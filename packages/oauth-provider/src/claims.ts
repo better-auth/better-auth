@@ -4,7 +4,7 @@ import type { User } from "better-auth/types";
 import { collectExtensionAccessTokenClaims } from "./extensions";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { GrantType } from "./types/oauth";
-import { ENCRYPTED_USER_ID_CLAIM } from "./utils";
+import { ENCRYPTED_ACTOR_CHAIN_CLAIM, ENCRYPTED_USER_ID_CLAIM } from "./utils";
 
 /**
  * Claim names the authorization server owns on a JWT access token, which no
@@ -34,6 +34,7 @@ const RESERVED_ACCESS_TOKEN_CLAIMS = new Set([
 	"act",
 	"reference_id",
 	ENCRYPTED_USER_ID_CLAIM,
+	ENCRYPTED_ACTOR_CHAIN_CLAIM,
 ]);
 
 /**

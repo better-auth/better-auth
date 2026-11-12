@@ -652,7 +652,14 @@ To get that token, register the service for both grants, `grant_types: [TOKEN_EX
 }
 ```
 
-`act.sub` is the actor token's subject. For a `client_credentials` token, it is the client ID. For a user's token issued to the service, it is that user's ID, even with `accessTokenSubject: "pairwise"`. Introspection returns `act` for JWT and opaque access tokens.
+`act.sub` is the actor token's subject. For a `client_credentials` token, it is the client ID. For a user's token issued to the service, it is that user's ID. Introspection returns `act` for JWT and opaque access tokens.
+
+When the exchanged token's client uses [pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers), each user in `act` is named by the `sub` that client sees for that user, instead of the user ID:
+
+* Introspection always returns those values.
+* A JWT access token carries them with `accessTokenSubject: "pairwise"`. With the default `accessTokenSubject: "user"`, the JWT carries user IDs in `act`, as it does in `sub`.
+
+`allowExchange`, `actorClaims`, and the [provider API](/docs/plugins/oauth-provider/reference#provider-extensions) receive user IDs.
 
 #### Actor chains
 
@@ -716,6 +723,8 @@ Every member of `may_act` must match the actor:
 * `iss` must equal this server's issuer.
 
 Any other member denies the exchange, because the provider cannot check it. So does an empty `may_act`. A subject token with `may_act` also cannot be exchanged without an actor token.
+
+To name a user actor, set `sub` to the user ID, never to a pairwise `sub`. The client a JWT access token was issued to can read its `may_act`. A `sub` that names a user therefore shows that user's ID to a client that should only see pairwise values. To allow a service to act, prefer `client_id`, which names no user.
 
 #### Add fields to the actor
 

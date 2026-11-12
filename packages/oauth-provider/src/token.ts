@@ -328,7 +328,13 @@ async function createJwtAccessToken(
 	// client_credentials, no resource owner participates, so the client is the
 	// subject represented to the resource server.
 	const subject = user
-		? await resolveAccessTokenSubject(ctx, user.id, client, opts)
+		? await resolveAccessTokenSubject(
+				ctx,
+				user.id,
+				client,
+				opts,
+				overrides?.act,
+			)
 		: { sub: client.clientId };
 
 	// Sign token — pass per-resource signing config if set; otherwise fall
@@ -362,9 +368,7 @@ async function createJwtAccessToken(
 			// so audit trails and (future) revocation lookups can reference
 			// individual tokens.
 			jti: generateRandomString(32),
-			// RFC 8693 actor chain and RFC 7800 sender-constraint, stamped last so
-			// the AS owns them.
-			...(overrides?.act ? { act: overrides.act } : {}),
+			// RFC 7800 sender-constraint, stamped last so the AS owns it.
 			...(overrides?.confirmation ? { cnf: overrides.confirmation } : {}),
 		},
 	});

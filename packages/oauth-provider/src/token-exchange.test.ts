@@ -93,25 +93,26 @@ async function bootScenario(
 		clientPrivileges: () => true,
 		...providerOptions,
 	} as OAuthOptions<Scope[]>;
-	const { auth, client, signInWithTestUser } = await getTestInstance(
-		{
-			baseURL: issuer,
-			advanced,
-			plugins: [
-				...(disableJwtPlugin ? [] : [jwt({ jwt: { issuer } })]),
-				oauthProvider(opts),
-				oauthTokenExchange(exchange),
-				...plugins,
-			],
-		},
-		// Adapter databases are shared across instances; keep each test user unique.
-		testWith
-			? {
-					testWith,
-					testUser: { email: `${generateRandomString(12)}@test.com` },
-				}
-			: {},
-	);
+	const { auth, client, signInWithTestUser, signInWithUser } =
+		await getTestInstance(
+			{
+				baseURL: issuer,
+				advanced,
+				plugins: [
+					...(disableJwtPlugin ? [] : [jwt({ jwt: { issuer } })]),
+					oauthProvider(opts),
+					oauthTokenExchange(exchange),
+					...plugins,
+				],
+			},
+			// Adapter databases are shared across instances; keep each test user unique.
+			testWith
+				? {
+						testWith,
+						testUser: { email: `${generateRandomString(12)}@test.com` },
+					}
+				: {},
+		);
 	await seedResourcesOnce(
 		(await auth.$context) as unknown as AuthContext,
 		opts,
@@ -192,6 +193,8 @@ async function bootScenario(
 		resource = mcp as string | null,
 		tokenHeaders = undefined as Record<string, string> | undefined,
 		clientAuth = undefined as Record<string, string> | undefined,
+		sessionHeaders = headers,
+		redirectURI = redirectUri,
 	} = {}) => {
 		const codeVerifier = generateRandomString(32);
 		const url = await createAuthorizationURL({
@@ -199,7 +202,7 @@ async function bootScenario(
 			options: {
 				clientId: requester.client_id,
 				clientSecret: requester.client_secret,
-				redirectURI: redirectUri,
+				redirectURI,
 			},
 			redirectURI: "",
 			authorizationEndpoint: `${issuer}/api/auth/oauth2/authorize`,
@@ -210,7 +213,7 @@ async function bootScenario(
 		if (resource) url.searchParams.append("resource", resource);
 		let location = "";
 		await client.$fetch(url.toString(), {
-			headers,
+			headers: sessionHeaders,
 			onError(context) {
 				location = context.response.headers.get("Location") ?? "";
 			},
@@ -221,7 +224,7 @@ async function bootScenario(
 				grant_type: "authorization_code",
 				code,
 				code_verifier: codeVerifier,
-				redirect_uri: redirectUri,
+				redirect_uri: redirectURI,
 				client_id: requester.client_id,
 				...(clientAuth ?? { client_secret: requester.client_secret! }),
 				...(resource ? { resource } : {}),
@@ -252,10 +255,20 @@ async function bootScenario(
 			extraHeaders,
 		);
 
+	/** Signs up and signs in another user, for a user actor token. */
+	const signInAnotherUser = async () => {
+		const email = `${generateRandomString(12)}@test.com`;
+		const password = "another-user-password";
+		await auth.api.signUpEmail({ body: { email, password, name: "Actor" } });
+		const { res, headers } = await signInWithUser(email, password);
+		return { user: res.user, headers };
+	};
+
 	return {
 		auth,
 		client,
 		headers,
+		signInAnotherUser,
 		agent,
 		mcpServer,
 		exchanger,
@@ -2546,5 +2559,210 @@ describe("oauthTokenExchange public clients", () => {
 			});
 			expect(error?.error).toBe("invalid_client");
 		});
+	});
+});
+
+/**
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ * @see https://datatracker.ietf.org/doc/html/rfc8693#section-4.1
+ */
+describe("oauthTokenExchange delegation with pairwise subjects", () => {
+	const pairwiseSecret = "test-pairwise-secret-key-32chars!!";
+
+	const bootUserActor = async ({
+		exchange = {} as OAuthTokenExchangeOptions,
+		bootOptions = {} as Parameters<typeof bootScenario>[1],
+		providerOptions = {} as Partial<OAuthOptions<Scope[]>>,
+	} = {}) => {
+		const scenario = await bootDelegation(
+			{ delegation: { maxDepth: 2 }, ...exchange },
+			bootOptions,
+			{ pairwiseSecret, ...providerOptions },
+		);
+		// A pairwise service that a second user signs in to. Its token for that
+		// user is the actor token.
+		const service = await scenario.createClient({
+			grant_types: [TOKEN_EXCHANGE_GRANT_TYPE, "authorization_code"],
+			redirect_uris: [redirectUri],
+			scope: "openid read write",
+			skip_consent: true,
+			resources: [mcp, api],
+			subject_type: "pairwise",
+		});
+		const actorUser = await scenario.signInAnotherUser();
+		const actorToken = await scenario.userTokenForMcp({
+			requester: service,
+			scope: "openid read",
+			sessionHeaders: actorUser.headers,
+		});
+		const delegateAsUser = async () =>
+			scenario.exchangeAs(
+				service,
+				(await scenario.userTokenForMcp()).access_token,
+				scenario.actorParams(actorToken.access_token),
+			);
+		/** The `sub` that `requester` sees for the actor user at introspection. */
+		const actorSubFor = async (
+			requester: { client_id: string; client_secret?: string },
+			{ resource = mcp, redirectURI = redirectUri } = {},
+		) => {
+			const token = await scenario.userTokenForMcp({
+				requester,
+				scope: "openid read",
+				resource,
+				redirectURI,
+				sessionHeaders: actorUser.headers,
+			});
+			return (await scenario.introspect(token.access_token, requester))?.sub;
+		};
+		return {
+			...scenario,
+			service,
+			actorUser: actorUser.user,
+			actorToken,
+			delegateAsUser,
+			actorSubFor,
+		};
+	};
+
+	it("gives a user actor the sub the token's client sees for that user", async () => {
+		const { service, actorUser, actorToken, delegateAsUser, introspect } =
+			await bootUserActor({
+				providerOptions: { accessTokenSubject: "pairwise" },
+			});
+		const { data, error } = await delegateAsUser();
+		expect(error).toBeNull();
+		const issued = decodeJwt(data!.access_token);
+		// The service already saw this value as the actor token's `sub`.
+		const actorSub = decodeJwt(actorToken.access_token).sub;
+		expect(actorSub).not.toBe(actorUser.id);
+		expect(issued.act).toEqual({ sub: actorSub });
+		expect(JSON.stringify(issued)).not.toContain(actorUser.id);
+		expect(await introspect(data!.access_token, service)).toMatchObject({
+			active: true,
+			act: { sub: actorSub },
+		});
+	});
+
+	it("passes the actor's user ID to hooks", async () => {
+		const allowExchange = vi.fn(() => true);
+		const { actorUser, delegateAsUser } = await bootUserActor({
+			exchange: { allowExchange },
+			providerOptions: { accessTokenSubject: "pairwise" },
+		});
+		const { error } = await delegateAsUser();
+		expect(error).toBeNull();
+		expect(allowExchange).toHaveBeenCalledWith(
+			expect.objectContaining({ act: { sub: actorUser.id } }),
+		);
+	});
+
+	it.each<[string, { disableJwtPlugin?: boolean }]>([
+		["JWT", {}],
+		["opaque", { disableJwtPlugin: true }],
+	])(
+		"maps earlier user actors for the client of a re-exchanged %s token",
+		async (_, bootOptions) => {
+			const {
+				createClient,
+				actorTokenFor,
+				actorParams,
+				exchangeAs,
+				introspect,
+				service,
+				actorUser,
+				delegateAsUser,
+				actorSubFor,
+			} = await bootUserActor({
+				bootOptions,
+				providerOptions: { accessTokenSubject: "pairwise" },
+			});
+			// A pairwise client in another sector, acting as itself.
+			const downstreamRedirect = "https://downstream.example.com/callback";
+			const downstream = await createClient({
+				grant_types: [
+					TOKEN_EXCHANGE_GRANT_TYPE,
+					"client_credentials",
+					"authorization_code",
+				],
+				client_credentials_scopes: ["read"],
+				redirect_uris: ["https://downstream.example.com/callback"],
+				scope: "openid read",
+				skip_consent: true,
+				resources: [api, other],
+				subject_type: "pairwise",
+			});
+			const first = await delegateAsUser();
+			expect(first.error).toBeNull();
+			const { data, error } = await exchangeAs(
+				downstream,
+				first.data!.access_token,
+				{
+					...actorParams((await actorTokenFor(downstream)).access_token),
+					resource: other,
+				},
+			);
+			expect(error).toBeNull();
+			const expectedAct = {
+				// A client actor keeps its client ID.
+				sub: downstream.client_id,
+				act: {
+					sub: await actorSubFor(downstream, {
+						resource: api,
+						redirectURI: downstreamRedirect,
+					}),
+				},
+			};
+			expect(expectedAct.act.sub).not.toBe(actorUser.id);
+			expect(expectedAct.act.sub).not.toBe(await actorSubFor(service));
+			const introspected = await introspect(data!.access_token, downstream);
+			expect(introspected?.act).toEqual(expectedAct);
+			if (!bootOptions.disableJwtPlugin) {
+				const issued = decodeJwt(data!.access_token);
+				expect(issued.act).toEqual(expectedAct);
+				expect(JSON.stringify(issued)).not.toContain(actorUser.id);
+			}
+		},
+	);
+
+	it("maps act at introspection when JWT access tokens keep the user ID", async () => {
+		const { service, actorUser, delegateAsUser, introspect, actorSubFor } =
+			await bootUserActor();
+		const { data, error } = await delegateAsUser();
+		expect(error).toBeNull();
+		// The JWT carries the user ID in `sub` and `act`, as before.
+		expect(decodeJwt(data!.access_token).act).toEqual({ sub: actorUser.id });
+		expect((await introspect(data!.access_token, service))?.act).toEqual({
+			sub: await actorSubFor(service),
+		});
+	});
+
+	it("maps act at introspection of an opaque token", async () => {
+		const { service, actorUser, delegateAsUser, introspect, actorSubFor } =
+			await bootUserActor({ bootOptions: { disableJwtPlugin: true } });
+		const { data, error } = await delegateAsUser();
+		expect(error).toBeNull();
+		const actorSub = await actorSubFor(service);
+		expect(actorSub).not.toBe(actorUser.id);
+		expect((await introspect(data!.access_token, service))?.act).toEqual({
+			sub: actorSub,
+		});
+	});
+
+	it("matches may_act against the actor's user ID", async () => {
+		const state: { mayAct?: unknown } = {};
+		const { actorUser, actorToken, delegateAsUser } = await bootUserActor({
+			providerOptions: {
+				accessTokenSubject: "pairwise",
+				customAccessTokenClaims: () =>
+					state.mayAct === undefined ? {} : { may_act: state.mayAct },
+			},
+		});
+		state.mayAct = { sub: decodeJwt(actorToken.access_token).sub };
+		expect((await delegateAsUser()).error?.error_description).toBe(
+			"the actor is not permitted by the subject token's may_act",
+		);
+		state.mayAct = { sub: actorUser.id };
+		expect((await delegateAsUser()).error).toBeNull();
 	});
 });

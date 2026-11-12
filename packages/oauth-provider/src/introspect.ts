@@ -22,6 +22,7 @@ import { findAccessToken, findToken } from "./token-lookup";
 import type {
 	ActiveAccessTokenPayload,
 	Confirmation,
+	OAuthActorClaim,
 	OAuthOptions,
 	SchemaClient,
 	Scope,
@@ -32,8 +33,8 @@ import {
 	getClient,
 	getJwtPlugin,
 	parseClientMetadata,
-	resolveSubjectIdentifier,
-	restoreAccessTokenUserId,
+	resolvePresentedSubjects,
+	restoreAccessTokenUserIds,
 	toAudienceClaim,
 	validateClientCredentials,
 } from "./utils";
@@ -177,9 +178,9 @@ async function validateJwtAccessToken(
 		}
 	}
 
-	// Internal callers read the user ID from `sub`; presentation re-derives the
-	// pairwise value in `resolveIntrospectionSub`.
-	if (!(await restoreAccessTokenUserId(ctx, jwtPayload))) {
+	// Internal callers read user IDs from `sub` and `act`; presentation
+	// re-derives the pairwise values in `resolveIntrospectionSubjects`.
+	if (!(await restoreAccessTokenUserIds(ctx, jwtPayload))) {
 		return { active: false };
 	}
 
@@ -510,11 +511,12 @@ export async function requireActiveAccessTokenWithClaims(
 }
 
 /**
- * Resolves pairwise sub on an introspection payload.
+ * Resolves pairwise `sub`, and user actors in `act`, on an introspection
+ * payload.
  * Applied at the presentation layer so internal validation functions
  * keep real user.id (needed for user lookup in /userinfo).
  */
-async function resolveIntrospectionSub(
+async function resolveIntrospectionSubjects(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	payload: JWTPayload,
@@ -536,12 +538,16 @@ async function resolveIntrospectionSub(
 			? introspectingClient
 			: await getClient(ctx, opts, issuerClientId);
 	if (!issuingClient) return payload;
-	const resolvedSub = await resolveSubjectIdentifier(
-		payload.sub as string,
-		issuingClient,
+	const subjects = await resolvePresentedSubjects(
+		ctx,
 		opts,
+		{
+			sub: payload.sub as string,
+			...(payload.act ? { act: payload.act as OAuthActorClaim } : {}),
+		},
+		issuingClient,
 	);
-	return { ...payload, sub: resolvedSub };
+	return { ...payload, ...subjects };
 }
 
 export async function introspectEndpoint(
@@ -605,7 +611,7 @@ export async function introspectEndpoint(
 				found.record,
 				client.clientId,
 			);
-			return resolveIntrospectionSub(ctx, opts, payload, client);
+			return resolveIntrospectionSubjects(ctx, opts, payload, client);
 		}
 		const { payload } = await validateFoundAccessToken(
 			ctx,
@@ -613,7 +619,7 @@ export async function introspectEndpoint(
 			found,
 			client.clientId,
 		);
-		return resolveIntrospectionSub(ctx, opts, payload, client);
+		return resolveIntrospectionSubjects(ctx, opts, payload, client);
 	} catch (error) {
 		if (error instanceof APIError) throw error;
 		logger.error("Introspection error:", error);
