@@ -13,8 +13,10 @@ For the `title`:
 - Lead with the headline: the affected API or feature and what changed for
   users. When only some users are affected, name that condition briefly so the
   title does not imply everyone is
-- Leave secondary details, exceptions, version ranges, and additional fixes in
-  the same changeset to the changelog. A title that omits them is complete
+- Leave secondary details, exceptions, and version ranges to the changelog. A
+  title that omits them is complete
+- When one changeset describes several changes, headline the most significant
+  one and leave the rest to the changelog
 - Wrap code identifiers in backticks, but not general concepts
 - Do not include links, HTML, images, bold or italic emphasis, `@mentions`, PR
   numbers, or author attribution
