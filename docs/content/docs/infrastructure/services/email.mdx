@@ -79,7 +79,7 @@ import { sendEmail } from "@better-auth/infra";
 export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
-    async sendResetPassword({ user, url }) {
+    sendResetPassword({ user, url }) {
       void sendEmail({
         template: "reset-password",
         to: user.email,
@@ -94,7 +94,7 @@ export const auth = betterAuth({
   },
   emailVerification: {
     sendOnSignUp: true,
-    async sendVerificationEmail({ user, url }) {
+    sendVerificationEmail({ user, url }) {
       void sendEmail({
         template: "verify-email",
         to: user.email,
@@ -109,7 +109,7 @@ export const auth = betterAuth({
   },
   plugins: [
     organization({
-      async sendInvitationEmail(data) {
+      sendInvitationEmail(data) {
         const inviteLink = `https://yourapp.com/accept-invitation/${data.id}`;
         void sendEmail({
           template: "invitation",
@@ -130,7 +130,7 @@ export const auth = betterAuth({
 ```
 
 <Callout type="warn">
-  Avoid awaiting the email sending to prevent timing attacks. On serverless platforms, use a [`backgroundTasks` handler](/docs/reference/options#backgroundtasks) such as `waitUntil` so the send still finishes after the response.
+  On long-running servers, the fire-and-forget callback above avoids waiting for delivery. On serverless platforms, configure a [`backgroundTasks` handler](/docs/reference/options#backgroundtasks) such as `waitUntil`, make the callback async, and use `await sendEmail(...)` instead of `void sendEmail(...)` inside it. Better Auth can then pass the pending callback promise to the handler without waiting for delivery before responding.
 </Callout>
 
 ## Available Templates

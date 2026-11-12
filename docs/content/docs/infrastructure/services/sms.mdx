@@ -84,7 +84,7 @@ export const auth = betterAuth({
 ```
 
 <Callout type="warn">
-  Avoid awaiting `sendOTP` work to prevent timing attacks. On serverless platforms, use a [`backgroundTasks` handler](/docs/reference/options#backgroundtasks) such as `waitUntil` so the send still finishes after the response.
+  On long-running servers, the fire-and-forget callback above avoids waiting for delivery. On serverless platforms, configure a [`backgroundTasks` handler](/docs/reference/options#backgroundtasks) such as `waitUntil`, make `sendOTP` async, and use `await sendSMS(...)` instead of `void sendSMS(...)` inside it. Better Auth can then pass the pending callback promise to the handler without waiting for delivery before responding.
 </Callout>
 
 ## Available Templates
