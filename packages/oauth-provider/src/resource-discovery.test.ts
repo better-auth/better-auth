@@ -815,11 +815,14 @@ describe("canonical client metadata document registration", () => {
 				});
 			},
 		);
+		const originalUpdate = instance.ctx.adapter.update.bind(
+			instance.ctx.adapter,
+		);
 		vi.spyOn(instance.ctx.adapter, "update").mockImplementation((async (
-			...args: Parameters<typeof instance.ctx.adapter.update>
+			...args: Parameters<typeof originalUpdate>
 		) => {
 			updateCalls++;
-			return instance.ctx.adapter.update(...args);
+			return originalUpdate(...args);
 		}) as typeof instance.ctx.adapter.update);
 
 		const revalidated = await registerClientMetadataDocument(
@@ -1013,11 +1016,14 @@ describe("canonical client metadata document registration", () => {
 				});
 			},
 		);
+		const originalUpdate = instance.ctx.adapter.update.bind(
+			instance.ctx.adapter,
+		);
 		vi.spyOn(instance.ctx.adapter, "update").mockImplementation((async (
-			...args: Parameters<typeof instance.ctx.adapter.update>
+			...args: Parameters<typeof originalUpdate>
 		) => {
 			updateCalls++;
-			return instance.ctx.adapter.update(...args);
+			return originalUpdate(...args);
 		}) as typeof instance.ctx.adapter.update);
 
 		const revalidated = await registerClientMetadataDocument(
