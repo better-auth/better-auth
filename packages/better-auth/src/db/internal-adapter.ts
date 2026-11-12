@@ -814,6 +814,8 @@ export const createInternalAdapter = (
 								session: {
 									...s.session,
 									expiresAt: new Date(s.session.expiresAt),
+									createdAt: new Date(s.session.createdAt),
+									updatedAt: new Date(s.session.updatedAt),
 								},
 								user: {
 									...s.user,

@@ -1,10 +1,14 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { Session, User } from "@better-auth/core/db";
 import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../api";
+import { APIError, isSessionAccepted, sessionMiddleware } from "../../api";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -48,6 +52,18 @@ const revokeDeviceSessionBodySchema = z.object({
 		description: "The session token to revoke",
 	}),
 });
+
+async function filterAcceptedSessions<
+	T extends {
+		session: Session & Record<string, unknown>;
+		user: User & Record<string, unknown>;
+	},
+>(ctx: GenericEndpointContext, sessions: T[]): Promise<T[]> {
+	const accepted = await Promise.all(
+		sessions.map((session) => isSessionAccepted(ctx, session)),
+	);
+	return sessions.filter((_, index) => accepted[index]);
+}
 
 export const multiSession = (options?: MultiSessionConfig | undefined) => {
 	const opts = {
@@ -103,8 +119,11 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						sessionTokens,
 						{ onlyActiveSessions: true },
 					);
-					const validSessions = sessions.filter(
-						(session) => session && session.session.expiresAt > new Date(),
+					const validSessions = await filterAcceptedSessions(
+						ctx,
+						sessions.filter(
+							(session) => session && session.session.expiresAt > new Date(),
+						),
 					);
 					const uniqueUserSessions = validSessions.reduce(
 						(acc, session) => {
@@ -199,6 +218,12 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							ERROR_CODES.INVALID_SESSION_TOKEN,
 						);
 					}
+					if (!(await isSessionAccepted(ctx, session))) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_SESSION_TOKEN,
+						);
+					}
 					await setSessionCookie(ctx, session);
 					return ctx.json({
 						session: parseSessionOutput(ctx.context.options, session.session),
@@ -270,6 +295,14 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					// Revoke the session proven by the signed cookie value, not the
 					// request-named token, so possession of one valid multi-session
 					// cookie cannot revoke a different session.
+					const revoked =
+						await ctx.context.internalAdapter.findSession(sessionCookie);
+					if (revoked && !(await isSessionAccepted(ctx, revoked))) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_SESSION_TOKEN,
+						);
+					}
 					await ctx.context.internalAdapter.deleteSession(sessionCookie);
 					expireCookie(ctx, {
 						name: multiSessionCookieName,
@@ -297,8 +330,12 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						if (sessionTokens.length > 0) {
 							const sessions =
 								await internalAdapter.findSessions(sessionTokens);
-							const validSessions = sessions.filter(
-								(session) => session && session.session.expiresAt > new Date(),
+							const validSessions = await filterAcceptedSessions(
+								ctx,
+								sessions.filter(
+									(session) =>
+										session && session.session.expiresAt > new Date(),
+								),
 							);
 
 							if (validSessions.length > 0) {
@@ -408,7 +445,34 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							)
 						).filter((v) => typeof v === "string");
 						if (verifiedTokens.length > 0) {
-							await ctx.context.internalAdapter.deleteSessions(verifiedTokens);
+							// A session that cannot be checked is kept, like in sign-out.
+							const logCheckFailure = (e: unknown) => {
+								ctx.context.logger.error(
+									"Failed to check sessions during sign-out",
+									e,
+								);
+							};
+							const sessions = await ctx.context.internalAdapter
+								.findSessions(verifiedTokens)
+								.then((found) => found.filter(Boolean))
+								.catch((e) => {
+									logCheckFailure(e);
+									return [];
+								});
+							const checks = await Promise.all(
+								sessions.map((session) =>
+									isSessionAccepted(ctx, session).catch((e) => {
+										logCheckFailure(e);
+										return false;
+									}),
+								),
+							);
+							const accepted = sessions.filter((_, index) => checks[index]);
+							if (accepted.length > 0) {
+								await ctx.context.internalAdapter.deleteSessions(
+									accepted.map(({ session }) => session.token),
+								);
+							}
 						}
 					}),
 				},

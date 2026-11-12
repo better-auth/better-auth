@@ -29,6 +29,7 @@
     "scim",
     "---Utility---",
     "bearer",
+    "dbsc",
     "captcha",
     "have-i-been-pwned",
     "i18n",
