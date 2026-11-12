@@ -1,5 +1,7 @@
 # @better-auth/electron
 
+## 1.7.22
+
 ## 1.7.21
 
 ### Patch Changes

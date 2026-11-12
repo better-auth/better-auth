@@ -1,5 +1,14 @@
 # auth
 
+## 1.7.22
+
+### Patch Changes
+
+- Updated dependencies [[`80c407b`](https://github.com/better-auth/better-auth/commit/80c407b7ca15d70b734a68b048dfbd22614c2242), [`d32a30a`](https://github.com/better-auth/better-auth/commit/d32a30af372591f42b06a396755d38c0c76d4f28), [`80c407b`](https://github.com/better-auth/better-auth/commit/80c407b7ca15d70b734a68b048dfbd22614c2242), [`946177e`](https://github.com/better-auth/better-auth/commit/946177e509ce1cb0010bfd98562609f72abe4da7), [`d210421`](https://github.com/better-auth/better-auth/commit/d210421a26ef7f7728ea7e668bba755b3003fe37), [`6536174`](https://github.com/better-auth/better-auth/commit/6536174213f63a8d544cd0d018659515bab5f8ad), [`485567e`](https://github.com/better-auth/better-auth/commit/485567e2c9d594a35810cfdfe07247e8cb744e24), [`ec3047d`](https://github.com/better-auth/better-auth/commit/ec3047da814ec22294573db6d9cdde3ba616992a), [`262adc0`](https://github.com/better-auth/better-auth/commit/262adc0e76969fe04ef9355d1c77972bd5f0a1a8), [`e9d8e59`](https://github.com/better-auth/better-auth/commit/e9d8e5977cb37ab1aa3824f1bb67b5c99a444e9b), [`d521343`](https://github.com/better-auth/better-auth/commit/d521343fc3e3c8a27ff63b7a62551459e85de38c), [`71052af`](https://github.com/better-auth/better-auth/commit/71052af880e62e2a3ce8e4a200880e020c309348), [`79219b4`](https://github.com/better-auth/better-auth/commit/79219b4f8e8b4cff0e184333fc46ef64e3c47e2e), [`79219b4`](https://github.com/better-auth/better-auth/commit/79219b4f8e8b4cff0e184333fc46ef64e3c47e2e)]:
+  - better-auth@1.7.22
+  - @better-auth/core@1.7.22
+  - @better-auth/telemetry@1.7.22
+
 ## 1.7.21
 
 ### Patch Changes
