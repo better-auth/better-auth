@@ -15,6 +15,37 @@ function catchChallenge(resource: string | string[]) {
 }
 
 describe("resource server challenge", () => {
+	/**
+	 * `WWW-Authenticate` is not a CORS-safelisted response header, so a
+	 * cross-origin client can read the challenge only when it is exposed.
+	 * @see https://fetch.spec.whatwg.org/#cors-safelisted-response-header-name
+	 */
+	it.each([
+		[
+			"Bearer",
+			new APIError("UNAUTHORIZED", { message: "missing bearer token" }),
+		],
+		["insufficient_scope", createInsufficientScopeError(["files:write"])],
+		[
+			"DPoP",
+			new APIError("UNAUTHORIZED", {
+				message: "invalid DPoP proof",
+				error: "invalid_dpop_proof",
+			}),
+		],
+	])("exposes WWW-Authenticate on a %s challenge", (_, error) => {
+		const challenge = createResourceServerChallenge(
+			error,
+			"https://api.example.com",
+		) as APIError;
+		const headers = new Headers(challenge.headers);
+
+		expect(headers.get("WWW-Authenticate")).toBeTruthy();
+		expect(headers.get("Access-Control-Expose-Headers")).toBe(
+			"WWW-Authenticate",
+		);
+	});
+
 	it("derives the RFC 9728 metadata URL from the protected resource", () => {
 		const error = catchChallenge("https://api.example.com/mcp/tools?tenant=a");
 		const headers = new Headers(error.headers);

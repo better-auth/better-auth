@@ -369,6 +369,8 @@ const handler = createMcpProtectedRequestHandler( // [!code highlight]
 
 `createMcpProtectedRequestHandler` returns the same RFC 9728 `WWW-Authenticate` response for unauthenticated requests. Set `requiredScopes` in its options to require scopes; a token missing any of them receives the same `403` `insufficient_scope` challenge as `requireMcpAuth`. Set `challengeScopes` in the same options object to advertise a scope hint on unauthenticated challenges.
 
+Both helpers expose `WWW-Authenticate` to browser clients on other origins. If your CORS layer sets `Access-Control-Expose-Headers`, see [Resource Server](/docs/plugins/oauth-provider/resource-server) for what it must include.
+
 <Callout type="warn">
   To stop a captured DPoP proof from being used twice, the handler records each proof it accepts for a DPoP-bound token. Unlike `requireMcpAuth`, `createMcpProtectedRequestHandler` keeps that record in memory by default. The default is safe only for a single long-lived instance. Other instances do not see the record, and a restart clears it. An attacker who captures a proof can replay it against another instance until the proof expires.
 

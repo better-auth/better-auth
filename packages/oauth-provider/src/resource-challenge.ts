@@ -102,6 +102,17 @@ export function buildDpopChallengeValue(
 		.join(", ");
 }
 
+/**
+ * `WWW-Authenticate` is not a CORS-safelisted response header, so browsers
+ * hide it from cross-origin clients unless the response exposes it.
+ */
+function challengeHeaders(challenge: string) {
+	return {
+		"WWW-Authenticate": challenge,
+		"Access-Control-Expose-Headers": "WWW-Authenticate",
+	};
+}
+
 function challengeBody(
 	message: string,
 	errorCode: string | undefined,
@@ -243,13 +254,13 @@ export function createResourceServerChallenge(
 			return new APIError(
 				"UNAUTHORIZED",
 				challengeBody(error.message, dpopErrorCode, description),
-				{
-					"WWW-Authenticate": buildDpopChallengeValue(
+				challengeHeaders(
+					buildDpopChallengeValue(
 						dpopErrorCode,
 						description,
 						opts?.dpopSigningAlgorithms,
 					),
-				},
+				),
 			);
 		}
 		// RFC 6750 §3.1: only a request that presented a token which failed
@@ -265,18 +276,14 @@ export function createResourceServerChallenge(
 				invalidToken ? errorCode : undefined,
 				description,
 			),
-			{
-				"WWW-Authenticate": buildBearerChallenge(
-					resource,
-					opts,
-					(metadataUrl) => [
-						invalidToken && `error="invalid_token"`,
-						errorDescription && `error_description="${errorDescription}"`,
-						`resource_metadata="${quoteAuthParam(metadataUrl)}"`,
-						challengeScope && `scope="${quoteAuthParam(challengeScope)}"`,
-					],
-				),
-			},
+			challengeHeaders(
+				buildBearerChallenge(resource, opts, (metadataUrl) => [
+					invalidToken && `error="invalid_token"`,
+					errorDescription && `error_description="${errorDescription}"`,
+					`resource_metadata="${quoteAuthParam(metadataUrl)}"`,
+					challengeScope && `scope="${quoteAuthParam(challengeScope)}"`,
+				]),
+			),
 		);
 	}
 	if (isInsufficientScopeError(error)) {
@@ -301,18 +308,14 @@ export function createResourceServerChallenge(
 				"insufficient_scope",
 				insufficientScope.description,
 			),
-			{
-				"WWW-Authenticate": buildBearerChallenge(
-					resource,
-					opts,
-					(metadataUrl) => [
-						`error="insufficient_scope"`,
-						scope && `scope="${quoteAuthParam(scope)}"`,
-						`resource_metadata="${quoteAuthParam(metadataUrl)}"`,
-						errorDescription && `error_description="${errorDescription}"`,
-					],
-				),
-			},
+			challengeHeaders(
+				buildBearerChallenge(resource, opts, (metadataUrl) => [
+					`error="insufficient_scope"`,
+					scope && `scope="${quoteAuthParam(scope)}"`,
+					`resource_metadata="${quoteAuthParam(metadataUrl)}"`,
+					errorDescription && `error_description="${errorDescription}"`,
+				]),
+			),
 		);
 	}
 	return undefined;
