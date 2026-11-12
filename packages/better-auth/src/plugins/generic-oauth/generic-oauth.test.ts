@@ -3817,7 +3817,24 @@ describe("oauth2", async () => {
 		});
 	});
 
+	// Serve provider discovery locally so these tests never reach a real host.
+	function mockDiscovery(issuer: string) {
+		mswServer.use(
+			http.get(`${issuer}/.well-known/openid-configuration`, () =>
+				HttpResponse.json({
+					issuer,
+					authorization_endpoint: `${issuer}/authorize`,
+					token_endpoint: `${issuer}/token`,
+					userinfo_endpoint: `${issuer}/userinfo`,
+					jwks_uri: `${issuer}/keys`,
+					id_token_signing_alg_values_supported: ["RS256"],
+				}),
+			),
+		);
+	}
+
 	it("should integrate okta provider helper with genericOAuth", async () => {
+		mockDiscovery("https://dev-12345.okta.com/oauth2/default");
 		const { auth: testAuth } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -3836,6 +3853,7 @@ describe("oauth2", async () => {
 	});
 
 	it("should integrate auth0 provider helper with genericOAuth", async () => {
+		mockDiscovery("https://dev-xxx.eu.auth0.com");
 		const { auth: testAuth } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -3903,6 +3921,7 @@ describe("oauth2", async () => {
 	});
 
 	it("should integrate keycloak provider helper with genericOAuth", async () => {
+		mockDiscovery("https://my-domain.com/realms/MyRealm");
 		const { auth: testAuth } = await getTestInstance({
 			plugins: [
 				genericOAuth({

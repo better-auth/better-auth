@@ -1,15 +1,17 @@
 import { isAPIError, NO_STORE_HEADERS } from "better-auth/api";
+import type { ResourceRequestInput } from "better-auth/oauth2";
 import {
 	DPOP_NONCE_HEADER,
 	DPOP_SIGNING_ALGORITHMS,
 	isInsufficientScopeError,
+	parseAccessTokenAuthorization,
 } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import { withExposedHeaders } from "./dpop";
 
 const DPOP_CHALLENGE_ERRORS = new Set(["invalid_dpop_proof", "use_dpop_nonce"]);
 const OAUTH_SCOPE_TOKEN_PATTERN = /^[\x21\x23-\x5b\x5d-\x7e]+$/;
-const ERROR_DESCRIPTION_PATTERN = /^[\x20-\x21\x23-\x5b\x5d-\x7e]+$/;
+const ERROR_DESCRIPTION_EXCLUDED = /[^\x20-\x21\x23-\x5b\x5d-\x7e]+/g;
 
 function quoteAuthParam(value: string): string {
 	if (/[\x00-\x1f\x7f]/.test(value)) {
@@ -28,17 +30,23 @@ function serializeChallengeScopes(scopes: readonly string[] | undefined) {
 	return [...new Set(scopes)].join(" ");
 }
 
-function validateErrorDescription(description: unknown): string {
-	if (
-		typeof description !== "string" ||
-		!ERROR_DESCRIPTION_PATTERN.test(description)
-	) {
-		throw new TypeError("invalid error_description");
-	}
-	return description;
+/**
+ * Fits a runtime error message into RFC 6750 §3's `error_description`
+ * character set instead of failing the response it describes: `"` becomes
+ * `'`, any other excluded character (`\`, controls, non-ASCII) becomes a space,
+ * and a description with nothing left is omitted.
+ */
+function formatErrorDescription(description: unknown): string | undefined {
+	if (typeof description !== "string") return undefined;
+	const formatted = description
+		.replace(/"/g, "'")
+		.replace(ERROR_DESCRIPTION_EXCLUDED, " ")
+		.replace(/ {2,}/g, " ")
+		.trim();
+	return formatted || undefined;
 }
 
-function extractDpopError(error: APIError): {
+function extractTokenError(error: APIError): {
 	errorCode?: string;
 	description: string;
 } {
@@ -56,12 +64,24 @@ function extractDpopError(error: APIError): {
 }
 
 function isDpopChallengeError(error: APIError) {
-	const { errorCode, description } = extractDpopError(error);
+	const { errorCode, description } = extractTokenError(error);
 	return (
 		!!errorCode &&
 		(DPOP_CHALLENGE_ERRORS.has(errorCode) ||
 			(errorCode === "invalid_token" && description.includes("DPoP")))
 	);
+}
+
+function presentsDpopScheme(
+	request: Request | Pick<ResourceRequestInput, "authorizationHeader">,
+) {
+	// Duck-type the `Request` so a cross-realm instance is still recognized.
+	const authorizationHeader =
+		typeof (request as Request).headers?.get === "function"
+			? (request as Request).headers.get("authorization")
+			: (request as Pick<ResourceRequestInput, "authorizationHeader">)
+					.authorizationHeader;
+	return parseAccessTokenAuthorization(authorizationHeader)?.scheme === "DPoP";
 }
 
 /** Builds an RFC 9449 §7.1 `WWW-Authenticate: DPoP` challenge value. */
@@ -70,23 +90,27 @@ export function buildDpopChallengeValue(
 	description: unknown,
 	algorithms: readonly string[] = DPOP_SIGNING_ALGORITHMS,
 ) {
+	const errorDescription = formatErrorDescription(description);
 	return [
 		`DPoP error="${quoteAuthParam(errorCode)}"`,
-		`error_description="${validateErrorDescription(description)}"`,
+		errorDescription && `error_description="${errorDescription}"`,
 		`algs="${quoteAuthParam(algorithms.join(" "))}"`,
-	].join(", ");
+	]
+		.filter((param) => !!param)
+		.join(", ");
 }
 
 function buildDpopChallengeHeaders(
 	error: APIError,
+	errorCode: string,
+	description: unknown,
 	opts?: {
 		dpopSigningAlgorithms?: readonly string[];
 	},
 ): Record<string, string> {
-	const { errorCode, description } = extractDpopError(error);
 	const headers: Record<string, string> = {
 		"WWW-Authenticate": buildDpopChallengeValue(
-			errorCode ?? "invalid_dpop_proof",
+			errorCode,
 			description,
 			opts?.dpopSigningAlgorithms,
 		),
@@ -106,6 +130,19 @@ function buildDpopChallengeHeaders(
 		);
 	}
 	return headers;
+}
+
+function challengeBody(
+	message: string,
+	errorCode: string | undefined,
+	description: unknown,
+) {
+	if (!errorCode) return { message };
+	return {
+		message,
+		error: errorCode,
+		...(typeof description === "string" && { error_description: description }),
+	};
 }
 
 function extractInsufficientScope(error: APIError): {
@@ -170,16 +207,30 @@ function buildBearerChallenge(
  * challenges carry `algs` and no `resource_metadata`.
  *
  * Missing/invalid bearer credentials are reported with RFC 6750 plus the RFC
- * 9728 `resource_metadata` pointer. Insufficient-scope failures (built with
+ * 9728 `resource_metadata` pointer. A 401 whose body has
+ * `error: "invalid_token"` means a presented token failed, so its challenge
+ * also carries that code and an `error_description` (RFC 6750 §3.1); any
+ * other 401 is treated as a request without credentials and carries neither.
+ * Insufficient-scope failures (built with
  * `createInsufficientScopeError`) are reported with RFC 6750 §3.1's
  * `insufficient_scope` challenge on a 403 naming the scopes the token lacks, so
  * clients can step up their authorization. DPoP-bound-token failures are
  * reported with RFC 9449's `DPoP` challenge so clients know which proof
- * algorithms to use; a `use_dpop_nonce` failure keeps its `DPoP-Nonce` header
- * so the client can retry with the nonce (RFC 9449 §9), adds `Cache-Control:
- * no-store`, and adds `DPoP-Nonce` and `WWW-Authenticate` to the error's
- * `Access-Control-Expose-Headers`. Non-URL resources (for example a `urn:` or a client id)
- * resolve their metadata URL through `resourceMetadataMappings`.
+ * algorithms to use. Pass the failed `request` so that any 401 on a request
+ * that presented its token with the `DPoP` scheme, such as an expired or
+ * revoked token, is also answered with a `DPoP` challenge (RFC 9449 §7.2).
+ * Without it, only DPoP-specific errors get one. A `use_dpop_nonce` failure
+ * keeps its `DPoP-Nonce` header so the client can retry with the nonce (RFC
+ * 9449 §9), adds `Cache-Control: no-store`, and adds `DPoP-Nonce` and
+ * `WWW-Authenticate` to the error's `Access-Control-Expose-Headers`. Non-URL
+ * resources (for example a `urn:` or a client id) resolve their metadata URL
+ * through `resourceMetadataMappings`.
+ *
+ * An `error_description` is fitted into RFC 6750 §3's character set rather
+ * than rejected: `"` becomes `'`, other excluded characters become spaces, and
+ * an empty result is omitted. The returned error's body keeps the original
+ * `error` and `error_description`. Invalid scope tokens in `challengeScopes`
+ * still throw, since they are server configuration.
  *
  * Every other error returns `undefined`, including a plain `FORBIDDEN`: a
  * permission denial that re-authorizing cannot fix must not be answered with a
@@ -201,25 +252,48 @@ export function createResourceServerChallenge(
 		 * insufficient-scope failure advertises the scopes it names instead.
 		 */
 		challengeScopes?: readonly string[];
+		/**
+		 * The request that failed, or its `Authorization` header as
+		 * `{ authorizationHeader }`. A 401 on a request that used the `DPoP`
+		 * scheme is answered with a `DPoP` challenge rather than `Bearer`.
+		 */
+		request?: Request | Pick<ResourceRequestInput, "authorizationHeader">;
 	},
 ): APIError | undefined {
 	const challengeScope = serializeChallengeScopes(opts?.challengeScopes);
 	if (isAPIError(error) && error.status === "UNAUTHORIZED") {
-		if (isDpopChallengeError(error)) {
+		const { errorCode, description } = extractTokenError(error);
+		const dpopError = isDpopChallengeError(error);
+		if (dpopError || (opts?.request && presentsDpopScheme(opts.request))) {
+			// Only the request's DPoP scheme can select this branch without an
+			// error code, and that request presented a token.
+			const dpopErrorCode = errorCode ?? "invalid_token";
 			return new APIError(
 				"UNAUTHORIZED",
-				{ message: error.message },
-				buildDpopChallengeHeaders(error, opts),
+				challengeBody(error.message, dpopErrorCode, description),
+				buildDpopChallengeHeaders(error, dpopErrorCode, description, opts),
 			);
 		}
+		// RFC 6750 §3.1: only a request that presented a token which failed
+		// carries an error code; one that sent no credentials gets none.
+		const invalidToken = errorCode === "invalid_token";
+		const errorDescription = invalidToken
+			? formatErrorDescription(description)
+			: undefined;
 		return new APIError(
 			"UNAUTHORIZED",
-			{ message: error.message },
+			challengeBody(
+				error.message,
+				invalidToken ? errorCode : undefined,
+				description,
+			),
 			{
 				"WWW-Authenticate": buildBearerChallenge(
 					resource,
 					opts,
 					(metadataUrl) => [
+						invalidToken && `error="invalid_token"`,
+						errorDescription && `error_description="${errorDescription}"`,
 						`resource_metadata="${quoteAuthParam(metadataUrl)}"`,
 						challengeScope && `scope="${quoteAuthParam(challengeScope)}"`,
 					],
@@ -229,7 +303,7 @@ export function createResourceServerChallenge(
 	}
 	if (isInsufficientScopeError(error)) {
 		const insufficientScope = extractInsufficientScope(error);
-		const errorDescription = validateErrorDescription(
+		const errorDescription = formatErrorDescription(
 			insufficientScope.description,
 		);
 		// RFC 6750 §3.1: a token that is valid but lacks the scopes the
@@ -238,9 +312,17 @@ export function createResourceServerChallenge(
 		// `challengeScopes` is only a fallback: the scopes the token actually lacks
 		// are the ones re-authorizing has to add.
 		const scope = insufficientScope.scope || challengeScope;
+		const message =
+			typeof insufficientScope.description === "string"
+				? insufficientScope.description
+				: error.message;
 		return new APIError(
 			"FORBIDDEN",
-			{ message: errorDescription },
+			challengeBody(
+				message,
+				"insufficient_scope",
+				insufficientScope.description,
+			),
 			{
 				"WWW-Authenticate": buildBearerChallenge(
 					resource,
@@ -249,7 +331,7 @@ export function createResourceServerChallenge(
 						`error="insufficient_scope"`,
 						scope && `scope="${quoteAuthParam(scope)}"`,
 						`resource_metadata="${quoteAuthParam(metadataUrl)}"`,
-						`error_description="${errorDescription}"`,
+						errorDescription && `error_description="${errorDescription}"`,
 					],
 				),
 			},

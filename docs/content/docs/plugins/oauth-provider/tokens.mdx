@@ -280,8 +280,47 @@ Requests without a `DPoP` proof are unaffected.
 Nonces are not stored. Each nonce holds its issue time and a signature keyed from your auth `secret`. Any instance with the same secret accepts a nonce another instance issued. Rotating the secret invalidates outstanding nonces, and each client recovers with one retry. Discovery metadata does not change, because RFC 9449 defines no metadata for nonces. A client learns that nonces are required from the first `use_dpop_nonce` response.
 
 <Callout>
-  The [OpenID4VC High Assurance Interoperability Profile 1.0](https://openid.net/specs/openid4vc-high-assurance-interoperability-profile-1_0.html#section-4) requires DPoP, and requires wallets to handle `DPoP-Nonce` from the authorization server and the credential issuer. To serve nonces from your own endpoints, such as a credential issuer's Nonce Endpoint or an API on the same origin, see [Require DPoP nonces](/docs/plugins/oauth-provider/resource-server#require-dpop-nonces).
+  The [OpenID4VC High Assurance Interoperability Profile 1.0](https://openid.net/specs/openid4vc-high-assurance-interoperability-profile-1_0.html#section-4) requires DPoP, and requires wallets to handle `DPoP-Nonce` from the authorization server and the credential issuer. To serve nonces from a plugin endpoint on the auth server, see [Nonces on your own endpoints](#nonces-on-your-own-endpoints). For an API that verifies access tokens, see [Require DPoP nonces](/docs/plugins/oauth-provider/resource-server#require-dpop-nonces).
 </Callout>
+
+#### Nonces on your own endpoints
+
+A plugin endpoint on the auth server can verify DPoP proofs with the same rules as the token endpoint, nonces included. Call `verifyDpopProof` on the provider API:
+
+```ts title="dpop-plugin.ts"
+import { getOAuthProviderApi } from "@better-auth/oauth-provider";
+import { createAuthEndpoint } from "better-auth/api";
+import type { BetterAuthPlugin } from "better-auth/types";
+
+export const dpopBinding = () =>
+  ({
+    id: "dpop-binding",
+    endpoints: {
+      bindKey: createAuthEndpoint(
+        "/dpop/bind",
+        { method: "POST" },
+        async (ctx) => {
+          const provider = getOAuthProviderApi(
+            ctx,
+            ctx.context.getPlugin("oauth-provider")!.options,
+          );
+          const proof = await provider.verifyDpopProof({ required: true });
+          // proof.jkt is the thumbprint of the key the client proved.
+          return ctx.json({ jkt: proof.jkt });
+        },
+      ),
+    },
+  }) satisfies BetterAuthPlugin;
+```
+
+`verifyDpopProof` checks the proof against your `dpop` settings and stores its `jti`, so the proof cannot be reused. Without `required: true`, it returns `undefined` when the request has no proof. When `dpop.nonce.required` is on:
+
+* A proof without a current nonce fails with a 400 `use_dpop_nonce` error and a fresh `DPoP-Nonce`.
+* A verified proof sets the client's next nonce on the response.
+
+Call it before your endpoint consumes a one-time credential, such as a code. The client's retry with the nonce can then still redeem it. Do not call it on a request that also calls `issueTokens` or `resolveConfirmation`. Those verify the proof themselves, and a second check rejects its `jti` as reused. A proof sent through `auth.api` fails, because there is no HTTP method to check against `htm`.
+
+An endpoint that only hands out nonces, such as a credential issuer's Nonce Endpoint, calls `provider.issueDpopNonce()`. It sets a nonce only when `dpop.nonce.required` is on. Otherwise it returns `undefined` and sets no header.
 
 ## Custom claims
 
@@ -624,8 +663,16 @@ A [`clientAuthentication` strategy](/docs/plugins/oauth-provider/reference#provi
 
 When the subject token is DPoP-bound, the rules depend on who exchanges it:
 
-* **The client the token was issued to** must prove the same key. It sends a proof signed by that key, as it does for a refresh, or its `clientAuthentication` strategy returns that key as `confirmation`. The exchanged token stays bound to that key. A missing proof, or a proof or `confirmation` with another key, fails with `invalid_dpop_proof`.
+* **The client the token was issued to** must prove the same key. It sends a proof signed by that key, as it does for a refresh, or its `clientAuthentication` strategy returns that key as `confirmation`. The exchanged token stays bound to that key. A request with neither a proof nor a `confirmation` fails with `invalid_dpop_proof`. So does a proof or `confirmation` with another key.
 * **A service in the token's audience**, such as the MCP server that received it, does not hold the client's key. If the service sends its own proof, the exchanged token is bound to the service's key. If it sends no proof and none is required, the exchanged token is a bearer token.
+
+A subject token can also be bound by another mechanism, such as an mTLS certificate in `cnf["x5t#S256"]` that came from a strategy's `confirmation`. When the client the token was issued to exchanges it, its strategy must return the same `confirmation` again. The exchanged token then stays bound to that certificate. The exchange fails with `invalid_request` in any of these cases:
+
+* The strategy returns a different certificate.
+* The strategy returns no `confirmation`. A DPoP proof does not replace it.
+* The token's `cnf` uses a method the server does not recognize.
+
+A service in the token's audience is treated as for a DPoP-bound token. The exchanged token is bound to the service's own proof or `confirmation`, or is a bearer token when the service sends neither and none is required.
 
 An [actor token](#delegate-to-an-actor) is always the exchanging client's own token. When it is bound to a key, the request must prove the same key:
 
@@ -659,7 +706,7 @@ The provider applies these rules to every exchange, before your `allowExchange` 
 | The client is confidential and registered for the token-exchange grant                                                                                | Someone who only holds a leaked token cannot exchange it                                                            |
 | The subject token is an access token this server issued to a user                                                                                     | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
 | The client is the subject token's client, or is linked to a resource in the token's audience                                                          | A client cannot exchange a token that was never sent to it                                                          |
-| A client that exchanges its own DPoP-bound token sends a proof signed by the same key                                                                 | An exchange cannot remove or replace the client's DPoP binding                                                      |
+| A client that exchanges its own sender-constrained token proves the same binding: the same DPoP key, or the same strategy `confirmation`              | An exchange cannot remove or replace the client's binding                                                           |
 | The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged | An exchange cannot add access. An exchange is not a sign-in                                                         |
 | Each target resource is registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default)                        | The client's resource policy still applies, including each resource's `allowedScopes`                               |
 | A client that does not skip consent needs a stored consent covering the scopes and resources                                                          | The user must have approved this client for this access                                                             |
@@ -686,6 +733,7 @@ A token exchange fails with one of these errors:
   * `requested_token_type` is unsupported.
   * The request sends neither `resource` nor `audience`.
   * The user has no stored consent for the client that covers the request.
+  * The client exchanges its own token bound by a non-DPoP `cnf`, such as an mTLS certificate, and its client authentication does not return that same `confirmation`.
   * Your `allowExchange` policy denies the exchange.
 * `invalid_scope` (400), when any of these applies:
   * The request names a scope that the subject token or the client does not have.

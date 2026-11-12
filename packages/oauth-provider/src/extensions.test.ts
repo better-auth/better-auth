@@ -1455,6 +1455,166 @@ describe("oauth-provider client metadata extensions", async () => {
 });
 
 /**
+ * @see https://datatracker.ietf.org/doc/html/rfc8705#section-3
+ */
+describe("client_credentials with a confirmation-proving strategy", async () => {
+	const issuer = "http://localhost:3000";
+	const resource = "https://api.example.com";
+	const dpopResource = "https://dpop-api.example.com";
+	const authMethod = "test_attestation_jwt";
+	const assertionType =
+		"urn:better-auth:test:client-assertion-type:test-attestation";
+	let proven: Confirmation = { "x5t#S256": "attested-certificate" };
+	// A grant that consumes a one-time credential after resolving its binding,
+	// like the device code and CIBA grants.
+	const oneTimeGrant = "urn:better-auth:test:one-time-grant";
+	let consumed = 0;
+	const strategy = {
+		id: "test-confirmation-strategy",
+		init(ctx) {
+			extendOAuthProvider(ctx, {
+				grants: {
+					[oneTimeGrant]: async ({ provider }) => {
+						const { client, confirmation } =
+							await provider.authenticateClient();
+						const binding = await provider.resolveConfirmation({
+							client,
+							scopes: ["read"],
+							confirmation,
+						});
+						consumed++;
+						return provider.issueTokens({
+							client,
+							scopes: ["read"],
+							confirmation: binding,
+						});
+					},
+				},
+				clientAuthentication: {
+					[authMethod]: {
+						assertionTypes: [assertionType],
+						authenticate: async ({ clientId }) => ({
+							clientId: clientId!,
+							confirmation: proven,
+						}),
+					},
+				},
+			});
+		},
+	} satisfies BetterAuthPlugin;
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL: issuer,
+		plugins: [
+			jwt({ jwt: { issuer } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				resources: [
+					resource,
+					{ identifier: dpopResource, dpopBoundAccessTokensRequired: true },
+				],
+				enforcePerClientResources: false,
+				clientPrivileges: () => true,
+			}),
+			strategy,
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	const issue = async ({
+		target = resource,
+		dpopBound = false,
+	}: {
+		target?: string;
+		dpopBound?: boolean;
+	} = {}) => {
+		const machine = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: authMethod,
+				grant_types: ["client_credentials"],
+				scope: "read",
+				client_credentials_scopes: ["read"],
+				...(dpopBound ? { dpop_bound_access_tokens: true } : {}),
+			},
+		});
+		return client.$fetch<{ access_token: string; token_type: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: machine.client_id,
+					client_assertion_type: assertionType,
+					client_assertion: `assertion:${machine.client_id}`,
+					scope: "read",
+					resource: target,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
+	};
+
+	it("binds the token to the confirmation the strategy proved", async () => {
+		proven = { "x5t#S256": "attested-certificate" };
+		const { data, error } = await issue();
+		expect(error).toBeNull();
+		expect(decodeJwt(data!.access_token).cnf).toEqual(proven);
+		expect(data?.token_type).toBe("Bearer");
+	});
+
+	it("issues a DPoP token for a DPoP key confirmation", async () => {
+		proven = { jkt: "strategy-proven-key" };
+		const { data, error } = await issue({ target: dpopResource });
+		expect(error).toBeNull();
+		expect(data?.token_type).toBe("DPoP");
+		expect(decodeJwt(data!.access_token).cnf).toEqual(proven);
+	});
+
+	it("rejects a certificate confirmation before a one-time credential is consumed", async () => {
+		proven = { "x5t#S256": "attested-certificate" };
+		const machine = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: authMethod,
+				grant_types: [oneTimeGrant],
+				scope: "read",
+				dpop_bound_access_tokens: true,
+			},
+		});
+		consumed = 0;
+		const { error } = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: oneTimeGrant,
+				client_id: machine.client_id,
+				client_assertion_type: assertionType,
+				client_assertion: `assertion:${machine.client_id}`,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(error).toMatchObject({
+			error: "invalid_dpop_proof",
+			error_description: "A DPoP-bound access token is required",
+		});
+		expect(consumed).toBe(0);
+	});
+
+	it.each([
+		["the client requires DPoP-bound tokens", { dpopBound: true }],
+		["the resource requires DPoP-bound tokens", { target: dpopResource }],
+	])("rejects a certificate confirmation when %s", async (_, options) => {
+		proven = { "x5t#S256": "attested-certificate" };
+		const { error } = await issue(options);
+		expect(error).toMatchObject({
+			error: "invalid_dpop_proof",
+			error_description: "A DPoP-bound access token is required",
+		});
+	});
+});
+
+/**
  * @see https://datatracker.ietf.org/doc/html/rfc7800#section-3.1
  * @see https://datatracker.ietf.org/doc/html/rfc9449#section-6
  * @see https://datatracker.ietf.org/doc/html/rfc8705#section-3.1

@@ -131,6 +131,16 @@ The `acr` and `amr` are stored with the authorization code or device code and wi
 
 `/oauth2/userinfo` accepts GET and POST and returns claims for an access token whose scopes include `openid`. A token without `openid` gets 400 `invalid_scope`. An expired or revoked token, or one whose session has ended, gets 401 `invalid_token` ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)).
 
+Every 401 from UserInfo carries a `WWW-Authenticate` challenge that tells the client how to retry. The response also lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, so a browser client on another origin can read the challenge.
+
+| Request                                                                                     | Challenge                                                                                                                      |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| No access token                                                                             | `Bearer, DPoP algs="…"`, with no error code                                                                                    |
+| A token sent with the `Bearer` scheme or in the form body, when the token is not DPoP-bound | `Bearer error="invalid_token", …`                                                                                              |
+| A DPoP-bound token, or any request that uses the `DPoP` scheme                              | `DPoP error="…", error_description="…", algs="…"` ([RFC 9449 §7.1](https://datatracker.ietf.org/doc/html/rfc9449#section-7.1)) |
+
+`algs` lists the proof algorithms from `dpop.signingAlgorithms`. UserInfo validates the access token before it checks the DPoP proof, so an invalid, expired, or revoked token gets `invalid_token` whatever the proof contains. For a valid DPoP-bound token, the error is `invalid_dpop_proof` when the proof is missing or fails verification, for example when its `htu`, `htm`, or key does not match. When [`dpop.nonce.required`](/docs/plugins/oauth-provider/tokens#server-provided-nonces) is on, a proof without a current server nonce gets `use_dpop_nonce` instead, and the response carries a `DPoP-Nonce` header to retry with. Every other failure gets `invalid_token`, including a DPoP-bound token sent with the `Bearer` scheme. An `auth.api.oauth2UserInfo` call has no HTTP request to check a proof against, so a DPoP-bound token fails with `invalid_token`, and the thrown error carries the same challenge in its `headers`.
+
 ```ts
 const response = await fetch("https://auth.example.com/api/auth/oauth2/userinfo", {
   headers: { Authorization: `Bearer ${accessToken}` },

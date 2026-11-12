@@ -642,14 +642,14 @@ export const createAdapterFactory =
 				const defaultModelName = getDefaultModelName(model);
 				const defaultBaseModelName = getDefaultModelName(baseModel);
 
+				// `references.model` is a schema key. References to app tables outside
+				// the schema never match, so they must not go through the resolver.
 				// First, check if the joined model has FKs to the base model (forward join)
 				let foreignKeys = Object.entries(
 					schema[defaultModelName]!.fields,
 				).filter(
 					([field, fieldAttributes]) =>
-						fieldAttributes.references &&
-						getDefaultModelName(fieldAttributes.references.model) ===
-							defaultBaseModelName,
+						fieldAttributes.references?.model === defaultBaseModelName,
 				);
 
 				let isForwardJoin = true;
@@ -660,9 +660,7 @@ export const createAdapterFactory =
 						schema[defaultBaseModelName]!.fields,
 					).filter(
 						([field, fieldAttributes]) =>
-							fieldAttributes.references &&
-							getDefaultModelName(fieldAttributes.references.model) ===
-								defaultModelName,
+							fieldAttributes.references?.model === defaultModelName,
 					);
 					isForwardJoin = false;
 				}

@@ -6,13 +6,10 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "better-auth/crypto";
-import type { DpopNonceOptions } from "better-auth/oauth2";
 import {
-	createDpopReplayStore,
 	generateCodeChallenge,
 	getConfirmationJkt,
 	isDpopProofError,
-	verifyDpopProof,
 } from "better-auth/oauth2";
 import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
@@ -29,7 +26,11 @@ import {
 	getDpopProofJwt,
 	getDpopRequestTime,
 	getEndpointUrl,
-	setDpopNonceHeader,
+	issueEndpointDpopNonce,
+	throwInvalidDpopProof,
+	throwUseDpopNonce,
+	verifyEndpointDpopProof,
+	verifyRequestDpopProof,
 } from "./dpop";
 import {
 	collectExtensionIdTokenClaims,
@@ -223,22 +224,30 @@ export function getOAuthProviderApi(
 		},
 		resolveConfirmation: async (params) => {
 			assertConfirmation(params.confirmation, "resolveConfirmation");
-			// A proven confirmation wins over the resource policy, so skip its lookup.
-			const policy = params.confirmation
-				? undefined
-				: await resolveResourcePolicy(ctx, opts, {
-						resource: params.resources,
-						clientId: params.client.clientId,
-						requestedScopes: params.scopes,
-					});
+			// Resolved even with a proven confirmation: a binding the DPoP policy
+			// rejects then fails before a grant consumes a one-time credential, so
+			// the credential can still be retried.
+			const policy = await resolveResourcePolicy(ctx, opts, {
+				resource: params.resources,
+				clientId: params.client.clientId,
+				requestedScopes: params.scopes,
+			});
 			return resolveIssuanceConfirmation(ctx, opts, {
 				client: params.client,
-				dpopBoundAccessTokensRequired:
-					policy?.dpopBoundAccessTokensRequired ?? false,
+				dpopBoundAccessTokensRequired: policy.dpopBoundAccessTokensRequired,
 				confirmation: params.confirmation,
 				expectedJkt: params.expectedJkt,
 			});
 		},
+		// One implementation serves both overloads: with `required: true` it
+		// throws instead of returning `undefined`.
+		verifyDpopProof: ((params?: { required?: boolean }) =>
+			verifyEndpointDpopProof(
+				ctx,
+				opts,
+				params,
+			)) as OAuthProviderApi["verifyDpopProof"],
+		issueDpopNonce: () => issueEndpointDpopNonce(ctx, opts),
 		hashToken: (token: string, type: StoreTokenType) =>
 			storeToken(opts.storeTokens, token, type),
 		validateAccessToken: async (token: string, clientId?: string) => {
@@ -842,29 +851,6 @@ async function resolveResourceGrantIssuance(
 	};
 }
 
-function throwInvalidDpopProof(errorDescription: string): never {
-	throw new APIError("BAD_REQUEST", {
-		error: "invalid_dpop_proof",
-		error_description: errorDescription,
-	});
-}
-
-/**
- * RFC 9449 §8: answers a token request whose DPoP proof lacks a current nonce
- * with `use_dpop_nonce` and the nonce to retry with.
- */
-async function throwUseDpopNonce(
-	ctx: GenericEndpointContext,
-	nonce: DpopNonceOptions,
-	errorDescription: string,
-): Promise<never> {
-	throw new APIError(
-		"BAD_REQUEST",
-		{ error: "use_dpop_nonce", error_description: errorDescription },
-		await setDpopNonceHeader(ctx, nonce),
-	);
-}
-
 /**
  * Issues the nonce challenge before any grant runs. Grants consume their
  * authorization code, device code, or refresh token before the DPoP proof is
@@ -902,6 +888,25 @@ function clientRequiresDpopBoundAccessTokens(client: SchemaClient<Scope[]>) {
 }
 
 /**
+ * A confirmation that is not a DPoP key, such as an mTLS certificate, cannot
+ * stand in for a DPoP binding the client or a resource requires.
+ */
+function assertConfirmationMeetsDpopPolicy(
+	client: SchemaClient<Scope[]>,
+	dpopBoundAccessTokensRequired: boolean,
+	confirmation: Confirmation | undefined,
+) {
+	if (
+		confirmation &&
+		!getConfirmationJkt(confirmation) &&
+		(clientRequiresDpopBoundAccessTokens(client) ||
+			dpopBoundAccessTokensRequired)
+	) {
+		throwInvalidDpopProof("A DPoP-bound access token is required");
+	}
+}
+
+/**
  * Resolves the sender-constraint for an issuance: the `confirmation` the client
  * proved at authentication, or else the request's DPoP proof. With
  * `expectedJkt`, the binding must use that key and a proof is required, as on
@@ -918,6 +923,11 @@ export async function resolveIssuanceConfirmation(
 	},
 ): Promise<Confirmation | undefined> {
 	if (params.confirmation) {
+		assertConfirmationMeetsDpopPolicy(
+			params.client,
+			params.dpopBoundAccessTokensRequired,
+			params.confirmation,
+		);
 		if (
 			params.expectedJkt !== undefined &&
 			getConfirmationJkt(params.confirmation) !== params.expectedJkt
@@ -964,35 +974,14 @@ async function resolveDpopTokenBinding(
 		return undefined;
 	}
 
-	const nonce = getDpopNonceOptions(ctx, opts);
-	let proof: Awaited<ReturnType<typeof verifyDpopProof>>;
-	try {
-		proof = await verifyDpopProof({
-			proofJwt: dpopProofJwt,
-			method: "POST",
-			// The endpoint serving this request: the token endpoint, or a plugin's
-			// own endpoint that issues tokens out-of-grant.
-			url: getEndpointUrl(ctx, ctx.path ?? "/oauth2/token"),
-			expectedJkt,
-			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
-			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
-			nonce,
-			// The time the request arrived, which the token endpoint's nonce check
-			// also used, not the time the grant reaches issuance.
-			nowSeconds: getDpopRequestTime(ctx),
-		});
-	} catch (error) {
-		if (isDpopProofError(error)) {
-			if (error.code === "use_dpop_nonce" && nonce) {
-				await throwUseDpopNonce(ctx, nonce, error.message);
-			}
-			throwInvalidDpopProof(error.message);
-		}
-		throw error;
-	}
-	// RFC 9449 §8.2: hand the client its next nonce with the response.
-	if (nonce) await setDpopNonceHeader(ctx, nonce);
+	const proof = await verifyRequestDpopProof(ctx, opts, {
+		proofJwt: dpopProofJwt,
+		method: "POST",
+		// The endpoint serving this request: the token endpoint, or a plugin's
+		// own endpoint that issues tokens out-of-grant.
+		url: getEndpointUrl(ctx, ctx.path ?? "/oauth2/token"),
+		expectedJkt,
+	});
 	return { jkt: proof.jkt };
 }
 
@@ -1365,6 +1354,11 @@ async function createUserTokens(
 	// the fallback. Either way the AS owns the RFC 7800 `cnf`: stamped into a JWT
 	// access token, persisted on opaque access and refresh tokens, and surfaced
 	// as `cnf` at introspection.
+	assertConfirmationMeetsDpopPolicy(
+		client,
+		grantIssuance.dpopBoundAccessTokensRequired,
+		params.confirmation,
+	);
 	const confirmation =
 		params.confirmation ??
 		(await resolveDpopTokenBinding(ctx, opts, {
@@ -1894,6 +1888,7 @@ async function handleClientCredentialsGrant(
 		clientSecret: client_secret,
 		preVerified,
 		authMethod,
+		confirmation,
 	} = destructureCredentials(credentials);
 	const { scope, resource }: { scope?: string; resource?: string | string[] } =
 		ctx.body;
@@ -1957,6 +1952,9 @@ async function handleClientCredentialsGrant(
 		scopes: requestedScopes,
 		grantType: "client_credentials",
 		resources,
+		// A sender-constraint the client-authentication strategy proved, such as
+		// an mTLS certificate. Without one, a DPoP proof on the request binds it.
+		confirmation,
 	});
 }
 

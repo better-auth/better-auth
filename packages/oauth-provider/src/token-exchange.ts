@@ -414,13 +414,23 @@ async function exchangeToken(
 			deny("the user has not consented to this client for this exchange");
 		}
 	}
-	// As on refresh, a client exchanging its own DPoP-bound token must prove the
-	// same key. A resource server cannot hold that key, so it binds its own.
-	// The actor token is always the client's own, so its key must be proven too.
-	const subjectJkt =
-		subject.client_id === client.clientId
-			? getConfirmationJkt(subject.cnf)
-			: undefined;
+	// A client exchanging its own sender-constrained token must prove the same
+	// binding: the same DPoP key, as on refresh, or the same client-auth
+	// confirmation, such as an mTLS certificate. A resource server cannot hold
+	// that key, so it binds its own.
+	const ownBinding =
+		subject.client_id === client.clientId ? subject.cnf : undefined;
+	const subjectJkt = getConfirmationJkt(ownBinding);
+	// A DPoP binding is checked against the proof below, as `invalid_dpop_proof`.
+	if (
+		ownBinding != null &&
+		subjectJkt === undefined &&
+		!(isConfirmation(ownBinding) && sameConfirmation(confirmation, ownBinding))
+	) {
+		deny("client authentication does not match the subject_token binding");
+	}
+	// The actor token is always the client's own, so its binding must be proven
+	// too.
 	const actorJkt = getConfirmationJkt(actor?.token.cnf);
 	if (subjectJkt && actorJkt && subjectJkt !== actorJkt) {
 		tokenError(
@@ -429,8 +439,6 @@ async function exchangeToken(
 			"subject_token and actor_token are bound to different keys",
 		);
 	}
-	// A binding other than DPoP, such as mTLS, must be the one the client
-	// proved at authentication.
 	if (
 		actor?.token.cnf !== undefined &&
 		!actorJkt &&
