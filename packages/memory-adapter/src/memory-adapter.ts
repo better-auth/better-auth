@@ -434,7 +434,7 @@ export const memoryAdapter = (
 						if (!activeDb[model]) {
 							activeDb[model] = [];
 						}
-						activeDb[model]!.push(data);
+						activeDb[model].push(data);
 						return data;
 					},
 					findOne: async ({ model, modelKey = model, where, select, join }) => {
@@ -503,10 +503,10 @@ export const memoryAdapter = (
 						const resArray = res as any[];
 						let table = applySortToRecords(resArray, sortBy, modelKey);
 						if (offset !== undefined) {
-							table = table!.slice(offset);
+							table = table.slice(offset);
 						}
 						if (limit !== undefined) {
-							table = table!.slice(0, limit);
+							table = table.slice(0, limit);
 						}
 						return table || [];
 					},

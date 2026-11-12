@@ -416,7 +416,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						ctx.context.orgOptions.sendInvitationEmail(
 							{
 								id: updatedInvitation.id!,
-								role: updatedInvitation.role! as string,
+								role: updatedInvitation.role as string,
 								email: updatedInvitation.email!.toLowerCase(),
 								organization: organization,
 								inviter: {

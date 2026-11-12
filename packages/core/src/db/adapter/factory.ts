@@ -540,10 +540,7 @@ export const createAdapterFactory =
 
 				const useNumberId = options.advanced?.database?.generateId === "serial";
 
-				if (
-					defaultFieldName === "id" ||
-					fieldAttr!.references?.field === "id"
-				) {
+				if (defaultFieldName === "id" || fieldAttr.references?.field === "id") {
 					if (useNumberId) {
 						if (Array.isArray(value)) {
 							newValue = value.map(Number);
