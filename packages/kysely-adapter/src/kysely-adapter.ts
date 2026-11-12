@@ -1048,6 +1048,15 @@ export const kyselyAdapter = (
 					: false,
 			supportsArrays: false, // Even if field supports JSON, we must pass stringified arrays to the database.
 			supportsUUIDs: config?.type === "postgres" ? true : false,
+			// node-postgres encodes JS arrays as Postgres array literals, which
+			// `json`/`jsonb` columns reject, so top-level JSON arrays go as text.
+			customTransformInput:
+				config?.type === "postgres"
+					? ({ data, fieldAttributes }) =>
+							fieldAttributes.type === "json" && Array.isArray(data)
+								? JSON.stringify(data)
+								: data
+					: undefined,
 			transaction: config?.transaction
 				? (cb) =>
 						db.transaction().execute((trx) => {
