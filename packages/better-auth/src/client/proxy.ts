@@ -4,7 +4,7 @@ import type {
 	ClientFetchOption,
 } from "@better-auth/core";
 import { toKebabCase } from "@better-auth/core/utils/string";
-import type { BetterFetch } from "@better-fetch/fetch";
+import type { BetterFetch, SuccessContext } from "@better-fetch/fetch";
 import { isPayloadMethod } from "@better-fetch/fetch";
 import type { Atom } from "nanostores";
 import { isAtom } from "../utils/is-atom";
@@ -57,7 +57,8 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					knownPathMethods[routePath] ||
 					options.method ||
 					(Object.keys(body).length > 0 ? "POST" : "GET");
-				return await client(routePath, {
+				let successContext: SuccessContext | undefined;
+				const result = await client(routePath, {
 					...options,
 					body: isPayloadMethod(method)
 						? {
@@ -67,36 +68,32 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						: undefined,
 					query: query || options?.query,
 					method,
-					async onSuccess(context) {
-						await options?.onSuccess?.(context);
-						if (!atomListeners || options.disableSignal) return;
-						/**
-						 * We trigger listeners
-						 */
-						const matches = atomListeners.filter((s) => s.matcher(routePath));
-						if (!matches.length) return;
-
-						const visited = new Set<ClientAtomListener["signal"]>();
-						for (const match of matches) {
-							const signal = atoms[match.signal as any];
-							if (!signal) return;
-							if (visited.has(match.signal)) {
-								continue;
-							}
-							visited.add(match.signal);
-							/**
-							 * To avoid race conditions we set the signal in a setTimeout
-							 */
-							const val = signal.get();
-							setTimeout(() => {
-								//@ts-expect-error
-								signal.set(!val);
-							}, 10);
-							// we also call the callback if it exists
-							match.callback?.(routePath);
-						}
+					onSuccess(context) {
+						successContext = context;
 					},
 				});
+				if (!successContext) return result;
+
+				// Signal only after every fetch plugin hook ran, so cookies they persist
+				// are sent by the refetch, and before onSuccess, so it sees the auth change.
+				const matches =
+					atomListeners && !options.disableSignal
+						? atomListeners.filter((s) => s.matcher(routePath))
+						: [];
+				const visited = new Set<ClientAtomListener["signal"]>();
+				for (const match of matches) {
+					const signal = atoms[match.signal as any];
+					if (!signal || visited.has(match.signal)) {
+						continue;
+					}
+					visited.add(match.signal);
+					//@ts-expect-error
+					signal.set(!signal.get());
+					// we also call the callback if it exists
+					match.callback?.(routePath);
+				}
+				await options?.onSuccess?.(successContext);
+				return result;
 			},
 		});
 	}

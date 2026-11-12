@@ -105,10 +105,6 @@ export function getSessionAtom(
 	let flight: SessionFlight | undefined;
 	let freshUntil = 0;
 	let sessionRevision = 0;
-	$signal.listen(() => {
-		sessionRevision++;
-		freshUntil = 0;
-	});
 
 	const refetch = (
 		queryParams?: { query?: SessionQueryParams } | undefined,
@@ -124,6 +120,17 @@ export function getSessionAtom(
 		},
 	);
 	withEquality(session, isSessionAtomEqual);
+	$signal.listen(() => {
+		sessionRevision++;
+		freshUntil = 0;
+		// An auth change makes a missing session unknown again until the refetch settles.
+		const current = session.value;
+		if (current.data !== null || current.isPending) return;
+		session.set({
+			...current,
+			isPending: true,
+		});
+	});
 
 	const executeSessionFetch = async (
 		signal: AbortSignal,
