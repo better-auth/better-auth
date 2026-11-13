@@ -76,6 +76,7 @@ export type {
 	OAuthRefreshContext,
 	ProviderOptions,
 } from "./oauth-provider";
+export { pushAuthorizationRequest } from "./pushed-authorization-request";
 export {
 	refreshAccessToken,
 	refreshAccessTokenRequest,

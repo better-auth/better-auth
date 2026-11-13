@@ -11,6 +11,7 @@ import {
 	applyDefaultAccessTokenExpiry,
 	createAuthorizationURL,
 	parseStringBoolean,
+	pushAuthorizationRequest,
 	refreshAccessToken,
 	validateAuthorizationCode,
 	verifyProviderIdToken,
@@ -69,6 +70,8 @@ interface DiscoveryDocument {
 	jwks_uri?: string;
 	end_session_endpoint?: string;
 	id_token_signing_alg_values_supported?: string[];
+	pushed_authorization_request_endpoint?: string;
+	require_pushed_authorization_requests?: boolean;
 }
 
 function isSecretlessTokenEndpointAuth(
@@ -282,6 +285,8 @@ export const genericOAuth = <const ID extends string>(
 			let tokenUrl = c.tokenUrl;
 			let userInfoUrl = c.userInfoUrl;
 			let endSessionEndpoint = c.endSessionEndpoint;
+			let pushedAuthorizationRequestUrl = c.pushedAuthorizationRequestUrl;
+			let requiresPushedAuthorizationRequest = false;
 
 			let issuer: string | undefined;
 			let isOidc = false;
@@ -303,6 +308,10 @@ export const genericOAuth = <const ID extends string>(
 					tokenUrl ??= discovered.token_endpoint;
 					userInfoUrl ??= discovered.userinfo_endpoint;
 					endSessionEndpoint ??= discovered.end_session_endpoint;
+					pushedAuthorizationRequestUrl ??=
+						discovered.pushed_authorization_request_endpoint;
+					requiresPushedAuthorizationRequest =
+						discovered.require_pushed_authorization_requests === true;
 					issuer = discovered.issuer;
 					const signingAlgs = discovered.id_token_signing_alg_values_supported;
 					isOidc = Array.isArray(signingAlgs) && signingAlgs.length > 0;
@@ -350,6 +359,35 @@ export const genericOAuth = <const ID extends string>(
 					`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri.`,
 				);
 			}
+
+			const pushedAuthorizationRequest = c.pushedAuthorizationRequest ?? "auto";
+			const usePushedAuthorizationRequest =
+				pushedAuthorizationRequest === true ||
+				(pushedAuthorizationRequest === "auto" &&
+					requiresPushedAuthorizationRequest);
+			if (usePushedAuthorizationRequest && !pushedAuthorizationRequestUrl) {
+				const reason = requiresPushedAuthorizationRequest
+					? "discovery requires pushed authorization requests but has no pushed_authorization_request_endpoint"
+					: "pushedAuthorizationRequest is true but no pushed authorization request endpoint is configured. Set pushedAuthorizationRequestUrl or use a discoveryUrl that publishes pushed_authorization_request_endpoint";
+				if (c.discoveryUrl) {
+					ctx.logger.error(
+						`Provider "${c.providerId}": ${reason}. Provider skipped.`,
+					);
+					continue;
+				}
+				throw new Error(`Provider "${c.providerId}": ${reason}.`);
+			}
+			if (
+				pushedAuthorizationRequest === false &&
+				requiresPushedAuthorizationRequest
+			) {
+				ctx.logger.warn(
+					`Provider "${c.providerId}": discovery sets require_pushed_authorization_requests, but pushedAuthorizationRequest is false. The provider will likely reject sign-in requests.`,
+				);
+			}
+			const pushedAuthorizationRequestEndpoint = usePushedAuthorizationRequest
+				? pushedAuthorizationRequestUrl
+				: undefined;
 
 			const tokenEndpointAuth = c.tokenEndpointAuth;
 			if (c.clientSecret && isSecretlessTokenEndpointAuth(tokenEndpointAuth)) {
@@ -475,14 +513,14 @@ export const genericOAuth = <const ID extends string>(
 					}
 					return url;
 				},
-				createAuthorizationURL(data) {
+				async createAuthorizationURL(data) {
 					if (!authorizationUrl) {
 						throw APIError.from(
 							"BAD_REQUEST",
 							GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 						);
 					}
-					return createAuthorizationURL({
+					const url = await createAuthorizationURL({
 						id: c.providerId,
 						options: {
 							clientId: c.clientId,
@@ -511,6 +549,32 @@ export const genericOAuth = <const ID extends string>(
 						},
 						loginHint: data.loginHint,
 					});
+					if (!pushedAuthorizationRequestEndpoint) {
+						return url;
+					}
+					try {
+						return await pushAuthorizationRequest({
+							authorizationURL: url,
+							authorizationEndpoint: authorizationUrl,
+							pushedAuthorizationRequestEndpoint,
+							options: {
+								clientId: c.clientId,
+								clientSecret: c.clientSecret,
+							},
+							tokenEndpoint: tokenUrl,
+							authentication: c.authentication,
+							tokenEndpointAuth,
+							headers: c.authorizationHeaders,
+						});
+					} catch (error) {
+						ctx.logger.error(
+							`Provider "${c.providerId}": pushed authorization request failed: ${error}`,
+						);
+						throw APIError.from(
+							"BAD_GATEWAY",
+							GENERIC_OAUTH_ERROR_CODES.PUSHED_AUTHORIZATION_REQUEST_FAILED,
+						);
+					}
 				},
 				async validateAuthorizationCode(data) {
 					if (c.getToken) {
