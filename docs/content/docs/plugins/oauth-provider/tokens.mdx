@@ -566,7 +566,7 @@ To get that token, register the service for both grants, `grant_types: [TOKEN_EX
 }
 ```
 
-`act.sub` is the actor token's subject. For a `client_credentials` token, it is the client ID. For a user's token issued to the service, it is that user's ID. Introspection returns `act` for JWT and opaque access tokens.
+`act.sub` is the actor token's subject. For a `client_credentials` token, it is the client ID. For a user's token issued to the service, it is that user's ID, even with `accessTokenSubject: "pairwise"`. Introspection returns `act` for JWT and opaque access tokens.
 
 #### Actor chains
 

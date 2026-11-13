@@ -446,6 +446,18 @@ export interface OAuthProviderApi {
 		token: string,
 		clientId?: string,
 	) => Awaitable<ActiveAccessTokenPayload>;
+	/**
+	 * Returns the subject identifier the given client sees for a user in its ID
+	 * tokens and UserInfo: the pairwise subject for a client with
+	 * `subject_type: "pairwise"` when `pairwiseSecret` is set, otherwise the
+	 * user ID. Access token payloads returned by `validateAccessToken` and
+	 * `requireActiveAccessToken` carry the user ID in `sub`; use this to
+	 * present it to a client.
+	 */
+	resolveSubject: (params: {
+		userId: string;
+		client: SchemaClient<Scope[]>;
+	}) => Promise<string>;
 }
 
 export interface OAuthExtensionGrantHandlerInput {
@@ -1808,6 +1820,16 @@ export interface OAuthOptions<
 	 * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
 	 */
 	pairwiseSecret?: string;
+	/**
+	 * The `sub` of JWT access tokens issued to a user. `"pairwise"` gives
+	 * clients with `subject_type: "pairwise"` the same `sub` as their ID tokens,
+	 * and adds the user ID encrypted in a `ba_uid` claim so the provider can
+	 * still find the user. Requires `pairwiseSecret`.
+	 *
+	 * @default "user"
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+	 */
+	accessTokenSubject?: "user" | "pairwise";
 	/**
 	 * Resolves a `request_uri` at the authorize endpoint (PAR support).
 	 *

@@ -2340,3 +2340,41 @@ describe("oauthTokenExchange delegation", () => {
 		});
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10892
+ */
+describe("oauthTokenExchange with pairwise access token subjects", () => {
+	it("resolves the user behind a pairwise subject token", async () => {
+		const {
+			auth,
+			headers,
+			createClient,
+			mcpServer,
+			userTokenForMcp,
+			exchangeAs,
+		} = await bootScenario(
+			{},
+			{},
+			{
+				pairwiseSecret: "test-pairwise-secret-key-32chars!!",
+				accessTokenSubject: "pairwise",
+			},
+		);
+		const pairwiseAgent = await createClient({
+			redirect_uris: [redirectUri],
+			scope: "openid profile read write offline_access",
+			skip_consent: true,
+			resources: [mcp],
+			subject_type: "pairwise",
+		});
+		const session = await auth.api.getSession({ headers });
+		const subject = await userTokenForMcp({ requester: pairwiseAgent });
+		expect(decodeJwt(subject.access_token).sub).not.toBe(session!.user.id);
+
+		const { data, error } = await exchangeAs(mcpServer, subject.access_token);
+		expect(error).toBeNull();
+		// The exchanging client has the public subject type, so it sees the user ID.
+		expect(decodeJwt(data!.access_token).sub).toBe(session!.user.id);
+	});
+});

@@ -12,6 +12,7 @@ import {
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
+import type { JWTPayload } from "jose";
 import {
 	getClientDiscoveries,
 	getExtensionClientAuthenticationStrategy,
@@ -1238,6 +1239,75 @@ export async function resolveSubjectIdentifier(
 		return computePairwiseSub(userId, client, opts.pairwiseSecret);
 	}
 	return userId;
+}
+
+/**
+ * Claim carrying the encrypted user ID in a JWT access token whose `sub` is
+ * pairwise. A pairwise `sub` cannot be reversed, and JWT access tokens are not
+ * stored, so UserInfo, introspection, and token exchange read the user from
+ * this claim. The ciphertext is randomized per token, so it does not link a
+ * user across clients.
+ *
+ * @internal
+ */
+export const ENCRYPTED_USER_ID_CLAIM = "ba_uid";
+
+/**
+ * Returns the `sub` for a JWT access token issued to a user, plus the encrypted
+ * user ID claim when `sub` is pairwise. See `accessTokenSubject`.
+ *
+ * @internal
+ */
+export async function resolveAccessTokenSubject(
+	ctx: GenericEndpointContext,
+	userId: string,
+	client: SchemaClient<Scope[]>,
+	opts: OAuthOptions<Scope[]>,
+): Promise<{ sub: string; [ENCRYPTED_USER_ID_CLAIM]?: string }> {
+	if (opts.accessTokenSubject !== "pairwise") {
+		return { sub: userId };
+	}
+	const sub = await resolveSubjectIdentifier(userId, client, opts);
+	if (sub === userId) {
+		return { sub };
+	}
+	return {
+		sub,
+		[ENCRYPTED_USER_ID_CLAIM]: await symmetricEncrypt({
+			key: ctx.context.secretConfig,
+			data: userId,
+		}),
+	};
+}
+
+/**
+ * Restores the user ID as `sub` on a verified JWT access token payload whose
+ * `sub` is pairwise, and removes the encrypted claim. Returns `false` when the
+ * claim does not decrypt.
+ *
+ * @internal
+ */
+export async function restoreAccessTokenUserId(
+	ctx: GenericEndpointContext,
+	payload: JWTPayload,
+): Promise<boolean> {
+	const encrypted = payload[ENCRYPTED_USER_ID_CLAIM];
+	if (encrypted === undefined) {
+		return true;
+	}
+	delete payload[ENCRYPTED_USER_ID_CLAIM];
+	if (typeof encrypted !== "string") {
+		return false;
+	}
+	try {
+		payload.sub = await symmetricDecrypt({
+			key: ctx.context.secretConfig,
+			data: encrypted,
+		});
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 /**

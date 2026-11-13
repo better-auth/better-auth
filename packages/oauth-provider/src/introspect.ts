@@ -33,6 +33,7 @@ import {
 	getJwtPlugin,
 	parseClientMetadata,
 	resolveSubjectIdentifier,
+	restoreAccessTokenUserId,
 	toAudienceClaim,
 	validateClientCredentials,
 } from "./utils";
@@ -174,6 +175,12 @@ async function validateJwtAccessToken(
 		if (!session || session.expiresAt < new Date()) {
 			return { active: false };
 		}
+	}
+
+	// Internal callers read the user ID from `sub`; presentation re-derives the
+	// pairwise value in `resolveIntrospectionSub`.
+	if (!(await restoreAccessTokenUserId(ctx, jwtPayload))) {
+		return { active: false };
 	}
 
 	// Return the JWT payload in introspection format
