@@ -19,7 +19,7 @@ describe("pushAuthorizationRequest", () => {
 	});
 
 	it("keeps the authorization endpoint's existing query text unchanged", async () => {
-		respondWith(
+		const fetchMock = respondWith(
 			Response.json(
 				{ request_uri: "urn:example:1", expires_in: 60 },
 				{ status: 201 },
@@ -37,6 +37,15 @@ describe("pushAuthorizationRequest", () => {
 		expect(url.href).toBe(
 			"https://as.example.com/authorize?tenant=acme%20inc&value=~&client_id=client&request_uri=urn%3Aexample%3A1",
 		);
+		const [input, init] = fetchMock.mock.calls[0]!;
+		expect(String(input)).toBe("https://as.example.com/par");
+		expect(init?.method).toBe("POST");
+		const body = new URLSearchParams(String(init?.body));
+		expect(Object.fromEntries(body)).toEqual({
+			response_type: "code",
+			client_id: "client",
+			state: "abc",
+		});
 	});
 
 	it("refuses a redirect from the pushed authorization request endpoint", async () => {

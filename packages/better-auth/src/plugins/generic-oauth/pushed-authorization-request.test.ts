@@ -105,11 +105,11 @@ async function startAuthorizationServer() {
 }
 
 describe("generic-oauth pushed authorization requests", async () => {
-	const as = await startAuthorizationServer();
+	const authorizationServer = await startAuthorizationServer();
 
 	afterEach(() => {
-		as.requests.length = 0;
-		Object.assign(as.metadata, {
+		authorizationServer.requests.length = 0;
+		Object.assign(authorizationServer.metadata, {
 			advertisePar: true,
 			requirePar: true,
 			parStatus: 201,
@@ -117,7 +117,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 		});
 	});
 	afterAll(async () => {
-		await as.close();
+		await authorizationServer.close();
 	});
 
 	async function createInstance(config: Partial<GenericOAuthConfig> = {}) {
@@ -128,7 +128,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 						config: [
 							{
 								providerId: "par",
-								discoveryUrl: `${as.url}/.well-known/openid-configuration`,
+								discoveryUrl: `${authorizationServer.url}/.well-known/openid-configuration`,
 								clientId: "par-client",
 								clientSecret: "par-secret",
 								...config,
@@ -158,7 +158,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 		expect(res.error).toBeNull();
 		const authorizationURL = new URL(res.data!.url!);
 		expect(`${authorizationURL.origin}${authorizationURL.pathname}`).toBe(
-			`${as.url}/authorize`,
+			`${authorizationServer.url}/authorize`,
 		);
 		expect([...authorizationURL.searchParams.keys()].sort()).toEqual([
 			"client_id",
@@ -169,7 +169,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 			"urn:ietf:params:oauth:request_uri:pushed-1",
 		);
 
-		const [pushed] = as.pushed();
+		const [pushed] = authorizationServer.pushed();
 		expect(pushed).toBeDefined();
 		expect(pushed!.headers["content-type"]).toBe(
 			"application/x-www-form-urlencoded",
@@ -201,7 +201,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 	});
 
 	it("keeps the front-channel request when discovery advertises but does not require PAR", async () => {
-		as.metadata.requirePar = false;
+		authorizationServer.metadata.requirePar = false;
 		const instance = await createInstance();
 		const { res } = await signIn(instance);
 
@@ -210,11 +210,11 @@ describe("generic-oauth pushed authorization requests", async () => {
 		expect(authorizationURL.searchParams.get("state")).toEqual(
 			expect.any(String),
 		);
-		expect(as.pushed()).toHaveLength(0);
+		expect(authorizationServer.pushed()).toHaveLength(0);
 	});
 
 	it("pushes an advertised-but-optional request when pushedAuthorizationRequest is true", async () => {
-		as.metadata.requirePar = false;
+		authorizationServer.metadata.requirePar = false;
 		const instance = await createInstance({ pushedAuthorizationRequest: true });
 		const { res } = await signIn(instance);
 
@@ -222,7 +222,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 		expect(authorizationURL.searchParams.get("request_uri")).toBe(
 			"urn:ietf:params:oauth:request_uri:pushed-1",
 		);
-		expect(as.pushed()).toHaveLength(1);
+		expect(authorizationServer.pushed()).toHaveLength(1);
 	});
 
 	it("does not push when pushedAuthorizationRequest is false", async () => {
@@ -232,7 +232,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 		const { res } = await signIn(instance);
 
 		expect(new URL(res.data!.url!).searchParams.get("request_uri")).toBeNull();
-		expect(as.pushed()).toHaveLength(0);
+		expect(authorizationServer.pushed()).toHaveLength(0);
 	});
 
 	it("authenticates the pushed request with the token endpoint client authentication", async () => {
@@ -244,7 +244,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 		const { res } = await signIn(instance);
 
 		expect(res.error).toBeNull();
-		const body = as.pushed()[0]!.body;
+		const body = authorizationServer.pushed()[0]!.body;
 		expect(body.get("client_secret")).toBeNull();
 		expect(body.get("client_assertion")).toBe("client-assertion-jwt");
 		expect(body.get("client_assertion_type")).toBe(
@@ -253,7 +253,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 		// RFC 9126 §2: the server must accept its token endpoint URL as the audience.
 		expect(getClientAssertion).toHaveBeenCalledWith({
 			clientId: "par-client",
-			tokenEndpoint: `${as.url}/token`,
+			tokenEndpoint: `${authorizationServer.url}/token`,
 			grantType: "authorization_code",
 		});
 	});
@@ -264,7 +264,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 		});
 		await signIn(instance);
 
-		const pushed = as.pushed()[0]!;
+		const pushed = authorizationServer.pushed()[0]!;
 		expect(pushed.headers.authorization).toBe(
 			`Basic ${btoa("par-client:par-secret")}`,
 		);
@@ -283,7 +283,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 			additionalParams: { ui_locales: "es" },
 		});
 
-		const body = as.pushed()[0]!.body;
+		const body = authorizationServer.pushed()[0]!.body;
 		expect(body.get("scope")).toBe("profile");
 		expect(body.get("prompt")).toBe("consent");
 		expect(body.get("audience")).toBe("https://api.example.com");
@@ -291,8 +291,8 @@ describe("generic-oauth pushed authorization requests", async () => {
 	});
 
 	it("fails the sign-in without a redirect when the server rejects the pushed request", async () => {
-		as.metadata.parStatus = 400;
-		as.metadata.parResponse = {
+		authorizationServer.metadata.parStatus = 400;
+		authorizationServer.metadata.parResponse = {
 			error: "invalid_request",
 			error_description: "redirect_uri is not registered",
 		};
@@ -308,7 +308,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 	});
 
 	it("fails the sign-in when the pushed request response has no request_uri", async () => {
-		as.metadata.parResponse = { expires_in: 60 };
+		authorizationServer.metadata.parResponse = { expires_in: 60 };
 		const instance = await createInstance();
 		const { res } = await signIn(instance);
 
@@ -319,10 +319,10 @@ describe("generic-oauth pushed authorization requests", async () => {
 	it("uses a configured pushedAuthorizationRequestUrl without discovery", async () => {
 		const instance = await createInstance({
 			discoveryUrl: undefined,
-			authorizationUrl: `${as.url}/authorize`,
-			tokenUrl: `${as.url}/token`,
-			userInfoUrl: `${as.url}/userinfo`,
-			pushedAuthorizationRequestUrl: `${as.url}/par`,
+			authorizationUrl: `${authorizationServer.url}/authorize`,
+			tokenUrl: `${authorizationServer.url}/token`,
+			userInfoUrl: `${authorizationServer.url}/userinfo`,
+			pushedAuthorizationRequestUrl: `${authorizationServer.url}/par`,
 			pushedAuthorizationRequest: true,
 		});
 		const { res } = await signIn(instance);
@@ -340,8 +340,8 @@ describe("generic-oauth pushed authorization requests", async () => {
 						config: [
 							{
 								providerId: "par",
-								authorizationUrl: `${as.url}/authorize`,
-								tokenUrl: `${as.url}/token`,
+								authorizationUrl: `${authorizationServer.url}/authorize`,
+								tokenUrl: `${authorizationServer.url}/token`,
 								clientId: "par-client",
 								clientSecret: "par-secret",
 								pushedAuthorizationRequest: true,
@@ -354,12 +354,12 @@ describe("generic-oauth pushed authorization requests", async () => {
 	});
 
 	it("skips a discovered provider that requires PAR but advertises no endpoint", async () => {
-		as.metadata.advertisePar = false;
+		authorizationServer.metadata.advertisePar = false;
 		const instance = await createInstance();
 		const { res } = await signIn(instance);
 
 		expect(res.data).toBeNull();
-		expect(as.pushed()).toHaveLength(0);
+		expect(authorizationServer.pushed()).toHaveLength(0);
 	});
 
 	it("warns when PAR is disabled for a server that requires it", async () => {
@@ -372,7 +372,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 						config: [
 							{
 								providerId: "par",
-								discoveryUrl: `${as.url}/.well-known/openid-configuration`,
+								discoveryUrl: `${authorizationServer.url}/.well-known/openid-configuration`,
 								clientId: "par-client",
 								clientSecret: "par-secret",
 								pushedAuthorizationRequest: false,

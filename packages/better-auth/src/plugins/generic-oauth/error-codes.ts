@@ -4,5 +4,5 @@ export const GENERIC_OAUTH_ERROR_CODES = defineErrorCodes({
 	INVALID_OAUTH_CONFIGURATION: "Invalid OAuth configuration",
 	TOKEN_URL_NOT_FOUND: "Invalid OAuth configuration. Token URL not found.",
 	PUSHED_AUTHORIZATION_REQUEST_FAILED:
-		"The provider rejected the pushed authorization request",
+		"The pushed authorization request failed",
 });

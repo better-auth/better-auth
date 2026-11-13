@@ -543,7 +543,7 @@ getUserInfo: async (tokens) => {
 
 ### Pushed Authorization Requests
 
-Some providers require pushed authorization requests (PAR, RFC 9126). High-security profiles such as FAPI 2.0 require them. With PAR, your server sends the authorization request, including `state`, `redirect_uri`, scopes, and the PKCE challenge, directly to the provider. The provider returns a short-lived `request_uri`. The user's browser is then redirected with only `client_id` and `request_uri`. The request parameters never pass through the browser, so nobody can read or change them on the way.
+Some providers require pushed authorization requests (PAR, RFC 9126). High-security profiles such as FAPI 2.0 require them. With PAR, your server sends the authorization request, including `state`, `redirect_uri`, scopes, and the PKCE challenge, directly to the provider. The provider returns a short-lived `request_uri`. The user's browser is then sent to the authorization endpoint with only `client_id` and `request_uri` added. Query parameters that are already part of the configured authorization endpoint stay on it. The request parameters never pass through the browser, so nobody can read or change them on the way.
 
 By default, Better Auth uses PAR when the provider's discovery document sets `require_pushed_authorization_requests: true`. Providers that do not require PAR keep the browser redirect they use today. Some providers require PAR only for specific clients and do not say so in discovery. To push every request to such a provider, or to any provider that supports PAR, set `pushedAuthorizationRequest: true`:
 
@@ -568,11 +568,11 @@ export const auth = betterAuth({
 });
 ```
 
-The pushed request authenticates your client the same way as the token request. Better Auth uses `clientSecret`, `authentication`, or `tokenEndpointAuth`, and sends `authorizationHeaders` with it. A `private_key_jwt` assertion getter receives the token endpoint URL as `tokenEndpoint`. RFC 9126 requires the provider to accept that URL as the assertion audience for pushed requests.
+The pushed request authenticates your client the same way as the token request. Better Auth uses `clientSecret`, `authentication`, or `tokenEndpointAuth`, and sends `authorizationHeaders` with it. A `private_key_jwt` assertion getter receives the token endpoint URL as `tokenEndpoint`. RFC 9126 requires the provider to accept that URL as the assertion audience for pushed requests. A provider configured with `getToken` and no `tokenUrl` has no token endpoint, so the getter receives the pushed authorization request endpoint instead, which RFC 9126 also requires the provider to accept.
 
 Pushing needs a pushed authorization request endpoint. Better Auth reads it from `pushed_authorization_request_endpoint` in the discovery document, or from `pushedAuthorizationRequestUrl`. If no endpoint is found, startup fails for a manually configured provider. A discovery provider is skipped and retried like any other failed discovery.
 
-If the provider rejects the pushed request, sign-in returns a `502` error with the code `PUSHED_AUTHORIZATION_REQUEST_FAILED` and no redirect URL. The server log records the provider's status and error code.
+If the pushed request fails, for example because the provider rejects it, sign-in returns a `502` error with the code `PUSHED_AUTHORIZATION_REQUEST_FAILED` and no redirect URL. The server log records the provider's status and error code.
 
 Set `pushedAuthorizationRequest: false` only for a provider whose discovery document claims to require PAR when it does not. Better Auth logs a warning at startup, because a provider that does require PAR rejects every browser-redirect sign-in.
 
