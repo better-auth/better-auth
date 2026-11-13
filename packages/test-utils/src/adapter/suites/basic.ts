@@ -3217,6 +3217,9 @@ export const getNormalTestSuiteTests = (
 				console.log(findResult);
 			},
 		},
+		/**
+		 * @see https://node-postgres.com/features/types
+		 */
 		"create - should support json arrays": {
 			migrateBetterAuth: {
 				plugins: [

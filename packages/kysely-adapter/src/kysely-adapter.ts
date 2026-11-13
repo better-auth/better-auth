@@ -140,6 +140,27 @@ export const kyselyAdapter = (
 				return { allSelectsStr, allSelects };
 			};
 
+			// node-postgres encodes JS arrays as Postgres array literals, which
+			// `json`/`jsonb` columns reject, so top-level JSON arrays are written
+			// as JSON text. Only written values are encoded: `in` and `not_in`
+			// filters also pass arrays and must keep their list shape.
+			const encodeJSONArrays = (
+				modelKey: string,
+				values: Record<string, any>,
+			): Record<string, any> => {
+				if (config?.type !== "postgres") return values;
+				const fields = schema[getDefaultModelName(modelKey)]?.fields;
+				if (!fields) return values;
+				let encoded: Record<string, any> | undefined;
+				for (const [field, attributes] of Object.entries(fields)) {
+					if (attributes.type !== "json") continue;
+					const column = getFieldName({ model: modelKey, field });
+					if (!Array.isArray(values[column])) continue;
+					encoded ??= { ...values };
+					encoded[column] = JSON.stringify(values[column]);
+				}
+				return encoded ?? values;
+			};
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -588,7 +609,9 @@ export const kyselyAdapter = (
 
 			return {
 				async create({ data, model, modelKey = model }) {
-					const builder = db.insertInto(model).values(data);
+					const builder = db
+						.insertInto(model)
+						.values(encodeJSONArrays(modelKey, data));
 					const returned = await withReturning(
 						data,
 						builder,
@@ -780,7 +803,9 @@ export const kyselyAdapter = (
 					}
 					const { and, or } = convertWhereClause(model, modelKey, where);
 
-					let query = db.updateTable(model).set(values as any);
+					let query = db
+						.updateTable(model)
+						.set(encodeJSONArrays(modelKey, values as Record<string, any>));
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -797,7 +822,9 @@ export const kyselyAdapter = (
 				},
 				async updateMany({ model, modelKey = model, where, update: values }) {
 					const { and, or } = convertWhereClause(model, modelKey, where);
-					let query = db.updateTable(model).set(values as any);
+					let query = db
+						.updateTable(model)
+						.set(encodeJSONArrays(modelKey, values) as any);
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -956,7 +983,9 @@ export const kyselyAdapter = (
 					// (`field = field + delta`) so the database, not the
 					// application, performs the arithmetic atomically. Absolute
 					// `set` assignments are applied in the same statement.
-					const assignments: Record<string, any> = { ...(set ?? {}) };
+					const assignments: Record<string, any> = {
+						...encodeJSONArrays(modelKey, set ?? {}),
+					};
 					for (const [field, delta] of Object.entries(increment)) {
 						assignments[field] = sql`${sql.ref(field)} + ${delta}`;
 					}
@@ -1048,15 +1077,6 @@ export const kyselyAdapter = (
 					: false,
 			supportsArrays: false, // Even if field supports JSON, we must pass stringified arrays to the database.
 			supportsUUIDs: config?.type === "postgres" ? true : false,
-			// node-postgres encodes JS arrays as Postgres array literals, which
-			// `json`/`jsonb` columns reject, so top-level JSON arrays go as text.
-			customTransformInput:
-				config?.type === "postgres"
-					? ({ data, fieldAttributes }) =>
-							fieldAttributes.type === "json" && Array.isArray(data)
-								? JSON.stringify(data)
-								: data
-					: undefined,
 			transaction: config?.transaction
 				? (cb) =>
 						db.transaction().execute((trx) => {
