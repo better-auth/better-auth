@@ -267,7 +267,7 @@ Pushed authorization requests ([RFC 9126](https://datatracker.ietf.org/doc/html/
 
 `requestUriResolver` <span className="opacity-70">`(input) => Promise<Record<string, string> | null>`</span>
 
-Resolves a `request_uri` at the authorize endpoint for pushed authorization requests ([RFC 9126 §4](https://datatracker.ietf.org/doc/html/rfc9126#section-4)). Return `null` for an unknown or expired URI. With `pushedAuthorizationRequests.enabled`, the authorize endpoint first looks up values that `/oauth2/par` issued and calls the resolver only for other values.
+Resolves a `request_uri` at the authorize endpoint for pushed authorization requests ([RFC 9126 §4](https://datatracker.ietf.org/doc/html/rfc9126#section-4)). Return `null` for an unknown or expired URI. With `pushedAuthorizationRequests.enabled`, the authorize endpoint first looks up values that `/oauth2/par` issued. It calls the resolver for any value it does not hold, including one that expired or was already used, so return `null` for values you did not issue.
 
 Discovery keeps `request_uri_parameter_supported: false` when you set a resolver. That field covers request objects that the server fetches from a URL the client hosts ([OpenID Connect Core §6.2](https://openid.net/specs/openid-connect-core-1_0.html#RequestUriParameter)), which the authorize endpoint does not support. A pushed `request_uri` does not depend on it ([RFC 9126 §5](https://datatracker.ietf.org/doc/html/rfc9126#section-5)).
 

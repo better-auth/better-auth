@@ -37,7 +37,7 @@ Better Auth also applies these rules to the authorize request ([OAuth 2.1 §4.1.
 
 A plain authorization request carries its parameters in the browser URL, where the user, browser extensions, and logs can read or change them. A pushed authorization request (PAR) moves them to a direct call from the client to your server ([RFC 9126](https://datatracker.ietf.org/doc/html/rfc9126)). The browser then carries only a short-lived reference.
 
-To serve the endpoint, set `pushedAuthorizationRequests.enabled`:
+To serve the endpoint, set `pushedAuthorizationRequests.enabled`. The endpoint also needs the `authorization_code` grant, which `grantTypes` includes by default:
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -65,7 +65,7 @@ The authorize endpoint uses only the pushed parameters. It ignores any other par
 
 ### Bind the code to a DPoP key
 
-A client can send a `DPoP` proof with the push, signed for the `/oauth2/par` URL. The server then binds the authorization code to that key ([RFC 9449 §10.1](https://datatracker.ietf.org/doc/html/rfc9449#section-10.1)). The token request must carry a proof signed by the same key. A pushed `dpop_jkt` that names a different key fails with `invalid_request`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
+A client can send a `DPoP` proof with the push. Its `htm` must be `POST`, and its `htu` must be the full public URL of `/oauth2/par`. Behind a proxy, set `baseURL` to the public URL so the server checks the same value. The server then binds the authorization code to that key ([RFC 9449 §10.1](https://datatracker.ietf.org/doc/html/rfc9449#section-10.1)). The token request must carry a proof signed by the same key. A pushed `dpop_jkt` that names a different key fails with `invalid_request`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
 
 ### Require pushed requests
 
@@ -86,7 +86,7 @@ An authorization request without `request_uri` then fails with `invalid_request`
 
 ### Resolve your own request URIs
 
-`requestUriResolver` resolves `request_uri` values that your own endpoint issues. With both PAR options set, the authorize endpoint first looks up values that `/oauth2/par` issued, and calls your resolver for any other value. A request your resolver returns counts as pushed under a required policy.
+`requestUriResolver` resolves `request_uri` values that your own endpoint issues. With both PAR options set, the authorize endpoint first looks up values that `/oauth2/par` issued, and calls your resolver for any other value, including one that expired or was already used. Return `null` for values you did not issue. A request your resolver returns counts as pushed under a required policy.
 
 Your resolver must enforce what the built-in endpoint does: each value expires quickly, works once, and works only for the client that pushed it. To bind the code to a DPoP key from your endpoint, call [`verifyDpopProof`](/docs/plugins/oauth-provider/tokens#nonces-on-your-own-endpoints) there and store the proof's `jkt` as `dpop_jkt` with the request.
 

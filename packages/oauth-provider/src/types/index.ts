@@ -1959,8 +1959,9 @@ export interface OAuthOptions<
 	 * is invalid or expired.
 	 *
 	 * With `pushedAuthorizationRequests.enabled`, the authorize endpoint first
-	 * looks up `request_uri` values issued by `/oauth2/par` and calls this
-	 * resolver only for other values.
+	 * looks up `request_uri` values issued by `/oauth2/par`. It calls this
+	 * resolver for any value it does not hold, including one that expired or
+	 * was already used, so return null for values you did not issue.
 	 */
 	requestUriResolver?: (input: {
 		requestUri: string;

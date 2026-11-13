@@ -630,6 +630,7 @@ describe("pushed authorization requests with required DPoP nonces", async () => 
 		});
 		expect(challenged.response.status).toBe(400);
 		expect(challenged.body).toMatchObject({ error: "use_dpop_nonce" });
+		expect(challenged.response.headers.get("Cache-Control")).toBe("no-store");
 		const nonce = challenged.response.headers.get("DPoP-Nonce");
 		expect(nonce).toBeTruthy();
 
@@ -638,6 +639,7 @@ describe("pushed authorization requests with required DPoP nonces", async () => 
 		});
 		expect(pushed.response.status).toBe(201);
 		expect(pushed.response.headers.get("DPoP-Nonce")).toBeTruthy();
+		expect(pushed.response.headers.get("Cache-Control")).toBe("no-store");
 	});
 
 	it("challenges for a nonce before consuming a private_key_jwt assertion", async () => {
