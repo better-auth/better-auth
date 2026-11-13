@@ -116,7 +116,9 @@ export const requireMcpAuth = <
 				? {
 						jwksFetch: async (): Promise<JSONWebKeySet | undefined> =>
 							jwtPlugin.endpoints.getJwks({ context: authContext }),
-						jwksCacheKey: jwtPlugin,
+						// Keyed per auth instance: one `jwt()` object can be shared by
+						// instances whose databases hold different keys.
+						jwksCacheKey: authContext,
 					}
 				: undefined;
 		const jwksUrl = opts?.jwksUrl ?? `${baseURL}/jwks`;
