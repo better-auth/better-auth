@@ -162,6 +162,7 @@ export interface CibaOptions {
 	 * ```ts
 	 * authorizationDetailsTypes: {
 	 * 	payment_initiation: {
+	 * 		// A `z.strictObject`, so unknown fields fail.
 	 * 		validate: (detail) => paymentSchema.safeParse(detail).success,
 	 * 	},
 	 * }

@@ -1077,8 +1077,8 @@ describe("ciba authorization_details", () => {
 		["a JSON object instead of an array", JSON.stringify(payment)],
 		["an empty array", "[]"],
 		[
-			"details over 4096 characters",
-			JSON.stringify([{ ...payment, creditorName: "x".repeat(4096) }]),
+			"details over 4096 characters once URL-encoded",
+			JSON.stringify([{ ...payment, creditorName: " ".repeat(1400) }]),
 		],
 		["a detail without a type", JSON.stringify([{ actions: ["initiate"] }])],
 		["a detail that is not an object", JSON.stringify(["payment"])],

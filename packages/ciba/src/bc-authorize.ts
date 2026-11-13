@@ -49,10 +49,13 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 				login_hint_token: z.string().optional(),
 				binding_message: z.string().max(64).optional(),
 				// CIBA §7.1: voluntary, space-separated, in order of preference.
-				acr_values: z.string().optional(),
-				// RFC 9396 §2: a JSON array, form-encoded as a string.
-				// Copied into the signed consent URL, so keep it well under URL limits.
-				authorization_details: z.string().max(4096).optional(),
+				acr_values: z.string().max(1024).optional(),
+				// RFC 9396 §2: a JSON array, form-encoded as a string. Copied into the
+				// signed consent URL, so its URL-encoded form stays under URL limits.
+				authorization_details: z
+					.string()
+					.refine((value) => encodeURIComponent(value).length <= 4096)
+					.optional(),
 				// CIBA §7.1: an RFC 6750 bearer credential of at most 1024 characters.
 				client_notification_token: z
 					.string()

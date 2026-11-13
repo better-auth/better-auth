@@ -249,7 +249,7 @@ Your API must check the `authorization_details` claim before it acts, such as th
 
 A detail that lists `locations` is issued only in a token for one of those resources. When the poll narrows the token to other resources, that detail is left out of the response and the token (RFC 9396 §9.1). A detail without `locations` goes to every token.
 
-A refreshed or exchanged token would not carry the details. So the provider issues no refresh token for a request with authorization details, even with `offline_access`, and leaves `offline_access` out of the returned `scope`. Token exchange rejects an access token that carries `authorization_details`. Discovery metadata lists the types as `authorization_details_types_supported`.
+A refreshed or exchanged token would not carry the details. So the provider issues no refresh token when the user approves authorization details, even with `offline_access`, and leaves `offline_access` out of the returned `scope`. Token exchange rejects an access token that carries `authorization_details`. Discovery metadata lists the types as `authorization_details_types_supported`.
 
 ## Decide from your own app
 
@@ -307,20 +307,20 @@ The ID token carries only the `auth_time`, `acr`, and `amr` you pass; without `a
 
 Starts a request. It accepts only `application/x-www-form-urlencoded` (CIBA §7.1), authenticates the client, and returns `auth_req_id`, `expires_in`, and `interval`. Each IP address can start 10 requests per minute. Discovery metadata advertises it as `backchannel_authentication_endpoint`, with `backchannel_token_delivery_modes_supported` set to `deliveryModes` and `backchannel_user_code_parameter_supported` set to `false`. With `authorizationDetailsTypes`, it also lists `authorization_details_types_supported`.
 
-| Parameter                   | Required  | Description                                                                                                                                                |
-| --------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scope`                     | yes       | Space-delimited scopes. Must include `openid`.                                                                                                             |
-| `login_hint`                | yes       | Identifies the user, by email unless you set `resolveUser`.                                                                                                |
-| `client_notification_token` | ping only | An RFC 6750 bearer token of at most 1024 characters, sent back on the ping callback.                                                                       |
-| `binding_message`           | no        | Up to 64 characters of plain text, in any script, shown in the notification, on the consent page, and by the client.                                       |
-| `requested_expiry`          | no        | Requested lifetime in seconds, a positive integer. Capped at `expiresIn`.                                                                                  |
-| `resource`                  | no        | One or more resource indicators the token is bound to.                                                                                                     |
-| `acr_values`                | no        | Space-separated ACR values in order of preference. See [Request a stronger sign-in](#request-a-stronger-sign-in).                                          |
-| `authorization_details`     | no        | A JSON array of RFC 9396 authorization details, up to 4096 characters. Requires `resource`. See [Approve structured actions](#approve-structured-actions). |
+| Parameter                   | Required  | Description                                                                                                                                                                 |
+| --------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scope`                     | yes       | Space-delimited scopes. Must include `openid`.                                                                                                                              |
+| `login_hint`                | yes       | Identifies the user, by email unless you set `resolveUser`.                                                                                                                 |
+| `client_notification_token` | ping only | An RFC 6750 bearer token of at most 1024 characters, sent back on the ping callback.                                                                                        |
+| `binding_message`           | no        | Up to 64 characters of plain text, in any script, shown in the notification, on the consent page, and by the client.                                                        |
+| `requested_expiry`          | no        | Requested lifetime in seconds, a positive integer. Capped at `expiresIn`.                                                                                                   |
+| `resource`                  | no        | One or more resource indicators the token is bound to.                                                                                                                      |
+| `acr_values`                | no        | Space-separated ACR values in order of preference, up to 1024 characters. See [Request a stronger sign-in](#request-a-stronger-sign-in).                                    |
+| `authorization_details`     | no        | A JSON array of RFC 9396 authorization details, up to 4096 characters once URL-encoded. Requires `resource`. See [Approve structured actions](#approve-structured-actions). |
 
 ### `POST /oauth2/token`
 
-The provider's token endpoint. With `grant_type=urn:openid:params:grant-type:ciba` and the `auth_req_id`, it returns the tokens once the user approves, or one of the errors below. Each `auth_req_id` issues tokens once. The poll may send `resource` to narrow the token to some of the approved resources (RFC 8707 §2.2). For a request with authorization details, the response carries the granted `authorization_details`. The poll cannot narrow them and is rejected with `invalid_authorization_details` when it sends `authorization_details`.
+The provider's token endpoint. With `grant_type=urn:openid:params:grant-type:ciba` and the `auth_req_id`, it returns the tokens once the user approves, or one of the errors below. Each `auth_req_id` issues tokens once. The poll may send `resource` to narrow the token to some of the approved resources (RFC 8707 §2.2). For a request with authorization details, the response carries the granted `authorization_details`. The poll cannot narrow them: once the user approves, a poll that sends `authorization_details` is rejected with `invalid_authorization_details`.
 
 ## Options
 

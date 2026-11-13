@@ -34,7 +34,7 @@ export const CIBA_ERROR_CODES = defineErrorCodes({
 	AUTHORIZATION_DETAILS_REQUIRE_RESOURCE:
 		"A request with authorization_details must name a resource, so its access token can carry them",
 	AUTHORIZATION_DETAILS_ON_POLL:
-		"authorization_details cannot be narrowed at the token endpoint",
+		"authorization_details is not accepted when polling the token endpoint",
 	UNSUPPORTED_ACR:
 		'The acr, or "0" when none is stated, is not in the provider\'s acrValuesSupported',
 });
