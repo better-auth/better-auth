@@ -162,6 +162,17 @@ const storedAuthorizationQuerySchema = authorizationQuerySchema.extend({
 });
 
 /**
+ * What the token endpoint keeps about a redeemed authorization code while
+ * tokens derived from it can be valid, so a reuse can be checked against the
+ * client and PKCE challenge the code was issued for.
+ */
+export const consumedAuthorizationCodeSchema = z.object({
+	clientId: z.string(),
+	codeChallenge: z.string().optional(),
+	codeChallengeMethod: z.enum(["S256"]).optional(),
+});
+
+/**
  * Runtime schema for the authorization code verification value.
  * Validates structure on deserialization from the JSON blob stored in the DB.
  * Uses passthrough so future fields (e.g. from authorization challenge) don't break parsing.
