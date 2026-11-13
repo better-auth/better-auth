@@ -187,9 +187,12 @@ export async function verifyResourceRequest(
 		}
 		return validated;
 	} catch (error) {
+		// A token from UserInfo's form body has no presented scheme, so the error
+		// alone decides whether the challenge is DPoP.
+		const authorizationHeader = ctx.headers?.get("authorization");
 		const challenge = buildResourceServerChallenge(error, resource, {
 			dpopSigningAlgorithms: algorithms,
-			request: { authorizationHeader: ctx.headers?.get("authorization") },
+			request: authorizationHeader ? { authorizationHeader } : undefined,
 		});
 		if (!challenge) throw error;
 		const headers = new Headers(challenge.headers);
