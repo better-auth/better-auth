@@ -253,7 +253,7 @@ Issues opaque access tokens and HS256 ID tokens. Defaults to `false`. See [Witho
 
 `revocableJwtAccessTokens` <span className="opacity-70">`boolean`</span>
 
-Lets `/oauth2/revoke` revoke JWT access tokens by `jti`, and makes revoking a refresh token also revoke the JWT access tokens of its grant. Introspection, UserInfo, and `validateAccessToken` then look up each JWT access token in the verification store. Defaults to `false`. See [Revoke JWT access tokens](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
+Lets `/oauth2/revoke` revoke JWT access tokens by `jti`, and makes revoking a refresh token also revoke the JWT access tokens of its grant. The same happens when a rotated refresh token or an authorization code is replayed. Introspection, UserInfo, and `validateAccessToken` then look up each JWT access token in the verification store. Defaults to `false`. See [Revoke JWT access tokens](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
 
 `dpop` <span className="opacity-70">`{ proofMaxAgeSeconds?, signingAlgorithms?, nonce? }`</span>
 

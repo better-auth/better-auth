@@ -146,7 +146,7 @@ The tokens issued from a code can outlive the code, so the provider remembers a 
 
 ## Refresh tokens
 
-Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire. After a replay, the refresh fails with `invalid_grant`, and the client must start a new authorization request to get tokens.
+Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire. With [`revocableJwtAccessTokens`](#revoke-the-access-tokens-of-a-grant), the replayed grant's JWT access tokens are revoked too. After a replay, the refresh fails with `invalid_grant`, and the client must start a new authorization request to get tokens.
 
 Keep the default, `0`, unless your clients lose refresh responses. To let a client retry a refresh after a lost response, set `refreshTokenReuseInterval` to a number of seconds. A retry within that window gets the same response back, including the replacement refresh token. The retry gets that response only when it uses the same client, scopes, resources, and DPoP key as the first refresh. A retry that differs but is otherwise valid gets `invalid_grant`.
 
@@ -451,8 +451,8 @@ A grant is everything one authorization produced: its first tokens and every ref
 
 Revoking a refresh token then also revokes the JWT access tokens of its grant, including those issued before earlier rotations ([RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). Better Auth stores one entry for the grant, not one per token, and keeps it for `accessTokenExpiresIn`. Every access token the grant issued before the revocation expires within that time. The same happens in these cases:
 
-* A refresh token that was already rotated is presented at the token endpoint or for revocation.
-* An authorization code is redeemed a second time. The grant of the refresh token issued for that code is revoked.
+* A refresh token that was already rotated is presented for revocation, or at the token endpoint outside the [`refreshTokenReuseInterval`](#refresh-tokens) window. A retry inside that window gets the earlier response back and revokes nothing.
+* An authorization code is reused by the client it was issued to, and the request passes the checks in [Authorization code reuse](#authorization-code-reuse). The grant of the refresh token issued for that code is revoked.
 
 The grant revocation has these limits:
 

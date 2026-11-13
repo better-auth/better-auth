@@ -93,8 +93,9 @@ async function revokeRefreshToken(
 		return;
 	}
 	// RFC 7009 §2.1: also revoke the grant's JWT access tokens. Written before
-	// the refresh token is marked revoked, so a failed write leaves the grant
-	// fully usable rather than half revoked.
+	// the refresh token is marked revoked, so a failed write leaves the refresh
+	// token usable and the request failed, never a revoked refresh token with
+	// live JWTs. If marking the row then throws, the JWTs are already revoked.
 	await revokeGrantAccessTokens(ctx, opts, {
 		grantId: refreshToken.grantId,
 		clientId,

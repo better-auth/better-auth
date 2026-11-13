@@ -444,11 +444,13 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 
 		it("revokes the grant's JWTs when the authorization code is replayed", async () => {
 			const grant = await authorize(server, { offline: true });
+			const rotated = (await refresh(server, grant.refreshToken!)).data!;
 
 			const replay = await grant.redeem();
 			expect(replay.error?.status).toBe(400);
 
 			await expectRevoked(server, grant.accessToken);
+			await expectRevoked(server, rotated.access_token!);
 		});
 
 		it("revokes every JWT of the grant when revocation races a refresh", async () => {
@@ -460,8 +462,11 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 			]);
 
 			await expectRevoked(server, grant.accessToken);
-			if (refreshed.data?.access_token) {
-				await expectRevoked(server, refreshed.data.access_token);
+			// Either the refresh lost the race, or the token it minted is revoked.
+			if (refreshed.data) {
+				await expectRevoked(server, refreshed.data.access_token!);
+			} else {
+				expect(refreshed.error?.status).toBe(400);
 			}
 		});
 
@@ -536,6 +541,24 @@ describe("oauth-provider - grant revocation when the verification store fails", 
 		}
 
 		const afterReplay = await refresh(server, rotated.refresh_token!);
+		expect(afterReplay.error?.status).toBe(400);
+	});
+
+	it("still deletes the code's tokens and fails the authorization code replay", async () => {
+		const grant = await authorize(server, { offline: true });
+		const ctx = await server.auth.$context;
+		const create = vi
+			.spyOn(ctx.internalAdapter, "createVerificationValue")
+			.mockRejectedValueOnce(new Error("store unavailable"));
+		try {
+			const replay = await grant.redeem();
+			expect(replay.error?.status).toBe(500);
+			expect(create).toHaveBeenCalled();
+		} finally {
+			create.mockRestore();
+		}
+
+		const afterReplay = await refresh(server, grant.refreshToken!);
 		expect(afterReplay.error?.status).toBe(400);
 	});
 });

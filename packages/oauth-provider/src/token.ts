@@ -681,31 +681,18 @@ async function revokeTokensIssuedForAuthorizationCode(
 	opts: OAuthOptions<Scope[]>,
 	authorizationCodeId: string,
 ) {
-	if (opts.revocableJwtAccessTokens) {
-		try {
-			const refreshTokens = await ctx.context.adapter.findMany<{
-				grantId?: string;
-				clientId: string;
-			}>({
-				model: "oauthRefreshToken",
-				where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
-			});
-			// Rotations of one grant share its ID, so revoke each grant once.
-			const grants = new Map(
-				refreshTokens.map((row) => [row.grantId, row.clientId]),
-			);
-			await Promise.all(
-				[...grants].map(([grantId, clientId]) =>
-					revokeGrantAccessTokens(ctx, opts, { grantId, clientId }),
-				),
-			);
-		} catch (error) {
-			ctx.context.logger.error(
-				"authorization code replay grant revocation failed",
-				error,
-			);
-		}
-	}
+	// Read the grants before the deletes below remove the rows that name them.
+	const grantLookup = opts.revocableJwtAccessTokens
+		? await ctx.context.adapter
+				.findMany<{ grantId?: string; clientId: string }>({
+					model: "oauthRefreshToken",
+					where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
+				})
+				.then(
+					(rows) => ({ rows }),
+					(error: unknown) => ({ error }),
+				)
+		: undefined;
 	const deleteIssuedTokens = async (
 		model: "oauthAccessToken" | "oauthRefreshToken",
 	) => {
@@ -727,6 +714,19 @@ async function revokeTokensIssuedForAuthorizationCode(
 	// Without a foreign key, an in-flight redemption can store an access token
 	// between the two deletes above. See `createOpaqueAccessToken`.
 	await deleteIssuedTokens("oauthAccessToken");
+	// Last, so a failure cannot stop the cleanup above. It still fails the
+	// request rather than leave the grant's JWT access tokens active unnoticed.
+	if (!grantLookup) return;
+	if ("error" in grantLookup) throw grantLookup.error;
+	// Rotations of one grant share its ID, so revoke each grant once.
+	const grants = new Map(
+		grantLookup.rows.map((row) => [row.grantId, row.clientId]),
+	);
+	await Promise.all(
+		[...grants].map(([grantId, clientId]) =>
+			revokeGrantAccessTokens(ctx, opts, { grantId, clientId }),
+		),
+	);
 }
 
 function consumedAuthorizationCodeIdentifier(authorizationCodeId: string) {

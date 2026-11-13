@@ -91,18 +91,23 @@ async function authorize({ client, headers, options }: TestServer) {
 	return tokens;
 }
 
-async function refresh({ client, options }: TestServer, refreshToken: string) {
+async function requestRefresh(
+	{ client, options }: TestServer,
+	refreshToken: string,
+) {
 	const { body, headers } = await refreshAccessTokenRequest({
 		refreshToken,
 		options,
 	});
-	return (
-		await client.$fetch<TokenResponse>("/oauth2/token", {
-			method: "POST",
-			body,
-			headers,
-		})
-	).data!;
+	return client.$fetch<TokenResponse>("/oauth2/token", {
+		method: "POST",
+		body,
+		headers,
+	});
+}
+
+async function refresh(server: TestServer, refreshToken: string) {
+	return (await requestRefresh(server, refreshToken)).data!;
 }
 
 async function isActive({ client, options }: TestServer, token: string) {
@@ -176,13 +181,16 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 
 			const [, raced] = await Promise.all([
 				revoke(server, second.refresh_token),
-				refresh(server, second.refresh_token),
+				requestRefresh(server, second.refresh_token),
 			]);
 
 			expect(await isActive(server, first.access_token)).toBe(false);
 			expect(await isActive(server, second.access_token)).toBe(false);
-			if (raced?.access_token) {
-				expect(await isActive(server, raced.access_token)).toBe(false);
+			// Either the refresh lost the race, or the token it minted is revoked.
+			if (raced.data) {
+				expect(await isActive(server, raced.data.access_token)).toBe(false);
+			} else {
+				expect(raced.error?.status).toBe(400);
 			}
 		});
 	},

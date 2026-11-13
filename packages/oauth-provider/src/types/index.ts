@@ -1820,9 +1820,9 @@ export interface OAuthOptions<
 	 * secondary storage alone, a lost or evicted entry makes the token valid
 	 * again; set `verification.storeInDatabase` to keep entries durable.
 	 *
-	 * Revoking a refresh token, or replaying a rotated refresh token or an
-	 * authorization code, also revokes the JWT access tokens of its grant
-	 * (RFC 7009 §2.1). They carry the grant in a `grant_id` claim.
+	 * Revoking a refresh token also revokes the JWT access tokens of its grant
+	 * (RFC 7009 §2.1). So does replaying a rotated refresh token or an
+	 * authorization code. The tokens carry the grant in a `grant_id` claim.
 	 *
 	 * Resource servers that verify JWT access tokens locally against the JWKS
 	 * never see the revocation. They must introspect to honor it.
