@@ -464,6 +464,77 @@ describe("createDpopFetch", () => {
 		});
 	});
 
+	it.each<[string, (url: string) => [string | Request, RequestInit?]]>([
+		[
+			"a streamed body",
+			(url) => [
+				url,
+				{
+					method: "POST",
+					body: new Blob(["grant_type=client_credentials"]).stream(),
+					duplex: "half",
+				} as RequestInit,
+			],
+		],
+		[
+			"a Request with a body",
+			(url) => [
+				new Request(url, {
+					method: "POST",
+					body: "grant_type=client_credentials",
+				}),
+			],
+		],
+	])("sends %s once without buffering it for a retry", async (_name, args) => {
+		const keyPair = await generateDpopKeyPair();
+		const nonceCache = createDpopNonceCache();
+		const { fetchImpl, calls } = createFakeFetch(() =>
+			tokenEndpointNonceChallenge("fresh-nonce"),
+		);
+		const cloneSpy = vi.spyOn(Request.prototype, "clone");
+		const dpopFetch = createDpopFetch({
+			keyPair,
+			fetch: fetchImpl,
+			nonceCache,
+		});
+
+		const response = await dpopFetch(
+			...args("https://as.example.com/oauth2/token"),
+		);
+
+		expect(cloneSpy).not.toHaveBeenCalled();
+		cloneSpy.mockRestore();
+		expect(response.status).toBe(400);
+		expect(calls).toHaveLength(1);
+		expect(await calls[0]!.request.text()).toBe(
+			"grant_type=client_credentials",
+		);
+		expect(await nonceCache.get("https://as.example.com")).toBe("fresh-nonce");
+	});
+
+	it("rebuilds an in-memory body for the retry", async () => {
+		const keyPair = await generateDpopKeyPair();
+		const { fetchImpl, calls } = createFakeFetch((_call, index) =>
+			index === 0
+				? tokenEndpointNonceChallenge("fresh-nonce")
+				: new Response("{}", { status: 200 }),
+		);
+		const cloneSpy = vi.spyOn(Request.prototype, "clone");
+		const dpopFetch = createDpopFetch({ keyPair, fetch: fetchImpl });
+
+		await dpopFetch("https://as.example.com/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({ grant_type: "client_credentials" }),
+		});
+
+		expect(cloneSpy).not.toHaveBeenCalled();
+		cloneSpy.mockRestore();
+		expect(calls).toHaveLength(2);
+		for (const call of calls) {
+			expect(await call.request.text()).toBe("grant_type=client_credentials");
+		}
+	});
+
 	it("does not retry more than once", async () => {
 		const keyPair = await generateDpopKeyPair();
 		const { fetchImpl, calls } = createFakeFetch((_call, index) =>

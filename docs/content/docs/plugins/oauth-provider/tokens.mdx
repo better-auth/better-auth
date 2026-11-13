@@ -283,6 +283,7 @@ const items = await dpopFetch("https://api.example.com/items", {
 * Adds the access token hash, `ath`, when the request has an `Authorization: DPoP` header.
 * Includes the latest nonce from the request's origin. Nonces are kept per origin, so an authorization server and an API on different origins never overwrite each other's nonce.
 * Retries once when the server answers `use_dpop_nonce` with a new nonce. Any other response, including a second `use_dpop_nonce`, comes back unchanged.
+* Sends a streamed body, or a `Request` that has a body, only once, so a large upload is never held in memory for a retry. The nonce from the response still applies to the next request. Pass a string, `URLSearchParams`, `FormData`, or `Blob` body to get the retry.
 
 `generateDpopKeyPair` creates an ES256 key whose private half cannot be exported. Tokens issued for a key only work with that key, so keep the key pair for as long as you keep the tokens. In a browser, store the `CryptoKeyPair` in IndexedDB, which preserves a non-exportable key. To use another algorithm, pass a key pair from `crypto.subtle.generateKey` for one that Better Auth accepts by default: ECDSA P-256 (`ES256`) or P-521 (`ES512`), Ed25519 (`EdDSA`), or an RSA key with SHA-256 and either PKCS #1 v1.5 (`RS256`) or PSS (`PS256`) padding. Its public key must be exportable, which it is by default.
 

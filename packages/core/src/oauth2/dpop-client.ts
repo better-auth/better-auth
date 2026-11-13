@@ -349,6 +349,14 @@ export interface CreateDpopFetchOptions {
 	nonceCache?: DpopNonceCache;
 }
 
+function hasStreamedBody(
+	input: string | URL | Request,
+	init: RequestInit | undefined,
+): boolean {
+	if (init?.body != null) return init.body instanceof ReadableStream;
+	return input instanceof Request && input.body !== null;
+}
+
 /**
  * Creates a `fetch` that adds a DPoP proof to every request and handles
  * server-provided nonces (RFC 9449 §8 and §9).
@@ -359,6 +367,8 @@ export interface CreateDpopFetchOptions {
  *   `DPoP-Nonce` response header updates it, including on success.
  * - On a `use_dpop_nonce` error that comes with a new nonce, the request is
  *   sent once more with a new proof. Any other response is returned as is.
+ *   A streamed body, or a `Request` input that has a body, is sent once and
+ *   never retried, so the upload is not buffered in memory.
  *
  * @example
  * ```ts
@@ -388,9 +398,13 @@ export function createDpopFetch(options: CreateDpopFetchOptions): DpopFetch {
 				? authorization.token
 				: undefined;
 
+		// A body already in memory is rebuilt for each attempt. A streamed body
+		// can be read only once, and buffering it for a retry would hold the
+		// whole upload in memory, so it is sent once and never retried.
+		const replayable = !hasStreamedBody(input, init);
+
 		const send = async (nonce: string | undefined) => {
-			// Keep `request` unread so its body can be sent again on a retry.
-			const attempt = request.clone();
+			const attempt = replayable ? new Request(input, init) : request;
 			attempt.headers.set(
 				DPOP_PROOF_HEADER,
 				await createDpopProof({
@@ -418,6 +432,7 @@ export function createDpopFetch(options: CreateDpopFetchOptions): DpopFetch {
 		// Retry only with a nonce the rejected proof did not already carry:
 		// the same nonce would fail again.
 		if (
+			!replayable ||
 			!first.nextNonce ||
 			first.nextNonce === sentNonce ||
 			!(await isDpopNonceError(first.response))
