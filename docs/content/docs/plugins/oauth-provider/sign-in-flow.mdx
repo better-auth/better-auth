@@ -80,7 +80,7 @@ oauthProvider({
 })
 ```
 
-To require it from one client, register the client with `require_pushed_authorization_requests: true` ([RFC 9126 §6](https://datatracker.ietf.org/doc/html/rfc9126#section-6)). A client can set this on itself through dynamic registration, because it only restricts that client. The registration fails with `invalid_client_metadata` unless `/oauth2/par` is enabled or you set `requestUriResolver`, because the client could otherwise never start authorization.
+To require it from one client, register the client with `require_pushed_authorization_requests: true` ([RFC 9126 §6](https://datatracker.ietf.org/doc/html/rfc9126#section-6)). A client can set this on itself through dynamic registration, because it only restricts that client. The registration fails with `invalid_client_metadata` unless the server serves `/oauth2/par` or you set `requestUriResolver`, because the client could otherwise never start authorization.
 
 An authorization request without `request_uri` then fails with `invalid_request` and the description `pushed authorization request is required`. With `required: true`, discovery also advertises `require_pushed_authorization_requests: true`. The login, consent, and other screens keep working, because they resume from the signed query.
 
