@@ -1662,7 +1662,9 @@ async function createUserTokens(
 						confirmation,
 						requestedUserInfoClaims,
 						act: params.act,
-						grantId,
+						// Opaque rows carry the grant only with a refresh token, which
+						// is what revokes them by grant.
+						grantId: isRefreshToken ? grantId : undefined,
 						accessTokenClaims: toStoredAccessTokenClaims(
 							params.accessTokenClaims,
 							opts,
