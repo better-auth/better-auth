@@ -70,6 +70,9 @@ export async function pushedAuthorizationRequestEndpoint(
 		throw new APIError("NOT_FOUND");
 	}
 	const provider = getOAuthProviderApi(ctx, opts, "authorization_code");
+	// Before client authentication consumes a one-time assertion, so the
+	// nonce retry can resend it (RFC 9449 §8).
+	await provider.challengeDpopNonce();
 	// Public clients identify themselves with client_id alone; confidential
 	// clients must authenticate (RFC 9126 §2.1).
 	const { clientId } = await provider.authenticateClient({

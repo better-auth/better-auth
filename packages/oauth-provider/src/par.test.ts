@@ -636,6 +636,57 @@ describe("pushed authorization requests with required DPoP nonces", async () => 
 		expect(pushed.response.status).toBe(201);
 		expect(pushed.response.headers.get("DPoP-Nonce")).toBeTruthy();
 	});
+
+	it("challenges for a nonce before consuming a private_key_jwt assertion", async () => {
+		const { privateKey, publicKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const keyClient = await createClient({
+			token_endpoint_auth_method: "private_key_jwt",
+			jwks: {
+				keys: [
+					{
+						...(await exportJWK(publicKey)),
+						kid: "par-key",
+						alg: "RS256",
+						use: "sig",
+					},
+				],
+			},
+		});
+		const now = Math.floor(Date.now() / 1000);
+		const assertion = await new SignJWT({})
+			.setProtectedHeader({ alg: "RS256", kid: "par-key" })
+			.setIssuer(keyClient.client_id)
+			.setSubject(keyClient.client_id)
+			.setAudience(parEndpoint)
+			.setIssuedAt(now)
+			.setExpirationTime(now + 60)
+			.setJti(generateRandomString(16))
+			.sign(privateKey);
+		const { params } = await authorizationParams(keyClient.client_id);
+		const body = {
+			...params,
+			client_assertion_type:
+				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+			client_assertion: assertion,
+		};
+		const key = await createDpopKey();
+
+		const challenged = await pushRequest(body, {
+			DPoP: await createProof(key, parEndpoint),
+		});
+		expect(challenged.body).toMatchObject({ error: "use_dpop_nonce" });
+
+		const pushed = await pushRequest(body, {
+			DPoP: await createProof(
+				key,
+				parEndpoint,
+				challenged.response.headers.get("DPoP-Nonce")!,
+			),
+		});
+		expect(pushed.response.status).toBe(201);
+	});
 });
 
 describe("pushed authorization requests disabled", async () => {
