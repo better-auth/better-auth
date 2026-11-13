@@ -10,7 +10,7 @@ npm install @better-auth/mongo-adapter
 
 ## Documentation
 
-For full documentation, visit [better-auth.com/docs/adapters/mongodb](https://www.better-auth.com/docs/adapters/mongodb).
+For full documentation, visit [better-auth.com/docs/adapters/mongo](https://www.better-auth.com/docs/adapters/mongo).
 
 ## License
 

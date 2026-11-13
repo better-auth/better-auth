@@ -4,7 +4,7 @@
   "description": "Kysely adapter for Better Auth",
   "type": "module",
   "license": "MIT",
-  "homepage": "https://www.better-auth.com/docs/adapters/kysely",
+  "homepage": "https://www.better-auth.com/docs/adapters/other-relational-databases",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
