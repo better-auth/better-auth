@@ -1870,7 +1870,7 @@ describe("oauth-provider extension client authentication confirmation", async ()
 	});
 });
 
-describe.each(["postgres", "mongodb"] as const)(
+describe.each(["postgres", "mysql"] as const)(
 	"opaque access-token claims on %s",
 	(testWith) => {
 		const grantType = "urn:better-auth:test:stored-claims-grant";
