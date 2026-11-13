@@ -206,11 +206,11 @@ The [resource client](#verify-access-tokens) created with your auth instance tak
 
 Your provider issues a JWT access token when the request names a `resource` and the JWT plugin is enabled. If either is missing, it issues an opaque token.
 
-|                         | JWT access token                               | Opaque access token                                     |
-| ----------------------- | ---------------------------------------------- | ------------------------------------------------------- |
-| How the API verifies it | Locally, with the JWKS (`jwksUrl`)             | Remotely, through `/oauth2/introspect` (`remoteVerify`) |
-| Cost per request        | No network call (unless `remoteVerify` is set) | One call to the auth server                             |
-| Claims                  | Frozen when the token is issued                | Recomputed on every introspection                       |
+|                         | JWT access token                               | Opaque access token                                                                                              |
+| ----------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| How the API verifies it | Locally, with the JWKS (`jwksUrl`)             | Remotely, through `/oauth2/introspect` (`remoteVerify`)                                                          |
+| Cost per request        | No network call (unless `remoteVerify` is set) | One call to the auth server                                                                                      |
+| Claims                  | Frozen when the token is issued                | Per-issuance `accessTokenClaims` stored when the token is issued. Other claims recomputed on every introspection |
 
 The simplest setup is to accept only JWT access tokens. It is fast, and your API needs no client credentials. `verifyAccessTokenRequest` checks the JWT's signature, `iss`, `aud`, and `exp`. It checks `scope` only against the `requiredScopes` you pass, and checks the token type only when you pass `typ: "at+jwt"`. Pass both to get the validation [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) requires. The cost is that the local check does not see an ended session. A JWT keeps passing the local check until it expires.
 
