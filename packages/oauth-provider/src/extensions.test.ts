@@ -1024,6 +1024,9 @@ describe("oauth-provider extensions", async () => {
 		expect(metadata.shared_metadata_field).toBe("first");
 	});
 
+	/**
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/reference#provider-extensions
+	 */
 	it("warns when two extensions contribute the same metadata key", async () => {
 		const makeMetadataExtensionPlugin = (
 			id: string,
