@@ -29,12 +29,21 @@ type CurrentUserContext = {
 };
 const currentUserContextStorage = new AsyncLocalStorage<CurrentUserContext>();
 
-afterAll(async () => {
+/**
+ * Runs the cleanup of every instance this file created, such as dropping its
+ * database. Each cleanup runs once, even if it throws, since it also closes
+ * the connection a retry would need.
+ *
+ * @internal
+ */
+export async function cleanupTestInstances() {
 	for (const cleanup of cleanupSet) {
-		await cleanup();
 		cleanupSet.delete(cleanup);
+		await cleanup();
 	}
-});
+}
+
+afterAll(cleanupTestInstances);
 
 const TEST_PASSWORD_HASH_PREFIX = "$test$sha256$";
 
