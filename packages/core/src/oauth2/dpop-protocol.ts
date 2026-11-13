@@ -69,13 +69,14 @@ export function stripAccessTokenAuthorizationScheme(token: string): string {
 }
 
 export function normalizeDpopHtu(url: string): string {
-	const parsed = new URL(url);
 	// RFC 9449 §4.2: `htu` is the target URI without query and fragment parts.
 	// Reject a fragment rather than silently strip it, so a malformed proof
 	// fails fast instead of matching a request URL it does not actually name.
-	if (parsed.hash) {
+	// `URL#hash` is empty for a bare `#`, so check the raw string.
+	if (url.includes("#")) {
 		throw new Error("DPoP proof htu must not contain a fragment");
 	}
+	const parsed = new URL(url);
 	return `${parsed.origin}${parsed.pathname}`;
 }
 

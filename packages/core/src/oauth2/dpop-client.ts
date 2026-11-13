@@ -369,6 +369,8 @@ function hasStreamedBody(
  *   sent once more with a new proof. Any other response is returned as is.
  *   A streamed body, or a `Request` input that has a body, is sent once and
  *   never retried, so the upload is not buffered in memory.
+ * - The proof names the requested URL. When `fetch` follows a redirect, the
+ *   target receives a proof for a different `htu` and rejects it.
  *
  * @example
  * ```ts

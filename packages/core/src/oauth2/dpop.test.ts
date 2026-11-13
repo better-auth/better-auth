@@ -12,6 +12,7 @@ import {
 	getConfirmationJkt,
 	verifyDpopProof,
 } from "./dpop";
+import { normalizeDpopHtu } from "./dpop-protocol";
 import { verifyAccessTokenRequest, verifyBearerToken } from "./verify";
 
 const method = "GET";
@@ -752,5 +753,25 @@ describe("server-provided DPoP nonces", () => {
 				),
 			).resolves.toMatchObject({ active: true });
 		});
+	});
+});
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc9449#section-4.2
+ */
+describe("normalizeDpopHtu", () => {
+	it("drops the query", () => {
+		expect(normalizeDpopHtu("HTTPS://AS.Example.com:443/token?x=1")).toBe(
+			"https://as.example.com/token",
+		);
+	});
+
+	it.each([
+		"https://as.example.com/token#frag",
+		"https://as.example.com/token#",
+	])("rejects a fragment in %s", (url) => {
+		expect(() => normalizeDpopHtu(url)).toThrow(
+			"DPoP proof htu must not contain a fragment",
+		);
 	});
 });

@@ -247,7 +247,7 @@ To verify DPoP-bound tokens in your API, see [Protect your API](/docs/plugins/oa
 
 ### Send DPoP requests from a client
 
-`better-auth/oauth2/dpop-client` signs proofs and handles nonces for a client app, such as a single-page app, a native app, a CLI, or an MCP client. It runs in browsers, Node.js, Bun, Deno, and Cloudflare Workers, and uses only the platform's Web Crypto and Fetch APIs, so it adds no server code to a client bundle. The same module is also available as `@better-auth/core/oauth2/dpop-client`.
+`better-auth/oauth2/dpop-client` signs proofs and handles nonces for a client app, such as a single-page app, a native app, a CLI, or an MCP client. It uses only the standard Web Crypto and Fetch APIs, which browsers, Node.js, Bun, Deno, and Cloudflare Workers provide, so it adds no server code to a client bundle. The same module is also available as `@better-auth/core/oauth2/dpop-client`.
 
 Create a key pair once, then send token and API requests through `createDpopFetch`:
 
@@ -284,6 +284,7 @@ const items = await dpopFetch("https://api.example.com/items", {
 * Includes the latest nonce from the request's origin. Nonces are kept per origin, so an authorization server and an API on different origins never overwrite each other's nonce.
 * Retries once when the server answers `use_dpop_nonce` with a new nonce. Any other response, including a second `use_dpop_nonce`, comes back unchanged.
 * Sends a streamed body, or a `Request` that has a body, only once, so a large upload is never held in memory for a retry. The nonce from the response still applies to the next request. Pass a string, `URLSearchParams`, `FormData`, or `Blob` body to get the retry.
+* Signs each proof for the URL it requests. A redirect target rejects that proof, because its URL differs from the proof's `htu`, so don't put DPoP endpoints behind redirects.
 
 `generateDpopKeyPair` creates an ES256 key whose private half cannot be exported. Tokens issued for a key only work with that key, so keep the key pair for as long as you keep the tokens. In a browser, store the `CryptoKeyPair` in IndexedDB, which preserves a non-exportable key. To use another algorithm, pass a key pair from `crypto.subtle.generateKey` for one that Better Auth accepts by default: ECDSA P-256 (`ES256`) or P-521 (`ES512`), Ed25519 (`EdDSA`), or an RSA key with SHA-256 and either PKCS #1 v1.5 (`RS256`) or PSS (`PS256`) padding. Its public key must be exportable, which it is by default.
 
@@ -297,8 +298,8 @@ authorizationUrl.searchParams.set("dpop_jkt", await deriveDpopKeyJkt(keyPair));
 
 To send requests your own way, use the building blocks `createDpopFetch` uses:
 
-* `createDpopProof({ keyPair, method, url, accessToken, nonce })` returns a proof for the `DPoP` header.
-* `isDpopNonceError(response)` tells whether a response asks for a retry with the nonce in its `DPoP-Nonce` header.
+* `await createDpopProof({ keyPair, method, url, accessToken, nonce })` returns a proof for the `DPoP` header.
+* `await isDpopNonceError(response)` tells whether a response asks for a retry with the nonce in its `DPoP-Nonce` header.
 * `createDpopNonceCache()` keeps the latest nonce for each origin. Pass your own `{ get, set }` object as `nonceCache` to keep nonces somewhere else, such as IndexedDB.
 
 To send requests with another fetch implementation, pass it as `fetch`. `createDpopFetch` calls it as a plain function, so bind a method first, such as `env.SERVICE.fetch.bind(env.SERVICE)` for a Cloudflare service binding.
