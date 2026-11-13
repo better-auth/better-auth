@@ -120,12 +120,13 @@ function rowChanged(baseRow: any, cloneRow: any): boolean {
 }
 
 /**
- * Serial ids are reserved per live database rather than read from the table
- * being written, because a transaction writes to its own clone: two
- * overlapping transactions, from one adapter or several adapters on the same
- * database, would otherwise pick the same id, and the later commit would
- * overwrite the other's row. The row count is not a safe next id either, since
- * it can equal a stored row's id once an earlier row is deleted.
+ * Serial ids come from a counter shared by every adapter and transaction on
+ * the same live database. A transaction writes to its own clone, so an id read
+ * only from the table being written could be picked twice by overlapping
+ * transactions, and the later commit would overwrite the other's row. The
+ * table's highest id is still read as a floor, for rows seeded into the
+ * database directly or created with a forced id. The row count is not a safe
+ * next id, since it can equal a stored row's id once an earlier row is deleted.
  */
 const lastSerialIdsByDb = new WeakMap<MemoryDB, Map<string, number>>();
 
