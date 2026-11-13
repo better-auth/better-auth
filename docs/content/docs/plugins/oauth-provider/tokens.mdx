@@ -617,7 +617,7 @@ oauthTokenExchange({
 A DPoP key ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449)) held by the app then stands in for its secret. The provider accepts an exchange from a public client registered for the token-exchange grant only when all of these hold:
 
 * The subject token was issued to that same client. A token whose audience the client is linked to is not enough.
-* The subject token is DPoP-bound. Get one by sending a DPoP proof on the app's authorization code request.
+* The subject token is DPoP-bound. Get one by sending a DPoP proof with the token request that redeems the authorization code, or any other way listed under [DPoP](#dpop).
 * The request carries a DPoP proof from the subject token's key.
 * The request has no `actor_token`.
 
