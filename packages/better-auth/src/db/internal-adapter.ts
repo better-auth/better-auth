@@ -306,24 +306,27 @@ export const createInternalAdapter = (
 		if (secondaryStorage && !databaseSessionFallbackEnabled) {
 			return internalAdapter.listSessions(userId, { onlyActiveSessions: true });
 		}
-		const pageSize = findManyPageSize;
 		const now = new Date();
 		const sessions: Session[] = [];
-		for (let offset = 0; ; offset += pageSize) {
+		// Paged by id, each page starting after the last one, so sessions deleted
+		// between pages can't shift a session past the next page's start. The
+		// caller orders them by creation time.
+		for (let lastId: string | undefined; ; ) {
 			const page = await (await getCurrentAdapter(adapter)).findMany<Session>({
 				model: "session",
 				where: [
 					{ field: "userId", value: userId },
 					{ field: "expiresAt", value: now, operator: "gt" },
+					...(lastId
+						? [{ field: "id", value: lastId, operator: "gt" } satisfies Where]
+						: []),
 				],
-				// Sorted by a unique field so pages never skip or repeat a session.
-				// The caller orders them by creation time.
 				sortBy: { field: "id", direction: "asc" },
-				limit: pageSize,
-				offset,
+				limit: findManyPageSize,
 			});
 			sessions.push(...page);
-			if (page.length < pageSize) return sessions;
+			if (page.length < findManyPageSize) return sessions;
+			lastId = page[page.length - 1]!.id;
 		}
 	}
 
