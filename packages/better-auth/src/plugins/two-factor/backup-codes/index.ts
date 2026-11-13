@@ -50,6 +50,10 @@ export interface BackupCodeOptions {
 	 * your `hash` function) and cannot be read back, so `viewBackupCodes` is
 	 * unavailable. The plaintext codes are only returned once, when they are
 	 * generated.
+	 *
+	 * A custom `hash` must be deterministic: verification hashes the submitted
+	 * code and compares it to the stored value, so a hasher that picks a random
+	 * salt on every call (such as bcrypt) rejects every code.
 	 */
 	storeBackupCodes?:
 		| (

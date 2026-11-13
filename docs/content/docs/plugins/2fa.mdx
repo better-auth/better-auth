@@ -643,7 +643,9 @@ export const twoFactorBackupCodeOptionsType = {
 
 <TypeTable type={twoFactorBackupCodeOptionsType} />
 
-With `storeBackupCodes: "hashed"`, each code is stored as a SHA-256 hash, so nobody with access to the database and your secret can read the codes back. The codes are returned in plain text only once, when they are generated, and `viewBackupCodes` is not available. You can also pass a custom hasher:
+With `storeBackupCodes: "hashed"`, each code is stored as an unsalted SHA-256 hash. The app secret is not used, so the codes can't be decrypted from the database. Their protection against offline guessing comes from the codes' randomness: the default codes are 10 characters from a 62-character alphabet, about 59 bits. The codes are returned in plain text only once, when they are generated, and `viewBackupCodes` is not available.
+
+You can also pass a custom hasher. It must be deterministic, because verification hashes the submitted code and compares it to the stored value. A hasher that picks a random salt on every call, such as bcrypt, rejects every code.
 
 ```ts title="auth.ts"
 twoFactor({
@@ -656,7 +658,7 @@ twoFactor({
 ```
 
 <Callout type="warn">
-  Changing `storeBackupCodes` does not convert codes that are already stored. Existing users need to generate new backup codes after you switch modes. If you use `customBackupCodesGenerate` with the `"hashed"` mode, make sure your codes are long and random, since a fast hash does not protect short codes.
+  Changing `storeBackupCodes` does not convert codes that are already stored. Existing users need to generate new backup codes after you switch modes. If you lower `length` or use `customBackupCodesGenerate` with the `"hashed"` mode, make sure your codes are still long and random, since a fast hash does not protect short codes.
 </Callout>
 
 **Account lockout**
