@@ -1,7 +1,7 @@
 ---
-"@better-auth/core": minor
-"better-auth": minor
-"@better-auth/passkey": minor
+"@better-auth/core": patch
+"better-auth": patch
+"@better-auth/passkey": patch
 ---
 
 Client plugins can now route diagnostic messages through the client logger.

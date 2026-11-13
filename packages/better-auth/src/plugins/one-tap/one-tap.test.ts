@@ -1027,13 +1027,17 @@ it("uses the configured client logger for One Tap errors", async () => {
 		},
 	});
 
-	await expect(client.oneTap()).rejects.toBe(error);
+	try {
+		await expect(client.oneTap()).rejects.toBe(error);
 
-	expect(log).toHaveBeenCalledWith(
-		"error",
-		"Error during Google One Tap flow:",
-		error,
-	);
+		expect(log).toHaveBeenCalledWith(
+			"error",
+			"Error during Google One Tap flow:",
+			error,
+		);
+	} finally {
+		vi.unstubAllGlobals();
+	}
 });
 
 describe("oneTapClient plugin-level options", async () => {
