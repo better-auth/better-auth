@@ -1,4 +1,8 @@
-import { createInsufficientScopeError } from "better-auth/oauth2";
+import {
+	createInsufficientScopeError,
+	requestToResourceInput,
+	verifyAccessTokenRequest,
+} from "better-auth/oauth2";
 import { APIError } from "better-call";
 import { describe, expect, it } from "vitest";
 import { createResourceServerChallenge } from "./resource-challenge";
@@ -11,6 +15,37 @@ function catchChallenge(resource: string | string[]) {
 }
 
 describe("resource server challenge", () => {
+	/**
+	 * `WWW-Authenticate` is not a CORS-safelisted response header, so a
+	 * cross-origin client can read the challenge only when it is exposed.
+	 * @see https://fetch.spec.whatwg.org/#cors-safelisted-response-header-name
+	 */
+	it.each([
+		[
+			"Bearer",
+			new APIError("UNAUTHORIZED", { message: "missing bearer token" }),
+		],
+		["insufficient_scope", createInsufficientScopeError(["files:write"])],
+		[
+			"DPoP",
+			new APIError("UNAUTHORIZED", {
+				message: "invalid DPoP proof",
+				error: "invalid_dpop_proof",
+			}),
+		],
+	])("exposes WWW-Authenticate on a %s challenge", (_, error) => {
+		const challenge = createResourceServerChallenge(
+			error,
+			"https://api.example.com",
+		) as APIError;
+		const headers = new Headers(challenge.headers);
+
+		expect(headers.get("WWW-Authenticate")).toBeTruthy();
+		expect(headers.get("Access-Control-Expose-Headers")).toBe(
+			"WWW-Authenticate",
+		);
+	});
+
 	it("derives the RFC 9728 metadata URL from the protected resource", () => {
 		const error = catchChallenge("https://api.example.com/mcp/tools?tenant=a");
 		const headers = new Headers(error.headers);
@@ -217,7 +252,7 @@ describe("resource server challenge", () => {
 		).toBe("X-Request-Id, DPoP-Nonce, WWW-Authenticate");
 	});
 
-	it("leaves a DPoP challenge without a nonce cacheable and unexposed", () => {
+	it("keeps a DPoP challenge without a nonce cacheable and exposes only WWW-Authenticate", () => {
 		const headers = new Headers(
 			(
 				createResourceServerChallenge(
@@ -231,7 +266,9 @@ describe("resource server challenge", () => {
 			).headers,
 		);
 		expect(headers.get("Cache-Control")).toBeNull();
-		expect(headers.get("Access-Control-Expose-Headers")).toBeNull();
+		expect(headers.get("Access-Control-Expose-Headers")).toBe(
+			"WWW-Authenticate",
+		);
 	});
 
 	it("keeps a DPoP challenge when the description contains quotes", () => {
@@ -355,6 +392,34 @@ describe("resource server challenge", () => {
 			expect(challenge.body).toMatchObject({ error: "invalid_token" });
 		});
 
+		it("answers a DPoP request's insufficient scope with a DPoP challenge", () => {
+			const challenge = createResourceServerChallenge(
+				createInsufficientScopeError(["files:write"]),
+				"https://api.example.com",
+				{
+					request: { authorizationHeader: "DPoP access-token" },
+					dpopSigningAlgorithms: ["ES256"],
+					challengeScopes: ["files:read"],
+				},
+			) as APIError;
+			expect(challenge.statusCode).toBe(403);
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'DPoP error="insufficient_scope", scope="files:write", error_description="access token is missing required scope: files:write", algs="ES256"',
+			);
+			expect(challenge.body).toMatchObject({ error: "insufficient_scope" });
+		});
+
+		it("keeps the Bearer insufficient-scope challenge for a Bearer request", () => {
+			const challenge = createResourceServerChallenge(
+				createInsufficientScopeError(["files:write"]),
+				"https://api.example.com",
+				{ request: { authorizationHeader: "Bearer access-token" } },
+			) as APIError;
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toMatch(
+				/^Bearer error="insufficient_scope", scope="files:write", resource_metadata=/,
+			);
+		});
+
 		it.each([
 			["a Bearer request", "Bearer access-token"],
 			["a request without credentials", null],
@@ -416,6 +481,67 @@ describe("resource server challenge", () => {
 			);
 			expect(challenge.body).not.toHaveProperty("error");
 			expect(challenge.body).not.toHaveProperty("error_description");
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10857
+	 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
+	 */
+	describe("unsupported authorization schemes", () => {
+		const resource = "https://api.example.com/mcp";
+
+		function rejectAuthorization(authorizationHeader: string) {
+			const request = new Request(resource, {
+				method: "POST",
+				headers: { Authorization: authorizationHeader },
+			});
+			return verifyAccessTokenRequest(requestToResourceInput(request), {
+				jwksUrl: "https://auth.example.com/jwks",
+				verifyOptions: {
+					issuer: "https://auth.example.com",
+					audience: resource,
+				},
+			}).then(
+				() => expect.fail("expected the request to be rejected"),
+				(error: unknown) => ({ error, request }),
+			);
+		}
+
+		it.each([
+			["no Authorization header", null],
+			["an unsupported scheme", "Basic dXNlcjpwYXNz"],
+		])(
+			"never answers a request with %s with a DPoP challenge",
+			(_, authorizationHeader) => {
+				const challenge = createResourceServerChallenge(
+					new APIError("UNAUTHORIZED", {
+						message: "DPoP proof header is required",
+						error: "invalid_dpop_proof",
+					}),
+					resource,
+					{ request: { authorizationHeader } },
+				) as APIError;
+
+				expect(new Headers(challenge.headers).get("WWW-Authenticate")).toMatch(
+					/^Bearer /,
+				);
+			},
+		);
+
+		it.each([
+			["an unsupported scheme", "Basic dXNlcjpwYXNz"],
+			["a header with no scheme", "access-token"],
+		])("answers %s with a Bearer challenge", async (_, authorizationHeader) => {
+			const { error, request } = await rejectAuthorization(authorizationHeader);
+			const challenge = createResourceServerChallenge(error, resource, {
+				request,
+			}) as APIError;
+
+			expect(challenge.statusCode).toBe(401);
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'Bearer error="invalid_token", error_description="authorization scheme must be Bearer or DPoP", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp"',
+			);
 		});
 	});
 });

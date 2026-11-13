@@ -5,7 +5,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin, User } from "better-auth/types";
 import { decodeJwt } from "jose";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { extendOAuthProvider } from "./extensions";
 import { oauthProvider } from "./oauth";
@@ -1023,6 +1023,54 @@ describe("oauth-provider extensions", async () => {
 				unknown
 			>;
 		expect(metadata.shared_metadata_field).toBe("first");
+	});
+
+	/**
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/reference#provider-extensions
+	 */
+	it("warns when two extensions contribute the same metadata key", async () => {
+		const makeMetadataExtensionPlugin = (
+			id: string,
+			metadata: Record<string, unknown>,
+		) =>
+			({
+				id,
+				init(ctx) {
+					extendOAuthProvider(ctx, { metadata: () => metadata });
+				},
+			}) satisfies BetterAuthPlugin;
+		const instance = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+				}),
+				makeMetadataExtensionPlugin("meta-ext-a", {
+					authorization_details_types_supported: ["type_a"],
+					only_in_a: true,
+				}),
+				makeMetadataExtensionPlugin("meta-ext-b", {
+					authorization_details_types_supported: ["type_b"],
+					issuer: "https://ignored.example.com",
+				}),
+			],
+		});
+		const { logger } = await instance.auth.$context;
+		const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+		const openIdConfig =
+			(await instance.auth.api.getOpenIdConfig()) as unknown as Record<
+				string,
+				unknown
+			>;
+		expect(openIdConfig.authorization_details_types_supported).toEqual([
+			"type_a",
+		]);
+		expect(warn.mock.calls.map(([message]) => message)).toEqual([
+			'oauth-provider: two extensions contributed the discovery metadata key "authorization_details_types_supported" to openid-configuration; keeping the first-registered value.',
+		]);
 	});
 
 	it("re-derives extension access-token claims on opaque-token introspection", async () => {

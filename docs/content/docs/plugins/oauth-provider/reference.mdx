@@ -513,6 +513,10 @@ Returned when `dpop.nonce.required` is on and the DPoP proof has no nonce, or on
 
 Token exchange has its own conditions for these errors. See [Token exchange errors](/docs/plugins/oauth-provider/tokens#token-exchange-errors).
 
+Authorization codes and device codes are single-use, and the token endpoint consumes one only after the request passes validation. A request rejected for its `code_verifier`, `redirect_uri`, `resource`, client, or an invalid DPoP proof or nonce leaves the code redeemable until it expires, so the client can retry with a corrected request. The one exception is a DPoP proof whose `jti` was already used: the server records proof `jti` values after it consumes the code, so that request uses up the code and returns `invalid_dpop_proof`.
+
+Presenting an authorization code that was already redeemed returns `invalid_grant` and revokes the tokens issued from it. Two requests that redeem the same authorization code at once are handled the same way: one receives tokens, the other gets `invalid_grant`, and the losing request can revoke the tokens the first one just received.
+
 When `adminCreateOAuthClient` links resources, an invalid identifier fails validation with `VALIDATION_ERROR`, an unknown or disabled resource returns `invalid_target`, and a `resourcePrivileges` denial returns `401`. The call creates nothing in each case.
 
 ## Rate limits
@@ -577,7 +581,7 @@ export const customOAuthExtension = () =>
 ```
 
 * `grants`, `clientAuthentication`, and `interactionRequests` must not overlap across extensions. A duplicate grant type, auth method, assertion type, or interaction parameter fails at startup. Extension grants and auth methods are advertised in discovery.
-* `metadata` and `claims` only add keys. A key the provider owns is kept, and a key two extensions contribute resolves to the first one registered. To advertise extension claims, set `advertisedMetadata.claims_supported`.
+* `metadata` and `claims` only add keys. A key the provider owns is kept, and a key two extensions contribute resolves to the first one registered, with a logged warning. To advertise extension claims, set `advertisedMetadata.claims_supported`.
 * A `clientDiscovery` entry has a stable `id` stored as client provenance. Changing it requires migrating the owned clients, and removing it makes them fail closed.
 
 A grant handler receives `provider` (`getClient`, `authenticateClient`, `resolveConfirmation`, `issueTokens`, `verifyDpopProof`, `issueDpopNonce`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). Other endpoints get the same object from `getOAuthProviderApi(ctx, opts, grantType?)`. Without `grantType`, `issueTokens` throws. `validateAccessToken` can return an inactive payload; protected endpoints should use `requireActiveAccessToken`, which rejects inactive tokens with a bearer challenge.

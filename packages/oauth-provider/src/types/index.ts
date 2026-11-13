@@ -586,7 +586,8 @@ export interface OAuthUserInfoExtensionInput {
  *   silently unreachable.
  * - Additive kinds (`metadata`, `claims`) never override authorization-server
  *   core; a key already owned by the provider is kept, and a key two extensions
- *   both contribute resolves to the first-registered extension.
+ *   both contribute resolves to the first-registered extension, with a
+ *   logged warning.
  */
 export interface OAuthProviderExtension {
 	/**
