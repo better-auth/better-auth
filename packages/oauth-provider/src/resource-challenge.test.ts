@@ -540,7 +540,7 @@ describe("resource server challenge", () => {
 
 			expect(challenge.statusCode).toBe(401);
 			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
-				'Bearer error="invalid_token", error_description="authorization scheme must be Bearer or DPoP", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp"',
+				'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp"',
 			);
 		});
 	});

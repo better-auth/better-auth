@@ -44,6 +44,33 @@ describe("createMcpProtectedRequestHandler", () => {
 		);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
+	 */
+	it("answers an unsupported authorization scheme with a Bearer challenge and no error code", async () => {
+		const actual =
+			await vi.importActual<typeof import("better-auth/oauth2")>(
+				"better-auth/oauth2",
+			);
+		verifyAccessTokenRequest.mockImplementation(
+			actual.verifyAccessTokenRequest,
+		);
+
+		const response = await createMcpProtectedRequestHandler(
+			protectedRequestOptions,
+			async () => new Response("unreachable"),
+		)(
+			new Request("https://app.example.com/mcp", {
+				headers: { Authorization: "Basic dXNlcjpwYXNz" },
+			}),
+		);
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toBe(
+			'Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/mcp"',
+		);
+	});
+
 	it("forwards flat JWT verification and challenge options", async () => {
 		verifyAccessTokenRequest.mockRejectedValue(
 			new APIError("UNAUTHORIZED", {
