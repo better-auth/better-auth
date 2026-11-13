@@ -352,6 +352,9 @@ describe("oauth-provider device-code grant", async () => {
 		return { proofFor, poll };
 	}
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-8
+	 */
 	it("keeps an approved device code when the poll's DPoP proof is rejected", async () => {
 		const clientId = await createDeviceClient();
 		const { proofFor, poll } = await createDpopPoller(

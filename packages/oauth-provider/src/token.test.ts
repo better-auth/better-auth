@@ -653,6 +653,9 @@ describe("oauth token - authorization_code", async () => {
 		}
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-15#section-4.1.3
+	 */
 	it("keeps the authorization code when the PKCE verifier is rejected", async () => {
 		const { url: authUrl, codeVerifier } = await createAuthUrl({
 			scopes: ["openid"],
@@ -685,6 +688,9 @@ describe("oauth token - authorization_code", async () => {
 		);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-15#section-4.1.3
+	 */
 	it("rejects an expired authorization code with invalid_grant", async () => {
 		const { url: authUrl, codeVerifier } = await createAuthUrl({
 			scopes: ["openid"],
@@ -5411,6 +5417,9 @@ describe("oauth token - DPoP", async () => {
 		);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-8
+	 */
 	it("keeps the authorization code when the DPoP proof is rejected", async () => {
 		const dpopKey = await createDpopKey();
 		const otherKey = await createDpopKey();
@@ -5451,6 +5460,9 @@ describe("oauth token - DPoP", async () => {
 		});
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-8
+	 */
 	it("keeps the authorization code when a required DPoP proof is missing", async () => {
 		const dpopKey = await createDpopKey();
 		const { code, codeVerifier } = await authorizeForCode(
