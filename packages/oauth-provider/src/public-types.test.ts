@@ -7,6 +7,7 @@ import type {
 	OAuthClientAdministrativeResponse,
 	OAuthClientRegistrationResponse,
 	OAuthOptions,
+	ResourceServerMetadata,
 	SchemaClient,
 	Scope,
 	TokenEndpointAuthMethod,
@@ -103,5 +104,14 @@ describe("public oauth-provider types", () => {
 		expectTypeOf<ClientPrivilegeContext["clientId"]>().toEqualTypeOf<
 			string | undefined
 		>();
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9728#section-2
+	 */
+	it("types protected resource metadata arrays as in RFC 9728", () => {
+		expectTypeOf<
+			ResourceServerMetadata["authorization_details_types_supported"]
+		>().toEqualTypeOf<string[] | undefined>();
 	});
 });
