@@ -229,11 +229,13 @@ export function createResourceServerChallenge(
 	const challengeScope = serializeChallengeScopes(opts?.challengeScopes);
 	if (isAPIError(error) && error.status === "UNAUTHORIZED") {
 		const { errorCode, description } = extractTokenError(error);
-		// `Unknown` is an unsupported scheme or none, which never attempted DPoP.
+		// With a request, only a `Bearer` presentation may still need a DPoP
+		// challenge, for a DPoP-bound token; any other scheme, or none, never
+		// attempted DPoP.
 		const scheme = presentedScheme(opts?.request);
 		if (
 			scheme === "DPoP" ||
-			(scheme !== "Unknown" && isDpopChallengeError(error))
+			((!opts?.request || scheme === "Bearer") && isDpopChallengeError(error))
 		) {
 			// Only the request's DPoP scheme can select this branch without an
 			// error code, and that request presented a token.

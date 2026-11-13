@@ -379,6 +379,27 @@ describe("resource server challenge", () => {
 		}
 
 		it.each([
+			["no Authorization header", null],
+			["an unsupported scheme", "Basic dXNlcjpwYXNz"],
+		])(
+			"never answers a request with %s with a DPoP challenge",
+			(_, authorizationHeader) => {
+				const challenge = createResourceServerChallenge(
+					new APIError("UNAUTHORIZED", {
+						message: "DPoP proof header is required",
+						error: "invalid_dpop_proof",
+					}),
+					resource,
+					{ request: { authorizationHeader } },
+				) as APIError;
+
+				expect(new Headers(challenge.headers).get("WWW-Authenticate")).toMatch(
+					/^Bearer /,
+				);
+			},
+		);
+
+		it.each([
 			["an unsupported scheme", "Basic dXNlcjpwYXNz"],
 			["a header with no scheme", "access-token"],
 		])("answers %s with a Bearer challenge", async (_, authorizationHeader) => {
