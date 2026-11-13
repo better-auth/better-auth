@@ -85,9 +85,6 @@ export const createCibaGrantHandler =
 		const authorizationDetails = readAuthorizationDetails(
 			request.authorizationDetails,
 		);
-		const granted = authorizationDetails
-			? { authorization_details: authorizationDetails }
-			: undefined;
 		// Refresh tokens do not carry authorization details, so a refreshed
 		// token would lose them; such an issuance gets no refresh token.
 		const scopes = request.scope
@@ -110,6 +107,16 @@ export const createCibaGrantHandler =
 		const resources =
 			selectedResources ??
 			(approvedResources.length ? approvedResources : undefined);
+		// RFC 9396 §9.1: a detail that names `locations` goes only to a token for
+		// one of them, so a narrowed token does not reveal details for the others.
+		const issuedDetails = authorizationDetails?.filter(
+			(detail) =>
+				!detail.locations ||
+				detail.locations.some((location) => resources?.includes(location)),
+		);
+		const granted = issuedDetails?.length
+			? { authorization_details: issuedDetails }
+			: undefined;
 		const policy = await resolveResourcePolicy(ctx, opts, {
 			resource: resources,
 			clientId,

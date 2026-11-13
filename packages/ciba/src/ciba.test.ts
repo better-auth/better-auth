@@ -1129,6 +1129,26 @@ describe("ciba authorization_details", () => {
 		expect(issued.body.scope).toBe("openid");
 	});
 
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc9396.html#section-9.1
+	 */
+	it.each([
+		["leaves out details for a resource the poll drops", secondResource, null],
+		["keeps details for the resource the poll selects", resource, [payment]],
+	])("%s", async (_, selected, expected) => {
+		const { authReqId, url } = await startPayment([payment], {
+			resource: [resource, secondResource],
+		});
+		await approve(url);
+		const issued = await poll(authReqId, pollClient, {}, [selected]);
+		expect(issued.status).toBe(200);
+		expect(issued.body.authorization_details ?? null).toEqual(expected);
+		expect(
+			decodeJwt(issued.body.access_token as string).authorization_details ??
+				null,
+		).toEqual(expected);
+	});
+
 	it("refuses authorization_details on the poll and keeps the approval", async () => {
 		const { authReqId, url } = await startPayment();
 		await approve(url);

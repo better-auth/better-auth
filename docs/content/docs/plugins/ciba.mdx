@@ -247,7 +247,9 @@ The provider then handles each request with `authorization_details` as follows:
 
 Your API must check the `authorization_details` claim before it acts, such as that the payment it is asked to make matches the approved amount and recipient.
 
-A refreshed token would not carry the details. So the provider issues no refresh token for a request with authorization details, even with `offline_access`, and leaves `offline_access` out of the returned `scope`. Discovery metadata lists the types as `authorization_details_types_supported`.
+A detail that lists `locations` is issued only in a token for one of those resources. When the poll narrows the token to other resources, that detail is left out of the response and the token (RFC 9396 §9.1). A detail without `locations` goes to every token.
+
+A refreshed or exchanged token would not carry the details. So the provider issues no refresh token for a request with authorization details, even with `offline_access`, and leaves `offline_access` out of the returned `scope`. Token exchange rejects an access token that carries `authorization_details`. Discovery metadata lists the types as `authorization_details_types_supported`.
 
 ## Decide from your own app
 
@@ -444,7 +446,7 @@ The plugin adds one model, `cibaRequest`:
 * Push delivery is not supported.
 * Only `login_hint` is supported; `id_token_hint` and `login_hint_token` are rejected with `invalid_request`.
 * `user_code` and signed authentication requests are not supported.
-* Authorization details reach your API only in JWT access tokens. They are not stored on refresh tokens or opaque access tokens, so a request with authorization details needs a `resource` and gets no refresh token.
+* Authorization details reach your API only in JWT access tokens. They are not stored on refresh tokens or opaque access tokens, so a request with authorization details needs a `resource`, gets no refresh token, and cannot be exchanged.
 * Only `/oauth2/bc-authorize` accepts authorization details. Discovery lists `authorization_details_types_supported` for the whole server, but `/oauth2/authorize` ignores `authorization_details`.
 * A client cannot register the authorization details types it may use. Every client may request every type in `authorizationDetailsTypes`.
 * There is no API that lists a user's pending requests. To show them in your app, keep the `requestId`s that `sendNotification` receives.

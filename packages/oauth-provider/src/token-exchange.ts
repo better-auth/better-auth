@@ -338,6 +338,11 @@ async function exchangeToken(
 	if (!subject?.active || !subject.sub || !subject.exp) {
 		deny("subject_token is invalid");
 	}
+	// RFC 9396 §9: the exchanged token would not carry the details the user
+	// approved, which its resource server must receive.
+	if (subject.authorization_details !== undefined) {
+		deny("subject_token must not carry authorization_details");
+	}
 	const user = await ctx.context.internalAdapter.findUserById(subject.sub);
 	if (!user) deny("subject_token does not represent a user");
 
