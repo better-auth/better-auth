@@ -81,7 +81,7 @@ type DynamicOrganizationRole<O extends OrganizationOptions> = O extends {
 	? LiteralString
 	: never;
 
-type OrganizationInvitationRole<O extends OrganizationOptions> =
+export type OrganizationInvitationRole<O extends OrganizationOptions> =
 	| InferOrganizationRolesFromOption<O>
 	| DynamicOrganizationRole<O>;
 
@@ -256,10 +256,10 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const adapter = getOrgAdapter<O>(ctx.context, option as O);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -1049,10 +1049,10 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 				);
 			}
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: invitation.organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId: invitation.organizationId },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -1296,10 +1296,10 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const isMember = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: orgId,
-			});
+			const isMember = await adapter.findCallerMember(
+				{ session, organizationId: orgId },
+				ctx,
+			);
 			if (!isMember) {
 				throw APIError.fromStatus("FORBIDDEN", {
 					message: "You are not a member of this organization",

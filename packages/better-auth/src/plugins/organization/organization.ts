@@ -4,6 +4,7 @@ import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import { shimContext } from "../../utils/shim";
 import { PACKAGE_VERSION } from "../../version";
 import type { AccessControl, ArrayElement } from "../access";
@@ -20,6 +21,7 @@ import {
 	listOrgRoles,
 	updateOrgRole,
 } from "./routes/crud-access-control";
+import type { OrganizationInvitationRole } from "./routes/crud-invites";
 import {
 	acceptInvitation,
 	cancelInvitation,
@@ -67,7 +69,17 @@ import type {
 	OrganizationSchema,
 	TeamMember,
 } from "./schema";
-import type { OrganizationOptions } from "./types";
+import type { OrganizationOptions, ResolveMembership } from "./types";
+
+type OrganizationPluginOptions<O extends OrganizationOptions> = O &
+	(NoInfer<O> extends { resolveMembership: ResolveMembership }
+		? {
+				resolveMembership: ResolveMembership<
+					OrganizationInvitationRole<NoInfer<O>>,
+					InferAdditionalFieldsFromPluginOptions<"member", NoInfer<O>>
+				>;
+			}
+		: {});
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -263,10 +275,10 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: ctx.context.session.user.id,
-				organizationId: activeOrganizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session: ctx.context.session, organizationId: activeOrganizationId },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"UNAUTHORIZED",
@@ -346,7 +358,7 @@ export function organization<
 			| undefined;
 	},
 >(
-	options?: O | undefined,
+	options?: OrganizationPluginOptions<O> | undefined,
 ): {
 	id: "organization";
 	version: string;
@@ -378,7 +390,7 @@ export function organization<
 		dynamicAccessControl: { enabled: true };
 	},
 >(
-	options?: O | undefined,
+	options?: OrganizationPluginOptions<O> | undefined,
 ): {
 	id: "organization";
 	version: string;
@@ -412,7 +424,7 @@ export function organization<
 		teams?: { enabled?: false | undefined } | undefined;
 	},
 >(
-	options?: O | undefined,
+	options?: OrganizationPluginOptions<O> | undefined,
 ): {
 	id: "organization";
 	version: string;
@@ -439,7 +451,7 @@ export function organization<
 	options: NoInfer<O>;
 };
 export function organization<O extends OrganizationOptions>(
-	options?: O | undefined,
+	options?: OrganizationPluginOptions<O> | undefined,
 ): DefaultOrganizationPlugin<O>;
 export function organization<O extends OrganizationOptions>(options?: O) {
 	const opts = (options || {}) as O;
