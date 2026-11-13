@@ -382,6 +382,22 @@ describe("session.maxPerUser", () => {
 		expect(await listSessionIds(next.user.id)).toEqual([next.session.id]);
 	});
 
+	it("does not revoke sessions for a new session that has already expired", async () => {
+		const { ctx, signIn, isActive } = await getMaxSessionsTestInstance(1);
+		useFakeClock();
+
+		const existing = await signIn();
+		advanceClock();
+		await ctx.internalAdapter.createSession(
+			existing.user.id,
+			false,
+			{ expiresAt: new Date(Date.now() - 1000) },
+			true,
+		);
+
+		expect(await isActive(existing.headers)).toBe(true);
+	});
+
 	it("does not revoke sessions when a create hook deletes the new session", async () => {
 		let deleteCreatedSessions = false;
 		const instance = await getMaxSessionsTestInstance(1, {

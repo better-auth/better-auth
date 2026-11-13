@@ -298,9 +298,9 @@ export const createInternalAdapter = (
 	);
 
 	/**
-	 * Lists all of a user's active sessions. Unlike `listSessions()`, it reads
-	 * every database page, so a limit above the adapter's page size still sees
-	 * every session.
+	 * Lists all of a user's active sessions, in no particular order. Unlike
+	 * `listSessions()`, it reads every database page, so a limit above the
+	 * adapter's page size still sees every session.
 	 */
 	async function listAllActiveSessions(userId: string): Promise<Session[]> {
 		if (secondaryStorage && !databaseSessionFallbackEnabled) {
@@ -316,7 +316,9 @@ export const createInternalAdapter = (
 					{ field: "userId", value: userId },
 					{ field: "expiresAt", value: now, operator: "gt" },
 				],
-				sortBy: { field: "createdAt", direction: "desc" },
+				// Sorted by a unique field so pages never skip or repeat a session.
+				// The caller orders them by creation time.
+				sortBy: { field: "id", direction: "asc" },
 				limit: pageSize,
 				offset,
 			});
@@ -330,9 +332,11 @@ export const createInternalAdapter = (
 	 * longer exists.
 	 */
 	async function enforceSessionLimit(token: string, maxPerUser: number) {
-		// A hook may have deleted the session since it was created.
+		// A hook may have deleted the session since it was created, and
+		// `findSession` returns expired sessions too.
 		const current = await internalAdapter.findSession(token);
-		if (!current) return;
+		if (!current || new Date(current.session.expiresAt).getTime() <= Date.now())
+			return;
 		const revokedTokens = selectSessionsOverLimit(
 			current.session,
 			await listAllActiveSessions(current.session.userId),
