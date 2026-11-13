@@ -1240,10 +1240,12 @@ export interface OAuthOptions<
 	 * per client. The decision is made once, when the client is created, and a
 	 * metadata document refresh never changes it.
 	 *
-	 * Each `post_logout_redirect_uris` entry of an allowed client must share an
-	 * origin with one of its `redirect_uris` (or, for a metadata document
-	 * client, its `client_id`), so logout never redirects users anywhere
-	 * authorization could not. Otherwise registration fails with
+	 * Each `post_logout_redirect_uris` entry of an allowed client must share a
+	 * scheme, host, and port with one of its `redirect_uris` (or, for a metadata
+	 * document client, its `client_id`), so logout never redirects users
+	 * anywhere authorization could not. Loopback hosts (`localhost`,
+	 * `127.0.0.1`, `[::1]`) match on any port, and private-use URIs match on
+	 * scheme and authority. Otherwise registration fails with
 	 * `invalid_client_metadata`.
 	 *
 	 * @see https://better-auth.com/docs/plugins/oauth-provider/openid-connect#registered-clients

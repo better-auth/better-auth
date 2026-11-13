@@ -1506,8 +1506,15 @@ describe("CIMD - RP-initiated logout for metadata document clients", async () =>
 
 		allowEndSession = true;
 		endSessionPolicy.mockClear();
+		vi.unstubAllGlobals();
+		stubMetadataFetch(clientId, {
+			...documentFor(clientId),
+			client_name: "Refreshed Logout Client",
+		});
 		await authorize(clientId);
-		expect((await storedClient(clientId))?.enableEndSession).toBeFalsy();
+		const refreshed = await storedClient(clientId);
+		expect(refreshed?.name).toBe("Refreshed Logout Client");
+		expect(refreshed?.enableEndSession).toBeFalsy();
 		expect(endSessionPolicy).not.toHaveBeenCalled();
 	});
 
@@ -1522,7 +1529,10 @@ describe("CIMD - RP-initiated logout for metadata document clients", async () =>
 			...documentFor(clientId),
 			post_logout_redirect_uris: ["https://attacker.example/landing"],
 		});
-		await authorize(clientId);
+		const refresh = await authorize(clientId);
+		expect(refresh.headers.get("location") ?? (await refresh.text())).toContain(
+			"invalid_client_metadata",
+		);
 		expect((await storedClient(clientId))?.postLogoutRedirectUris).toEqual([
 			"https://mcp-logout-moved.example.com/logged-out",
 		]);
