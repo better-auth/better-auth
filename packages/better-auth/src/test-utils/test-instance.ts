@@ -19,6 +19,11 @@ import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
 
 const cleanupSet = new Set<Function>();
 
+// One MongoDB database per test file: Vitest loads this module once per file,
+// so files running in parallel cannot drop each other's data. Instances in one
+// file share it, as they share the file's `afterAll` cleanup.
+const mongodbDatabase = `ba_test_${randomUUID().replaceAll("-", "_")}`;
+
 type CurrentUserContext = {
 	headers: Headers;
 };
@@ -125,23 +130,19 @@ export async function getTestInstance<
 		});
 	}
 
-	async function mongodbClient() {
+	async function getMongodb() {
 		const { MongoClient } = await import("mongodb");
-		const dbClient = async (connectionString: string, dbName: string) => {
-			// Fail fast in CI/local when Mongo is unreachable instead of hanging
-			// until Vitest's default 10s testTimeout (driver default is 30s).
-			const client = new MongoClient(connectionString, {
-				serverSelectionTimeoutMS: 2000,
-				connectTimeoutMS: 2000,
-			});
-			await client.connect();
-			const db = client.db(dbName);
-			return db;
-		};
-		const db = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
-		return db;
+		// Fail fast in CI/local when Mongo is unreachable instead of hanging
+		// until Vitest's default 10s testTimeout (driver default is 30s).
+		const client = new MongoClient("mongodb://127.0.0.1:27017", {
+			serverSelectionTimeoutMS: 2000,
+			connectTimeoutMS: 2000,
+		});
+		await client.connect();
+		return { client, db: client.db(mongodbDatabase) };
 	}
 
+	const mongodb = testWith === "mongodb" ? await getMongodb() : undefined;
 	const postgres = testWith === "postgres" ? await getPostgres() : undefined;
 	const mysql = testWith === "mysql" ? await getMysql() : undefined;
 	const sqlite = testWith === "sqlite" ? await getSqlite() : undefined;
@@ -164,11 +165,10 @@ export async function getTestInstance<
 					type: "postgres",
 					transaction: config?.transaction,
 				}
-			: testWith === "mongodb"
-				? await Promise.all([
-						mongodbClient(),
-						await import("../adapters/mongodb-adapter"),
-					]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
+			: mongodb
+				? await import("../adapters/mongodb-adapter").then(
+						({ mongodbAdapter }) => mongodbAdapter(mongodb.db),
+					)
 				: mysql
 					? {
 							db: mysql,
@@ -193,9 +193,12 @@ export async function getTestInstance<
 	// Register before migrations and test-user setup so a failed setup still
 	// drops the database it created.
 	const cleanup = async () => {
-		if (testWith === "mongodb") {
-			const db = await mongodbClient();
-			await db.dropDatabase();
+		if (mongodb) {
+			try {
+				await mongodb.db.dropDatabase();
+			} finally {
+				await mongodb.client.close();
+			}
 			return;
 		}
 		if (postgres) {
