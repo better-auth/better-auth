@@ -1,5 +1,11 @@
 # @better-auth/kysely-adapter
 
+## 1.7.23
+
+### Patch Changes
+
+- [#12530](https://github.com/better-auth/better-auth/pull/12530) [`9dc64fb`](https://github.com/better-auth/better-auth/commit/9dc64fbba9c39c10bc809e54a46a9ae21e4e15d4) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The Kysely adapter on PostgreSQL now saves `json` fields whose value is an array. Before, writing an array such as `[{ type: "payment" }]` to a plugin's `json` field failed with `invalid input syntax for type json`. JSON objects were not affected.
+
 ## 1.7.22
 
 ## 1.7.21
