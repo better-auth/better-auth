@@ -338,7 +338,7 @@ export const before = createAuthMiddleware(async (ctx) => {
 });
 ```
 
-`challengeDpopNonce` checks only the proof's `nonce`. It does not verify the signature, `htm`, or `htu`, and it does not store the `jti`. The request must still verify the proof, with `verifyDpopProof`, `issueTokens`, or `resolveConfirmation`, before you trust it. Within one request, that verification measures nonce freshness at the same time as the challenge, so a nonce that passes the challenge cannot expire before the proof is verified.
+`challengeDpopNonce` checks only the proof's `nonce`. It does not verify the signature, `htm`, or `htu`, and it does not store the `jti`. The request must still verify the proof before you trust it. `verifyDpopProof` always verifies it. `issueTokens` and `resolveConfirmation` verify it only when no client-authentication `confirmation` is passed, because a `confirmation` replaces the proof. Within one request, that verification measures nonce freshness at the same time as the challenge, so a nonce that passes the challenge cannot expire before the proof is verified.
 
 ## Custom claims
 

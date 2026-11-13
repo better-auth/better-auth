@@ -447,8 +447,9 @@ export interface OAuthProviderApi {
 	 * Resolves when nonces are off or the request has no `DPoP` header.
 	 *
 	 * It checks only the `nonce` claim and does not reserve the `jti`. Verify
-	 * the proof afterwards with `verifyDpopProof`, `resolveConfirmation`, or
-	 * `issueTokens` before trusting it.
+	 * the proof afterwards before trusting it: `verifyDpopProof` always does,
+	 * while `resolveConfirmation` and `issueTokens` do only without a
+	 * `confirmation`, which replaces the proof.
 	 */
 	challengeDpopNonce: () => Promise<void>;
 	/**
