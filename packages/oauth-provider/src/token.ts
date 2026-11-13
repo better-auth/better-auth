@@ -44,7 +44,11 @@ import { isUserDelegatedScope } from "./oauthClient/client-credentials";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
 import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
-import { findRefreshToken, revokeGrantAccessTokens } from "./token-lookup";
+import {
+	authorizationCodeGrantId,
+	findRefreshToken,
+	revokeGrantAccessTokens,
+} from "./token-lookup";
 import type {
 	Confirmation,
 	OAuthActorClaim,
@@ -680,19 +684,8 @@ async function revokeTokensIssuedForAuthorizationCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	authorizationCodeId: string,
+	clientId: string,
 ) {
-	// Read the grants before the deletes below remove the rows that name them.
-	const grantLookup = opts.revocableJwtAccessTokens
-		? await ctx.context.adapter
-				.findMany<{ grantId?: string; clientId: string }>({
-					model: "oauthRefreshToken",
-					where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
-				})
-				.then(
-					(rows) => ({ rows }),
-					(error: unknown) => ({ error }),
-				)
-		: undefined;
 	const deleteIssuedTokens = async (
 		model: "oauthAccessToken" | "oauthRefreshToken",
 	) => {
@@ -716,17 +709,12 @@ async function revokeTokensIssuedForAuthorizationCode(
 	await deleteIssuedTokens("oauthAccessToken");
 	// Last, so a failure cannot stop the cleanup above. It still fails the
 	// request rather than leave the grant's JWT access tokens active unnoticed.
-	if (!grantLookup) return;
-	if ("error" in grantLookup) throw grantLookup.error;
-	// Rotations of one grant share its ID, so revoke each grant once.
-	const grants = new Map(
-		grantLookup.rows.map((row) => [row.grantId, row.clientId]),
-	);
-	await Promise.all(
-		[...grants].map(([grantId, clientId]) =>
-			revokeGrantAccessTokens(ctx, opts, { grantId, clientId }),
-		),
-	);
+	if (opts.revocableJwtAccessTokens) {
+		await revokeGrantAccessTokens(ctx, opts, {
+			grantId: await authorizationCodeGrantId(authorizationCodeId),
+			clientId,
+		});
+	}
 }
 
 function consumedAuthorizationCodeIdentifier(authorizationCodeId: string) {
@@ -1516,10 +1504,15 @@ async function createUserTokens(
 	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
 	// Kept across rotations, so revoking any refresh token of the grant can
 	// revoke the access tokens it issued. A legacy row without one starts a new
-	// grant ID here.
-	const grantId = isRefreshToken
-		? (existingRefreshToken?.grantId ?? generateRandomString(32))
-		: undefined;
+	// grant ID here. A grant from an authorization code takes its ID from the
+	// code, so a replay of the code can revoke it.
+	const grantId =
+		existingRefreshToken?.grantId ??
+		(params.authorizationCodeId
+			? await authorizationCodeGrantId(params.authorizationCodeId)
+			: isRefreshToken
+				? generateRandomString(32)
+				: undefined);
 	const isIdToken = user && effectiveScopes.includes("openid");
 	const metadata = parseClientMetadata(client.metadata);
 	const additionalIdTokenClaims =
@@ -1756,6 +1749,7 @@ async function rejectAuthorizationCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	authorizationCodeId: string,
+	clientId: string,
 	reuseByIssuingClient: boolean,
 ): Promise<never> {
 	if (reuseByIssuingClient) {
@@ -1763,6 +1757,7 @@ async function rejectAuthorizationCode(
 			ctx,
 			opts,
 			authorizationCodeId,
+			clientId,
 		);
 	}
 	throw new APIError("BAD_REQUEST", {
@@ -1803,6 +1798,7 @@ async function checkVerificationValue(
 			ctx,
 			opts,
 			authorizationCodeId,
+			client_id,
 			await isReuseByIssuingClient(
 				ctx,
 				authorizationCodeId,
@@ -2129,7 +2125,13 @@ async function handleAuthorizationCodeGrant(
 	if (!consumed || consumed.id !== verificationId) {
 		// This request already passed the client and PKCE checks against this
 		// code, so it is a reuse by the issuing client.
-		return rejectAuthorizationCode(ctx, opts, authorizationCodeId, true);
+		return rejectAuthorizationCode(
+			ctx,
+			opts,
+			authorizationCodeId,
+			client_id,
+			true,
+		);
 	}
 	await dpop.recordReplay();
 

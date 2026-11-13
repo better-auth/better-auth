@@ -123,8 +123,11 @@ interface TokenResponse {
 	refresh_token?: string;
 }
 
-/** Runs the authorization code flow; `offline` also requests a refresh token. */
-async function authorize(
+/**
+ * Gets an authorization code without redeeming it; `offline` also requests a
+ * refresh token.
+ */
+async function authorizeCode(
 	server: TestServer,
 	{ offline = false }: { offline?: boolean } = {},
 ) {
@@ -174,6 +177,12 @@ async function authorize(
 			headers: tokenHeaders,
 		});
 	};
+	return { redeem };
+}
+
+/** Runs the authorization code flow; `offline` also requests a refresh token. */
+async function authorize(server: TestServer, options?: { offline?: boolean }) {
+	const { redeem } = await authorizeCode(server, options);
 	const tokens = (await redeem()).data!;
 	expect(tokens.access_token!.split(".")).toHaveLength(3);
 	return {
@@ -504,9 +513,48 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 			await expectRevoked(server, rotated.access_token!);
 		});
 
-		it("stamps no grant ID when the response has no refresh token", async () => {
-			const token = await getAccessToken(server);
-			expect(decodeJwt(token).grant_id).toBeUndefined();
+		it("revokes a JWT issued without a refresh token when its code is replayed", async () => {
+			const grant = await authorize(server);
+			expect(grant.refreshToken).toBeUndefined();
+
+			const replay = await grant.redeem();
+			expect(replay.error?.status).toBe(400);
+
+			await expectRevoked(server, grant.accessToken);
+		});
+
+		it("revokes the JWT of a redemption that a concurrent replay of its code overtakes", async () => {
+			const { redeem } = await authorizeCode(server, { offline: true });
+			const ctx = await server.auth.$context;
+			// Hold the winning redemption before it stores its refresh token until
+			// the losing request has finished revoking.
+			let releaseWinner!: () => void;
+			const loserFinished = new Promise<void>((resolve) => {
+				releaseWinner = resolve;
+			});
+			const create = ctx.adapter.create;
+			const spy = vi.spyOn(ctx.adapter, "create").mockImplementation((async (
+				args: Parameters<typeof create>[0],
+			) => {
+				if (args.model === "oauthRefreshToken") await loserFinished;
+				return create.call(ctx.adapter, args);
+			}) as typeof create);
+			try {
+				const responses = await Promise.all(
+					[redeem(), redeem()].map((request) =>
+						request.then((response) => {
+							if (response.error) releaseWinner();
+							return response;
+						}),
+					),
+				);
+				const winner = responses.find((response) => response.data);
+				const loser = responses.find((response) => response.error);
+				expect(loser?.error?.status).toBe(400);
+				await expectRevoked(server, winner!.data!.access_token!);
+			} finally {
+				spy.mockRestore();
+			}
 		});
 	},
 );
@@ -573,7 +621,7 @@ describe("oauth-provider - grant revocation with contributed claims", async () =
 		const grant = await authorize(server, { offline: true });
 		const token = await getAccessToken(server);
 		expect(decodeJwt(grant.accessToken).grant_id).not.toBe("forged");
-		expect(decodeJwt(token).grant_id).toBeUndefined();
+		expect(decodeJwt(token).grant_id).not.toBe("forged");
 	});
 });
 
@@ -591,15 +639,24 @@ describe("oauth-provider - grant revocation in secondary storage", async () => {
 	it("keeps the grant entry for the access token lifetime", async () => {
 		const grant = await authorize(server, { offline: true });
 		const grantId = decodeJwt(grant.accessToken).grant_id as string;
-		expect((await revoke(server, grant.refreshToken!)).error).toBe(null);
+		// Let time pass between computing the entry's expiry and storing it.
+		const now = Date.now();
+		let tick = 0;
+		const clock = vi.spyOn(Date, "now").mockImplementation(() => now + tick++);
+		try {
+			expect((await revoke(server, grant.refreshToken!)).error).toBe(null);
+		} finally {
+			clock.mockRestore();
+		}
 
 		const key = [...store.keys()].find(
 			(k) => k.startsWith("verification:") && k.includes(grantId),
 		);
 		expect(key).toBeDefined();
-		expect(
-			Math.abs(ttls.get(key!)! - accessTokenExpiresIn),
-		).toBeLessThanOrEqual(2);
+		// Outlives a token revoked in the second it was issued, which stays
+		// accepted until its `exp`.
+		expect(ttls.get(key!)).toBeGreaterThanOrEqual(accessTokenExpiresIn);
+		expect(ttls.get(key!)).toBeLessThanOrEqual(accessTokenExpiresIn + 1);
 		expect(await isActiveAtIntrospection(server, grant.accessToken)).toBe(
 			false,
 		);
