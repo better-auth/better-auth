@@ -353,7 +353,13 @@ function hasStreamedBody(
 	input: string | URL | Request,
 	init: RequestInit | undefined,
 ): boolean {
-	if (init?.body != null) return init.body instanceof ReadableStream;
+	if (init?.body != null) {
+		// Check the shape rather than `instanceof`, which misses a stream
+		// created in another realm, such as an iframe.
+		return (
+			typeof (init.body as Partial<ReadableStream>).getReader === "function"
+		);
+	}
 	return input instanceof Request && input.body !== null;
 }
 
@@ -367,10 +373,12 @@ function hasStreamedBody(
  *   `DPoP-Nonce` response header updates it, including on success.
  * - On a `use_dpop_nonce` error that comes with a new nonce, the request is
  *   sent once more with a new proof. Any other response is returned as is.
- *   A streamed body, or a `Request` input that has a body, is sent once and
- *   never retried, so the upload is not buffered in memory.
- * - The proof names the requested URL. When `fetch` follows a redirect, the
- *   target receives a proof for a different `htu` and rejects it.
+ *   A streamed body is sent once and never retried, so the upload is not
+ *   buffered in memory. This covers a `ReadableStream` passed as `init.body`
+ *   and a `Request` input whose body `init` does not replace.
+ * - The proof names the requested origin and path. When `fetch` follows a
+ *   redirect to a different origin or path, a server that verifies DPoP
+ *   there rejects the proof.
  *
  * @example
  * ```ts
