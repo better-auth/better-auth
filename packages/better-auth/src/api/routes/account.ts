@@ -760,6 +760,7 @@ async function getValidAccessToken(
 			accessTokenExpiresAt,
 			scopes: parseStoredScopes(account.scope),
 			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
+			tokenType: newTokens?.tokenType || "Bearer",
 		};
 	} catch (_error) {
 		throw APIError.from("BAD_REQUEST", {
@@ -957,6 +958,7 @@ export const refreshToken = createAuthEndpoint(
 				idToken: tokens.idToken || account.idToken,
 				providerId: account.providerId,
 				accountId: account.id,
+				tokenType: tokens.tokenType || "Bearer",
 			});
 		} catch (_error) {
 			throw APIError.from("BAD_REQUEST", {
