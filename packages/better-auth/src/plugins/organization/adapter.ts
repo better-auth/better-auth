@@ -1348,16 +1348,13 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				userId: user.id,
 				organizationId,
 			});
-			const resolved = await options?.resolveMembership?.(
+			if (!options?.resolveMembership) return member;
+			const resolved = await options.resolveMembership(
 				{ user, session, organizationId, member },
 				ctx,
 			);
-			if (resolved === undefined) return member;
 			if (!resolved) return null;
-			const { id, role, ...fields } =
-				typeof resolved === "string" || Array.isArray(resolved)
-					? { role: resolved }
-					: resolved;
+			const { id, ...fields } = resolved;
 			return {
 				createdAt: new Date(),
 				user: {
@@ -1367,9 +1364,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					image: user.image,
 				},
 				...member,
-				...fields,
 				id: id ?? member?.id ?? `resolved:${user.id}:${organizationId}`,
-				role: Array.isArray(role) ? role.join(",") : role,
+				...fields,
 				organizationId,
 				userId: user.id,
 			} as NonNullable<typeof member>;

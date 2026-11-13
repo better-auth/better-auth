@@ -24,12 +24,12 @@ export type ResolveMembership = (
 	},
 	ctx: GenericEndpointContext,
 ) => Awaitable<
-	| string
-	| string[]
-	| ({ role: string | string[]; id?: string | undefined } & Record<string, any>)
+	| ({
+			role: string;
+			id?: string | undefined;
+			createdAt?: Date | undefined;
+	  } & Record<string, any>)
 	| null
-	| false
-	| undefined
 >;
 
 export interface OrganizationOptions {
@@ -80,10 +80,12 @@ export interface OrganizationOptions {
 	 * setting an organization active, reading it, checking permissions, and
 	 * managing members, invitations and teams. Keep it cheap or cached.
 	 *
-	 * `member` is the caller's member row, or `null`. Return `undefined` to use
-	 * it as is, `null` or `false` to refuse, a role to act with that role, or a
-	 * membership object whose fields merge over the row. Nothing is written to
-	 * the member table.
+	 * `member` is the caller's member row, or `null`. Return the effective
+	 * membership, or `null` to refuse. Return `member` to keep the default;
+	 * forgetting to do so locks real members out. Multiple roles are a
+	 * comma-separated string. Other fields merge over the row; `userId` and
+	 * `organizationId` are always the caller's and the organization's. Nothing
+	 * is written to the member table.
 	 *
 	 * `ctx` is the context of the endpoint being called, so the result can
 	 * depend on the request: `ctx.path`, `ctx.body`, `ctx.headers`.
@@ -91,9 +93,12 @@ export interface OrganizationOptions {
 	 * @example
 	 * ```ts
 	 * resolveMembership: ({ user, member }, ctx) => {
-	 *   if (member) return;
+	 *   if (member) return member;
 	 *   const paths = ["/organization/update", "/organization/delete"];
-	 *   if (user.role === "admin" && paths.includes(ctx.path)) return "owner";
+	 *   if (user.role === "admin" && paths.includes(ctx.path)) {
+	 *     return { role: "owner" };
+	 *   }
+	 *   return null;
 	 * }
 	 * ```
 	 */

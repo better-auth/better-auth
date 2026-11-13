@@ -45,8 +45,8 @@ async function setup(resolveMembership?: ResolveMembership) {
 
 const forStaff =
 	(result: ReturnType<ResolveMembership>): ResolveMembership =>
-	({ user }) =>
-		user.email === STAFF_EMAIL ? result : undefined;
+	({ user, member }) =>
+		user.email === STAFF_EMAIL ? result : member;
 
 describe("resolveMembership", () => {
 	it("changes nothing when the option is not set", async () => {
@@ -61,8 +61,8 @@ describe("resolveMembership", () => {
 		expect(member.role).toBe("owner");
 	});
 
-	it("lets a non-member act with a role string", async () => {
-		const resolveMembership = vi.fn(forStaff("admin"));
+	it("lets a non-member act with a role", async () => {
+		const resolveMembership = vi.fn(forStaff({ role: "admin" }));
 		const { auth, staff, staffUser, org } = await setup(resolveMembership);
 
 		const active = await auth.api.setActiveOrganization({
@@ -92,9 +92,12 @@ describe("resolveMembership", () => {
 
 	it("passes the endpoint context so the resolver can decide per request", async () => {
 		const { auth, owner, staff, org } = await setup(({ user, member }, ctx) => {
-			if (member || user.email !== STAFF_EMAIL) return;
-			if (["/organization/update", "/organization/delete"].includes(ctx.path))
-				return "owner";
+			if (member) return member;
+			const paths = ["/organization/update", "/organization/delete"];
+			if (user.email === STAFF_EMAIL && paths.includes(ctx.path)) {
+				return { role: "owner" };
+			}
+			return null;
 		});
 
 		const updated = await auth.api.updateOrganization({
@@ -129,7 +132,7 @@ describe("resolveMembership", () => {
 	});
 
 	it("receives the context of the endpoint being called", async () => {
-		const resolveMembership = vi.fn<ResolveMembership>(() => undefined);
+		const resolveMembership = vi.fn<ResolveMembership>(({ member }) => member);
 		const { auth, owner, org } = await setup(resolveMembership);
 		await auth.api.setActiveOrganization({
 			body: { organizationId: org.id },
@@ -172,31 +175,32 @@ describe("resolveMembership", () => {
 		expect(member.id).toBe(`resolved:${staffUser.id}:${org.id}`);
 	});
 
-	it.each([null, false] as const)(
-		"refuses when the resolver returns %s",
-		async (result) => {
-			const { auth, staff, org } = await setup(forStaff(result));
-			await expect(
-				auth.api.setActiveOrganization({
-					body: { organizationId: org.id },
-					headers: staff,
-				}),
-			).rejects.toMatchObject({ status: "FORBIDDEN" });
-		},
-	);
+	it("always uses the caller's userId and the resolved organizationId", async () => {
+		const { auth, staff, staffUser, org } = await setup(
+			forStaff({
+				role: "member",
+				userId: "someone-else",
+				organizationId: "other-org",
+			}),
+		);
+		await auth.api.setActiveOrganization({
+			body: { organizationId: org.id },
+			headers: staff,
+		});
+		const member = await auth.api.getActiveMember({ headers: staff });
+		expect(member).toMatchObject({
+			userId: staffUser.id,
+			organizationId: org.id,
+		});
+	});
 
-	it("keeps the default for members and non-members when it returns undefined", async () => {
-		const resolveMembership = vi.fn<ResolveMembership>(() => undefined);
+	it("keeps a real member unchanged when it returns member", async () => {
+		const resolveMembership = vi.fn<ResolveMembership>(({ member }) => member);
 		const { auth, owner, staff, org, ownerMember } =
 			await setup(resolveMembership);
 		const member = await auth.api.getActiveMember({ headers: owner });
 		expect(member).toMatchObject({ id: ownerMember.id, role: "owner" });
-		expect(resolveMembership).toHaveBeenCalledWith(
-			expect.objectContaining({
-				member: expect.objectContaining({ id: ownerMember.id, role: "owner" }),
-			}),
-			expect.anything(),
-		);
+		expect(member).toEqual(resolveMembership.mock.lastCall?.[0].member);
 		await expect(
 			auth.api.setActiveOrganization({
 				body: { organizationId: org.id },
@@ -205,8 +209,10 @@ describe("resolveMembership", () => {
 		).rejects.toMatchObject({ status: "FORBIDDEN" });
 	});
 
-	it("downgrades a real member with a role string", async () => {
-		const { auth, owner, ownerMember } = await setup(() => "member");
+	it("downgrades a real member", async () => {
+		const { auth, owner, ownerMember } = await setup(() => ({
+			role: "member",
+		}));
 		const member = await auth.api.getActiveMember({ headers: owner });
 		expect(member).toMatchObject({ id: ownerMember.id, role: "member" });
 		await expect(
@@ -230,8 +236,8 @@ describe("resolveMembership", () => {
 		});
 	});
 
-	it("refuses a real member when the resolver returns false", async () => {
-		const { auth, owner } = await setup(() => false);
+	it("refuses a real member when the resolver returns null", async () => {
+		const { auth, owner } = await setup(() => null);
 		await expect(
 			auth.api.getFullOrganization({ headers: owner }),
 		).rejects.toMatchObject({ status: "FORBIDDEN" });
