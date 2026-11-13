@@ -4,6 +4,7 @@ import { isAPIError } from "better-auth/api";
 import { getConfirmationJkt } from "better-auth/oauth2";
 import type { User } from "better-auth/types";
 import type { JWTPayload } from "jose";
+import { getDpopProofJwt } from "./dpop";
 import { extendOAuthProvider } from "./extensions";
 import { resolveResourcePolicy } from "./resources";
 import { resolveIssuanceConfirmation, sameConfirmation } from "./token";
@@ -17,6 +18,7 @@ import type {
 import type { Awaitable } from "./types/helpers";
 import {
 	consentCovers,
+	couldBeUserId,
 	findConsent,
 	isConfirmation,
 	isRecord,
@@ -104,6 +106,16 @@ export interface OAuthTokenExchangeOptions {
 	allowExchange?: (request: OAuthTokenExchangeRequest) => Awaitable<boolean>;
 	/** Delegation (`actor_token` and `act`) settings. */
 	delegation?: OAuthTokenExchangeDelegationOptions;
+	/**
+	 * Whether public clients (`token_endpoint_auth_method: "none"`) registered
+	 * for the grant may exchange tokens. With `"dpop-bound"`, a public client
+	 * may exchange only a DPoP-bound access token issued to itself, must prove
+	 * that token's key, and receives a token bound to the same key. It cannot
+	 * send an `actor_token`.
+	 *
+	 * @default false
+	 */
+	publicClients?: false | "dpop-bound";
 }
 
 // Names the authorization server owns inside the current actor's `act` entry.
@@ -168,24 +180,6 @@ function actorChainDepth(act: unknown): number | null {
 	return depth;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * Whether `id` has the shape of a user id under the configured id mode. A
- * lookup with any other value cannot match, and some databases reject it: a
- * serial id column receives `NaN`, and a Postgres `uuid` column rejects
- * non-UUID text.
- */
-function couldBeUserId(
-	ctx: OAuthExtensionGrantHandlerInput["ctx"],
-	id: string,
-): boolean {
-	const mode = ctx.context.options.advanced?.database?.generateId;
-	if (mode === "serial") return /^\d+$/.test(id);
-	if (mode === "uuid") return UUID.test(id);
-	return true;
-}
-
 /**
  * Validates and resolves the `actor_token`. Like the subject token, it must be
  * an active access token this server issued, but to the requesting client
@@ -213,7 +207,7 @@ async function resolveActor(
 		// equals the client id (`generateClientId` is configurable), so that
 		// collision is rejected rather than guessed.
 		if (
-			couldBeUserId(ctx, clientId) &&
+			couldBeUserId(ctx.context, clientId) &&
 			(await ctx.context.internalAdapter.findUserById(clientId))
 		) {
 			deny("actor_token is invalid");
@@ -309,8 +303,28 @@ async function exchangeToken(
 		.filter((target) => target != null);
 	if (targets.length === 0) deny("resource or audience is required");
 
-	// Confidential clients only, and only when registered for this grant.
-	const { client, confirmation } = await provider.authenticateClient();
+	// Only clients registered for this grant, and public clients only when
+	// enabled. A confidential client must still send its credentials.
+	const { client, confirmation } = await provider.authenticateClient(
+		options.publicClients === "dpop-bound"
+			? { requireCredentials: false }
+			: undefined,
+	);
+	// Without client authentication, a DPoP proof of the subject token's key is
+	// what stops someone holding only a leaked token from exchanging it.
+	const isPublicClient = client.tokenEndpointAuthMethod === "none";
+	if (isPublicClient) {
+		if (actorToken) deny("a public client cannot send actor_token");
+		// Fail before any lookup: the proof is checked against the subject
+		// token's key once that token is validated.
+		if (!getDpopProofJwt(ctx)) {
+			tokenError(
+				"BAD_REQUEST",
+				"invalid_dpop_proof",
+				"DPoP proof header is required",
+			);
+		}
+	}
 
 	// Userinfo is only an implicit audience of OpenID tokens, and exchanged
 	// tokens never carry `openid`.
@@ -335,8 +349,18 @@ async function exchangeToken(
 		subjectToken,
 		client.clientId,
 	);
-	if (!subject?.active || !subject.sub || !subject.exp) {
+	if (
+		!subject?.active ||
+		!subject.sub ||
+		!subject.exp ||
+		// A public client cannot prove it is the resource server in the token's
+		// audience, so it may only exchange its own tokens.
+		(isPublicClient && subject.client_id !== client.clientId)
+	) {
 		deny("subject_token is invalid");
+	}
+	if (isPublicClient && !getConfirmationJkt(subject.cnf)) {
+		deny("a public client may only exchange a DPoP-bound subject_token");
 	}
 	// RFC 9396 §9: the exchanged token would not carry the details the user
 	// approved, which its resource server must receive.
@@ -514,6 +538,9 @@ async function exchangeToken(
  * another registered resource. The issued token represents the same user,
  * carries the requesting client as `client_id`, and expires no later than the
  * subject token.
+ *
+ * With `publicClients: "dpop-bound"`, a public client can also exchange its
+ * own DPoP-bound token.
  *
  * Without an `actor_token`, the exchange is impersonation. With one, it is
  * delegation: the issued token names the actor in `act`, nesting any earlier

@@ -133,9 +133,20 @@ oauthProvider({
 })
 ```
 
+## Authorization code reuse
+
+An authorization code works once. A second token request with the same code is rejected. When that request comes from the client the code was issued to, the provider also revokes the refresh tokens and opaque access tokens issued from the code. JWT access tokens stay valid until they expire ([OAuth 2.1 §7.5.3](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-7.5.3)). The request comes from the issuing client when:
+
+* It carries that client's `client_id`, and a confidential client also authenticates with its credentials.
+* It carries the matching `code_verifier`, if the code was issued with PKCE. Public clients always use PKCE, so a public client's code can only be used to revoke with its `code_verifier`.
+
+A request that fails either check is rejected and the tokens stay valid. This includes a confidential client that sends its secret but leaves out the `code_verifier` for a code issued with PKCE. Someone who has the code but not the `code_verifier` therefore cannot revoke the client's tokens.
+
+The tokens issued from a code can outlive the code, so the provider remembers a redeemed code for as long as those tokens can still be valid. The record lasts for the longer of `accessTokenExpiresIn` and `refreshTokenExpiresIn` after redemption (30 days by default), and each refresh-token rotation extends it by the same amount. A reuse after the code expires still revokes the tokens while that record exists.
+
 ## Refresh tokens
 
-Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire. After a replay, the refresh fails with `invalid_grant`, and the client must start a new authorization request to get tokens.
+Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire. With [`revocableJwtAccessTokens`](#revoke-the-access-tokens-of-a-grant), the replayed grant's JWT access tokens are revoked too. After a replay, the refresh fails with `invalid_grant`, and the client must start a new authorization request to get tokens.
 
 Keep the default, `0`, unless your clients lose refresh responses. To let a client retry a refresh after a lost response, set `refreshTokenReuseInterval` to a number of seconds. A retry within that window gets the same response back, including the replacement refresh token. The retry gets that response only when it uses the same client, scopes, resources, and DPoP key as the first refresh. A retry that differs but is otherwise valid gets `invalid_grant`.
 
@@ -322,6 +333,24 @@ Call it before your endpoint consumes a one-time credential, such as a code. The
 
 An endpoint that only hands out nonces, such as a credential issuer's Nonce Endpoint, calls `provider.issueDpopNonce()`. It sets a nonce only when `dpop.nonce.required` is on. Otherwise it returns `undefined` and sets no header.
 
+A plugin endpoint or before hook that stages state before the proof is verified calls `provider.challengeDpopNonce()` first. It sends the token endpoint's nonce challenge, a 400 `use_dpop_nonce` error with a fresh `DPoP-Nonce`, when the proof lacks a current nonce. The client's retry then finds the state untouched. It does nothing when `dpop.nonce.required` is off or the request has no `DPoP` header.
+
+```ts title="dpop-hook.ts"
+import { getOAuthProviderApi } from "@better-auth/oauth-provider";
+import { createAuthMiddleware } from "better-auth/api";
+
+export const before = createAuthMiddleware(async (ctx) => {
+  if (ctx.path !== "/oauth2/token") return;
+  await getOAuthProviderApi(
+    ctx,
+    ctx.context.getPlugin("oauth-provider")!.options,
+  ).challengeDpopNonce();
+  // Stage state here. The token endpoint verifies the proof afterwards.
+});
+```
+
+`challengeDpopNonce` checks only the proof's `nonce`. It does not verify the signature, `htm`, or `htu`, and it does not store the `jti`. The request must still verify the proof before you trust it. `verifyDpopProof` always verifies it. `issueTokens` and `resolveConfirmation` verify it only when no client-authentication `confirmation` is passed, because a `confirmation` replaces the proof. Within one request, that verification measures nonce freshness at the same time as the challenge, so a nonce that passes the challenge cannot expire before the proof is verified.
+
 ## Custom claims
 
 To add claims to access tokens, set `customAccessTokenClaims`. It receives `user`, `scopes`, `referenceId`, `resources`, and the client's `metadata`. It returns an object of claims to add. Use namespaced claim names, and see [RFC 9068 §2.2](https://datatracker.ietf.org/doc/html/rfc9068#section-2.2) for the claims the provider already sets. To stop a token from being issued, for example when the user has left the organization, throw from the callback.
@@ -391,11 +420,47 @@ A client can only revoke tokens issued to it ([RFC 7009 §2.1](https://datatrack
 What the endpoint does depends on the token:
 
 * **Opaque access token**: deleted. Refresh tokens from the same grant stay valid.
-* **Refresh token**: marked revoked, so it can no longer issue tokens. The opaque access tokens it issued are deleted. JWT access tokens it issued stay valid until they expire.
-* **Refresh token that was already revoked or rotated**: treated as replay. The endpoint still returns 200, and it deletes the client's refresh tokens for that user, along with the opaque access tokens they issued. An access token issued without a refresh token, and any JWT access token, stays valid until it expires.
-* **JWT access token**: cannot be revoked, because it is never stored. An expired JWT is treated as unknown and returns 200. A JWT issued to the calling client that still verifies returns 400 `unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), unless its audience names a resource that is not registered. Such a JWT returns 200 instead.
+* **Refresh token**: marked revoked, so it can no longer issue tokens. The opaque access tokens of its grant are deleted, including those issued before earlier rotations ([RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). An opaque access token issued before your deployment stored grant IDs is deleted only with the refresh token that issued it. JWT access tokens from the same grant are revoked only with [`revocableJwtAccessTokens`](#revoke-jwt-access-tokens). Without it, they stay valid until they expire.
+* **Refresh token that was already revoked or rotated**: treated as replay. The endpoint still returns 200, and it deletes the client's refresh tokens for that user, along with the opaque access tokens they issued. With `revocableJwtAccessTokens`, the JWT access tokens of the replayed token's grant are also revoked. Any other JWT access token, and an access token issued without a refresh token, stays valid until it expires.
+* **JWT access token**: revoked only with [`revocableJwtAccessTokens`](#revoke-jwt-access-tokens). Without it, a JWT issued to the calling client that still verifies returns 400 `unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), because the token is never stored. An expired JWT is treated as unknown and returns 200. So does a JWT whose audience names a resource that is not registered.
 
 To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's session. A JWT that carries a `sid` is reported inactive by introspection and rejected by UserInfo once its session ends. A `client_credentials` JWT has no session. Its lifetime is the only limit.
+
+### Revoke JWT access tokens
+
+A JWT access token is self-contained, so by default it stays valid until it expires. Set `revocableJwtAccessTokens: true` to let a client revoke one:
+
+```ts title="auth.ts"
+oauthProvider({
+  revocableJwtAccessTokens: true, // [!code highlight]
+})
+```
+
+Revoking a JWT access token then returns 200 and stores its `jti` in the [verification store](/docs/concepts/database#verification) until the token's `exp`. After that, the token is reported inactive by introspection, rejected by UserInfo with 401 `invalid_token`, and reported inactive by `validateAccessToken`. Revoking the same token again returns 200.
+
+Before you turn it on, consider:
+
+* **Resource servers that verify locally don't see revocations.** `verifyAccessTokenRequest` without `remoteVerify`, and [`requireMcpAuth`](/docs/plugins/mcp), check the signature against the JWKS and never ask the server. A revoked token stays valid there until it expires. To honor revocation, set [`remoteVerify`](/docs/plugins/oauth-provider/resource-server#jwt-or-opaque-tokens) so every token is introspected.
+* **Each check adds lookups.** Introspection, UserInfo, and `validateAccessToken` look up the token's `jti` in the verification store, revoked or not. A token that carries a [`grant_id`](#revoke-the-access-tokens-of-a-grant) also has its grant looked up, in parallel. In the database, each lookup also deletes expired verification rows, unless you set `verification.disableCleanup`. With `verification.storeIdentifier: "hashed"`, each lookup that finds nothing takes two reads.
+* **Revocations last only as long as their storage.** With [secondary storage](/docs/concepts/database#secondary-storage), entries go there and expire on their own: a token's entry at its `exp`, a grant's entry after `accessTokenExpiresIn`. If the storage evicts or loses an entry, the revoked token is accepted again. Use storage that never evicts these keys, or set `verification.storeInDatabase: true` to also keep entries in the database.
+* **Writes are bounded by the rate limit.** Each revocation writes one entry, and only for a valid token issued to the calling client. Revoking a refresh token writes one entry for its grant. A replayed refresh token or authorization code at `/oauth2/token` also writes one entry for its grant. When rate limiting is enabled, which is the default in production, the [rate limits](/docs/plugins/oauth-provider/reference#rate-limits) bound how fast entries are written: 30 requests per 60 seconds for `/oauth2/revoke`, and 20 for `/oauth2/token`. If you turn rate limiting off, nothing bounds them.
+
+#### Revoke the access tokens of a grant
+
+A grant is everything one authorization produced: its first tokens and every refresh token rotated from them. Each refresh token stores its grant's ID. With the option on, each JWT access token issued with a refresh token or for an authorization code also carries it in a `grant_id` claim. Better Auth sets this claim, and custom access-token claims can't override it.
+
+Revoking a refresh token then also revokes the JWT access tokens of its grant, including those issued before earlier rotations ([RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). Better Auth stores one entry for the grant, not one per token, and keeps it for `accessTokenExpiresIn`. Every access token the grant issued before the revocation expires within that time. The same happens in these cases:
+
+* A refresh token that was already rotated is presented for revocation, or at the token endpoint outside the [`refreshTokenReuseInterval`](#refresh-tokens) window. A retry inside that window gets the earlier response back and revokes nothing.
+* An authorization code is reused by the client it was issued to, and the request passes the checks in [Authorization code reuse](#authorization-code-reuse). The code's grant is revoked, including a JWT access token issued for the code without a refresh token. This holds even when the reuse arrives while the first redemption is still issuing its tokens.
+
+The grant revocation has these limits:
+
+* **Other grants stay valid.** A replayed refresh token deletes all of the client's refresh tokens for the user, but only the replayed grant's JWT access tokens are revoked. JWT access tokens of the user's other grants with that client stay valid until they expire. A replayed authorization code deletes only the tokens issued for that code.
+* **Most tokens without a refresh token aren't covered.** A JWT access token issued without a refresh token has a `grant_id` only when it was issued for an authorization code, and only a reuse of that code revokes it. Revoke any other such token by its `jti`, or end the user's session.
+* **Tokens from token exchange aren't covered.** A token that a client obtained by exchanging one of the grant's access tokens doesn't carry the grant's `grant_id`. It stays valid until it expires.
+* **Tokens from before you turned the option on aren't covered.** They carry no `grant_id`. JWT access tokens issued from then on carry it, including those issued by refreshing an earlier refresh token.
+* **Shortening the lifetime shortens the entry.** If you lower `accessTokenExpiresIn`, a token issued under the longer lifetime can outlive the entry for its grant.
 
 ## Without the JWT plugin
 
@@ -474,7 +539,7 @@ export const auth = betterAuth({
 
 The grant `urn:ietf:params:oauth:grant-type:token-exchange` is then advertised in `grant_types_supported`. RFC 8693 defines no other discovery metadata.
 
-Register the exchanging service as a confidential client with `TOKEN_EXCHANGE_GRANT_TYPE`. Public clients cannot exchange tokens.
+Register the exchanging service as a confidential client with `TOKEN_EXCHANGE_GRANT_TYPE`. A public client can exchange only its own DPoP-bound tokens, and only after you [enable public clients](#exchange-as-a-public-client).
 
 ```ts title="register-exchanging-client.ts"
 import { TOKEN_EXCHANGE_GRANT_TYPE } from "@better-auth/oauth-provider";
@@ -539,6 +604,27 @@ curl https://auth.example.com/api/auth/oauth2/token \
 
 With the JWT plugin enabled, the exchanged token is a JWT access token whose `aud` is the requested resource. With `disableJwtPlugin: true`, it is opaque and the resource is returned by introspection. The response has no refresh token and no ID token.
 
+### Exchange as a public client
+
+A public client, such as a desktop, mobile, or browser app, has no secret, so the provider cannot tell it apart from someone who copied its `client_id`. By default, a public client that requests a token exchange gets `invalid_client`. To let public clients exchange tokens, set `publicClients` to `"dpop-bound"`:
+
+```ts title="auth.ts"
+oauthTokenExchange({
+  publicClients: "dpop-bound",
+});
+```
+
+A DPoP key ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449)) held by the app then stands in for its secret. The provider accepts an exchange from a public client registered for the token-exchange grant only when all of these hold:
+
+* The subject token was issued to that same client. A token whose audience the client is linked to is not enough.
+* The subject token is DPoP-bound. Get one by sending a DPoP proof with the token request that redeems the authorization code, or any other way listed under [DPoP](#dpop).
+* The request carries a DPoP proof from the subject token's key.
+* The request has no `actor_token`.
+
+The exchanged token is bound to the same key. Someone who steals a public client's access token cannot exchange it without that key.
+
+Confidential clients still authenticate as before.
+
 ### Delegate to an actor
 
 An impersonation token does not show which service acts for the user. A resource server then cannot tell a call from the user's own client apart from a call by a service in between. Delegation ([RFC 8693 §1.1](https://datatracker.ietf.org/doc/html/rfc8693#section-1.1)) adds that information. The service sends an actor token next to the subject token, and the exchanged token names the actor in its `act` claim. The token keeps the same user as `sub`, and the same scopes and audience rules as an impersonation token.
@@ -567,6 +653,13 @@ To get that token, register the service for both grants, `grant_types: [TOKEN_EX
 ```
 
 `act.sub` is the actor token's subject. For a `client_credentials` token, it is the client ID. For a user's token issued to the service, it is that user's ID. Introspection returns `act` for JWT and opaque access tokens.
+
+When the exchanged token's client uses [pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers), it can see each user in `act` as the `sub` it sees for that user, instead of the user ID. Where it sees those values depends on the token format:
+
+* Introspection always returns those values.
+* A JWT access token carries them with `accessTokenSubject: "pairwise"`. With the default `accessTokenSubject: "user"`, the JWT carries user IDs in `act`, as it does in `sub`.
+
+`allowExchange`, `actorClaims`, and the [provider API](/docs/plugins/oauth-provider/reference#provider-extensions) receive user IDs.
 
 #### Actor chains
 
@@ -630,6 +723,8 @@ Every member of `may_act` must match the actor:
 * `iss` must equal this server's issuer.
 
 Any other member denies the exchange, because the provider cannot check it. So does an empty `may_act`. A subject token with `may_act` also cannot be exchanged without an actor token.
+
+To name a user actor, set `sub` to the user ID, never to a pairwise `sub`. The client a JWT access token was issued to can read its `may_act`. A `sub` that names a user therefore shows that user's ID to a client that should only see pairwise values. To allow a service to act, prefer `client_id`, which names no user.
 
 #### Add fields to the actor
 
@@ -701,18 +796,18 @@ A refused exchange fails with `invalid_request`.
 
 The provider applies these rules to every exchange, before your `allowExchange` policy:
 
-| Rule                                                                                                                                                  | Why                                                                                                                 |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| The client is confidential and registered for the token-exchange grant                                                                                | Someone who only holds a leaked token cannot exchange it                                                            |
-| The subject token is an access token this server issued to a user                                                                                     | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
-| The subject token carries no `authorization_details`                                                                                                  | The exchanged token would drop the details the user approved, which the resource server must receive (RFC 9396 §9)  |
-| The client is the subject token's client, or is linked to a resource in the token's audience                                                          | A client cannot exchange a token that was never sent to it                                                          |
-| A client that exchanges its own sender-constrained token proves the same binding: the same DPoP key, or the same strategy `confirmation`              | An exchange cannot remove or replace the client's binding                                                           |
-| The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged | An exchange cannot add access. An exchange is not a sign-in                                                         |
-| Each target resource is registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default)                        | The client's resource policy still applies, including each resource's `allowedScopes`                               |
-| A client that does not skip consent needs a stored consent covering the scopes and resources                                                          | The user must have approved this client for this access                                                             |
-| The exchanged token expires no later than the subject token and carries the subject token's session (`sid`)                                           | Repeated exchanges cannot extend access, and once the session ends, introspection reports exchanged tokens inactive |
-| No refresh token or ID token is issued                                                                                                                | The service must exchange again when the token expires                                                              |
+| Rule                                                                                                                                                        | Why                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| The client is registered for the token-exchange grant and is confidential, or is a public client allowed by [`publicClients`](#exchange-as-a-public-client) | Someone who only holds a leaked token cannot exchange it                                                            |
+| The subject token is an access token this server issued to a user                                                                                           | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
+| The subject token carries no `authorization_details`                                                                                                        | The exchanged token would drop the details the user approved, which the resource server must receive (RFC 9396 §9)  |
+| The client is the subject token's client, or is linked to a resource in the token's audience                                                                | A client cannot exchange a token that was never sent to it                                                          |
+| A client that exchanges its own sender-constrained token proves the same binding: the same DPoP key, or the same strategy `confirmation`                    | An exchange cannot remove or replace the client's binding                                                           |
+| The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged       | An exchange cannot add access. An exchange is not a sign-in                                                         |
+| Each target resource is registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default)                              | The client's resource policy still applies, including each resource's `allowedScopes`                               |
+| A client that does not skip consent needs a stored consent covering the scopes and resources                                                                | The user must have approved this client for this access                                                             |
+| The exchanged token expires no later than the subject token and carries the subject token's session (`sid`)                                                 | Repeated exchanges cannot extend access, and once the session ends, introspection reports exchanged tokens inactive |
+| No refresh token or ID token is issued                                                                                                                      | The service must exchange again when the token expires                                                              |
 
 Scope names are global across resources. A `read` scope on the MCP server and a `read` scope on the API are the same scope, so restrict what a resource accepts with its `allowedScopes`.
 
@@ -736,6 +831,7 @@ A token exchange fails with one of these errors:
   * The user has no stored consent for the client that covers the request.
   * The client exchanges its own token bound by a non-DPoP `cnf`, such as an mTLS certificate, and its client authentication does not return that same `confirmation`.
   * Your `allowExchange` policy denies the exchange.
+  * A public client sends a subject token issued to another client, a subject token that is not DPoP-bound, or an `actor_token`.
 * `invalid_scope` (400), when any of these applies:
   * The request names a scope that the subject token or the client does not have.
   * The request names `openid` or `offline_access`.
@@ -744,7 +840,7 @@ A token exchange fails with one of these errors:
   * A `resource` or `audience` value is unknown or disabled.
   * A `resource` or `audience` value is not linked to the client while `enforcePerClientResources` is on.
   * A `resource` or `audience` value is the userinfo endpoint.
-* `invalid_client`, when client authentication fails.
+* `invalid_client`, when client authentication fails, including when a public client exchanges without `publicClients: "dpop-bound"`.
 * `unauthorized_client` (400), when the client is not registered for the token-exchange grant.
 * `invalid_dpop_proof` (400), when any of these applies:
   * The DPoP proof is invalid.

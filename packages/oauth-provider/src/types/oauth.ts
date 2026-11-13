@@ -252,6 +252,20 @@ export interface AuthServerMetadata {
 	 */
 	dpop_signing_alg_values_supported?: JWSAlgorithms[];
 	/**
+	 * URL of the pushed authorization request endpoint. Present only when
+	 * pushed authorization requests are enabled.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9126#section-5
+	 */
+	pushed_authorization_request_endpoint?: string;
+	/**
+	 * Whether the authorization server accepts authorization requests only
+	 * through pushed authorization requests.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9126#section-5
+	 */
+	require_pushed_authorization_requests?: boolean;
+	/**
 	 * Boolean value specifying whether the OP supports HTTP-based (front-channel)
 	 * logout, with true indicating support.
 	 *
@@ -468,6 +482,12 @@ export interface OAuthClient {
 	 * tokens.
 	 */
 	dpop_bound_access_tokens?: boolean;
+	/**
+	 * RFC 9126 §6 client metadata. When true, the authorization server accepts
+	 * authorization requests from this client only through a pushed
+	 * authorization request.
+	 */
+	require_pushed_authorization_requests?: boolean;
 	/**
 	 * Subject identifier type for this client.
 	 *

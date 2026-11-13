@@ -248,14 +248,18 @@ export interface OAuthTokenIssueParams {
 	 */
 	requestedUserInfoClaims?: string[];
 	/**
-	 * Additional JWT access-token claims for this single issuance.
+	 * Additional access-token claims for this single issuance.
 	 *
-	 * JWT-only: these are baked into the signed token at mint. Opaque access
-	 * tokens persist no per-issuance claims, so they do NOT reappear at
-	 * introspection. A claim that must be visible at opaque-token introspection
-	 * belongs in a grant-type-stable `claims.accessToken` contributor instead,
-	 * which the introspection path re-derives. Reserved RFC 9068 claim names stay
-	 * owned by the authorization server.
+	 * A JWT access token carries them in its signed payload. An opaque access
+	 * token stores them as JSON on its `oauthAccessToken` row, and introspection
+	 * returns them to the callers allowed to introspect that token. Values must
+	 * be JSON-serializable and read back as their JSON form, the same as in a
+	 * JWT. Stored claims stay in the database until the token row is deleted, so
+	 * avoid personal data the resource server can look up instead.
+	 *
+	 * Reserved RFC 9068 claim names stay owned by the authorization server and
+	 * are removed. The plugin's `customAccessTokenClaims` and a resource's
+	 * `customClaims` override a claim of the same name.
 	 */
 	accessTokenClaims?: Record<string, unknown>;
 	/**
@@ -309,6 +313,22 @@ export interface OAuthTokenResponse {
 }
 
 export type ActiveAccessTokenPayload = JWTPayload & { active: true };
+
+/** Options for `OAuthProviderApi.verifyResourceRequest`. */
+export interface VerifyResourceRequestParams {
+	/**
+	 * Scopes the token must all carry. A token missing any of them fails with
+	 * a 403 `insufficient_scope` challenge that names every missing scope.
+	 */
+	scopes?: readonly string[];
+	/**
+	 * Resource identifier the token's `aud` claim must contain (RFC 9068
+	 * §4). It also sets the challenge's `resource_metadata` when it is a URL.
+	 * Without it, a token for any resource is accepted. An empty string throws
+	 * a `TypeError`.
+	 */
+	audience?: string;
+}
 
 /**
  * The OAuth Provider's server-side capability surface, bound to a request `ctx`.
@@ -424,6 +444,19 @@ export interface OAuthProviderApi {
 	 */
 	issueDpopNonce: () => Promise<string | undefined>;
 	/**
+	 * Throws the token endpoint's 400 `use_dpop_nonce` error with a fresh
+	 * `DPoP-Nonce` (RFC 9449 §8) when `dpop.nonce.required` is on and the
+	 * request's proof lacks a current nonce. Call it in a plugin endpoint or
+	 * before hook before consuming a one-time credential or staging state.
+	 * Resolves when nonces are off or the request has no `DPoP` header.
+	 *
+	 * It checks only the `nonce` claim and does not reserve the `jti`. Verify
+	 * the proof afterwards before trusting it: `verifyDpopProof` always does,
+	 * while `resolveConfirmation` and `issueTokens` do only without a
+	 * `confirmation`, which replaces the proof.
+	 */
+	challengeDpopNonce: () => Promise<void>;
+	/**
 	 * Computes the stored lookup key for a token value (the same hash the
 	 * provider persists), so a caller can find or revoke a previously issued
 	 * opaque token by its value.
@@ -440,12 +473,49 @@ export interface OAuthProviderApi {
 	) => Awaitable<JWTPayload>;
 	/**
 	 * Validates an access token for a protected resource and throws the OAuth
-	 * bearer challenge when the token is inactive or unknown.
+	 * bearer challenge when the token is inactive or unknown. It checks the
+	 * token only: it does not verify a DPoP proof for a DPoP-bound token. A
+	 * protected endpoint should use `verifyResourceRequest` instead.
 	 */
 	requireActiveAccessToken: (
 		token: string,
 		clientId?: string,
 	) => Awaitable<ActiveAccessTokenPayload>;
+	/**
+	 * Returns the subject identifier the given client sees for a user in its ID
+	 * tokens and UserInfo: the pairwise subject for a client with
+	 * `subject_type: "pairwise"` when `pairwiseSecret` is set, otherwise the
+	 * user ID. Access token payloads returned by `validateAccessToken`,
+	 * `requireActiveAccessToken`, and `verifyResourceRequest` carry the user
+	 * ID in `sub`; use this to present it to a client.
+	 */
+	resolveSubject: (params: {
+		userId: string;
+		client: SchemaClient<Scope[]>;
+	}) => Promise<string>;
+	/**
+	 * Verifies the access token on this request for an endpoint served by this
+	 * instance, such as a companion plugin's protected endpoint. Opaque and JWT
+	 * access tokens are both validated against this server's own records: a
+	 * revoked opaque token, a token whose session ended, and a token whose
+	 * client is disabled or whose resource is deleted all fail immediately.
+	 *
+	 * It reads the token from the `Authorization` header (`Bearer` or `DPoP`),
+	 * requires it to be active, enforces a DPoP binding (RFC 9449 §7) with this
+	 * server's DPoP settings, including `dpop.nonce.required`, and then checks
+	 * `audience` and `scopes`. It returns the token's claims in RFC 7662
+	 * introspection form, with the user ID in `sub` even when the token's
+	 * `sub` is pairwise.
+	 *
+	 * A rejected token or request throws an `APIError` that is ready to send:
+	 * a 401 or 403 with the RFC 6750 or RFC 9449 `WWW-Authenticate` challenge.
+	 * Other errors, such as a storage failure, are rethrown unchanged. A
+	 * DPoP-bound token fails on a call without an HTTP request, such as
+	 * `auth.api`, because the proof's method and URL cannot be checked.
+	 */
+	verifyResourceRequest: (
+		params?: VerifyResourceRequestParams,
+	) => Promise<ActiveAccessTokenPayload>;
 }
 
 export interface OAuthExtensionGrantHandlerInput {
@@ -586,7 +656,8 @@ export interface OAuthUserInfoExtensionInput {
  *   silently unreachable.
  * - Additive kinds (`metadata`, `claims`) never override authorization-server
  *   core; a key already owned by the provider is kept, and a key two extensions
- *   both contribute resolves to the first-registered extension.
+ *   both contribute resolves to the first-registered extension, with a
+ *   logged warning.
  */
 export interface OAuthProviderExtension {
 	/**
@@ -1744,6 +1815,29 @@ export interface OAuthOptions<
 	 */
 	disableJwtPlugin?: boolean;
 	/**
+	 * Lets `/oauth2/revoke` revoke JWT access tokens by their `jti`.
+	 *
+	 * A revoked token reads as inactive at `/oauth2/introspect`, is rejected at
+	 * `/oauth2/userinfo`, and fails `validateAccessToken`. The revocation is
+	 * kept in the verification store until the token's `exp`. Each of those
+	 * checks looks the token up in that store, so this is off by default. With
+	 * secondary storage alone, a lost or evicted entry makes the token valid
+	 * again; set `verification.storeInDatabase` to keep entries durable.
+	 *
+	 * Revoking a refresh token also revokes the JWT access tokens of its grant
+	 * (RFC 7009 §2.1). So does replaying a rotated refresh token or an
+	 * authorization code. The tokens carry the grant in a `grant_id` claim.
+	 *
+	 * Resource servers that verify JWT access tokens locally against the JWKS
+	 * never see the revocation. They must introspect to honor it.
+	 *
+	 * When off, `/oauth2/revoke` answers `unsupported_token_type` for a JWT
+	 * access token.
+	 *
+	 * @default false
+	 */
+	revocableJwtAccessTokens?: boolean;
+	/**
 	 * Rate limit configuration for OAuth endpoints.
 	 *
 	 * Each endpoint can be configured with a `window` (in seconds) and `max` requests.
@@ -1798,6 +1892,12 @@ export interface OAuthOptions<
 		 * @default { window: 60, max: 60 }
 		 */
 		userinfo?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/par endpoint, applied when
+		 * `pushedAuthorizationRequests.enabled` is true.
+		 * @default { window: 60, max: 20 }
+		 */
+		par?: { window: number; max: number } | false;
 	};
 	/**
 	 * Secret used to compute pairwise subject identifiers (HMAC-SHA256).
@@ -1808,11 +1908,60 @@ export interface OAuthOptions<
 	 */
 	pairwiseSecret?: string;
 	/**
+	 * The `sub` of JWT access tokens issued to a user. `"pairwise"` gives
+	 * clients with `subject_type: "pairwise"` the same `sub` as their ID tokens,
+	 * and adds the user ID encrypted in a `ba_uid` claim so the provider can
+	 * still find the user. Requires `pairwiseSecret`.
+	 *
+	 * @default "user"
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+	 */
+	accessTokenSubject?: "user" | "pairwise";
+	/**
+	 * Pushed authorization requests (RFC 9126).
+	 *
+	 * When enabled, clients authenticate to `POST /oauth2/par` with the
+	 * authorization request parameters and receive a single-use `request_uri`
+	 * for `/oauth2/authorize`. A DPoP proof on the pushed request binds the
+	 * authorization code to its key (RFC 9449 §10.1).
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9126
+	 */
+	pushedAuthorizationRequests?: {
+		/**
+		 * Serve `POST /oauth2/par` and advertise it in discovery as
+		 * `pushed_authorization_request_endpoint`.
+		 */
+		enabled: boolean;
+		/**
+		 * Reject authorization requests from every client unless they use a
+		 * `request_uri` from a pushed request. Clients can also require this for
+		 * themselves with the `require_pushed_authorization_requests` metadata.
+		 *
+		 * Needs `enabled`.
+		 *
+		 * @default false
+		 */
+		required?: boolean;
+		/**
+		 * Lifetime of a `request_uri` in seconds: a positive whole number below
+		 * 600.
+		 *
+		 * @default 60
+		 */
+		expiresIn?: number;
+	};
+	/**
 	 * Resolves a `request_uri` at the authorize endpoint (PAR support).
 	 *
 	 * When the authorize endpoint receives a `request_uri` parameter, this callback
 	 * resolves it to the original authorization parameters. Return null if the URI
 	 * is invalid or expired.
+	 *
+	 * With `pushedAuthorizationRequests.enabled`, the authorize endpoint first
+	 * looks up `request_uri` values issued by `/oauth2/par`. It calls this
+	 * resolver for any value it does not hold, including one that expired or
+	 * was already used, so return null for values you did not issue.
 	 */
 	requestUriResolver?: (input: {
 		requestUri: string;
@@ -2287,6 +2436,11 @@ export interface SchemaClient<
 	 * client must include a valid DPoP proof and receive DPoP-bound tokens.
 	 */
 	dpopBoundAccessTokens?: boolean;
+	/**
+	 * RFC 9126 §6 client metadata. When true, the authorize endpoint accepts
+	 * requests from this client only through a pushed authorization request.
+	 */
+	requirePushedAuthorizationRequests?: boolean;
 	//---- All other metadata ----//
 	/** Used to indicate if consent screen can be skipped */
 	skipConsent?: boolean;
@@ -2354,6 +2508,13 @@ export interface OAuthOpaqueAccessToken<
 	 * Not available without the "offline_access" scope
 	 */
 	refreshId?: string;
+	/**
+	 * The grant of the refresh token issued with this access token. Revoking
+	 * any refresh token of the grant deletes every access token with it.
+	 *
+	 * Not available without the "offline_access" scope
+	 */
+	grantId?: string;
 	/** The expiration date of the access token. */
 	expiresAt: Date;
 	/** The creation date of the access token. */
@@ -2389,6 +2550,11 @@ export interface OAuthOpaqueAccessToken<
 	 * claim at introspection.
 	 */
 	act?: OAuthActorClaim;
+	/**
+	 * Per-issuance `accessTokenClaims` from `issueTokens`, with reserved names
+	 * removed. Returned at introspection.
+	 */
+	accessTokenClaims?: Record<string, unknown>;
 }
 
 /**
@@ -2402,6 +2568,14 @@ export interface OAuthRefreshToken<
 	userId: string;
 	referenceId?: string;
 	authorizationCodeId?: string;
+	/**
+	 * Identifies the grant this refresh token belongs to. Every rotation keeps
+	 * it, and the grant's opaque access tokens store it. With
+	 * `revocableJwtAccessTokens`, its JWT access tokens carry it as `grant_id`.
+	 *
+	 * Absent on refresh tokens stored before 1.8; the next rotation adds one.
+	 */
+	grantId?: string;
 	clientId?: string;
 	expiresAt: Date;
 	createdAt: Date;

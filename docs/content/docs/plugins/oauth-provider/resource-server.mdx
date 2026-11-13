@@ -51,9 +51,13 @@ export const GET = async (req: Request) => {
 
 The thrown error has no `WWW-Authenticate` header, which [RFC 6750 §3](https://datatracker.ietf.org/doc/html/rfc6750#section-3) requires when a request has no usable token. To add it, pass the error and your API's resource identifier to `createResourceServerChallenge` from `@better-auth/oauth-provider`, and send the returned `headers`. It returns a challenge for 401 and `insufficient_scope` errors, and `undefined` for any other error. Bearer challenges, including `insufficient_scope`, carry a `resource_metadata` link to your [protected resource metadata](#protected-resource-metadata).
 
-A request can send a token that fails verification, for example an expired or revoked one. Its Bearer challenge then carries `error="invalid_token"` and an `error_description` ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)). A request that sent no token gets a challenge without an error code. The client can then tell a token it must replace from a request that needs authorization first. When your own code rejects a presented token, throw an `APIError` with status `UNAUTHORIZED` and `error: "invalid_token"` to get the same challenge.
+The challenge depends on whether the request presented a token. When it sent a token that failed verification, for example an expired or revoked one, the Bearer challenge carries `error="invalid_token"` and an `error_description` ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)), so the client knows it must replace that token. When it sent no credentials at all, the challenge has no error code, so the client knows it must authorize first. When your own code rejects a presented token, throw an `APIError` with status `UNAUTHORIZED` and `error: "invalid_token"` to get the same challenge.
 
-Pass the failed request as `request`, as above. A client that sends its token with the `DPoP` scheme then gets a `DPoP` challenge for every 401, including an expired or revoked token ([RFC 9449 §7.2](https://datatracker.ietf.org/doc/html/rfc9449#section-7.2)). A client that supports only DPoP might not act on a `Bearer` challenge. Without `request`, only DPoP-specific failures, such as an invalid proof, get a `DPoP` challenge. A `DPoP` challenge lists the accepted proof algorithms in `algs` and has no `resource_metadata`. If your framework has no `Request`, pass `{ authorizationHeader }` instead.
+Pass the failed request as `request`, as above. A client that sends its token with the `DPoP` scheme then gets a `DPoP` challenge for every 401, including an expired or revoked token ([RFC 9449 §7.2](https://datatracker.ietf.org/doc/html/rfc9449#section-7.2)). A client that supports only DPoP might not act on a `Bearer` challenge. A request that uses any other scheme, such as `Basic`, or sends a token with no scheme, gets a `Bearer` challenge, so the client can still find your protected resource metadata. Without `request`, only DPoP-specific failures, such as an invalid proof, get a `DPoP` challenge. A `DPoP` challenge lists the accepted proof algorithms in `algs` and has no `resource_metadata`. If your framework has no `Request`, pass `{ authorizationHeader }` instead.
+
+With `request`, an `insufficient_scope` 403 on a request that used the `DPoP` scheme also gets a `DPoP` challenge, such as `DPoP error="insufficient_scope", scope="files:write", algs="ES256"` ([RFC 9449 §7.1](https://datatracker.ietf.org/doc/html/rfc9449#section-7.1)). Its `scope` names the missing scopes, as in the `Bearer` challenge, so the client knows which scopes to request when it authorizes again.
+
+Browsers hide `WWW-Authenticate` from cross-origin scripts unless the response lists it in `Access-Control-Expose-Headers`, because it is not a [CORS-safelisted response header](https://fetch.spec.whatwg.org/#cors-safelisted-response-header-name). The returned `headers` include `Access-Control-Expose-Headers: WWW-Authenticate`, so a browser client on another origin can read `resource_metadata`, `scope`, and `algs`. Your CORS layer must also answer the 401 and 403 responses with `Access-Control-Allow-Origin`. If it sets its own `Access-Control-Expose-Headers`, add `WWW-Authenticate` to that list, since it can replace the value on the challenge.
 
 RFC 6750 limits `error_description` to printable ASCII without `"` or `\`. To fit a description into that set, `createResourceServerChallenge` replaces each `"` with `'` and each other character outside it with a space. When nothing is left, it leaves `error_description` out. The returned error's `body` keeps the original `error` and `error_description`.
 
@@ -202,11 +206,11 @@ The [resource client](#verify-access-tokens) created with your auth instance tak
 
 Your provider issues a JWT access token when the request names a `resource` and the JWT plugin is enabled. If either is missing, it issues an opaque token.
 
-|                         | JWT access token                               | Opaque access token                                     |
-| ----------------------- | ---------------------------------------------- | ------------------------------------------------------- |
-| How the API verifies it | Locally, with the JWKS (`jwksUrl`)             | Remotely, through `/oauth2/introspect` (`remoteVerify`) |
-| Cost per request        | No network call (unless `remoteVerify` is set) | One call to the auth server                             |
-| Claims                  | Frozen when the token is issued                | Recomputed on every introspection                       |
+|                         | JWT access token                               | Opaque access token                                                                                              |
+| ----------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| How the API verifies it | Locally, with the JWKS (`jwksUrl`)             | Remotely, through `/oauth2/introspect` (`remoteVerify`)                                                          |
+| Cost per request        | No network call (unless `remoteVerify` is set) | One call to the auth server                                                                                      |
+| Claims                  | Frozen when the token is issued                | Per-issuance `accessTokenClaims` stored when the token is issued. Other claims recomputed on every introspection |
 
 The simplest setup is to accept only JWT access tokens. It is fast, and your API needs no client credentials. `verifyAccessTokenRequest` checks the JWT's signature, `iss`, `aud`, and `exp`. It checks `scope` only against the `requiredScopes` you pass, and checks the token type only when you pass `typ: "at+jwt"`. Pass both to get the validation [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) requires. The cost is that the local check does not see an ended session. A JWT keeps passing the local check until it expires.
 
@@ -239,6 +243,60 @@ const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
   When you set `audience`, the audience check stops a token issued for another API on the same issuer from passing at yours. If the introspection response has no `aud` claim and you set an `audience`, the token is rejected. Set `remoteVerify.allowMissingAudience: true` only if you trust the issuer to bind the token to your API some other way.
 </Callout>
 
+## Endpoints on the auth server
+
+A plugin endpoint served by the auth server itself can verify the request in-process with `verifyResourceRequest` on the provider API. It needs no JWKS fetch, introspection client, or network call, and it accepts JWT and opaque access tokens alike.
+
+```ts title="reports-plugin.ts"
+import { getOAuthProviderApi } from "@better-auth/oauth-provider";
+import { createAuthEndpoint } from "better-auth/api";
+import type { BetterAuthPlugin } from "better-auth/types";
+
+export const reports = () =>
+  ({
+    id: "reports",
+    endpoints: {
+      listReports: createAuthEndpoint(
+        "/reports",
+        { method: "GET" },
+        async (ctx) => {
+          const provider = getOAuthProviderApi(
+            ctx,
+            ctx.context.getPlugin("oauth-provider")!.options,
+          );
+          const claims = await provider.verifyResourceRequest({
+            audience: "https://auth.example.com/api/auth/reports",
+            scopes: ["read:reports"],
+          });
+          return ctx.json({ owner: claims.sub });
+        },
+      ),
+    },
+  }) satisfies BetterAuthPlugin;
+```
+
+`verifyResourceRequest` reads the token from the `Authorization` header and checks it against the provider's own records. A revoked opaque token, a token whose session has ended, and a token whose client is disabled fail on the next request. A JWT access token cannot be revoked by itself, so without a session it stays valid until it expires. It then applies the same rules as UserInfo:
+
+* A DPoP-bound token must come with a valid proof for this request's method and URL. With `dpop.nonce.required` on, the proof must carry a current nonce, and the response carries the next one.
+* With `audience`, the token's `aud` must contain it ([RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4)). Without it, a token issued for any resource passes, so set it whenever your endpoint is a registered resource.
+* With `scopes`, the token must carry every scope listed.
+
+It returns the token's claims in [introspection](#introspection) form, including `sub`, `client_id`, `scope`, `aud`, and `cnf`. For a token issued to a user, `sub` is the user ID, even when the token carries a [pairwise `sub`](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens). When it rejects the token or request, it throws an error that is ready to send:
+
+| Failure                                               | Status | Challenge                                              |
+| ----------------------------------------------------- | ------ | ------------------------------------------------------ |
+| No token, or a scheme other than `Bearer` or `DPoP`   | 401    | `Bearer` and `DPoP`, with no error code                |
+| Unknown, expired, or revoked token, or `aud` mismatch | 401    | `invalid_token`                                        |
+| Missing, invalid, or replayed DPoP proof              | 401    | `DPoP` with `invalid_dpop_proof`                       |
+| Missing or expired DPoP nonce                         | 401    | `DPoP` with `use_dpop_nonce` and a `DPoP-Nonce` header |
+| Missing scopes                                        | 403    | `insufficient_scope`, naming every missing scope       |
+
+When `audience` is a URL, the `Bearer` challenge also points to its [protected resource metadata](#protected-resource-metadata). Every challenge lists `WWW-Authenticate` in `Access-Control-Expose-Headers`.
+
+A DPoP-bound token fails through `auth.api`, because there is no HTTP request to check the proof against. A bearer token works there.
+
+`requireActiveAccessToken` on the provider API only checks that a token is active. It does not check a DPoP proof, so prefer `verifyResourceRequest` for a protected endpoint.
+
 ## Introspection
 
 `/oauth2/introspect` implements [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662). The caller must authenticate as a registered client ([§2.1](https://datatracker.ietf.org/doc/html/rfc7662#section-2.1)), using any method that client is registered for, including `private_key_jwt`.
@@ -255,7 +313,7 @@ To set up the second case, [register your API as a resource](/docs/plugins/oauth
 
 An access token tied to a session is reported inactive once that session ends. When a session is deleted, such as at sign-out, Better Auth revokes its refresh tokens that lack `offline_access`. A refresh token can lose `offline_access` when a refresh narrows its scopes. Introspection reports those tokens inactive. Other refresh tokens stay active after their session ends, until they expire or are revoked. When a refresh token outlives its session, the response omits `sid`. See [Back-channel logout](/docs/plugins/oauth-provider/openid-connect#back-channel-logout).
 
-For an access token, the [introspection response](https://datatracker.ietf.org/doc/html/rfc7662#section-2.2) includes extension access token claims, `customAccessTokenClaims`, per-resource `customClaims`, and the reserved claims the server owns (`iss`, `sub`, `aud`, `scope`, and similar). A JWT access token returns the claims signed at issuance. An opaque access token returns claims recomputed at introspection. Per-issuance claims and claims that depend on the grant type therefore appear only for JWT access tokens. A refresh token response omits `aud`, extension claims, `customAccessTokenClaims`, and per-resource `customClaims`. See [Claim precedence](/docs/plugins/oauth-provider/reference#claim-precedence).
+For an access token, the [introspection response](https://datatracker.ietf.org/doc/html/rfc7662#section-2.2) includes extension access token claims, `customAccessTokenClaims`, per-resource `customClaims`, and the reserved claims the server owns (`iss`, `sub`, `aud`, `scope`, and similar). A JWT access token returns the claims signed at issuance. An opaque access token returns the per-issuance `accessTokenClaims` stored at issuance and recomputes the other claims at introspection. Claims that depend on the grant type therefore appear only for JWT access tokens. A refresh token response omits `aud`, extension claims, `customAccessTokenClaims`, and per-resource `customClaims`. See [Claim precedence](/docs/plugins/oauth-provider/reference#claim-precedence).
 
 A callback that returns a reserved claim name has that claim dropped. See [Custom claims](/docs/plugins/oauth-provider/tokens#custom-claims).
 

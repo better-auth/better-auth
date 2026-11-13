@@ -93,25 +93,26 @@ async function bootScenario(
 		clientPrivileges: () => true,
 		...providerOptions,
 	} as OAuthOptions<Scope[]>;
-	const { auth, client, signInWithTestUser } = await getTestInstance(
-		{
-			baseURL: issuer,
-			advanced,
-			plugins: [
-				...(disableJwtPlugin ? [] : [jwt({ jwt: { issuer } })]),
-				oauthProvider(opts),
-				oauthTokenExchange(exchange),
-				...plugins,
-			],
-		},
-		// Adapter databases are shared across instances; keep each test user unique.
-		testWith
-			? {
-					testWith,
-					testUser: { email: `${generateRandomString(12)}@test.com` },
-				}
-			: {},
-	);
+	const { auth, client, signInWithTestUser, signInWithUser } =
+		await getTestInstance(
+			{
+				baseURL: issuer,
+				advanced,
+				plugins: [
+					...(disableJwtPlugin ? [] : [jwt({ jwt: { issuer } })]),
+					oauthProvider(opts),
+					oauthTokenExchange(exchange),
+					...plugins,
+				],
+			},
+			// Adapter databases are shared across instances; keep each test user unique.
+			testWith
+				? {
+						testWith,
+						testUser: { email: `${generateRandomString(12)}@test.com` },
+					}
+				: {},
+		);
 	await seedResourcesOnce(
 		(await auth.$context) as unknown as AuthContext,
 		opts,
@@ -192,6 +193,8 @@ async function bootScenario(
 		resource = mcp as string | null,
 		tokenHeaders = undefined as Record<string, string> | undefined,
 		clientAuth = undefined as Record<string, string> | undefined,
+		sessionHeaders = headers,
+		redirectURI = redirectUri,
 	} = {}) => {
 		const codeVerifier = generateRandomString(32);
 		const url = await createAuthorizationURL({
@@ -199,7 +202,7 @@ async function bootScenario(
 			options: {
 				clientId: requester.client_id,
 				clientSecret: requester.client_secret,
-				redirectURI: redirectUri,
+				redirectURI,
 			},
 			redirectURI: "",
 			authorizationEndpoint: `${issuer}/api/auth/oauth2/authorize`,
@@ -210,7 +213,7 @@ async function bootScenario(
 		if (resource) url.searchParams.append("resource", resource);
 		let location = "";
 		await client.$fetch(url.toString(), {
-			headers,
+			headers: sessionHeaders,
 			onError(context) {
 				location = context.response.headers.get("Location") ?? "";
 			},
@@ -221,7 +224,7 @@ async function bootScenario(
 				grant_type: "authorization_code",
 				code,
 				code_verifier: codeVerifier,
-				redirect_uri: redirectUri,
+				redirect_uri: redirectURI,
 				client_id: requester.client_id,
 				...(clientAuth ?? { client_secret: requester.client_secret! }),
 				...(resource ? { resource } : {}),
@@ -241,7 +244,9 @@ async function bootScenario(
 			{
 				grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
 				client_id: requester.client_id,
-				client_secret: requester.client_secret!,
+				...(requester.client_secret
+					? { client_secret: requester.client_secret }
+					: {}),
 				subject_token: subjectToken,
 				subject_token_type: ACCESS_TOKEN_TYPE,
 				resource: api,
@@ -250,10 +255,20 @@ async function bootScenario(
 			extraHeaders,
 		);
 
+	/** Signs up and signs in another user, for a user actor token. */
+	const signInAnotherUser = async () => {
+		const email = `${generateRandomString(12)}@test.com`;
+		const password = "another-user-password";
+		await auth.api.signUpEmail({ body: { email, password, name: "Actor" } });
+		const { res, headers } = await signInWithUser(email, password);
+		return { user: res.user, headers };
+	};
+
 	return {
 		auth,
 		client,
 		headers,
+		signInAnotherUser,
 		agent,
 		mcpServer,
 		exchanger,
@@ -2359,5 +2374,490 @@ describe("oauthTokenExchange delegation", () => {
 			expect(issued.cnf).toEqual({ jkt: await deriveDpopJkt(key.publicJwk) });
 			expect(issued.act).toEqual({ sub: delegator.client_id });
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10892
+ */
+describe("oauthTokenExchange with pairwise access token subjects", () => {
+	it("resolves the user behind a pairwise subject token", async () => {
+		const {
+			auth,
+			headers,
+			createClient,
+			mcpServer,
+			userTokenForMcp,
+			exchangeAs,
+		} = await bootScenario(
+			{},
+			{},
+			{
+				pairwiseSecret: "test-pairwise-secret-key-32chars!!",
+				accessTokenSubject: "pairwise",
+			},
+		);
+		const pairwiseAgent = await createClient({
+			redirect_uris: [redirectUri],
+			scope: "openid profile read write offline_access",
+			skip_consent: true,
+			resources: [mcp],
+			subject_type: "pairwise",
+		});
+		const session = await auth.api.getSession({ headers });
+		const subject = await userTokenForMcp({ requester: pairwiseAgent });
+		expect(decodeJwt(subject.access_token).sub).not.toBe(session!.user.id);
+
+		const { data, error } = await exchangeAs(mcpServer, subject.access_token);
+		expect(error).toBeNull();
+		// The exchanging client has the public subject type, so it sees the user ID.
+		expect(decodeJwt(data!.access_token).sub).toBe(session!.user.id);
+	});
+});
+
+describe("oauthTokenExchange public clients", () => {
+	async function bootPublicClient(
+		publicClients?: OAuthTokenExchangeOptions["publicClients"],
+	) {
+		const allowExchange = vi.fn(() => true);
+		const scenario = await bootScenario({ publicClients, allowExchange });
+		const app = await scenario.createClient({
+			token_endpoint_auth_method: "none",
+			grant_types: ["authorization_code", TOKEN_EXCHANGE_GRANT_TYPE],
+			redirect_uris: [redirectUri],
+			scope: "openid read write",
+			skip_consent: true,
+			// Linked to mcp, so it is in the audience of the agent's MCP tokens.
+			resources: [mcp, api],
+		});
+		const key = await createDpopKey();
+		/** A user token issued to the public client and bound to `key`. */
+		const ownBoundToken = async () => {
+			const token = await scenario.userTokenForMcp({
+				scope: "openid read",
+				requester: app,
+				clientAuth: {},
+				tokenHeaders: { DPoP: await key.prove() },
+			});
+			expect(token.token_type).toBe("DPoP");
+			return token;
+		};
+		/** Exchanges as the public client: `client_id` only, no secret. */
+		const exchange = (
+			subjectToken: string,
+			extraHeaders?: Record<string, string>,
+			extra: Record<string, string> = {},
+		) => scenario.exchangeAs(app, subjectToken, extra, extraHeaders);
+		return {
+			...scenario,
+			app,
+			key,
+			allowExchange,
+			ownBoundToken,
+			exchange,
+		};
+	}
+
+	it("refuses a public client by default", async () => {
+		const { ownBoundToken, exchange, key } = await bootPublicClient();
+		const subject = await ownBoundToken();
+		const { error } = await exchange(subject.access_token, {
+			DPoP: await key.prove(),
+		});
+		expect(error?.error).toBe("invalid_client");
+	});
+
+	describe('with publicClients: "dpop-bound"', () => {
+		it("exchanges the client's own DPoP-bound token for a token bound to the same key", async () => {
+			const { ownBoundToken, exchange, key, introspect, mcpServer } =
+				await bootPublicClient("dpop-bound");
+			const subject = await ownBoundToken();
+			const { data, error } = await exchange(subject.access_token, {
+				DPoP: await key.prove(),
+			});
+			expect(error).toBeNull();
+			expect(data?.token_type).toBe("DPoP");
+			expect(data?.refresh_token).toBeUndefined();
+			const issued = decodeJwt(data!.access_token);
+			expect(issued.aud).toBe(api);
+			expect(issued.cnf).toEqual({ jkt: await deriveDpopJkt(key.publicJwk) });
+			// The issued token is still active for a resource server of api.
+			expect((await introspect(data!.access_token, mcpServer))?.active).toBe(
+				true,
+			);
+		});
+
+		it("requires a DPoP proof before allowExchange runs", async () => {
+			const { ownBoundToken, exchange, allowExchange } =
+				await bootPublicClient("dpop-bound");
+			const subject = await ownBoundToken();
+			const { error } = await exchange(subject.access_token);
+			expect(error).toMatchObject({
+				error: "invalid_dpop_proof",
+				error_description: "DPoP proof header is required",
+			});
+			expect(allowExchange).not.toHaveBeenCalled();
+		});
+
+		it("requires the proof to use the subject token's key", async () => {
+			const { ownBoundToken, exchange } = await bootPublicClient("dpop-bound");
+			const subject = await ownBoundToken();
+			const otherKey = await createDpopKey();
+			const { error } = await exchange(subject.access_token, {
+				DPoP: await otherKey.prove(),
+			});
+			expect(error).toMatchObject({
+				error: "invalid_dpop_proof",
+				error_description: "DPoP proof key does not match the bound token",
+			});
+		});
+
+		it("refuses a token issued to another client, even for a resource it serves", async () => {
+			const { userTokenForMcp, exchange, key, allowExchange } =
+				await bootPublicClient("dpop-bound");
+			// The agent's token for mcp, whose audience the public client serves.
+			const subject = await userTokenForMcp({
+				tokenHeaders: { DPoP: await key.prove() },
+			});
+			const { error } = await exchange(subject.access_token, {
+				DPoP: await key.prove(),
+			});
+			expect(error).toMatchObject({
+				error: "invalid_request",
+				error_description: "subject_token is invalid",
+			});
+			expect(allowExchange).not.toHaveBeenCalled();
+		});
+
+		it("refuses its own bearer token, so a stolen one cannot be bound to a new key", async () => {
+			const { app, userTokenForMcp, exchange, key, allowExchange } =
+				await bootPublicClient("dpop-bound");
+			const subject = await userTokenForMcp({
+				scope: "openid read",
+				requester: app,
+				clientAuth: {},
+			});
+			expect(subject.token_type).toBe("Bearer");
+			const { error } = await exchange(subject.access_token, {
+				DPoP: await key.prove(),
+			});
+			expect(error).toMatchObject({
+				error: "invalid_request",
+				error_description:
+					"a public client may only exchange a DPoP-bound subject_token",
+			});
+			expect(allowExchange).not.toHaveBeenCalled();
+		});
+
+		it("refuses an actor_token from a public client", async () => {
+			const { ownBoundToken, exchange, key } =
+				await bootPublicClient("dpop-bound");
+			const subject = await ownBoundToken();
+			const { error } = await exchange(
+				subject.access_token,
+				{ DPoP: await key.prove() },
+				{
+					actor_token: subject.access_token,
+					actor_token_type: ACCESS_TOKEN_TYPE,
+				},
+			);
+			expect(error).toMatchObject({
+				error: "invalid_request",
+				error_description: "a public client cannot send actor_token",
+			});
+		});
+
+		it("still requires a confidential client to authenticate", async () => {
+			const { mcpServer, userTokenForMcp, postToken } =
+				await bootPublicClient("dpop-bound");
+			const subject = await userTokenForMcp();
+			const { error } = await postToken({
+				grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+				client_id: mcpServer.client_id,
+				subject_token: subject.access_token,
+				subject_token_type: ACCESS_TOKEN_TYPE,
+				resource: api,
+			});
+			expect(error?.error).toBe("invalid_client");
+		});
+	});
+});
+
+/**
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ * @see https://datatracker.ietf.org/doc/html/rfc8693#section-4.1
+ */
+describe("oauthTokenExchange delegation with pairwise subjects", () => {
+	const pairwiseSecret = "test-pairwise-secret-key-32chars!!";
+
+	const bootUserActor = async ({
+		exchange = {} as OAuthTokenExchangeOptions,
+		bootOptions = {} as Parameters<typeof bootScenario>[1],
+		providerOptions = {} as Partial<OAuthOptions<Scope[]>>,
+	} = {}) => {
+		const scenario = await bootDelegation(
+			{ delegation: { maxDepth: 2 }, ...exchange },
+			bootOptions,
+			{ pairwiseSecret, ...providerOptions },
+		);
+		// A pairwise service that a second user signs in to. Its token for that
+		// user is the actor token.
+		const service = await scenario.createClient({
+			grant_types: [TOKEN_EXCHANGE_GRANT_TYPE, "authorization_code"],
+			redirect_uris: [redirectUri],
+			scope: "openid read write",
+			skip_consent: true,
+			resources: [mcp, api],
+			subject_type: "pairwise",
+		});
+		const actorUser = await scenario.signInAnotherUser();
+		const actorToken = await scenario.userTokenForMcp({
+			requester: service,
+			scope: "openid read",
+			sessionHeaders: actorUser.headers,
+		});
+		const delegateAsUser = async () =>
+			scenario.exchangeAs(
+				service,
+				(await scenario.userTokenForMcp()).access_token,
+				scenario.actorParams(actorToken.access_token),
+			);
+		/** The `sub` that `requester` sees for the actor user at introspection. */
+		const actorSubFor = async (
+			requester: { client_id: string; client_secret?: string },
+			{ resource = mcp, redirectURI = redirectUri } = {},
+		) => {
+			const token = await scenario.userTokenForMcp({
+				requester,
+				scope: "openid read",
+				resource,
+				redirectURI,
+				sessionHeaders: actorUser.headers,
+			});
+			return (await scenario.introspect(token.access_token, requester))?.sub;
+		};
+		return {
+			...scenario,
+			service,
+			actorUser: actorUser.user,
+			actorToken,
+			delegateAsUser,
+			actorSubFor,
+		};
+	};
+
+	it("gives a user actor the sub the token's client sees for that user", async () => {
+		const { service, actorUser, actorToken, delegateAsUser, introspect } =
+			await bootUserActor({
+				providerOptions: { accessTokenSubject: "pairwise" },
+			});
+		const { data, error } = await delegateAsUser();
+		expect(error).toBeNull();
+		const issued = decodeJwt(data!.access_token);
+		// The service already saw this value as the actor token's `sub`.
+		const actorSub = decodeJwt(actorToken.access_token).sub;
+		expect(actorSub).not.toBe(actorUser.id);
+		expect(issued.act).toEqual({ sub: actorSub });
+		expect(JSON.stringify(issued)).not.toContain(actorUser.id);
+		expect(await introspect(data!.access_token, service)).toMatchObject({
+			active: true,
+			act: { sub: actorSub },
+		});
+	});
+
+	it("passes the actor's user ID to hooks", async () => {
+		const allowExchange = vi.fn(() => true);
+		const { actorUser, delegateAsUser } = await bootUserActor({
+			exchange: { allowExchange },
+			providerOptions: { accessTokenSubject: "pairwise" },
+		});
+		const { error } = await delegateAsUser();
+		expect(error).toBeNull();
+		expect(allowExchange).toHaveBeenCalledWith(
+			expect.objectContaining({ act: { sub: actorUser.id } }),
+		);
+	});
+
+	it.each<[string, { disableJwtPlugin?: boolean }]>([
+		["JWT", {}],
+		["opaque", { disableJwtPlugin: true }],
+	])(
+		"maps earlier user actors for the client of a re-exchanged %s token",
+		async (_, bootOptions) => {
+			const {
+				createClient,
+				actorTokenFor,
+				actorParams,
+				exchangeAs,
+				introspect,
+				service,
+				actorUser,
+				delegateAsUser,
+				actorSubFor,
+			} = await bootUserActor({
+				bootOptions,
+				providerOptions: { accessTokenSubject: "pairwise" },
+			});
+			// A pairwise client in another sector, acting as itself.
+			const downstreamRedirect = "https://downstream.example.com/callback";
+			const downstream = await createClient({
+				grant_types: [
+					TOKEN_EXCHANGE_GRANT_TYPE,
+					"client_credentials",
+					"authorization_code",
+				],
+				client_credentials_scopes: ["read"],
+				redirect_uris: ["https://downstream.example.com/callback"],
+				scope: "openid read",
+				skip_consent: true,
+				resources: [api, other],
+				subject_type: "pairwise",
+			});
+			const first = await delegateAsUser();
+			expect(first.error).toBeNull();
+			const { data, error } = await exchangeAs(
+				downstream,
+				first.data!.access_token,
+				{
+					...actorParams((await actorTokenFor(downstream)).access_token),
+					resource: other,
+				},
+			);
+			expect(error).toBeNull();
+			const expectedAct = {
+				// A client actor keeps its client ID.
+				sub: downstream.client_id,
+				act: {
+					sub: await actorSubFor(downstream, {
+						resource: api,
+						redirectURI: downstreamRedirect,
+					}),
+				},
+			};
+			expect(expectedAct.act.sub).not.toBe(actorUser.id);
+			expect(expectedAct.act.sub).not.toBe(await actorSubFor(service));
+			const introspected = await introspect(data!.access_token, downstream);
+			expect(introspected?.act).toEqual(expectedAct);
+			if (!bootOptions.disableJwtPlugin) {
+				const issued = decodeJwt(data!.access_token);
+				expect(issued.act).toEqual(expectedAct);
+				expect(JSON.stringify(issued)).not.toContain(actorUser.id);
+			}
+		},
+	);
+
+	it("maps act at introspection when JWT access tokens keep the user ID", async () => {
+		const { service, actorUser, delegateAsUser, introspect, actorSubFor } =
+			await bootUserActor();
+		const { data, error } = await delegateAsUser();
+		expect(error).toBeNull();
+		// The JWT carries the user ID in `sub` and `act`, as before.
+		expect(decodeJwt(data!.access_token).act).toEqual({ sub: actorUser.id });
+		expect((await introspect(data!.access_token, service))?.act).toEqual({
+			sub: await actorSubFor(service),
+		});
+	});
+
+	it("maps act at introspection of an opaque token", async () => {
+		const { service, actorUser, delegateAsUser, introspect, actorSubFor } =
+			await bootUserActor({ bootOptions: { disableJwtPlugin: true } });
+		const { data, error } = await delegateAsUser();
+		expect(error).toBeNull();
+		const actorSub = await actorSubFor(service);
+		expect(actorSub).not.toBe(actorUser.id);
+		expect((await introspect(data!.access_token, service))?.act).toEqual({
+			sub: actorSub,
+		});
+	});
+
+	it("presents a user actor whose ID is also a client ID as a user", async () => {
+		const {
+			auth,
+			service,
+			actorUser,
+			delegateAsUser,
+			introspect,
+			actorSubFor,
+		} = await bootUserActor({
+			providerOptions: { accessTokenSubject: "pairwise" },
+		});
+		// `generateClientId` is configurable, so a client ID can equal a user ID.
+		await (await auth.$context).adapter.create({
+			model: "oauthClient",
+			data: {
+				clientId: actorUser.id,
+				redirectUris: [redirectUri],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const { data, error } = await delegateAsUser();
+		expect(error).toBeNull();
+		const actorSub = await actorSubFor(service);
+		expect(actorSub).not.toBe(actorUser.id);
+		expect(decodeJwt(data!.access_token).act).toEqual({ sub: actorSub });
+		expect((await introspect(data!.access_token, service))?.act).toEqual({
+			sub: actorSub,
+		});
+	});
+
+	it("keeps every client actor's ID beyond the adapter's find-many limit", async () => {
+		const {
+			createClient,
+			actorTokenFor,
+			actorParams,
+			exchangeAs,
+			introspect,
+			userTokenForMcp,
+		} = await bootUserActor({
+			exchange: { delegation: { maxDepth: 3 } },
+			bootOptions: { advanced: { database: { defaultFindManyLimit: 2 } } },
+		});
+		const machine = (resources: string[]) =>
+			createClient({
+				grant_types: [TOKEN_EXCHANGE_GRANT_TYPE, "client_credentials"],
+				client_credentials_scopes: ["read"],
+				scope: "read",
+				skip_consent: true,
+				resources,
+				subject_type: "pairwise",
+			});
+		// Three client actors, one more than the limit.
+		const hops = [
+			{ requester: await machine([mcp, api]), resource: api },
+			{ requester: await machine([api, other]), resource: other },
+			{ requester: await machine([other, api]), resource: api },
+		];
+		let token = (await userTokenForMcp()).access_token;
+		for (const { requester, resource } of hops) {
+			const { data, error } = await exchangeAs(requester, token, {
+				...actorParams((await actorTokenFor(requester)).access_token),
+				resource,
+			});
+			expect(error).toBeNull();
+			token = data!.access_token;
+		}
+		const [first, second, last] = hops.map((hop) => hop.requester);
+		expect((await introspect(token, last!))?.act).toEqual({
+			sub: last!.client_id,
+			act: { sub: second!.client_id, act: { sub: first!.client_id } },
+		});
+	});
+
+	it("matches may_act against the actor's user ID", async () => {
+		const state: { mayAct?: unknown } = {};
+		const { actorUser, actorToken, delegateAsUser } = await bootUserActor({
+			providerOptions: {
+				accessTokenSubject: "pairwise",
+				customAccessTokenClaims: () =>
+					state.mayAct === undefined ? {} : { may_act: state.mayAct },
+			},
+		});
+		state.mayAct = { sub: decodeJwt(actorToken.access_token).sub };
+		expect((await delegateAsUser()).error?.error_description).toBe(
+			"the actor is not permitted by the subject token's may_act",
+		);
+		state.mayAct = { sub: actorUser.id };
+		expect((await delegateAsUser()).error).toBeNull();
 	});
 });

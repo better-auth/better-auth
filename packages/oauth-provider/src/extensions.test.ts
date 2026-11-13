@@ -5,7 +5,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin, User } from "better-auth/types";
 import { decodeJwt } from "jose";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { extendOAuthProvider } from "./extensions";
 import { oauthProvider } from "./oauth";
@@ -107,9 +107,17 @@ describe("oauth-provider extensions", async () => {
 							client,
 							scopes: ["openid", "email", "vc"],
 							user: grantUser,
-							// Per-issuance claims are JWT-only; an opaque token persists
-							// none, so this must be absent at introspection.
-							accessTokenClaims: { opaque_per_issuance: "jwt-only" },
+							accessTokenClaims: {
+								opaque_per_issuance: "persisted",
+								nested_claim: { tier: "gold", regions: ["eu", "us"] },
+								issued_for: new Date("2026-01-01T00:00:00.000Z"),
+								dropped_claim: undefined,
+								access_order_probe: "grant",
+								client_id: "malicious-grant-client",
+								sub: "malicious-grant-sub",
+								act: { sub: "forged-actor" },
+								cnf: { jkt: "forged-by-grant" },
+							},
 						});
 					},
 					// Sender-constrains an opaque access token (no resource). The
@@ -184,6 +192,7 @@ describe("oauth-provider extensions", async () => {
 				claims: {
 					accessToken: () => ({
 						extension_access_claim: "extension-access",
+						access_order_probe: "extension",
 						client_id: "malicious-extension-client",
 						cnf: { jkt: "forged-by-extension" },
 					}),
@@ -1025,6 +1034,54 @@ describe("oauth-provider extensions", async () => {
 		expect(metadata.shared_metadata_field).toBe("first");
 	});
 
+	/**
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/reference#provider-extensions
+	 */
+	it("warns when two extensions contribute the same metadata key", async () => {
+		const makeMetadataExtensionPlugin = (
+			id: string,
+			metadata: Record<string, unknown>,
+		) =>
+			({
+				id,
+				init(ctx) {
+					extendOAuthProvider(ctx, { metadata: () => metadata });
+				},
+			}) satisfies BetterAuthPlugin;
+		const instance = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+				}),
+				makeMetadataExtensionPlugin("meta-ext-a", {
+					authorization_details_types_supported: ["type_a"],
+					only_in_a: true,
+				}),
+				makeMetadataExtensionPlugin("meta-ext-b", {
+					authorization_details_types_supported: ["type_b"],
+					issuer: "https://ignored.example.com",
+				}),
+			],
+		});
+		const { logger } = await instance.auth.$context;
+		const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+		const openIdConfig =
+			(await instance.auth.api.getOpenIdConfig()) as unknown as Record<
+				string,
+				unknown
+			>;
+		expect(openIdConfig.authorization_details_types_supported).toEqual([
+			"type_a",
+		]);
+		expect(warn.mock.calls.map(([message]) => message)).toEqual([
+			'oauth-provider: two extensions contributed the discovery metadata key "authorization_details_types_supported" to openid-configuration; keeping the first-registered value.',
+		]);
+	});
+
 	it("re-derives extension access-token claims on opaque-token introspection", async () => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
@@ -1071,8 +1128,79 @@ describe("oauth-provider extensions", async () => {
 		expect(introspection.data?.extension_access_claim).toBe("extension-access");
 		// The contributor tried to set the reserved client_id; the AS owns it.
 		expect(introspection.data?.client_id).toBe(oauthClient!.client_id);
-		// Per-issuance extras are JWT-only and must not reappear on opaque tokens.
-		expect(introspection.data?.opaque_per_issuance).toBeUndefined();
+	});
+
+	it("persists per-issuance access-token claims on opaque tokens and returns them at introspection", async () => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: extensionAuthMethod,
+				grant_types: [extensionOpaqueGrant],
+				scope: "openid email vc",
+				application_type: "web",
+			},
+		});
+		const clientAuth = {
+			client_id: oauthClient!.client_id,
+			client_assertion_type: extensionAssertionType,
+			client_assertion: `assertion:${oauthClient!.client_id}`,
+		};
+		const tokenResponse = await client.$fetch<{ access_token: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: extensionOpaqueGrant,
+					...clientAuth,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
+		expect(tokenResponse.error).toBeNull();
+		const accessToken = tokenResponse.data!.access_token;
+		expect(accessToken).not.toContain(".");
+
+		const introspection = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/introspect",
+			{
+				method: "POST",
+				body: new URLSearchParams({ token: accessToken, ...clientAuth }),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
+		expect(introspection.error).toBeNull();
+		expect(introspection.data?.active).toBe(true);
+		expect(introspection.data?.opaque_per_issuance).toBe("persisted");
+		expect(introspection.data?.nested_claim).toEqual({
+			tier: "gold",
+			regions: ["eu", "us"],
+		});
+		// Same precedence as the JWT mint: per-issuance claims override
+		// extension contributors.
+		expect(introspection.data?.access_order_probe).toBe("grant");
+		// Reserved names stay owned by the authorization server.
+		expect(introspection.data?.client_id).toBe(oauthClient!.client_id);
+		expect(introspection.data?.sub).toBe(grantUser!.id);
+		expect(introspection.data?.act).toBeUndefined();
+		expect(introspection.data?.cnf).toBeUndefined();
+
+		// Reserved names are removed before storage, not only at introspection.
+		const ctx = await auth.$context;
+		const rows = await ctx.adapter.findMany<{
+			accessTokenClaims?: Record<string, unknown> | null;
+		}>({
+			model: "oauthAccessToken",
+			where: [{ field: "clientId", value: oauthClient!.client_id }],
+		});
+		expect(rows).toHaveLength(1);
+		// Stored in JSON form, as a signed JWT would carry it: an `undefined`
+		// value is dropped.
+		expect(Object.keys(rows[0]!.accessTokenClaims ?? {}).sort()).toEqual([
+			"access_order_probe",
+			"issued_for",
+			"nested_claim",
+			"opaque_per_issuance",
+		]);
 	});
 
 	it("surfaces an extension assertion rejection as invalid_client", async () => {
@@ -1231,6 +1359,15 @@ describe("oauth-provider extensions", async () => {
 		expect(introspection.data?.active).toBe(true);
 		expect(introspection.data?.token_type).toBe("DPoP");
 		expect(introspection.data?.cnf).toEqual({ jkt: "opaque-bound-jkt" });
+
+		// An issuance without per-issuance claims stores none.
+		const row = await (await auth.$context).adapter.findOne<{
+			accessTokenClaims?: Record<string, unknown> | null;
+		}>({
+			model: "oauthAccessToken",
+			where: [{ field: "clientId", value: oauthClient!.client_id }],
+		});
+		expect(row?.accessTokenClaims ?? null).toBeNull();
 	});
 
 	it("authenticateClient binds the assertion audience to the served endpoint", async () => {
@@ -1732,3 +1869,134 @@ describe("oauth-provider extension client authentication confirmation", async ()
 		});
 	});
 });
+
+it("keeps act on a JWT access token issued without a user", async () => {
+	const grantType = "urn:better-auth:test:client-actor-grant";
+	const resource = "https://api.example.com";
+	const issuer = "http://localhost:3000";
+	const plugin = {
+		id: "test-client-actor-grant",
+		init(ctx) {
+			extendOAuthProvider(ctx, {
+				grants: {
+					[grantType]: async ({ provider }) => {
+						const { client } = await provider.authenticateClient({
+							scopes: ["read"],
+						});
+						return provider.issueTokens({
+							client,
+							scopes: ["read"],
+							resources: [resource],
+							act: { sub: "upstream-service" },
+						});
+					},
+				},
+			});
+		},
+	} satisfies BetterAuthPlugin;
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL: issuer,
+		plugins: [
+			jwt({ jwt: { issuer } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				resources: [resource],
+				enforcePerClientResources: false,
+			}),
+			plugin,
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: "client_secret_post",
+			grant_types: [grantType],
+			scope: "read",
+		},
+	});
+	const tokens = await auth.api.oauth2Token({
+		body: {
+			grant_type: grantType,
+			client_id: oauthClient!.client_id,
+			client_secret: oauthClient!.client_secret!,
+		},
+	});
+	expect(decodeJwt(tokens.access_token)).toMatchObject({
+		sub: oauthClient!.client_id,
+		act: { sub: "upstream-service" },
+	});
+});
+
+describe.each(["postgres", "mysql"] as const)(
+	"opaque access-token claims on %s",
+	(testWith) => {
+		const grantType = "urn:better-auth:test:stored-claims-grant";
+
+		it("stores per-issuance claims and returns them at introspection", async () => {
+			const plugin = {
+				id: "test-stored-claims-grant",
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						grants: {
+							[grantType]: async ({ provider }) => {
+								const { client } = await provider.authenticateClient({
+									scopes: ["read"],
+								});
+								return provider.issueTokens({
+									client,
+									scopes: ["read"],
+									accessTokenClaims: {
+										tenant: { id: "t_1", regions: ["eu"] },
+										client_id: "malicious-client",
+									},
+								});
+							},
+						},
+					});
+				},
+			} satisfies BetterAuthPlugin;
+			const { auth, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						oauthProvider({
+							loginPage: "/login",
+							consentPage: "/consent",
+							scopes: ["read"],
+							disableJwtPlugin: true,
+						}),
+						plugin,
+					],
+				},
+				{
+					testWith,
+					testUser: { email: `${crypto.randomUUID()}@test.com` },
+				},
+			);
+			const { headers } = await signInWithTestUser();
+			const oauthClient = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					token_endpoint_auth_method: "client_secret_post",
+					grant_types: [grantType],
+					scope: "read",
+				},
+			});
+			const clientAuth = {
+				client_id: oauthClient!.client_id,
+				client_secret: oauthClient!.client_secret!,
+			};
+			const tokens = await auth.api.oauth2Token({
+				body: { grant_type: grantType, ...clientAuth },
+			});
+			const introspection = await auth.api.oauth2Introspect({
+				body: { token: tokens.access_token, ...clientAuth },
+			});
+			expect(introspection.active).toBe(true);
+			expect(introspection.tenant).toEqual({ id: "t_1", regions: ["eu"] });
+			expect(introspection.client_id).toBe(oauthClient!.client_id);
+		});
+	},
+);

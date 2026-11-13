@@ -22,6 +22,7 @@ import { findAccessToken, findToken } from "./token-lookup";
 import type {
 	ActiveAccessTokenPayload,
 	Confirmation,
+	OAuthActorClaim,
 	OAuthOptions,
 	SchemaClient,
 	Scope,
@@ -32,7 +33,8 @@ import {
 	getClient,
 	getJwtPlugin,
 	parseClientMetadata,
-	resolveSubjectIdentifier,
+	resolvePresentedSubjects,
+	restoreAccessTokenUserIds,
 	toAudienceClaim,
 	validateClientCredentials,
 } from "./utils";
@@ -176,6 +178,12 @@ async function validateJwtAccessToken(
 		}
 	}
 
+	// Internal callers read user IDs from `sub` and `act`; presentation
+	// re-derives the pairwise values in `resolveIntrospectionSubjects`.
+	if (!(await restoreAccessTokenUserIds(ctx, jwtPayload))) {
+		return { active: false };
+	}
+
 	// Return the JWT payload in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 	jwtPayload.client_id = jwtPayload.azp;
@@ -284,9 +292,9 @@ async function validateOpaqueAccessToken(
 	const resourcePolicyClaims = resources?.length
 		? await getResourceCustomClaims(ctx, opts, resources)
 		: {};
-	// `grantType` and per-issuance extras are not persisted on the opaque row,
-	// so extension claims are re-derived grant-type-stable and per-request
-	// extras are JWT-only (see `resolveAccessTokenClaims`).
+	// `grantType` is not persisted on the opaque row, so extension claims are
+	// re-derived grant-type-stable. Per-issuance claims come from the row, so
+	// they keep the precedence they have in a JWT.
 	const accessTokenClaims = client
 		? await resolveAccessTokenClaims({
 				ctx,
@@ -299,7 +307,7 @@ async function validateOpaqueAccessToken(
 				resources,
 				referenceId: accessToken.referenceId,
 				metadata: parseClientMetadata(client.metadata),
-				perRequestClaims: undefined,
+				perRequestClaims: accessToken.accessTokenClaims ?? undefined,
 				resourcePolicyClaims,
 			})
 		: {};
@@ -503,11 +511,12 @@ export async function requireActiveAccessTokenWithClaims(
 }
 
 /**
- * Resolves pairwise sub on an introspection payload.
+ * Resolves pairwise `sub`, and user actors in `act`, on an introspection
+ * payload.
  * Applied at the presentation layer so internal validation functions
  * keep real user.id (needed for user lookup in /userinfo).
  */
-async function resolveIntrospectionSub(
+async function resolveIntrospectionSubjects(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	payload: JWTPayload,
@@ -529,12 +538,16 @@ async function resolveIntrospectionSub(
 			? introspectingClient
 			: await getClient(ctx, opts, issuerClientId);
 	if (!issuingClient) return payload;
-	const resolvedSub = await resolveSubjectIdentifier(
-		payload.sub as string,
-		issuingClient,
+	const subjects = await resolvePresentedSubjects(
+		ctx,
 		opts,
+		{
+			sub: payload.sub as string,
+			...(payload.act ? { act: payload.act as OAuthActorClaim } : {}),
+		},
+		issuingClient,
 	);
-	return { ...payload, sub: resolvedSub };
+	return { ...payload, ...subjects };
 }
 
 export async function introspectEndpoint(
@@ -598,7 +611,7 @@ export async function introspectEndpoint(
 				found.record,
 				client.clientId,
 			);
-			return resolveIntrospectionSub(ctx, opts, payload, client);
+			return resolveIntrospectionSubjects(ctx, opts, payload, client);
 		}
 		const { payload } = await validateFoundAccessToken(
 			ctx,
@@ -606,7 +619,7 @@ export async function introspectEndpoint(
 			found,
 			client.clientId,
 		);
-		return resolveIntrospectionSub(ctx, opts, payload, client);
+		return resolveIntrospectionSubjects(ctx, opts, payload, client);
 	} catch (error) {
 		if (error instanceof APIError) throw error;
 		logger.error("Introspection error:", error);

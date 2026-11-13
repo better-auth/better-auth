@@ -21,6 +21,10 @@ import { getExtensionInteractionRequest } from "./extensions";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { mapIssuesToOAuthError } from "./oauth-endpoint";
+import {
+	consumePushedAuthorizationRequest,
+	isPushedAuthorizationRequestEnabled,
+} from "./par";
 import { resolveResourcePolicy } from "./resources";
 import {
 	canonicalizeOAuthQueryParams,
@@ -35,6 +39,7 @@ import type {
 	OAuthInteractionQuery,
 	OAuthInteractionRequest,
 	OAuthOptions,
+	SchemaClient,
 	Scope,
 	VerificationValue,
 } from "./types";
@@ -130,7 +135,7 @@ function deriveResponseMode(
 	return "query";
 }
 
-const authorizationQueryErrorCodesByField = {
+export const authorizationQueryErrorCodesByField = {
 	response_type: { invalid: "unsupported_response_type" },
 	resource: { invalid: "invalid_target" },
 } as const;
@@ -567,18 +572,25 @@ export async function authorizeEndpoint(
 				ctx,
 			});
 		}
-		if (!opts.requestUriResolver) {
+		const builtInPar = isPushedAuthorizationRequestEnabled(opts);
+		if (!builtInPar && !opts.requestUriResolver) {
 			return authorizeRedirectOnError(opts)({
 				error: "request_uri_not_supported",
 				error_description: "request_uri not supported",
 				ctx,
 			});
 		}
-		const resolvedParams = await opts.requestUriResolver({
-			requestUri,
-			clientId,
-			ctx,
-		});
+		// Values issued by /oauth2/par are resolved here; any other value goes
+		// to the app's resolver.
+		const pushed = builtInPar
+			? await consumePushedAuthorizationRequest(ctx, opts, requestUri, clientId)
+			: ({ status: "not_found" } as const);
+		const resolvedParams =
+			pushed.status === "found"
+				? pushed.query
+				: pushed.status === "not_found" && opts.requestUriResolver
+					? await opts.requestUriResolver({ requestUri, clientId, ctx })
+					: null;
 		if (!resolvedParams) {
 			return authorizeRedirectOnError(opts)({
 				error: "invalid_request_uri",
@@ -589,7 +601,7 @@ export async function authorizeEndpoint(
 		// RFC 9126 §4: all params come from the stored request, not the URL.
 		// Only client_id is carried from the authorization URL.
 		const urlClientId = query.client_id;
-		query = resolvedParams as unknown as OAuthAuthorizationQuery;
+		query = { ...resolvedParams } as unknown as OAuthAuthorizationQuery;
 		if (urlClientId) {
 			query.client_id = urlClientId;
 		}
@@ -612,63 +624,162 @@ export async function authorizeEndpoint(
 		query: serializeAuthorizationQuery(query).toString(),
 	});
 
-	if (!query.response_type) {
-		return authorizeRedirectOnError(opts)({
-			error: "invalid_request",
-			error_description: "response_type is required",
-			ctx,
-		});
+	const validation = await validateAuthorizationRequest(ctx, opts, query);
+	if (!validation.valid) {
+		switch (validation.deliverTo) {
+			case "client":
+				return handleRedirect(
+					ctx,
+					formatErrorURL(
+						query.redirect_uri,
+						validation.error,
+						validation.error_description,
+						query.state,
+						getIssuer(ctx, opts),
+					),
+				);
+			case "trusted_redirect":
+				return authorizeRedirectOnError(opts)({
+					error: validation.error,
+					error_description: validation.error_description,
+					ctx,
+				});
+			default:
+				return handleRedirect(
+					ctx,
+					getErrorURL(ctx, validation.error, validation.error_description),
+				);
+		}
 	}
+	const { client } = validation;
+	query = validation.query;
 
-	const promptSet = ctx.query?.prompt
-		? parsePrompt(ctx.query?.prompt)
-		: undefined;
-	if (promptSet?.has("select_account") && !opts.selectAccount?.page) {
+	// Required PAR applies to requests that reach this endpoint directly.
+	// Resumed requests carry the parameters this server signed after resolving
+	// the pushed request, so they never hold a request_uri.
+	if (
+		settings?.isAuthorize === true &&
+		requestUri === undefined &&
+		(opts.pushedAuthorizationRequests?.required === true ||
+			client.requirePushedAuthorizationRequests === true)
+	) {
 		return handleRedirect(
 			ctx,
-			getErrorURL(
-				ctx,
-				`unsupported_prompt_select_account`,
-				"unsupported prompt type",
+			formatErrorURL(
+				query.redirect_uri,
+				"invalid_request",
+				"pushed authorization request is required",
+				query.state,
+				getIssuer(ctx, opts),
 			),
+		);
+	}
+	return runAuthorizationInteraction(ctx, opts, headers, settings, {
+		query,
+		client,
+		approve: (approval) =>
+			createAuthorizationCodeURL(ctx, opts, {
+				...approval,
+				// An authorization request always carries its validated redirect_uri.
+				query: approval.query as OAuthAuthorizationQuery,
+				clientId: client.clientId,
+				resource: toResourceList(approval.query.resource) ?? [],
+			}),
+	});
+}
+
+/**
+ * Where `/oauth2/authorize` delivers a validation error: the validated client
+ * redirect URI, the requested redirect URI when it is registered for the
+ * client, or the server error page.
+ */
+type AuthorizationErrorDelivery = "client" | "trusted_redirect" | "server";
+
+export type AuthorizationRequestValidation =
+	| {
+			valid: true;
+			query: OAuthAuthorizationQuery;
+			client: SchemaClient<Scope[]>;
+	  }
+	| {
+			valid: false;
+			error: OAuthErrorCode;
+			error_description: string;
+			deliverTo: AuthorizationErrorDelivery;
+	  };
+
+function invalidAuthorizationRequest(
+	error: OAuthErrorCode,
+	errorDescription: string,
+	deliverTo: AuthorizationErrorDelivery,
+): AuthorizationRequestValidation {
+	return {
+		valid: false,
+		error,
+		error_description: errorDescription,
+		deliverTo,
+	};
+}
+
+/**
+ * Validates a parsed authorization request against the client registration and
+ * server configuration. `/oauth2/authorize` and `/oauth2/par` share it, so a
+ * pushed request is checked as the front-channel request would be
+ * (RFC 9126 §2.1).
+ */
+export async function validateAuthorizationRequest(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	query: OAuthAuthorizationQuery,
+): Promise<AuthorizationRequestValidation> {
+	if (!query.response_type) {
+		return invalidAuthorizationRequest(
+			"invalid_request",
+			"response_type is required",
+			"trusted_redirect",
+		);
+	}
+
+	const promptSet = query.prompt ? parsePrompt(query.prompt) : undefined;
+	if (promptSet?.has("select_account") && !opts.selectAccount?.page) {
+		return invalidAuthorizationRequest(
+			"unsupported_prompt_select_account",
+			"unsupported prompt type",
+			"server",
 		);
 	}
 
 	if (!(query.response_type === "code")) {
-		return handleRedirect(
-			ctx,
-			getErrorURL(
-				ctx,
-				"unsupported_response_type",
-				"unsupported response type",
-			),
+		return invalidAuthorizationRequest(
+			"unsupported_response_type",
+			"unsupported response type",
+			"server",
 		);
 	}
 
 	// Check client
 	const client = await getClient(ctx, opts, query.client_id);
 	if (!client) {
-		return handleRedirect(
-			ctx,
-			getErrorURL(ctx, "invalid_client", "client not found"),
+		return invalidAuthorizationRequest(
+			"invalid_client",
+			"client not found",
+			"server",
 		);
 	}
 	if (client.disabled) {
-		return handleRedirect(
-			ctx,
-			getErrorURL(ctx, "client_disabled", "client is disabled"),
+		return invalidAuthorizationRequest(
+			"client_disabled",
+			"client is disabled",
+			"server",
 		);
 	}
 	// The authorize endpoint only serves the authorization_code grant; reject
 	// clients that are not registered for it.
 	if (!clientAllowsGrant(client, "authorization_code")) {
-		return handleRedirect(
-			ctx,
-			getErrorURL(
-				ctx,
-				"unauthorized_client",
-				"client is not authorized to use the authorization_code grant",
-			),
+		return invalidAuthorizationRequest(
+			"unauthorized_client",
+			"client is not authorized to use the authorization_code grant",
+			"server",
 		);
 	}
 
@@ -677,9 +788,10 @@ export async function authorizeEndpoint(
 	let isValidRedirectUri = false;
 	if (query.redirect_uri) {
 		if (!isRedirectUriTransportAllowed(opts, query.redirect_uri, isWebClient)) {
-			return handleRedirect(
-				ctx,
-				getErrorURL(ctx, "invalid_request", INSECURE_REDIRECT_URI_MESSAGE),
+			return invalidAuthorizationRequest(
+				"invalid_request",
+				INSECURE_REDIRECT_URI_MESSAGE,
+				"server",
 			);
 		}
 		// Default validation: exact match + native loopback port variance
@@ -710,9 +822,10 @@ export async function authorizeEndpoint(
 		}
 	}
 	if (!isValidRedirectUri) {
-		return handleRedirect(
-			ctx,
-			getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
+		return invalidAuthorizationRequest(
+			"invalid_redirect",
+			"invalid redirect uri",
+			"server",
 		);
 	}
 	// Check for invalid scopes if requested from query
@@ -723,15 +836,10 @@ export async function authorizeEndpoint(
 			return !validScopes?.has(scope);
 		});
 		if (invalidScopes.length) {
-			return handleRedirect(
-				ctx,
-				formatErrorURL(
-					query.redirect_uri,
-					"invalid_scope",
-					`The following scopes are invalid: ${invalidScopes.join(", ")}`,
-					query.state,
-					getIssuer(ctx, opts),
-				),
+			return invalidAuthorizationRequest(
+				"invalid_scope",
+				`The following scopes are invalid: ${invalidScopes.join(", ")}`,
+				"client",
 			);
 		}
 	}
@@ -742,27 +850,17 @@ export async function authorizeEndpoint(
 	}
 	const openidRequested = requestedScopes.includes("openid");
 	if (query.claims !== undefined && !openidRequested) {
-		return handleRedirect(
-			ctx,
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"openid scope must be requested when using the claims parameter",
-				query.state,
-				getIssuer(ctx, opts),
-			),
+		return invalidAuthorizationRequest(
+			"invalid_request",
+			"openid scope must be requested when using the claims parameter",
+			"client",
 		);
 	}
 	if (openidRequested && !isValidOidcClaimsRequest(query.claims)) {
-		return handleRedirect(
-			ctx,
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"claims must be a valid Claims request object",
-				query.state,
-				getIssuer(ctx, opts),
-			),
+		return invalidAuthorizationRequest(
+			"invalid_request",
+			"claims must be a valid Claims request object",
+			"client",
 		);
 	}
 	// Fail before sign-in when no supported ACR can satisfy an essential request;
@@ -773,15 +871,10 @@ export async function authorizeEndpoint(
 			canSatisfyEssentialAcrRequest(query.claims, acr),
 		)
 	) {
-		return handleRedirect(
-			ctx,
-			formatErrorURL(
-				query.redirect_uri,
-				"access_denied",
-				"essential acr requirement cannot be met",
-				query.state,
-				getIssuer(ctx, opts),
-			),
+		return invalidAuthorizationRequest(
+			"access_denied",
+			"essential acr requirement cannot be met",
+			"client",
 		);
 	}
 
@@ -803,16 +896,7 @@ export async function authorizeEndpoint(
 				const description =
 					(err.body as { error_description?: string })?.error_description ??
 					"requested resource invalid";
-				return handleRedirect(
-					ctx,
-					formatErrorURL(
-						query.redirect_uri,
-						error,
-						description,
-						query.state,
-						getIssuer(ctx, opts),
-					),
-				);
+				return invalidAuthorizationRequest(error, description, "client");
 			}
 			throw err;
 		}
@@ -827,15 +911,10 @@ export async function authorizeEndpoint(
 	// Validate PKCE parameters if required
 	if (pkceRequired) {
 		if (!query.code_challenge || !query.code_challenge_method) {
-			return handleRedirect(
-				ctx,
-				formatErrorURL(
-					query.redirect_uri,
-					"invalid_request",
-					pkceRequired.valueOf(),
-					query.state,
-					getIssuer(ctx, opts),
-				),
+			return invalidAuthorizationRequest(
+				"invalid_request",
+				pkceRequired.valueOf(),
+				"client",
 			);
 		}
 	}
@@ -844,46 +923,25 @@ export async function authorizeEndpoint(
 	if (query.code_challenge || query.code_challenge_method) {
 		// Both parameters must be provided together
 		if (!query.code_challenge || !query.code_challenge_method) {
-			return handleRedirect(
-				ctx,
-				formatErrorURL(
-					query.redirect_uri,
-					"invalid_request",
-					"code_challenge and code_challenge_method must both be provided",
-					query.state,
-					getIssuer(ctx, opts),
-				),
+			return invalidAuthorizationRequest(
+				"invalid_request",
+				"code_challenge and code_challenge_method must both be provided",
+				"client",
 			);
 		}
 
 		// Check code challenge method is supported (only S256)
 		const codeChallengesSupported = ["S256"];
 		if (!codeChallengesSupported.includes(query.code_challenge_method)) {
-			return handleRedirect(
-				ctx,
-				formatErrorURL(
-					query.redirect_uri,
-					"invalid_request",
-					"invalid code_challenge method, only S256 is supported",
-					query.state,
-					getIssuer(ctx, opts),
-				),
+			return invalidAuthorizationRequest(
+				"invalid_request",
+				"invalid code_challenge method, only S256 is supported",
+				"client",
 			);
 		}
 	}
 
-	return runAuthorizationInteraction(ctx, opts, headers, settings, {
-		query,
-		client,
-		approve: (approval) =>
-			createAuthorizationCodeURL(ctx, opts, {
-				...approval,
-				// An authorization request always carries its validated redirect_uri.
-				query: approval.query as OAuthAuthorizationQuery,
-				clientId: client.clientId,
-				resource: toResourceList(approval.query.resource) ?? [],
-			}),
-	});
+	return { valid: true, query, client };
 }
 
 /**

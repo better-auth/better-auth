@@ -1058,7 +1058,7 @@ export const signInSSO = (options?: SSOOptions) => {
 							where: [
 								{
 									field: providerId ? "providerId" : "organizationId",
-									value: providerId || orgId!,
+									value: providerId || orgId,
 								},
 							],
 						}),
@@ -1541,7 +1541,7 @@ async function handleOIDCCallback(
 		}
 		const verified = await validateOIDCIdToken(
 			tokenResponse.idToken,
-			jwksEndpoint!,
+			jwksEndpoint,
 			{ audience: config.clientId, issuer: provider.issuer },
 			(url) => ctx.context.isTrustedOrigin(url),
 		).catch((error) => {
@@ -1554,10 +1554,10 @@ async function handleOIDCCallback(
 		if (!verified) {
 			return redirectOIDCError("invalid_provider", "token_not_verified");
 		}
-		if (!readStringClaim(verified!.payload, "sub")) {
+		if (!readStringClaim(verified.payload, "sub")) {
 			return redirectOIDCError("invalid_provider", "id_token_subject_missing");
 		}
-		verifiedIdToken = verified!;
+		verifiedIdToken = verified;
 	}
 	if (options?.resolveUser && !verifiedIdToken) {
 		return redirectOIDCError(

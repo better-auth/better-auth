@@ -166,6 +166,11 @@ export const schema = {
 				required: false,
 				defaultValue: false,
 			},
+			requirePushedAuthorizationRequests: {
+				type: "boolean",
+				required: false,
+				defaultValue: false,
+			},
 			// All other metadata
 			referenceId: {
 				type: "string",
@@ -365,6 +370,11 @@ export const schema = {
 				required: false,
 				index: true,
 			},
+			// Shared by every rotation of one grant.
+			grantId: {
+				type: "string",
+				required: false,
+			},
 			resources: {
 				type: "string[]",
 				required: false,
@@ -496,6 +506,13 @@ export const schema = {
 				},
 				index: true,
 			},
+			// The refresh-token grant this token was issued under, so revoking any
+			// refresh token of the grant can revoke it (RFC 7009 §2.1).
+			grantId: {
+				type: "string",
+				required: false,
+				index: true,
+			},
 			expiresAt: {
 				type: "date",
 			},
@@ -515,6 +532,11 @@ export const schema = {
 			// RFC 8693 `act` actor chain of a delegated (token exchange) access
 			// token. Surfaced as `act` at introspection.
 			act: {
+				type: "json",
+				required: false,
+			},
+			// Per-issuance `accessTokenClaims`, returned at introspection.
+			accessTokenClaims: {
 				type: "json",
 				required: false,
 			},

@@ -162,6 +162,17 @@ const storedAuthorizationQuerySchema = authorizationQuerySchema.extend({
 });
 
 /**
+ * What the token endpoint keeps about a redeemed authorization code while
+ * tokens derived from it can be valid, so a reuse can be checked against the
+ * client and PKCE challenge the code was issued for.
+ */
+export const consumedAuthorizationCodeSchema = z.object({
+	clientId: z.string(),
+	codeChallenge: z.string().optional(),
+	codeChallengeMethod: z.enum(["S256"]).optional(),
+});
+
+/**
  * Runtime schema for the authorization code verification value.
  * Validates structure on deserialization from the JSON blob stored in the DB.
  * Uses passthrough so future fields (e.g. from authorization challenge) don't break parsing.
@@ -224,6 +235,8 @@ export const clientRegistrationRequestSchema = z.object({
 	subject_type: z.enum(["public", "pairwise"]).optional(),
 	// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
 	dpop_bound_access_tokens: z.boolean().optional(),
+	// RFC 9126 §6: client accepts authorization requests only through PAR.
+	require_pushed_authorization_requests: z.boolean().optional(),
 	// RFC 7591 §2 extension: declare the RFC 8707 resource indicators this client
 	// will request. Each must be a valid resource URI matching an existing
 	// oauthResource row; the registration handler links them on success.

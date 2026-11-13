@@ -1,6 +1,12 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { defineRequestState, hasRequestState } from "@better-auth/core/context";
+import { assertDpopProofNonce } from "@better-auth/core/oauth2/internal";
 import { APIError, NO_STORE_HEADERS } from "better-auth/api";
-import type { DpopNonceOptions, VerifiedDpopProof } from "better-auth/oauth2";
+import type {
+	DpopNonceOptions,
+	DpopReplayStore,
+	VerifiedDpopProof,
+} from "better-auth/oauth2";
 import {
 	createDpopNonce,
 	createDpopReplayStore,
@@ -58,25 +64,18 @@ export function getDpopNonceOptions(
 	};
 }
 
-const dpopRequestTimes = new WeakMap<object, number>();
+const dpopRequestTime = defineRequestState(() => Math.floor(Date.now() / 1000));
 
 /**
  * The time, in epoch seconds, that this request's DPoP proof and nonce are
- * checked against. The first call captures it, and later calls for the same
- * request reuse it. The token endpoint's nonce check before the grant runs and
- * the proof verification at issuance therefore agree. A nonce that expires
- * while the grant consumes its code does not fail the request after the code
- * is gone.
+ * checked against. The first call captures it, and later calls in the same
+ * request, before hooks included, reuse it. A nonce that passes the check
+ * before a grant consumes its code therefore cannot expire before the proof is
+ * verified at issuance.
  */
-export function getDpopRequestTime(
-	ctx: Pick<GenericEndpointContext, "context">,
-): number {
-	let seconds = dpopRequestTimes.get(ctx);
-	if (seconds === undefined) {
-		seconds = Math.floor(Date.now() / 1000);
-		dpopRequestTimes.set(ctx, seconds);
-	}
-	return seconds;
+async function getDpopRequestTime(): Promise<number> {
+	if (!(await hasRequestState())) return Math.floor(Date.now() / 1000);
+	return dpopRequestTime.get();
 }
 
 /**
@@ -138,7 +137,7 @@ export function throwInvalidDpopProof(errorDescription: string): never {
  * RFC 9449 §8: answers a request whose DPoP proof lacks a current nonce with
  * `use_dpop_nonce` and the nonce to retry with.
  */
-export async function throwUseDpopNonce(
+async function throwUseDpopNonce(
 	ctx: Pick<GenericEndpointContext, "setHeader" | "responseHeaders">,
 	nonce: DpopNonceOptions,
 	errorDescription: string,
@@ -163,20 +162,24 @@ export async function verifyRequestDpopProof(
 		method: string;
 		url: string;
 		expectedJkt?: string;
+		/** Defaults to the database-backed store. */
+		replayStore?: DpopReplayStore;
 	},
 ): Promise<VerifiedDpopProof> {
 	const nonce = getDpopNonceOptions(ctx, opts);
+	const { replayStore, ...proofParams } = params;
 	let proof: VerifiedDpopProof;
 	try {
 		proof = await verifyDpopProof({
-			...params,
+			...proofParams,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
+			replayStore:
+				replayStore ?? createDpopReplayStore(ctx.context.internalAdapter),
 			nonce,
 			// The time the request arrived, which the token endpoint's nonce check
 			// also used, not the time a grant reaches issuance.
-			nowSeconds: getDpopRequestTime(ctx),
+			nowSeconds: await getDpopRequestTime(),
 		});
 	} catch (error) {
 		if (isDpopProofError(error)) {
@@ -231,4 +234,27 @@ export async function issueEndpointDpopNonce(
 	if (!nonce) return undefined;
 	const headers = await setDpopNonceHeader(ctx, nonce);
 	return headers[DPOP_NONCE_HEADER];
+}
+
+/**
+ * RFC 9449 §8: challenges a proof without a current nonce before the request
+ * consumes a one-time credential. Checks only the `nonce` claim and leaves the
+ * `jti` unreserved, so the proof must still be verified. Backs
+ * `OAuthProviderApi.challengeDpopNonce`.
+ */
+export async function challengeEndpointDpopNonce(
+	ctx: GenericEndpointContext,
+	opts: Pick<OAuthOptions<Scope[]>, "dpop">,
+): Promise<void> {
+	const nonce = getDpopNonceOptions(ctx, opts);
+	const proofJwt = getDpopProofJwt(ctx);
+	if (!nonce || !proofJwt) return;
+	try {
+		await assertDpopProofNonce(proofJwt, nonce, await getDpopRequestTime());
+	} catch (error) {
+		if (isDpopProofError(error)) {
+			await throwUseDpopNonce(ctx, nonce, error.message);
+		}
+		throw error;
+	}
 }

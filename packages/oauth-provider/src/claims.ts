@@ -4,6 +4,7 @@ import type { User } from "better-auth/types";
 import { collectExtensionAccessTokenClaims } from "./extensions";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { GrantType } from "./types/oauth";
+import { ENCRYPTED_ACTOR_CHAIN_CLAIM, ENCRYPTED_USER_ID_CLAIM } from "./utils";
 
 /**
  * Claim names the authorization server owns on a JWT access token, which no
@@ -32,6 +33,8 @@ const RESERVED_ACCESS_TOKEN_CLAIMS = new Set([
 	"cnf",
 	"act",
 	"reference_id",
+	ENCRYPTED_USER_ID_CLAIM,
+	ENCRYPTED_ACTOR_CHAIN_CLAIM,
 ]);
 
 /**
@@ -43,12 +46,18 @@ const RESERVED_ACCESS_TOKEN_CLAIMS = new Set([
  */
 function stripReservedClaims(
 	claims: Record<string, unknown> | null | undefined,
+	opts: OAuthOptions<Scope[]>,
 ): Record<string, unknown> {
 	if (!claims) return {};
+	// `grant_id` is AS-owned only when grants are revocable; otherwise it stays
+	// available to custom claims.
+	const isReserved = (key: string) =>
+		RESERVED_ACCESS_TOKEN_CLAIMS.has(key) ||
+		(key === "grant_id" && !!opts.revocableJwtAccessTokens);
 	const stripped: string[] = [];
 	const safe: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(claims)) {
-		if (RESERVED_ACCESS_TOKEN_CLAIMS.has(key)) {
+		if (isReserved(key)) {
 			stripped.push(key);
 			continue;
 		}
@@ -62,6 +71,21 @@ function stripReservedClaims(
 		);
 	}
 	return safe;
+}
+
+/**
+ * Per-issuance claims as stored on an opaque-token row: reserved names removed
+ * and values in the JSON form a signed JWT would carry, on every adapter.
+ */
+export function toStoredAccessTokenClaims(
+	claims: Record<string, unknown> | undefined,
+	opts: OAuthOptions<Scope[]>,
+): Record<string, unknown> | undefined {
+	if (!claims) return undefined;
+	const safe: Record<string, unknown> = JSON.parse(
+		JSON.stringify(stripReservedClaims(claims, opts)),
+	);
+	return Object.keys(safe).length > 0 ? safe : undefined;
 }
 
 /**
@@ -91,8 +115,8 @@ export interface AccessTokenClaimsInput {
 	/** Session the tokens are issued for; `undefined` at introspection. See {@link OAuthClaimExtensionInput.sessionId}. */
 	sessionId: string | undefined;
 	/**
-	 * Per-issuance claims a grant handler supplied via `accessTokenClaims`.
-	 * Available only at issuance; `undefined` at introspection.
+	 * Per-issuance claims a grant handler supplied via `accessTokenClaims`. At
+	 * introspection, the claims stored on the opaque-token row.
 	 */
 	perRequestClaims: Record<string, unknown> | undefined;
 	/** Per-resource `customClaims` from `resolveResourcePolicy` (raw, not yet stripped). */
@@ -152,10 +176,13 @@ export async function resolveAccessTokenClaims(
 				metadata,
 			})
 		: {};
-	return stripReservedClaims({
-		...extensionClaims,
-		...(perRequestClaims ?? {}),
-		...pluginClaims,
-		...resourcePolicyClaims,
-	});
+	return stripReservedClaims(
+		{
+			...extensionClaims,
+			...(perRequestClaims ?? {}),
+			...pluginClaims,
+			...resourcePolicyClaims,
+		},
+		input.opts,
+	);
 }

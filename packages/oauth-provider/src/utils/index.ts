@@ -12,6 +12,7 @@ import {
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
+import type { JWTPayload } from "jose";
 import {
 	getClientDiscoveries,
 	getExtensionClientAuthenticationStrategy,
@@ -23,6 +24,7 @@ import type {
 	ClientDiscovery,
 	Confirmation,
 	GrantType,
+	OAuthActorClaim,
 	OAuthConsent,
 	OAuthOptions,
 	Prompt,
@@ -1238,6 +1240,166 @@ export async function resolveSubjectIdentifier(
 		return computePairwiseSub(userId, client, opts.pairwiseSecret);
 	}
 	return userId;
+}
+
+/**
+ * Claim carrying the encrypted user ID in a JWT access token whose `sub` is
+ * pairwise. A pairwise `sub` cannot be reversed, and JWT access tokens are not
+ * stored, so UserInfo, introspection, and token exchange read the user from
+ * this claim. The ciphertext is randomized per token, so it does not link a
+ * user across clients.
+ *
+ * @internal
+ */
+export const ENCRYPTED_USER_ID_CLAIM = "ba_uid";
+
+/**
+ * Claim carrying the encrypted `act` chain, with user IDs, next to
+ * {@link ENCRYPTED_USER_ID_CLAIM}.
+ *
+ * @internal
+ */
+export const ENCRYPTED_ACTOR_CHAIN_CLAIM = "ba_act";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Whether `id` has the shape of a user id under the configured id mode. A
+ * lookup with any other value cannot match, and some databases reject it: a
+ * serial id column receives `NaN`, and a Postgres `uuid` column rejects
+ * non-UUID text.
+ *
+ * @internal
+ */
+export function couldBeUserId(context: AuthContext, id: string): boolean {
+	const mode = context.options.advanced?.database?.generateId;
+	if (mode === "serial") return /^\d+$/.test(id);
+	if (mode === "uuid") return UUID.test(id);
+	return true;
+}
+
+/**
+ * Returns the `sub` and `act` that `client` sees. For a pairwise client, the
+ * user and each user actor get that client's pairwise subject. A client
+ * actor's `sub` is a registered client ID, which token exchange never accepts
+ * when it is also a user ID, so it stays as is.
+ *
+ * @internal
+ */
+export async function resolvePresentedSubjects(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	subjects: { sub: string; act?: OAuthActorClaim },
+	client: SchemaClient<Scope[]>,
+): Promise<{ sub: string; act?: OAuthActorClaim }> {
+	if (client.subjectType !== "pairwise" || !opts.pairwiseSecret) {
+		return subjects;
+	}
+	const sub = await resolveSubjectIdentifier(subjects.sub, client, opts);
+	if (!subjects.act) return { sub };
+	const actorSubs = new Set<string>();
+	for (
+		let entry: OAuthActorClaim | undefined = subjects.act;
+		entry;
+		entry = entry.act
+	) {
+		actorSubs.add(entry.sub);
+	}
+	const clientRows = await ctx.context.adapter.findMany<{ clientId: string }>({
+		model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
+		where: [{ field: "clientId", operator: "in", value: [...actorSubs] }],
+		select: ["clientId"],
+		limit: actorSubs.size,
+	});
+	const clientIds = new Set(clientRows.map((row) => row.clientId));
+	// A client ID that is also a user ID is presented as a user, so a
+	// collision can only hide a client ID, never reveal a user ID.
+	const ambiguous = [...clientIds].filter((id) =>
+		couldBeUserId(ctx.context, id),
+	);
+	if (ambiguous.length > 0) {
+		const userRows = await ctx.context.adapter.findMany<{ id: string }>({
+			model: "user",
+			where: [{ field: "id", operator: "in", value: ambiguous }],
+			select: ["id"],
+			limit: ambiguous.length,
+		});
+		for (const { id } of userRows) clientIds.delete(id);
+	}
+	const present = async (entry: OAuthActorClaim): Promise<OAuthActorClaim> => ({
+		...entry,
+		sub: clientIds.has(entry.sub)
+			? entry.sub
+			: await resolveSubjectIdentifier(entry.sub, client, opts),
+		...(entry.act ? { act: await present(entry.act) } : {}),
+	});
+	return { sub, act: await present(subjects.act) };
+}
+
+/**
+ * Returns the `sub` and `act` for a JWT access token issued to a user. When
+ * `sub` is pairwise, `act` names user actors by pairwise subject too, and the
+ * user IDs are added encrypted. See `accessTokenSubject`.
+ *
+ * @internal
+ */
+export async function resolveAccessTokenSubject(
+	ctx: GenericEndpointContext,
+	userId: string,
+	client: SchemaClient<Scope[]>,
+	opts: OAuthOptions<Scope[]>,
+	act: OAuthActorClaim | undefined,
+): Promise<{
+	sub: string;
+	act?: OAuthActorClaim;
+	[ENCRYPTED_USER_ID_CLAIM]?: string;
+	[ENCRYPTED_ACTOR_CHAIN_CLAIM]?: string;
+}> {
+	const subjects = { sub: userId, ...(act ? { act } : {}) };
+	if (opts.accessTokenSubject !== "pairwise") return subjects;
+	const presented = await resolvePresentedSubjects(ctx, opts, subjects, client);
+	if (presented.sub === userId) return presented;
+	const encrypt = (data: string) =>
+		symmetricEncrypt({ key: ctx.context.secretConfig, data });
+	return {
+		...presented,
+		[ENCRYPTED_USER_ID_CLAIM]: await encrypt(userId),
+		...(act
+			? { [ENCRYPTED_ACTOR_CHAIN_CLAIM]: await encrypt(JSON.stringify(act)) }
+			: {}),
+	};
+}
+
+/**
+ * Restores the user ID as `sub`, and user IDs in `act`, on a verified JWT
+ * access token payload whose subjects are pairwise, and removes the encrypted
+ * claims. Returns `false` when a claim does not decrypt.
+ *
+ * @internal
+ */
+export async function restoreAccessTokenUserIds(
+	ctx: GenericEndpointContext,
+	payload: JWTPayload,
+): Promise<boolean> {
+	const encryptedUserId = payload[ENCRYPTED_USER_ID_CLAIM];
+	const encryptedAct = payload[ENCRYPTED_ACTOR_CHAIN_CLAIM];
+	delete payload[ENCRYPTED_USER_ID_CLAIM];
+	delete payload[ENCRYPTED_ACTOR_CHAIN_CLAIM];
+	const decrypt = (data: unknown) => {
+		if (typeof data !== "string") throw new TypeError("not a string");
+		return symmetricDecrypt({ key: ctx.context.secretConfig, data });
+	};
+	try {
+		if (encryptedUserId !== undefined) {
+			payload.sub = await decrypt(encryptedUserId);
+		}
+		if (encryptedAct !== undefined) {
+			payload.act = JSON.parse(await decrypt(encryptedAct));
+		}
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 /**

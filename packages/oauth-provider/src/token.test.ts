@@ -591,9 +591,19 @@ describe("oauth token - authorization_code", async () => {
 		expect(tokens.data?.refresh_token).toBeDefined();
 
 		const context = await auth.$context;
+		const originalDeleteMany = context.adapter.deleteMany.bind(context.adapter);
+		let accessTokenCleanupFailed = false;
 		const deleteMany = vi
 			.spyOn(context.adapter, "deleteMany")
-			.mockRejectedValueOnce(new Error("cleanup failed"));
+			.mockImplementation(async (data) => {
+				// The code lookup's expired-row cleanup also calls deleteMany, so
+				// fail the first access-token cleanup rather than the first call.
+				if (data.model === "oauthAccessToken" && !accessTokenCleanupFailed) {
+					accessTokenCleanupFailed = true;
+					throw new Error("cleanup failed");
+				}
+				return originalDeleteMany(data);
+			});
 		const loggerError = vi
 			.spyOn(context.logger, "error")
 			.mockImplementation(() => undefined);
@@ -608,14 +618,17 @@ describe("oauth token - authorization_code", async () => {
 				"authorization code replay cleanup failed",
 				expect.any(Error),
 			);
-			expect(deleteMany).toHaveBeenNthCalledWith(
-				1,
-				expect.objectContaining({ model: "oauthAccessToken" }),
-			);
-			expect(deleteMany).toHaveBeenNthCalledWith(
-				2,
-				expect.objectContaining({ model: "oauthRefreshToken" }),
-			);
+			const cleanupModels = deleteMany.mock.calls
+				.map(([data]) => data.model)
+				.filter(
+					(model) =>
+						model === "oauthAccessToken" || model === "oauthRefreshToken",
+				);
+			expect(cleanupModels).toEqual([
+				"oauthAccessToken",
+				"oauthRefreshToken",
+				"oauthAccessToken",
+			]);
 
 			const { body, headers } = await refreshAccessTokenRequest({
 				refreshToken: tokens.data!.refresh_token!,
@@ -638,6 +651,77 @@ describe("oauth token - authorization_code", async () => {
 			deleteMany.mockRestore();
 			loggerError.mockRestore();
 		}
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-15#section-4.1.3
+	 */
+	it("keeps the authorization code when the PKCE verifier is rejected", async () => {
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const rejected = await validateAuthCode({
+			code: code!,
+			codeVerifier: generateRandomString(32),
+		});
+		expect((rejected.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const replay = await validateAuthCode({ code: code!, codeVerifier });
+		expect((replay.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-15#section-4.1.3
+	 */
+	it("rejects an expired authorization code with invalid_grant", async () => {
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const context = await auth.$context;
+		await context.adapter.update({
+			model: "verification",
+			where: [
+				{
+					field: "identifier",
+					value: await storeToken("hashed", code!, "authorization_code"),
+				},
+			],
+			update: { expiresAt: new Date(Date.now() - 1000) },
+		});
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.data?.access_token).toBeUndefined();
+		expect((tokens.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
 	});
 
 	/**
@@ -665,6 +749,320 @@ describe("oauth token - authorization_code", async () => {
 		expect((response.error as { error?: string })?.error).toBe(
 			"invalid_client",
 		);
+	});
+
+	/**
+	 * A reused code revokes the tokens issued from it only when the request
+	 * proves it comes from the client the code was issued to: the same
+	 * authenticated client and, when the code was issued with PKCE, the
+	 * matching `code_verifier`. Otherwise anyone holding a leaked code could
+	 * revoke the real client's tokens.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-7.5.3
+	 */
+	describe("authorization code reuse", () => {
+		async function issueCode(
+			clientId: string,
+			codeVerifier: string | undefined,
+			scopes = ["openid", "offline_access"],
+		) {
+			const { url } = await createAuthUrl({
+				options: { clientId, redirectURI: redirectUri },
+				scopes,
+				codeVerifier,
+			});
+			let location = "";
+			await client.$fetch(url.toString(), {
+				onError(context) {
+					location = context.response.headers.get("Location") || "";
+				},
+			});
+			const code = new URL(location).searchParams.get("code");
+			if (!code) throw new Error(`no code in redirect: ${location}`);
+			return code;
+		}
+
+		function redeem(params: Record<string, string>) {
+			return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					redirect_uri: redirectUri,
+					...params,
+				}),
+			});
+		}
+
+		async function accessTokenWorks(accessToken: string) {
+			const userinfo = await client.$fetch("/oauth2/userinfo", {
+				headers: { Authorization: `Bearer ${accessToken}` },
+			});
+			return userinfo.error === null;
+		}
+
+		async function createPublicClient() {
+			const registered = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					token_endpoint_auth_method: "none",
+					grant_types: ["authorization_code", "refresh_token"],
+					redirect_uris: [redirectUri],
+					application_type: "native",
+					skip_consent: true,
+				},
+			});
+			return registered.client_id;
+		}
+
+		it("keeps a public client's tokens when the reused code carries a wrong code_verifier", async () => {
+			const clientId = await createPublicClient();
+			const codeVerifier = generateRandomString(43);
+			const code = await issueCode(clientId, codeVerifier);
+			const tokens = await redeem({
+				client_id: clientId,
+				code,
+				code_verifier: codeVerifier,
+			});
+			expect(tokens.error).toBeNull();
+
+			const replay = await redeem({
+				client_id: clientId,
+				code,
+				code_verifier: generateRandomString(43),
+			});
+			expect(replay.error).toMatchObject({
+				status: 400,
+				error: "invalid_grant",
+			});
+
+			expect(await accessTokenWorks(tokens.data!.access_token!)).toBe(true);
+			const refreshed = await client.$fetch<OAuthTokenResponse>(
+				"/oauth2/token",
+				{
+					method: "POST",
+					headers: { "content-type": "application/x-www-form-urlencoded" },
+					body: new URLSearchParams({
+						grant_type: "refresh_token",
+						client_id: clientId,
+						refresh_token: tokens.data!.refresh_token!,
+					}),
+				},
+			);
+			expect(refreshed.error).toBeNull();
+		});
+
+		it("revokes a public client's tokens when the reused code carries the matching code_verifier", async () => {
+			const clientId = await createPublicClient();
+			const codeVerifier = generateRandomString(43);
+			const code = await issueCode(clientId, codeVerifier);
+			const tokens = await redeem({
+				client_id: clientId,
+				code,
+				code_verifier: codeVerifier,
+			});
+			expect(tokens.error).toBeNull();
+
+			const replay = await redeem({
+				client_id: clientId,
+				code,
+				code_verifier: codeVerifier,
+			});
+			expect(replay.error).toMatchObject({
+				status: 400,
+				error: "invalid_grant",
+			});
+			expect(await accessTokenWorks(tokens.data!.access_token!)).toBe(false);
+		});
+
+		function refresh(clientId: string, refreshToken: string) {
+			return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					client_id: clientId,
+					refresh_token: refreshToken,
+				}),
+			});
+		}
+
+		it("revokes the refresh token when the issuing client reuses the code after the code expired", async () => {
+			const clientId = await createPublicClient();
+			const codeVerifier = generateRandomString(43);
+			const code = await issueCode(clientId, codeVerifier);
+			const tokens = await redeem({
+				client_id: clientId,
+				code,
+				code_verifier: codeVerifier,
+			});
+			expect(tokens.error).toBeNull();
+
+			const hour = 60 * 60 * 1000;
+			vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 2 * hour });
+			try {
+				const replay = await redeem({
+					client_id: clientId,
+					code,
+					code_verifier: codeVerifier,
+				});
+				expect(replay.error).toMatchObject({
+					status: 400,
+					error: "invalid_grant",
+				});
+				const refreshed = await refresh(clientId, tokens.data!.refresh_token!);
+				expect(refreshed.error).toMatchObject({
+					status: 400,
+					error: "invalid_grant",
+				});
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("records the code before consuming it, so a concurrent duplicate can revoke", async () => {
+			const clientId = await createPublicClient();
+			const codeVerifier = generateRandomString(43);
+			const code = await issueCode(clientId, codeVerifier);
+			const { internalAdapter } = await auth.$context;
+			const consume = internalAdapter.consumeVerificationValue;
+			let recordedBeforeConsume: boolean | undefined;
+			const spy = vi
+				.spyOn(internalAdapter, "consumeVerificationValue")
+				.mockImplementation(async (identifier) => {
+					if (recordedBeforeConsume === undefined) {
+						recordedBeforeConsume =
+							(await internalAdapter.findVerificationValue(
+								`oauth_consumed_code:${identifier}`,
+							)) !== null;
+					}
+					return consume(identifier);
+				});
+			try {
+				const tokens = await redeem({
+					client_id: clientId,
+					code,
+					code_verifier: codeVerifier,
+				});
+				expect(tokens.error).toBeNull();
+			} finally {
+				spy.mockRestore();
+			}
+			expect(recordedBeforeConsume).toBe(true);
+		});
+
+		it("keeps the reuse record alive across refresh-token rotations", async () => {
+			const clientId = await createPublicClient();
+			const codeVerifier = generateRandomString(43);
+			const code = await issueCode(clientId, codeVerifier);
+			const tokens = await redeem({
+				client_id: clientId,
+				code,
+				code_verifier: codeVerifier,
+			});
+			expect(tokens.error).toBeNull();
+
+			const day = 24 * 60 * 60 * 1000;
+			const start = Date.now();
+			vi.useFakeTimers({ toFake: ["Date"], now: start + 20 * day });
+			try {
+				const rotated = await refresh(clientId, tokens.data!.refresh_token!);
+				expect(rotated.error).toBeNull();
+
+				// Past the 30-day refresh lifetime of the original redemption.
+				vi.setSystemTime(start + 40 * day);
+				const replay = await redeem({
+					client_id: clientId,
+					code,
+					code_verifier: codeVerifier,
+				});
+				expect(replay.error).toMatchObject({
+					status: 400,
+					error: "invalid_grant",
+				});
+				const refreshed = await refresh(clientId, rotated.data!.refresh_token!);
+				expect(refreshed.error).toMatchObject({
+					status: 400,
+					error: "invalid_grant",
+				});
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("keeps the tokens when another client reuses the code with the matching code_verifier", async () => {
+			const clientId = await createPublicClient();
+			const codeVerifier = generateRandomString(43);
+			const code = await issueCode(clientId, codeVerifier);
+			const tokens = await redeem({
+				client_id: clientId,
+				code,
+				code_verifier: codeVerifier,
+			});
+			expect(tokens.error).toBeNull();
+
+			const replay = await redeem({
+				client_id: oauthClient!.client_id,
+				client_secret: oauthClient!.client_secret!,
+				code,
+				code_verifier: codeVerifier,
+			});
+			expect(replay.error).toMatchObject({
+				status: 400,
+				error: "invalid_grant",
+			});
+			expect(await accessTokenWorks(tokens.data!.access_token!)).toBe(true);
+		});
+
+		it("keeps a confidential client's tokens when the reused PKCE code omits the code_verifier", async () => {
+			const codeVerifier = generateRandomString(43);
+			const code = await issueCode(oauthClient!.client_id, codeVerifier);
+			const credentials = {
+				client_id: oauthClient!.client_id,
+				client_secret: oauthClient!.client_secret!,
+			};
+			const tokens = await redeem({
+				...credentials,
+				code,
+				code_verifier: codeVerifier,
+			});
+			expect(tokens.error).toBeNull();
+
+			const replay = await redeem({ ...credentials, code });
+			expect(replay.error).toMatchObject({
+				status: 400,
+				error: "invalid_grant",
+			});
+			expect(await accessTokenWorks(tokens.data!.access_token!)).toBe(true);
+		});
+
+		it("revokes the tokens when the authenticated client reuses a code issued without PKCE", async () => {
+			const registered = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					token_endpoint_auth_method: "client_secret_post",
+					grant_types: ["authorization_code"],
+					redirect_uris: [redirectUri],
+					application_type: "native",
+					skip_consent: true,
+					require_pkce: false,
+				},
+			});
+			const credentials = {
+				client_id: registered.client_id,
+				client_secret: registered.client_secret!,
+			};
+			const code = await issueCode(registered.client_id, undefined, ["openid"]);
+			const tokens = await redeem({ ...credentials, code });
+			expect(tokens.error).toBeNull();
+
+			const replay = await redeem({ ...credentials, code });
+			expect(replay.error).toMatchObject({
+				status: 400,
+				error: "invalid_grant",
+			});
+			expect(await accessTokenWorks(tokens.data!.access_token!)).toBe(false);
+		});
 	});
 
 	/**
@@ -5326,6 +5724,120 @@ describe("oauth token - DPoP", async () => {
 		expect(tokens.data?.access_token).toBeUndefined();
 		expect((tokens.error as { error?: string } | null)?.error).toBe(
 			"invalid_dpop_proof",
+		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-8
+	 */
+	it("keeps the authorization code when the DPoP proof is rejected", async () => {
+		const dpopKey = await createDpopKey();
+		const otherKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+
+		const wrongKeyProof = await createDpopProof({
+			privateKey: otherKey.privateKey,
+			publicJwk: otherKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "retry-wrong-key-proof",
+		});
+		const rejected = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			wrongKeyProof,
+		);
+		expect((rejected.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "retry-valid-proof",
+		});
+		const tokens = await exchangeCode(code, codeVerifier, jwtResource, proof);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.token_type).toBe("DPoP");
+		expect(decodeJwt(tokens.data!.access_token!).cnf).toMatchObject({
+			jkt: dpopKey.jkt,
+		});
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-8
+	 */
+	it("keeps the authorization code when a required DPoP proof is missing", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			undefined,
+			dpopRequiredResource,
+		);
+
+		const rejected = await exchangeCode(
+			code,
+			codeVerifier,
+			dpopRequiredResource,
+		);
+		expect((rejected.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "retry-required-proof",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			dpopRequiredResource,
+			proof,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.token_type).toBe("DPoP");
+	});
+
+	/**
+	 * The proof's `jti` is recorded only after the code is consumed, so the
+	 * request that loses the race is told the code is gone, not that the proof
+	 * was replayed.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+	 */
+	it("issues once when two exchanges with one DPoP proof arrive together", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "concurrent-shared-proof",
+		});
+
+		const results = await Promise.all([
+			exchangeCode(code, codeVerifier, jwtResource, proof),
+			exchangeCode(code, codeVerifier, jwtResource, proof),
+		]);
+		const successes = results.filter((result) => result.error === null);
+		const failures = results.filter((result) => result.error !== null);
+		expect(successes).toHaveLength(1);
+		expect(successes[0]?.data?.token_type).toBe("DPoP");
+		expect(failures).toHaveLength(1);
+		expect((failures[0]?.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
 		);
 	});
 

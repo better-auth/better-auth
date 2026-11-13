@@ -11,6 +11,7 @@ import { decodeJwt } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import { getOAuthProviderApi } from "./token";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
 import { resolveSubjectIdentifier } from "./utils";
@@ -728,5 +729,219 @@ describe("pairwise metadata", async () => {
 
 		const metadata = await auth.api.getOpenIdConfig();
 		expect(metadata.subject_types_supported).toEqual(["public"]);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10892
+ */
+describe("pairwise sub in JWT access tokens", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const resource = "https://api.example.com";
+	const redirectUri = "https://rp-a.example.com/callback";
+	const userInfoAudience = `${authServerBaseUrl}/api/auth/oauth2/userinfo`;
+
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					pairwiseSecret: "test-pairwise-secret-key-32chars!!",
+					accessTokenSubject: "pairwise",
+					scopes: ["openid", "profile", "email", "offline_access", "read"],
+					// Lets the test admin grant a client_credentials scope.
+					clientPrivileges: () => true,
+					resources: [resource],
+					enforcePerClientResources: false,
+					// A plugin claim cannot replace the internal subject claim.
+					customAccessTokenClaims: () => ({ ba_uid: "forged" }),
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers, user } = await signInWithTestUser();
+
+	const createClient = (subjectType?: "pairwise") =>
+		auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: [
+					"authorization_code",
+					"refresh_token",
+					"client_credentials",
+				],
+				scope: "openid profile email offline_access read",
+				client_credentials_scopes: ["read"],
+				skip_consent: true,
+				...(subjectType ? { subject_type: subjectType } : {}),
+			},
+		});
+	let pairwiseClient: OAuthClient;
+	let publicClient: OAuthClient;
+	beforeAll(async () => {
+		pairwiseClient = await createClient("pairwise");
+		publicClient = await createClient();
+	});
+
+	const postForm = <T>(path: string, body: Record<string, string>) =>
+		client.$fetch<T>(path, {
+			method: "POST",
+			body: new URLSearchParams(body),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+
+	async function getTokens(oauthClient: OAuthClient) {
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: "test",
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "test-state",
+			scopes: ["openid", "profile", "email", "offline_access"],
+			codeVerifier,
+		});
+		let location = "";
+		await client.$fetch(url.toString(), {
+			headers,
+			onError(context) {
+				location = context.response.headers.get("Location") ?? "";
+			},
+		});
+		const { data } = await postForm<{
+			access_token: string;
+			id_token: string;
+			refresh_token: string;
+		}>("/oauth2/token", {
+			grant_type: "authorization_code",
+			code: new URL(location).searchParams.get("code")!,
+			code_verifier: codeVerifier,
+			redirect_uri: redirectUri,
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret!,
+			resource,
+		});
+		return data!;
+	}
+
+	const userInfo = (accessToken: string) =>
+		client.$fetch<{ sub?: string; email?: string }>("/oauth2/userinfo", {
+			headers: { authorization: `Bearer ${accessToken}` },
+		});
+
+	it("uses the ID token's pairwise sub and leaves the user ID out of the token", async () => {
+		const tokens = await getTokens(pairwiseClient);
+		const accessToken = decodeJwt(tokens.access_token);
+		expect(accessToken.aud).toEqual([resource, userInfoAudience]);
+		expect(accessToken.sub).toBe(decodeJwt(tokens.id_token).sub);
+		expect(accessToken.sub).not.toBe(user.id);
+		expect(JSON.stringify(accessToken)).not.toContain(user.id);
+		expect(accessToken.ba_uid).not.toBe("forged");
+	});
+
+	it("still resolves the user at UserInfo and introspection", async () => {
+		const tokens = await getTokens(pairwiseClient);
+		const pairwiseSub = decodeJwt(tokens.id_token).sub;
+
+		const info = await userInfo(tokens.access_token);
+		expect(info.error).toBeNull();
+		expect(info.data).toMatchObject({ sub: pairwiseSub, email: user.email });
+
+		const { data: introspection } = await postForm<Record<string, unknown>>(
+			"/oauth2/introspect",
+			{
+				token: tokens.access_token,
+				client_id: pairwiseClient.client_id,
+				client_secret: pairwiseClient.client_secret!,
+			},
+		);
+		expect(introspection).toMatchObject({ active: true, sub: pairwiseSub });
+		expect(introspection).not.toHaveProperty("ba_uid");
+	});
+
+	it("keeps the pairwise sub on refreshed access tokens", async () => {
+		const tokens = await getTokens(pairwiseClient);
+		const { data: refreshed } = await postForm<{ access_token: string }>(
+			"/oauth2/token",
+			{
+				grant_type: "refresh_token",
+				refresh_token: tokens.refresh_token,
+				client_id: pairwiseClient.client_id,
+				client_secret: pairwiseClient.client_secret!,
+				resource,
+			},
+		);
+		const pairwiseSub = decodeJwt(tokens.id_token).sub;
+		expect(decodeJwt(refreshed!.access_token).sub).toBe(pairwiseSub);
+	});
+
+	it("keeps the user ID for public clients and the client ID without a user", async () => {
+		const tokens = await getTokens(publicClient);
+		expect(decodeJwt(tokens.access_token).sub).toBe(user.id);
+		expect(decodeJwt(tokens.access_token)).not.toHaveProperty("ba_uid");
+
+		const { data, error } = await postForm<{ access_token: string }>(
+			"/oauth2/token",
+			{
+				grant_type: "client_credentials",
+				scope: "read",
+				client_id: pairwiseClient.client_id,
+				client_secret: pairwiseClient.client_secret!,
+				resource,
+			},
+		);
+		expect(error).toBeNull();
+		expect(decodeJwt(data!.access_token).sub).toBe(pairwiseClient.client_id);
+	});
+
+	it("requires pairwiseSecret", () => {
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				accessTokenSubject: "pairwise",
+			}),
+		).toThrow("accessTokenSubject");
+	});
+});
+
+describe("resolveSubject provider API", () => {
+	const opts = {
+		pairwiseSecret: "test-pairwise-secret-key-32chars!!",
+	} as OAuthOptions<Scope[]>;
+	const api = getOAuthProviderApi(
+		{} as Parameters<typeof getOAuthProviderApi>[0],
+		opts,
+	);
+	const client = (subjectType?: "pairwise") =>
+		({
+			clientId: "client",
+			redirectUris: ["https://rp.example.com/callback"],
+			sectorIdentifier: "rp.example.com",
+			subjectType,
+		}) as SchemaClient<Scope[]>;
+
+	it("returns the sub a client sees in ID tokens", async () => {
+		const pairwiseSub = await api.resolveSubject({
+			userId: "user-1",
+			client: client("pairwise"),
+		});
+		expect(pairwiseSub).not.toBe("user-1");
+		expect(pairwiseSub).toBe(
+			await resolveSubjectIdentifier("user-1", client("pairwise"), opts),
+		);
+		await expect(
+			api.resolveSubject({ userId: "user-1", client: client() }),
+		).resolves.toBe("user-1");
 	});
 });
