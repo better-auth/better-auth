@@ -1,5 +1,6 @@
 import type {
 	Awaitable,
+	ClientAssertionGetter,
 	DBTransactionAdapter,
 	OAuth2Tokens,
 	User,
@@ -648,6 +649,12 @@ export interface SSOOptions {
 		privateKeyPem?: string;
 		kid?: string;
 		algorithm?: string;
+		/**
+		 * Signs the client assertion in place of the key fields above. Use it when
+		 * the provider needs header parameters Better Auth does not set, such as
+		 * Microsoft Entra ID's `x5t#S256`, or when the key stays in an HSM or KMS.
+		 */
+		clientAssertion?: ClientAssertionGetter;
 	}>;
 	/**
 	 * SAML security options for AuthnRequest/InResponseTo validation.

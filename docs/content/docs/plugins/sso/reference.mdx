@@ -73,9 +73,9 @@ Maximum providers each user can register. `0` disables registration. Any signed-
 
 One OIDC callback for every provider, as a path or a full URL. See [Shared redirect URI](/docs/plugins/sso/oidc#shared-redirect-uri).
 
-`resolvePrivateKey` <span className="opacity-70">`({ providerId, keyId, issuer }) => Promise<{ privateKeyJwk?, privateKeyPem?, kid?, algorithm? }>`</span>
+`resolvePrivateKey` <span className="opacity-70">`({ providerId, keyId, issuer }) => Promise<{ privateKeyJwk?, privateKeyPem?, kid?, algorithm?, clientAssertion? }>`</span>
 
-Returns the signing key for `private_key_jwt`, so keys stay out of the database. Registering a `private_key_jwt` provider fails without it. See [Token endpoint authentication](/docs/plugins/sso/oidc#token-endpoint-authentication).
+Returns the signing key for `private_key_jwt`, so keys stay out of the database, or a `clientAssertion` signer to use instead. Registering a `private_key_jwt` provider fails without it. See [Token endpoint authentication](/docs/plugins/sso/oidc#token-endpoint-authentication).
 
 `guardProviderMutation` <span className="opacity-70">`(input, context) => Awaitable<void>`</span>
 
