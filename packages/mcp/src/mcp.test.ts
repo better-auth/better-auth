@@ -792,4 +792,23 @@ describe("requireMcpAuth co-located with the authorization server", async () => 
 		expect(routeFetch).toHaveBeenCalled();
 		expect(requestUrl(routeFetch.mock.calls[0]![0]).href).toBe(jwksUrl);
 	});
+
+	it("fetches the JWT plugin's jwks.remoteUrl over HTTP", async () => {
+		const remoteUrl = "https://keys.example.test/jwks";
+		const remote = await createColocatedInstance(
+			jwt({ jwks: { remoteUrl, keyPairConfig: { alg: "EdDSA" } } }),
+		);
+		const accessToken = await remote.issueAccessToken();
+		const keyFetch = vi.fn(async (_input: RequestInfo | URL) =>
+			Response.json({ keys: [] }),
+		);
+		vi.stubGlobal("fetch", keyFetch);
+
+		await requireMcpAuth(remote.instance.auth, () =>
+			Response.json({ ok: true }),
+		)(mcpRequest(accessToken));
+
+		expect(keyFetch).toHaveBeenCalled();
+		expect(requestUrl(keyFetch.mock.calls[0]![0]).href).toBe(remoteUrl);
+	});
 });

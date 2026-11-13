@@ -344,7 +344,7 @@ export const mcpOauthOptionsType = {
 
 ## Remote MCP Server
 
-`requireMcpAuth` verifies tokens with the signing keys of the auth instance you pass it, or against `jwksUrl` when you set one. When the resource server runs separately from the authorization server, or uses a dynamic `baseURL`, use `createMcpProtectedRequestHandler` with explicit verification options instead of `requireMcpAuth`.
+`requireMcpAuth` verifies tokens with the signing keys of the auth instance you pass it. It fetches the keys over HTTP instead when you set `jwksUrl`, or when the JWT plugin publishes them at `jwks.remoteUrl`. When the resource server runs separately from the authorization server, or uses a dynamic `baseURL`, use `createMcpProtectedRequestHandler` with explicit verification options instead of `requireMcpAuth`.
 
 ```ts title="mcp-server.ts"
 import { createMcpProtectedRequestHandler } from "@better-auth/mcp"; // [!code highlight]

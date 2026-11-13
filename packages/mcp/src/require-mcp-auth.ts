@@ -21,7 +21,8 @@ export interface RequireMcpAuthOptions {
 	issuer?: string;
 	/**
 	 * URL of the authorization server's JWKS. When unset, the signing keys are
-	 * read from the auth instance in-process, without an HTTP request.
+	 * read from the auth instance in-process, without an HTTP request, or
+	 * fetched from the JWT plugin's `jwks.remoteUrl` when it sets one.
 	 */
 	jwksUrl?: string;
 	/**
@@ -121,7 +122,10 @@ export const requireMcpAuth = <
 						jwksCacheKey: authContext,
 					}
 				: undefined;
-		const jwksUrl = opts?.jwksUrl ?? `${baseURL}/jwks`;
+		// The JWT plugin disables its `/jwks` endpoint when keys are published at
+		// `jwks.remoteUrl`.
+		const jwksUrl =
+			opts?.jwksUrl ?? jwtPlugin?.options?.jwks?.remoteUrl ?? `${baseURL}/jwks`;
 		return createProtectedRequestHandler(
 			{
 				...localJwks,

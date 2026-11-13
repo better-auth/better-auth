@@ -287,7 +287,7 @@ export interface VerifyAccessTokenOptions {
 		requiredScope: string,
 		grantedScopes: ReadonlySet<string>,
 	) => boolean;
-	/** Required to verify access token locally */
+	/** Verifies the access token locally against this JWKS, unless `jwksFetch` is set */
 	jwksUrl?: string;
 	/**
 	 * In-process key source used instead of `jwksUrl`, for a verifier running
