@@ -654,7 +654,7 @@ To get that token, register the service for both grants, `grant_types: [TOKEN_EX
 
 `act.sub` is the actor token's subject. For a `client_credentials` token, it is the client ID. For a user's token issued to the service, it is that user's ID. Introspection returns `act` for JWT and opaque access tokens.
 
-When the exchanged token's client uses [pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers), each user in `act` is named by the `sub` that client sees for that user, instead of the user ID:
+When the exchanged token's client uses [pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers), it can see each user in `act` as the `sub` it sees for that user, instead of the user ID. Where it sees those values depends on the token format:
 
 * Introspection always returns those values.
 * A JWT access token carries them with `accessTokenSubject: "pairwise"`. With the default `accessTokenSubject: "user"`, the JWT carries user IDs in `act`, as it does in `sub`.
