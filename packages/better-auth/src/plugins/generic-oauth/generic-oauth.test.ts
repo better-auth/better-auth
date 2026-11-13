@@ -4605,10 +4605,17 @@ describe("oauth2", async () => {
 			});
 			let capturedAssertion: unknown;
 			server.service.once("beforeTokenSigning", (_token, req) => {
-				capturedAssertion = (req as any).body.client_assertion;
+				if (
+					"body" in req &&
+					typeof req.body === "object" &&
+					req.body !== null &&
+					"client_assertion" in req.body
+				) {
+					capturedAssertion = req.body.client_assertion;
+				}
 			});
 
-			const { customFetchImpl, cookieSetter } = await getTestInstance({
+			const { client, customFetchImpl, cookieSetter } = await getTestInstance({
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4632,14 +4639,7 @@ describe("oauth2", async () => {
 			});
 
 			const headers = new Headers();
-			const authClient = createAuthClient({
-				baseURL: "http://localhost:3000",
-				fetchOptions: {
-					customFetchImpl,
-					onSuccess: cookieSetter(headers),
-				},
-			});
-			const res = await authClient.signIn.social({
+			const res = await client.signIn.social({
 				provider: "test-assertion-issuer",
 				callbackURL: "http://localhost:3000/dashboard",
 				fetchOptions: {
