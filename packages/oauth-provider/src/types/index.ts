@@ -490,10 +490,11 @@ export interface OAuthProviderApi {
 	 * introspection form, with the user ID in `sub` even when the token's
 	 * `sub` is pairwise.
 	 *
-	 * A failure throws an `APIError` that is ready to send: a 401 or 403 with
-	 * the RFC 6750 or RFC 9449 `WWW-Authenticate` challenge. A DPoP-bound token
-	 * fails on a call without an HTTP request, such as `auth.api`, because the
-	 * proof's method and URL cannot be checked.
+	 * A rejected token or request throws an `APIError` that is ready to send:
+	 * a 401 or 403 with the RFC 6750 or RFC 9449 `WWW-Authenticate` challenge.
+	 * Other errors, such as a storage failure, are rethrown unchanged. A
+	 * DPoP-bound token fails on a call without an HTTP request, such as
+	 * `auth.api`, because the proof's method and URL cannot be checked.
 	 */
 	verifyResourceRequest: (
 		params?: VerifyResourceRequestParams,

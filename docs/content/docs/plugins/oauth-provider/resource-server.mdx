@@ -281,7 +281,7 @@ export const reports = () =>
 * With `audience`, the token's `aud` must contain it ([RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4)). Without it, a token issued for any resource passes, so set it whenever your endpoint is a registered resource.
 * With `scopes`, the token must carry every scope listed.
 
-It returns the token's claims in [introspection](#introspection) form, including `sub`, `client_id`, `scope`, `aud`, and `cnf`. For a token issued to a user, `sub` is the user ID, even when the token carries a [pairwise `sub`](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens). On failure it throws an error that is ready to send:
+It returns the token's claims in [introspection](#introspection) form, including `sub`, `client_id`, `scope`, `aud`, and `cnf`. For a token issued to a user, `sub` is the user ID, even when the token carries a [pairwise `sub`](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens). When it rejects the token or request, it throws an error that is ready to send:
 
 | Failure                                               | Status | Challenge                                              |
 | ----------------------------------------------------- | ------ | ------------------------------------------------------ |
