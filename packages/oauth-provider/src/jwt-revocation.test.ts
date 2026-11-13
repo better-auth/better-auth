@@ -497,6 +497,38 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 			await expectRevoked(server, rotated.access_token!);
 		});
 
+		it("revokes the JWT of a legacy refresh token's rotation that wins a race with its revocation", async () => {
+			const grant = await authorize(server, { offline: true });
+			const ctx = await server.auth.$context;
+			await ctx.adapter.updateMany({
+				model: "oauthRefreshToken",
+				where: [{ field: "clientId", value: server.oauthClient.client_id }],
+				update: { grantId: null },
+			});
+			// Let a rotation win between the revocation's read and its swap.
+			let rotated: Awaited<ReturnType<typeof refresh>> | undefined;
+			let rotating = false;
+			const incrementOne = ctx.adapter.incrementOne;
+			const spy = vi
+				.spyOn(ctx.adapter, "incrementOne")
+				.mockImplementation((async (
+					args: Parameters<typeof incrementOne>[0],
+				) => {
+					if (args.model === "oauthRefreshToken" && !rotating) {
+						rotating = true;
+						rotated = await refresh(server, grant.refreshToken!);
+					}
+					return incrementOne.call(ctx.adapter, args);
+				}) as typeof incrementOne);
+			try {
+				expect((await revoke(server, grant.refreshToken!)).error).toBe(null);
+			} finally {
+				spy.mockRestore();
+			}
+
+			await expectRevoked(server, rotated!.data!.access_token!);
+		});
+
 		it("revokes JWTs from a legacy refresh token's rotation when the legacy token is replayed", async () => {
 			const grant = await authorize(server, { offline: true });
 			const ctx = await server.auth.$context;

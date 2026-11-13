@@ -55,7 +55,10 @@ interface TokenResponse {
 }
 
 /** Runs the authorization code flow without a resource, so the access token is opaque. */
-async function authorize({ client, headers, options }: TestServer) {
+async function authorize(
+	{ client, headers, options }: TestServer,
+	{ offline = true }: { offline?: boolean } = {},
+) {
 	const codeVerifier = generateRandomString(32);
 	const authUrl = await createAuthorizationURL({
 		id: "test",
@@ -63,7 +66,12 @@ async function authorize({ client, headers, options }: TestServer) {
 		redirectURI: "",
 		authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		state: "123",
-		scopes: ["openid", "profile", "email", "offline_access"],
+		scopes: [
+			"openid",
+			"profile",
+			"email",
+			...(offline ? ["offline_access"] : []),
+		],
 		codeVerifier,
 	});
 	let callbackRedirectUrl = "";
@@ -157,6 +165,21 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 			expect(await refresh(server, otherGrant.refresh_token)).toMatchObject({
 				access_token: expect.any(String),
 			});
+		});
+
+		it("stores no grant ID on an opaque token issued without a refresh token", async () => {
+			const tokens = await authorize(server, { offline: false });
+			expect(tokens.refresh_token).toBeUndefined();
+			const ctx = await server.auth.$context;
+			const rows = await ctx.adapter.findMany<{ grantId?: string | null }>({
+				model: "oauthAccessToken",
+				where: [
+					{ field: "clientId", value: server.options.clientId },
+					{ field: "refreshId", value: null },
+				],
+			});
+			expect(rows.length).toBeGreaterThan(0);
+			for (const row of rows) expect(row.grantId ?? null).toBe(null);
 		});
 
 		it("revokes the refresh token's own opaque tokens when the grant predates grant IDs", async () => {

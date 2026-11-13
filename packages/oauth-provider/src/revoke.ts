@@ -14,7 +14,7 @@ import {
 	jwtRevocationMarker,
 	revokeGrantAccessTokens,
 } from "./token-lookup";
-import type { OAuthOptions, Scope } from "./types";
+import type { OAuthOptions, OAuthRefreshToken, Scope } from "./types";
 import {
 	destructureCredentials,
 	extractClientCredentials,
@@ -124,7 +124,20 @@ async function revokeRefreshToken(
 		},
 	});
 	if (!won) {
-		await invalidateRefreshFamily(ctx, opts, clientId, refreshToken);
+		// A rotation that won the swap gives a legacy row its grant ID, and the
+		// JWT it issued carries that ID, so read it back before the teardown.
+		const current = refreshToken.grantId
+			? refreshToken
+			: await ctx.context.adapter.findOne<
+					Pick<OAuthRefreshToken<Scope[]>, "grantId">
+				>({
+					model: "oauthRefreshToken",
+					where: [{ field: "id", value: refreshToken.id }],
+				});
+		await invalidateRefreshFamily(ctx, opts, clientId, {
+			userId: refreshToken.userId,
+			grantId: current?.grantId,
+		});
 		return;
 	}
 	// RFC 7009 §2.1: every opaque access token of the grant, including those
