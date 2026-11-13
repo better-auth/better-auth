@@ -375,13 +375,13 @@ Every `oauthProvider()` setup needs these columns, even when the feature that us
 
 Requests fail until the columns exist.
 
-**What to do:** apply the columns before you deploy. With the built-in Kysely adapter, run `npx auth@latest migrate`. With Prisma or Drizzle, run `npx auth@latest generate` and apply the schema with your ORM.
+**What to do:** apply these columns the same way as the [schema changes](#schema-changes), before you deploy. The warning there about regenerated Prisma and Drizzle clients applies here too.
 
 ### Pending behavior changes
 
 These pending changes need action from OAuth provider setups:
 
-* **Grant-wide token revocation:** revoking a refresh token at `/oauth2/revoke` now deletes every opaque access token of its grant, including tokens issued before earlier refreshes. Opaque access tokens issued before you upgrade are still deleted only with the refresh token that issued them.
+* **Grant-wide token revocation:** revoking a refresh token at `/oauth2/revoke` now deletes every opaque access token of its grant, including tokens issued before earlier refreshes. Opaque access tokens issued before you upgrade are still deleted only with the refresh token that issued them. Replaying a revoked refresh token works as before: it deletes every refresh token the client holds for that user, and the opaque access tokens linked to them.
 * **Opaque access token claims:** a custom grant that passes `accessTokenClaims` while issuing opaque tokens will see them at introspection, `validateAccessToken`, and token exchange `may_act` checks.
 * **Authorization code reuse:** reuse revokes the code's tokens only when the request authenticates as the code's client and, for a PKCE code, carries the matching `code_verifier`. A reuse after the code would have expired no longer revokes anything.
 * **Unsupported `Authorization` schemes:** `verifyAccessTokenRequest` rejects a header with no scheme, or a scheme such as `Basic`, without an `error` code in the 401 body. Code that matched `body.error === "invalid_token"` for this case must check for a 401 without `body.error`.
