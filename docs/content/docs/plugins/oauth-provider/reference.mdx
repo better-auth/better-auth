@@ -159,6 +159,10 @@ Extra scopes a registration may ask for. Every value must be in `scopes`. Defaul
 
 Whether dynamically registered confidential clients require PKCE. Defaults to `true`. `false` removes the protection against intercepted and injected codes for every such client, including anonymous ones. See [PKCE](/docs/plugins/oauth-provider/tokens#pkce).
 
+`clientRegistrationEnableEndSession` <span className="opacity-70">`boolean | (input) => boolean | Promise<boolean>`</span>
+
+Whether clients created through dynamic registration or a Client ID Metadata Document may use RP-initiated logout. The function form receives `{ client, registrationSource }`. Defaults to `false`. Each of their `post_logout_redirect_uris` must share a scheme, host, and port with one of their `redirect_uris`, or with the `client_id` URL of a metadata document client. Loopback hosts match on any port, and private-use URIs match on scheme and authority. See [Registered clients](/docs/plugins/oauth-provider/openid-connect#registered-clients).
+
 `clientRegistrationDefaultApplicationType` <span className="opacity-70">`"web" | "native" | "infer"`</span>
 
 `application_type` used when a registration omits it. Defaults to `"web"`.

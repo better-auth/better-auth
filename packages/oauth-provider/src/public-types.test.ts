@@ -1,5 +1,6 @@
 import type {
 	AuthMethod,
+	ClientRegistrationEndSessionInput,
 	ClientRegistrationRequest,
 	GrantType,
 	OAuthClient,
@@ -20,6 +21,27 @@ type ClientPrivilegeContext = Parameters<
 >[0];
 
 describe("public oauth-provider types", () => {
+	it("types the registered-client logout policy from the package entrypoint", () => {
+		expectTypeOf<
+			ClientRegistrationEndSessionInput["registrationSource"]
+		>().toEqualTypeOf<"dynamic" | "clientMetadataDocument">();
+		expectTypeOf<
+			ClientRegistrationEndSessionInput["client"]["client_id"]
+		>().toEqualTypeOf<string>();
+		expectTypeOf<
+			ClientRegistrationEndSessionInput["client"]
+		>().not.toHaveProperty("enable_end_session");
+		expectTypeOf<
+			OAuthOptions["clientRegistrationEnableEndSession"]
+		>().toEqualTypeOf<
+			| boolean
+			| ((
+					input: ClientRegistrationEndSessionInput,
+			  ) => boolean | Promise<boolean>)
+			| undefined
+		>();
+	});
+
 	it("exports the signed-query verifier with a server-side secret", () => {
 		expectTypeOf<
 			typeof import("@better-auth/oauth-provider").verifyOAuthQueryParams

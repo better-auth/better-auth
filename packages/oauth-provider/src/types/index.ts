@@ -828,6 +828,38 @@ export interface OAuthClientMetadataExtensionInput {
 }
 
 /**
+ * Input to the {@link OAuthOptions.clientRegistrationEnableEndSession}
+ * function.
+ */
+export interface ClientRegistrationEndSessionInput {
+	/**
+	 * The client's validated registration metadata and its assigned
+	 * `client_id`. Registrants assert this metadata themselves, and it holds
+	 * none of the server-owned fields a registration cannot set.
+	 */
+	client: Omit<
+		OAuthClientRegistrationMetadata,
+		| "metadata"
+		| "client_secret"
+		| "client_secret_expires_at"
+		| "client_id_issued_at"
+		| "user_id"
+		| "reference_id"
+		| "disabled"
+		| "skip_consent"
+		| "enable_end_session"
+		| "require_pkce"
+	> & {
+		client_id: string;
+	};
+	/**
+	 * `"dynamic"` for `POST /oauth2/register`, `"clientMetadataDocument"` for a
+	 * client created from its Client ID Metadata Document.
+	 */
+	registrationSource: "dynamic" | "clientMetadataDocument";
+}
+
+/**
  * Result of authorizing an RFC 7591 initial access token, returned by
  * {@link OAuthOptions.validateInitialAccessToken}.
  */
@@ -1269,6 +1301,31 @@ export interface OAuthOptions<
 	 * @default true
 	 */
 	clientRegistrationRequirePKCE?: boolean;
+	/**
+	 * Whether clients created through dynamic client registration or a Client
+	 * ID Metadata Document may use RP-Initiated Logout at
+	 * `/oauth2/end-session`, the same permission `enable_end_session` gives an
+	 * admin-created client.
+	 *
+	 * Pass `true` to allow it for every such client, or a function that decides
+	 * per client. The decision is made once, when the client is created, and a
+	 * metadata document refresh never changes it.
+	 *
+	 * Each `post_logout_redirect_uris` entry of an allowed client must share a
+	 * scheme, host, and port with one of its `redirect_uris` (or, for a metadata
+	 * document client, its `client_id`), so logout never redirects users
+	 * anywhere authorization could not. Loopback hosts (`localhost`,
+	 * `127.0.0.1`, `[::1]`) match on any port, and private-use URIs match on
+	 * scheme and authority. Otherwise registration fails with
+	 * `invalid_client_metadata`.
+	 *
+	 * @see https://better-auth.com/docs/plugins/oauth-provider/openid-connect#registered-clients
+	 *
+	 * @default false
+	 */
+	clientRegistrationEnableEndSession?:
+		| boolean
+		| ((input: ClientRegistrationEndSessionInput) => Awaitable<boolean>);
 	/**
 	 * Default `application_type` for dynamic client registrations that omit the
 	 * field.
