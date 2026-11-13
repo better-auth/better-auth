@@ -206,11 +206,11 @@ The [resource client](#verify-access-tokens) created with your auth instance tak
 
 Your provider issues a JWT access token when the request names a `resource` and the JWT plugin is enabled. If either is missing, it issues an opaque token.
 
-|                         | JWT access token                               | Opaque access token                                     |
-| ----------------------- | ---------------------------------------------- | ------------------------------------------------------- |
-| How the API verifies it | Locally, with the JWKS (`jwksUrl`)             | Remotely, through `/oauth2/introspect` (`remoteVerify`) |
-| Cost per request        | No network call (unless `remoteVerify` is set) | One call to the auth server                             |
-| Claims                  | Frozen when the token is issued                | Recomputed on every introspection                       |
+|                         | JWT access token                               | Opaque access token                                                                                              |
+| ----------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| How the API verifies it | Locally, with the JWKS (`jwksUrl`)             | Remotely, through `/oauth2/introspect` (`remoteVerify`)                                                          |
+| Cost per request        | No network call (unless `remoteVerify` is set) | One call to the auth server                                                                                      |
+| Claims                  | Frozen when the token is issued                | Per-issuance `accessTokenClaims` stored when the token is issued. Other claims recomputed on every introspection |
 
 The simplest setup is to accept only JWT access tokens. It is fast, and your API needs no client credentials. `verifyAccessTokenRequest` checks the JWT's signature, `iss`, `aud`, and `exp`. It checks `scope` only against the `requiredScopes` you pass, and checks the token type only when you pass `typ: "at+jwt"`. Pass both to get the validation [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) requires. The cost is that the local check does not see an ended session. A JWT keeps passing the local check until it expires.
 
@@ -313,7 +313,7 @@ To set up the second case, [register your API as a resource](/docs/plugins/oauth
 
 An access token tied to a session is reported inactive once that session ends. When a session is deleted, such as at sign-out, Better Auth revokes its refresh tokens that lack `offline_access`. A refresh token can lose `offline_access` when a refresh narrows its scopes. Introspection reports those tokens inactive. Other refresh tokens stay active after their session ends, until they expire or are revoked. When a refresh token outlives its session, the response omits `sid`. See [Back-channel logout](/docs/plugins/oauth-provider/openid-connect#back-channel-logout).
 
-For an access token, the [introspection response](https://datatracker.ietf.org/doc/html/rfc7662#section-2.2) includes extension access token claims, `customAccessTokenClaims`, per-resource `customClaims`, and the reserved claims the server owns (`iss`, `sub`, `aud`, `scope`, and similar). A JWT access token returns the claims signed at issuance. An opaque access token returns claims recomputed at introspection. Per-issuance claims and claims that depend on the grant type therefore appear only for JWT access tokens. A refresh token response omits `aud`, extension claims, `customAccessTokenClaims`, and per-resource `customClaims`. See [Claim precedence](/docs/plugins/oauth-provider/reference#claim-precedence).
+For an access token, the [introspection response](https://datatracker.ietf.org/doc/html/rfc7662#section-2.2) includes extension access token claims, `customAccessTokenClaims`, per-resource `customClaims`, and the reserved claims the server owns (`iss`, `sub`, `aud`, `scope`, and similar). A JWT access token returns the claims signed at issuance. An opaque access token returns the per-issuance `accessTokenClaims` stored at issuance and recomputes the other claims at introspection. Claims that depend on the grant type therefore appear only for JWT access tokens. A refresh token response omits `aud`, extension claims, `customAccessTokenClaims`, and per-resource `customClaims`. See [Claim precedence](/docs/plugins/oauth-provider/reference#claim-precedence).
 
 A callback that returns a reserved claim name has that claim dropped. See [Custom claims](/docs/plugins/oauth-provider/tokens#custom-claims).
 

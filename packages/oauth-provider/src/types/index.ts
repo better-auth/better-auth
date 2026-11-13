@@ -248,14 +248,18 @@ export interface OAuthTokenIssueParams {
 	 */
 	requestedUserInfoClaims?: string[];
 	/**
-	 * Additional JWT access-token claims for this single issuance.
+	 * Additional access-token claims for this single issuance.
 	 *
-	 * JWT-only: these are baked into the signed token at mint. Opaque access
-	 * tokens persist no per-issuance claims, so they do NOT reappear at
-	 * introspection. A claim that must be visible at opaque-token introspection
-	 * belongs in a grant-type-stable `claims.accessToken` contributor instead,
-	 * which the introspection path re-derives. Reserved RFC 9068 claim names stay
-	 * owned by the authorization server.
+	 * A JWT access token carries them in its signed payload. An opaque access
+	 * token stores them as JSON on its `oauthAccessToken` row, and introspection
+	 * returns them to the callers allowed to introspect that token. Values must
+	 * be JSON-serializable and read back as their JSON form, the same as in a
+	 * JWT. Stored claims stay in the database until the token row is deleted, so
+	 * avoid personal data the resource server can look up instead.
+	 *
+	 * Reserved RFC 9068 claim names stay owned by the authorization server and
+	 * are removed. The plugin's `customAccessTokenClaims` and a resource's
+	 * `customClaims` override a claim of the same name.
 	 */
 	accessTokenClaims?: Record<string, unknown>;
 	/**
@@ -2496,6 +2500,11 @@ export interface OAuthOpaqueAccessToken<
 	 * claim at introspection.
 	 */
 	act?: OAuthActorClaim;
+	/**
+	 * Per-issuance `accessTokenClaims` from `issueTokens`, with reserved names
+	 * removed. Returned at introspection.
+	 */
+	accessTokenClaims?: Record<string, unknown>;
 }
 
 /**
