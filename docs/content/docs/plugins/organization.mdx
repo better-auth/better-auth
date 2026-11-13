@@ -674,10 +674,11 @@ By default the plugin authorizes the signed-in user in an organization by their 
 
 The plugin calls it on every lookup of the caller's own membership: setting an organization active, reading it, checking permissions, and managing members, invitations and teams. It receives the caller's member row as `member`, or `null` if there is none. Because it runs on each of these lookups, keep it cheap or cache what it reads.
 
-* `undefined`: use `member` as is, so a user without a member row is refused.
-* `null` or `false`: refuse, even if a member row exists.
-* A role: act with that role, overriding the member row's role.
-* An object: a full membership. `role` is required; `id` defaults to the member row's id, or a stable placeholder when there is none; other fields, including your member `additionalFields`, merge over the row.
+Return the effective membership, or `null` to refuse:
+
+* `member`: keep the default. Start with `if (member) return member;`, or real members are locked out.
+* `null`: refuse, even if a member row exists.
+* A membership object: `role` is required, with multiple roles as a comma-separated string. `id` and `createdAt` default to the member row's, or to a stable placeholder id and the current time when there is none. Other fields, including your member `additionalFields`, merge over the row. `userId` and `organizationId` are always the caller's and the organization's.
 
 The second argument is the context of the endpoint being called, so the result can depend on the request: `ctx.path`, `ctx.body`, `ctx.headers`. For example, platform admins (from the [admin plugin](/docs/plugins/admin)) can update or delete any organization, but nothing else:
 
@@ -690,16 +691,19 @@ export const auth = betterAuth({
     admin(),
     organization({
       resolveMembership: ({ user, member }, ctx) => {
-        if (member) return;
+        if (member) return member;
         const paths = ["/organization/update", "/organization/delete"];
-        if (user.role === "admin" && paths.includes(ctx.path)) return "owner";
+        if (user.role === "admin" && paths.includes(ctx.path)) {
+          return { role: "owner" };
+        }
+        return null;
       },
     }),
   ],
 });
 ```
 
-Returning `"owner"` grants the owner's protections too, so scope it as narrowly as the example does.
+Returning the `owner` role grants the owner's protections too, so scope it as narrowly as the example does.
 
 A resolved membership doesn't appear in `listMembers`, and leaving the organization still requires a member row.
 
@@ -2612,7 +2616,7 @@ await client.organization.create({
 
 **creatorRole**: `admin | owner` - The role of the user who creates the organization. By default, it's `owner`. You can set it to `admin`.
 
-**resolveMembership**: `({ user, session, organizationId, member }, ctx) => Awaitable<string | string[] | { role, id?, ...fields } | null | false | undefined>` - Overrides how the signed-in user's membership is resolved, on every lookup of it. `ctx` is the endpoint context of the request. See [Resolve Membership](#resolve-membership).
+**resolveMembership**: `({ user, session, organizationId, member }, ctx) => Awaitable<{ role, id?, createdAt?, ...fields } | null>` - Overrides how the signed-in user's membership is resolved, on every lookup of it. `ctx` is the endpoint context of the request. See [Resolve Membership](#resolve-membership).
 
 **membershipLimit**: `number` | `((user: User, organization: Organization) => Promise<number> | number)` - The maximum number of members allowed in an organization. By default, it's `100`. You can set it to any number you want or a function that returns the limit number.
 
