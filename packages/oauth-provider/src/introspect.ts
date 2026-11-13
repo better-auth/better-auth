@@ -27,6 +27,7 @@ import type {
 import {
 	destructureCredentials,
 	extractClientCredentials,
+	findActiveSessionId,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
@@ -474,21 +475,7 @@ async function validateRefreshToken(
 		};
 	}
 
-	let sessionId = refreshToken.sessionId ?? undefined;
-	if (sessionId) {
-		const session = await ctx.context.adapter.findOne<Session>({
-			model: "session",
-			where: [
-				{
-					field: "id",
-					value: sessionId,
-				},
-			],
-		});
-		if (!session || session.expiresAt < new Date()) {
-			sessionId = undefined;
-		}
-	}
+	const sessionId = await findActiveSessionId(ctx, refreshToken.sessionId);
 
 	let user: User | undefined = undefined;
 	if (refreshToken.userId) {
