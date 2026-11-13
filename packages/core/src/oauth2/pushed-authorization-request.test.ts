@@ -18,7 +18,7 @@ describe("pushAuthorizationRequest", () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("keeps query parameters already on the authorization endpoint", async () => {
+	it("keeps the authorization endpoint's existing query text unchanged", async () => {
 		respondWith(
 			Response.json(
 				{ request_uri: "urn:example:1", expires_in: 60 },
@@ -27,14 +27,15 @@ describe("pushAuthorizationRequest", () => {
 		);
 		const url = await pushAuthorizationRequest({
 			authorizationURL,
-			authorizationEndpoint: "https://as.example.com/authorize?tenant=acme",
+			authorizationEndpoint:
+				"https://as.example.com/authorize?tenant=acme%20inc&value=~",
 			pushedAuthorizationRequestEndpoint: "https://as.example.com/par",
 			options: { clientId: "client" },
 			tokenEndpointAuth: { method: "none" },
 		});
 
 		expect(url.href).toBe(
-			"https://as.example.com/authorize?tenant=acme&client_id=client&request_uri=urn%3Aexample%3A1",
+			"https://as.example.com/authorize?tenant=acme%20inc&value=~&client_id=client&request_uri=urn%3Aexample%3A1",
 		);
 	});
 

@@ -1,5 +1,6 @@
 import { BetterAuthError } from "../error";
 import type { AwaitableFunction } from "../types";
+import { appendQueryParams } from "../utils/url";
 import type { ProviderOptions } from "./oauth-provider";
 import { fetchRefusingRedirects } from "./reject-redirects";
 import type {
@@ -96,8 +97,9 @@ export async function pushAuthorizationRequest({
 		);
 	}
 
-	const url = new URL(authorizationEndpoint);
-	url.searchParams.set("client_id", body.get("client_id") ?? "");
-	url.searchParams.set("request_uri", requestUri);
-	return url;
+	const params = new URLSearchParams({
+		client_id: body.get("client_id") ?? "",
+		request_uri: requestUri,
+	});
+	return new URL(appendQueryParams(authorizationEndpoint, params));
 }
