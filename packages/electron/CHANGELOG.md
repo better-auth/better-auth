@@ -1,5 +1,11 @@
 # @better-auth/electron
 
+## 1.7.23
+
+### Patch Changes
+
+- [#12490](https://github.com/better-auth/better-auth/pull/12490) [`53abb96`](https://github.com/better-auth/better-auth/commit/53abb9664ab634086b58e9fe5d6c47c66445deca) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed sign-in callbacks being missed on Windows and Linux when Chromium reorders or appends launch arguments.
+
 ## 1.7.22
 
 ## 1.7.21

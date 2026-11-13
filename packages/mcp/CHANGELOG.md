@@ -1,5 +1,24 @@
 # @better-auth/mcp
 
+## 1.7.23
+
+### Patch Changes
+
+- [#12525](https://github.com/better-auth/better-auth/pull/12525) [`06925b3`](https://github.com/better-auth/better-auth/commit/06925b35dd14ca39e2080fb2b8e85c14f5c2931b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Answer a DPoP request whose token lacks a required scope with a `DPoP` challenge. Before, the `insufficient_scope` 403 always carried a `Bearer` challenge, even when the client sent a valid DPoP-bound token and proof. The `DPoP` challenge keeps `error="insufficient_scope"` and the missing scopes in `scope`, so the client can still authorize again for them. Like other `DPoP` challenges, it lists the accepted proof algorithms in `algs` and has no `resource_metadata`. A `Bearer` request still gets the `Bearer` challenge with `resource_metadata`. This applies when `createResourceServerChallenge` receives the failed `request`, which the resource client's `verifyAccessTokenRequest`, `requireMcpAuth`, and `createMcpProtectedRequestHandler` pass automatically, including for an `insufficient_scope` error thrown by an MCP tool handler.
+
+- [#12521](https://github.com/better-auth/better-auth/pull/12521) [`7c61c40`](https://github.com/better-auth/better-auth/commit/7c61c40534b878f6e53d50daf03fba5db6fbdd59) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Browser clients on another origin can now read resource-server and MCP `WWW-Authenticate` challenges. `createResourceServerChallenge`, and the resource client and MCP helpers built on it, now send `Access-Control-Expose-Headers: WWW-Authenticate` with every Bearer, `insufficient_scope`, and `DPoP` challenge. If your CORS layer sets its own `Access-Control-Expose-Headers`, include `WWW-Authenticate` in it.
+
+- [#12504](https://github.com/better-auth/better-auth/pull/12504) [`35135c6`](https://github.com/better-auth/better-auth/commit/35135c64d2f9bb8c4bf7c464cc9f66d0bf1c1a7a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `dpop.replayStore` JSDoc on `createMcpProtectedRequestHandler` now says the default store is in memory and safe only for a single long-lived instance, and that multi-instance or serverless deployments should pass a shared store such as `createDpopReplayStore(internalAdapter)`.
+
+- [#12501](https://github.com/better-auth/better-auth/pull/12501) [`cfa73e9`](https://github.com/better-auth/better-auth/commit/cfa73e90fae636f22179b933c29171bada503515) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `requireMcpAuth` now accepts tokens when the JWT plugin publishes its keys at `jwks.remoteUrl`. It fetches the keys from that URL instead of the auth server's own `/jwks` endpoint, which the JWT plugin disables in that setup.
+
+- [#12501](https://github.com/better-auth/better-auth/pull/12501) [`cfa73e9`](https://github.com/better-auth/better-auth/commit/cfa73e90fae636f22179b933c29171bada503515) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `requireMcpAuth` now reads the signing keys from the auth instance instead of requesting its own `/jwks` endpoint, so MCP routes served from the same app as the auth server no longer fail with a 500 on runtimes that block requests to their own hostname, such as a single Cloudflare Worker.
+
+  Set `jwksUrl` to keep fetching the keys over HTTP.
+
+- Updated dependencies [[`b9c259b`](https://github.com/better-auth/better-auth/commit/b9c259b61d453a2ca604b2f054e05e0d0a653625), [`06925b3`](https://github.com/better-auth/better-auth/commit/06925b35dd14ca39e2080fb2b8e85c14f5c2931b), [`7c61c40`](https://github.com/better-auth/better-auth/commit/7c61c40534b878f6e53d50daf03fba5db6fbdd59), [`be0d01c`](https://github.com/better-auth/better-auth/commit/be0d01c8c254dbde2ec35975cd72ac437245b256), [`2959544`](https://github.com/better-auth/better-auth/commit/295954490665cdef7f25f0ec0f7fa671b368bc45)]:
+  - @better-auth/oauth-provider@1.7.23
+
 ## 1.7.22
 
 ### Patch Changes

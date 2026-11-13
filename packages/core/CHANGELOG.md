@@ -1,5 +1,15 @@
 # @better-auth/core
 
+## 1.7.23
+
+### Patch Changes
+
+- [#12501](https://github.com/better-auth/better-auth/pull/12501) [`cfa73e9`](https://github.com/better-auth/better-auth/commit/cfa73e90fae636f22179b933c29171bada503515) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `requireMcpAuth` now reads the signing keys from the auth instance instead of requesting its own `/jwks` endpoint, so MCP routes served from the same app as the auth server no longer fail with a 500 on runtimes that block requests to their own hostname, such as a single Cloudflare Worker.
+
+  Set `jwksUrl` to keep fetching the keys over HTTP.
+
+- [#12480](https://github.com/better-auth/better-auth/pull/12480) [`c10b35d`](https://github.com/better-auth/better-auth/commit/c10b35da7383ddefe1710190a100dabb7283803e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `advanced.database.validateSchema` JSDoc now says validation runs when the auth instance is first used, and that adapters other than Kysely, Drizzle, and Prisma skip it with a log message.
+
 ## 1.7.22
 
 ### Patch Changes
