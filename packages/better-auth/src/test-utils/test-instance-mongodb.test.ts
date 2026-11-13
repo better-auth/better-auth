@@ -65,8 +65,11 @@ describe.runIf(isMongodbAvailable || Boolean(process.env.CI))(
 				close.mockRestore();
 				if (undroppedDatabase) {
 					const client = await MongoClient.connect("mongodb://127.0.0.1:27017");
-					await client.db(undroppedDatabase).dropDatabase();
-					await client.close();
+					try {
+						await client.db(undroppedDatabase).dropDatabase();
+					} finally {
+						await client.close();
+					}
 				}
 			}
 		});
