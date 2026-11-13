@@ -483,6 +483,22 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 			await expectRevoked(server, rotated.access_token!);
 		});
 
+		it("revokes JWTs from a legacy refresh token's rotation when the legacy token is replayed", async () => {
+			const grant = await authorize(server, { offline: true });
+			const ctx = await server.auth.$context;
+			await ctx.adapter.updateMany({
+				model: "oauthRefreshToken",
+				where: [{ field: "clientId", value: server.oauthClient.client_id }],
+				update: { grantId: null },
+			});
+			const rotated = (await refresh(server, grant.refreshToken!)).data!;
+
+			const replay = await refresh(server, grant.refreshToken!);
+			expect(replay.error?.status).toBe(400);
+
+			await expectRevoked(server, rotated.access_token!);
+		});
+
 		it("stamps no grant ID when the response has no refresh token", async () => {
 			const token = await getAccessToken(server);
 			expect(decodeJwt(token).grant_id).toBeUndefined();

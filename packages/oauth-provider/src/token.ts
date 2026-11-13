@@ -911,6 +911,11 @@ async function createRefreshToken(
 		revoked: rotatedAt,
 		rotatedAt,
 	};
+	// A legacy parent gets the grant ID started for it, so a later replay of
+	// the parent still revokes the JWT access tokens issued after this rotation.
+	if (grantId && !originalRefresh.grantId) {
+		rotationUpdate.grantId = grantId;
+	}
 	const reuseInterval = opts.refreshTokenReuseInterval ?? 0;
 	if (reuseInterval > 0) {
 		rotationUpdate.rotationReplayExpiresAt = new Date(
