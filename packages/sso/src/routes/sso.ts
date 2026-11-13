@@ -1,22 +1,21 @@
+import { HIDE_METADATA } from "@better-auth/core/api";
 import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import {
+	authorizationCodeRequest,
+	createAuthorizationURL,
+	createPrivateKeyJwtClientAssertionGetter,
+	getOAuth2Tokens,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
+	parseStringBoolean,
+} from "@better-auth/core/oauth2";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
 	TokenEndpointAuth,
-} from "better-auth";
-import {
-	authorizationCodeRequest,
-	createAuthorizationURL,
-	createPrivateKeyJwtClientAssertionGetter,
-	generateState,
-	getOAuth2Tokens,
-	HIDE_METADATA,
-	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
-	parseState,
 } from "better-auth";
 import {
 	APIError,
@@ -33,7 +32,9 @@ import {
 import { generateRandomString } from "better-auth/crypto";
 import {
 	additionalAuthorizationParamsSchema,
+	generateState,
 	handleOAuthUserInfo,
+	parseState,
 } from "better-auth/oauth2";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { RequestInfo } from "samlify/types/src/types";
@@ -79,12 +80,7 @@ import {
 	requireSuccessfulSSOAuthentication,
 	resolveSSOUser,
 } from "../user-resolution";
-import {
-	domainMatches,
-	parseProviderEmailVerified,
-	safeJsonParse,
-	validateEmailDomain,
-} from "../utils";
+import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
 	assertSAMLIdentityProviderAuthority,
@@ -1061,7 +1057,7 @@ export const signInSSO = (options?: SSOOptions) => {
 							where: [
 								{
 									field: providerId ? "providerId" : "organizationId",
-									value: providerId || orgId!,
+									value: providerId || orgId,
 								},
 							],
 						}),
@@ -1544,7 +1540,7 @@ async function handleOIDCCallback(
 		}
 		const verified = await validateOIDCIdToken(
 			tokenResponse.idToken,
-			jwksEndpoint!,
+			jwksEndpoint,
 			{ audience: config.clientId, issuer: provider.issuer },
 			(url) => ctx.context.isTrustedOrigin(url),
 		).catch((error) => {
@@ -1557,10 +1553,10 @@ async function handleOIDCCallback(
 		if (!verified) {
 			return redirectOIDCError("invalid_provider", "token_not_verified");
 		}
-		if (!readStringClaim(verified!.payload, "sub")) {
+		if (!readStringClaim(verified.payload, "sub")) {
 			return redirectOIDCError("invalid_provider", "id_token_subject_missing");
 		}
-		verifiedIdToken = verified!;
+		verifiedIdToken = verified;
 	}
 	if (options?.resolveUser && !verifiedIdToken) {
 		return redirectOIDCError(
@@ -1613,9 +1609,9 @@ async function handleOIDCCallback(
 			id: readStringClaim(rawUserInfo, "sub"),
 			email: readEmailClaim(rawUserInfo),
 			emailVerified: options?.trustEmailVerified
-				? parseProviderEmailVerified(
+				? (parseStringBoolean(
 						rawUserInfo[mapping.emailVerified || "email_verified"],
-					)
+					) ?? false)
 				: false,
 			name: readStringClaim(rawUserInfo, mapping.name || "name"),
 			image: readStringClaim(rawUserInfo, mapping.image || "picture"),
@@ -1633,9 +1629,9 @@ async function handleOIDCCallback(
 			id: idToken.sub,
 			email: readEmailClaim(idToken),
 			emailVerified: options?.trustEmailVerified
-				? parseProviderEmailVerified(
+				? (parseStringBoolean(
 						idToken[mapping.emailVerified || "email_verified"],
-					)
+					) ?? false)
 				: false,
 			name: readStringClaim(idToken, mapping.name || "name"),
 			image: readStringClaim(idToken, mapping.image || "picture"),
@@ -2506,7 +2502,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 					sessionLookupKey,
 				);
 
-			let nameID = session.user.email;
+			let nameID: string | undefined;
 			let sessionIndex: string | undefined;
 			let samlSessionKey: string | undefined;
 
@@ -2519,10 +2515,23 @@ export const initiateSLO = (options?: SSOOptions) => {
 				if (stored) {
 					const data = safeJsonParse<SAMLSessionRecord>(stored.value);
 					if (data) {
-						nameID = data.nameID || nameID;
+						nameID = data.nameID;
 						sessionIndex = data.sessionIndex;
 					}
 				}
+			}
+			if (!nameID) {
+				// The SAML account's accountId is the NameID from the assertion.
+				// With several, the most recently updated is the newest link.
+				const [account] = (
+					await ctx.context.internalAdapter.findAccounts(session.user.id)
+				)
+					.filter((account) => account.providerId === providerId)
+					.sort(
+						(a, b) =>
+							new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+					);
+				nameID = account?.accountId ?? session.user.email;
 			}
 
 			const logoutRequest = sp.createLogoutRequest(idp, "redirect", {

@@ -41,7 +41,7 @@ export const initGetDefaultFieldName = ({
 
 		let f = schema[modelKey]?.fields[field];
 		if (!f) {
-			const result = Object.entries(schema[modelKey]!.fields!).find(
+			const result = Object.entries(schema[modelKey]!.fields).find(
 				([_, f]) => f.fieldName === field,
 			);
 			if (result) {

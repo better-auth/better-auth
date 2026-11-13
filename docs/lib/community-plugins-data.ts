@@ -376,14 +376,13 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "better-inbox",
-		url: "https://github.com/better-inbox/better-inbox",
-		description:
-			"In-app notifications for Better Auth apps. One plugin, one migration, one component — notifications live in your database, addressed to your users.",
+		name: "BYO (byo-oss)",
+		url: "https://byo.dev",
+		description: "Open-source packages for better-auth apps.",
 		author: {
-			name: "stewartjarod",
-			github: "stewartjarod",
-			avatar: "https://github.com/stewartjarod.png",
+			name: "byo-oss",
+			github: "byo-oss",
+			avatar: "https://github.com/byo-oss.png",
 		},
 	},
 	{
@@ -549,6 +548,17 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "Tianhui Michael Li",
 			github: "tianhuil",
 			avatar: "https://github.com/tianhuil.png",
+		},
+	},
+	{
+		name: "@mailkite/better-auth-inbox",
+		url: "https://github.com/mailkite/mailkite-better-auth-inbox",
+		description:
+			"Give your app a real mailbox. Receive inbound email as signature-verified webhooks, then list, read, thread and reply through session-scoped endpoints — scoped per user or per organization.",
+		author: {
+			name: "MailKite",
+			github: "mailkite",
+			avatar: "https://github.com/mailkite.png",
 		},
 	},
 ];

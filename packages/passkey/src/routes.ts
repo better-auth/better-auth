@@ -654,8 +654,14 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				ctx,
 				resp?.response?.clientDataJSON,
 			);
-			if (expectedOrigin.length === 0) {
+			if (!expectedOrigin) {
 				throw expectedOriginUnavailable(ctx);
+			}
+			if (expectedOrigin.length === 0) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+				);
 			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
@@ -918,8 +924,14 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				ctx,
 				resp?.response?.clientDataJSON,
 			);
-			if (expectedOrigin.length === 0) {
+			if (!expectedOrigin) {
 				throw expectedOriginUnavailable(ctx);
+			}
+			if (expectedOrigin.length === 0) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
+				);
 			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,

@@ -31,3 +31,23 @@ export function getEndpointUrl(
 		: path;
 	return `${base}${endpointPath}`;
 }
+
+/**
+ * Adds `headers` to a comma-separated `Access-Control-Expose-Headers` value,
+ * keeping the names already listed.
+ */
+export function withExposedHeaders(
+	exposed: string | null | undefined,
+	...headers: string[]
+): string {
+	const names = (exposed ?? "")
+		.split(",")
+		.map((name) => name.trim())
+		.filter(Boolean);
+	for (const header of headers) {
+		if (!names.some((name) => name.toLowerCase() === header.toLowerCase())) {
+			names.push(header);
+		}
+	}
+	return names.join(", ");
+}

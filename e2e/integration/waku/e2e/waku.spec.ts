@@ -11,6 +11,24 @@ const servers = {
 	start: { build: true, command: ["run", "start", "--host", "localhost"] },
 } as const;
 
+async function waitForHydration(page: Page) {
+	await expect(page.locator("[data-hydrated]")).toBeAttached();
+}
+
+async function submitAction(page: Page, button: string) {
+	// Before hydration the form would post natively and redirect in a new request.
+	await waitForHydration(page);
+	const [response] = await Promise.all([
+		page.waitForResponse(
+			(response) =>
+				new URL(response.url()).pathname.startsWith("/RSC/F/") &&
+				response.request().method() === "POST",
+		),
+		page.getByRole("button", { name: button }).click(),
+	]);
+	expect(response.ok()).toBe(true);
+}
+
 async function signUp(
 	page: Page,
 	baseURL: string,
@@ -21,15 +39,7 @@ async function signUp(
 	await page.getByLabel("Name").fill(name);
 	await page.getByLabel("Email").fill(email);
 	await page.getByLabel("Password").fill("password123");
-	const [response] = await Promise.all([
-		page.waitForResponse(
-			(response) =>
-				new URL(response.url()).origin === new URL(baseURL).origin &&
-				response.request().method() === "POST",
-		),
-		page.getByRole("button", { name: "Sign up" }).click(),
-	]);
-	expect(response.ok()).toBe(true);
+	await submitAction(page, "Sign up");
 }
 
 async function getCookie(page: Page, name: string) {
@@ -83,6 +93,43 @@ for (const [mode, server] of Object.entries(servers)) {
 
 			await page.goto(baseURL);
 			await expect(page.getByText("Signed in as Action User")).toBeVisible();
+		});
+
+		/**
+		 * @see https://waku.gg/guides/authentication#reading-a-queued-cookie-in-the-same-request
+		 */
+		test("renders the redirect after a server-action sign-up with the new session", async ({
+			page,
+		}) => {
+			await signUp(page, baseURL, "Redirect User", "redirect@example.com");
+
+			await expect(page).toHaveURL(new URL("/dashboard", baseURL).href);
+			await expect(page.getByText("Signed in as Redirect User")).toBeVisible();
+		});
+
+		/**
+		 * @see https://waku.gg/guides/authentication#reading-a-queued-cookie-in-the-same-request
+		 */
+		test("renders the redirect after a server-action sign-out without the session", async ({
+			page,
+		}) => {
+			await signUp(
+				page,
+				baseURL,
+				"Action Sign Out User",
+				"action-signout@example.com",
+			);
+			await page.goto(new URL("/dashboard", baseURL).href);
+			await expect(
+				page.getByText("Signed in as Action Sign Out User"),
+			).toBeVisible();
+
+			await submitAction(page, "Sign out");
+
+			await expect(page.getByText("Signed out", { exact: true })).toBeVisible();
+			expect(
+				await getCookie(page, "better-auth.session_token"),
+			).toBeUndefined();
 		});
 
 		test("clears session cookies on API sign-out when the cookie cache is missing", async ({

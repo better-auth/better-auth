@@ -1,5 +1,23 @@
 # @better-auth/scim
 
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+- [#12413](https://github.com/better-auth/better-auth/pull/12413) [`f539be6`](https://github.com/better-auth/better-auth/commit/f539be6c8911643957cb5d9103817515d817ea11) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Apps that enable the SCIM plugin with a database adapter that has no native transactions, such as Cloudflare D1, now start. Before, `betterAuth()` threw at startup, so sign-in, sessions, and every other auth route failed.
+
+  SCIM itself still needs native transactions. On these adapters, Better Auth logs an error at startup and returns 501 Not Implemented for every `/scim/v2` request, over HTTP or through `auth.api`, and for server calls that change a SCIM connection. Server calls that read SCIM connections keep working. To provision users and groups with SCIM, use an adapter with native transactions. Apps whose adapter has native transactions are unaffected.
+
+- [#12070](https://github.com/better-auth/better-auth/pull/12070) [`fcf0db6`](https://github.com/better-auth/better-auth/commit/fcf0db623350bc542457d9234cb2067f2d552e43) Thanks [@mallachari](https://github.com/mallachari)! - SCIM Groups with more than 100 members now sync in full (affected v1.7.0 to v1.7.20). Before, a Group `POST` with more than 100 members returned `400`, and `PUT`, `PATCH` and `DELETE` could leave members or mapped roles behind. Role mapping no longer skips Users who are in several Groups, and the managed connection endpoints return every connection and credential instead of the first 100. No action is needed.
+
+## 1.7.20
+
+## 1.7.19
+
 ## 1.7.18
 
 ## 1.7.17

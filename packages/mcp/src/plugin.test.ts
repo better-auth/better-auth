@@ -291,9 +291,13 @@ describe("mcp plugin", async () => {
 			).toThrow("MCP resource");
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11337
+		 */
 		it.each([
 			"https://api.example.com/mcp",
 			"http://localhost:3000/mcp",
+			"http://my-branch.api.localhost/mcp",
 			"http://127.0.0.1:3000/mcp",
 			"http://127.42.0.1/mcp",
 			"http://[::1]:3000/mcp",
@@ -332,7 +336,7 @@ describe("mcp plugin", async () => {
 
 			expect(response.status).toBe(401);
 			expect(response.headers.get("WWW-Authenticate")).toBe(
-				`Bearer resource_metadata="${authServerBaseUrl}/.well-known/oauth-protected-resource/api/auth"`,
+				`Bearer error="invalid_token", error_description="no token payload", resource_metadata="${authServerBaseUrl}/.well-known/oauth-protected-resource/api/auth"`,
 			);
 		});
 

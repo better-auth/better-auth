@@ -7,6 +7,9 @@ function githubReader(pullRequest: GitHubPullRequest): GitHubReader {
 		async getPullRequest() {
 			return pullRequest;
 		},
+		async getCommitAuthors() {
+			return [];
+		},
 		async getReleaseBody() {
 			return null;
 		},

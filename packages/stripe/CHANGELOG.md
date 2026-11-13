@@ -1,5 +1,21 @@
 # @better-auth/stripe
 
+## 1.7.22
+
+### Patch Changes
+
+- [#12473](https://github.com/better-auth/better-auth/pull/12473) [`f6487ed`](https://github.com/better-auth/better-auth/commit/f6487eddd799de2758420621ddf5d248f30aa3f3) Thanks [@bytaesu](https://github.com/bytaesu)! - A `customer.subscription.updated` webhook for a customer with no local subscription now logs a clear warning instead of failing with a `TypeError`.
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+## 1.7.20
+
+## 1.7.19
+
 ## 1.7.18
 
 ## 1.7.17

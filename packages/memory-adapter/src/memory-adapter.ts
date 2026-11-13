@@ -285,9 +285,14 @@ export const memoryAdapter = (
 									}
 									return record[field].endsWith(value);
 								case "ne":
-									return isInsensitive
-										? !insensitiveCompare(record[field], value)
-										: record[field] !== value;
+									if (isInsensitive) {
+										return !insensitiveCompare(record[field], value);
+									}
+									// Mirror `eq null`: an unset field is null.
+									if (value === null) {
+										return record[field] != null;
+									}
+									return record[field] !== value;
 								case "gt":
 									return value != null && Boolean(record[field] > value);
 								case "gte":
@@ -429,7 +434,7 @@ export const memoryAdapter = (
 						if (!activeDb[model]) {
 							activeDb[model] = [];
 						}
-						activeDb[model]!.push(data);
+						activeDb[model].push(data);
 						return data;
 					},
 					findOne: async ({ model, modelKey = model, where, select, join }) => {
@@ -498,10 +503,10 @@ export const memoryAdapter = (
 						const resArray = res as any[];
 						let table = applySortToRecords(resArray, sortBy, modelKey);
 						if (offset !== undefined) {
-							table = table!.slice(offset);
+							table = table.slice(offset);
 						}
 						if (limit !== undefined) {
-							table = table!.slice(0, limit);
+							table = table.slice(0, limit);
 						}
 						return table || [];
 					},

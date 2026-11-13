@@ -1,5 +1,57 @@
 # @better-auth/core
 
+## 1.7.22
+
+### Patch Changes
+
+- [#12333](https://github.com/better-auth/better-auth/pull/12333) [`6536174`](https://github.com/better-auth/better-auth/commit/6536174213f63a8d544cd0d018659515bab5f8ad) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `getSession` failing with "Failed to get session" when a `user.additionalFields` entry references a table outside the Better Auth schema, including with database joins enabled on Drizzle and Prisma. Join resolution now matches `references.model` against schema keys only.
+
+- [#12432](https://github.com/better-auth/better-auth/pull/12432) [`262adc0`](https://github.com/better-auth/better-auth/commit/262adc0e76969fe04ef9355d1c77972bd5f0a1a8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Reject introspected access tokens that fail claim validation with a 401 `UNAUTHORIZED` error. When `remoteVerify` introspection reported an active token whose `aud`, `iss`, `exp`, or `nbf` claim did not pass the configured checks, `verifyBearerToken` and `verifyAccessTokenRequest` threw a plain `Error`, so resource servers answered with a 500 instead of a `WWW-Authenticate` challenge. Expired tokens now report `token expired` and other claim failures report `invalid access token`, matching local JWKS verification.
+
+- [#12445](https://github.com/better-auth/better-auth/pull/12445) [`e9d8e59`](https://github.com/better-auth/better-auth/commit/e9d8e5977cb37ab1aa3824f1bb67b5c99a444e9b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource-server challenges no longer turn a rejected request into a 500, and they now tell clients when the token they sent is invalid.
+
+  `createResourceServerChallenge` used to throw when an `error_description` contained a character that RFC 6750 does not allow in that parameter. Better Auth's own DPoP message `DPoP proof typ must be "dpop+jwt"` was one of them. The description is now fitted into the allowed characters: `"` becomes `'`, other disallowed characters become spaces, and an empty result is left out. Invalid scope tokens in `challengeScopes` still throw.
+
+  When the request presented a token that failed verification, the 401 Bearer challenge now carries `error="invalid_token"` and an `error_description`, following RFC 6750 §3 and §3.1. A request without a token still gets no error code. `verifyBearerToken` and `verifyAccessTokenRequest` now set `error: "invalid_token"` and `error_description` on their expired, invalid, inactive, and unreadable token errors, and the challenge's response body includes both fields alongside `message`.
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12126](https://github.com/better-auth/better-auth/pull/12126) [`4739122`](https://github.com/better-auth/better-auth/commit/4739122fa67c77cde71c4d1b60d84483fc1bf11b) Thanks [@hardikguptaofficialgit](https://github.com/hardikguptaofficialgit)! - On Prisma with MongoDB, when your id columns use `@db.ObjectId`, magic link and email OTP sign-in for users with an unverified email no longer fail with a 500 (`Malformed ObjectID`). SAML sign-in, DPoP-bound OAuth requests, and `private_key_jwt` client authentication are fixed the same way, and Sign-In with Ethereum now keeps the email the user supplied instead of a placeholder. Setups with plain `String` id columns and other databases are unaffected.
+
+- [#12401](https://github.com/better-auth/better-auth/pull/12401) [`c3a94c5`](https://github.com/better-auth/better-auth/commit/c3a94c546af3c3bf4573f254b666facb4a94fc2d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Generic OAuth providers configured with `authorizationHeaders` now send those headers when refreshing an access token, not only when exchanging the authorization code. Before, a provider whose token endpoint requires one of those headers accepted the sign-in but rejected every refresh. Providers without `authorizationHeaders` are unaffected.
+
+  `refreshAccessToken` and `refreshAccessTokenRequest` from `@better-auth/core/oauth2` accept an optional `headers` input for providers that need extra headers on refresh. Client authentication headers still take precedence over it.
+
+  Extra headers whose names differ only in case from a client authentication header, such as `Authorization` with `authentication: "basic"`, no longer produce a combined, invalid header on the code exchange or refresh. Client authentication replaces them, including headers a custom `tokenEndpointAuth` hook sets in any casing.
+
+- [#11716](https://github.com/better-auth/better-auth/pull/11716) [`1a79da5`](https://github.com/better-auth/better-auth/commit/1a79da50672c8a7ccea89c93b11b25aea86262be) Thanks [@bytaesu](https://github.com/bytaesu)! - Authentication requests no longer hang on Cloudflare Workers when the request that started schema validation ends before validation finishes. On Workers, each request now runs its own schema lookup until one completes.
+
+- [#12402](https://github.com/better-auth/better-auth/pull/12402) [`2d10ae7`](https://github.com/better-auth/better-auth/commit/2d10ae733eacab919ce13413ac9e840f2ea7f1c6) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - With `advanced.database.generateId: "serial"`, filtering an `id` or reference field with `null` now compares it with `null`. Before, the `null` became `0`, so `eq null` matched no row and, on the memory adapter, `ne null` also matched rows where the field was unset.
+
+- [#12425](https://github.com/better-auth/better-auth/pull/12425) [`ef4d4f7`](https://github.com/better-auth/better-auth/commit/ef4d4f7dc457fc78b0414e9c6a60827a7a3eab0e) Thanks [@bytaesu](https://github.com/bytaesu)! - Telemetry now reports Cloudflare Workers as `workerd` instead of `node` when `nodejs_compat` is enabled. `@better-auth/core/env` exports the runtime detection it uses.
+
+## 1.7.20
+
+### Patch Changes
+
+- [#11904](https://github.com/better-auth/better-auth/pull/11904) [`a3f50d0`](https://github.com/better-auth/better-auth/commit/a3f50d064dd3bd1ee8a83a687ea54428aaec8997) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth provider deployments served over plain HTTP on a private network, such as a LAN address, a VPN, or a private DNS name, can now accept `http` redirect URIs through the new `allowInsecureRedirectUri` option. Return `true` from it for origins you control. The same option lets web clients use `localhost` callbacks during development. Without the option, redirect URI validation is unchanged.
+
+  If your issuer (`baseURL`, or `jwt.issuer` when set) uses `http` on a non-loopback host, discovery and the `iss` authorization response parameter now report it as configured instead of rewriting it to `https`. They now match the issuer in issued tokens, so OpenID Connect sign-ins no longer fail on the mismatch. If a proxy terminates TLS in front of Better Auth, set `baseURL` to the public `https` URL.
+
+  When an authorization request uses a registered `http` redirect URI that the HTTPS policy rejects, the error now appears on the server error page instead of being redirected to that URI.
+
+  Client registration and updates now reject post-logout redirect URIs that contain credentials, such as `https://user:pass@example.com/logged-out`, matching the existing rule for redirect URIs.
+
+## 1.7.19
+
+### Patch Changes
+
+- [#12317](https://github.com/better-auth/better-auth/pull/12317) [`8412a5f`](https://github.com/better-auth/better-auth/commit/8412a5f43b724648b3faaa452bec0a6ba8e01765) Thanks [@bytaesu](https://github.com/bytaesu)! - Failed fallback join queries are now reported only through the configured logger, instead of also printing the raw database error (including SQL and bound values) with `console.error`.
+
+- [#12369](https://github.com/better-auth/better-auth/pull/12369) [`34ee100`](https://github.com/better-auth/better-auth/commit/34ee1008d8269d32b875e2743b9805090863f2f4) Thanks [@bytaesu](https://github.com/bytaesu)! - `getAccessToken` and `refreshToken` now fail when a provider refuses a token refresh with a 200 status, as GitHub does, instead of returning the expired access token.
+
 ## 1.7.18
 
 ### Patch Changes
