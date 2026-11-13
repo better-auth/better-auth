@@ -195,7 +195,9 @@ export function jwtRevocationMarker(
 	}
 	return {
 		identifier: `oauth-revoked-access-token:${payload.jti}`,
-		expiresAt: new Date(payload.exp * 1000),
+		// The token is accepted until `exp` itself, and secondary storage rounds
+		// the TTL down to whole seconds, so keep the entry one second longer.
+		expiresAt: new Date((payload.exp + 1) * 1000),
 	};
 }
 

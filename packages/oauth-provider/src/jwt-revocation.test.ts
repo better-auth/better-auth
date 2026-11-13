@@ -227,10 +227,17 @@ describe("oauth-provider - revocable JWT access tokens", async () => {
 		expect(await userinfoStatus(server, untouched)).toBe(200);
 	});
 
-	it("answers 200 when the same token is revoked again", async () => {
+	it("answers 200 when the same token is revoked again, without a second write", async () => {
 		const token = await getAccessToken(server);
-		expect((await revoke(server, token)).error).toBe(null);
-		expect((await revoke(server, token)).error).toBe(null);
+		const ctx = await server.auth.$context;
+		const create = vi.spyOn(ctx.internalAdapter, "createVerificationValue");
+		try {
+			expect((await revoke(server, token)).error).toBe(null);
+			expect((await revoke(server, token)).error).toBe(null);
+			expect(create).toHaveBeenCalledTimes(1);
+		} finally {
+			create.mockRestore();
+		}
 	});
 
 	it("refuses to revoke another client's JWT access token", async () => {
@@ -270,9 +277,10 @@ describe("oauth-provider - revocable JWT access tokens in secondary storage", as
 		);
 		expect(key).toBeDefined();
 		const ttl = ttls.get(key!)!;
-		const remaining = exp! - Math.floor(Date.now() / 1000);
-		expect(ttl).toBeGreaterThan(0);
-		expect(Math.abs(ttl - remaining)).toBeLessThanOrEqual(2);
+		// The entry must outlive the token, which is accepted until `exp`.
+		const remaining = exp! - Date.now() / 1000;
+		expect(ttl).toBeGreaterThanOrEqual(remaining);
+		expect(ttl).toBeLessThanOrEqual(remaining + 2);
 		expect(await isActiveAtIntrospection(server, token)).toBe(false);
 	});
 });
