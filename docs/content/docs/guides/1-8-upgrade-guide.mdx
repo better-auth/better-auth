@@ -169,12 +169,12 @@ Apple, Cognito, Discord, Facebook Limited Login, GitLab, Google, Gumroad, Kakao,
 
 The phone number plugin now sets a user's number only after the user verifies it:
 
-* Sign-up and sign-in routes reject a `phoneNumber` field with `PHONE_NUMBER_CANNOT_BE_SET`.
+* Routes that create a user reject an unverified `phoneNumber` field with `PHONE_NUMBER_CANNOT_BE_SET`. Examples are email sign-up and an email OTP sign-in that creates a new account.
 * A phone number mapped from a social profile is dropped.
 * Verifying a number stored unverified on another account requires that account's session, or the cookie from a `requireVerification` sign-in. Otherwise the request returns `PHONE_NUMBER_PENDING_VERIFICATION`. With `updatePhoneNumber: true`, the number moves to the signed-in user instead.
 * Phone sign-in with `requireVerification` now requires `sendOTP`, and returns `SEND_OTP_NOT_IMPLEMENTED` without it.
 
-**What to do:** remove `phoneNumber` from sign-up and sign-in calls. Set the number afterwards with `authClient.phoneNumber.sendOtp` and `authClient.phoneNumber.verify({ updatePhoneNumber: true })`, as the [phone number plugin](/docs/plugins/phone-number) shows.
+**What to do:** remove `phoneNumber` from calls that create a user, such as `signUp.email`. Keep it in `signIn.phoneNumber`, which uses it to find the account. Set a new user's number afterwards with `authClient.phoneNumber.sendOtp` and `authClient.phoneNumber.verify({ updatePhoneNumber: true })`, as the [phone number plugin](/docs/plugins/phone-number) shows.
 
 ### Phone password reset requires a verified number
 
