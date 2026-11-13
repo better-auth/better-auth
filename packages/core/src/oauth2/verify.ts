@@ -287,8 +287,21 @@ export interface VerifyAccessTokenOptions {
 		requiredScope: string,
 		grantedScopes: ReadonlySet<string>,
 	) => boolean;
-	/** Required to verify access token locally */
+	/** Verifies the access token locally against this JWKS, unless `jwksFetch` is set */
 	jwksUrl?: string;
+	/**
+	 * In-process key source used instead of `jwksUrl`, for a verifier running
+	 * in the same process as the authorization server.
+	 *
+	 * @internal
+	 */
+	jwksFetch?: () => Promise<JSONWebKeySet | undefined>;
+	/**
+	 * Stable object to cache the `jwksFetch` result under.
+	 *
+	 * @internal
+	 */
+	jwksCacheKey?: object;
 	/** If provided, can verify a token remotely */
 	remoteVerify?: VerifyAccessTokenRemote;
 }
@@ -453,10 +466,12 @@ async function verifyAccessTokenPayload(
 ) {
 	let payload: JWTPayload | undefined;
 	// Locally verify
-	if (opts.jwksUrl && !opts?.remoteVerify?.force) {
+	const jwksFetch = opts.jwksFetch ?? opts.jwksUrl;
+	if (jwksFetch && !opts?.remoteVerify?.force) {
 		try {
 			payload = await verifyJwsAccessToken(token, {
-				jwksFetch: opts.jwksUrl,
+				jwksFetch,
+				jwksCacheKey: opts.jwksCacheKey,
 				verifyOptions: opts.verifyOptions,
 			});
 		} catch (error) {
