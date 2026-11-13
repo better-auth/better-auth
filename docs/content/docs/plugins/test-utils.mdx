@@ -158,6 +158,10 @@ Auth helpers create authenticated sessions for testing protected routes.
 
 All three helpers accept an optional `session` object for fields configured through `session.additionalFields` or a plugin's session schema. Supplied values override defaults; omitted fields keep their defaults. Standard session fields such as `id`, `userId`, `token`, and timestamps are ignored.
 
+When `session.cookieCache.enabled` is set, the helpers also include the `session_data` cookie using the configured cache strategy, version, and cookie attributes. Large cache values are split into cookie chunks automatically.
+
+For stateless setups without a database, seed the user with `test.saveUser(test.createUser())` before calling an auth helper. Better Auth keeps this fixture in its in-memory fallback adapter; the generated cookies can authenticate against a separate stateless instance with the same secret and cookie cache configuration.
+
 #### login
 
 Creates a session for a user and returns session details, headers, cookies, and token.

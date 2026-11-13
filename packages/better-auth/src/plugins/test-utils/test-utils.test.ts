@@ -1,4 +1,6 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import { beforeEach, describe, expect, it } from "vitest";
+import { getCookieCache } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { emailOTP } from "../email-otp";
 import { organization } from "../organization";
@@ -290,6 +292,194 @@ describe("testUtils plugin", async () => {
 			const session = await auth.api.getSession({ headers: result.headers });
 			expect(session?.user.id).toBe(user.id);
 			await test.deleteUser(user.id);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9271
+	 */
+	describe("cookie cache authentication", async () => {
+		describe.each(["compact", "jwt", "jwe"] as const)(
+			"%s strategy",
+			async (strategy) => {
+				const options = {
+					database: undefined,
+					user: {
+						additionalFields: {
+							publicValue: { type: "string", defaultValue: "public-user" },
+							privateValue: {
+								type: "string",
+								defaultValue: "private-user",
+								returned: false,
+							},
+						},
+					},
+					session: {
+						cookieCache: {
+							enabled: true,
+							strategy,
+							version: "test-fixture-v2",
+						},
+						additionalFields: {
+							publicValue: { type: "string", defaultValue: "public-session" },
+							privateValue: {
+								type: "string",
+								defaultValue: "private-session",
+								returned: false,
+							},
+						},
+					},
+					plugins: [testUtils()],
+				} satisfies BetterAuthOptions;
+				const { auth } = await getTestInstance(options, {
+					disableTestUser: true,
+				});
+				const { auth: reader } = await getTestInstance(options, {
+					disableTestUser: true,
+				});
+				const ctx = await auth.$context;
+				const test = ctx.test;
+
+				it.each(["login", "getAuthHeaders", "getCookies"] as const)(
+					"%s authenticates a fresh stateless instance with the configured cache",
+					async (helper) => {
+						const user = await test.saveUser(test.createUser());
+						let headers: Headers;
+						if (helper === "login") {
+							const result = await test.login({ userId: user.id });
+							headers = result.headers;
+							expect(result.cookies.map(({ name }) => name)).toContain(
+								ctx.authCookies.sessionData.name,
+							);
+							expect(
+								new Headers({
+									cookie: result.cookies
+										.map(({ name, value }) => `${name}=${value}`)
+										.join("; "),
+								}).get("cookie"),
+							).toBe(headers.get("cookie"));
+						} else if (helper === "getAuthHeaders") {
+							headers = await test.getAuthHeaders({ userId: user.id });
+						} else {
+							const cookies = await test.getCookies({ userId: user.id });
+							headers = new Headers({
+								cookie: cookies
+									.map(({ name, value }) => `${name}=${value}`)
+									.join("; "),
+							});
+						}
+
+						// The reader has its own empty fallback adapter, so only the cache
+						// can authenticate these cookies.
+						expect(reader.options.database).toBeUndefined();
+						expect(
+							await (await reader.$context).internalAdapter.findUserById(
+								user.id,
+							),
+						).toBeNull();
+						const session = await reader.api.getSession({ headers });
+						expect(session?.user.id).toBe(user.id);
+						expect(session?.user.publicValue).toBe("public-user");
+						expect(session?.session.publicValue).toBe("public-session");
+
+						const cache = await getCookieCache(headers, {
+							secret: ctx.secret,
+							strategy,
+							version: "test-fixture-v2",
+						});
+						expect(cache).not.toBeNull();
+						expect(cache?.user).not.toHaveProperty("privateValue");
+						expect(cache?.session).not.toHaveProperty("privateValue");
+
+						const tokenOnly = new Headers({
+							cookie: headers
+								.get("cookie")!
+								.split("; ")
+								.find((cookie) =>
+									cookie.startsWith(`${ctx.authCookies.sessionToken.name}=`),
+								)!,
+						});
+						expect(
+							await reader.api.getSession({ headers: tokenOnly }),
+						).toBeNull();
+					},
+				);
+			},
+		);
+
+		it("emits chunked JWE cache cookies with the configured attributes", async () => {
+			const options = {
+				database: undefined,
+				baseURL: "https://auth.example.com",
+				session: {
+					cookieCache: { enabled: true, strategy: "jwe", maxAge: 600 },
+				},
+				advanced: {
+					cookiePrefix: "fixture",
+					cookies: {
+						session_data: {
+							name: "custom-cache",
+							attributes: {
+								path: "/api/auth",
+								sameSite: "strict",
+								httpOnly: false,
+							},
+						},
+					},
+				},
+				plugins: [testUtils()],
+			} satisfies BetterAuthOptions;
+			const { auth } = await getTestInstance(options, {
+				disableTestUser: true,
+			});
+			const { auth: reader } = await getTestInstance(options, {
+				disableTestUser: true,
+			});
+			const ctx = await auth.$context;
+			const user = await ctx.test.saveUser(
+				ctx.test.createUser({ name: "Long name ".repeat(1000) }),
+			);
+			const cookies = await ctx.test.getCookies({
+				userId: user.id,
+				domain: "browser.example.com",
+			});
+			const cacheCookies = cookies.filter(({ name }) =>
+				name.startsWith(`${ctx.authCookies.sessionData.name}.`),
+			);
+			expect(cacheCookies.length).toBeGreaterThan(1);
+			for (const cookie of cacheCookies) {
+				expect(cookie).toMatchObject({
+					domain: "browser.example.com",
+					path: "/api/auth",
+					httpOnly: false,
+					secure: true,
+					sameSite: "Strict",
+				});
+				expect(cookie.expires).toBeGreaterThan(Math.floor(Date.now() / 1000));
+			}
+			const headers = new Headers({
+				cookie: cookies.map(({ name, value }) => `${name}=${value}`).join("; "),
+			});
+			const session = await reader.api.getSession({ headers });
+			expect(session?.user.name).toBe(user.name);
+		});
+
+		it("keeps token-only cookies when the cache is disabled", async () => {
+			const { auth } = await getTestInstance({
+				session: { cookieCache: { enabled: false } },
+				plugins: [testUtils()],
+			});
+			const ctx = await auth.$context;
+			const user = await ctx.test.saveUser(ctx.test.createUser());
+			const result = await ctx.test.login({ userId: user.id });
+			expect(result.cookies).toHaveLength(1);
+			expect(result.cookies[0]?.name).toBe(ctx.authCookies.sessionToken.name);
+			expect(result.headers.get("cookie")).not.toContain(
+				ctx.authCookies.sessionData.name,
+			);
+			expect(
+				(await auth.api.getSession({ headers: result.headers }))?.user.id,
+			).toBe(user.id);
 		});
 	});
 
