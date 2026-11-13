@@ -857,12 +857,12 @@ async function resolveResourceGrantIssuance(
 }
 
 /**
- * Issues the nonce challenge before any grant runs. Grants consume their
- * authorization code, device code, or refresh token before the DPoP proof is
+ * Issues the nonce challenge before any grant runs. Some grants, such as the
+ * refresh token grant, consume their credential before the DPoP proof is
  * fully verified, so challenging there would leave the client's retry with
- * nothing to redeem. The proof is still verified, nonce included, at issuance,
- * against the same request time, so a nonce that passes here cannot expire
- * before then.
+ * nothing to redeem. The proof is still verified, nonce included, before
+ * issuance against the same request time, so a nonce that passes here cannot
+ * expire before then.
  */
 async function challengeMissingDpopNonce(
 	ctx: GenericEndpointContext,
