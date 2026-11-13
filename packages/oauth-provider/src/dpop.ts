@@ -1,6 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, NO_STORE_HEADERS } from "better-auth/api";
-import type { DpopNonceOptions, VerifiedDpopProof } from "better-auth/oauth2";
+import type {
+	DpopNonceOptions,
+	DpopReplayStore,
+	VerifiedDpopProof,
+} from "better-auth/oauth2";
 import {
 	createDpopNonce,
 	createDpopReplayStore,
@@ -163,16 +167,20 @@ export async function verifyRequestDpopProof(
 		method: string;
 		url: string;
 		expectedJkt?: string;
+		/** Defaults to the database-backed store. */
+		replayStore?: DpopReplayStore;
 	},
 ): Promise<VerifiedDpopProof> {
 	const nonce = getDpopNonceOptions(ctx, opts);
+	const { replayStore, ...proofParams } = params;
 	let proof: VerifiedDpopProof;
 	try {
 		proof = await verifyDpopProof({
-			...params,
+			...proofParams,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
+			replayStore:
+				replayStore ?? createDpopReplayStore(ctx.context.internalAdapter),
 			nonce,
 			// The time the request arrived, which the token endpoint's nonce check
 			// also used, not the time a grant reaches issuance.

@@ -155,7 +155,7 @@ export function formatReleaseBody(
 			if (entriesForType.length === 0) continue;
 
 			entriesForType.sort((a, b) => a.title.localeCompare(b.title));
-			lines.push(CHANGE_TYPE_HEADINGS[changeType]!, "");
+			lines.push(CHANGE_TYPE_HEADINGS[changeType], "");
 
 			for (const entry of entriesForType) {
 				const rewrite = rewrites[entry.rewriteKey];
