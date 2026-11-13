@@ -707,6 +707,8 @@ Returning the `owner` role grants the owner's protections too, so scope it as na
 
 A resolved membership doesn't appear in `listMembers`, and leaving the organization still requires a member row.
 
+While `resolveMembership` is set, `getInvitation` accepts an invitation whose inviter has no member row, since a resolved member can send invitations. That also keeps invitations from removed members readable, so cancel a member's pending invitations when you remove them if that matters to you.
+
 #### Use Active Organization
 
 To retrieve the active organization for the user, you can call the `useActiveOrganization` hook. It returns the active organization for the user. Whenever the active organization changes, the hook will re-evaluate and return the new active organization.

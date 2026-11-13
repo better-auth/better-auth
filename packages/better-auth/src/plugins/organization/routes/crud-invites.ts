@@ -1244,7 +1244,12 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 				userId: invitation.inviterId,
 				organizationId: invitation.organizationId,
 			});
-			if (!member) {
+			const inviter =
+				member?.user ??
+				(options.resolveMembership
+					? await ctx.context.internalAdapter.findUserById(invitation.inviterId)
+					: null);
+			if (!inviter) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION,
@@ -1255,7 +1260,7 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 				...invitation,
 				organizationName: organization.name,
 				organizationSlug: organization.slug,
-				inviterEmail: member.user.email,
+				inviterEmail: inviter.email,
 			});
 		},
 	);
