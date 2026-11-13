@@ -205,6 +205,21 @@
   - @better-auth/prisma-adapter@1.8.0-beta.0
   - @better-auth/telemetry@1.8.0-beta.0
 
+## 1.7.23
+
+### Patch Changes
+
+- [#12543](https://github.com/better-auth/better-auth/pull/12543) [`d6e9bbd`](https://github.com/better-auth/better-auth/commit/d6e9bbdbb71a2472fac387bfabacf7c1cbfe4f26) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `getTestInstance` from `better-auth/test` now gives each test file its own MongoDB database and closes its MongoDB client on cleanup. Before, every MongoDB test instance shared the `better-auth` database and dropped it during cleanup, so test files running in parallel deleted each other's data.
+
+- Updated dependencies [[`9dc64fb`](https://github.com/better-auth/better-auth/commit/9dc64fbba9c39c10bc809e54a46a9ae21e4e15d4), [`cfa73e9`](https://github.com/better-auth/better-auth/commit/cfa73e90fae636f22179b933c29171bada503515), [`41a2526`](https://github.com/better-auth/better-auth/commit/41a25269dbd0d2942ba95b7c362cb266f977bccb), [`c10b35d`](https://github.com/better-auth/better-auth/commit/c10b35da7383ddefe1710190a100dabb7283803e)]:
+  - @better-auth/kysely-adapter@1.7.23
+  - @better-auth/core@1.7.23
+  - @better-auth/memory-adapter@1.7.23
+  - @better-auth/drizzle-adapter@1.7.23
+  - @better-auth/mongo-adapter@1.7.23
+  - @better-auth/prisma-adapter@1.7.23
+  - @better-auth/telemetry@1.7.23
+
 ## 1.7.22
 
 ### Patch Changes

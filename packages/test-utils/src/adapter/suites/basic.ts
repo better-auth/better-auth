@@ -3217,6 +3217,62 @@ export const getNormalTestSuiteTests = (
 				console.log(findResult);
 			},
 		},
+		/**
+		 * @see https://node-postgres.com/features/types
+		 */
+		"create - should support json arrays": {
+			migrateBetterAuth: {
+				plugins: [
+					{
+						id: "json-array-test",
+						schema: {
+							testModel: {
+								fields: {
+									json: {
+										type: "json",
+										required: true,
+									},
+								},
+							},
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			},
+			test: async () => {
+				const value = [{ type: "payment", amount: 1 }, { nested: [1, 2] }];
+				const result = await adapter.create<{
+					id: string;
+					json: unknown[];
+				}>({
+					model: "testModel",
+					data: { json: value },
+				});
+				expect(result.json).toEqual(value);
+
+				const findResult = await adapter.findOne<{
+					json: unknown[];
+				}>({
+					model: "testModel",
+					where: [{ field: "id", value: result.id }],
+				});
+				expect(findResult?.json).toEqual(value);
+
+				const updated = await adapter.update<{ json: unknown[] }>({
+					model: "testModel",
+					where: [{ field: "id", value: result.id }],
+					update: { json: ["a", { b: 2 }] },
+				});
+				expect(updated?.json).toEqual(["a", { b: 2 }]);
+
+				const afterUpdate = await adapter.findOne<{
+					json: unknown[];
+				}>({
+					model: "testModel",
+					where: [{ field: "id", value: result.id }],
+				});
+				expect(afterUpdate?.json).toEqual(["a", { b: 2 }]);
+			},
+		},
 		"update - should support multiple where conditions under AND connector with unique field":
 			async () => {
 				// This test is specific to Prisma where unique fields must be at root level,

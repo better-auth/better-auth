@@ -553,10 +553,10 @@ export function matchType(
 	if (fieldType === "string[]" || fieldType === "number[]") {
 		return columnDataType.toLowerCase().includes("json");
 	}
-	const types = map[dbType]!;
+	const types = map[dbType];
 	const expected = Array.isArray(fieldType)
 		? types["string"].map((t) => t.toLowerCase())
-		: types[fieldType]!.map((t) => t.toLowerCase());
+		: types[fieldType].map((t) => t.toLowerCase());
 	return expected.includes(normalize(columnDataType));
 }
 

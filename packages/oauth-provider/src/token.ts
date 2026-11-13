@@ -6,7 +6,12 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "better-auth/crypto";
+import type {
+	DpopReplayReservation,
+	DpopReplayStore,
+} from "better-auth/oauth2";
 import {
+	createDpopReplayStore,
 	generateCodeChallenge,
 	getConfirmationJkt,
 	isDpopProofError,
@@ -956,6 +961,7 @@ async function resolveDpopTokenBinding(
 		verificationValue?: VerificationValue;
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 		expectedJkt?: string;
+		replayStore?: DpopReplayStore;
 	},
 ): Promise<Confirmation | undefined> {
 	const authCodeDpopJkt = params.verificationValue?.query.dpop_jkt;
@@ -981,8 +987,63 @@ async function resolveDpopTokenBinding(
 		// own endpoint that issues tokens out-of-grant.
 		url: getEndpointUrl(ctx, ctx.path ?? "/oauth2/token"),
 		expectedJkt,
+		replayStore: params.replayStore,
 	});
 	return { jkt: proof.jkt };
+}
+
+/**
+ * Checks the token request's DPoP proof before a one-time code is consumed,
+ * under the resource policy issuance applies, so a rejected proof leaves the
+ * code for a retry.
+ *
+ * The proof's `jti` is not recorded yet: call `recordReplay` once the code is
+ * consumed, then pass `confirmation` to issuance. Recording it earlier would
+ * report the loser of a concurrent redemption as a replayed proof instead of a
+ * spent code.
+ */
+export async function checkDpopProofBeforeConsume(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		client: SchemaClient<Scope[]>;
+		scopes: string[];
+		resources?: string[];
+		verificationValue?: VerificationValue;
+	},
+): Promise<{
+	confirmation?: Confirmation;
+	recordReplay: () => Promise<void>;
+}> {
+	const policy = await resolveResourcePolicy(ctx, opts, {
+		resource: params.resources,
+		clientId: params.client.clientId,
+		requestedScopes: params.scopes,
+	});
+	let reservation: DpopReplayReservation | undefined;
+	const confirmation = await resolveDpopTokenBinding(ctx, opts, {
+		client: params.client,
+		grantIssuance: policy,
+		verificationValue: params.verificationValue,
+		replayStore: {
+			reserve: (pending) => {
+				reservation = pending;
+				return true;
+			},
+		},
+	});
+	return {
+		confirmation,
+		recordReplay: async () => {
+			if (!reservation) return;
+			const reserved = await createDpopReplayStore(
+				ctx.context.internalAdapter,
+			).reserve({ ...reservation, now: new Date() });
+			if (!reserved) {
+				throwInvalidDpopProof("DPoP proof jti has already been used");
+			}
+		},
+	};
 }
 
 type RefreshTokenRotationReplayRequest = {
@@ -1533,7 +1594,26 @@ async function createUserTokens(
 	return ctx.json(responseBody);
 }
 
-/** Checks verification value */
+/**
+ * Rejects an unknown, expired, or already-redeemed authorization code. A code
+ * presented after redemption revokes the tokens it issued (RFC 6749 §4.1.2).
+ */
+async function rejectAuthorizationCode(
+	ctx: GenericEndpointContext,
+	authorizationCodeId: string,
+): Promise<never> {
+	await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
+	throw new APIError("BAD_REQUEST", {
+		error_description: "invalid code",
+		error: "invalid_grant",
+	});
+}
+
+/**
+ * Reads and checks the verification value without consuming it. The caller
+ * consumes the code only after every request-level check passes, so a rejected
+ * verifier, binding, or DPoP proof leaves the code for a retry.
+ */
 async function checkVerificationValue(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -1547,20 +1627,16 @@ async function checkVerificationValue(
 		code,
 		"authorization_code",
 	);
-	// Atomic single-use redemption per RFC 6749 §4.1.2. The first caller
-	// receives the row and mints tokens; concurrent racers receive `null`
-	// and fall through to the `invalid_grant` error path (RFC 6749 §5.2).
 	const verification =
-		await ctx.context.internalAdapter.consumeVerificationValue(
+		await ctx.context.internalAdapter.findVerificationValue(
 			authorizationCodeId,
 		);
-
-	if (!verification) {
-		await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
-		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid code",
-			error: "invalid_grant",
-		});
+	// Secondary storage returns `expiresAt` as a JSON string, so coerce it.
+	if (
+		!verification ||
+		new Date(verification.expiresAt).getTime() < Date.now()
+	) {
+		return rejectAuthorizationCode(ctx, authorizationCodeId);
 	}
 
 	let rawValue: unknown;
@@ -1636,6 +1712,7 @@ async function checkVerificationValue(
 
 	return {
 		verificationValue,
+		verificationId: verification.id,
 		effectiveResources,
 		authorizedResources: storedResources,
 		authorizationCodeId,
@@ -1717,6 +1794,7 @@ async function handleAuthorizationCodeGrant(
 	/** Get and check Verification Value */
 	const {
 		verificationValue,
+		verificationId,
 		effectiveResources,
 		authorizedResources,
 		authorizationCodeId,
@@ -1849,6 +1927,27 @@ async function handleAuthorizationCodeGrant(
 		getSupportedClaims(opts),
 	);
 
+	const dpop = await checkDpopProofBeforeConsume(ctx, opts, {
+		client,
+		scopes,
+		resources: effectiveResources,
+		verificationValue,
+	});
+
+	// Atomic single-use redemption per RFC 6749 §4.1.2, claimed only after the
+	// request passed every check above. Concurrent racers receive `null` and
+	// are rejected as a replay with `invalid_grant` (RFC 6749 §5.2). Lookup
+	// and consume each take the newest row for the identifier, so issue only
+	// when they are the same row.
+	const consumed =
+		await ctx.context.internalAdapter.consumeVerificationValue(
+			authorizationCodeId,
+		);
+	if (!consumed || consumed.id !== verificationId) {
+		return rejectAuthorizationCode(ctx, authorizationCodeId);
+	}
+	await dpop.recordReplay();
+
 	return createUserTokens(ctx, opts, {
 		client,
 		scopes: verificationValue.query.scope?.split(" ") ?? [],
@@ -1865,6 +1964,7 @@ async function handleAuthorizationCodeGrant(
 		requestedUserInfoClaims,
 		resources: effectiveResources,
 		originalResources: authorizedResources,
+		confirmation: dpop.confirmation,
 	});
 }
 

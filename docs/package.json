@@ -15,6 +15,7 @@
     "lint:fix": "pnpm -w biome check docs/ --fix --unsafe",
     "sync-versions": "node scripts/sync-versions.ts",
     "sync-typesense": "node scripts/sync-typesense.ts",
+    "validate:sidebar-icons": "pnpm sync-versions && node --import=tsx scripts/validate-sidebar-icons.ts",
     "validate:docs": "node scripts/validate-meta.ts content/docs && node --import=tsx scripts/validate-sidebar-icons.ts && node scripts/validate-links.ts",
     "format:md": "remark . --ext md,mdx --output --quiet",
     "format:check": "remark . --ext md,mdx --quiet --frail",

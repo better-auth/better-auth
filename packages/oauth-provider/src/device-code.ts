@@ -18,7 +18,7 @@ import {
 import * as z from "zod";
 import { extendOAuthProvider } from "./extensions";
 import { resolveResourcePolicy } from "./resources";
-import { getOAuthProviderApi } from "./token";
+import { checkDpopProofBeforeConsume, getOAuthProviderApi } from "./token";
 import type {
 	OAuthExtensionGrantHandlerInput,
 	OAuthInteractionRequestHandler,
@@ -121,12 +121,16 @@ async function exchangeOAuthDeviceCode(
 	const {
 		authorizationContext: { client, scopes },
 		claimedDeviceCode,
-		redemptionContext: { resources, confirmation },
+		redemptionContext: { resources, confirmation, recordReplay },
 		user,
 	} = await redeemDeviceCode<
 		OAuthDeviceCodeFields,
 		ClientAuthorization,
-		{ resources?: string[]; confirmation?: Confirmation }
+		{
+			resources?: string[];
+			confirmation?: Confirmation;
+			recordReplay: () => Promise<void>;
+		}
 	>({
 		ctx,
 		deviceCode,
@@ -178,15 +182,26 @@ async function exchangeOAuthDeviceCode(
 				requestedScopes: authorization.scopes,
 			});
 			// Same for a rejected DPoP proof: the client can retry with a valid one.
-			const confirmation = await provider.resolveConfirmation({
+			// A sender constraint the client-authentication strategy proved takes
+			// precedence over a DPoP proof, as in issuance.
+			if (authorization.confirmation) {
+				const confirmation = await provider.resolveConfirmation({
+					client: authorization.client,
+					scopes: authorization.scopes,
+					resources,
+					confirmation: authorization.confirmation,
+				});
+				return { resources, confirmation, recordReplay: async () => {} };
+			}
+			const dpop = await checkDpopProofBeforeConsume(ctx, input.opts, {
 				client: authorization.client,
 				scopes: authorization.scopes,
 				resources,
-				confirmation: authorization.confirmation,
 			});
-			return { resources, confirmation };
+			return { resources, ...dpop };
 		},
 	});
+	await recordReplay();
 
 	return provider.issueTokens({
 		client,
