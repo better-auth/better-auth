@@ -6,6 +6,7 @@ import type {
 	OAuthIdTokenConfig,
 	OAuthProvider,
 	OAuthRefreshContext,
+	TokenEndpointAuth,
 } from "@better-auth/core/oauth2";
 import {
 	applyDefaultAccessTokenExpiry,
@@ -72,6 +73,17 @@ interface DiscoveryDocument {
 	id_token_signing_alg_values_supported?: string[];
 	pushed_authorization_request_endpoint?: string;
 	require_pushed_authorization_requests?: boolean;
+}
+
+function withAssertionIssuer(
+	auth: Extract<TokenEndpointAuth, { method: "private_key_jwt" }>,
+	issuer: string,
+): TokenEndpointAuth {
+	return {
+		method: "private_key_jwt",
+		getClientAssertion: (context) =>
+			auth.getClientAssertion({ ...context, issuer }),
+	};
 }
 
 function isSecretlessTokenEndpointAuth(
@@ -389,7 +401,10 @@ export const genericOAuth = <const ID extends string>(
 				? pushedAuthorizationRequestUrl
 				: undefined;
 
-			const tokenEndpointAuth = c.tokenEndpointAuth;
+			const tokenEndpointAuth: GenericOAuthConfig["tokenEndpointAuth"] =
+				c.tokenEndpointAuth?.method === "private_key_jwt" && issuer
+					? withAssertionIssuer(c.tokenEndpointAuth, issuer)
+					: c.tokenEndpointAuth;
 			if (c.clientSecret && isSecretlessTokenEndpointAuth(tokenEndpointAuth)) {
 				throw new Error(
 					`Provider "${c.providerId}": tokenEndpointAuth.method "${tokenEndpointAuth?.method}" cannot be combined with clientSecret`,

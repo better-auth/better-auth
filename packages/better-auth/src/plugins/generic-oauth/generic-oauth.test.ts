@@ -6,10 +6,11 @@ import type {
 } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
+import { createPrivateKeyJwtClientAssertionGetter } from "@better-auth/core/oauth2";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterFetch } from "@better-fetch/fetch";
 import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import type {
@@ -4584,6 +4585,7 @@ describe("oauth2", async () => {
 				clientId,
 				tokenEndpoint: expect.stringContaining(`localhost:${port}`),
 				grantType: "authorization_code",
+				issuer: `http://localhost:${port}`,
 			});
 			expect(capturedBody).not.toBeNull();
 			const body = capturedBody!;
@@ -4594,6 +4596,119 @@ describe("oauth2", async () => {
 				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
 			);
 			expect(body.client_assertion).toBe(assertion);
+		});
+
+		it("should sign private_key_jwt assertions for the discovered issuer when audience is issuer", async () => {
+			issueIdTokenFor("oauth2");
+			const { privateKey } = await generateKeyPair("ES256", {
+				extractable: true,
+			});
+			let capturedAssertion: unknown;
+			server.service.once("beforeTokenSigning", (_token, req) => {
+				if (
+					"body" in req &&
+					typeof req.body === "object" &&
+					req.body !== null &&
+					"client_assertion" in req.body
+				) {
+					capturedAssertion = req.body.client_assertion;
+				}
+			});
+
+			const { client, customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-assertion-issuer",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								tokenEndpointAuth: {
+									method: "private_key_jwt",
+									getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+										privateKeyJwk: await exportJWK(privateKey),
+										algorithm: "ES256",
+										audience: "issuer",
+									}),
+								},
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "test-assertion-issuer",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toBe("http://localhost:3000/dashboard");
+			expect(typeof capturedAssertion).toBe("string");
+			expect(decodeJwt(capturedAssertion as string).aud).toBe(
+				`http://localhost:${port}`,
+			);
+		});
+
+		it("should fail sign-in without a token request when audience is issuer and no issuer is discovered", async () => {
+			const { privateKey } = await generateKeyPair("ES256", {
+				extractable: true,
+			});
+			const tokenRequest = vi.fn();
+			server.service.once("beforeTokenSigning", tokenRequest);
+			onTestFinished(() => {
+				server.service.off("beforeTokenSigning", tokenRequest);
+			});
+
+			const { client, customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-assertion-no-issuer",
+								authorizationUrl: `http://localhost:${port}/authorize`,
+								tokenUrl: `http://localhost:${port}/token`,
+								clientId,
+								tokenEndpointAuth: {
+									method: "private_key_jwt",
+									getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+										privateKeyJwk: await exportJWK(privateKey),
+										algorithm: "ES256",
+										audience: "issuer",
+									}),
+								},
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "test-assertion-no-issuer",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toContain("error=");
+			expect(tokenRequest).not.toHaveBeenCalled();
 		});
 
 		it("should reject secretless token endpoint auth combined with clientSecret", async () => {

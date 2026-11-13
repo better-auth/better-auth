@@ -405,6 +405,19 @@ genericOAuth({
 });
 ```
 
+The assertion's `aud` claim names the server that should accept it. By default, `createPrivateKeyJwtClientAssertionGetter` uses the token endpoint URL, as OpenID Connect Core recommends. FAPI 2.0 and [RFC 10070](https://www.rfc-editor.org/rfc/rfc10070) require the authorization server's issuer identifier instead. To sign assertions for the issuer, set `audience: "issuer"`:
+
+```ts
+getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+    privateKeyJwk: { /* your JWK */ },
+    audience: "issuer",
+}),
+```
+
+Better Auth takes the issuer from the `issuer` field of the discovery document, so `audience: "issuer"` requires `discoveryUrl`. Without a discovered issuer, each token request and pushed authorization request fails with an error instead of falling back to the token endpoint. Before you enable it, check that the provider accepts the issuer as the assertion audience. Some servers accept only the token endpoint URL and reject the request.
+
+A custom `getClientAssertion` receives the discovered issuer as `issuer`. The field is `undefined` when the provider has no discovery document or the document has no issuer.
+
 **discoveryHeaders**: (Optional) Custom headers to include in the discovery request. Useful for providers that require special headers. Better Auth sends these headers only to the origin (scheme, host, and port) of `discoveryUrl`:
 
 * The discovery request follows a redirect only within that origin. If `discoveryUrl` redirects to another origin, discovery fails and Better Auth logs an error. Set `discoveryUrl` to the final URL.
