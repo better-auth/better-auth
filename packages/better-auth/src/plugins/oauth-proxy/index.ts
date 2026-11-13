@@ -1,4 +1,5 @@
 import type {
+	BetterAuthOptions,
 	BetterAuthPlugin,
 	GenericEndpointContext,
 	SecretConfig,
@@ -129,6 +130,47 @@ const passthroughPayloadSchema = z.looseObject({
 
 type PassthroughPayload = z.infer<typeof passthroughPayloadSchema>;
 
+function decodePassthroughPayload(
+	rawPayload: any,
+	options?: BetterAuthOptions,
+): PassthroughPayload {
+	if (rawPayload && typeof rawPayload === "object") {
+		if (rawPayload.account && typeof rawPayload.account === "object") {
+			if (typeof rawPayload.account.accessTokenExpiresAt === "string") {
+				const d = new Date(rawPayload.account.accessTokenExpiresAt);
+				if (!isNaN(d.getTime())) {
+					rawPayload.account.accessTokenExpiresAt = d;
+				}
+			}
+			if (typeof rawPayload.account.refreshTokenExpiresAt === "string") {
+				const d = new Date(rawPayload.account.refreshTokenExpiresAt);
+				if (!isNaN(d.getTime())) {
+					rawPayload.account.refreshTokenExpiresAt = d;
+				}
+			}
+		}
+		const userFields = options?.user?.additionalFields;
+		if (
+			userFields &&
+			rawPayload.userInfo &&
+			typeof rawPayload.userInfo === "object"
+		) {
+			for (const [key, fieldConfig] of Object.entries(userFields)) {
+				if (
+					fieldConfig.type === "date" &&
+					typeof rawPayload.userInfo[key] === "string"
+				) {
+					const d = new Date(rawPayload.userInfo[key]);
+					if (!isNaN(d.getTime())) {
+						rawPayload.userInfo[key] = d;
+					}
+				}
+			}
+		}
+	}
+	return passthroughPayloadSchema.parse(rawPayload);
+}
+
 const restoreOAuthProxyState = async (
 	ctx: GenericEndpointContext,
 	state: string,
@@ -210,7 +252,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 			let payload: PassthroughPayload;
 			try {
-				payload = passthroughPayloadSchema.parse(parseJSON(decryptedPayload));
+				const rawPayload = parseJSON(decryptedPayload, {
+					strict: true,
+					parseDates: false,
+				});
+				payload = decodePassthroughPayload(rawPayload, ctx.context.options);
 			} catch (e) {
 				ctx.context.logger.error("Failed to parse OAuth proxy payload", e);
 				throw redirectOnError(ctx, defaultErrorURL, "invalid_payload");
