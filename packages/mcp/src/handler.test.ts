@@ -90,6 +90,7 @@ describe("createMcpProtectedRequestHandler", () => {
 		)(request());
 
 		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toMatch(/^Bearer /);
 		expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
 			"WWW-Authenticate",
 		);
