@@ -836,7 +836,7 @@ export const oauthAccessTokenTableFields = [
   { name: "referenceId", type: "string", description: "Consent reference", isOptional: true },
   { name: "authorizationCodeId", type: "string", description: "Authorization code that started this token family", isOptional: true },
   { name: "refreshId", type: "string", description: "Refresh token this access token belongs to", isOptional: true, isForeignKey: true, references: { model: "oauthRefreshToken", field: "id" } },
-  { name: "grantId", type: "string", description: "Grant of the refresh token issued with this token, used to revoke it with any refresh token of the grant. Empty on rows stored before the column existed; such a token is revoked only with its own refresh token", isOptional: true },
+  { name: "grantId", type: "string", description: "Grant of the refresh token issued with this token, used to revoke it with any refresh token of the grant. Empty when the token was issued without a refresh token. Also empty on rows stored before the column existed; such a token is revoked only with its own refresh token", isOptional: true },
   { name: "resources", type: "string[]", description: "Resources the token is valid for", isOptional: true },
   { name: "requestedUserInfoClaims", type: "string[]", description: "UserInfo claims requested with `claims`", isOptional: true },
   { name: "scopes", type: "string[]", description: "Granted scopes" },
