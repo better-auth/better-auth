@@ -2749,6 +2749,80 @@ describe("oauthTokenExchange delegation with pairwise subjects", () => {
 		});
 	});
 
+	it("presents a user actor whose ID is also a client ID as a user", async () => {
+		const {
+			auth,
+			service,
+			actorUser,
+			delegateAsUser,
+			introspect,
+			actorSubFor,
+		} = await bootUserActor({
+			providerOptions: { accessTokenSubject: "pairwise" },
+		});
+		// `generateClientId` is configurable, so a client ID can equal a user ID.
+		await (await auth.$context).adapter.create({
+			model: "oauthClient",
+			data: {
+				clientId: actorUser.id,
+				redirectUris: [redirectUri],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const { data, error } = await delegateAsUser();
+		expect(error).toBeNull();
+		const actorSub = await actorSubFor(service);
+		expect(actorSub).not.toBe(actorUser.id);
+		expect(decodeJwt(data!.access_token).act).toEqual({ sub: actorSub });
+		expect((await introspect(data!.access_token, service))?.act).toEqual({
+			sub: actorSub,
+		});
+	});
+
+	it("keeps every client actor's ID beyond the adapter's find-many limit", async () => {
+		const {
+			createClient,
+			actorTokenFor,
+			actorParams,
+			exchangeAs,
+			introspect,
+			userTokenForMcp,
+		} = await bootUserActor({
+			exchange: { delegation: { maxDepth: 3 } },
+			bootOptions: { advanced: { database: { defaultFindManyLimit: 2 } } },
+		});
+		const machine = (resources: string[]) =>
+			createClient({
+				grant_types: [TOKEN_EXCHANGE_GRANT_TYPE, "client_credentials"],
+				client_credentials_scopes: ["read"],
+				scope: "read",
+				skip_consent: true,
+				resources,
+				subject_type: "pairwise",
+			});
+		// Three client actors, one more than the limit.
+		const hops = [
+			{ requester: await machine([mcp, api]), resource: api },
+			{ requester: await machine([api, other]), resource: other },
+			{ requester: await machine([other, api]), resource: api },
+		];
+		let token = (await userTokenForMcp()).access_token;
+		for (const { requester, resource } of hops) {
+			const { data, error } = await exchangeAs(requester, token, {
+				...actorParams((await actorTokenFor(requester)).access_token),
+				resource,
+			});
+			expect(error).toBeNull();
+			token = data!.access_token;
+		}
+		const [first, second, last] = hops.map((hop) => hop.requester);
+		expect((await introspect(token, last!))?.act).toEqual({
+			sub: last!.client_id,
+			act: { sub: second!.client_id, act: { sub: first!.client_id } },
+		});
+	});
+
 	it("matches may_act against the actor's user ID", async () => {
 		const state: { mayAct?: unknown } = {};
 		const { actorUser, actorToken, delegateAsUser } = await bootUserActor({

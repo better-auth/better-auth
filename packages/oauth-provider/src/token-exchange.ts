@@ -18,6 +18,7 @@ import type {
 import type { Awaitable } from "./types/helpers";
 import {
 	consentCovers,
+	couldBeUserId,
 	findConsent,
 	isConfirmation,
 	isRecord,
@@ -179,24 +180,6 @@ function actorChainDepth(act: unknown): number | null {
 	return depth;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * Whether `id` has the shape of a user id under the configured id mode. A
- * lookup with any other value cannot match, and some databases reject it: a
- * serial id column receives `NaN`, and a Postgres `uuid` column rejects
- * non-UUID text.
- */
-function couldBeUserId(
-	ctx: OAuthExtensionGrantHandlerInput["ctx"],
-	id: string,
-): boolean {
-	const mode = ctx.context.options.advanced?.database?.generateId;
-	if (mode === "serial") return /^\d+$/.test(id);
-	if (mode === "uuid") return UUID.test(id);
-	return true;
-}
-
 /**
  * Validates and resolves the `actor_token`. Like the subject token, it must be
  * an active access token this server issued, but to the requesting client
@@ -224,7 +207,7 @@ async function resolveActor(
 		// equals the client id (`generateClientId` is configurable), so that
 		// collision is rejected rather than guessed.
 		if (
-			couldBeUserId(ctx, clientId) &&
+			couldBeUserId(ctx.context, clientId) &&
 			(await ctx.context.internalAdapter.findUserById(clientId))
 		) {
 			deny("actor_token is invalid");

@@ -1261,6 +1261,23 @@ export const ENCRYPTED_USER_ID_CLAIM = "ba_uid";
  */
 export const ENCRYPTED_ACTOR_CHAIN_CLAIM = "ba_act";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Whether `id` has the shape of a user id under the configured id mode. A
+ * lookup with any other value cannot match, and some databases reject it: a
+ * serial id column receives `NaN`, and a Postgres `uuid` column rejects
+ * non-UUID text.
+ *
+ * @internal
+ */
+export function couldBeUserId(context: AuthContext, id: string): boolean {
+	const mode = context.options.advanced?.database?.generateId;
+	if (mode === "serial") return /^\d+$/.test(id);
+	if (mode === "uuid") return UUID.test(id);
+	return true;
+}
+
 /**
  * Returns the `sub` and `act` that `client` sees. For a pairwise client, the
  * user and each user actor get that client's pairwise subject. A client
@@ -1280,20 +1297,35 @@ export async function resolvePresentedSubjects(
 	}
 	const sub = await resolveSubjectIdentifier(subjects.sub, client, opts);
 	if (!subjects.act) return { sub };
-	const actorSubs: string[] = [];
+	const actorSubs = new Set<string>();
 	for (
 		let entry: OAuthActorClaim | undefined = subjects.act;
 		entry;
 		entry = entry.act
 	) {
-		actorSubs.push(entry.sub);
+		actorSubs.add(entry.sub);
 	}
 	const clientRows = await ctx.context.adapter.findMany<{ clientId: string }>({
 		model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
-		where: [{ field: "clientId", operator: "in", value: actorSubs }],
+		where: [{ field: "clientId", operator: "in", value: [...actorSubs] }],
 		select: ["clientId"],
+		limit: actorSubs.size,
 	});
 	const clientIds = new Set(clientRows.map((row) => row.clientId));
+	// A client ID that is also a user ID is presented as a user, so a
+	// collision can only hide a client ID, never reveal a user ID.
+	const ambiguous = [...clientIds].filter((id) =>
+		couldBeUserId(ctx.context, id),
+	);
+	if (ambiguous.length > 0) {
+		const userRows = await ctx.context.adapter.findMany<{ id: string }>({
+			model: "user",
+			where: [{ field: "id", operator: "in", value: ambiguous }],
+			select: ["id"],
+			limit: ambiguous.length,
+		});
+		for (const { id } of userRows) clientIds.delete(id);
+	}
 	const present = async (entry: OAuthActorClaim): Promise<OAuthActorClaim> => ({
 		...entry,
 		sub: clientIds.has(entry.sub)
