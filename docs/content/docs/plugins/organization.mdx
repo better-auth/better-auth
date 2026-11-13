@@ -681,7 +681,7 @@ export const auth = betterAuth({
     admin(),
     organization({
       resolveMembership: ({ user, member }) => {
-        if (user.role === "admin") return { role: "owner" };
+        if (user.role?.split(",").includes("admin")) return { role: "owner" };
         return member;
       },
     }),

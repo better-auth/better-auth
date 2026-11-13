@@ -19,6 +19,7 @@ async function setup(resolveMembership?: ResolveMembership) {
 						},
 					},
 					resolveMembership,
+					teams: { enabled: true },
 				}),
 			],
 		});
@@ -331,6 +332,58 @@ describe("resolveMembership", () => {
 			id: ownerMember.id,
 			role: "owner",
 			department: "Ops",
+		});
+	});
+
+	it("returns the resolved role when the caller passes their own userId", async () => {
+		const { auth, staff, staffUser, org } = await setup(
+			forStaff({ role: "admin" }),
+		);
+		const role = await auth.api.getActiveMemberRole({
+			query: { organizationId: org.id, userId: staffUser.id },
+			headers: staff,
+		});
+		expect(role.role).toBe("admin");
+	});
+
+	it("hides the teams of an organization the resolver refuses", async () => {
+		const { auth, owner } = await setup(() => null);
+		const teams = await auth.api.listUserTeams({ headers: owner });
+		expect(teams).toEqual([]);
+	});
+
+	describe("updating the caller's own stored row", () => {
+		it("keeps the owner guard when the sole owner is resolved as admin", async () => {
+			const { auth, owner, org, ownerMember } = await setup(() => ({
+				role: "admin",
+			}));
+			await expect(
+				auth.api.updateMemberRole({
+					body: {
+						organizationId: org.id,
+						memberId: ownerMember.id,
+						role: "member",
+					},
+					headers: owner,
+				}),
+			).rejects.toMatchObject({ status: "FORBIDDEN" });
+		});
+
+		it("keeps the last-owner guard when the resolver returns another id", async () => {
+			const { auth, owner, org, ownerMember } = await setup(() => ({
+				id: "resolved-owner",
+				role: "owner",
+			}));
+			await expect(
+				auth.api.updateMemberRole({
+					body: {
+						organizationId: org.id,
+						memberId: ownerMember.id,
+						role: "member",
+					},
+					headers: owner,
+				}),
+			).rejects.toMatchObject({ status: "BAD_REQUEST" });
 		});
 	});
 

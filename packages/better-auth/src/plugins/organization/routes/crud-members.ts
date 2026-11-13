@@ -581,10 +581,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				);
 			}
 
-			const toBeUpdatedMember =
-				member.id !== ctx.body.memberId
-					? await adapter.findMemberById(ctx.body.memberId)
-					: member;
+			const toBeUpdatedMember = await adapter.findMemberById(ctx.body.memberId);
 
 			if (!toBeUpdatedMember) {
 				throw APIError.from(
@@ -613,7 +610,8 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			const isSettingCreatorRole = roleToSet.includes(creatorRole);
 
-			const memberIsUpdatingThemselves = member.id === toBeUpdatedMember.id;
+			const memberIsUpdatingThemselves =
+				toBeUpdatedMember.userId === session.user.id;
 
 			if (
 				(isUpdatingCreator && !updaterIsCreator) ||
@@ -1111,7 +1109,7 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				);
 			}
-			if (!ctx.query?.userId) {
+			if (!ctx.query?.userId || ctx.query.userId === session.user.id) {
 				return ctx.json<{ role: InferOrganizationRolesFromOption<O> }>({
 					role: isMember.role,
 				});

@@ -977,10 +977,7 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 			const orgIds = [...new Set(teams.map((team) => team.organizationId))];
 			const memberships = await Promise.all(
 				orgIds.map((organizationId) =>
-					adapter.checkMembership({
-						userId: session.user.id,
-						organizationId,
-					}),
+					adapter.findCallerMember({ session, organizationId }, ctx),
 				),
 			);
 			const memberOrgIds = new Set(
