@@ -152,6 +152,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "better-auth-bachs",
+		url: "https://github.com/grtsnx/better-auth-bachs",
+		description:
+			"Production-ready Bachs billing plugin for Better Auth, built on the official @bachs/sdk — hosted checkout, subscriptions, customer portal, and secure webhooks.",
+		author: {
+			name: "Greatness Abolade",
+			github: "grtsnx",
+			avatar: "https://github.com/grtsnx.png",
+		},
+	},
+	{
 		name: "better-auth-solana-payments",
 		url: "https://github.com/alexasomba/better-auth-solana-payments",
 		description:
