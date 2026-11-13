@@ -521,3 +521,28 @@ it("does not reuse a stored serial id after a delete", async () => {
 	expect(third.id).not.toBe(second.id);
 	expect(new Set(db.widget!.map((row) => row.id)).size).toBe(db.widget!.length);
 });
+
+it("gives overlapping transactions distinct serial ids", async () => {
+	const db: MemoryDB = { widget: [] };
+	const adapter = memoryAdapter(db)({
+		...options,
+		advanced: { database: { generateId: "serial" } },
+	});
+	let release: () => void = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const first = adapter.transaction(async (tx) => {
+		const row = await tx.create({ model: "widget", data: { name: "a" } });
+		await gate;
+		return row;
+	});
+	const second = adapter.transaction(async (tx) => {
+		const row = await tx.create({ model: "widget", data: { name: "b" } });
+		release();
+		return row;
+	});
+	const [a, b] = await Promise.all([first, second]);
+	expect(a.id).not.toBe(b.id);
+	expect(db.widget!.map((row) => row.name).sort()).toEqual(["a", "b"]);
+});

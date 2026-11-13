@@ -119,23 +119,30 @@ function rowChanged(baseRow: any, cloneRow: any): boolean {
 	return JSON.stringify(baseRow) !== JSON.stringify(cloneRow);
 }
 
-/**
- * The row count is not a safe next id once rows have been deleted: it can
- * equal the id of a row that is still stored.
- */
-function nextSerialId(rows: Record<string, unknown>[] | undefined) {
-	let max = 0;
-	for (const row of rows ?? []) {
-		if (typeof row.id === "number" && row.id > max) max = row.id;
-	}
-	return max + 1;
-}
-
 export const memoryAdapter = (
 	db: MemoryDB,
 	config?: MemoryAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
+	/**
+	 * Serial ids are reserved here rather than read from the table being
+	 * written, because a transaction writes to its own clone: two overlapping
+	 * transactions would otherwise pick the same id, and the later commit would
+	 * overwrite the other's row. The row count is not a safe next id either,
+	 * since it can equal a stored row's id once an earlier row is deleted.
+	 */
+	const lastSerialIds = new Map<string, number>();
+	const reserveSerialId = (
+		model: string,
+		rows: Record<string, unknown>[] | undefined,
+	) => {
+		let max = lastSerialIds.get(model) ?? 0;
+		for (const row of rows ?? []) {
+			if (typeof row.id === "number" && row.id > max) max = row.id;
+		}
+		lastSerialIds.set(model, max + 1);
+		return max + 1;
+	};
 
 	/**
 	 * Build an adapter factory whose operations read and write `activeDb`.
@@ -429,7 +436,7 @@ export const memoryAdapter = (
 							options.advanced?.database?.generateId === "serial";
 						if (useNumberId) {
 							// @ts-expect-error
-							data.id = nextSerialId(activeDb[model]);
+							data.id = reserveSerialId(model, activeDb[model]);
 						}
 						if (!activeDb[model]) {
 							activeDb[model] = [];
