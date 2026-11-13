@@ -5,6 +5,7 @@ import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import type { SecretConfig } from "../../../crypto";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
+import { constantTimeEqual } from "../../../crypto/buffer";
 import { generateRandomString } from "../../../crypto/random";
 import { parseUserOutput } from "../../../db/schema";
 import { shouldRequirePassword } from "../../../utils/password";
@@ -16,6 +17,7 @@ import type {
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
+import { defaultKeyHasher } from "../utils";
 import {
 	assertTwoFactorNotLocked,
 	recordTwoFactorFailure,
@@ -41,12 +43,20 @@ export interface BackupCodeOptions {
 	 */
 	customBackupCodesGenerate?: (() => string[]) | undefined;
 	/**
-	 * How to store the backup codes in the database, whether encrypted or plain.
+	 * How to store the backup codes in the database: plain, encrypted, or
+	 * hashed. You can also provide a custom encryptor or hasher.
+	 *
+	 * Hashed codes are stored as a SHA-256 hash of each code (or the output of
+	 * your `hash` function) and cannot be read back, so `viewBackupCodes` is
+	 * unavailable. The plaintext codes are only returned once, when they are
+	 * generated.
 	 */
 	storeBackupCodes?:
 		| (
 				| "plain"
 				| "encrypted"
+				| "hashed"
+				| { hash: (code: string) => Promise<string> }
 				| {
 						encrypt: (token: string) => Promise<string>;
 						decrypt: (token: string) => Promise<string>;
@@ -69,12 +79,23 @@ function generateBackupCodesFn(options?: BackupCodeOptions | undefined) {
 		.map((code) => `${code.slice(0, 5)}-${code.slice(5)}`);
 }
 
-export async function encodeBackupCodes(
-	codes: string[],
+function getBackupCodeHasher(options?: BackupCodeOptions | undefined) {
+	const store = options?.storeBackupCodes;
+	if (store === "hashed") {
+		return defaultKeyHasher;
+	}
+	if (typeof store === "object" && "hash" in store) {
+		return store.hash;
+	}
+	return null;
+}
+
+async function serializeBackupCodes(
+	storedCodes: string[],
 	secret: string | SecretConfig,
 	options?: BackupCodeOptions | undefined,
 ): Promise<string> {
-	const json = JSON.stringify(codes);
+	const json = JSON.stringify(storedCodes);
 	if (options?.storeBackupCodes === "encrypted") {
 		return symmetricEncrypt({ data: json, key: secret });
 	}
@@ -87,6 +108,18 @@ export async function encodeBackupCodes(
 	return json;
 }
 
+export async function encodeBackupCodes(
+	codes: string[],
+	secret: string | SecretConfig,
+	options?: BackupCodeOptions | undefined,
+): Promise<string> {
+	const hash = getBackupCodeHasher(options);
+	const storedCodes = hash
+		? await Promise.all(codes.map((code) => hash(code)))
+		: codes;
+	return serializeBackupCodes(storedCodes, secret, options);
+}
+
 export async function generateBackupCodes(
 	secret: string | SecretConfig,
 	options?: BackupCodeOptions | undefined,
@@ -96,7 +129,7 @@ export async function generateBackupCodes(
 		: generateBackupCodesFn(options);
 	return {
 		backupCodes,
-		encryptedBackupCodes: await encodeBackupCodes(backupCodes, secret, options),
+		storedBackupCodes: await encodeBackupCodes(backupCodes, secret, options),
 	};
 }
 
@@ -108,16 +141,27 @@ export async function verifyBackupCode(
 	key: string | SecretConfig,
 	options?: BackupCodeOptions | undefined,
 ) {
-	const codes = await getBackupCodes(data.backupCodes, key, options);
-	if (!codes) {
+	const storedCodes = await getBackupCodes(data.backupCodes, key, options);
+	if (!storedCodes) {
+		return {
+			status: false,
+			updated: null,
+		};
+	}
+	const hash = getBackupCodeHasher(options);
+	const candidate = hash ? await hash(data.code) : data.code;
+	const remainingCodes = storedCodes.filter(
+		(storedCode) => !constantTimeEqual(storedCode, candidate),
+	);
+	if (remainingCodes.length === storedCodes.length) {
 		return {
 			status: false,
 			updated: null,
 		};
 	}
 	return {
-		status: codes.includes(data.code),
-		updated: codes.filter((code) => code !== data.code),
+		status: true,
+		updated: await serializeBackupCodes(remainingCodes, key, options),
 	};
 }
 
@@ -375,12 +419,6 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						);
 					}
-					const updatedBackupCodes = await encodeBackupCodes(
-						validate.updated,
-						ctx.context.secretConfig,
-						opts,
-					);
-
 					const updated = await ctx.context.adapter.incrementOne({
 						model: twoFactorTable,
 						where: [
@@ -395,7 +433,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						],
 						increment: {},
 						set: {
-							backupCodes: updatedBackupCodes,
+							backupCodes: validate.updated,
 						},
 					});
 					if (!updated) {
@@ -521,7 +559,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					await ctx.context.adapter.update({
 						model: twoFactorTable,
 						update: {
-							backupCodes: backupCodes.encryptedBackupCodes,
+							backupCodes: backupCodes.storedBackupCodes,
 						},
 						where: [
 							{
@@ -540,7 +578,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			 * A server-only function that returns a user's decrypted two-factor
 			 * backup codes. It is not exposed over HTTP and has no client method;
 			 * call it from trusted server code with a `userId` taken from an
-			 * authenticated session.
+			 * authenticated session. Throws when backup codes are stored hashed.
 			 *
 			 * ### API Methods
 			 *
@@ -555,6 +593,12 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					body: viewBackupCodesBodySchema,
 				},
 				async (ctx) => {
+					if (getBackupCodeHasher(opts)) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_VIEWABLE,
+						);
+					}
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,
 						where: [

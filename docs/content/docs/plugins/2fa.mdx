@@ -444,6 +444,10 @@ You can now allow users to provide a backup code as an account recovery method.
 
 To display the backup codes to the user, you can call `viewBackupCodes` on the server. This will return the backup codes in the response. You should only do this if the user has a fresh session - a session that was just created.
 
+<Callout type="warn">
+  `viewBackupCodes` is not available when `storeBackupCodes` is set to `"hashed"` or a custom `hash` function, because hashed codes can't be read back. It throws a `BACKUP_CODES_NOT_VIEWABLE` error instead. Show the codes returned by `enable` or `generateBackupCodes` to the user once.
+</Callout>
+
 <APIMethod path="/two-factor/view-backup-codes" method="POST" isServerOnly forceAsBody>
   ```ts
   type viewBackupCodes = {
@@ -631,13 +635,29 @@ export const twoFactorBackupCodeOptionsType = {
   },
   storeBackupCodes: {
     description:
-      "How to store the backup codes in the database. Whether to store it as plain text or encrypted. You can also provide a custom encryptor.",
+      "How to store the backup codes in the database: plain text, encrypted, or hashed. You can also provide a custom encryptor or hasher.",
     type: "string",
-    default: "plain",
+    default: "encrypted",
   },
 }
 
 <TypeTable type={twoFactorBackupCodeOptionsType} />
+
+With `storeBackupCodes: "hashed"`, each code is stored as a SHA-256 hash, so nobody with access to the database and your secret can read the codes back. The codes are returned in plain text only once, when they are generated, and `viewBackupCodes` is not available. You can also pass a custom hasher:
+
+```ts title="auth.ts"
+twoFactor({
+  backupCodeOptions: {
+    storeBackupCodes: {
+      hash: async (code) => myHash(code),
+    },
+  },
+})
+```
+
+<Callout type="warn">
+  Changing `storeBackupCodes` does not convert codes that are already stored. Existing users need to generate new backup codes after you switch modes. If you use `customBackupCodesGenerate` with the `"hashed"` mode, make sure your codes are long and random, since a fast hash does not protect short codes.
+</Callout>
 
 **Account lockout**
 
