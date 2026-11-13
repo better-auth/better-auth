@@ -157,18 +157,6 @@ export const memoryAdapter = (
 				usePlural: false,
 				debugLogs: config?.debugLogs || false,
 				supportsArrays: true,
-				customTransformInput(props) {
-					const useNumberId =
-						props.options.advanced?.database?.generateId === "serial";
-					if (
-						useNumberId &&
-						props.field === "id" &&
-						props.action === "create"
-					) {
-						return nextSerialId(activeDb[props.model]);
-					}
-					return props.data;
-				},
 				transaction: async (cb) => {
 					// Copy-on-write isolation: run the callback against a clone, then
 					// replay its delta onto the live db on success. On failure the clone
