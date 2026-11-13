@@ -251,6 +251,10 @@ Custom refresh token encoding sent to clients.
 
 Issues opaque access tokens and HS256 ID tokens. Defaults to `false`. See [Without the JWT plugin](/docs/plugins/oauth-provider/tokens#without-the-jwt-plugin).
 
+`revocableJwtAccessTokens` <span className="opacity-70">`boolean`</span>
+
+Lets `/oauth2/revoke` revoke JWT access tokens by `jti`. Introspection, UserInfo, and `validateAccessToken` then look up each JWT access token in the verification store. Defaults to `false`. See [Revoke JWT access tokens](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
+
 `dpop` <span className="opacity-70">`{ proofMaxAgeSeconds?, signingAlgorithms?, nonce? }`</span>
 
 DPoP proof validation. `proofMaxAgeSeconds` defaults to `300`, and `signingAlgorithms` to `["EdDSA", "ES256", "ES512", "PS256", "RS256"]`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).

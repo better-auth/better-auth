@@ -1811,6 +1811,25 @@ export interface OAuthOptions<
 	 */
 	disableJwtPlugin?: boolean;
 	/**
+	 * Lets `/oauth2/revoke` revoke JWT access tokens by their `jti`.
+	 *
+	 * A revoked token reads as inactive at `/oauth2/introspect`, is rejected at
+	 * `/oauth2/userinfo`, and fails `validateAccessToken`. The revocation is
+	 * kept in the verification store until the token's `exp`. Each of those
+	 * checks looks the token up in that store, so this is off by default. With
+	 * secondary storage alone, a lost or evicted entry makes the token valid
+	 * again; set `verification.storeInDatabase` to keep entries durable.
+	 *
+	 * Resource servers that verify JWT access tokens locally against the JWKS
+	 * never see the revocation. They must introspect to honor it.
+	 *
+	 * When off, `/oauth2/revoke` answers `unsupported_token_type` for a JWT
+	 * access token.
+	 *
+	 * @default false
+	 */
+	revocableJwtAccessTokens?: boolean;
+	/**
 	 * Rate limit configuration for OAuth endpoints.
 	 *
 	 * Each endpoint can be configured with a `window` (in seconds) and `max` requests.
