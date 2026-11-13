@@ -181,7 +181,7 @@ async function exchangeOAuthDeviceCode(
 			const resources = requestedResources ?? boundResources;
 			// Validate before the atomic claim: an invalid target must not consume a
 			// one-time code that can still be exchanged with its authorized resources.
-			await resolveResourcePolicy(ctx, input.opts, {
+			const policy = await resolveResourcePolicy(ctx, input.opts, {
 				resource: resources,
 				clientId: authorization.client.clientId,
 				requestedScopes: authorization.scopes,
@@ -200,6 +200,7 @@ async function exchangeOAuthDeviceCode(
 				client: authorization.client,
 				scopes: authorization.scopes,
 				resources,
+				policy,
 			});
 			return { resources, ...dpop };
 		},
