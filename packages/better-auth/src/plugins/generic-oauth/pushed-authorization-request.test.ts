@@ -257,7 +257,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 			clientId: "par-client",
 			tokenEndpoint: `${authorizationServer.url}/token`,
 			grantType: "authorization_code",
-			issuer: as.url,
+			issuer: authorizationServer.url,
 		});
 	});
 
@@ -282,8 +282,10 @@ describe("generic-oauth pushed authorization requests", async () => {
 		const { res } = await signIn(instance);
 
 		expect(res.error).toBeNull();
-		const assertion = as.pushed()[0]!.body.get("client_assertion");
-		expect(decodeJwt(assertion!).aud).toBe(as.url);
+		const assertion = authorizationServer
+			.pushed()[0]!
+			.body.get("client_assertion");
+		expect(decodeJwt(assertion!).aud).toBe(authorizationServer.url);
 	});
 
 	it("sends client_secret_basic credentials in the Authorization header", async () => {
