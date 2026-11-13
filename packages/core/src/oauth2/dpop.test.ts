@@ -259,20 +259,30 @@ describe("verifyDpopProof", () => {
 	 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
 	 */
 	it.each([
-		["no scheme", "raw-token-without-scheme"],
-		["an unsupported scheme", "Basic dXNlcjpwYXNz"],
+		["no Authorization header", undefined, "missing authorization header"],
+		[
+			"a token with no scheme",
+			"raw-token-without-scheme",
+			"authorization scheme must be Bearer or DPoP",
+		],
+		[
+			"a token with an unsupported scheme",
+			"Basic dXNlcjpwYXNz",
+			"authorization scheme must be Bearer or DPoP",
+		],
 	])(
-		"rejects a token with %s without an error code",
-		async (_, authorizationHeader) => {
+		"rejects %s without an error code",
+		async (_, authorizationHeader, message) => {
 			const error = await verifyAccessTokenRequest(
 				{ authorizationHeader, method, url },
 				remoteVerifyOptions(),
 			).catch((e: unknown) => e);
 			expect(error).toMatchObject({
 				status: "UNAUTHORIZED",
-				body: { message: "authorization scheme must be Bearer or DPoP" },
+				body: { message },
 			});
 			expect(error).not.toHaveProperty("body.error");
+			expect(error).not.toHaveProperty("body.error_description");
 		},
 	);
 });
