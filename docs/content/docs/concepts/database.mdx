@@ -129,8 +129,6 @@ When the auth instance is first used, Better Auth checks that your database has 
 
 Drizzle and Prisma are checked against your schema definitions, so the check cannot tell whether migrations were applied.
 
-Only the Kysely, Drizzle, and Prisma adapters register a schema check. MongoDB, the memory adapter, and custom adapters are not validated: Better Auth logs a debug message, or a warning if you set `validateSchema: true`, and database operations proceed normally.
-
 To disable runtime validation, set `advanced.database.validateSchema` to `false`.
 
 ```ts title="auth.ts"
