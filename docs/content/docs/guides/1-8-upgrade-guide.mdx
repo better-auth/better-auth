@@ -1,0 +1,391 @@
+---
+icon: guidesV18UpgradeGuide
+sidebarTitle: "1.8 Upgrade Guide"
+title: Upgrading to Better Auth 1.8
+description: Upgrade Better Auth from 1.7 to 1.8, including schema changes and breaking changes in sign-up, phone numbers, One Tap, social provider profiles, the OAuth provider, device authorization, and SAML.
+---
+
+Most projects upgrade to Better Auth 1.8 with one command:
+
+```package-install
+npx auth@latest upgrade
+```
+
+Upgrade `better-auth` and every `@better-auth/*` package together so they stay on 1.8.
+
+Some areas change behavior or types. Use this table to choose the sections that apply to your project.
+
+| If your project                              | Read                                                                                      |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Uses Better Auth at all                      | [Core](#core)                                                                             |
+| Uses social login, generic OAuth, or One Tap | [Social and generic OAuth sign-in](#social-and-generic-oauth-sign-in)                     |
+| Uses the phone number plugin                 | [Phone number](#phone-number)                                                             |
+| Runs its own OAuth or OpenID provider        | [Schema changes](#schema-changes) and [As an identity provider](#as-an-identity-provider) |
+| Uses the device authorization plugin         | [Device authorization](#device-authorization)                                             |
+| Uses SAML SSO                                | [Enterprise SSO](#enterprise-sso)                                                         |
+| Uses passkeys, Electron, or Drizzle          | [Other plugins and adapters](#other-plugins-and-adapters)                                 |
+
+## Schema changes
+
+Only the OAuth provider plugins add columns in 1.8. Every new column is optional, so no data step is needed. Other projects can skip this section.
+
+* `oauthProvider()` adds:
+  * `acr` and `amr` on `oauthRefreshToken`
+  * `act` on `oauthAccessToken`
+  * `expiresAt`, `sectorIdentifier`, `frontchannelLogoutUri`, and `frontchannelLogoutSessionRequired` on `oauthClient`
+* `oauthDeviceAuthorization()` adds `referenceId`, `authTime`, `acr`, and `amr` on `deviceCode`.
+
+Apply the schema, then deploy the 1.8 packages. With the built-in Kysely adapter, run `npx auth@latest migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth@latest generate`, review the output, and apply it with your migration tooling. MongoDB needs no migration.
+
+<Callout type="warn">
+  With the Kysely, Prisma, or Drizzle adapter, the default schema check fails every request until the new columns exist. With Prisma or Drizzle, a regenerated client or schema deployed before the migration fails every request that reads an OAuth client.
+</Callout>
+
+***
+
+## Core
+
+### Sign-up side effects run after the account is saved
+
+Better Auth now sends the verification email for an email sign-up, or for a new social or SSO account, only after the account is saved. `onExistingUserSignUp` also runs after the sign-up's database work completes. A sign-up that rolls back no longer sends an email for an account that doesn't exist.
+
+This changes how errors from these callbacks behave:
+
+* If `sendVerificationEmail` or `onExistingUserSignUp` throws during a sign-up, the sign-up now succeeds and the error is logged. Before, a callback that threw synchronously failed and rolled back the sign-up.
+* If a `databaseHooks` `user` or `account` `after` hook throws during a sign-up, the request still fails, and the verification email is not sent. The user can request a new one.
+
+**What to do:** if you threw from `sendVerificationEmail` or `onExistingUserSignUp` to reject a sign-up, move that check out of the callback. To reject only new accounts, return `false` from a `databaseHooks.user.create.before` hook:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          if (!isAllowedDomain(user.email)) {
+            return false;
+          }
+        },
+      },
+    },
+  },
+});
+```
+
+This hook doesn't run when the email already exists, because that sign-up never creates a user. For a check that must also reject those attempts, use a [before hook on `/sign-up/email`](/docs/concepts/hooks#example-enforce-email-domain-restriction).
+
+### Session cache writes after sign-in
+
+This applies with `secondaryStorage` and `session.storeSessionInDatabase: true`. Social, SSO, One Tap, and OAuth proxy sign-ins now write the session to secondary storage after the commit, as email sign-up already did. A failed write is logged instead of failing the sign-in. With `session.preserveSessionInDatabase: true`, a failed write still fails the sign-in.
+
+### Sensitive routes require a live session
+
+This applies with a server-side session store. These routes now check that the session is still active in the store, even when the cookie cache is on:
+
+* Passkey registration
+* Device-code approval
+* Two-factor enrollment
+* Phone number changes
+* Social account linking
+* Organization invitations
+
+A session created from an API key with `enableSessionForAPIKeys` is refused on these routes.
+
+**What to do:** if you call `linkOAuthAccount` directly, pass the session that started the link in the OAuth state. Social link callbacks now require that session.
+
+### Expired verification rows are cleaned up on use
+
+Expired verification rows are now also deleted when a single-use value, such as a magic link, an OTP, or an issued nonce, is used. Before, cleanup ran only when a value was looked up. `verification.disableCleanup` turns off both kinds of cleanup.
+
+***
+
+## Social and generic OAuth sign-in
+
+### Google One Tap requires a server-issued nonce
+
+`/one-tap/callback` now requires a single-use nonce from the new `POST /one-tap/nonce` endpoint, so each Google ID token signs in only once.
+
+If you sign in with `authClient.oneTap()`, the client fetches the nonce for you. Remove its `nonce` option and any `nonce` in `additionalOptions`, which are now ignored.
+
+If you call `/one-tap/callback` or `auth.api.oneTapCallback` yourself, the callback now rejects requests that were accepted before:
+
+* A request without a `nonce` returns `400`.
+* A nonce that is unknown, expired, or already used returns `400 INVALID_ID_TOKEN_NONCE`.
+* A token whose `nonce` claim differs from the nonce is rejected as an invalid ID token.
+
+**What to do:** fetch a nonce from `POST /one-tap/nonce`, pass it to Google, and send it back in the callback body, as [Nonce](/docs/plugins/one-tap#nonce) shows.
+
+### ID token sign-in rejects an opaque token sent with a nonce
+
+When a client signs in or links an account with a provider token through `signIn.social` or `linkSocial`, and the request also sends a `nonce`, an opaque (non-JWT) token, such as a Facebook Graph access token, is now rejected. An opaque token cannot carry a nonce, so the nonce cannot be checked. Opaque tokens sent without a `nonce` are still accepted.
+
+**What to do:** if a provider sets a custom `verifyIdToken`, compare the request's nonce to the token's `nonce` claim inside it.
+
+### Generic OAuth rejects an `Authorization` entry in `authorizationHeaders`
+
+A generic OAuth provider whose `authorizationHeaders` contains `Authorization`, in any letter case, now fails at startup with an error that names the provider. Before, Better Auth sent that header to the token endpoint, where it could conflict with the client authentication from `clientSecret` or `tokenEndpointAuth`.
+
+**What to do:** set the header from a custom token endpoint method. The custom method adds no client credentials, so set every credential the provider requires:
+
+```ts title="auth.ts"
+tokenEndpointAuth: {
+  method: "custom",
+  customizeRequest({ body, headers }) {
+    body.set("client_id", process.env.PROVIDER_CLIENT_ID!);
+    headers.authorization = `Provider ${process.env.PROVIDER_CREDENTIAL}`;
+  },
+},
+```
+
+Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refreshAccessToken`, or `refreshAccessTokenRequest` from `@better-auth/core/oauth2` that pass `authorization` in `headers` now throw.
+
+### Social provider profile types match the provider
+
+This applies if you use `mapProfileToUser`, a custom `getUserInfo`, or read a provider's profile type. Each profile type now matches what the provider returns. Claims that depend on a scope or account setting are optional, and a provider that omits a value leaves the stored value unchanged when profile updates are enabled.
+
+**What to do:** typecheck your project and handle optional or `null` values. Where a provider can omit the email, such as Naver, PayPal, Paybin, Railway, or Spotify, `mapProfileToUser` must supply one.
+
+These providers also change a field's type or need a code change:
+
+* **Dropbox:** custom profiles must supply the new required fields, including `home_path` for team roots.
+* **GitHub:** `id` and the account counters are numbers.
+* **GitLab:** `locked` is a required boolean.
+* **Hugging Face:** organizations are arrays, and roles are strings. Use `securityRestrictions` instead of the deprecated SSO and MFA flags.
+* **Kick:** `user_id` is a number.
+* **Linear:** `avatarUrl` is required and typed `string | null`.
+* **LinkedIn:** `locale` is a language tag string, such as `en-US`, instead of an object.
+* **Microsoft Entra ID:** timestamps are numbers, `groups`, `acrs`, and `xms_cc` are string arrays, and `in_corp` is a boolean.
+* **Notion:** a missing `image` is `undefined` instead of `null`.
+* **Paybin and Twitch:** profiles come from UserInfo instead of ID token claims. A custom ID token sign-in that uses the default profile reader must also send `accessToken`.
+* **Polar:** accounts are identified by the UserInfo subject, and `mapProfileToUser` receives the UserInfo claims.
+* **VK:** `user.phone` is a string.
+* **Zoom:** login types include `11`, `21`, and `23`. Exhaustive login-type checks must handle them.
+
+Apple, Cognito, Discord, Facebook Limited Login, GitLab, Google, Gumroad, Kakao, Naver, Patreon, PayPal, Railway, Roblox, Slack, Spotify, and Twitter (X) mark more claims optional or nullable. Cognito, Roblox, and Slack type custom claims as `unknown`. A missing email verification claim from Discord, Google, or PayPal now means unverified.
+
+***
+
+## Phone number
+
+### A phone number is set only by verifying it
+
+The phone number plugin now sets a user's number only after the user verifies it:
+
+* Routes that create a user reject an unverified `phoneNumber` field with `PHONE_NUMBER_CANNOT_BE_SET`. Examples are email sign-up and an email OTP sign-in that creates a new account.
+* A phone number mapped from a social profile is dropped.
+* Verifying a number stored unverified on another account requires that account's session, or the cookie from a `requireVerification` sign-in. Otherwise the request returns `PHONE_NUMBER_PENDING_VERIFICATION`. With `updatePhoneNumber: true`, the number moves to the signed-in user instead.
+* Phone sign-in with `requireVerification` now requires `sendOTP`, and returns `SEND_OTP_NOT_IMPLEMENTED` without it.
+
+**What to do:** remove `phoneNumber` from calls that create a user, such as `signUp.email`. Keep it in `signIn.phoneNumber`, which uses it to find the account. Set a new user's number afterwards with `authClient.phoneNumber.sendOtp` and `authClient.phoneNumber.verify({ updatePhoneNumber: true })`, as the [phone number plugin](/docs/plugins/phone-number) shows.
+
+### Phone password reset requires a verified number
+
+`requestPasswordReset` no longer sends a code to a phone number that is not verified on the account, and `resetPassword` returns `PHONE_NUMBER_PENDING_VERIFICATION` without changing the password.
+
+**What to do:** users with an unverified number must verify it first, or reset their password another way.
+
+***
+
+## As an identity provider
+
+This section covers `@better-auth/oauth-provider`. Apply the [schema changes](#schema-changes) first. Every setup should read the first four sections. The rest apply only if you use the feature they name.
+
+### `reference_id` and `act` claims are reserved
+
+The provider now sets the `reference_id` and `act` access token claims itself:
+
+* `reference_id` holds the consent reference that `postLogin.consentReferenceId` returns, such as an organization. JWT access tokens include it, and introspection returns it.
+* `act` names the actor of a delegated token from token exchange.
+
+A value for either claim set by `customAccessTokenClaims`, an extension `claims.accessToken` contributor, or a resource's `customClaims` is now dropped with a warning.
+
+**What to do:** rename your own claim if you set either name. A custom grant that issues a delegated token passes `act` to `issueTokens`.
+
+```ts title="auth.ts"
+oauthProvider({
+  customAccessTokenClaims: ({ user }) => ({
+    // was: reference_id
+    tenant_id: user.tenantId,
+  }),
+});
+```
+
+### Revocation and introspection follow RFC 7009 and RFC 7662
+
+`/oauth2/revoke` and `/oauth2/introspect` now find a token the way the RFCs describe. [Revocation](/docs/plugins/oauth-provider/tokens#revocation) documents the full behavior. These responses changed:
+
+* `/oauth2/revoke` returns `200` for an unknown or already revoked token. Before, it returned `400 invalid_request`. A valid JWT access token still returns `400 unsupported_token_type`.
+* A token sent with the wrong `token_type_hint` is found. Before, revoke returned `400` and introspection returned `{ "active": false }` for a valid token.
+* A confidential client that revokes a token issued to a different client gets `400 invalid_request`. A public client gets `200`, and the token stays valid.
+* A JWT-shaped token that fails verification, such as one with `alg: none` or a forged signature, is an invalid token: `200` from revoke, `{ "active": false }` from introspection, and `401 invalid_token` from UserInfo. Before, all three returned `500`.
+* At `/oauth2/token`, a refresh token without the configured `prefix.refreshToken` gets `400 invalid_grant`. Before, it got `400 invalid_token`.
+* In an extension grant, `provider.validateAccessToken` returns `{ active: false }` for an unknown token instead of throwing. `provider.requireActiveAccessToken` still throws.
+
+**What to do:** update clients and tests that expect the old status codes.
+
+### Repeated request parameters are rejected
+
+To stop a request from carrying two values that different parts of the server read differently, OAuth endpoints now reject a standard parameter sent more than once with `400 invalid_request`. The error description names the parameter.
+
+* At `/oauth2/token`, `/oauth2/introspect`, and `/oauth2/revoke`, any repeated form parameter fails, such as `code=a&code=b`. At the token endpoint, `resource` and `audience` may still repeat.
+* A form-encoded POST to `/oauth2/authorize` follows the same rules as a GET request. A repeated `resource` keeps every value instead of only the last one.
+* A parameter sent without a value counts as omitted, so `scope=read&scope=` is the same as `scope=read`, and `resource=` is the same as no `resource`.
+* A malformed `resource` at the token endpoint, such as a relative URI, returns `invalid_target` instead of `invalid_request`.
+
+**What to do:** clients that send each parameter once need no change. If your client matches on the error code for a malformed `resource`, match `invalid_target`.
+
+### Client metadata updates
+
+* Updating a client with an empty `metadata` object now clears its stored metadata. Before, the old metadata stayed.
+* Sending `backchannel_logout_uri: null` or `frontchannel_logout_uri: null` to `/oauth2/update-client` or `adminUpdateOAuthClient` now clears the URI. Before, `null` was rejected.
+
+### Client secret expiry takes effect
+
+This applies if you set `clientRegistrationClientSecretExpiration`, or pass `client_secret_expires_at` to `adminCreateOAuthClient` or `adminUpdateOAuthClient`. The expiry is now saved and enforced. Once it passes, the token, introspection, and revocation endpoints reject the secret with `invalid_client`. Before, the value was discarded and secrets never expired.
+
+Clients created before you upgrade have no stored expiry, so their secrets still never expire. **What to do:** to give an existing client an expiry, set `client_secret_expires_at` with `adminUpdateOAuthClient`, as [Restricted fields](/docs/plugins/oauth-provider/clients#restricted-fields) describes.
+
+### Sender-constrained tokens keep their binding
+
+This applies if you bind tokens with DPoP or mTLS, or write a `clientAuthentication` strategy:
+
+* A `client_credentials` token is now bound to the `confirmation` that a `clientAuthentication` strategy returns, such as an mTLS certificate thumbprint. When the strategy returns a DPoP key (`jkt`), the token type is `DPoP`, and the client must send a DPoP proof to every protected resource.
+* A confirmation that is not a DPoP key no longer satisfies a required DPoP binding. When a client registers with `dpop_bound_access_tokens: true`, or a resource sets `dpopBoundAccessTokensRequired: true`, such an issuance fails with `invalid_dpop_proof`.
+* A malformed `confirmation` fails the request with `server_error`. A confirmation must have exactly one member, `jkt` or `x5t#S256`, with a non-empty string value.
+* With `oauthTokenExchange()`, a client that exchanges its own DPoP-bound access token must prove the same key, with a DPoP proof or a matching `confirmation`. A client that exchanges its own certificate-bound token must return the same `confirmation` from its strategy, or the exchange fails with `invalid_request`. DPoP checks now run before `allowExchange`.
+
+**What to do:** return a confirmation from a strategy only for the key or certificate the client proved. Clients whose strategy returns a `jkt` must send DPoP proofs.
+
+### Consent reference hook runs once
+
+`postLogin.consentReferenceId` now runs once per acceptance instead of twice. Accepting at `/oauth2/consent` with `reference_id` fails with `invalid_request` when `postLogin.consentReferenceId` is not configured.
+
+**What to do:** if `consentReferenceId` has a side effect, such as writing an audit record, check that it no longer expects two calls.
+
+### Pairwise subjects for private-use and loopback redirect URIs
+
+Pairwise clients created after the upgrade with private-use redirect URIs, such as `com.example.app:/callback`, or loopback ones, such as `http://localhost:8787/callback`, each get their own `sub`. Before, unrelated clients of either kind could share one. Existing clients keep their current `sub`.
+
+### Extension and API authors
+
+This applies if you build on `extendOAuthProvider()` or implement the provider API yourself:
+
+* Custom `OAuthProviderApi` implementations must add `verifyDpopProof()` and `issueDpopNonce()`.
+* Extension grants now receive every `audience` value instead of only the last one.
+* `DpopBindingErrorCode` and `DpopProofErrorCode` from `@better-auth/core/oauth2` now include `use_dpop_nonce`. DPoP checks return it only when you pass a `nonce` option, but exhaustive checks over either type must handle it to typecheck:
+
+  ```ts
+  function describe(code: DpopBindingErrorCode): string {
+    switch (code) {
+      case "invalid_token":
+        return "Invalid access token";
+      case "invalid_dpop_proof":
+        return "Invalid DPoP proof";
+      case "use_dpop_nonce":
+        return "Retry with the nonce from the DPoP-Nonce header";
+    }
+  }
+  ```
+
+***
+
+## Device authorization
+
+### OAuth device codes are approved through `/oauth2/authorize`
+
+This applies to `oauthDeviceAuthorization()`. Standalone `deviceAuthorization()` setups are unaffected.
+
+Users now approve device codes on the provider's sign-in, account selection, post-login, and consent pages, the same as an authorization request. The `/device`, `/device/approve`, and `/device/deny` endpoints refuse OAuth device codes with `invalid_request`, and the error names the URL to use.
+
+**What to do:** deploy these page changes together with the upgrade, because 1.7 can't approve a code through `/oauth2/authorize`. Change your device verification page to send the browser to `/oauth2/authorize?user_code=<code>`, show the `user_code` on your consent page, and handle the `status` or `error` the user returns with. [Approve the device](/docs/plugins/device-authorization#approve-the-device) shows the page.
+
+### Device code decisions and polling
+
+These apply to both device authorization plugins:
+
+* When the same device code is approved and denied at the same time, only the first decision takes effect. The other request fails with `invalid_request` and "Device code already processed". Before, both requests succeeded and the later one replaced the first.
+* The `/device/approve` error type no longer lists `device_code_already_processed`, which the server never returned. TypeScript code that compares against it must check `invalid_request`.
+* Device clients that poll too soon after their code expires now receive `expired_token` right away, instead of `slow_down`.
+
+### Custom `DeviceAuthorizationGrant` implementations
+
+If you wrote a custom `DeviceAuthorizationGrant`:
+
+* Rename `assertSessionRedemption` to `assertStandaloneUse`. It now also runs for `/device`, `/device/approve`, and `/device/deny`, and receives `use: "redeem"` or `use: "approve"`.
+* Remove `getVerificationContext`, `verificationOpenAPIProperties`, and the interface's second type parameter. `/device` no longer returns grant details.
+* A grant that approves codes on its own pages can use `findDeviceCodeByUserCode`, `assertDeviceCodePending`, `decideDeviceCode`, and `buildVerificationUris`.
+
+***
+
+## Enterprise SSO
+
+### SAML uses the NameID as the email only for the email format
+
+SAML sign-in now uses the `NameID` as the user's email only when its `Format` is `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. Before, any NameID became the email, even when it was not an address.
+
+A provider that sends no email attribute, and a NameID in another format or with no format, now fails with `error=missing_user_info`. This includes users who signed in that way before. The server log names the format the IdP sent. A SAML response without a NameID also redirects with `error=missing_user_info`, instead of `error=saml_error`.
+
+**What to do:** pick one of these before you upgrade:
+
+* Configure the IdP to send an `email` attribute, or the `emailAddress` NameID format.
+* Set `samlConfig.mapping.email` to the attribute the IdP does send. [SAML](/docs/plugins/sso/saml) lists the attributes Better Auth reads by default.
+* Return the NameID from `mapProfileToUser`, as [Use an email-valued NameID](/docs/plugins/sso/provisioning#use-an-email-valued-nameid) describes.
+
+### SAML users without a name get their email as their name
+
+Before, a SAML user without a `displayName`, `givenName`, or `surname` attribute got the NameID as their name, which can be an opaque ID. In `mapProfileToUser`, `providerUser.name` is now `undefined` in that case. If `mapProfileToUser` returns a `name`, the user gets that name instead of the email. Existing users keep their stored name, unless `resolveUser` links them with `profile: "update"`, or `account.accountLinking.updateUserInfoOnLink` is on when their SSO account is first linked by email.
+
+***
+
+## Other plugins and adapters
+
+### Passkeys enforce the user verification policy on sign-in
+
+The passkey plugin now applies `authenticatorSelection.userVerification` to authentication as well as registration. When it is `required`, a response without the user verification flag is rejected.
+
+**What to do:** if you set `userVerification: "required"`, make sure your users' authenticators support user verification, such as a PIN or biometric. Otherwise set it to `"preferred"`.
+
+### Electron sign-in waits for two-factor verification
+
+Electron desktop sign-in now completes only after required two-factor verification and the other sign-in after-hooks, whatever the plugin order. Authorization codes require the issuing browser session to stay valid until the code is exchanged.
+
+**What to do:** in a plugin after-hook on a credential sign-in route, handle a `null` `ctx.context.newSession` while two-factor verification is pending.
+
+### Drizzle schema marks omitted `required` fields as non-nullable
+
+The Drizzle generator now emits non-nullable Relations v2 columns for fields whose `required` flag is omitted. Regenerating an existing schema can produce a nullability migration.
+
+**What to do:** backfill any `NULL` values in those columns before you apply the migration.
+
+***
+
+## Pending changes
+
+<Callout type="warn">
+  The changes in this section are not yet merged into the 1.8 branch. Move each entry into its section, or remove it, before the release candidate.
+</Callout>
+
+### Pending schema changes for `oauthProvider()`
+
+Every `oauthProvider()` setup needs these columns, even when the feature that uses them is off:
+
+* `oauthClient.requirePushedAuthorizationRequests`, a boolean that defaults to `false`, from pushed authorization requests.
+* `oauthRefreshToken.grantId` and `oauthAccessToken.grantId`, from grant-wide token revocation.
+* `oauthAccessToken.accessTokenClaims`, from opaque access token claims.
+
+Requests fail until the columns exist.
+
+**What to do:** apply these columns the same way as the [schema changes](#schema-changes), before you deploy. The warning there about regenerated Prisma and Drizzle clients applies here too.
+
+### Pending behavior changes
+
+These pending changes need action from OAuth provider setups:
+
+* **Grant-wide token revocation:** revoking a refresh token at `/oauth2/revoke` now deletes every opaque access token of its grant, including tokens issued before earlier refreshes. Opaque access tokens issued before you upgrade are still deleted only with the refresh token that issued them. Replaying a revoked refresh token works as before: it deletes every refresh token the client holds for that user, and the opaque access tokens linked to them.
+* **Opaque access token claims:** a custom grant that passes `accessTokenClaims` while issuing opaque tokens will see them at introspection, `validateAccessToken`, and token exchange `may_act` checks.
+* **Authorization code reuse:** reuse revokes the code's tokens only when the request authenticates as the code's client and, for a PKCE code, carries the matching `code_verifier`. A reuse after the code would have expired no longer revokes anything.
+* **Unsupported `Authorization` schemes:** `verifyAccessTokenRequest` rejects a header with no scheme, or a scheme such as `Basic`, without an `error` code in the 401 body. Code that matched `body.error === "invalid_token"` for this case must check for a 401 without `body.error`.
+
+### Pending opt-in changes
+
+These pending changes are opt-in or additive and need no action: pairwise access token subjects (`accessTokenSubject: "pairwise"`), revocable JWT access tokens (`revocableJwtAccessTokens: true`), token exchange for public clients (`publicClients: "dpop-bound"`), in-process resource verification (`verifyResourceRequest`), and discovery metadata from extensions.
