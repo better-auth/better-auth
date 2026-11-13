@@ -79,7 +79,8 @@ export interface OrganizationOptions {
 	 * Overrides how the plugin resolves the signed-in user's membership in an
 	 * organization. Runs on every lookup of the caller's own membership:
 	 * setting an organization active, reading it, checking permissions, and
-	 * managing members, invitations and teams. Keep it cheap or cached.
+	 * managing members, invitations and teams. `leaveOrganization` is the
+	 * exception: it removes the stored row. Keep it cheap or cached.
 	 *
 	 * `member` is the caller's member row, or `null`. Return the effective
 	 * membership, or `null` to refuse. Return `member` to keep the default;
@@ -103,7 +104,7 @@ export interface OrganizationOptions {
 	 * ```ts
 	 * resolveMembership: ({ user, member }, ctx) => {
 	 *   const paths = ["/organization/update", "/organization/delete"];
-	 *   if (user.role === "admin" && paths.includes(ctx.path)) {
+	 *   if (user.role?.split(",").includes("admin") && paths.includes(ctx.path)) {
 	 *     return { role: "owner" };
 	 *   }
 	 *   return member;
