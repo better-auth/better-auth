@@ -198,7 +198,7 @@ Better Auth computes the value with HMAC-SHA256 over the client's **sector ident
 Changing a client's redirect URIs recomputes its sector, so moving to another host changes the `sub` its users receive. Clients created before Better Auth stored sectors keep the sector of their first redirect URI host, so their users' `sub` does not change. Unrelated custom-scheme or loopback clients created before then can share a sector.
 
 * Pairwise `sub` appears in the ID token, UserInfo, and introspection. Introspection returns the `sub` of the client the token was issued to.
-* JWT access tokens carry the user ID as `sub` by default, so resource servers can look users up. A client can decode its own JWT access tokens, so a pairwise client that requests a `resource` learns the user ID. To keep the user ID from pairwise clients, set `accessTokenSubject: "pairwise"`, or have them request opaque tokens by omitting `resource`.
+* JWT access tokens carry the user ID as `sub` by default, so resource servers can look users up. A client can decode its own JWT access tokens, so a pairwise client that requests a `resource` learns the user ID. The provider issues a JWT access token only when the client requests a `resource` and the JWT plugin is enabled; otherwise the token is opaque. To keep the user ID from pairwise clients, set `accessTokenSubject: "pairwise"`, or have them request opaque tokens by omitting `resource`.
 
 ### Pairwise `sub` in JWT access tokens
 
@@ -213,7 +213,7 @@ oauthProvider({
 
 Resource servers that read `sub` from those tokens then see a different value for the same user under each sector, and cannot look the user up by that value. Keep the default if a resource server keys its data on the user ID across clients. Tokens for clients with `subject_type: "public"` and `client_credentials` tokens are unaffected.
 
-The option covers the top-level `sub` only. A token from [delegation](/docs/plugins/oauth-provider/tokens#delegate-to-an-actor) still carries the actor user's ID in `act.sub`.
+The option covers the top-level `sub` only. A token from [delegation](/docs/plugins/oauth-provider/tokens#delegate-to-an-actor) still carries the actor's subject in `act.sub`: the user ID for a user's token, or the client ID for a `client_credentials` token.
 
 The token also carries a `ba_uid` claim: the user ID encrypted with the Better Auth secret, with a fresh nonce for each token so the value does not link users across clients. UserInfo, introspection, and token exchange read the user from it. Resource servers should ignore it. Rotating the Better Auth secret without keeping the old one makes existing tokens inactive.
 
