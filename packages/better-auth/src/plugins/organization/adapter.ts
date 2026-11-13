@@ -1350,7 +1350,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			if (!options?.resolveMembership) return member;
 			const resolved = await options.resolveMembership(
-				{ user, session, organizationId, member },
+				{ user, session, organizationId, member, purpose: "caller" },
 				ctx,
 			);
 			if (!resolved) return null;

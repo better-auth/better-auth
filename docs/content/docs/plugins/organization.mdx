@@ -676,7 +676,7 @@ The plugin calls it on every lookup of the caller's own membership: setting an o
 
 Return the effective membership, or `null` to refuse:
 
-* `member`: keep the default. Start with `if (member) return member;`, or real members are locked out.
+* `member`: keep the default. End with `return member;`, or real members are locked out. Put elevated grants before it, so an admin who is also a plain member of the organization still gets the elevated role.
 * `null`: refuse, even if a member row exists.
 * A membership object: `role` is required, with multiple roles as a comma-separated string. `id` and `createdAt` default to the member row's, or to a stable placeholder id and the current time when there is none. Other fields, including your member `additionalFields`, merge over the row. `userId` and `organizationId` are always the caller's and the organization's.
 
@@ -691,12 +691,11 @@ export const auth = betterAuth({
     admin(),
     organization({
       resolveMembership: ({ user, member }, ctx) => {
-        if (member) return member;
         const paths = ["/organization/update", "/organization/delete"];
         if (user.role === "admin" && paths.includes(ctx.path)) {
           return { role: "owner" };
         }
-        return null;
+        return member;
       },
     }),
   ],
@@ -707,7 +706,7 @@ Returning the `owner` role grants the owner's protections too, so scope it as na
 
 A resolved membership doesn't appear in `listMembers`, and leaving the organization still requires a member row.
 
-While `resolveMembership` is set, `getInvitation` accepts an invitation whose inviter has no member row, since a resolved member can send invitations. That also keeps invitations from removed members readable, so cancel a member's pending invitations when you remove them if that matters to you.
+`getInvitation` refuses an invitation whose inviter is no longer in the organization. A resolved member can send invitations without a member row, so when the inviter has none, the plugin calls `resolveMembership` for them with `purpose: "inviter"`, the inviter as `user`, `session: null` and `member: null`. `ctx` is the invitee's request, not the inviter's. Return a membership if the inviter may still invite, or `null` to refuse. All other calls have `purpose: "caller"` and the caller's session. A resolver that decides by `ctx.path` or reads `session` should check `purpose` first.
 
 #### Use Active Organization
 
@@ -2618,7 +2617,7 @@ await client.organization.create({
 
 **creatorRole**: `admin | owner` - The role of the user who creates the organization. By default, it's `owner`. You can set it to `admin`.
 
-**resolveMembership**: `({ user, session, organizationId, member }, ctx) => Awaitable<{ role, id?, createdAt?, ...fields } | null>` - Overrides how the signed-in user's membership is resolved, on every lookup of it. `ctx` is the endpoint context of the request. See [Resolve Membership](#resolve-membership).
+**resolveMembership**: `({ user, session, organizationId, member, purpose }, ctx) => Awaitable<{ role, id?, createdAt?, ...fields } | null>` - Overrides how the signed-in user's membership is resolved, on every lookup of it. `ctx` is the endpoint context of the request. `purpose` is `"inviter"`, with `session: null`, when `getInvitation` checks an inviter who has no member row. See [Resolve Membership](#resolve-membership).
 
 **membershipLimit**: `number` | `((user: User, organization: Organization) => Promise<number> | number)` - The maximum number of members allowed in an organization. By default, it's `100`. You can set it to any number you want or a function that returns the limit number.
 

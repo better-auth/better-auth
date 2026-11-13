@@ -1244,11 +1244,25 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 				userId: invitation.inviterId,
 				organizationId: invitation.organizationId,
 			});
-			const inviter =
-				member?.user ??
-				(options.resolveMembership
-					? await ctx.context.internalAdapter.findUserById(invitation.inviterId)
-					: null);
+			const findResolvedInviter = async () => {
+				if (!options.resolveMembership) return null;
+				const user = await ctx.context.internalAdapter.findUserById(
+					invitation.inviterId,
+				);
+				if (!user) return null;
+				const resolved = await options.resolveMembership(
+					{
+						user,
+						session: null,
+						organizationId: invitation.organizationId,
+						member: null,
+						purpose: "inviter",
+					},
+					ctx,
+				);
+				return resolved ? user : null;
+			};
+			const inviter = member?.user ?? (await findResolvedInviter());
 			if (!inviter) {
 				throw APIError.from(
 					"BAD_REQUEST",

@@ -18,9 +18,10 @@ import type {
 export type ResolveMembership = (
 	data: {
 		user: User & Record<string, any>;
-		session: Session & Record<string, any>;
+		session: (Session & Record<string, any>) | null;
 		organizationId: string;
 		member: (Member & Record<string, any>) | null;
+		purpose: "caller" | "inviter";
 	},
 	ctx: GenericEndpointContext,
 ) => Awaitable<
@@ -82,7 +83,8 @@ export interface OrganizationOptions {
 	 *
 	 * `member` is the caller's member row, or `null`. Return the effective
 	 * membership, or `null` to refuse. Return `member` to keep the default;
-	 * forgetting to do so locks real members out. Multiple roles are a
+	 * forgetting to do so locks real members out. Put elevated grants before
+	 * it, so a user who is also a plain member still gets them. Multiple roles are a
 	 * comma-separated string. Other fields merge over the row; `userId` and
 	 * `organizationId` are always the caller's and the organization's. Nothing
 	 * is written to the member table.
@@ -90,15 +92,21 @@ export interface OrganizationOptions {
 	 * `ctx` is the context of the endpoint being called, so the result can
 	 * depend on the request: `ctx.path`, `ctx.body`, `ctx.headers`.
 	 *
+	 * `purpose` is `"caller"` when resolving the signed-in user, with their
+	 * `session`. It is `"inviter"` when `getInvitation` checks that the sender
+	 * of an invitation, who has no member row, still belongs to the
+	 * organization: `user` is the inviter, `session` is `null`, and `ctx` is
+	 * the invitee's request. Return a membership only if the inviter may still
+	 * invite.
+	 *
 	 * @example
 	 * ```ts
 	 * resolveMembership: ({ user, member }, ctx) => {
-	 *   if (member) return member;
 	 *   const paths = ["/organization/update", "/organization/delete"];
 	 *   if (user.role === "admin" && paths.includes(ctx.path)) {
 	 *     return { role: "owner" };
 	 *   }
-	 *   return null;
+	 *   return member;
 	 * }
 	 * ```
 	 */
