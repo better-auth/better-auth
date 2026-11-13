@@ -291,6 +291,12 @@ export const createInternalAdapter = (
 		}
 	}
 
+	// The most rows a `findMany` without an explicit limit returns.
+	const findManyPageSize = Math.max(
+		options.advanced?.database?.defaultFindManyLimit ?? 100,
+		1,
+	);
+
 	/**
 	 * Lists all of a user's active sessions. Unlike `listSessions()`, it reads
 	 * every database page, so a limit above the adapter's page size still sees
@@ -300,10 +306,7 @@ export const createInternalAdapter = (
 		if (secondaryStorage && !databaseSessionFallbackEnabled) {
 			return internalAdapter.listSessions(userId, { onlyActiveSessions: true });
 		}
-		const pageSize = Math.max(
-			options.advanced?.database?.defaultFindManyLimit ?? 100,
-			1,
-		);
+		const pageSize = findManyPageSize;
 		const now = new Date();
 		const sessions: Session[] = [];
 		for (let offset = 0; ; offset += pageSize) {
@@ -335,8 +338,12 @@ export const createInternalAdapter = (
 			await listAllActiveSessions(current.session.userId),
 			maxPerUser,
 		);
-		if (revokedTokens.length) {
-			await internalAdapter.deleteSessions(revokedTokens);
+		// Delete hooks only see one page of the sessions a bulk delete matches,
+		// so revoke at most a page at a time.
+		for (let i = 0; i < revokedTokens.length; i += findManyPageSize) {
+			await internalAdapter.deleteSessions(
+				revokedTokens.slice(i, i + findManyPageSize),
+			);
 		}
 	}
 

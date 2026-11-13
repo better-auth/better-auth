@@ -350,6 +350,38 @@ describe("session.maxPerUser", () => {
 		expect(deletedFrom).toEqual(["/sign-in/email"]);
 	});
 
+	it("runs session delete hooks for revocations larger than the database page size", async () => {
+		let deleteHookCalls = 0;
+		const { ctx, signIn, isActive, listSessionIds } =
+			await getMaxSessionsTestInstance(1, {
+				advanced: { database: { defaultFindManyLimit: 2 } },
+				databaseHooks: {
+					session: {
+						delete: {
+							async before() {
+								deleteHookCalls++;
+							},
+						},
+					},
+				},
+			});
+		useFakeClock();
+
+		// Sessions created within the same second don't revoke each other.
+		const existing = await signIn();
+		for (let i = 0; i < 4; i++) {
+			await ctx.internalAdapter.createSession(existing.user.id);
+		}
+
+		advanceClock();
+		deleteHookCalls = 0;
+		const next = await signIn();
+
+		expect(deleteHookCalls).toBe(5);
+		expect(await isActive(existing.headers)).toBe(false);
+		expect(await listSessionIds(next.user.id)).toEqual([next.session.id]);
+	});
+
 	it("does not revoke sessions when a create hook deletes the new session", async () => {
 		let deleteCreatedSessions = false;
 		const instance = await getMaxSessionsTestInstance(1, {
