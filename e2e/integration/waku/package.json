@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "hono": "4.13.13",
+    "hono": "4.13.16",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "react-server-dom-webpack": "19.3.1",
