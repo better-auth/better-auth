@@ -50,6 +50,9 @@ const forStaff =
 	({ user, member }) =>
 		user.email === STAFF_EMAIL ? result : member;
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/1595
+ */
 describe("resolveMembership", () => {
 	it("changes nothing when the option is not set", async () => {
 		const { auth, owner, staff, org } = await setup();
@@ -78,6 +81,7 @@ describe("resolveMembership", () => {
 				session: expect.objectContaining({ userId: staffUser.id }),
 				organizationId: org.id,
 				member: null,
+				purpose: "caller",
 			},
 			expect.anything(),
 		);
@@ -92,53 +96,96 @@ describe("resolveMembership", () => {
 		expect(invitation.organizationId).toBe(org.id);
 	});
 
-	it("still refuses an invitation from a removed member without the option", async () => {
-		const { auth, client, signInWithUser, owner, staff, staffUser, org } =
-			await setup();
-		await auth.api.addMember({
-			body: { organizationId: org.id, userId: staffUser.id, role: "admin" },
-		});
-		const invitation = await auth.api.createInvitation({
-			body: { organizationId: org.id, email: "new@test.com", role: "member" },
-			headers: staff,
-		});
-		await auth.api.removeMember({
-			body: { organizationId: org.id, memberIdOrEmail: STAFF_EMAIL },
-			headers: owner,
-		});
-		await client.signUp.email({
-			email: "new@test.com",
-			password: PASSWORD,
-			name: "New",
-		});
-		const invitee = await signInWithUser("new@test.com", PASSWORD);
-		await expect(
-			auth.api.getInvitation({
-				query: { id: invitation.id },
-				headers: invitee.headers,
-			}),
-		).rejects.toMatchObject({ status: "BAD_REQUEST" });
-	});
+	/**
+	 * @see https://github.com/better-auth/better-auth/discussions/7381
+	 */
+	describe("inviter of an invitation", () => {
+		async function inviteFromStaff(ctx: Awaited<ReturnType<typeof setup>>) {
+			const { auth, client, signInWithUser, staff, org } = ctx;
+			const invitation = await auth.api.createInvitation({
+				body: { organizationId: org.id, email: "new@test.com", role: "member" },
+				headers: staff,
+			});
+			await client.signUp.email({
+				email: "new@test.com",
+				password: PASSWORD,
+				name: "New",
+			});
+			const invitee = await signInWithUser("new@test.com", PASSWORD);
+			return () =>
+				auth.api.getInvitation({
+					query: { id: invitation.id },
+					headers: invitee.headers,
+				});
+		}
 
-	it("lets the invitee read an invitation sent by a resolved member", async () => {
-		const { auth, client, signInWithUser, staff, org } = await setup(
-			forStaff({ role: "admin" }),
-		);
-		const invitation = await auth.api.createInvitation({
-			body: { organizationId: org.id, email: "new@test.com", role: "member" },
-			headers: staff,
+		async function removeStaffAfterInviting(
+			ctx: Awaited<ReturnType<typeof setup>>,
+		) {
+			await ctx.auth.api.addMember({
+				body: {
+					organizationId: ctx.org.id,
+					userId: ctx.staffUser.id,
+					role: "admin",
+				},
+			});
+			const getInvitation = await inviteFromStaff(ctx);
+			await ctx.auth.api.removeMember({
+				body: { organizationId: ctx.org.id, memberIdOrEmail: STAFF_EMAIL },
+				headers: ctx.owner,
+			});
+			return getInvitation;
+		}
+
+		it("checks a resolved inviter through the resolver, without a session", async () => {
+			const resolveMembership = vi.fn(forStaff({ role: "admin" }));
+			const ctx = await setup(resolveMembership);
+			const getInvitation = await inviteFromStaff(ctx);
+			resolveMembership.mockClear();
+
+			const fetched = await getInvitation();
+			expect(fetched.inviterEmail).toBe(STAFF_EMAIL);
+			expect(resolveMembership).toHaveBeenCalledWith(
+				{
+					user: expect.objectContaining({ id: ctx.staffUser.id }),
+					session: null,
+					organizationId: ctx.org.id,
+					member: null,
+					purpose: "inviter",
+				},
+				expect.anything(),
+			);
 		});
-		await client.signUp.email({
-			email: "new@test.com",
-			password: PASSWORD,
-			name: "New",
+
+		it("refuses when the resolver no longer grants the inviter a membership", async () => {
+			let staffIsAdmin = true;
+			const ctx = await setup(({ user, member }) =>
+				user.email === STAFF_EMAIL && staffIsAdmin ? { role: "admin" } : member,
+			);
+			const getInvitation = await inviteFromStaff(ctx);
+			staffIsAdmin = false;
+
+			await expect(getInvitation()).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+			});
 		});
-		const invitee = await signInWithUser("new@test.com", PASSWORD);
-		const fetched = await auth.api.getInvitation({
-			query: { id: invitation.id },
-			headers: invitee.headers,
+
+		it("refuses an invitation from a removed member the resolver doesn't grant", async () => {
+			const ctx = await setup(({ member }) => member);
+			const getInvitation = await removeStaffAfterInviting(ctx);
+
+			await expect(getInvitation()).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+			});
 		});
-		expect(fetched.inviterEmail).toBe(STAFF_EMAIL);
+
+		it("refuses an invitation from a removed member without the option", async () => {
+			const getInvitation = await removeStaffAfterInviting(await setup());
+
+			await expect(getInvitation()).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+			});
+		});
 	});
 
 	it("passes the endpoint context so the resolver can decide per request", async () => {
