@@ -211,7 +211,7 @@ export function createPrivateKeyJwtClientAssertionGetter(
 	return async ({ clientId, tokenEndpoint, issuer }) => {
 		if (options.audience === "issuer" && !issuer) {
 			throw new Error(
-				'private_key_jwt audience "issuer" requires the authorization server issuer. Configure the provider with a discovery document that publishes it.',
+				'private_key_jwt audience "issuer" requires the authorization server issuer as `issuer` in the client assertion context. Generic OAuth sets it from the provider\'s discovery document; other callers must pass it themselves.',
 			);
 		}
 		return signPrivateKeyJwtClientAssertion({
