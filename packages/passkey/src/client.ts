@@ -1,8 +1,10 @@
 import type {
+	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
 	ClientFetchOption,
 	ClientStore,
 } from "@better-auth/core";
+import { createLogger } from "@better-auth/core/env";
 import type { BetterFetch } from "@better-fetch/fetch";
 import type {
 	PublicKeyCredentialCreationOptionsJSON,
@@ -41,7 +43,9 @@ export const getPasskeyActions = (
 		$listPasskeys: ReturnType<typeof atom<any>>;
 		$store: ClientStore;
 	},
+	options?: BetterAuthClientOptions | undefined,
 ) => {
+	const logger = createLogger(options?.logger);
 	const signInPasskey = async (
 		opts?:
 			| {
@@ -121,7 +125,7 @@ export const getPasskeyActions = (
 			return verified;
 		} catch (err) {
 			// Error logs ran on the front-end
-			console.error(`[Better Auth] Error verifying passkey`, err);
+			logger.error("Error verifying passkey", err);
 			return {
 				data: null,
 				error: {
@@ -326,11 +330,15 @@ export const passkeyClient = () => {
 		id: "passkey",
 		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<typeof passkey>,
-		getActions: ($fetch, $store) =>
-			getPasskeyActions($fetch, {
-				$listPasskeys,
-				$store,
-			}),
+		getActions: ($fetch, $store, options) =>
+			getPasskeyActions(
+				$fetch,
+				{
+					$listPasskeys,
+					$store,
+				},
+				options,
+			),
 		getAtoms($fetch) {
 			const listPasskeys = useAuthQuery<Passkey[]>(
 				$listPasskeys,

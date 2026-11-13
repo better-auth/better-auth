@@ -1001,6 +1001,41 @@ describe("oneTapClient types", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12410
+ */
+it("uses the configured client logger for One Tap errors", async () => {
+	const error = new Error("Google Identity Services failed to initialize");
+	const log = vi.fn();
+	const initialize = vi.fn(() => {
+		throw error;
+	});
+	const { client } = await getTestInstance(
+		{ plugins: [oneTap()] },
+		{
+			clientOptions: {
+				logger: { level: "error", log },
+				plugins: [oneTapClient({ clientId: "test-client" })],
+			},
+		},
+	);
+	vi.stubGlobal("window", {
+		document: {},
+		googleScriptInitialized: true,
+		google: {
+			accounts: { id: { initialize, renderButton: vi.fn(), prompt: vi.fn() } },
+		},
+	});
+
+	await expect(client.oneTap()).rejects.toBe(error);
+
+	expect(log).toHaveBeenCalledWith(
+		"error",
+		"Error during Google One Tap flow:",
+		error,
+	);
+});
+
 describe("oneTapClient plugin-level options", async () => {
 	const initialize = vi.fn();
 	const renderButton = vi.fn();

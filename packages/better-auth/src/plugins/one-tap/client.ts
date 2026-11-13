@@ -5,6 +5,7 @@ import type {
 	ClientFetchOption,
 	ClientStore,
 } from "@better-auth/core";
+import { createLogger } from "@better-auth/core/env";
 import { isSafeUrlScheme } from "@better-auth/core/utils/url";
 import type { BetterFetch } from "@better-fetch/fetch";
 import { PACKAGE_VERSION } from "../../version";
@@ -219,22 +220,23 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 		getActions: (
 			$fetch: BetterFetch,
 			_$store: ClientStore,
-			_options: BetterAuthClientOptions | undefined,
+			clientOptions: BetterAuthClientOptions | undefined,
 		) => {
+			const logger = createLogger(clientOptions?.logger);
 			return {
 				oneTap: async (
 					opts?: GoogleOneTapActionOptions | undefined,
 					fetchOptions?: ClientFetchOption | undefined,
 				) => {
 					if (isRequestInProgress) {
-						console.warn(
+						logger.warn(
 							"A Google One Tap request is already in progress. Please wait.",
 						);
 						return;
 					}
 
 					if (typeof window === "undefined" || !window.document) {
-						console.warn(
+						logger.warn(
 							"Google One Tap is only available in browser environments",
 						);
 						return;
@@ -250,7 +252,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								: opts.button.container;
 
 						if (!container) {
-							console.error(
+							logger.error(
 								"Google One Tap: Button container not found",
 								opts.button.container,
 							);
@@ -290,7 +292,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								try {
 									await callback(response.credential);
 								} catch (error) {
-									console.error("Error during button callback:", error);
+									logger.error("Error during button callback:", error);
 								}
 							},
 							auto_select: autoSelect,
@@ -355,7 +357,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 										await callback(response.credential);
 										resolve();
 									} catch (error) {
-										console.error("Error during One Tap callback:", error);
+										logger.error("Error during One Tap callback:", error);
 										reject(error);
 									}
 								},
@@ -406,7 +408,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							handlePrompt(0);
 						});
 					} catch (error) {
-						console.error("Error during Google One Tap flow:", error);
+						logger.error("Error during Google One Tap flow:", error);
 						throw error;
 					} finally {
 						isRequestInProgress = false;

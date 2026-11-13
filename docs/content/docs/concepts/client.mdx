@@ -221,6 +221,23 @@ const authClient = createAuthClient({
 })
 ```
 
+### Client Logger
+
+Client plugins use the client logger for diagnostic messages. It accepts the same options as the server logger, so you can route messages to your own logger or disable it:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+
+const authClient = createAuthClient({
+    logger: {
+        level: "error",
+        log(level, message, ...args) {
+            console[level](message, ...args)
+        },
+    },
+})
+```
+
 ### Disabling Default Fetch Plugins
 
 The auth client includes default fetch plugins that handle browser-specific behaviors like automatic redirects. For non-browser environments (e.g., React Native/Expo), you can disable these by setting `disableDefaultFetchPlugins` to `true`:

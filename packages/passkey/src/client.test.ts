@@ -146,6 +146,42 @@ describe("passkey client", () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12410
+	 */
+	it("uses the configured client logger for passkey errors", async () => {
+		const error = new Error("verification failed");
+		const log = vi.fn();
+		const fetchMock = vi.fn(async (path: string) => {
+			if (path === "/passkey/generate-authenticate-options") {
+				return {
+					data: {
+						challenge: "challenge",
+						rpId: "example.com",
+						allowCredentials: [],
+						userVerification: "preferred",
+					},
+				};
+			}
+			throw error;
+		});
+		const actions = getPasskeyActions(
+			fetchMock as unknown as Parameters<typeof getPasskeyActions>[0],
+			{
+				$listPasskeys: { set: vi.fn() },
+				$store: { notify: vi.fn() },
+			} as unknown as Parameters<typeof getPasskeyActions>[1],
+			{ logger: { log } },
+		);
+		mocks.startAuthentication.mockResolvedValueOnce({
+			clientExtensionResults: {},
+		});
+
+		await actions.signIn.passkey();
+
+		expect(log).toHaveBeenCalledWith("error", "Error verifying passkey", error);
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9373
 	 */
 	it("returns an auth error without logging expected authentication ceremony failures", async () => {

@@ -4,6 +4,7 @@ import type {
 	BetterFetchPlugin,
 } from "@better-fetch/fetch";
 import type { Atom, WritableAtom } from "nanostores";
+import type { Logger } from "../env";
 import type { LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
 
@@ -83,6 +84,10 @@ export interface RevalidateOptions {
 
 export interface BetterAuthClientOptions {
 	fetchOptions?: ClientFetchOption | undefined;
+	/**
+	 * Configure logging for client plugins. Uses Better Auth's default logger when omitted.
+	 */
+	logger?: Logger | undefined;
 	plugins?: BetterAuthClientPlugin[] | undefined;
 	baseURL?: string | undefined;
 	basePath?: string | undefined;
