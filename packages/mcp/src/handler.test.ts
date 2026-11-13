@@ -190,6 +190,29 @@ describe("createMcpProtectedRequestHandler", () => {
 		);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-7.1
+	 */
+	it("answers a handler insufficient-scope error on a DPoP request with a DPoP challenge", async () => {
+		verifyAccessTokenRequest.mockResolvedValue({ sub: "user-5" });
+
+		const response = await createMcpProtectedRequestHandler(
+			{ ...protectedRequestOptions, dpop: { signingAlgorithms: ["ES256"] } },
+			async () => {
+				throw createInsufficientScopeError(["mcp:admin"]);
+			},
+		)(
+			new Request("https://app.example.com/mcp", {
+				headers: { Authorization: "DPoP access-token" },
+			}),
+		);
+
+		expect(response.status).toBe(403);
+		expect(response.headers.get("WWW-Authenticate")).toBe(
+			'DPoP error="insufficient_scope", scope="mcp:admin", error_description="access token is missing required scope: mcp:admin", algs="ES256"',
+		);
+	});
+
 	it("propagates an unbranded structural insufficient-scope error unchanged", async () => {
 		verifyAccessTokenRequest.mockResolvedValue({ sub: "user-6" });
 		const spoofed = new APIError("FORBIDDEN", {
