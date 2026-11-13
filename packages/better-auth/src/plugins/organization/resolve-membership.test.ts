@@ -35,6 +35,8 @@ async function setup(resolveMembership?: ResolveMembership) {
 	const staff = await signInWithUser(STAFF_EMAIL, PASSWORD);
 	return {
 		auth,
+		client,
+		signInWithUser,
 		owner: owner.headers,
 		staff: staff.headers,
 		staffUser: staff.res.user,
@@ -88,6 +90,55 @@ describe("resolveMembership", () => {
 			headers: staff,
 		});
 		expect(invitation.organizationId).toBe(org.id);
+	});
+
+	it("still refuses an invitation from a removed member without the option", async () => {
+		const { auth, client, signInWithUser, owner, staff, staffUser, org } =
+			await setup();
+		await auth.api.addMember({
+			body: { organizationId: org.id, userId: staffUser.id, role: "admin" },
+		});
+		const invitation = await auth.api.createInvitation({
+			body: { organizationId: org.id, email: "new@test.com", role: "member" },
+			headers: staff,
+		});
+		await auth.api.removeMember({
+			body: { organizationId: org.id, memberIdOrEmail: STAFF_EMAIL },
+			headers: owner,
+		});
+		await client.signUp.email({
+			email: "new@test.com",
+			password: PASSWORD,
+			name: "New",
+		});
+		const invitee = await signInWithUser("new@test.com", PASSWORD);
+		await expect(
+			auth.api.getInvitation({
+				query: { id: invitation.id },
+				headers: invitee.headers,
+			}),
+		).rejects.toMatchObject({ status: "BAD_REQUEST" });
+	});
+
+	it("lets the invitee read an invitation sent by a resolved member", async () => {
+		const { auth, client, signInWithUser, staff, org } = await setup(
+			forStaff({ role: "admin" }),
+		);
+		const invitation = await auth.api.createInvitation({
+			body: { organizationId: org.id, email: "new@test.com", role: "member" },
+			headers: staff,
+		});
+		await client.signUp.email({
+			email: "new@test.com",
+			password: PASSWORD,
+			name: "New",
+		});
+		const invitee = await signInWithUser("new@test.com", PASSWORD);
+		const fetched = await auth.api.getInvitation({
+			query: { id: invitation.id },
+			headers: invitee.headers,
+		});
+		expect(fetched.inviterEmail).toBe(STAFF_EMAIL);
 	});
 
 	it("passes the endpoint context so the resolver can decide per request", async () => {
