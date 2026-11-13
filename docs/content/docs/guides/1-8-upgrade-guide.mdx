@@ -54,7 +54,7 @@ This changes how errors from these callbacks behave:
 * If `sendVerificationEmail` or `onExistingUserSignUp` throws during a sign-up, the sign-up now succeeds and the error is logged. Before, a callback that threw synchronously failed and rolled back the sign-up.
 * If a `databaseHooks` `user` or `account` `after` hook throws during a sign-up, the request still fails, and the verification email is not sent. The user can request a new one.
 
-**What to do:** if you threw from `sendVerificationEmail` or `onExistingUserSignUp` to reject a sign-up, move that check to a `databaseHooks.user.create.before` hook:
+**What to do:** if you threw from `sendVerificationEmail` or `onExistingUserSignUp` to reject a sign-up, move that check out of the callback. To reject only new accounts, return `false` from a `databaseHooks.user.create.before` hook:
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -71,6 +71,8 @@ export const auth = betterAuth({
   },
 });
 ```
+
+This hook doesn't run when the email already exists, because that sign-up never creates a user. For a check that must also reject those attempts, use a [before hook on `/sign-up/email`](/docs/concepts/hooks#example-enforce-email-domain-restriction).
 
 ### Session cache writes after sign-in
 
@@ -295,7 +297,7 @@ This applies to `oauthDeviceAuthorization()`. Standalone `deviceAuthorization()`
 
 Users now approve device codes on the provider's sign-in, account selection, post-login, and consent pages, the same as an authorization request. The `/device`, `/device/approve`, and `/device/deny` endpoints refuse OAuth device codes with `invalid_request`, and the error names the URL to use.
 
-**What to do:** before you upgrade, change your device verification page to send the browser to `/oauth2/authorize?user_code=<code>`, show the `user_code` on your consent page, and handle the `status` or `error` the user returns with. [Approve the device](/docs/plugins/device-authorization#approve-the-device) shows the page.
+**What to do:** deploy these page changes together with the upgrade, because 1.7 can't approve a code through `/oauth2/authorize`. Change your device verification page to send the browser to `/oauth2/authorize?user_code=<code>`, show the `user_code` on your consent page, and handle the `status` or `error` the user returns with. [Approve the device](/docs/plugins/device-authorization#approve-the-device) shows the page.
 
 ### Device code decisions and polling
 
@@ -331,7 +333,7 @@ A provider that sends no email attribute, and a NameID in another format or with
 
 ### SAML users without a name get their email as their name
 
-Before, a SAML user without a `displayName`, `givenName`, or `surname` attribute got the NameID as their name, which can be an opaque ID. In `mapProfileToUser`, `providerUser.name` is now `undefined` in that case. Existing users keep their stored name, unless `resolveUser` links them with `profile: "update"`, or `account.accountLinking.updateUserInfoOnLink` is on when their SSO account is first linked by email.
+Before, a SAML user without a `displayName`, `givenName`, or `surname` attribute got the NameID as their name, which can be an opaque ID. In `mapProfileToUser`, `providerUser.name` is now `undefined` in that case. If `mapProfileToUser` returns a `name`, the user gets that name instead of the email. Existing users keep their stored name, unless `resolveUser` links them with `profile: "update"`, or `account.accountLinking.updateUserInfoOnLink` is on when their SSO account is first linked by email.
 
 ***
 
