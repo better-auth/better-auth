@@ -27,6 +27,7 @@ import {
 } from "./oauthClient/client-credentials";
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import { assertResourcePrivileges } from "./oauthResource/privileges";
+import { isPushedAuthorizationRequestEnabled } from "./par";
 import { getResource } from "./resources";
 import type {
 	ClientRegistrationRequest,
@@ -551,6 +552,17 @@ export async function checkOAuthClient(
 			error: "invalid_client_metadata",
 			error_description:
 				"require_pushed_authorization_requests must be a boolean",
+		});
+	}
+	if (
+		clientWithDefaults.require_pushed_authorization_requests === true &&
+		!isPushedAuthorizationRequestEnabled(opts) &&
+		!opts.requestUriResolver
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description:
+				"require_pushed_authorization_requests needs pushed authorization requests to be enabled",
 		});
 	}
 

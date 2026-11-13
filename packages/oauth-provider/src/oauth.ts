@@ -1165,6 +1165,36 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 										"RFC 9449 DPoP proof JWT that binds the authorization code to its key",
 								},
 							],
+							requestBody: {
+								required: true,
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											description:
+												"Authorization request parameters, as for /oauth2/authorize, plus client authentication. request and request_uri are rejected.",
+											properties: {
+												client_id: { type: "string" },
+												response_type: { type: "string" },
+												redirect_uri: { type: "string", format: "uri" },
+												scope: { type: "string" },
+												state: { type: "string" },
+												code_challenge: { type: "string" },
+												code_challenge_method: { type: "string" },
+												resource: {
+													type: "array",
+													items: { type: "string", format: "uri" },
+												},
+												dpop_jkt: { type: "string" },
+												client_secret: { type: "string" },
+												client_assertion: { type: "string" },
+												client_assertion_type: { type: "string" },
+											},
+											required: ["response_type"],
+										},
+									},
+								},
+							},
 							responses: {
 								"201": {
 									description: "Authorization request stored",

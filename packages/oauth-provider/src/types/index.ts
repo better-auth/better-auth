@@ -1944,7 +1944,8 @@ export interface OAuthOptions<
 		 */
 		required?: boolean;
 		/**
-		 * Lifetime of a `request_uri` in seconds. Must be below 600.
+		 * Lifetime of a `request_uri` in seconds: a positive whole number below
+		 * 600.
 		 *
 		 * @default 60
 		 */

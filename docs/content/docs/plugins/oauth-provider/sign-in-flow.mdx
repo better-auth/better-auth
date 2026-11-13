@@ -53,7 +53,7 @@ Discovery then advertises `pushed_authorization_request_endpoint`. The client us
 2. The server answers `201` with `request_uri` and `expires_in`.
 3. The client sends the user to `/oauth2/authorize` with only `client_id` and `request_uri`.
 
-The PAR endpoint checks the parameters as the authorize endpoint would. An unregistered `redirect_uri`, an unknown scope, or missing PKCE fails at the push with a JSON error, before the user sees a page. A pushed request that contains `request_uri` fails with `invalid_request`.
+The PAR endpoint checks the parameters as the authorize endpoint would. An unregistered `redirect_uri`, an unknown scope, or missing PKCE for a client that requires it fails at the push with a JSON error, before the user sees a page. A pushed request that contains `request_uri` fails with `invalid_request`.
 
 Each `request_uri` has these limits ([RFC 9126 §4](https://datatracker.ietf.org/doc/html/rfc9126#section-4)):
 
@@ -80,7 +80,7 @@ oauthProvider({
 })
 ```
 
-To require it from one client, register the client with `require_pushed_authorization_requests: true` ([RFC 9126 §6](https://datatracker.ietf.org/doc/html/rfc9126#section-6)). A client can set this on itself through dynamic registration, because it only restricts that client.
+To require it from one client, register the client with `require_pushed_authorization_requests: true` ([RFC 9126 §6](https://datatracker.ietf.org/doc/html/rfc9126#section-6)). A client can set this on itself through dynamic registration, because it only restricts that client. The registration fails with `invalid_client_metadata` unless `/oauth2/par` is enabled or you set `requestUriResolver`, because the client could otherwise never start authorization.
 
 An authorization request without `request_uri` then fails with `invalid_request` and the description `pushed authorization request is required`. With `required: true`, discovery also advertises `require_pushed_authorization_requests: true`. The login, consent, and other screens keep working, because they resume from the signed query.
 

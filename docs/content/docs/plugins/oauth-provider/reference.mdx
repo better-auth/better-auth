@@ -263,7 +263,7 @@ DPoP proof validation. `proofMaxAgeSeconds` defaults to `300`, and `signingAlgor
 
 `pushedAuthorizationRequests` <span className="opacity-70">`{ enabled, required?, expiresIn? }`</span>
 
-Pushed authorization requests ([RFC 9126](https://datatracker.ietf.org/doc/html/rfc9126)). `enabled: true` serves `/oauth2/par` and advertises `pushed_authorization_request_endpoint`. `required: true` rejects authorization requests without a `request_uri` with `invalid_request`, and advertises `require_pushed_authorization_requests: true`. It needs `enabled: true`, or the plugin fails at startup. `expiresIn` is the `request_uri` lifetime in seconds. It defaults to `60` and must be a whole number below `600`. See [Pushed authorization requests](/docs/plugins/oauth-provider/sign-in-flow#pushed-authorization-requests).
+Pushed authorization requests ([RFC 9126](https://datatracker.ietf.org/doc/html/rfc9126)). `enabled: true` serves `/oauth2/par` and advertises `pushed_authorization_request_endpoint`, when `grantTypes` includes `authorization_code`. `required: true` rejects authorization requests without a `request_uri` with `invalid_request`, and advertises `require_pushed_authorization_requests: true`. It needs `enabled: true`, or the plugin fails at startup. `expiresIn` is the `request_uri` lifetime in seconds. It defaults to `60` and must be a positive whole number below `600`. See [Pushed authorization requests](/docs/plugins/oauth-provider/sign-in-flow#pushed-authorization-requests).
 
 `requestUriResolver` <span className="opacity-70">`(input) => Promise<Record<string, string> | null>`</span>
 

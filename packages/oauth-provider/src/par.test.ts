@@ -489,12 +489,15 @@ describe("pushed authorization requests", async () => {
 			identifier: string;
 			value: string;
 		}>({ model: "verification" });
-		const stored = rows.find((row) =>
+		const stored = rows.filter((row) =>
 			row.identifier.startsWith("pushed_authorization_request:"),
 		);
-		expect(stored).toBeDefined();
-		expect(stored!.value).not.toContain(client.client_secret!);
-		expect(stored!.value).not.toContain(pushed.body.request_uri as string);
+		expect(pushed.response.status).toBe(201);
+		expect(stored.length).toBeGreaterThan(0);
+		for (const row of stored) {
+			expect(row.value).not.toContain(client.client_secret!);
+			expect(row.value).not.toContain(pushed.body.request_uri as string);
+		}
 	});
 
 	describe("DPoP (RFC 9449 §10.1)", () => {
@@ -710,6 +713,14 @@ describe("pushed authorization requests disabled", async () => {
 		expect(metadata).not.toHaveProperty(
 			"require_pushed_authorization_requests",
 		);
+	});
+
+	it("rejects a client that requires pushed requests", async () => {
+		await expect(
+			createClient({ require_pushed_authorization_requests: true }),
+		).rejects.toMatchObject({
+			body: { error: "invalid_client_metadata" },
+		});
 	});
 });
 
