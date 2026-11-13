@@ -546,3 +546,30 @@ it("gives overlapping transactions distinct serial ids", async () => {
 	expect(a.id).not.toBe(b.id);
 	expect(db.widget!.map((row) => row.name).sort()).toEqual(["a", "b"]);
 });
+
+it("gives overlapping transactions from two adapters on one db distinct serial ids", async () => {
+	const db: MemoryDB = { widget: [] };
+	const serialOptions = {
+		...options,
+		advanced: { database: { generateId: "serial" as const } },
+	};
+	const first = memoryAdapter(db)(serialOptions);
+	const second = memoryAdapter(db)(serialOptions);
+	let release: () => void = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const a = first.transaction(async (tx) => {
+		const row = await tx.create({ model: "widget", data: { name: "a" } });
+		await gate;
+		return row;
+	});
+	const b = second.transaction(async (tx) => {
+		const row = await tx.create({ model: "widget", data: { name: "b" } });
+		release();
+		return row;
+	});
+	const [rowA, rowB] = await Promise.all([a, b]);
+	expect(rowA.id).not.toBe(rowB.id);
+	expect(db.widget!.map((row) => row.name).sort()).toEqual(["a", "b"]);
+});

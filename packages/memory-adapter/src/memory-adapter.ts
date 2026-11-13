@@ -119,19 +119,23 @@ function rowChanged(baseRow: any, cloneRow: any): boolean {
 	return JSON.stringify(baseRow) !== JSON.stringify(cloneRow);
 }
 
+/**
+ * Serial ids are reserved per live database rather than read from the table
+ * being written, because a transaction writes to its own clone: two
+ * overlapping transactions, from one adapter or several adapters on the same
+ * database, would otherwise pick the same id, and the later commit would
+ * overwrite the other's row. The row count is not a safe next id either, since
+ * it can equal a stored row's id once an earlier row is deleted.
+ */
+const lastSerialIdsByDb = new WeakMap<MemoryDB, Map<string, number>>();
+
 export const memoryAdapter = (
 	db: MemoryDB,
 	config?: MemoryAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
-	/**
-	 * Serial ids are reserved here rather than read from the table being
-	 * written, because a transaction writes to its own clone: two overlapping
-	 * transactions would otherwise pick the same id, and the later commit would
-	 * overwrite the other's row. The row count is not a safe next id either,
-	 * since it can equal a stored row's id once an earlier row is deleted.
-	 */
-	const lastSerialIds = new Map<string, number>();
+	const lastSerialIds = lastSerialIdsByDb.get(db) ?? new Map<string, number>();
+	lastSerialIdsByDb.set(db, lastSerialIds);
 	const reserveSerialId = (
 		model: string,
 		rows: Record<string, unknown>[] | undefined,
