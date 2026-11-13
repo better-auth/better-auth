@@ -241,7 +241,9 @@ async function bootScenario(
 			{
 				grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
 				client_id: requester.client_id,
-				client_secret: requester.client_secret!,
+				...(requester.client_secret
+					? { client_secret: requester.client_secret }
+					: {}),
 				subject_token: subjectToken,
 				subject_token_type: ACCESS_TOKEN_TYPE,
 				resource: api,
@@ -2376,5 +2378,173 @@ describe("oauthTokenExchange with pairwise access token subjects", () => {
 		expect(error).toBeNull();
 		// The exchanging client has the public subject type, so it sees the user ID.
 		expect(decodeJwt(data!.access_token).sub).toBe(session!.user.id);
+	});
+});
+
+describe("oauthTokenExchange public clients", () => {
+	async function bootPublicClient(
+		publicClients?: OAuthTokenExchangeOptions["publicClients"],
+	) {
+		const allowExchange = vi.fn(() => true);
+		const scenario = await bootScenario({ publicClients, allowExchange });
+		const app = await scenario.createClient({
+			token_endpoint_auth_method: "none",
+			grant_types: ["authorization_code", TOKEN_EXCHANGE_GRANT_TYPE],
+			redirect_uris: [redirectUri],
+			scope: "openid read write",
+			skip_consent: true,
+			// Linked to mcp, so it is in the audience of the agent's MCP tokens.
+			resources: [mcp, api],
+		});
+		const key = await createDpopKey();
+		/** A user token issued to the public client and bound to `key`. */
+		const ownBoundToken = async () => {
+			const token = await scenario.userTokenForMcp({
+				scope: "openid read",
+				requester: app,
+				clientAuth: {},
+				tokenHeaders: { DPoP: await key.prove() },
+			});
+			expect(token.token_type).toBe("DPoP");
+			return token;
+		};
+		/** Exchanges as the public client: `client_id` only, no secret. */
+		const exchange = (
+			subjectToken: string,
+			extraHeaders?: Record<string, string>,
+			extra: Record<string, string> = {},
+		) => scenario.exchangeAs(app, subjectToken, extra, extraHeaders);
+		return {
+			...scenario,
+			app,
+			key,
+			allowExchange,
+			ownBoundToken,
+			exchange,
+		};
+	}
+
+	it("refuses a public client by default", async () => {
+		const { ownBoundToken, exchange, key } = await bootPublicClient();
+		const subject = await ownBoundToken();
+		const { error } = await exchange(subject.access_token, {
+			DPoP: await key.prove(),
+		});
+		expect(error?.error).toBe("invalid_client");
+	});
+
+	describe('with publicClients: "dpop-bound"', () => {
+		it("exchanges the client's own DPoP-bound token for a token bound to the same key", async () => {
+			const { ownBoundToken, exchange, key, introspect, mcpServer } =
+				await bootPublicClient("dpop-bound");
+			const subject = await ownBoundToken();
+			const { data, error } = await exchange(subject.access_token, {
+				DPoP: await key.prove(),
+			});
+			expect(error).toBeNull();
+			expect(data?.token_type).toBe("DPoP");
+			expect(data?.refresh_token).toBeUndefined();
+			const issued = decodeJwt(data!.access_token);
+			expect(issued.aud).toBe(api);
+			expect(issued.cnf).toEqual({ jkt: await deriveDpopJkt(key.publicJwk) });
+			// The issued token is still active for a resource server of api.
+			expect((await introspect(data!.access_token, mcpServer))?.active).toBe(
+				true,
+			);
+		});
+
+		it("requires a DPoP proof before allowExchange runs", async () => {
+			const { ownBoundToken, exchange, allowExchange } =
+				await bootPublicClient("dpop-bound");
+			const subject = await ownBoundToken();
+			const { error } = await exchange(subject.access_token);
+			expect(error).toMatchObject({
+				error: "invalid_dpop_proof",
+				error_description: "DPoP proof header is required",
+			});
+			expect(allowExchange).not.toHaveBeenCalled();
+		});
+
+		it("requires the proof to use the subject token's key", async () => {
+			const { ownBoundToken, exchange } = await bootPublicClient("dpop-bound");
+			const subject = await ownBoundToken();
+			const otherKey = await createDpopKey();
+			const { error } = await exchange(subject.access_token, {
+				DPoP: await otherKey.prove(),
+			});
+			expect(error).toMatchObject({
+				error: "invalid_dpop_proof",
+				error_description: "DPoP proof key does not match the bound token",
+			});
+		});
+
+		it("refuses a token issued to another client, even for a resource it serves", async () => {
+			const { userTokenForMcp, exchange, key, allowExchange } =
+				await bootPublicClient("dpop-bound");
+			// The agent's token for mcp, whose audience the public client serves.
+			const subject = await userTokenForMcp({
+				tokenHeaders: { DPoP: await key.prove() },
+			});
+			const { error } = await exchange(subject.access_token, {
+				DPoP: await key.prove(),
+			});
+			expect(error).toMatchObject({
+				error: "invalid_request",
+				error_description: "subject_token is invalid",
+			});
+			expect(allowExchange).not.toHaveBeenCalled();
+		});
+
+		it("refuses its own bearer token, so a stolen one cannot be bound to a new key", async () => {
+			const { app, userTokenForMcp, exchange, key, allowExchange } =
+				await bootPublicClient("dpop-bound");
+			const subject = await userTokenForMcp({
+				scope: "openid read",
+				requester: app,
+				clientAuth: {},
+			});
+			expect(subject.token_type).toBe("Bearer");
+			const { error } = await exchange(subject.access_token, {
+				DPoP: await key.prove(),
+			});
+			expect(error).toMatchObject({
+				error: "invalid_request",
+				error_description:
+					"a public client may only exchange a DPoP-bound subject_token",
+			});
+			expect(allowExchange).not.toHaveBeenCalled();
+		});
+
+		it("refuses an actor_token from a public client", async () => {
+			const { ownBoundToken, exchange, key } =
+				await bootPublicClient("dpop-bound");
+			const subject = await ownBoundToken();
+			const { error } = await exchange(
+				subject.access_token,
+				{ DPoP: await key.prove() },
+				{
+					actor_token: subject.access_token,
+					actor_token_type: ACCESS_TOKEN_TYPE,
+				},
+			);
+			expect(error).toMatchObject({
+				error: "invalid_request",
+				error_description: "a public client cannot send actor_token",
+			});
+		});
+
+		it("still requires a confidential client to authenticate", async () => {
+			const { mcpServer, userTokenForMcp, postToken } =
+				await bootPublicClient("dpop-bound");
+			const subject = await userTokenForMcp();
+			const { error } = await postToken({
+				grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+				client_id: mcpServer.client_id,
+				subject_token: subject.access_token,
+				subject_token_type: ACCESS_TOKEN_TYPE,
+				resource: api,
+			});
+			expect(error?.error).toBe("invalid_client");
+		});
 	});
 });
