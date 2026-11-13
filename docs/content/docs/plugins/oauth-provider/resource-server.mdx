@@ -243,6 +243,60 @@ const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
   When you set `audience`, the audience check stops a token issued for another API on the same issuer from passing at yours. If the introspection response has no `aud` claim and you set an `audience`, the token is rejected. Set `remoteVerify.allowMissingAudience: true` only if you trust the issuer to bind the token to your API some other way.
 </Callout>
 
+## Endpoints on the auth server
+
+A plugin endpoint served by the auth server itself can verify the request in-process with `verifyResourceRequest` on the provider API. It needs no JWKS fetch, introspection client, or network call, and it accepts JWT and opaque access tokens alike.
+
+```ts title="reports-plugin.ts"
+import { getOAuthProviderApi } from "@better-auth/oauth-provider";
+import { createAuthEndpoint } from "better-auth/api";
+import type { BetterAuthPlugin } from "better-auth/types";
+
+export const reports = () =>
+  ({
+    id: "reports",
+    endpoints: {
+      listReports: createAuthEndpoint(
+        "/reports",
+        { method: "GET" },
+        async (ctx) => {
+          const provider = getOAuthProviderApi(
+            ctx,
+            ctx.context.getPlugin("oauth-provider")!.options,
+          );
+          const claims = await provider.verifyResourceRequest({
+            audience: "https://auth.example.com/api/auth/reports",
+            scopes: ["read:reports"],
+          });
+          return ctx.json({ owner: claims.sub });
+        },
+      ),
+    },
+  }) satisfies BetterAuthPlugin;
+```
+
+`verifyResourceRequest` reads the token from the `Authorization` header and checks it against the provider's own records. A revoked opaque token, a token whose session has ended, and a token whose client is disabled fail on the next request. A JWT access token cannot be revoked by itself, so without a session it stays valid until it expires. It then applies the same rules as UserInfo:
+
+* A DPoP-bound token must come with a valid proof for this request's method and URL. With `dpop.nonce.required` on, the proof must carry a current nonce, and the response carries the next one.
+* With `audience`, the token's `aud` must contain it ([RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4)). Without it, a token issued for any resource passes, so set it whenever your endpoint is a registered resource.
+* With `scopes`, the token must carry every scope listed.
+
+It returns the token's claims in [introspection](#introspection) form, including `sub`, `client_id`, `scope`, `aud`, and `cnf`. For a token issued to a user, `sub` is the user ID, even when the token carries a [pairwise `sub`](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens). When it rejects the token or request, it throws an error that is ready to send:
+
+| Failure                                               | Status | Challenge                                              |
+| ----------------------------------------------------- | ------ | ------------------------------------------------------ |
+| No token, or a scheme other than `Bearer` or `DPoP`   | 401    | `Bearer` and `DPoP`, with no error code                |
+| Unknown, expired, or revoked token, or `aud` mismatch | 401    | `invalid_token`                                        |
+| Missing, invalid, or replayed DPoP proof              | 401    | `DPoP` with `invalid_dpop_proof`                       |
+| Missing or expired DPoP nonce                         | 401    | `DPoP` with `use_dpop_nonce` and a `DPoP-Nonce` header |
+| Missing scopes                                        | 403    | `insufficient_scope`, naming every missing scope       |
+
+When `audience` is a URL, the `Bearer` challenge also points to its [protected resource metadata](#protected-resource-metadata). Every challenge lists `WWW-Authenticate` in `Access-Control-Expose-Headers`.
+
+A DPoP-bound token fails through `auth.api`, because there is no HTTP request to check the proof against. A bearer token works there.
+
+`requireActiveAccessToken` on the provider API only checks that a token is active. It does not check a DPoP proof, so prefer `verifyResourceRequest` for a protected endpoint.
+
 ## Introspection
 
 `/oauth2/introspect` implements [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662). The caller must authenticate as a registered client ([§2.1](https://datatracker.ietf.org/doc/html/rfc7662#section-2.1)), using any method that client is registered for, including `private_key_jwt`.
