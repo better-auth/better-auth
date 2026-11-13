@@ -61,6 +61,12 @@ export async function pushAuthorizationRequest({
 }: PushAuthorizationRequestInput): Promise<URL> {
 	options = typeof options === "function" ? await options() : options;
 	const body = new URLSearchParams(authorizationURL.searchParams);
+	// RFC 9126 §2.1: the server rejects a pushed request that carries request_uri.
+	if (body.has("request_uri")) {
+		throw new BetterAuthError(
+			"A pushed authorization request cannot include request_uri",
+		);
+	}
 	const requestHeaders: Record<string, string> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",

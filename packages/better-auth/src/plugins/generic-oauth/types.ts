@@ -74,13 +74,17 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * request endpoint (RFC 9126) instead of the browser redirect.
 	 *
 	 * - `"auto"`: push when discovery reports
-	 *   `require_pushed_authorization_requests: true`.
+	 *   `require_pushed_authorization_requests: true`. Without a discovery
+	 *   document, for example while discovery is unavailable and explicit
+	 *   endpoints are used instead, it does not push.
 	 * - `true`: always push. Requires a pushed authorization request endpoint
-	 *   from discovery or `pushedAuthorizationRequestUrl`.
+	 *   from discovery or `pushedAuthorizationRequestUrl`. Use it for servers
+	 *   that require PAR for this client without advertising it in discovery.
 	 * - `false`: never push.
 	 *
 	 * The pushed request authenticates the client the same way as the token
-	 * endpoint request, using `clientSecret` or `tokenEndpointAuth`.
+	 * endpoint request, using `clientSecret`, `authentication`, or
+	 * `tokenEndpointAuth`.
 	 *
 	 * @default "auto"
 	 */

@@ -357,8 +357,11 @@ describe("generic-oauth pushed authorization requests", async () => {
 		authorizationServer.metadata.advertisePar = false;
 		const instance = await createInstance();
 		const { res } = await signIn(instance);
+		const context = await instance.auth.$context;
 
 		expect(res.data).toBeNull();
+		expect(res.error?.code).toBe("PROVIDER_NOT_FOUND");
+		expect(context.socialProviders.some((p) => p.id === "par")).toBe(false);
 		expect(authorizationServer.pushed()).toHaveLength(0);
 	});
 
