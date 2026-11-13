@@ -365,6 +365,11 @@ export const schema = {
 				required: false,
 				index: true,
 			},
+			// Shared by every rotation of one grant.
+			grantId: {
+				type: "string",
+				required: false,
+			},
 			resources: {
 				type: "string[]",
 				required: false,
@@ -494,6 +499,13 @@ export const schema = {
 					model: "oauthRefreshToken",
 					field: "id",
 				},
+				index: true,
+			},
+			// The refresh-token grant this token was issued under, so revoking any
+			// refresh token of the grant can revoke it (RFC 7009 §2.1).
+			grantId: {
+				type: "string",
+				required: false,
 				index: true,
 			},
 			expiresAt: {
