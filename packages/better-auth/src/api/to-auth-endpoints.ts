@@ -16,6 +16,7 @@ import {
 	resolveDynamicTrustedProxyHeaders,
 	resolveRequestContext,
 } from "../context/helpers";
+import { runWithSessionLimits } from "../db/session-limit";
 import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
 import { dispatchAuthEndpoint, getOperationId } from "./dispatch";
 
@@ -109,7 +110,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 				return run();
 			}
 			const store: RequestStateWeakMap = new WeakMap();
-			return runWithRequestState(store, run);
+			return runWithRequestState(store, () => runWithSessionLimits(run));
 		};
 		api[key].path = endpoint.path;
 		api[key].options = endpoint.options;

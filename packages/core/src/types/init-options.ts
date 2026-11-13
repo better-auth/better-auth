@@ -1195,6 +1195,22 @@ export type BetterAuthOptions = {
 				 * @default 1 day (60 * 60 * 24)
 				 */
 				freshAge?: number;
+				/**
+				 * The maximum number of active sessions a user can have.
+				 *
+				 * When a new session would exceed the limit, the user's oldest
+				 * sessions are revoked once the request that created it finishes,
+				 * if the new session still exists. The new session always counts
+				 * toward the limit and is never revoked by it, and sessions created
+				 * within the same second don't revoke each other. Impersonation
+				 * sessions created by the admin plugin don't count toward the limit
+				 * and don't revoke the user's own sessions.
+				 *
+				 * Must be a positive integer.
+				 *
+				 * @default undefined (no limit)
+				 */
+				maxPerUser?: number | undefined;
 		  })
 		| undefined;
 	account?:

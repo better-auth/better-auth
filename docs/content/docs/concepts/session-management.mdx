@@ -99,6 +99,33 @@ export const auth = betterAuth({
 })
 ```
 
+## Limiting Sessions per User
+
+By default, a user can have any number of active sessions. To cap them, set `maxPerUser`. When a new session would exceed the limit, the user's oldest sessions are revoked:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    //... other config options
+    session: {
+        maxPerUser: 3 // Keep at most 3 active sessions per user
+    }
+})
+```
+
+* The new session counts toward the limit and is never revoked by it, so `maxPerUser: 1` signs the user out everywhere else on each new sign-in.
+* The limit applies when the request that created the session finishes, if the session still exists. A sign-in that stops at a [two-factor](/docs/plugins/2fa) challenge revokes nothing until the second factor is verified.
+* Expired sessions don't count toward the limit.
+* Impersonation sessions created by the [admin plugin](/docs/plugins/admin) don't count toward the limit and don't revoke the user's own sessions.
+* `maxPerUser` must be a positive integer. Any other value throws when the auth config is initialized.
+* The limit works with the database, [secondary storage](#sessions-in-secondary-storage), or both.
+* `maxPerUser` limits sessions across all devices. The [multi-session plugin's](/docs/plugins/multi-session) `maximumSessions` limits accounts signed in on one device.
+
+<Callout>
+  A new session only revokes sessions created before it, so sign-ins that happen within the same second don't revoke each other. They can leave the user over the limit until the next sign-in.
+</Callout>
+
 ## Session Management
 
 Better Auth provides a set of functions to manage sessions.

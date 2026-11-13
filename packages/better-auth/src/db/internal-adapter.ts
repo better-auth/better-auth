@@ -33,6 +33,7 @@ import {
 	parseSessionOutput,
 	parseUserOutput,
 } from "./schema";
+import { deferSessionLimit, revokeSessionsOverLimit } from "./session-limit";
 import {
 	getStorageOption,
 	processIdentifier,
@@ -290,7 +291,7 @@ export const createInternalAdapter = (
 		}
 	}
 
-	return {
+	const internalAdapter: InternalAdapter = {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt">,
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
@@ -683,6 +684,37 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 			);
+			const maxPerUser = options.session?.maxPerUser;
+			if (
+				res &&
+				maxPerUser !== undefined &&
+				!res.impersonatedBy &&
+				!(await deferSessionLimit({
+					token: res.token,
+					maxPerUser,
+					internalAdapter,
+					logger,
+				}))
+			) {
+				// Queued after the session's own writes, so inside a transaction the
+				// older sessions are only revoked once the new one has committed.
+				await queueAfterTransactionHook(
+					() =>
+						revokeSessionsOverLimit(
+							internalAdapter,
+							res as Session,
+							maxPerUser,
+						),
+					{
+						onError(error: unknown) {
+							logger.error(
+								"Failed to revoke sessions over session.maxPerUser",
+								error,
+							);
+						},
+					},
+				);
+			}
 			return res as Session;
 		},
 		findSession: async (
@@ -1761,4 +1793,5 @@ export const createInternalAdapter = (
 		},
 		refreshUserSessions,
 	};
+	return internalAdapter;
 };
