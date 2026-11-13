@@ -89,7 +89,7 @@ function presentedScheme(
 }
 
 /** Builds an RFC 9449 §7.1 `WWW-Authenticate: DPoP` challenge value. */
-export function buildDpopChallengeValue(
+function buildDpopChallengeValue(
 	errorCode: string,
 	description: unknown,
 	algorithms: readonly string[] = DPOP_SIGNING_ALGORITHMS,
