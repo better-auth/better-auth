@@ -920,6 +920,37 @@ describe("oauth token - authorization_code", async () => {
 			}
 		});
 
+		it("records the code before consuming it, so a concurrent duplicate can revoke", async () => {
+			const clientId = await createPublicClient();
+			const codeVerifier = generateRandomString(43);
+			const code = await issueCode(clientId, codeVerifier);
+			const { internalAdapter } = await auth.$context;
+			const consume = internalAdapter.consumeVerificationValue;
+			let recordedBeforeConsume: boolean | undefined;
+			const spy = vi
+				.spyOn(internalAdapter, "consumeVerificationValue")
+				.mockImplementation(async (identifier) => {
+					if (recordedBeforeConsume === undefined) {
+						recordedBeforeConsume =
+							(await internalAdapter.findVerificationValue(
+								`oauth_consumed_code:${identifier}`,
+							)) !== null;
+					}
+					return consume(identifier);
+				});
+			try {
+				const tokens = await redeem({
+					client_id: clientId,
+					code,
+					code_verifier: codeVerifier,
+				});
+				expect(tokens.error).toBeNull();
+			} finally {
+				spy.mockRestore();
+			}
+			expect(recordedBeforeConsume).toBe(true);
+		});
+
 		it("keeps the reuse record alive across refresh-token rotations", async () => {
 			const clientId = await createPublicClient();
 			const codeVerifier = generateRandomString(43);

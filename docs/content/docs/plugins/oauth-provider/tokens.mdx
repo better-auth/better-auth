@@ -135,10 +135,10 @@ oauthProvider({
 
 ## Authorization code reuse
 
-An authorization code works once. A second token request with the same code is rejected. When that request comes from the client the code was issued to, the provider also revokes the tokens issued from the code ([OAuth 2.1 §7.5.3](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-7.5.3)):
+An authorization code works once. A second token request with the same code is rejected. When that request comes from the client the code was issued to, the provider also revokes the refresh tokens and opaque access tokens issued from the code. JWT access tokens stay valid until they expire ([OAuth 2.1 §7.5.3](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-7.5.3)). The request comes from the issuing client when:
 
-* The request must authenticate as that client.
-* If the code was issued with PKCE, the request must carry the matching `code_verifier`.
+* It carries that client's `client_id`, and a confidential client also authenticates with its credentials.
+* It carries the matching `code_verifier`, if the code was issued with PKCE. Public clients always use PKCE, so a public client's code can only be used to revoke with its `code_verifier`.
 
 A request that fails either check is rejected and the tokens stay valid. This includes a confidential client that sends its secret but leaves out the `code_verifier` for a code issued with PKCE. Someone who has the code but not the `code_verifier` therefore cannot revoke the client's tokens.
 
