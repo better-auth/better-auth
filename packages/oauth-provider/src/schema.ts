@@ -166,6 +166,11 @@ export const schema = {
 				required: false,
 				defaultValue: false,
 			},
+			requirePushedAuthorizationRequests: {
+				type: "boolean",
+				required: false,
+				defaultValue: false,
+			},
 			// All other metadata
 			referenceId: {
 				type: "string",

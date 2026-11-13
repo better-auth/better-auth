@@ -235,6 +235,8 @@ export const clientRegistrationRequestSchema = z.object({
 	subject_type: z.enum(["public", "pairwise"]).optional(),
 	// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
 	dpop_bound_access_tokens: z.boolean().optional(),
+	// RFC 9126 §6: client accepts authorization requests only through PAR.
+	require_pushed_authorization_requests: z.boolean().optional(),
 	// RFC 7591 §2 extension: declare the RFC 8707 resource indicators this client
 	// will request. Each must be a valid resource URI matching an existing
 	// oauthResource row; the registration handler links them on success.

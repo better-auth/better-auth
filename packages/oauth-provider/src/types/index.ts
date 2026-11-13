@@ -1892,6 +1892,12 @@ export interface OAuthOptions<
 		 * @default { window: 60, max: 60 }
 		 */
 		userinfo?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/par endpoint, applied when
+		 * `pushedAuthorizationRequests.enabled` is true.
+		 * @default { window: 60, max: 20 }
+		 */
+		par?: { window: number; max: number } | false;
 	};
 	/**
 	 * Secret used to compute pairwise subject identifiers (HMAC-SHA256).
@@ -1912,11 +1918,50 @@ export interface OAuthOptions<
 	 */
 	accessTokenSubject?: "user" | "pairwise";
 	/**
+	 * Pushed authorization requests (RFC 9126).
+	 *
+	 * When enabled, clients authenticate to `POST /oauth2/par` with the
+	 * authorization request parameters and receive a single-use `request_uri`
+	 * for `/oauth2/authorize`. A DPoP proof on the pushed request binds the
+	 * authorization code to its key (RFC 9449 §10.1).
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9126
+	 */
+	pushedAuthorizationRequests?: {
+		/**
+		 * Serve `POST /oauth2/par` and advertise it in discovery as
+		 * `pushed_authorization_request_endpoint`.
+		 */
+		enabled: boolean;
+		/**
+		 * Reject authorization requests from every client unless they use a
+		 * `request_uri` from a pushed request. Clients can also require this for
+		 * themselves with the `require_pushed_authorization_requests` metadata.
+		 *
+		 * Needs `enabled`.
+		 *
+		 * @default false
+		 */
+		required?: boolean;
+		/**
+		 * Lifetime of a `request_uri` in seconds: a positive whole number below
+		 * 600.
+		 *
+		 * @default 60
+		 */
+		expiresIn?: number;
+	};
+	/**
 	 * Resolves a `request_uri` at the authorize endpoint (PAR support).
 	 *
 	 * When the authorize endpoint receives a `request_uri` parameter, this callback
 	 * resolves it to the original authorization parameters. Return null if the URI
 	 * is invalid or expired.
+	 *
+	 * With `pushedAuthorizationRequests.enabled`, the authorize endpoint first
+	 * looks up `request_uri` values issued by `/oauth2/par`. It calls this
+	 * resolver for any value it does not hold, including one that expired or
+	 * was already used, so return null for values you did not issue.
 	 */
 	requestUriResolver?: (input: {
 		requestUri: string;
@@ -2391,6 +2436,11 @@ export interface SchemaClient<
 	 * client must include a valid DPoP proof and receive DPoP-bound tokens.
 	 */
 	dpopBoundAccessTokens?: boolean;
+	/**
+	 * RFC 9126 §6 client metadata. When true, the authorize endpoint accepts
+	 * requests from this client only through a pushed authorization request.
+	 */
+	requirePushedAuthorizationRequests?: boolean;
 	//---- All other metadata ----//
 	/** Used to indicate if consent screen can be skipped */
 	skipConsent?: boolean;
