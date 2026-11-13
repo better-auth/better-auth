@@ -77,6 +77,25 @@ describe("createMcpProtectedRequestHandler", () => {
 	});
 
 	/**
+	 * @see https://fetch.spec.whatwg.org/#cors-safelisted-response-header-name
+	 */
+	it("exposes WWW-Authenticate on a challenge", async () => {
+		verifyAccessTokenRequest.mockRejectedValue(
+			new APIError("UNAUTHORIZED", { message: "missing bearer token" }),
+		);
+
+		const response = await createMcpProtectedRequestHandler(
+			protectedRequestOptions,
+			async () => new Response("unreachable"),
+		)(request());
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
+			"WWW-Authenticate",
+		);
+	});
+
+	/**
 	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-7.2
 	 */
 	it("answers a failed DPoP request with a DPoP challenge", async () => {
