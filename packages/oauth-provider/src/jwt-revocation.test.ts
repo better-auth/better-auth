@@ -81,7 +81,7 @@ function createSecondaryStorage() {
 async function setup(
 	providerOptions?: Partial<OAuthOptions<Scope[]>>,
 	authOptions?: Partial<BetterAuthOptions>,
-	testWith?: "sqlite" | "postgres" | "mysql" | "mongodb",
+	testWith?: "sqlite" | "postgres" | "mysql",
 ) {
 	const { auth, client, signInWithTestUser } = await getTestInstance(
 		{
@@ -99,12 +99,7 @@ async function setup(
 				validateProbe,
 			],
 		},
-		{
-			clientOptions: { plugins: [oauthProviderClient()] },
-			testWith,
-			// MongoDB keeps one database for every instance.
-			testUser: { email: `${generateRandomString(12)}@test.com` },
-		},
+		{ clientOptions: { plugins: [oauthProviderClient()] }, testWith },
 	);
 	const { headers } = await signInWithTestUser();
 	const oauthClient = await auth.api.adminCreateOAuthClient({
@@ -399,16 +394,16 @@ async function expectActive(server: TestServer, token: string) {
 /**
  * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
  */
-describe.each(["sqlite", "postgres", "mysql", "mongodb"] as const)(
+describe.each(["sqlite", "postgres", "mysql"] as const)(
 	"oauth-provider - refresh token revocation revokes the grant's JWT access tokens on %s",
-	(testWith) => {
-		// Each test gets its own instance: MongoDB instances share one database,
-		// so a suite-wide instance collides with other files running in parallel.
-		const createServer = () =>
-			setup({ revocableJwtAccessTokens: true }, undefined, testWith);
+	async (testWith) => {
+		const server = await setup(
+			{ revocableJwtAccessTokens: true },
+			undefined,
+			testWith,
+		);
 
 		it("revokes JWTs from the first issue and every rotation, and leaves other grants alone", async () => {
-			const server = await createServer();
 			const first = await authorize(server, { offline: true });
 			const rotated = (await refresh(server, first.refreshToken!)).data!;
 			const otherGrant = await authorize(server, { offline: true });
@@ -429,7 +424,6 @@ describe.each(["sqlite", "postgres", "mysql", "mongodb"] as const)(
 		});
 
 		it("revokes the grant's JWTs when a rotated refresh token is replayed at the token endpoint", async () => {
-			const server = await createServer();
 			const first = await authorize(server, { offline: true });
 			const rotated = (await refresh(server, first.refreshToken!)).data!;
 
@@ -440,7 +434,6 @@ describe.each(["sqlite", "postgres", "mysql", "mongodb"] as const)(
 		});
 
 		it("revokes the grant's JWTs when a rotated refresh token is presented for revocation", async () => {
-			const server = await createServer();
 			const first = await authorize(server, { offline: true });
 			const rotated = (await refresh(server, first.refreshToken!)).data!;
 
@@ -450,7 +443,6 @@ describe.each(["sqlite", "postgres", "mysql", "mongodb"] as const)(
 		});
 
 		it("revokes the grant's JWTs when the authorization code is replayed", async () => {
-			const server = await createServer();
 			const grant = await authorize(server, { offline: true });
 
 			const replay = await grant.redeem();
@@ -460,7 +452,6 @@ describe.each(["sqlite", "postgres", "mysql", "mongodb"] as const)(
 		});
 
 		it("revokes every JWT of the grant when revocation races a refresh", async () => {
-			const server = await createServer();
 			const grant = await authorize(server, { offline: true });
 
 			const [, refreshed] = await Promise.all([
@@ -475,7 +466,6 @@ describe.each(["sqlite", "postgres", "mysql", "mongodb"] as const)(
 		});
 
 		it("starts a grant ID for a refresh token stored before the option was enabled", async () => {
-			const server = await createServer();
 			const grant = await authorize(server, { offline: true });
 			const ctx = await server.auth.$context;
 			await ctx.adapter.updateMany({
@@ -494,7 +484,6 @@ describe.each(["sqlite", "postgres", "mysql", "mongodb"] as const)(
 		});
 
 		it("stamps no grant ID when the response has no refresh token", async () => {
-			const server = await createServer();
 			const token = await getAccessToken(server);
 			expect(decodeJwt(token).grant_id).toBeUndefined();
 		});

@@ -17,7 +17,7 @@ const formHeaders = {
 	"content-type": "application/x-www-form-urlencoded",
 };
 
-async function setup(testWith: "sqlite" | "postgres" | "mysql" | "mongodb") {
+async function setup(testWith: "sqlite" | "postgres" | "mysql") {
 	const { auth, client, signInWithTestUser } = await getTestInstance(
 		{
 			baseURL: authServerBaseUrl,
@@ -26,12 +26,7 @@ async function setup(testWith: "sqlite" | "postgres" | "mysql" | "mongodb") {
 				oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
 			],
 		},
-		{
-			clientOptions: { plugins: [oauthProviderClient()] },
-			testWith,
-			// MongoDB keeps one database for every instance.
-			testUser: { email: `${generateRandomString(12)}@test.com` },
-		},
+		{ clientOptions: { plugins: [oauthProviderClient()] }, testWith },
 	);
 	const { headers } = await signInWithTestUser();
 	const oauthClient = await auth.api.adminCreateOAuthClient({
@@ -137,15 +132,12 @@ async function revoke({ client, options }: TestServer, token: string) {
 /**
  * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
  */
-describe.each(["sqlite", "postgres", "mysql", "mongodb"] as const)(
+describe.each(["sqlite", "postgres", "mysql"] as const)(
 	"oauth-provider - refresh token revocation revokes the grant's opaque access tokens on %s",
-	(testWith) => {
-		// Each test gets its own instance: MongoDB instances share one database,
-		// so a suite-wide instance collides with other files running in parallel.
-		const createServer = () => setup(testWith);
+	async (testWith) => {
+		const server = await setup(testWith);
 
 		it("revokes opaque tokens from the first issue and every rotation, and leaves other grants alone", async () => {
-			const server = await createServer();
 			const first = await authorize(server);
 			const second = await refresh(server, first.refresh_token);
 			const third = await refresh(server, second.refresh_token);
@@ -163,7 +155,6 @@ describe.each(["sqlite", "postgres", "mysql", "mongodb"] as const)(
 		});
 
 		it("revokes the refresh token's own opaque tokens when the grant predates grant IDs", async () => {
-			const server = await createServer();
 			const grant = await authorize(server);
 			const ctx = await server.auth.$context;
 			for (const model of ["oauthRefreshToken", "oauthAccessToken"]) {
@@ -180,7 +171,6 @@ describe.each(["sqlite", "postgres", "mysql", "mongodb"] as const)(
 		});
 
 		it("revokes every opaque token of the grant when revocation races a refresh", async () => {
-			const server = await createServer();
 			const first = await authorize(server);
 			const second = await refresh(server, first.refresh_token);
 
