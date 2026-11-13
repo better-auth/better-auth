@@ -2,6 +2,7 @@ import type {
 	AuthContext,
 	Awaitable,
 	GenericEndpointContext,
+	LiteralString,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { Session, User } from "../../types";
@@ -14,6 +15,26 @@ import type {
 	Team,
 	TeamMember,
 } from "./schema";
+
+export type ResolveMembership<
+	Role extends string = string,
+	Fields = Record<string, any>,
+> = (
+	data: {
+		user: User & Record<string, any>;
+		session: Session & Record<string, any>;
+		organizationId: string;
+		member: (Member & Record<string, any>) | null;
+	},
+	ctx: GenericEndpointContext,
+) => Awaitable<
+	| Role
+	| Role[]
+	| ({ role: Role | Role[]; id?: string | undefined } & Partial<Fields>)
+	| null
+	| false
+	| undefined
+>;
 
 export interface OrganizationOptions {
 	/**
@@ -57,6 +78,24 @@ export interface OrganizationOptions {
 	 * @default "owner"
 	 */
 	creatorRole?: string | undefined;
+	/**
+	 * Overrides how the plugin resolves the signed-in user's membership in an
+	 * organization. Runs on every lookup of the caller's own membership:
+	 * setting an organization active, reading it, checking permissions, and
+	 * managing members, invitations and teams. Keep it cheap or cached.
+	 *
+	 * `member` is the caller's member row, or `null`. Return `undefined` to use
+	 * it as is, `null` or `false` to refuse, a role to act with that role, or a
+	 * membership object whose fields merge over the row. Nothing is written to
+	 * the member table.
+	 *
+	 * @example
+	 * ```ts
+	 * resolveMembership: ({ user, member }) =>
+	 *   !member && user.role === "support" ? "member" : undefined
+	 * ```
+	 */
+	resolveMembership?: ResolveMembership<LiteralString> | undefined;
 	/**
 	 * The maximum number of members allowed in an organization.
 	 *

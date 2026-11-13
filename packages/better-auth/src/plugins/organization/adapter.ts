@@ -185,7 +185,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 	const invitationAdditionalFields =
 		options?.schema?.invitation?.additionalFields;
 	const teamAdditionalFields = options?.schema?.team?.additionalFields;
-	return {
+	const orgAdapter = {
 		findOrganizationBySlug: async (
 			slug: string,
 		): Promise<InferOrganization<O> | null> => {
@@ -1326,6 +1326,53 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				},
 			});
 			return invitation;
+		},
+	};
+	return {
+		...orgAdapter,
+		/**
+		 * The signed-in user's member in an organization: their member row, as
+		 * overridden by `resolveMembership`. Use it to authorize the caller, not
+		 * to look up other users.
+		 */
+		findCallerMember: async (
+			data: {
+				session: { session: Session; user: User };
+				organizationId: string;
+			},
+			ctx: GenericEndpointContext,
+		) => {
+			const { session, user } = data.session;
+			const { organizationId } = data;
+			const member = await orgAdapter.findMemberByOrgId({
+				userId: user.id,
+				organizationId,
+			});
+			const resolved = await options?.resolveMembership?.(
+				{ user, session, organizationId, member },
+				ctx,
+			);
+			if (resolved === undefined) return member;
+			if (!resolved) return null;
+			const { id, role, ...fields } =
+				typeof resolved === "string" || Array.isArray(resolved)
+					? { role: resolved }
+					: resolved;
+			return {
+				createdAt: new Date(),
+				user: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+					image: user.image,
+				},
+				...member,
+				...fields,
+				id: id ?? member?.id ?? `resolved:${user.id}:${organizationId}`,
+				role: Array.isArray(role) ? role.join(",") : role,
+				organizationId,
+				userId: user.id,
+			} as NonNullable<typeof member>;
 		},
 	};
 };

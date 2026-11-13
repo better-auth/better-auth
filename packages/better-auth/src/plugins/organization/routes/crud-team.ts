@@ -115,10 +115,10 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options as O);
 			if (session) {
-				const member = await adapter.findMemberByOrgId({
-					userId: session.user.id,
-					organizationId,
-				});
+				const member = await adapter.findCallerMember(
+					{ session, organizationId },
+					ctx,
+				);
 				if (!member) {
 					throw APIError.from(
 						"FORBIDDEN",
@@ -278,10 +278,10 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			if (session) {
-				const member = await adapter.findMemberByOrgId({
-					userId: session.user.id,
-					organizationId,
-				});
+				const member = await adapter.findCallerMember(
+					{ session, organizationId },
+					ctx,
+				);
 
 				if (!member || session.session?.activeTeamId === ctx.body.teamId) {
 					throw APIError.from(
@@ -493,10 +493,10 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 
 			if (!member) {
 				throw APIError.from(
@@ -684,10 +684,10 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId || "",
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId: organizationId || "" },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"FORBIDDEN",
@@ -886,10 +886,10 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 					);
 				}
 
-				const requesterMember = await adapter.findMemberByOrgId({
-					userId: session.user.id,
-					organizationId,
-				});
+				const requesterMember = await adapter.findCallerMember(
+					{ session, organizationId },
+					ctx,
+				);
 
 				if (!requesterMember) {
 					throw APIError.from(
@@ -945,10 +945,10 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 			// Without an explicit org, return all of the caller's teams across
 			// every organization (preserves original behavior).
 			if (isExplicitOrg && organizationId) {
-				const requesterMember = await adapter.findMemberByOrgId({
-					userId: session.user.id,
-					organizationId,
-				});
+				const requesterMember = await adapter.findCallerMember(
+					{ session, organizationId },
+					ctx,
+				);
 
 				if (!requesterMember) {
 					throw APIError.from(
@@ -1077,10 +1077,10 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
 				);
 			}
-			const isOrgMember = await adapter.checkMembership({
-				userId: session.user.id,
-				organizationId: team.organizationId,
-			});
+			const isOrgMember = await adapter.findCallerMember(
+				{ session, organizationId: team.organizationId },
+				ctx,
+			);
 			if (!isOrgMember) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -1187,10 +1187,10 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			const currentMember = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
+			const currentMember = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 
 			if (!currentMember) {
 				throw APIError.from(
@@ -1389,10 +1389,10 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			const currentMember = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
+			const currentMember = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 
 			if (!currentMember) {
 				throw APIError.from(

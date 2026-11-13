@@ -334,10 +334,10 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -569,10 +569,10 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				throw APIError.fromStatus("BAD_REQUEST");
 			}
 
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 
 			if (!member) {
 				throw APIError.from(
@@ -834,10 +834,10 @@ export const getActiveMember = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -1010,10 +1010,10 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			const isMember = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId,
-			});
+			const isMember = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!isMember) {
 				throw APIError.from(
 					"FORBIDDEN",
@@ -1101,10 +1101,10 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
-			const isMember = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId,
-			});
+			const isMember = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!isMember) {
 				throw APIError.from(
 					"FORBIDDEN",
