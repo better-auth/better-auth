@@ -1770,16 +1770,19 @@ describe("oauth register - protected dynamic registration", async () => {
 		expect(body.error).toBe("access_denied");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9012
+	 */
 	it("passes through an APIError from another copy of better-call", async () => {
-		// Stands in for an APIError class loaded from a second better-call
-		// install, which fails `instanceof` against this package's copy.
-		const ForeignAPIError = class extends Error {
-			override name = "APIError";
-			status = "FORBIDDEN";
-			statusCode = 403;
-			headers = new Headers();
-			body = { error: "access_denied", error_description: "tenant suspended" };
-		};
+		// Stands in for an APIError from a second better-call install, which
+		// fails `instanceof` against this package's copy.
+		const foreignAPIError = Object.assign(new Error("tenant suspended"), {
+			name: "APIError",
+			status: "FORBIDDEN",
+			statusCode: 403,
+			headers: new Headers(),
+			body: { error: "access_denied", error_description: "tenant suspended" },
+		});
 		const foreignBaseUrl = "http://localhost:3007";
 		const { customFetchImpl: foreignFetch } = await getTestInstance({
 			baseURL: foreignBaseUrl,
@@ -1790,7 +1793,7 @@ describe("oauth register - protected dynamic registration", async () => {
 					consentPage: "/consent",
 					allowDynamicClientRegistration: true,
 					validateInitialAccessToken: () => {
-						throw new ForeignAPIError();
+						throw foreignAPIError;
 					},
 				}),
 			],
