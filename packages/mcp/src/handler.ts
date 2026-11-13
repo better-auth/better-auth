@@ -48,6 +48,17 @@ export interface McpProtectedRequestHandlerOptions {
 	dpop?: {
 		proofMaxAgeSeconds?: number;
 		signingAlgorithms?: readonly string[];
+		/**
+		 * Store that rejects a DPoP proof that was already used.
+		 *
+		 * Unlike `requireMcpAuth`, this handler has no auth instance to store
+		 * proofs in, so it defaults to a process-local in-memory store. That is
+		 * safe only for a single long-lived instance. For multiple instances or
+		 * serverless, pass a shared store, such as
+		 * `createDpopReplayStore((await auth.$context).internalAdapter)` from
+		 * `better-auth/oauth2`. With secondary storage, that store also needs
+		 * `verification.storeInDatabase: true`, or every DPoP request fails.
+		 */
 		replayStore?: DpopReplayStore;
 	};
 }
