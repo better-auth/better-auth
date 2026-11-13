@@ -1870,6 +1870,66 @@ describe("oauth-provider extension client authentication confirmation", async ()
 	});
 });
 
+it("keeps act on a JWT access token issued without a user", async () => {
+	const grantType = "urn:better-auth:test:client-actor-grant";
+	const resource = "https://api.example.com";
+	const issuer = "http://localhost:3000";
+	const plugin = {
+		id: "test-client-actor-grant",
+		init(ctx) {
+			extendOAuthProvider(ctx, {
+				grants: {
+					[grantType]: async ({ provider }) => {
+						const { client } = await provider.authenticateClient({
+							scopes: ["read"],
+						});
+						return provider.issueTokens({
+							client,
+							scopes: ["read"],
+							resources: [resource],
+							act: { sub: "upstream-service" },
+						});
+					},
+				},
+			});
+		},
+	} satisfies BetterAuthPlugin;
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL: issuer,
+		plugins: [
+			jwt({ jwt: { issuer } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				resources: [resource],
+				enforcePerClientResources: false,
+			}),
+			plugin,
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: "client_secret_post",
+			grant_types: [grantType],
+			scope: "read",
+		},
+	});
+	const tokens = await auth.api.oauth2Token({
+		body: {
+			grant_type: grantType,
+			client_id: oauthClient!.client_id,
+			client_secret: oauthClient!.client_secret!,
+		},
+	});
+	expect(decodeJwt(tokens.access_token)).toMatchObject({
+		sub: oauthClient!.client_id,
+		act: { sub: "upstream-service" },
+	});
+});
+
 describe.each(["postgres", "mysql"] as const)(
 	"opaque access-token claims on %s",
 	(testWith) => {

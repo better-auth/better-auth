@@ -335,7 +335,10 @@ async function createJwtAccessToken(
 				opts,
 				overrides?.act,
 			)
-		: { sub: client.clientId };
+		: {
+				sub: client.clientId,
+				...(overrides?.act ? { act: overrides.act } : {}),
+			};
 
 	// Sign token — pass per-resource signing config if set; otherwise fall
 	// back to the JWT plugin's default.
