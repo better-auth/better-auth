@@ -4,7 +4,6 @@ import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import { shimContext } from "../../utils/shim";
 import { PACKAGE_VERSION } from "../../version";
 import type { AccessControl, ArrayElement } from "../access";
@@ -21,7 +20,6 @@ import {
 	listOrgRoles,
 	updateOrgRole,
 } from "./routes/crud-access-control";
-import type { OrganizationInvitationRole } from "./routes/crud-invites";
 import {
 	acceptInvitation,
 	cancelInvitation,
@@ -69,17 +67,7 @@ import type {
 	OrganizationSchema,
 	TeamMember,
 } from "./schema";
-import type { OrganizationOptions, ResolveMembership } from "./types";
-
-type OrganizationPluginOptions<O extends OrganizationOptions> = O &
-	(NoInfer<O> extends { resolveMembership: ResolveMembership }
-		? {
-				resolveMembership: ResolveMembership<
-					OrganizationInvitationRole<NoInfer<O>>,
-					InferAdditionalFieldsFromPluginOptions<"member", NoInfer<O>>
-				>;
-			}
-		: {});
+import type { OrganizationOptions } from "./types";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -358,7 +346,7 @@ export function organization<
 			| undefined;
 	},
 >(
-	options?: OrganizationPluginOptions<O> | undefined,
+	options?: O | undefined,
 ): {
 	id: "organization";
 	version: string;
@@ -390,7 +378,7 @@ export function organization<
 		dynamicAccessControl: { enabled: true };
 	},
 >(
-	options?: OrganizationPluginOptions<O> | undefined,
+	options?: O | undefined,
 ): {
 	id: "organization";
 	version: string;
@@ -424,7 +412,7 @@ export function organization<
 		teams?: { enabled?: false | undefined } | undefined;
 	},
 >(
-	options?: OrganizationPluginOptions<O> | undefined,
+	options?: O | undefined,
 ): {
 	id: "organization";
 	version: string;
@@ -451,7 +439,7 @@ export function organization<
 	options: NoInfer<O>;
 };
 export function organization<O extends OrganizationOptions>(
-	options?: OrganizationPluginOptions<O> | undefined,
+	options?: O | undefined,
 ): DefaultOrganizationPlugin<O>;
 export function organization<O extends OrganizationOptions>(options?: O) {
 	const opts = (options || {}) as O;

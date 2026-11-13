@@ -1,28 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from ".";
-import { adminAc, defaultAc, memberAc, ownerAc } from "./access";
 import type { ResolveMembership } from "./types";
 
 const STAFF_EMAIL = "staff@test.com";
 const PASSWORD = "password123";
 
-const roles = {
-	owner: ownerAc,
-	admin: adminAc,
-	member: memberAc,
-	orgManager: defaultAc.newRole({ organization: ["update", "delete"] }),
-};
-
-type Resolver = ResolveMembership<keyof typeof roles, { department: string }>;
-
-async function setup(resolveMembership?: Resolver) {
+async function setup(resolveMembership?: ResolveMembership) {
 	const { auth, client, signInWithTestUser, signInWithUser } =
 		await getTestInstance({
 			plugins: [
 				organization({
-					ac: defaultAc,
-					roles,
 					schema: {
 						member: {
 							additionalFields: {
@@ -56,7 +44,7 @@ async function setup(resolveMembership?: Resolver) {
 }
 
 const forStaff =
-	(result: ReturnType<Resolver>): Resolver =>
+	(result: ReturnType<ResolveMembership>): ResolveMembership =>
 	({ user }) =>
 		user.email === STAFF_EMAIL ? result : undefined;
 
@@ -102,24 +90,28 @@ describe("resolveMembership", () => {
 		expect(invitation.organizationId).toBe(org.id);
 	});
 
-	it("limits narrow roles to their permissions", async () => {
-		const { auth, staff, org } = await setup(
-			forStaff(["member", "orgManager"]),
-		);
-		await auth.api.setActiveOrganization({
-			body: { organizationId: org.id },
-			headers: staff,
+	it("passes the endpoint context so the resolver can decide per request", async () => {
+		const { auth, owner, staff, org } = await setup(({ user, member }, ctx) => {
+			if (member || user.email !== STAFF_EMAIL) return;
+			if (["/organization/update", "/organization/delete"].includes(ctx.path))
+				return "owner";
 		});
 
 		const updated = await auth.api.updateOrganization({
-			body: { data: { name: "Renamed" } },
+			body: { organizationId: org.id, data: { name: "Renamed" } },
 			headers: staff,
 		});
 		expect(updated?.name).toBe("Renamed");
 
 		await expect(
 			auth.api.createInvitation({
-				body: { email: "new@test.com", role: "member" },
+				body: { organizationId: org.id, email: "new@test.com", role: "member" },
+				headers: staff,
+			}),
+		).rejects.toMatchObject({ status: "BAD_REQUEST" });
+		await expect(
+			auth.api.setActiveOrganization({
+				body: { organizationId: org.id },
 				headers: staff,
 			}),
 		).rejects.toMatchObject({ status: "FORBIDDEN" });
@@ -131,9 +123,22 @@ describe("resolveMembership", () => {
 		await expect(
 			auth.api.getFullOrganization({
 				query: { organizationId: org.id },
-				headers: staff,
+				headers: owner,
 			}),
 		).rejects.toMatchObject({ status: "BAD_REQUEST" });
+	});
+
+	it("receives the context of the endpoint being called", async () => {
+		const resolveMembership = vi.fn<ResolveMembership>(() => undefined);
+		const { auth, owner, org } = await setup(resolveMembership);
+		await auth.api.setActiveOrganization({
+			body: { organizationId: org.id },
+			headers: owner,
+		});
+		const ctx = resolveMembership.mock.lastCall?.[1];
+		expect(ctx?.path).toBe("/organization/set-active");
+		expect(ctx?.body).toEqual({ organizationId: org.id });
+		expect(ctx?.headers?.get("cookie")).toBe(owner.get("cookie"));
 	});
 
 	it("uses the id and additional fields of a returned membership", async () => {
@@ -181,7 +186,7 @@ describe("resolveMembership", () => {
 	);
 
 	it("keeps the default for members and non-members when it returns undefined", async () => {
-		const resolveMembership = vi.fn<Resolver>(() => undefined);
+		const resolveMembership = vi.fn<ResolveMembership>(() => undefined);
 		const { auth, owner, staff, org, ownerMember } =
 			await setup(resolveMembership);
 		const member = await auth.api.getActiveMember({ headers: owner });
@@ -230,22 +235,5 @@ describe("resolveMembership", () => {
 		await expect(
 			auth.api.getFullOrganization({ headers: owner }),
 		).rejects.toMatchObject({ status: "FORBIDDEN" });
-	});
-
-	it("only accepts configured roles", () => {
-		organization({ resolveMembership: async () => ["admin", "member"] });
-		// @ts-expect-error unknown default role
-		organization({ resolveMembership: () => "superuser" });
-		organization({
-			ac: defaultAc,
-			roles,
-			resolveMembership: () => "orgManager",
-		});
-		organization({
-			ac: defaultAc,
-			roles,
-			// @ts-expect-error unknown custom role
-			resolveMembership: () => ({ role: "superuser" }),
-		});
 	});
 });

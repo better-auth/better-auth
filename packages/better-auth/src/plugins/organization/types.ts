@@ -2,7 +2,6 @@ import type {
 	AuthContext,
 	Awaitable,
 	GenericEndpointContext,
-	LiteralString,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { Session, User } from "../../types";
@@ -16,10 +15,7 @@ import type {
 	TeamMember,
 } from "./schema";
 
-export type ResolveMembership<
-	Role extends string = string,
-	Fields = Record<string, any>,
-> = (
+export type ResolveMembership = (
 	data: {
 		user: User & Record<string, any>;
 		session: Session & Record<string, any>;
@@ -28,9 +24,9 @@ export type ResolveMembership<
 	},
 	ctx: GenericEndpointContext,
 ) => Awaitable<
-	| Role
-	| Role[]
-	| ({ role: Role | Role[]; id?: string | undefined } & Partial<Fields>)
+	| string
+	| string[]
+	| ({ role: string | string[]; id?: string | undefined } & Record<string, any>)
 	| null
 	| false
 	| undefined
@@ -89,13 +85,19 @@ export interface OrganizationOptions {
 	 * membership object whose fields merge over the row. Nothing is written to
 	 * the member table.
 	 *
+	 * `ctx` is the context of the endpoint being called, so the result can
+	 * depend on the request: `ctx.path`, `ctx.body`, `ctx.headers`.
+	 *
 	 * @example
 	 * ```ts
-	 * resolveMembership: ({ user, member }) =>
-	 *   !member && user.role === "support" ? "member" : undefined
+	 * resolveMembership: ({ user, member }, ctx) => {
+	 *   if (member) return;
+	 *   const paths = ["/organization/update", "/organization/delete"];
+	 *   if (user.role === "admin" && paths.includes(ctx.path)) return "owner";
+	 * }
 	 * ```
 	 */
-	resolveMembership?: ResolveMembership<LiteralString> | undefined;
+	resolveMembership?: ResolveMembership | undefined;
 	/**
 	 * The maximum number of members allowed in an organization.
 	 *
