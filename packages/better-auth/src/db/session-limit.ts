@@ -1,11 +1,19 @@
-import type { InternalAdapter } from "@better-auth/core";
+import type { AuthEndpointContext } from "@better-auth/core/context";
 import {
 	defineRequestState,
 	hasRequestState,
 	queueAfterTransactionHook,
+	runWithEndpointContext,
+	tryGetCurrentAuthEndpointContext,
 } from "@better-auth/core/context";
 import type { InternalLogger } from "@better-auth/core/env";
 import type { Session } from "../types";
+
+type PendingSessionLimit = {
+	readonly enforce: () => Promise<void>;
+	readonly logger: InternalLogger;
+	readonly endpointContext: AuthEndpointContext | undefined;
+};
 
 /**
  * Sessions created during the current request that still need
@@ -19,49 +27,39 @@ const toSeconds = (date: Date | string) =>
 	Math.floor(new Date(date).getTime() / 1000);
 
 /**
- * Keeps the user's newest `maxPerUser` sessions, counting `session`, and
- * revokes the rest. Impersonation sessions neither count nor get revoked.
+ * Picks the tokens to revoke so the user keeps their newest `maxPerUser`
+ * sessions, counting `session`. Impersonation sessions neither count nor get
+ * revoked.
  */
-export async function revokeSessionsOverLimit(
-	internalAdapter: InternalAdapter,
+export function selectSessionsOverLimit(
 	session: Session,
+	sessions: Session[],
 	maxPerUser: number,
 ) {
 	// Compared in whole seconds, since a database column may store no more.
 	// Sessions created alongside `session` enforce the limit themselves, so
 	// concurrent sign-ins never revoke each other.
 	const createdAt = toSeconds(session.createdAt);
-	const sessions = await internalAdapter.listSessions(session.userId, {
-		onlyActiveSessions: true,
-	});
 	// `session` is left out and the limit reduced by one, so it is never
 	// revoked, even when the list doesn't include it yet.
-	const revokedTokens = sessions
-		.filter(
-			(s) =>
-				s.id !== session.id &&
-				s.token !== session.token &&
-				!(s as Session & { impersonatedBy?: unknown }).impersonatedBy,
-		)
-		// Sessions read from secondary storage carry `createdAt` as a string.
-		.sort(
-			(a, b) =>
-				new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-		)
-		.slice(maxPerUser - 1)
-		.filter((s) => toSeconds(s.createdAt) < createdAt)
-		.map((s) => s.token);
-	if (revokedTokens.length) {
-		await internalAdapter.deleteSessions(revokedTokens);
-	}
+	return (
+		sessions
+			.filter(
+				(s) =>
+					s.id !== session.id &&
+					s.token !== session.token &&
+					!(s as Session & { impersonatedBy?: unknown }).impersonatedBy,
+			)
+			// Sessions read from secondary storage carry `createdAt` as a string.
+			.sort(
+				(a, b) =>
+					new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+			)
+			.slice(maxPerUser - 1)
+			.filter((s) => toSeconds(s.createdAt) < createdAt)
+			.map((s) => s.token)
+	);
 }
-
-type PendingSessionLimit = {
-	readonly token: string;
-	readonly maxPerUser: number;
-	readonly internalAdapter: InternalAdapter;
-	readonly logger: InternalLogger;
-};
 
 /**
  * Defers `session.maxPerUser` enforcement for a session created during a
@@ -71,18 +69,23 @@ type PendingSessionLimit = {
  *
  * @returns `false` when there is no request to defer to.
  */
-export async function deferSessionLimit(pending: PendingSessionLimit) {
+export async function deferSessionLimit(
+	pending: Omit<PendingSessionLimit, "endpointContext">,
+) {
 	if (!(await hasRequestState())) return false;
 	const pendingLimits = await pendingSessionLimits.get();
 	if (!pendingLimits) return false;
-	pendingLimits.push(pending);
+	pendingLimits.push({
+		...pending,
+		endpointContext: tryGetCurrentAuthEndpointContext(),
+	});
 	return true;
 }
 
 /**
  * Runs a request and then enforces `session.maxPerUser` for the sessions it
- * created that still exist. Must be called where the request state is
- * created, so nested endpoint calls share it and the limit applies once.
+ * created. Must be called where the request state is created, so nested
+ * endpoint calls share it and the limit applies once.
  */
 export async function runWithSessionLimits<T>(fn: () => Promise<T>) {
 	const pendingLimits: PendingSessionLimit[] = [];
@@ -90,21 +93,12 @@ export async function runWithSessionLimits<T>(fn: () => Promise<T>) {
 	try {
 		return await fn();
 	} finally {
-		for (const {
-			token,
-			maxPerUser,
-			internalAdapter,
-			logger,
-		} of pendingLimits) {
+		for (const { enforce, logger, endpointContext } of pendingLimits) {
 			await queueAfterTransactionHook(
+				// Session delete hooks see the request that created the session.
 				async () => {
-					const current = await internalAdapter.findSession(token);
-					if (!current) return;
-					await revokeSessionsOverLimit(
-						internalAdapter,
-						current.session,
-						maxPerUser,
-					);
+					if (!endpointContext) return enforce();
+					await runWithEndpointContext(endpointContext, enforce);
 				},
 				{
 					onError(error: unknown) {

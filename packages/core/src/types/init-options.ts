@@ -1200,7 +1200,8 @@ export type BetterAuthOptions = {
 				 *
 				 * When a new session would exceed the limit, the user's oldest
 				 * sessions are revoked once the request that created it finishes,
-				 * if the new session still exists. The new session always counts
+				 * if the new session still exists. A session created outside a
+				 * request is limited right away. The new session always counts
 				 * toward the limit and is never revoked by it, and sessions created
 				 * within the same second don't revoke each other. Impersonation
 				 * sessions created by the admin plugin don't count toward the limit

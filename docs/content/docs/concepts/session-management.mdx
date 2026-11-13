@@ -115,7 +115,7 @@ export const auth = betterAuth({
 ```
 
 * The new session counts toward the limit and is never revoked by it, so `maxPerUser: 1` signs the user out everywhere else on each new sign-in.
-* The limit applies when the request that created the session finishes, if the session still exists. A sign-in that stops at a [two-factor](/docs/plugins/2fa) challenge revokes nothing until the second factor is verified.
+* For a session created during a request, the limit applies when that request finishes, if the session still exists. A session created outside a request, such as with `internalAdapter.createSession()` in a script, is limited right away. A sign-in that stops at a [two-factor](/docs/plugins/2fa) challenge revokes nothing until the second factor is verified.
 * Expired sessions don't count toward the limit.
 * Impersonation sessions created by the [admin plugin](/docs/plugins/admin) don't count toward the limit and don't revoke the user's own sessions.
 * `maxPerUser` must be a positive integer. Any other value throws when the auth config is initialized.

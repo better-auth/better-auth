@@ -33,7 +33,7 @@ import {
 	parseSessionOutput,
 	parseUserOutput,
 } from "./schema";
-import { deferSessionLimit, revokeSessionsOverLimit } from "./session-limit";
+import { deferSessionLimit, selectSessionsOverLimit } from "./session-limit";
 import {
 	getStorageOption,
 	processIdentifier,
@@ -288,6 +288,55 @@ export const createInternalAdapter = (
 			if (verificationConsumeLocks.get(key) === next) {
 				verificationConsumeLocks.delete(key);
 			}
+		}
+	}
+
+	/**
+	 * Lists all of a user's active sessions. Unlike `listSessions()`, it reads
+	 * every database page, so a limit above the adapter's page size still sees
+	 * every session.
+	 */
+	async function listAllActiveSessions(userId: string): Promise<Session[]> {
+		if (secondaryStorage && !databaseSessionFallbackEnabled) {
+			return internalAdapter.listSessions(userId, { onlyActiveSessions: true });
+		}
+		const pageSize = Math.max(
+			options.advanced?.database?.defaultFindManyLimit ?? 100,
+			1,
+		);
+		const now = new Date();
+		const sessions: Session[] = [];
+		for (let offset = 0; ; offset += pageSize) {
+			const page = await (await getCurrentAdapter(adapter)).findMany<Session>({
+				model: "session",
+				where: [
+					{ field: "userId", value: userId },
+					{ field: "expiresAt", value: now, operator: "gt" },
+				],
+				sortBy: { field: "createdAt", direction: "desc" },
+				limit: pageSize,
+				offset,
+			});
+			sessions.push(...page);
+			if (page.length < pageSize) return sessions;
+		}
+	}
+
+	/**
+	 * Enforces `session.maxPerUser` for the session with `token`, unless it no
+	 * longer exists.
+	 */
+	async function enforceSessionLimit(token: string, maxPerUser: number) {
+		// A hook may have deleted the session since it was created.
+		const current = await internalAdapter.findSession(token);
+		if (!current) return;
+		const revokedTokens = selectSessionsOverLimit(
+			current.session,
+			await listAllActiveSessions(current.session.userId),
+			maxPerUser,
+		);
+		if (revokedTokens.length) {
+			await internalAdapter.deleteSessions(revokedTokens);
 		}
 	}
 
@@ -685,35 +734,20 @@ export const createInternalAdapter = (
 					: undefined,
 			);
 			const maxPerUser = options.session?.maxPerUser;
-			if (
-				res &&
-				maxPerUser !== undefined &&
-				!res.impersonatedBy &&
-				!(await deferSessionLimit({
-					token: res.token,
-					maxPerUser,
-					internalAdapter,
-					logger,
-				}))
-			) {
-				// Queued after the session's own writes, so inside a transaction the
-				// older sessions are only revoked once the new one has committed.
-				await queueAfterTransactionHook(
-					() =>
-						revokeSessionsOverLimit(
-							internalAdapter,
-							res as Session,
-							maxPerUser,
-						),
-					{
+			if (res && maxPerUser !== undefined && !res.impersonatedBy) {
+				const enforce = () => enforceSessionLimit(res.token, maxPerUser);
+				if (!(await deferSessionLimit({ enforce, logger }))) {
+					// Queued after the session's own writes, so inside a transaction the
+					// older sessions are only revoked once the new one has committed.
+					await queueAfterTransactionHook(enforce, {
 						onError(error: unknown) {
 							logger.error(
 								"Failed to revoke sessions over session.maxPerUser",
 								error,
 							);
 						},
-					},
-				);
+					});
+				}
 			}
 			return res as Session;
 		},

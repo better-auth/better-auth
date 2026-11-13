@@ -247,6 +247,67 @@ describe("session.maxPerUser", () => {
 			expect(token).toBeTruthy();
 			expect(await listSessionIds(user.id)).toHaveLength(1);
 		});
+
+		it("enforces the limit for sessions created outside a request", async () => {
+			const { ctx, signIn, isActive, listSessionIds } =
+				await getMaxSessionsTestInstance(1, options());
+			useFakeClock();
+
+			const first = await signIn();
+			advanceClock();
+			const created = await ctx.internalAdapter.createSession(first.user.id);
+
+			expect(await isActive(first.headers)).toBe(false);
+			expect(await listSessionIds(first.user.id)).toEqual([created.id]);
+		});
+
+		it("does not count expired sessions", async () => {
+			const { auth, testUser, signIn, isActive, listSessionIds } =
+				await getMaxSessionsTestInstance(2, options());
+			useFakeClock();
+
+			const longLived = await signIn();
+			advanceClock();
+			// Expires after a day, while `longLived` lasts a week.
+			const { token } = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+					rememberMe: false,
+				},
+			});
+			vi.setSystemTime(Date.now() + 2 * 24 * 60 * 60 * 1000);
+			const next = await signIn();
+
+			expect(await isActive(longLived.headers)).toBe(true);
+			expect(
+				await isActive(new Headers({ authorization: `Bearer ${token}` })),
+			).toBe(false);
+			expect(await listSessionIds(next.user.id)).toEqual(
+				[longLived.session.id, next.session.id].sort(),
+			);
+		});
+
+		it("applies a limit larger than the database page size", async () => {
+			const base = options();
+			const { signIn, isActive } = await getMaxSessionsTestInstance(3, {
+				...base,
+				advanced: { database: { defaultFindManyLimit: 2 } },
+			});
+			useFakeClock();
+
+			const sessions = [];
+			for (let i = 0; i < 5; i++) {
+				sessions.push(await signIn());
+				advanceClock();
+			}
+
+			const active = [];
+			for (const { headers } of sessions) {
+				active.push(await isActive(headers));
+			}
+			expect(active).toEqual([false, false, true, true, true]);
+		});
 	});
 
 	it("does not revoke sessions when no limit is set", async () => {
@@ -265,17 +326,57 @@ describe("session.maxPerUser", () => {
 		}
 	});
 
-	it("enforces the limit for sessions created outside a request", async () => {
-		const { ctx, signIn, isActive, listSessionIds } =
-			await getMaxSessionsTestInstance(1);
+	it("runs session delete hooks in the request that created the session", async () => {
+		const deletedFrom: (string | undefined)[] = [];
+		const { signIn, isActive } = await getMaxSessionsTestInstance(1, {
+			databaseHooks: {
+				session: {
+					delete: {
+						async before(_session, ctx) {
+							deletedFrom.push(ctx?.path);
+						},
+					},
+				},
+			},
+		});
 		useFakeClock();
 
 		const first = await signIn();
 		advanceClock();
-		const created = await ctx.internalAdapter.createSession(first.user.id);
+		deletedFrom.length = 0;
+		await signIn();
 
 		expect(await isActive(first.headers)).toBe(false);
-		expect(await listSessionIds(first.user.id)).toEqual([created.id]);
+		expect(deletedFrom).toEqual(["/sign-in/email"]);
+	});
+
+	it("does not revoke sessions when a create hook deletes the new session", async () => {
+		let deleteCreatedSessions = false;
+		const instance = await getMaxSessionsTestInstance(1, {
+			databaseHooks: {
+				session: {
+					create: {
+						async after(session) {
+							if (!deleteCreatedSessions) return;
+							const ctx = await instance.auth.$context;
+							await ctx.internalAdapter.deleteSession(session.token);
+						},
+					},
+				},
+			},
+		});
+		const { ctx, signIn, isActive, listSessionIds } = instance;
+		useFakeClock();
+
+		const existing = await signIn();
+		advanceClock();
+		deleteCreatedSessions = true;
+		await ctx.internalAdapter.createSession(existing.user.id);
+
+		expect(await isActive(existing.headers)).toBe(true);
+		expect(await listSessionIds(existing.user.id)).toEqual([
+			existing.session.id,
+		]);
 	});
 
 	it("does not revoke sessions for a sign-in that stops at a second factor", async () => {
