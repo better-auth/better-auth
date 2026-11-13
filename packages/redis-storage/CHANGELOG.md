@@ -1,5 +1,7 @@
 # @better-auth/redis-storage
 
+## 1.7.23
+
 ## 1.7.22
 
 ## 1.7.21

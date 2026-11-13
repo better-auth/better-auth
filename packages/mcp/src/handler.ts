@@ -3,6 +3,7 @@ import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { createResourceServerChallenge } from "@better-auth/oauth-provider";
 import type {
 	DpopReplayStore,
+	VerifyAccessTokenOptions,
 	VerifyAccessTokenRequestOptions,
 } from "better-auth/oauth2";
 import {
@@ -48,6 +49,17 @@ export interface McpProtectedRequestHandlerOptions {
 	dpop?: {
 		proofMaxAgeSeconds?: number;
 		signingAlgorithms?: readonly string[];
+		/**
+		 * Store that rejects a DPoP proof that was already used.
+		 *
+		 * Unlike `requireMcpAuth`, this handler has no auth instance to store
+		 * proofs in, so it defaults to a process-local in-memory store. That is
+		 * safe only for a single long-lived instance. For multiple instances or
+		 * serverless, pass a shared store, such as
+		 * `createDpopReplayStore((await auth.$context).internalAdapter)` from
+		 * `better-auth/oauth2`. With secondary storage, that store also needs
+		 * `verification.storeInDatabase: true`, or every DPoP request fails.
+		 */
 		replayStore?: DpopReplayStore;
 	};
 }
@@ -108,6 +120,11 @@ function toChallengeResponse(
 	);
 }
 
+type McpRequestHandler = (
+	request: Request,
+	accessTokenClaims: JWTPayload,
+) => Awaitable<Response>;
+
 /**
  * A request middleware handler that verifies an MCP access token and responds
  * with an RFC 9728 `WWW-Authenticate` header for unauthenticated requests.
@@ -118,10 +135,19 @@ function toChallengeResponse(
  */
 export const createMcpProtectedRequestHandler = (
 	options: McpProtectedRequestHandlerOptions,
-	handler: (
-		request: Request,
-		accessTokenClaims: JWTPayload,
-	) => Awaitable<Response>,
+	handler: McpRequestHandler,
+) => createProtectedRequestHandler(options, handler);
+
+/**
+ * {@link createMcpProtectedRequestHandler} that can also read the
+ * authorization server's keys in-process.
+ *
+ * @internal
+ */
+export const createProtectedRequestHandler = (
+	options: McpProtectedRequestHandlerOptions &
+		Pick<VerifyAccessTokenOptions, "jwksFetch" | "jwksCacheKey">,
+	handler: McpRequestHandler,
 ) => {
 	const resource = validateMcpResource(options.audience);
 	const resolvedChallengeOptions = {
@@ -135,6 +161,8 @@ export const createMcpProtectedRequestHandler = (
 			audience: options.audience,
 		},
 		jwksUrl: options.jwksUrl,
+		jwksFetch: options.jwksFetch,
+		jwksCacheKey: options.jwksCacheKey,
 		remoteVerify: options.remoteVerify,
 		requiredScopes: options.requiredScopes,
 		isScopeSatisfied: options.isScopeSatisfied,
@@ -157,7 +185,10 @@ export const createMcpProtectedRequestHandler = (
 			return await handler(request, accessTokenClaims);
 		} catch (error) {
 			if (isInsufficientScopeError(error)) {
-				return toChallengeResponse(error, resource, resolvedChallengeOptions);
+				return toChallengeResponse(error, resource, {
+					...resolvedChallengeOptions,
+					request,
+				});
 			}
 			throw error;
 		}

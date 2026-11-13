@@ -1,5 +1,19 @@
 # @better-auth/oauth-provider
 
+## 1.7.23
+
+### Patch Changes
+
+- [#12499](https://github.com/better-auth/better-auth/pull/12499) [`b9c259b`](https://github.com/better-auth/better-auth/commit/b9c259b61d453a2ca604b2f054e05e0d0a653625) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A token request that fails validation no longer uses up its authorization code or approved device code. Before, the code was consumed before the `code_verifier`, `redirect_uri`, `resource`, and DPoP proof were checked, so a client that retried with a corrected request got `invalid_grant` and the user had to sign in or approve the device again. Codes are now consumed only after the request passes validation. A DPoP proof whose `jti` was already used is still detected after the code is consumed, so that request uses up the code and returns `invalid_dpop_proof`, as before. Codes stay single-use, and an authorization code presented after redemption still revokes the tokens issued from it.
+
+- [#12525](https://github.com/better-auth/better-auth/pull/12525) [`06925b3`](https://github.com/better-auth/better-auth/commit/06925b35dd14ca39e2080fb2b8e85c14f5c2931b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Answer a DPoP request whose token lacks a required scope with a `DPoP` challenge. Before, the `insufficient_scope` 403 always carried a `Bearer` challenge, even when the client sent a valid DPoP-bound token and proof. The `DPoP` challenge keeps `error="insufficient_scope"` and the missing scopes in `scope`, so the client can still authorize again for them. Like other `DPoP` challenges, it lists the accepted proof algorithms in `algs` and has no `resource_metadata`. A `Bearer` request still gets the `Bearer` challenge with `resource_metadata`. This applies when `createResourceServerChallenge` receives the failed `request`, which the resource client's `verifyAccessTokenRequest`, `requireMcpAuth`, and `createMcpProtectedRequestHandler` pass automatically, including for an `insufficient_scope` error thrown by an MCP tool handler.
+
+- [#12521](https://github.com/better-auth/better-auth/pull/12521) [`7c61c40`](https://github.com/better-auth/better-auth/commit/7c61c40534b878f6e53d50daf03fba5db6fbdd59) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Browser clients on another origin can now read resource-server and MCP `WWW-Authenticate` challenges. `createResourceServerChallenge`, and the resource client and MCP helpers built on it, now send `Access-Control-Expose-Headers: WWW-Authenticate` with every Bearer, `insufficient_scope`, and `DPoP` challenge. If your CORS layer sets its own `Access-Control-Expose-Headers`, include `WWW-Authenticate` in it.
+
+- [#12500](https://github.com/better-auth/better-auth/pull/12500) [`be0d01c`](https://github.com/better-auth/better-auth/commit/be0d01c8c254dbde2ec35975cd72ac437245b256) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The OAuth provider now logs a warning when two extensions contribute the same discovery metadata key. The first-registered extension's value is still the one served, so discovery output is unchanged, but the dropped contribution is no longer silent.
+
+- [#12515](https://github.com/better-auth/better-auth/pull/12515) [`2959544`](https://github.com/better-auth/better-auth/commit/295954490665cdef7f25f0ec0f7fa671b368bc45) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A protected resource request that uses an unsupported authorization scheme, such as `Basic`, or sends a token with no scheme, now gets a `Bearer` challenge with its `resource_metadata` pointer instead of a `DPoP` challenge. MCP clients can find the authorization server again from that response.
+
 ## 1.7.22
 
 ### Patch Changes

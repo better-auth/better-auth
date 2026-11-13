@@ -402,9 +402,9 @@ describe("session-refresh", () => {
 		vi.stubGlobal("navigator", {
 			product: "ReactNative",
 		});
-		const fetchSession = vi.fn(async () => {});
+		const mockFetchSession = vi.fn(async () => {});
 		const manager = createSessionRefreshManager({
-			fetchSession,
+			fetchSession: mockFetchSession,
 			sessionSignal: atom(false),
 			options: {
 				sessionOptions: {
@@ -417,6 +417,6 @@ describe("session-refresh", () => {
 		await vi.advanceTimersByTimeAsync(5000);
 		manager.cleanup();
 
-		expect(fetchSession).toHaveBeenCalledOnce();
+		expect(mockFetchSession).toHaveBeenCalledOnce();
 	});
 });

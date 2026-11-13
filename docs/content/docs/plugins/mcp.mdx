@@ -230,11 +230,11 @@ export { POST };
 
 `createMcpHandler` returns JSON or request-scoped Server-Sent Events (SSE) as required by the operation; it does not require a Redis-backed MCP session store. If you implement `subscriptions/listen` across multiple server instances, provide the SDK with a shared event bus for that extension. OAuth clients, consent, authorization codes, refresh tokens, CIMD metadata, and DPoP replay detection still use durable state because they are authorization and security records, not MCP transport sessions.
 
-`requireMcpAuth` reads the `Authorization` header, verifies access tokens against the authorization server's JSON Web Key Set (JWKS), and checks the signature, issuer, audience, and expiry. It also enforces [RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449) Demonstrating Proof of Possession (DPoP) when an access token is DPoP-bound. Unauthenticated requests receive a JSON-RPC `401` with the RFC 9728 `WWW-Authenticate` header, so MCP clients can start the authorization flow. Tokens missing a required scope receive a `403` with an [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1) `insufficient_scope` challenge, which MCP clients use to step up their authorization.
+`requireMcpAuth` reads the `Authorization` header, verifies access tokens against the authorization server's JSON Web Key Set (JWKS), and checks the signature, issuer, audience, and expiry. It also enforces [RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449) Demonstrating Proof of Possession (DPoP) when an access token is DPoP-bound. Unauthenticated requests receive a JSON-RPC `401` with the RFC 9728 `WWW-Authenticate` header, so MCP clients can start the authorization flow. Tokens missing a required scope receive a `403` with an [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1) `insufficient_scope` challenge, which MCP clients use to step up their authorization. A client that sent its token with the `DPoP` scheme gets a `DPoP` challenge instead ([RFC 9449 §7.1](https://datatracker.ietf.org/doc/html/rfc9449#section-7.1)). It names the missing scopes in `scope` and the accepted proof algorithms in `algs`, and it has no `resource_metadata`.
 
-The wrapper passes the verified access-token claims as a second callback argument, not as a database record. The example keeps authentication at the route boundary; if a tool needs token context, convert those claims to the SDK's `AuthInfo` and pass it through `mcpServerHandler.fetch(request, { authInfo })`. `requireMcpAuth` never exposes a refresh token, and it checks the access token locally against the JWKS without a database round trip. DPoP replay protection uses your auth instance's database adapter by default so it works across server instances; pass `dpop.replayStore` only when you need a different shared store.
+The wrapper passes the verified access-token claims as a second callback argument, not as a database record. The example keeps authentication at the route boundary; if a tool needs token context, convert those claims to the SDK's `AuthInfo` and pass it through `mcpServerHandler.fetch(request, { authInfo })`. `requireMcpAuth` never exposes a refresh token, and it checks the access token locally against the JWKS. It reads the signing keys from your auth instance instead of requesting its own `/jwks` endpoint, so it also works on runtimes that cannot send a request to their own hostname. The keys are cached for five minutes and refetched sooner when a token names an unknown key. DPoP replay protection uses your auth instance's database adapter by default so it works across server instances; pass `dpop.replayStore` only when you need a different shared store.
 
-By default, `requireMcpAuth` reads the server's resolved Better Auth URL from the auth context and uses it as the expected issuer, resource, and JWKS base. If `mcp({ resource })` uses a different identifier, pass that same value to `requireMcpAuth`, as shown above. Override the issuer or JWKS URL when `jwt.issuer` is custom or the authorization server runs separately:
+By default, `requireMcpAuth` reads the server's resolved Better Auth URL from the auth context and uses it as the expected issuer and resource. If `mcp({ resource })` uses a different identifier, pass that same value to `requireMcpAuth`, as shown above. Override the issuer when `jwt.issuer` is custom. Set `jwksUrl` to fetch the keys over HTTP instead, for example when the authorization server runs separately:
 
 ```ts
 requireMcpAuth(auth, handler, {
@@ -344,7 +344,7 @@ export const mcpOauthOptionsType = {
 
 ## Remote MCP Server
 
-`requireMcpAuth` verifies tokens against your Better Auth server's JWKS, so the MCP route can run anywhere as long as it can reach that JWKS URL. When the resource server runs separately from the authorization server, or uses a dynamic `baseURL`, use `createMcpProtectedRequestHandler` with explicit verification options instead of `requireMcpAuth`.
+`requireMcpAuth` verifies tokens with the signing keys of the auth instance you pass it. It fetches the keys over HTTP instead when you set `jwksUrl`, or when the JWT plugin publishes them at `jwks.remoteUrl`. When the resource server runs separately from the authorization server, or uses a dynamic `baseURL`, use `createMcpProtectedRequestHandler` with explicit verification options instead of `requireMcpAuth`.
 
 ```ts title="mcp-server.ts"
 import { createMcpProtectedRequestHandler } from "@better-auth/mcp"; // [!code highlight]
@@ -368,3 +368,14 @@ const handler = createMcpProtectedRequestHandler( // [!code highlight]
 ```
 
 `createMcpProtectedRequestHandler` returns the same RFC 9728 `WWW-Authenticate` response for unauthenticated requests. Set `requiredScopes` in its options to require scopes; a token missing any of them receives the same `403` `insufficient_scope` challenge as `requireMcpAuth`. Set `challengeScopes` in the same options object to advertise a scope hint on unauthenticated challenges.
+
+Both helpers expose `WWW-Authenticate` to browser clients on other origins. If your CORS layer sets `Access-Control-Expose-Headers`, see [Resource Server](/docs/plugins/oauth-provider/resource-server) for what it must include.
+
+<Callout type="warn">
+  To stop a captured DPoP proof from being used twice, the handler records each proof it accepts for a DPoP-bound token. Unlike `requireMcpAuth`, `createMcpProtectedRequestHandler` keeps that record in memory by default. The default is safe only for a single long-lived instance. Other instances do not see the record, and a restart clears it. An attacker who captures a proof can replay it against another instance until the proof expires.
+
+  If the handler runs on several instances or on serverless, pass a shared store as `dpop.replayStore`:
+
+  * If the handler runs in the same app as your Better Auth server, use `createDpopReplayStore`, as shown in [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens). It needs database-backed verification storage. If you configure secondary storage, also set `verification.storeInDatabase: true`. Otherwise every DPoP request fails.
+  * Otherwise, implement `DpopReplayStore` on storage that every instance shares. Its `reserve` method must record the proof's `key` until at least `expiresAt` in one atomic step, and return `false` if the key is already recorded. If `reserve` throws, the request fails.
+</Callout>

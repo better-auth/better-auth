@@ -672,3 +672,143 @@ describe("requireMcpAuth access token profile", async () => {
 		expect(handler).not.toHaveBeenCalled();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10888
+ */
+describe("requireMcpAuth co-located with the authorization server", async () => {
+	const origin = "https://colocated.example.test";
+	const baseURL = `${origin}/api/auth`;
+
+	async function createColocatedInstance(jwtPlugin = jwt()) {
+		const instance = await getTestInstance({
+			baseURL: origin,
+			advanced: { useSecureCookies: false },
+			plugins: [
+				jwtPlugin,
+				mcp({
+					loginPage: "/login",
+					consentPage: "/consent",
+					resource: baseURL,
+					scopes: ["mcp:base"],
+					clientPrivileges: () => true,
+				}),
+			],
+		});
+
+		async function issueAccessToken() {
+			const { headers } = await instance.signInWithTestUser();
+			const client = await instance.auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					grant_types: ["client_credentials"],
+					token_endpoint_auth_method: "client_secret_post",
+					redirect_uris: [REDIRECT_URI],
+					client_credentials_scopes: ["mcp:base"],
+				},
+			});
+			const tokenResponse = await instance.customFetchImpl(
+				`${baseURL}/oauth2/token`,
+				{
+					method: "POST",
+					headers: { "content-type": "application/x-www-form-urlencoded" },
+					body: new URLSearchParams({
+						grant_type: "client_credentials",
+						client_id: client.client_id,
+						client_secret: client.client_secret!,
+						scope: "mcp:base",
+						resource: baseURL,
+					}),
+				},
+			);
+			expect(tokenResponse.status).toBe(200);
+			const { access_token: accessToken } = await tokenResponse.json();
+			return accessToken as string;
+		}
+
+		return { instance, issueAccessToken };
+	}
+
+	function mcpRequest(accessToken: string) {
+		return new Request(`${origin}/mcp`, {
+			headers: { Authorization: `Bearer ${accessToken}` },
+		});
+	}
+
+	const { instance, issueAccessToken } = await createColocatedInstance();
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("verifies a token without requesting the server's own JWKS over HTTP", async () => {
+		const accessToken = await issueAccessToken();
+		// A runtime that cannot send a request to its own hostname.
+		const selfFetch = vi.fn(async () => {
+			throw new TypeError("fetch failed");
+		});
+		vi.stubGlobal("fetch", selfFetch);
+		const handler = vi.fn(() => Response.json({ ok: true }));
+
+		const response = await requireMcpAuth(
+			instance.auth,
+			handler,
+		)(mcpRequest(accessToken));
+
+		expect(response.status).toBe(200);
+		expect(handler).toHaveBeenCalledOnce();
+		expect(selfFetch).not.toHaveBeenCalled();
+	});
+
+	it("keeps signing keys separate for auth instances that share a JWT plugin", async () => {
+		const sharedJwt = jwt();
+		const first = await createColocatedInstance(sharedJwt);
+		const second = await createColocatedInstance(sharedJwt);
+		const firstToken = await first.issueAccessToken();
+		const secondToken = await second.issueAccessToken();
+		const handler = () => Response.json({ ok: true });
+		const verifyFirst = requireMcpAuth(first.instance.auth, handler);
+		const verifySecond = requireMcpAuth(second.instance.auth, handler);
+
+		expect((await verifyFirst(mcpRequest(firstToken))).status).toBe(200);
+		expect((await verifySecond(mcpRequest(secondToken))).status).toBe(200);
+		expect((await verifyFirst(mcpRequest(firstToken))).status).toBe(200);
+	});
+
+	it("fetches an explicit jwksUrl over HTTP", async () => {
+		const accessToken = await issueAccessToken();
+		const jwksUrl = `${baseURL}/jwks`;
+		const routeFetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+			instance.customFetchImpl(input, init),
+		);
+		vi.stubGlobal("fetch", routeFetch);
+		const handler = vi.fn(() => Response.json({ ok: true }));
+
+		const response = await requireMcpAuth(instance.auth, handler, {
+			jwksUrl,
+		})(mcpRequest(accessToken));
+
+		expect(response.status).toBe(200);
+		expect(routeFetch).toHaveBeenCalled();
+		expect(requestUrl(routeFetch.mock.calls[0]![0]).href).toBe(jwksUrl);
+	});
+
+	it("fetches the JWT plugin's jwks.remoteUrl over HTTP", async () => {
+		const remoteUrl = "https://keys.example.test/jwks";
+		const remote = await createColocatedInstance(
+			jwt({ jwks: { remoteUrl, keyPairConfig: { alg: "EdDSA" } } }),
+		);
+		const accessToken = await remote.issueAccessToken();
+		const keyFetch = vi.fn(async (_input: RequestInfo | URL) =>
+			Response.json({ keys: [] }),
+		);
+		vi.stubGlobal("fetch", keyFetch);
+
+		await requireMcpAuth(remote.instance.auth, () =>
+			Response.json({ ok: true }),
+		)(mcpRequest(accessToken));
+
+		expect(keyFetch).toHaveBeenCalled();
+		expect(requestUrl(keyFetch.mock.calls[0]![0]).href).toBe(remoteUrl);
+	});
+});
