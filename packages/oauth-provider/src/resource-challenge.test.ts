@@ -1,4 +1,8 @@
-import { createInsufficientScopeError } from "better-auth/oauth2";
+import {
+	createInsufficientScopeError,
+	requestToResourceInput,
+	verifyAccessTokenRequest,
+} from "better-auth/oauth2";
 import { APIError } from "better-call";
 import { describe, expect, it } from "vitest";
 import { createResourceServerChallenge } from "./resource-challenge";
@@ -347,6 +351,67 @@ describe("resource server challenge", () => {
 			);
 			expect(challenge.body).not.toHaveProperty("error");
 			expect(challenge.body).not.toHaveProperty("error_description");
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10857
+	 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
+	 */
+	describe("unsupported authorization schemes", () => {
+		const resource = "https://api.example.com/mcp";
+
+		function rejectAuthorization(authorizationHeader: string) {
+			const request = new Request(resource, {
+				method: "POST",
+				headers: { Authorization: authorizationHeader },
+			});
+			return verifyAccessTokenRequest(requestToResourceInput(request), {
+				jwksUrl: "https://auth.example.com/jwks",
+				verifyOptions: {
+					issuer: "https://auth.example.com",
+					audience: resource,
+				},
+			}).then(
+				() => expect.fail("expected the request to be rejected"),
+				(error: unknown) => ({ error, request }),
+			);
+		}
+
+		it.each([
+			["no Authorization header", null],
+			["an unsupported scheme", "Basic dXNlcjpwYXNz"],
+		])(
+			"never answers a request with %s with a DPoP challenge",
+			(_, authorizationHeader) => {
+				const challenge = createResourceServerChallenge(
+					new APIError("UNAUTHORIZED", {
+						message: "DPoP proof header is required",
+						error: "invalid_dpop_proof",
+					}),
+					resource,
+					{ request: { authorizationHeader } },
+				) as APIError;
+
+				expect(new Headers(challenge.headers).get("WWW-Authenticate")).toMatch(
+					/^Bearer /,
+				);
+			},
+		);
+
+		it.each([
+			["an unsupported scheme", "Basic dXNlcjpwYXNz"],
+			["a header with no scheme", "access-token"],
+		])("answers %s with a Bearer challenge", async (_, authorizationHeader) => {
+			const { error, request } = await rejectAuthorization(authorizationHeader);
+			const challenge = createResourceServerChallenge(error, resource, {
+				request,
+			}) as APIError;
+
+			expect(challenge.statusCode).toBe(401);
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'Bearer error="invalid_token", error_description="authorization scheme must be Bearer or DPoP", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp"',
+			);
 		});
 	});
 });
