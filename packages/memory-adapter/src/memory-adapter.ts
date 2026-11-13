@@ -119,6 +119,18 @@ function rowChanged(baseRow: any, cloneRow: any): boolean {
 	return JSON.stringify(baseRow) !== JSON.stringify(cloneRow);
 }
 
+/**
+ * The row count is not a safe next id once rows have been deleted: it can
+ * equal the id of a row that is still stored.
+ */
+function nextSerialId(rows: Record<string, unknown>[] | undefined) {
+	let max = 0;
+	for (const row of rows ?? []) {
+		if (typeof row.id === "number" && row.id > max) max = row.id;
+	}
+	return max + 1;
+}
+
 export const memoryAdapter = (
 	db: MemoryDB,
 	config?: MemoryAdapterConfig | undefined,
@@ -153,7 +165,7 @@ export const memoryAdapter = (
 						props.field === "id" &&
 						props.action === "create"
 					) {
-						return activeDb[props.model]!.length + 1;
+						return nextSerialId(activeDb[props.model]);
 					}
 					return props.data;
 				},
@@ -429,7 +441,7 @@ export const memoryAdapter = (
 							options.advanced?.database?.generateId === "serial";
 						if (useNumberId) {
 							// @ts-expect-error
-							data.id = activeDb[model]!.length + 1;
+							data.id = nextSerialId(activeDb[model]);
 						}
 						if (!activeDb[model]) {
 							activeDb[model] = [];
