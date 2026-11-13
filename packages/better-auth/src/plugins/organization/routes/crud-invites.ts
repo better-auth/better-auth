@@ -80,7 +80,7 @@ type DynamicOrganizationRole<O extends OrganizationOptions> = O extends {
 	? LiteralString
 	: never;
 
-export type OrganizationInvitationRole<O extends OrganizationOptions> =
+type OrganizationInvitationRole<O extends OrganizationOptions> =
 	| InferOrganizationRolesFromOption<O>
 	| DynamicOrganizationRole<O>;
 

@@ -679,33 +679,27 @@ The plugin calls it on every lookup of the caller's own membership: setting an o
 * A role: act with that role, overriding the member row's role.
 * An object: a full membership. `role` is required; `id` defaults to the member row's id, or a stable placeholder when there is none; other fields, including your member `additionalFields`, merge over the row.
 
-Roles are typed from your `roles`. Returning `"owner"` grants the owner's protections too, so prefer a narrow role:
+The second argument is the context of the endpoint being called, so the result can depend on the request: `ctx.path`, `ctx.body`, `ctx.headers`. For example, platform admins (from the [admin plugin](/docs/plugins/admin)) can update or delete any organization, but nothing else:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { organization } from "better-auth/plugins";
-import { createAccessControl } from "better-auth/plugins/access";
-import {
-  adminAc,
-  defaultStatements,
-  memberAc,
-  ownerAc,
-} from "better-auth/plugins/organization/access";
-
-const ac = createAccessControl(defaultStatements);
-const support = ac.newRole({ organization: ["update"], member: ["update"] });
+import { admin, organization } from "better-auth/plugins";
 
 export const auth = betterAuth({
   plugins: [
+    admin(),
     organization({
-      ac,
-      roles: { owner: ownerAc, admin: adminAc, member: memberAc, support },
-      resolveMembership: ({ user, member }) =>
-        !member && user.role === "support" ? "support" : undefined,
+      resolveMembership: ({ user, member }, ctx) => {
+        if (member) return;
+        const paths = ["/organization/update", "/organization/delete"];
+        if (user.role === "admin" && paths.includes(ctx.path)) return "owner";
+      },
     }),
   ],
 });
 ```
+
+Returning `"owner"` grants the owner's protections too, so scope it as narrowly as the example does.
 
 A resolved membership doesn't appear in `listMembers`, and leaving the organization still requires a member row.
 
@@ -2618,7 +2612,7 @@ await client.organization.create({
 
 **creatorRole**: `admin | owner` - The role of the user who creates the organization. By default, it's `owner`. You can set it to `admin`.
 
-**resolveMembership**: `({ user, session, organizationId, member }, ctx) => Awaitable<Role | Role[] | { role, id?, ...fields } | null | false | undefined>` - Overrides how the signed-in user's membership is resolved, on every lookup of it. See [Resolve Membership](#resolve-membership).
+**resolveMembership**: `({ user, session, organizationId, member }, ctx) => Awaitable<string | string[] | { role, id?, ...fields } | null | false | undefined>` - Overrides how the signed-in user's membership is resolved, on every lookup of it. `ctx` is the endpoint context of the request. See [Resolve Membership](#resolve-membership).
 
 **membershipLimit**: `number` | `((user: User, organization: Organization) => Promise<number> | number)` - The maximum number of members allowed in an organization. By default, it's `100`. You can set it to any number you want or a function that returns the limit number.
 
