@@ -5,10 +5,16 @@ import { getOAuthProviderApi } from "@better-auth/oauth-provider";
 import { getAcrValuesSupported } from "@better-auth/oauth-provider/internal";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import * as z from "zod";
+import {
+	readAuthorizationDetails,
+	storeAuthorizationDetails,
+	validateAuthorizationDetails,
+} from "./authorization-details";
 import { APPROVAL_PARAMETER } from "./constants";
 import { pingClient } from "./delivery";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
 import type { CibaRequest } from "./schema";
+import type { ResolvedCibaOptions } from "./types";
 
 // A missing, decided, or expired request and another user's request fail the
 // same way, so the link reveals nothing to anyone but the user it was sent to.
@@ -83,6 +89,10 @@ export function cibaApprovalRequest(
 				scope: signedQuery?.scope ?? request.scope,
 				resource: request.resources ?? [],
 				binding_message: request.bindingMessage ?? undefined,
+				// The provider passes these to `authenticationContext.resolve`.
+				acr_values: request.acrValues?.join(" ") || undefined,
+				// For the consent page to show; approval grants the stored details.
+				authorization_details: request.authorizationDetails ?? undefined,
 			};
 			return {
 				query,
@@ -122,65 +132,98 @@ export function cibaApprovalRequest(
  * decided and how they authenticated; the provider checks that it is the
  * hinted user and that the scopes stay within the request.
  */
-export const completeCibaRequest = createAuthEndpoint.serverOnly(
-	{
-		method: "POST",
-		body: z.object({
-			/** `requestId` from `sendNotification`. */
-			requestId: z.string().min(1),
-			/** The user who decided; must be the user the `login_hint` identified. */
-			userId: z.string().min(1),
-			decision: z.enum(["approved", "denied"]),
-			/** Approved scopes, a subset of the request's that keeps `openid`. */
-			scopes: z.array(z.string()).optional(),
-			/** When the user authenticated, issued as `auth_time`. */
-			authTime: z.date().optional(),
-			/** Issued as the ID token `acr`; must be in `acrValuesSupported`. */
-			acr: z.string().optional(),
-			/** Issued as the ID token `amr`. */
-			amr: z.array(z.string()).optional(),
-		}),
-	},
-	async (ctx) => {
-		const { requestId, userId, decision, acr, amr } = ctx.body;
-		if (decision === "denied") {
-			await recordDecision(ctx, requestId, userId, { status: "denied" });
+export const createCompleteCibaRequest = (options: ResolvedCibaOptions) =>
+	createAuthEndpoint.serverOnly(
+		{
+			method: "POST",
+			body: z.object({
+				/** `requestId` from `sendNotification`. */
+				requestId: z.string().min(1),
+				/** The user who decided; must be the user the `login_hint` identified. */
+				userId: z.string().min(1),
+				decision: z.enum(["approved", "denied"]),
+				/** Approved scopes, a subset of the request's that keeps `openid`. */
+				scopes: z.array(z.string()).optional(),
+				/** When the user authenticated, issued as `auth_time`. */
+				authTime: z.date().optional(),
+				/** Issued as the ID token `acr`; must be in `acrValuesSupported`. */
+				acr: z.string().optional(),
+				/** Issued as the ID token `amr`. */
+				amr: z.array(z.string()).optional(),
+				/**
+				 * RFC 9396 details the user approved, issued with the tokens. Each
+				 * must be of a type the request carried and pass that type's
+				 * `validate`. Defaults to the requested details; `[]` grants none.
+				 */
+				authorizationDetails: z
+					.array(z.looseObject({ type: z.string() }))
+					.optional(),
+			}),
+		},
+		async (ctx) => {
+			const { requestId, userId, decision, acr, amr } = ctx.body;
+			if (decision === "denied") {
+				await recordDecision(ctx, requestId, userId, { status: "denied" });
+				return ctx.json({ status: true });
+			}
+			const request = await ctx.context.adapter.findOne<CibaRequest>({
+				model: "cibaRequest",
+				where: [{ field: "id", value: requestId }],
+			});
+			// Another user's, a decided, or an expired request fails as an unknown one,
+			// before its scopes are read. recordDecision still guards the write.
+			if (
+				!request ||
+				request.userId !== userId ||
+				request.status !== "pending" ||
+				request.expiresAt <= new Date()
+			) {
+				return unknownRequest();
+			}
+			const requested = request.scope.split(" ");
+			const scopes = ctx.body.scopes ?? requested;
+			if (scopes.some((scope) => !requested.includes(scope))) {
+				oauthError(
+					"invalid_scope",
+					CIBA_ERROR_CODES.SCOPE_NOT_REQUESTED.message,
+				);
+			}
+			if (!scopes.includes("openid")) {
+				oauthError("invalid_scope", CIBA_ERROR_CODES.INVALID_SCOPE.message);
+			}
+			const oauthOptions = ctx.context.getPlugin("oauth-provider")!.options;
+			// Without an acr the ID token claims "0", which must be supported too.
+			if (!getAcrValuesSupported(oauthOptions).includes(acr ?? "0")) {
+				oauthError("invalid_request", CIBA_ERROR_CODES.UNSUPPORTED_ACR.message);
+			}
+			let authorizationDetails = request.authorizationDetails ?? null;
+			if (ctx.body.authorizationDetails) {
+				const requestedTypes = (
+					readAuthorizationDetails(request.authorizationDetails) ?? []
+				).map((detail) => detail.type);
+				const client = await getOAuthProviderApi(ctx, oauthOptions).getClient(
+					request.clientId,
+				);
+				if (!client) return unknownRequest();
+				const granted = await validateAuthorizationDetails(
+					ctx.body.authorizationDetails,
+					{
+						options,
+						client,
+						ctx,
+						allowedTypes: requestedTypes,
+					},
+				);
+				authorizationDetails = storeAuthorizationDetails(granted);
+			}
+			await recordDecision(ctx, requestId, userId, {
+				status: "approved",
+				scope: scopes.join(" "),
+				authTime: ctx.body.authTime ?? null,
+				acr: acr ?? null,
+				amr: amr?.length ? amr : null,
+				authorizationDetails,
+			});
 			return ctx.json({ status: true });
-		}
-		const request = await ctx.context.adapter.findOne<CibaRequest>({
-			model: "cibaRequest",
-			where: [{ field: "id", value: requestId }],
-		});
-		// Another user's, a decided, or an expired request fails as an unknown one,
-		// before its scopes are read. recordDecision still guards the write.
-		if (
-			!request ||
-			request.userId !== userId ||
-			request.status !== "pending" ||
-			request.expiresAt <= new Date()
-		) {
-			return unknownRequest();
-		}
-		const requested = request.scope.split(" ");
-		const scopes = ctx.body.scopes ?? requested;
-		if (scopes.some((scope) => !requested.includes(scope))) {
-			oauthError("invalid_scope", CIBA_ERROR_CODES.SCOPE_NOT_REQUESTED.message);
-		}
-		if (!scopes.includes("openid")) {
-			oauthError("invalid_scope", CIBA_ERROR_CODES.INVALID_SCOPE.message);
-		}
-		const oauthOptions = ctx.context.getPlugin("oauth-provider")!.options;
-		// Without an acr the ID token claims "0", which must be supported too.
-		if (!getAcrValuesSupported(oauthOptions).includes(acr ?? "0")) {
-			oauthError("invalid_request", CIBA_ERROR_CODES.UNSUPPORTED_ACR.message);
-		}
-		await recordDecision(ctx, requestId, userId, {
-			status: "approved",
-			scope: scopes.join(" "),
-			authTime: ctx.body.authTime ?? null,
-			acr: acr ?? null,
-			amr: amr?.length ? amr : null,
-		});
-		return ctx.json({ status: true });
-	},
-);
+		},
+	);

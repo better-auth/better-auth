@@ -2,7 +2,7 @@ import type { OAuthProviderExtension } from "@better-auth/oauth-provider";
 import { extendOAuthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin } from "better-auth";
 import { mergeSchema } from "better-auth/db";
-import { cibaApprovalRequest, completeCibaRequest } from "./approval";
+import { cibaApprovalRequest, createCompleteCibaRequest } from "./approval";
 import { createBcAuthorize } from "./bc-authorize";
 import {
 	APPROVAL_PARAMETER,
@@ -67,6 +67,13 @@ export const ciba = (options: CibaOptions) => {
 			backchannel_authentication_endpoint: `${ctx.context.baseURL}${BC_AUTHORIZE_PATH}`,
 			backchannel_token_delivery_modes_supported: resolvedOptions.deliveryModes,
 			backchannel_user_code_parameter_supported: false,
+			...(resolvedOptions.authorizationDetailsTypes
+				? {
+						authorization_details_types_supported: Object.keys(
+							resolvedOptions.authorizationDetailsTypes,
+						),
+					}
+				: {}),
 		}),
 	};
 	return {
@@ -79,7 +86,7 @@ export const ciba = (options: CibaOptions) => {
 		},
 		endpoints: {
 			bcAuthorize: createBcAuthorize(resolvedOptions),
-			completeCibaRequest,
+			completeCibaRequest: createCompleteCibaRequest(resolvedOptions),
 		},
 		// Each request notifies a user, so it gets a tighter limit than the
 		// generic per-IP default.
@@ -96,4 +103,10 @@ export const ciba = (options: CibaOptions) => {
 
 export { CIBA_GRANT_TYPE } from "./constants";
 export { CIBA_ERROR_CODES } from "./error-codes";
-export type { CibaDeliveryMode, CibaNotification, CibaOptions } from "./types";
+export type {
+	CibaAuthorizationDetail,
+	CibaAuthorizationDetailsType,
+	CibaDeliveryMode,
+	CibaNotification,
+	CibaOptions,
+} from "./types";

@@ -47,6 +47,20 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			/** ACR values the client requested with `acr_values`, in order. */
+			acrValues: {
+				type: "string[]",
+				required: false,
+			},
+			/**
+			 * RFC 9396 authorization details the client requested, narrowed to the
+			 * granted ones on approval. A JSON array, stored as text: a `json`
+			 * field is not portable for a top-level array.
+			 */
+			authorizationDetails: {
+				type: "string",
+				required: false,
+			},
 			/** RFC 8707 resource indicators the issued token is bound to. */
 			resources: {
 				type: "string[]",
@@ -129,6 +143,9 @@ export interface CibaRequest {
 	userId: string;
 	scope: string;
 	bindingMessage?: string | null;
+	acrValues?: string[] | null;
+	/** A JSON array of {@link CibaAuthorizationDetail}. */
+	authorizationDetails?: string | null;
 	resources?: string[] | null;
 	status: "pending" | "approved" | "denied";
 	clientNotificationEndpoint?: string | null;

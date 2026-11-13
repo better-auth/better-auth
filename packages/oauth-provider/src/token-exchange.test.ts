@@ -328,6 +328,27 @@ describe("oauthTokenExchange", () => {
 		});
 	});
 
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc9396.html#section-9
+	 */
+	it("rejects a subject token that carries authorization_details", async () => {
+		const { mcpServer, userTokenForMcp, exchangeAs } = await bootScenario(
+			{},
+			{},
+			{
+				customAccessTokenClaims: () => ({
+					authorization_details: [{ type: "payment_initiation" }],
+				}),
+			},
+		);
+		const subject = await userTokenForMcp();
+		const { error } = await exchangeAs(mcpServer, subject.access_token);
+		expect(error).toMatchObject({
+			error: "invalid_request",
+			error_description: "subject_token must not carry authorization_details",
+		});
+	});
+
 	it("never widens scope beyond the subject token", async () => {
 		const { mcpServer, userTokenForMcp, exchangeAs } = await bootScenario();
 		const subject = await userTokenForMcp();

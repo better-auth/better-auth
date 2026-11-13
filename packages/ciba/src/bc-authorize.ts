@@ -11,6 +11,11 @@ import {
 import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 import * as z from "zod";
 import {
+	parseAuthorizationDetails,
+	storeAuthorizationDetails,
+	validateAuthorizationDetails,
+} from "./authorization-details";
+import {
 	APPROVAL_PARAMETER,
 	BC_AUTHORIZE_PATH,
 	CIBA_GRANT_TYPE,
@@ -19,7 +24,7 @@ import type { CibaDelivery } from "./delivery";
 import { resolveCibaDelivery } from "./delivery";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
 import type { CibaRequest } from "./schema";
-import type { ResolvedCibaOptions } from "./types";
+import type { CibaAuthorizationDetail, ResolvedCibaOptions } from "./types";
 
 // Control and invisible formatting characters, such as bidirectional
 // overrides: a binding message must be plain text (CIBA §7.1).
@@ -43,6 +48,14 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 				id_token_hint: z.string().optional(),
 				login_hint_token: z.string().optional(),
 				binding_message: z.string().max(64).optional(),
+				// CIBA §7.1: voluntary, space-separated, in order of preference.
+				acr_values: z.string().max(1024).optional(),
+				// RFC 9396 §2: a JSON array, form-encoded as a string. Copied into the
+				// signed consent URL, so its URL-encoded form stays under URL limits.
+				authorization_details: z
+					.string()
+					.refine((value) => encodeURIComponent(value).length <= 4096)
+					.optional(),
 				// CIBA §7.1: an RFC 6750 bearer credential of at most 1024 characters.
 				client_notification_token: z
 					.string()
@@ -58,6 +71,7 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 			formParams: { repeatable: ["resource"] },
 			errorCodesByField: {
 				binding_message: "invalid_binding_message",
+				authorization_details: "invalid_authorization_details",
 				resource: { invalid: "invalid_target" },
 			},
 			metadata: {
@@ -167,6 +181,23 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 				);
 			}
 
+			let authorizationDetails: CibaAuthorizationDetail[] | undefined;
+			if (ctx.body.authorization_details !== undefined) {
+				// RFC 9396 §9: resource servers must receive the details. Only a JWT
+				// access token carries them, and only a resource makes one.
+				if (!policy.audienceClaim || oauthOptions.disableJwtPlugin) {
+					oauthError(
+						"invalid_authorization_details",
+						CIBA_ERROR_CODES.AUTHORIZATION_DETAILS_REQUIRE_RESOURCE.message,
+					);
+				}
+				authorizationDetails = await validateAuthorizationDetails(
+					parseAuthorizationDetails(ctx.body.authorization_details),
+					{ options, client, ctx },
+				);
+			}
+			const acrValues = ctx.body.acr_values?.match(/\S+/g) ?? undefined;
+
 			const user = options.resolveUser
 				? await options.resolveUser({ loginHint, client }, ctx)
 				: ((await ctx.context.internalAdapter.findUserByEmail(loginHint))
@@ -197,6 +228,8 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 					userId: user.id,
 					scope: scopes.join(" "),
 					bindingMessage,
+					acrValues: acrValues ?? null,
+					authorizationDetails: storeAuthorizationDetails(authorizationDetails),
 					resources: resources ?? null,
 					status: "pending",
 					...(ping
@@ -231,6 +264,8 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 							clientName: client.name ?? undefined,
 							scopes,
 							bindingMessage,
+							acrValues,
+							authorizationDetails,
 							url: url.toString(),
 							expiresAt,
 						},

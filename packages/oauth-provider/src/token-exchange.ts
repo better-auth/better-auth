@@ -362,6 +362,11 @@ async function exchangeToken(
 	if (isPublicClient && !getConfirmationJkt(subject.cnf)) {
 		deny("a public client may only exchange a DPoP-bound subject_token");
 	}
+	// RFC 9396 §9: the exchanged token would not carry the details the user
+	// approved, which its resource server must receive.
+	if (subject.authorization_details !== undefined) {
+		deny("subject_token must not carry authorization_details");
+	}
 	const user = await ctx.context.internalAdapter.findUserById(subject.sub);
 	if (!user) deny("subject_token does not represent a user");
 

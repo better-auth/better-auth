@@ -4,6 +4,7 @@ import {
 	toResourceList,
 	validateClientScopes,
 } from "@better-auth/oauth-provider/internal";
+import { readAuthorizationDetails } from "./authorization-details";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
 import type { CibaRequest } from "./schema";
 import type { ResolvedCibaOptions } from "./types";
@@ -75,7 +76,20 @@ export const createCibaGrantHandler =
 
 		// Everything that can refuse runs before the claim, so a refusal keeps the
 		// approved request for another poll.
-		const scopes = request.scope.split(" ");
+		if (ctx.body?.authorization_details !== undefined) {
+			oauthError(
+				"invalid_authorization_details",
+				CIBA_ERROR_CODES.AUTHORIZATION_DETAILS_ON_POLL.message,
+			);
+		}
+		const authorizationDetails = readAuthorizationDetails(
+			request.authorizationDetails,
+		);
+		// Refresh tokens do not carry authorization details, so a refreshed
+		// token would lose them; such an issuance gets no refresh token.
+		const scopes = request.scope
+			.split(" ")
+			.filter((scope) => !authorizationDetails || scope !== "offline_access");
 		validateClientScopes(client, scopes);
 		// RFC 8707 §2.2: the poll may narrow the approved resources.
 		const approvedResources = request.resources ?? [];
@@ -93,6 +107,16 @@ export const createCibaGrantHandler =
 		const resources =
 			selectedResources ??
 			(approvedResources.length ? approvedResources : undefined);
+		// RFC 9396 §9.1: a detail that names `locations` goes only to a token for
+		// one of them, so a narrowed token does not reveal details for the others.
+		const issuedDetails = authorizationDetails?.filter(
+			(detail) =>
+				!detail.locations ||
+				detail.locations.some((location) => resources?.includes(location)),
+		);
+		const granted = issuedDetails?.length
+			? { authorization_details: issuedDetails }
+			: undefined;
 		const policy = await resolveResourcePolicy(ctx, opts, {
 			resource: resources,
 			clientId,
@@ -153,5 +177,8 @@ export const createCibaGrantHandler =
 			// A DPoP proof on this poll, or a sender-constraint proved at client
 			// authentication, binds the issued token.
 			confirmation: binding,
+			// RFC 9396 §7 and §9.1: granted details in the response and the JWT.
+			tokenResponse: granted,
+			accessTokenClaims: granted,
 		});
 	};

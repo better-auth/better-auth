@@ -7,6 +7,38 @@ import type { schema } from "./schema";
 export type CibaDeliveryMode = "poll" | "ping";
 
 /**
+ * One RFC 9396 authorization detail: a structured permission, such as a
+ * payment to approve. `type` selects the deployment-defined fields.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc9396.html#section-2
+ */
+export interface CibaAuthorizationDetail {
+	type: string;
+	locations?: string[];
+	actions?: string[];
+	datatypes?: string[];
+	identifier?: string;
+	privileges?: string[];
+	[field: string]: unknown;
+}
+
+/** An authorization details type clients may request. */
+export interface CibaAuthorizationDetailsType {
+	/**
+	 * Return `true` when the detail is valid for this type. Check every field,
+	 * and reject unknown fields, invalid values, and missing required fields
+	 * (RFC 9396 §5): the client receives `invalid_authorization_details`. Runs
+	 * for each detail a client requests and each one server code approves
+	 * through `completeCibaRequest`.
+	 */
+	validate: (
+		detail: CibaAuthorizationDetail,
+		input: { client: SchemaClient<Scope[]> },
+		ctx: GenericEndpointContext,
+	) => Awaitable<boolean>;
+}
+
+/**
  * What {@link CibaOptions.sendNotification} receives to reach the user on a
  * separate device.
  */
@@ -27,6 +59,18 @@ export interface CibaNotification {
 	 * confirm the request is the one they expect.
 	 */
 	bindingMessage?: string | undefined;
+	/**
+	 * ACR values the client requested with `acr_values`, in order of
+	 * preference. A voluntary request: authenticate the user as strongly as
+	 * these ask when you can, and state what the user actually proved as `acr`
+	 * when completing the request.
+	 */
+	acrValues?: string[] | undefined;
+	/**
+	 * RFC 9396 details of what the client asks to do, such as a payment to
+	 * approve. Show them to the user before they decide.
+	 */
+	authorizationDetails?: CibaAuthorizationDetail[] | undefined;
 	/**
 	 * Absolute link that opens the provider's sign-in and consent pages for
 	 * this request. Send it to the user.
@@ -102,6 +146,29 @@ export interface CibaOptions {
 	 * @default 5
 	 */
 	interval?: number;
+
+	/**
+	 * RFC 9396 authorization details types clients may request with
+	 * `authorization_details`, keyed by `type` and advertised as
+	 * `authorization_details_types_supported`. Without it, a request that
+	 * carries `authorization_details` fails with `invalid_authorization_details`.
+	 *
+	 * Granted details are returned in the token response and as the
+	 * `authorization_details` claim of the JWT access token, so a request with
+	 * details must name a `resource`. Refreshed tokens would not carry them, so
+	 * such a request is issued no refresh token.
+	 *
+	 * @example
+	 * ```ts
+	 * authorizationDetailsTypes: {
+	 * 	payment_initiation: {
+	 * 		// A `z.strictObject`, so unknown fields fail.
+	 * 		validate: (detail) => paymentSchema.safeParse(detail).success,
+	 * 	},
+	 * }
+	 * ```
+	 */
+	authorizationDetailsTypes?: Record<string, CibaAuthorizationDetailsType>;
 
 	/** Rename the `cibaRequest` model or its fields. */
 	schema?: InferOptionSchema<typeof schema>;

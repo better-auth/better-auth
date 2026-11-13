@@ -33,6 +33,26 @@ const mfaAcr = "urn:example:acr:mfa";
 const resolveAuthenticationContext =
 	vi.fn<() => OAuthAuthenticationContext | undefined>();
 
+const PAYMENT = "payment_initiation";
+const payment = {
+	type: PAYMENT,
+	actions: ["initiate"],
+	locations: [resource],
+	instructedAmount: { currency: "EUR", amount: "123.50" },
+	creditorName: "Merchant A",
+};
+const PAYMENT_FIELDS = new Set([
+	"type",
+	"actions",
+	"locations",
+	"instructedAmount",
+	"creditorName",
+]);
+// A deployment's type-specific check: known fields only (RFC 9396 §5).
+const validatePayment = vi.fn((detail: Record<string, unknown>) =>
+	Object.keys(detail).every((key) => PAYMENT_FIELDS.has(key)),
+);
+
 let lastNotification: CibaNotification | undefined;
 const sendNotification = vi.fn((notification: CibaNotification) => {
 	lastNotification = notification;
@@ -65,6 +85,9 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 				deliveryModes: ["poll", "ping"],
 				allowPublicClients: true,
 				sendNotification,
+				authorizationDetailsTypes: {
+					[PAYMENT]: { validate: validatePayment },
+				},
 			}),
 		],
 	});
@@ -970,6 +993,267 @@ describe("ciba server-side completion", () => {
 	});
 });
 
+/**
+ * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.7.1
+ */
+describe("ciba acr_values", () => {
+	it("passes the requested acr values to the notification and the resolver", async () => {
+		resolveAuthenticationContext.mockClear();
+		const { url } = await start({ acr_values: `${mfaAcr} 0` });
+		expect(lastNotification!.acrValues).toEqual([mfaAcr, "0"]);
+		const consent = await openLink(url);
+		expect(consent.searchParams.get("acr_values")).toBe(`${mfaAcr} 0`);
+		await answerConsent(consent, true);
+		expect(resolveAuthenticationContext).toHaveBeenCalledWith(
+			expect.objectContaining({ requestedAcrValues: [mfaAcr, "0"] }),
+		);
+	});
+
+	it("accepts acr values the provider does not support, as a voluntary request", async () => {
+		const { authReqId, url } = await start({ acr_values: "urn:example:other" });
+		expect(lastNotification!.acrValues).toEqual(["urn:example:other"]);
+		await approve(url);
+		const issued = await poll(authReqId);
+		expect(decodeJwt(issued.body.id_token as string).acr).toBe("0");
+	});
+
+	it("leaves acrValues out when the client requests none", async () => {
+		await start();
+		expect(lastNotification!.acrValues).toBeUndefined();
+	});
+});
+
+/**
+ * @see https://www.rfc-editor.org/rfc/rfc9396.html
+ */
+describe("ciba authorization_details", () => {
+	const startPayment = (
+		details: unknown[] = [payment],
+		params: Record<string, string | string[]> = {},
+		client = pollClient,
+	) =>
+		start(
+			{ resource, authorization_details: JSON.stringify(details), ...params },
+			client,
+		);
+
+	it("shows the requested details and issues them as granted", async () => {
+		const { authReqId, url } = await startPayment();
+		expect(lastNotification!.authorizationDetails).toEqual([payment]);
+		expect(validatePayment).toHaveBeenCalledWith(
+			payment,
+			expect.objectContaining({
+				client: expect.objectContaining({ clientId: pollClient.client_id }),
+			}),
+			expect.anything(),
+		);
+		const consent = await openLink(url);
+		expect(
+			JSON.parse(consent.searchParams.get("authorization_details")!),
+		).toEqual([payment]);
+		await answerConsent(consent, true);
+
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		expect(issued.body.authorization_details).toEqual([payment]);
+		expect(
+			decodeJwt(issued.body.access_token as string).authorization_details,
+		).toEqual([payment]);
+	});
+
+	it("issues no authorization_details for a request without them", async () => {
+		const { authReqId, url } = await start({ resource });
+		expect(lastNotification!.authorizationDetails).toBeUndefined();
+		await approve(url);
+		const issued = await poll(authReqId);
+		expect(issued.body.authorization_details).toBeUndefined();
+		expect(
+			decodeJwt(issued.body.access_token as string).authorization_details,
+		).toBeUndefined();
+	});
+
+	it.each([
+		["malformed JSON", "[{"],
+		["a JSON object instead of an array", JSON.stringify(payment)],
+		["an empty array", "[]"],
+		[
+			"details over 4096 characters once URL-encoded",
+			JSON.stringify([{ ...payment, creditorName: " ".repeat(1400) }]),
+		],
+		["a detail without a type", JSON.stringify([{ actions: ["initiate"] }])],
+		["a detail that is not an object", JSON.stringify(["payment"])],
+		["an unsupported type", JSON.stringify([{ type: "account_information" }])],
+		[
+			"a common field of the wrong type",
+			JSON.stringify([{ ...payment, actions: "initiate" }]),
+		],
+		[
+			"a field the type's validator rejects",
+			JSON.stringify([{ ...payment, debtorAccount: "DE00" }]),
+		],
+	])("rejects %s", async (_, authorizationDetails) => {
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+			resource,
+			authorization_details: authorizationDetails,
+		});
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("invalid_authorization_details");
+	});
+
+	it("requires a resource, so the access token is a JWT that carries the details", async () => {
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+			authorization_details: JSON.stringify([payment]),
+		});
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("invalid_authorization_details");
+	});
+
+	it("issues no refresh token, because refreshed tokens would lose the details", async () => {
+		const client = await createClient(POLL, {
+			grant_types: [CIBA_GRANT_TYPE, "refresh_token"],
+		});
+		const { authReqId, url } = await startPayment(
+			[payment],
+			{ scope: "openid offline_access" },
+			client,
+		);
+		await approve(url);
+		const issued = await poll(authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.authorization_details).toEqual([payment]);
+		expect(issued.body.refresh_token).toBeUndefined();
+		expect(issued.body.scope).toBe("openid");
+	});
+
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc9396.html#section-9.1
+	 */
+	it.each([
+		["leaves out details for a resource the poll drops", secondResource, null],
+		["keeps details for the resource the poll selects", resource, [payment]],
+	])("%s", async (_, selected, expected) => {
+		const { authReqId, url } = await startPayment([payment], {
+			resource: [resource, secondResource],
+		});
+		await approve(url);
+		const issued = await poll(authReqId, pollClient, {}, [selected]);
+		expect(issued.status).toBe(200);
+		expect(issued.body.authorization_details ?? null).toEqual(expected);
+		expect(
+			decodeJwt(issued.body.access_token as string).authorization_details ??
+				null,
+		).toEqual(expected);
+	});
+
+	it("refuses authorization_details on the poll and keeps the approval", async () => {
+		const { authReqId, url } = await startPayment();
+		await approve(url);
+		const body = new URLSearchParams({
+			client_id: pollClient.client_id,
+			grant_type: CIBA_GRANT_TYPE,
+			auth_req_id: authReqId,
+			authorization_details: JSON.stringify([payment]),
+		});
+		const res = await customFetchImpl(`${baseURL}/api/auth/oauth2/token`, {
+			method: "POST",
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+				...clientAuthentication(pollClient).headers,
+			},
+			body: body.toString(),
+		});
+		expect(res.status).toBe(400);
+		expect((await res.json()).error).toBe("invalid_authorization_details");
+		expect((await poll(authReqId)).status).toBe(200);
+	});
+
+	it("issues the details server code approves", async () => {
+		const { authReqId } = await startPayment();
+		const { requestId, user } = lastNotification!;
+		const granted = { ...payment, actions: ["initiate"], creditorName: "B" };
+		await auth.api.completeCibaRequest({
+			body: {
+				requestId,
+				userId: user.id,
+				decision: "approved",
+				authorizationDetails: [granted],
+			},
+		});
+		const issued = await poll(authReqId);
+		expect(issued.body.authorization_details).toEqual([granted]);
+	});
+
+	it("issues no details when server code approves none of them", async () => {
+		const { authReqId } = await startPayment();
+		const { requestId, user } = lastNotification!;
+		await auth.api.completeCibaRequest({
+			body: {
+				requestId,
+				userId: user.id,
+				decision: "approved",
+				authorizationDetails: [],
+			},
+		});
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		expect(issued.body.authorization_details).toBeUndefined();
+	});
+
+	it.each([
+		["a type the server does not support", [{ type: "account_information" }]],
+		["a detail the type's validator rejects", [{ ...payment, iban: "DE00" }]],
+	])(
+		"refuses server approval of %s and keeps the request pending",
+		async (_, details) => {
+			const { authReqId } = await startPayment();
+			const { requestId, user } = lastNotification!;
+			await expect(
+				auth.api.completeCibaRequest({
+					body: {
+						requestId,
+						userId: user.id,
+						decision: "approved",
+						authorizationDetails: details,
+					},
+				}),
+			).rejects.toMatchObject({
+				body: { error: "invalid_authorization_details" },
+			});
+			expect((await poll(authReqId)).body.error).toBe("authorization_pending");
+		},
+	);
+
+	it("refuses server approval of details for a request without them", async () => {
+		const { authReqId } = await start({ resource });
+		const { requestId, user } = lastNotification!;
+		await expect(
+			auth.api.completeCibaRequest({
+				body: {
+					requestId,
+					userId: user.id,
+					decision: "approved",
+					authorizationDetails: [payment],
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_authorization_details" },
+		});
+		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
+	});
+
+	it("advertises the supported types in discovery", async () => {
+		const metadata = (await auth.api.getOpenIdConfig()) as Record<
+			string,
+			unknown
+		>;
+		expect(metadata.authorization_details_types_supported).toEqual([PAYMENT]);
+	});
+});
+
 describe("ciba ping mode", () => {
 	let pingClient: OAuthClient;
 	const token = "client-token.123";
@@ -1178,5 +1462,19 @@ describe("ciba defaults", async () => {
 		expect(metadata.backchannel_token_delivery_modes_supported).toEqual([
 			"poll",
 		]);
+		expect(metadata.authorization_details_types_supported).toBeUndefined();
+	});
+
+	it("rejects authorization_details instead of ignoring them", async () => {
+		const client = await register();
+		const res = await bcAuthorize(
+			{
+				...request,
+				authorization_details: JSON.stringify([{ type: "payment_initiation" }]),
+			},
+			client,
+			instance.customFetchImpl,
+		);
+		expect(res.body.error).toBe("invalid_authorization_details");
 	});
 });
