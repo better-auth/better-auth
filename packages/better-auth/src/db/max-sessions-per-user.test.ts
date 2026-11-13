@@ -3,6 +3,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { runWithRequestState } from "@better-auth/core/context";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sessionMiddleware } from "../api";
@@ -11,10 +12,12 @@ import { setSessionCookie } from "../cookies";
 import { admin } from "../plugins/admin";
 import { twoFactor } from "../plugins/two-factor";
 import { getTestInstance } from "../test-utils/test-instance";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions, Session } from "../types";
+import { selectSessionsOverLimit } from "./session-limit";
 
-function createSecondaryStorage(): SecondaryStorage {
-	const store = new Map<string, string>();
+function createSecondaryStorage(
+	store = new Map<string, string>(),
+): SecondaryStorage {
 	return {
 		set(key, value) {
 			store.set(key, value);
@@ -314,11 +317,13 @@ describe("session.maxPerUser", () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			rateLimit: { enabled: false },
 		});
+		useFakeClock();
 
 		const sessions = [];
 		for (let i = 0; i < 3; i++) {
 			const { headers } = await signInWithTestUser();
 			sessions.push(await auth.api.getSession({ headers }));
+			advanceClock();
 		}
 
 		for (const current of sessions) {
@@ -398,6 +403,34 @@ describe("session.maxPerUser", () => {
 		expect(await isActive(existing.headers)).toBe(true);
 	});
 
+	it("stops revoking when a delete hook vetoes the revocation", async () => {
+		let deleteAttempts = 0;
+		const { signIn, isActive } = await getMaxSessionsTestInstance(1, {
+			// Small enough that every read fills the window and reads again.
+			advanced: { database: { defaultFindManyLimit: 1 } },
+			databaseHooks: {
+				session: {
+					delete: {
+						async before() {
+							deleteAttempts++;
+							return false;
+						},
+					},
+				},
+			},
+		});
+		useFakeClock();
+
+		const first = await signIn();
+		advanceClock();
+		deleteAttempts = 0;
+		const second = await signIn();
+
+		expect(deleteAttempts).toBe(1);
+		expect(await isActive(first.headers)).toBe(true);
+		expect(await isActive(second.headers)).toBe(true);
+	});
+
 	it("does not revoke sessions when a create hook deletes the new session", async () => {
 		let deleteCreatedSessions = false;
 		const instance = await getMaxSessionsTestInstance(1, {
@@ -427,8 +460,41 @@ describe("session.maxPerUser", () => {
 		]);
 	});
 
-	it("does not revoke sessions for a sign-in that stops at a second factor", async () => {
-		const { auth, db, testUser, signIn, isActive, listSessionIds } =
+	it.each([
+		{ name: "a sign-in", plugins: () => [twoFactor()] },
+		{
+			name: "a sign-in with a nested dispatch",
+			plugins: () => [nestedDispatchPlugin, twoFactor()],
+		},
+	])(
+		"does not revoke sessions for $name that stops at a second factor",
+		async ({ plugins }) => {
+			const { auth, db, testUser, signIn, isActive, listSessionIds } =
+				await getMaxSessionsTestInstance(1, { plugins: plugins() });
+			useFakeClock();
+
+			const existing = await signIn();
+			await db.update({
+				model: "user",
+				where: [{ field: "id", value: existing.user.id }],
+				update: { twoFactorEnabled: true },
+			});
+
+			advanceClock();
+			const res = await auth.api.signInEmail({
+				body: { email: testUser.email, password: testUser.password },
+			});
+
+			expect(res).toMatchObject({ twoFactorRedirect: true });
+			expect(await isActive(existing.headers)).toBe(true);
+			expect(await listSessionIds(existing.user.id)).toEqual([
+				existing.session.id,
+			]);
+		},
+	);
+
+	it("defers the limit inside request state the caller created", async () => {
+		const { auth, db, testUser, signIn, isActive } =
 			await getMaxSessionsTestInstance(1, { plugins: [twoFactor()] });
 		useFakeClock();
 
@@ -440,45 +506,58 @@ describe("session.maxPerUser", () => {
 		});
 
 		advanceClock();
-		const res = await auth.api.signInEmail({
-			body: { email: testUser.email, password: testUser.password },
-		});
+		const res = await runWithRequestState(new WeakMap(), () =>
+			auth.api.signInEmail({
+				body: { email: testUser.email, password: testUser.password },
+			}),
+		);
 
 		expect(res).toMatchObject({ twoFactorRedirect: true });
 		expect(await isActive(existing.headers)).toBe(true);
-		expect(await listSessionIds(existing.user.id)).toEqual([
-			existing.session.id,
-		]);
 	});
 
-	it("does not revoke sessions when a nested dispatch runs before the second factor", async () => {
-		const { auth, db, testUser, signIn, isActive, listSessionIds } =
+	it("enforces the limit for sessions created after a request finishes", async () => {
+		const { auth, ctx, signIn, isActive } = await getMaxSessionsTestInstance(1);
+		useFakeClock();
+
+		const existing = await signIn();
+		advanceClock();
+		await runWithRequestState(new WeakMap(), async () => {
+			await auth.api.getSession({ headers: existing.headers });
+			await ctx.internalAdapter.createSession(existing.user.id);
+		});
+
+		expect(await isActive(existing.headers)).toBe(false);
+	});
+
+	it("does not revoke sessions when the request fails", async () => {
+		let failSignIn = false;
+		const { auth, testUser, signIn, isActive } =
 			await getMaxSessionsTestInstance(1, {
-				plugins: [nestedDispatchPlugin, twoFactor()],
+				hooks: {
+					after: createAuthMiddleware(async (ctx) => {
+						if (failSignIn && ctx.path === "/sign-in/email") {
+							throw new Error("sign-in failed");
+						}
+					}),
+				},
 			});
 		useFakeClock();
 
 		const existing = await signIn();
-		await db.update({
-			model: "user",
-			where: [{ field: "id", value: existing.user.id }],
-			update: { twoFactorEnabled: true },
-		});
-
 		advanceClock();
-		const res = await auth.api.signInEmail({
-			body: { email: testUser.email, password: testUser.password },
-		});
+		failSignIn = true;
+		await expect(
+			auth.api.signInEmail({
+				body: { email: testUser.email, password: testUser.password },
+			}),
+		).rejects.toThrow("sign-in failed");
 
-		expect(res).toMatchObject({ twoFactorRedirect: true });
 		expect(await isActive(existing.headers)).toBe(true);
-		expect(await listSessionIds(existing.user.id)).toEqual([
-			existing.session.id,
-		]);
 	});
 
 	it("enforces the limit for sessions an endpoint creates without issuing", async () => {
-		const { auth, signIn, isActive, listSessionIds } =
+		const { auth, ctx, signIn, isActive, listSessionIds } =
 			await getMaxSessionsTestInstance(1, { plugins: [createTokenPlugin] });
 		useFakeClock();
 
@@ -491,10 +570,9 @@ describe("session.maxPerUser", () => {
 		expect(await isActive(existing.headers)).toBe(false);
 		const sessions = await listSessionIds(existing.user.id);
 		expect(sessions).toHaveLength(1);
-		expect(
-			(await (await auth.$context).internalAdapter.findSession(token))?.session
-				.id,
-		).toBe(sessions[0]);
+		expect((await ctx.internalAdapter.findSession(token))?.session.id).toBe(
+			sessions[0],
+		);
 	});
 
 	it("does not revoke other sessions when a session is rotated", async () => {
@@ -515,6 +593,44 @@ describe("session.maxPerUser", () => {
 		expect(await listSessionIds(laptop.user.id)).toEqual(
 			[laptop.session.id, rotatedId].sort(),
 		);
+	});
+
+	it("drops revoked sessions from the secondary storage session list", async () => {
+		const store = new Map<string, string>();
+		const { signIn } = await getMaxSessionsTestInstance(1, {
+			secondaryStorage: createSecondaryStorage(store),
+		});
+		useFakeClock();
+
+		let latest = await signIn();
+		for (let i = 0; i < 3; i++) {
+			advanceClock();
+			latest = await signIn();
+		}
+
+		const list = JSON.parse(
+			store.get(`active-sessions-${latest.user.id}`) ?? "[]",
+		) as { token: string }[];
+		expect(list.map((s) => s.token)).toEqual([latest.session.token]);
+	});
+
+	it("revokes sessions without a valid creation time first", () => {
+		const now = Date.now();
+		const at = (token: string, createdAt: Date | string | undefined) =>
+			({ token, createdAt }) as Session;
+
+		expect(
+			selectSessionsOverLimit(
+				at("new", new Date(now)),
+				[
+					at("missing", undefined),
+					at("old", new Date(now - 10_000)),
+					at("invalid", "not a date"),
+					at("recent", new Date(now - 5000)),
+				],
+				2,
+			),
+		).toEqual(["old", "missing", "invalid"]);
 	});
 
 	it("does not let concurrent sign-ins revoke each other", async () => {

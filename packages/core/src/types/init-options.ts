@@ -1199,7 +1199,7 @@ export type BetterAuthOptions = {
 				 * The maximum number of active sessions a user can have.
 				 *
 				 * When a new session would exceed the limit, the user's oldest
-				 * sessions are revoked once the request that created it finishes,
+				 * sessions are revoked once the request that created it succeeds,
 				 * if the new session still exists. A session created outside a
 				 * request is limited right away. The new session always counts
 				 * toward the limit and is never revoked by it, and sessions created
@@ -1207,7 +1207,8 @@ export type BetterAuthOptions = {
 				 * sessions created by the admin plugin don't count toward the limit
 				 * and don't revoke the user's own sessions.
 				 *
-				 * Must be a positive integer.
+				 * Must be a positive integer, and needs a `database` or
+				 * `secondaryStorage`.
 				 *
 				 * @default undefined (no limit)
 				 */

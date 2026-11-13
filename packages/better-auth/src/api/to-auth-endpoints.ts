@@ -107,7 +107,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 			};
 
 			if (await hasRequestState()) {
-				return run();
+				return runWithSessionLimits(run);
 			}
 			const store: RequestStateWeakMap = new WeakMap();
 			return runWithRequestState(store, () => runWithSessionLimits(run));

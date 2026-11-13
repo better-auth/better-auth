@@ -115,11 +115,11 @@ export const auth = betterAuth({
 ```
 
 * The new session counts toward the limit and is never revoked by it, so `maxPerUser: 1` signs the user out everywhere else on each new sign-in.
-* For a session created during a request, the limit applies when that request finishes, if the session still exists. A session created outside a request, such as with `internalAdapter.createSession(userId)` in a script, is limited right away. A sign-in that stops at a [two-factor](/docs/plugins/2fa) challenge revokes nothing until the second factor is verified.
+* The limit applies when the request that created the session succeeds, and only if the session still exists then. A sign-in that stops at a [two-factor](/docs/plugins/2fa) challenge revokes nothing until the second factor is verified. A session created outside a request, such as with `internalAdapter.createSession(userId)` in a script, is limited right away.
 * Expired sessions don't count toward the limit.
 * Impersonation sessions created by the [admin plugin](/docs/plugins/admin) don't count toward the limit and don't revoke the user's own sessions.
-* `maxPerUser` must be a positive integer. Any other value throws when the auth config is initialized.
-* The limit works with the database, [secondary storage](#sessions-in-secondary-storage), or both.
+* The limit works with the database, [secondary storage](#sessions-in-secondary-storage), or both. It needs one of them, since [stateless sessions](#stateless-session-management) can't be revoked.
+* `maxPerUser` must be a positive integer. Any other value, or setting it without a database or secondary storage, throws when the auth config is initialized.
 * `maxPerUser` limits sessions across all devices. The [multi-session plugin's](/docs/plugins/multi-session) `maximumSessions` limits accounts signed in on one device.
 
 <Callout>

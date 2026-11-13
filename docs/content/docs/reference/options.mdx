@@ -471,7 +471,7 @@ export const auth = betterAuth({
 * `fields`: Map fields to different column names
 * `expiresIn`: Expiration time for the session token in seconds (default: `604800` - 7 days)
 * `updateAge`: How often the session should be refreshed in seconds (default: `86400` - 1 day)
-* `maxPerUser`: Maximum number of active sessions per user. When a new session exceeds the limit, the user's oldest sessions are revoked. Sessions created within the same second don't revoke each other, so they can briefly exceed the limit. Must be a positive integer (default: no limit)
+* `maxPerUser`: Maximum number of active sessions per user. When a new session would exceed the limit, the user's oldest sessions are revoked. Sessions created within the same second don't revoke each other, so they can leave the user over the limit until the next sign-in. Must be a positive integer, and needs a database or secondary storage (default: no limit)
 * `additionalFields`: Additional fields for the session table
 * `storeSessionInDatabase`: Store session in database when secondary storage is provided (default: `false`)
 * `preserveSessionInDatabase`: Preserve session records in database when deleted from secondary storage (default: `false`)

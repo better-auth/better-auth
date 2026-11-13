@@ -8,10 +8,14 @@ import {
 } from "@better-auth/core/context";
 import type { InternalLogger } from "@better-auth/core/env";
 import type { Session } from "../types";
+import { isAPIError } from "../utils/is-api-error";
 
-type PendingSessionLimit = {
+type SessionLimit = {
 	readonly enforce: () => Promise<void>;
 	readonly logger: InternalLogger;
+};
+
+type PendingSessionLimit = SessionLimit & {
 	readonly endpointContext: AuthEndpointContext | undefined;
 };
 
@@ -23,8 +27,13 @@ const pendingSessionLimits = defineRequestState<PendingSessionLimit[] | null>(
 	() => null,
 );
 
-const toSeconds = (date: Date | string) =>
-	Math.floor(new Date(date).getTime() / 1000);
+/**
+ * Milliseconds since the epoch, or 0 when a row has no creation time.
+ */
+const toTime = (date: Date | string | null | undefined) => {
+	const time = date ? new Date(date).getTime() : 0;
+	return Number.isFinite(time) ? time : 0;
+};
 
 /**
  * Picks the tokens to revoke so the user keeps their newest `maxPerUser`
@@ -33,82 +42,82 @@ const toSeconds = (date: Date | string) =>
  */
 export function selectSessionsOverLimit(
 	session: Session,
-	sessions: Session[],
+	sessions: (Session & { impersonatedBy?: string | null | undefined })[],
 	maxPerUser: number,
 ) {
 	// Compared in whole seconds, since a database column may store no more.
 	// Sessions created alongside `session` enforce the limit themselves, so
 	// concurrent sign-ins never revoke each other.
-	const createdAt = toSeconds(session.createdAt);
+	const createdAt = Math.floor(toTime(session.createdAt) / 1000);
 	// `session` is left out and the limit reduced by one, so it is never
 	// revoked, even when the list doesn't include it yet.
-	return (
-		sessions
-			.filter(
-				(s) =>
-					s.id !== session.id &&
-					s.token !== session.token &&
-					!(s as Session & { impersonatedBy?: unknown }).impersonatedBy,
-			)
-			// Sessions read from secondary storage carry `createdAt` as a string.
-			.sort(
-				(a, b) =>
-					new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-			)
-			.slice(maxPerUser - 1)
-			.filter((s) => toSeconds(s.createdAt) < createdAt)
-			.map((s) => s.token)
-	);
+	return sessions
+		.filter((s) => s.token !== session.token && !s.impersonatedBy)
+		.sort((a, b) => toTime(b.createdAt) - toTime(a.createdAt))
+		.slice(maxPerUser - 1)
+		.filter((s) => Math.floor(toTime(s.createdAt) / 1000) < createdAt)
+		.map((s) => s.token);
+}
+
+function queueSessionLimit({ enforce, logger }: SessionLimit) {
+	return queueAfterTransactionHook(enforce, {
+		onError(error: unknown) {
+			logger.error("Failed to revoke sessions over session.maxPerUser", error);
+		},
+	});
 }
 
 /**
- * Defers `session.maxPerUser` enforcement for a session created during a
- * request to the end of that request, so it only applies to sessions the
- * request keeps. A sign-in that stops at a second factor, for example,
- * deletes its session and must not revoke the user's other sessions.
+ * Schedules `session.maxPerUser` enforcement for a new session.
  *
- * @returns `false` when there is no request to defer to.
+ * During a request it runs when the request finishes, so it only applies to
+ * sessions the request keeps. A sign-in that stops at a second factor, for
+ * example, deletes its session and must not revoke the user's other sessions.
+ * Otherwise it runs once the surrounding transaction commits.
  */
-export async function deferSessionLimit(
-	pending: Omit<PendingSessionLimit, "endpointContext">,
-) {
-	if (!(await hasRequestState())) return false;
-	const pendingLimits = await pendingSessionLimits.get();
-	if (!pendingLimits) return false;
+export async function scheduleSessionLimit(limit: SessionLimit) {
+	const pendingLimits = (await hasRequestState())
+		? await pendingSessionLimits.get()
+		: null;
+	if (!pendingLimits) return queueSessionLimit(limit);
 	pendingLimits.push({
-		...pending,
+		...limit,
 		endpointContext: tryGetCurrentAuthEndpointContext(),
 	});
-	return true;
 }
 
 /**
  * Runs a request and then enforces `session.maxPerUser` for the sessions it
- * created. Must be called where the request state is created, so nested
- * endpoint calls share it and the limit applies once.
+ * created. Must run inside request state. Nested calls share the outermost
+ * call's sessions, so the limit applies once, when that call finishes.
  */
 export async function runWithSessionLimits<T>(fn: () => Promise<T>) {
+	if (await pendingSessionLimits.get()) return fn();
 	const pendingLimits: PendingSessionLimit[] = [];
 	await pendingSessionLimits.set(pendingLimits);
+	let failed = false;
 	try {
 		return await fn();
+	} catch (error) {
+		// An `APIError`, redirects included, still sends the session cookie. Any
+		// other error fails the request, so it keeps none of its sessions.
+		failed = !isAPIError(error);
+		throw error;
 	} finally {
-		for (const { enforce, logger, endpointContext } of pendingLimits) {
-			await queueAfterTransactionHook(
-				// Session delete hooks see the request that created the session.
-				async () => {
-					if (!endpointContext) return enforce();
-					await runWithEndpointContext(endpointContext, enforce);
-				},
-				{
-					onError(error: unknown) {
-						logger.error(
-							"Failed to revoke sessions over session.maxPerUser",
-							error,
-						);
+		// Sessions created after this, by work the request didn't wait for, are
+		// enforced right away.
+		await pendingSessionLimits.set(null);
+		if (!failed) {
+			for (const { endpointContext, ...limit } of pendingLimits) {
+				await queueSessionLimit({
+					...limit,
+					// Session delete hooks see the request that created the session.
+					enforce: async () => {
+						if (!endpointContext) return limit.enforce();
+						await runWithEndpointContext(endpointContext, limit.enforce);
 					},
-				},
-			);
+				});
+			}
 		}
 	}
 }

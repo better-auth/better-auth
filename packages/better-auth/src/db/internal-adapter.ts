@@ -33,7 +33,7 @@ import {
 	parseSessionOutput,
 	parseUserOutput,
 } from "./schema";
-import { deferSessionLimit, selectSessionsOverLimit } from "./session-limit";
+import { scheduleSessionLimit, selectSessionsOverLimit } from "./session-limit";
 import {
 	getStorageOption,
 	processIdentifier,
@@ -291,66 +291,86 @@ export const createInternalAdapter = (
 		}
 	}
 
-	// The most rows a `findMany` without an explicit limit returns.
-	const findManyPageSize = Math.max(
-		options.advanced?.database?.defaultFindManyLimit ?? 100,
-		1,
-	);
-
-	/**
-	 * Lists all of a user's active sessions, in no particular order. Unlike
-	 * `listSessions()`, it reads every database page, so a limit above the
-	 * adapter's page size still sees every session.
-	 */
-	async function listAllActiveSessions(userId: string): Promise<Session[]> {
-		if (secondaryStorage && !databaseSessionFallbackEnabled) {
-			return internalAdapter.listSessions(userId, { onlyActiveSessions: true });
-		}
-		const now = new Date();
-		const sessions: Session[] = [];
-		// Paged by id, each page starting after the last one, so sessions deleted
-		// between pages can't shift a session past the next page's start. The
-		// caller orders them by creation time.
-		for (let lastId: string | undefined; ; ) {
-			const page = await (await getCurrentAdapter(adapter)).findMany<Session>({
-				model: "session",
-				where: [
-					{ field: "userId", value: userId },
-					{ field: "expiresAt", value: now, operator: "gt" },
-					...(lastId
-						? [{ field: "id", value: lastId, operator: "gt" } satisfies Where]
-						: []),
-				],
-				sortBy: { field: "id", direction: "asc" },
-				limit: findManyPageSize,
-			});
-			sessions.push(...page);
-			if (page.length < findManyPageSize) return sessions;
-			lastId = page[page.length - 1]!.id;
-		}
-	}
-
 	/**
 	 * Enforces `session.maxPerUser` for the session with `token`, unless it no
-	 * longer exists.
+	 * longer exists or has expired.
 	 */
 	async function enforceSessionLimit(token: string, maxPerUser: number) {
 		// A hook may have deleted the session since it was created, and
 		// `findSession` returns expired sessions too.
 		const current = await internalAdapter.findSession(token);
-		if (!current || new Date(current.session.expiresAt).getTime() <= Date.now())
+		if (
+			!current ||
+			new Date(current.session.expiresAt).getTime() <= Date.now()
+		) {
 			return;
-		const revokedTokens = selectSessionsOverLimit(
-			current.session,
-			await listAllActiveSessions(current.session.userId),
-			maxPerUser,
+		}
+		const { session } = current;
+		// Matches the adapter factory's default `findMany` limit.
+		const pageSize = Math.max(
+			options.advanced?.database?.defaultFindManyLimit ?? 100,
+			1,
 		);
-		// Delete hooks only see one page of the sessions a bulk delete matches,
-		// so revoke at most a page at a time.
-		for (let i = 0; i < revokedTokens.length; i += findManyPageSize) {
-			await internalAdapter.deleteSessions(
-				revokedTokens.slice(i, i + findManyPageSize),
+		const attempted = new Set<string>();
+		const revoke = async (sessions: Session[]) => {
+			const tokens = selectSessionsOverLimit(
+				session,
+				sessions,
+				maxPerUser,
+			).filter((t) => !attempted.has(t));
+			// Delete hooks only see one page of the sessions a bulk delete
+			// matches, and some databases cap bound parameters at 100, so revoke
+			// in small batches.
+			const batchSize = Math.min(pageSize, 50);
+			for (let i = 0; i < tokens.length; i += batchSize) {
+				const batch = tokens.slice(i, i + batchSize);
+				for (const t of batch) attempted.add(t);
+				await internalAdapter.deleteSessions(batch);
+			}
+			return tokens.length;
+		};
+
+		if (secondaryStorage && !databaseSessionFallbackEnabled) {
+			// The cached list holds all of the user's sessions.
+			await revoke(
+				await internalAdapter.listSessions(session.userId, {
+					onlyActiveSessions: true,
+				}),
 			);
+			if (!attempted.size) return;
+			// `deleteSessions` leaves revoked tokens in the list, and every later
+			// `listSessions` reads each entry, so drop them.
+			const now = Date.now();
+			const list =
+				safeJSONParse<ActiveSessionReference[]>(
+					await secondaryStorage.get(`active-sessions-${session.userId}`),
+				) ?? [];
+			await setActiveSessionReferences(
+				session.userId,
+				list.filter((s) => s.expiresAt > now && !attempted.has(s.token)),
+				now,
+			);
+			return;
+		}
+
+		// Reads the newest `maxPerUser + pageSize` sessions and reads again after
+		// revoking, until a read finds nothing new to revoke (for example, when a
+		// delete hook vetoed it).
+		const windowSize = maxPerUser + pageSize;
+		for (;;) {
+			const sessions = await (
+				await getCurrentAdapter(adapter)
+			).findMany<Session>({
+				model: "session",
+				where: [
+					{ field: "userId", value: session.userId },
+					{ field: "expiresAt", value: new Date(), operator: "gt" },
+				],
+				sortBy: { field: "createdAt", direction: "desc" },
+				limit: windowSize,
+			});
+			const revoked = await revoke(sessions);
+			if (sessions.length < windowSize || revoked === 0) return;
 		}
 	}
 
@@ -749,19 +769,10 @@ export const createInternalAdapter = (
 			);
 			const maxPerUser = options.session?.maxPerUser;
 			if (res && maxPerUser !== undefined && !res.impersonatedBy) {
-				const enforce = () => enforceSessionLimit(res.token, maxPerUser);
-				if (!(await deferSessionLimit({ enforce, logger }))) {
-					// Queued after the session's own writes, so inside a transaction the
-					// older sessions are only revoked once the new one has committed.
-					await queueAfterTransactionHook(enforce, {
-						onError(error: unknown) {
-							logger.error(
-								"Failed to revoke sessions over session.maxPerUser",
-								error,
-							);
-						},
-					});
-				}
+				await scheduleSessionLimit({
+					enforce: () => enforceSessionLimit(res.token, maxPerUser),
+					logger,
+				});
 			}
 			return res as Session;
 		},
