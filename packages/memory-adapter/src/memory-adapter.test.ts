@@ -153,6 +153,59 @@ describe("memory adapter updateMany return shape", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12536
+ */
+describe("memory adapter mixed AND/OR where", () => {
+	async function seedTaggedWidgets(adapter: DBAdapter<BetterAuthOptions>) {
+		for (const [id, name, tag] of [
+			["1", "alice", "keep"],
+			["2", "bob", "keep"],
+			["3", "carol", "keep"],
+			["4", "alice", "other"],
+		]) {
+			await adapter.create({
+				model: "widget",
+				data: { id, name, tag },
+				forceAllowId: true,
+			});
+		}
+	}
+
+	it("matches rows that satisfy the AND group and the OR group", async () => {
+		const { adapter } = setup();
+		await seedTaggedWidgets(adapter);
+
+		const rows = await adapter.findMany<{ id: string }>({
+			model: "widget",
+			where: [
+				{ field: "tag", value: "keep" },
+				{ field: "name", value: "alice", connector: "OR" },
+				{ field: "name", value: "bob", connector: "OR" },
+			],
+		});
+
+		expect(rows.map((row) => row.id).sort()).toEqual(["1", "2"]);
+	});
+
+	it("leaves rows outside the AND group untouched in deleteMany", async () => {
+		const { db, adapter } = setup();
+		await seedTaggedWidgets(adapter);
+
+		const deleted = await adapter.deleteMany({
+			model: "widget",
+			where: [
+				{ field: "tag", value: "keep" },
+				{ field: "name", value: "alice", connector: "OR" },
+				{ field: "name", value: "bob", connector: "OR" },
+			],
+		});
+
+		expect(deleted).toBe(2);
+		expect(db.widget!.map((row) => row.id).sort()).toEqual(["3", "4"]);
+	});
+});
+
 describe("memory adapter incrementOne", () => {
 	it("applies a positive delta and returns the updated row", async () => {
 		const { adapter } = setup();
