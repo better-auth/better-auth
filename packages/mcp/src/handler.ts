@@ -55,7 +55,9 @@ export interface McpProtectedRequestHandlerOptions {
 		 * proofs in, so it defaults to a process-local in-memory store. That is
 		 * safe only for a single long-lived instance. For multiple instances or
 		 * serverless, pass a shared store, such as
-		 * `createDpopReplayStore(internalAdapter)` from `better-auth/oauth2`.
+		 * `createDpopReplayStore((await auth.$context).internalAdapter)` from
+		 * `better-auth/oauth2`. With secondary storage, that store also needs
+		 * `verification.storeInDatabase: true`, or every DPoP request fails.
 		 */
 		replayStore?: DpopReplayStore;
 	};
