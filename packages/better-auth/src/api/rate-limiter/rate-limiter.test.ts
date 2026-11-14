@@ -440,6 +440,100 @@ describe("database rate-limit cleanup scheduling", async () => {
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/issues/12557
+ */
+describe("database rate-limit sweep for new keys", () => {
+	async function setup() {
+		const { auth, client } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				storage: "database",
+				window: 10,
+				max: 20,
+			},
+		});
+		const ctx = await auth.$context;
+		const seedExpired = (key: string) =>
+			ctx.adapter.create({
+				model: "rateLimit",
+				data: { key, count: 1, lastRequest: Date.now() - 120_000 },
+			});
+		const hasRow = async (key: string) =>
+			(await ctx.adapter.count({
+				model: "rateLimit",
+				where: [{ field: "key", value: key }],
+			})) > 0;
+		return { ctx, client, seedExpired, hasRow };
+	}
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("removes expired rows when the request comes from a key not seen before", async () => {
+		const { client, seedExpired, hasRow } = await setup();
+		await seedExpired("10.0.0.1|/get-session");
+		await seedExpired("10.0.0.2|/sign-in/email");
+
+		// 127.0.0.1|/get-session has no row yet, so this takes the create path.
+		await client.getSession();
+
+		expect(await hasRow("10.0.0.1|/get-session")).toBe(false);
+		expect(await hasRow("10.0.0.2|/sign-in/email")).toBe(false);
+		expect(await hasRow("127.0.0.1|/get-session")).toBe(true);
+	});
+
+	it("keeps rows that are still inside their window", async () => {
+		const { ctx, client, hasRow } = await setup();
+		await ctx.adapter.create({
+			model: "rateLimit",
+			data: {
+				key: "10.0.0.3|/get-session",
+				count: 1,
+				lastRequest: Date.now() - 5_000,
+			},
+		});
+
+		await client.getSession();
+
+		expect(await hasRow("10.0.0.3|/get-session")).toBe(true);
+	});
+
+	it("sweeps at most once per interval instead of on every new key", async () => {
+		const { ctx, client } = await setup();
+		const deleteMany = vi.spyOn(ctx.adapter, "deleteMany");
+		const sweeps = () =>
+			deleteMany.mock.calls.filter(([args]) => args.model === "rateLimit")
+				.length;
+
+		await client.getSession();
+		await client.$fetch("/ok");
+		await client.$fetch("/ok", { method: "GET" });
+
+		expect(sweeps()).toBe(1);
+	});
+
+	it("sweeps again once the interval has passed", async () => {
+		const { ctx, client, seedExpired, hasRow } = await setup();
+		vi.useFakeTimers({ toFake: ["Date"] });
+		const deleteMany = vi.spyOn(ctx.adapter, "deleteMany");
+		const sweeps = () =>
+			deleteMany.mock.calls.filter(([args]) => args.model === "rateLimit")
+				.length;
+
+		await client.getSession();
+		expect(sweeps()).toBe(1);
+
+		vi.setSystemTime(Date.now() + 61_000);
+		await seedExpired("10.0.0.4|/get-session");
+		await client.$fetch("/ok");
+
+		expect(sweeps()).toBe(2);
+		expect(await hasRow("10.0.0.4|/get-session")).toBe(false);
+	});
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/issues/11519
  */
 describe("database rate-limit with a string lastRequest", async () => {
