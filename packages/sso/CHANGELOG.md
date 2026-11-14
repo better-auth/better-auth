@@ -1,5 +1,7 @@
 # @better-auth/sso
 
+## 1.8.0-beta.10
+
 ## 1.8.0-beta.9
 
 ### Minor Changes
