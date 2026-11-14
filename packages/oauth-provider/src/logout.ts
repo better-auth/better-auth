@@ -62,6 +62,35 @@ export interface BackchannelLogoutPlan {
 	refreshTokenIds: string[];
 	sessionId: string;
 	targets: BackchannelLogoutTarget[];
+	/**
+	 * Set when the session ends through an endpoint that ends every grant for
+	 * the user (see {@link endsAllUserGrants}). Every unrevoked access and
+	 * refresh token of this user is then revoked, including `offline_access`
+	 * refresh tokens and tokens no longer bound to a session.
+	 */
+	revokeAllGrantsOfUserId?: string;
+}
+
+/**
+ * Endpoints that end every session of a user because their credentials may be
+ * compromised (password reset) or because they asked to sign out everywhere.
+ * `offline_access` keeps long-lived API access alive through a normal logout
+ * (OIDC Back-Channel Logout 1.0 §2.7), but whoever holds a refresh token must
+ * not keep access through these.
+ *
+ * Password reset endpoints only end sessions when
+ * `emailAndPassword.revokeSessionsOnPasswordReset` is enabled, so the sweep
+ * follows that option.
+ */
+const END_ALL_USER_GRANTS_PATHS = new Set([
+	"/reset-password",
+	"/email-otp/reset-password",
+	"/phone-number/reset-password",
+	"/revoke-sessions",
+]);
+
+export function endsAllUserGrants(path: string | undefined): boolean {
+	return path !== undefined && END_ALL_USER_GRANTS_PATHS.has(path);
 }
 
 /**
@@ -118,6 +147,10 @@ async function signLogoutToken(
  * revoked; `offline_access` refresh tokens survive so long-lived API access can
  * outlive the browser session.
  *
+ * When `revokeAllUserGrants` is set, every grant of the user is revoked
+ * instead, including `offline_access` refresh tokens (see
+ * {@link endsAllUserGrants}).
+ *
  * Token revocation runs regardless of the JWT plugin (refresh-token revocation
  * has no dependency on signing). Only Logout Token delivery needs the JWT
  * plugin, so a plan may contain token identifiers with no delivery targets.
@@ -128,10 +161,21 @@ async function signLogoutToken(
 async function prepareBackchannelLogoutPlan(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	input: { sessionId: string; userId: string },
+	input: { sessionId: string; userId: string; revokeAllUserGrants?: boolean },
 ): Promise<BackchannelLogoutPlan | null> {
-	const { sessionId, userId } = input;
+	const { sessionId, userId, revokeAllUserGrants } = input;
 	if (!userId) return null;
+	// User-wide revocation needs only the user ID. Notification lookups must
+	// never prevent this required work from running after deletion commits.
+	const sweepPlan: BackchannelLogoutPlan | null = revokeAllUserGrants
+		? {
+				accessTokenIds: [],
+				refreshTokenIds: [],
+				sessionId,
+				targets: [],
+				revokeAllGrantsOfUserId: userId,
+			}
+		: null;
 
 	const logger = ctx.context.logger;
 	try {
@@ -152,7 +196,11 @@ async function prepareBackchannelLogoutPlan(
 		const affectedClientIds = new Set<string>();
 		for (const t of accessTokens) affectedClientIds.add(t.clientId);
 		for (const t of refreshTokens) affectedClientIds.add(t.clientId);
-		if (affectedClientIds.size === 0) return null;
+		if (affectedClientIds.size === 0) {
+			// Tokens can outlive the session that issued them, so a user-wide
+			// sweep still has work to do when this session holds none.
+			return sweepPlan;
+		}
 
 		const clients = await adapter.findMany<SchemaClient<Scope[]>>({
 			model: "oauthClient",
@@ -206,11 +254,68 @@ async function prepareBackchannelLogoutPlan(
 			refreshTokenIds: refreshToRevokeIds,
 			sessionId,
 			targets,
+			...(revokeAllUserGrants ? { revokeAllGrantsOfUserId: userId } : {}),
 		};
 	} catch (error) {
 		logger.error("back-channel logout planning failed", error);
-		return null;
+		return sweepPlan;
 	}
+}
+
+// A revoke-all request can delete many sessions. Share only its user-wide
+// database sweep; each session still delivers its own back-channel logout.
+const userGrantRevocationsByContext = new WeakMap<
+	GenericEndpointContext,
+	Map<string, Promise<void>>
+>();
+
+export function revokeAllUserGrants(
+	ctx: GenericEndpointContext,
+	userId: string,
+) {
+	let users = userGrantRevocationsByContext.get(ctx);
+	if (!users) {
+		users = new Map();
+		userGrantRevocationsByContext.set(ctx, users);
+	}
+	const existing = users.get(userId);
+	if (existing) return existing;
+	const task = (async () => {
+		const adapter = await getCurrentAdapter(ctx.context.adapter);
+		const revokedAt = new Date();
+		// Include rotated parents, not only unrevoked rows. Clearing rotatedAt
+		// invalidates rotation replay and lets an in-flight issuer detect the
+		// revocation after inserting its replacement. This is persistent database
+		// state, so the issuer can run on a different worker.
+		// Refresh rows must be swept before access rows: an issuer that has
+		// already passed its final parent check has inserted both by this point.
+		const failures: unknown[] = [];
+		for (const model of ["oauthRefreshToken", "oauthAccessToken"] as const) {
+			try {
+				await adapter.updateMany({
+					model,
+					where: [{ field: "userId", value: userId }],
+					update:
+						model === "oauthRefreshToken"
+							? {
+									revoked: revokedAt,
+									rotatedAt: null,
+									rotationReplayExpiresAt: null,
+								}
+							: { revoked: revokedAt },
+				});
+			} catch (error) {
+				ctx.context.logger.error(
+					"back-channel logout: token revocation update failed",
+					error,
+				);
+				failures.push(error);
+			}
+		}
+		if (failures.length > 0) throw failures[0];
+	})();
+	users.set(userId, task);
+	return task;
 }
 
 /**
@@ -223,22 +328,24 @@ async function applyBackchannelLogoutPlan(
 	plan: BackchannelLogoutPlan,
 ): Promise<void> {
 	const revokedAt = new Date();
+	const sweepUserId = plan.revokeAllGrantsOfUserId;
 	const adapter = await getCurrentAdapter(ctx.context.adapter);
 	const revocations = await Promise.allSettled([
-		plan.accessTokenIds.length > 0
+		!sweepUserId && plan.accessTokenIds.length > 0
 			? adapter.updateMany({
 					model: "oauthAccessToken",
 					where: [{ field: "id", operator: "in", value: plan.accessTokenIds }],
 					update: { revoked: revokedAt },
 				})
 			: Promise.resolve(),
-		plan.refreshTokenIds.length > 0
+		!sweepUserId && plan.refreshTokenIds.length > 0
 			? adapter.updateMany({
 					model: "oauthRefreshToken",
 					where: [{ field: "id", operator: "in", value: plan.refreshTokenIds }],
 					update: { revoked: revokedAt },
 				})
 			: Promise.resolve(),
+		sweepUserId ? revokeAllUserGrants(ctx, sweepUserId) : Promise.resolve(),
 	]);
 	// Session liveness remains authoritative, but operators still need a signal
 	// if the stored revocation backstop drifts from the committed session state.
@@ -257,6 +364,70 @@ async function applyBackchannelLogoutPlan(
 }
 
 /**
+ * Await required user revocation before handing off notification delivery.
+ * On failure, notify every verified ended session whose later hook would be
+ * skipped by the propagated error, retaining the original revocation error.
+ */
+export async function executeBackchannelLogoutPlan(
+	ctx: GenericEndpointContext,
+	plan: BackchannelLogoutPlan,
+	logoutPlanBySessionId: Map<string, BackchannelLogoutPlan>,
+): Promise<void> {
+	const dispatch = (endedPlan: BackchannelLogoutPlan) => {
+		const task = (
+			endedPlan.revokeAllGrantsOfUserId
+				? deliverBackchannelLogoutTokens(ctx, endedPlan)
+				: applyBackchannelLogoutPlan(ctx, endedPlan)
+		).catch((error) => {
+			ctx.context.logger.error(
+				"Back-channel logout failed after session deletion",
+				error,
+			);
+		});
+		return ctx.context.runInBackgroundOrAwait(task);
+	};
+	// Keep the required sweep ahead of best-effort delivery and
+	// surface its error even with a background handler configured.
+	if (plan.revokeAllGrantsOfUserId) {
+		try {
+			await revokeAllUserGrants(ctx, plan.revokeAllGrantsOfUserId);
+		} catch (error) {
+			const endedPlans = [plan];
+			// A batch deletes all rows before its after hooks. Throwing
+			// here stops later hooks, so dispatch their committed plans
+			// now too. Verify liveness first: a staged plan alone is not
+			// proof of deletion (a custom hook may have vetoed it).
+			const adapter = await getCurrentAdapter(ctx.context.adapter);
+			for (const [id, sibling] of logoutPlanBySessionId) {
+				if (sibling.revokeAllGrantsOfUserId !== plan.revokeAllGrantsOfUserId)
+					continue;
+				try {
+					const live = await adapter.findOne<Session>({
+						model: "session",
+						where: [{ field: "id", value: id }],
+					});
+					if (
+						(!live || live.expiresAt <= new Date()) &&
+						logoutPlanBySessionId.delete(id)
+					)
+						endedPlans.push(sibling);
+				} catch (lookupError) {
+					ctx.context.logger.error(
+						"Unable to verify ended session for logout delivery",
+						lookupError,
+					);
+				}
+			}
+			await Promise.allSettled(
+				endedPlans.filter((p) => p.targets.length > 0).map(dispatch),
+			);
+			throw error;
+		}
+	}
+	await dispatch(plan);
+}
+
+/**
  * Asynchronous phase: sign one Logout Token per target client and POST it to
  * the registered `backchannel_logout_uri`. The caller hands this to
  * `runInBackgroundOrAwait`, so when a background handler is configured (Vercel
@@ -272,6 +443,7 @@ async function deliverBackchannelLogoutTokens(
 	ctx: GenericEndpointContext,
 	plan: BackchannelLogoutPlan,
 ): Promise<void> {
+	if (plan.targets.length === 0) return;
 	const logger = ctx.context.logger;
 	const jwtPluginOptions = getJwtPlugin(ctx.context)?.options;
 	const iss = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;

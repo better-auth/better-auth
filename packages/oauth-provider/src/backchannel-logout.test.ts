@@ -16,7 +16,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { toNodeHandler } from "better-auth/node";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { createLocalJWKSet, jwtVerify } from "jose";
+import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
 import type { Listener } from "listhen";
 import { listen } from "listhen";
 import {
@@ -103,10 +103,18 @@ describe("oauth back-channel logout", async () => {
 	const state = "123";
 	const scopes = ["openid", "email", "profile", "offline_access"];
 	let shouldVetoSessionDeletion = false;
+	let resetPasswordToken = "";
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
 		database: memoryAdapter(database),
+		emailAndPassword: {
+			enabled: true,
+			revokeSessionsOnPasswordReset: true,
+			async sendResetPassword({ token }) {
+				resetPasswordToken = token;
+			},
+		},
 		databaseHooks: {
 			session: {
 				delete: {
@@ -592,6 +600,494 @@ describe("oauth back-channel logout", async () => {
 		}
 	});
 
+	async function refreshTokenGrant(
+		oauthClient: Awaited<ReturnType<typeof registerClient>>,
+		refreshToken: string,
+	) {
+		return client.$fetch<{ access_token: string }>("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "refresh_token",
+				refresh_token: refreshToken,
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret!,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+	}
+
+	async function expectAllClientTokensRevoked(clientId: string) {
+		const { accessTokens, refreshTokens } =
+			await readClientTokenRevocation(clientId);
+		expect(accessTokens.length).toBeGreaterThan(0);
+		expect(refreshTokens.length).toBeGreaterThan(0);
+		for (const t of accessTokens) expect(t.revoked).toBeInstanceOf(Date);
+		for (const t of refreshTokens) expect(t.revoked).toBeInstanceOf(Date);
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("revokes offline_access grants when the user revokes all sessions", async () => {
+		const oauthClient = await registerClient({
+			backchannel_logout_uri: undefined,
+		});
+		// A grant issued under an earlier session keeps its offline_access
+		// refresh token through a normal sign-out, unbound from any session.
+		const earlier = await issueTokens({ client: oauthClient });
+		await client.signOut({ fetchOptions: { headers } });
+		headers = (await signInWithTestUser()).headers;
+		const current = await issueTokens({ client: oauthClient });
+		expect(earlier.refresh_token).toBeDefined();
+		expect(current.refresh_token).toBeDefined();
+
+		await auth.api.revokeSessions({ headers });
+
+		await expectAllClientTokensRevoked(oauthClient.client_id);
+		for (const token of [earlier.refresh_token!, current.refresh_token!]) {
+			const response = await refreshTokenGrant(oauthClient, token);
+			expect(response.error?.status).toBe(400);
+			expect(response.data).toBeNull();
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("revokes offline_access grants when a password reset revokes sessions", async () => {
+		const oauthClient = await registerClient({
+			backchannel_logout_uri: undefined,
+		});
+		const tokens = await issueTokens({ client: oauthClient });
+		expect(tokens.refresh_token).toBeDefined();
+
+		const resetPassword = async (newPassword: string) => {
+			resetPasswordToken = "";
+			await auth.api.requestPasswordReset({
+				body: { email: "test@test.com", redirectTo: "/reset" },
+			});
+			expect(resetPasswordToken).not.toBe("");
+			await auth.api.resetPassword({
+				body: { token: resetPasswordToken, newPassword },
+			});
+		};
+
+		await resetPassword("new-password-12276");
+		try {
+			await expectAllClientTokensRevoked(oauthClient.client_id);
+			const response = await refreshTokenGrant(
+				oauthClient,
+				tokens.refresh_token!,
+			);
+			expect(response.error?.status).toBe(400);
+			expect(response.data).toBeNull();
+		} finally {
+			// Restore the test user's password for the sign-in in `beforeEach`.
+			await resetPassword("test123456");
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it.each(["oauthRefreshToken", "oauthAccessToken"])(
+		"rejects an in-flight refresh when all sessions end before the %s insert",
+		async (model) => {
+			const oauthClient = await registerClient({
+				backchannel_logout_uri: undefined,
+			});
+			const earlier = await issueTokens({ client: oauthClient });
+			await client.signOut({ fetchOptions: { headers } });
+			headers = (await signInWithTestUser()).headers;
+			const context = await auth.$context;
+			const create = context.adapter.create.bind(context.adapter);
+			const spy = vi.spyOn(context.adapter, "create");
+			let revokedDuringRotation = false;
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === model) {
+					spy.mockRestore();
+					await auth.api.revokeSessions({ headers });
+					revokedDuringRotation = true;
+				}
+				return create(...args);
+			});
+			try {
+				const response = await refreshTokenGrant(
+					oauthClient,
+					earlier.refresh_token!,
+				);
+				expect(revokedDuringRotation).toBe(true);
+				expect(response.error?.status).toBe(400);
+				expect(response.data).toBeNull();
+				await expectAllClientTokensRevoked(oauthClient.client_id);
+			} finally {
+				spy.mockRestore();
+			}
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("revokes replacement tokens when the sweep follows the final parent read", async () => {
+		const oauthClient = await registerClient({
+			backchannel_logout_uri: undefined,
+		});
+		const earlier = await issueTokens({ client: oauthClient });
+		await client.signOut({ fetchOptions: { headers } });
+		headers = (await signInWithTestUser()).headers;
+		const context = await auth.$context;
+		const findOne = context.adapter.findOne.bind(context.adapter);
+		const spy = vi.spyOn(context.adapter, "findOne");
+		let sweptAfterRead = false;
+		spy.mockImplementation(async (...args) => {
+			const result = await findOne(...args);
+			if (
+				args[0].model === "oauthRefreshToken" &&
+				args[0].where.some((condition) => condition.field === "id")
+			) {
+				spy.mockRestore();
+				await auth.api.revokeSessions({ headers });
+				sweptAfterRead = true;
+			}
+			return result;
+		});
+		try {
+			const response = await refreshTokenGrant(
+				oauthClient,
+				earlier.refresh_token!,
+			);
+			expect(sweptAfterRead).toBe(true);
+			// If the final read already saw an invalidated parent the issuer may
+			// fail closed. Otherwise every inserted row is visible to the sweep.
+			if (response.error) expect(response.error.status).toBe(400);
+			await expectAllClientTokensRevoked(oauthClient.client_id);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it.each(["oauthRefreshToken", "oauthAccessToken"])(
+		"rejects an initial grant when all sessions end before the %s insert",
+		async (model) => {
+			const oauthClient = await registerClient({
+				backchannel_logout_uri: undefined,
+			});
+			const context = await auth.$context;
+			const create = context.adapter.create.bind(context.adapter);
+			const spy = vi.spyOn(context.adapter, "create");
+			let sweptDuringIssuance = false;
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === model) {
+					spy.mockRestore();
+					await auth.api.revokeSessions({ headers });
+					sweptDuringIssuance = true;
+				}
+				return create(...args);
+			});
+			try {
+				expect(await issueTokens({ client: oauthClient })).toBeNull();
+				expect(sweptDuringIssuance).toBe(true);
+				await expectAllClientTokensRevoked(oauthClient.client_id);
+			} finally {
+				spy.mockRestore();
+			}
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it.each(["oauthRefreshToken", "oauthAccessToken"])(
+		"surfaces a failed %s sweep when revoking all sessions",
+		async (model) => {
+			const oauthClient = await registerClient({
+				backchannel_logout_uri: undefined,
+			});
+			await issueTokens({ client: oauthClient });
+			const context = await auth.$context;
+			const errors = vi.spyOn(context.logger, "error");
+			const updateMany = context.adapter.updateMany.bind(context.adapter);
+			const spy = vi.spyOn(context.adapter, "updateMany");
+			const background = vi
+				.spyOn(context, "runInBackgroundOrAwait")
+				.mockResolvedValue(undefined);
+			const failure = new Error("token store unavailable");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === model) throw failure;
+				return updateMany(...args);
+			});
+			try {
+				await expect(
+					auth.api.revokeSessions({ headers }),
+				).rejects.toMatchObject({ status: "INTERNAL_SERVER_ERROR" });
+				expect(errors).toHaveBeenCalledWith(
+					"back-channel logout: token revocation update failed",
+					expect.objectContaining({ message: "token store unavailable" }),
+				);
+				expect(background).not.toHaveBeenCalled();
+				const { accessTokens, refreshTokens } = await readClientTokenRevocation(
+					oauthClient.client_id,
+				);
+				const otherTokens =
+					model === "oauthRefreshToken" ? accessTokens : refreshTokens;
+				for (const token of otherTokens) {
+					expect(token.revoked).toBeInstanceOf(Date);
+				}
+			} finally {
+				spy.mockRestore();
+			}
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("revokes initial tokens when the sweep follows the final session read", async () => {
+		const oauthClient = await registerClient({
+			backchannel_logout_uri: undefined,
+		});
+		const context = await auth.$context;
+		const findOne = context.adapter.findOne.bind(context.adapter);
+		const spy = vi.spyOn(context.adapter, "findOne");
+		let sessionReads = 0;
+		spy.mockImplementation(async (...args) => {
+			const result = await findOne(...args);
+			if (
+				args[0].model === "session" &&
+				args[0].where.some((condition) => condition.field === "id") &&
+				++sessionReads === 2
+			) {
+				spy.mockRestore();
+				await auth.api.revokeSessions({ headers });
+			}
+			return result;
+		});
+		try {
+			await issueTokens({ client: oauthClient });
+			expect(sessionReads).toBe(2);
+			await expectAllClientTokensRevoked(oauthClient.client_id);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("surfaces a failed refresh sweep after a password reset", async () => {
+		const oauthClient = await registerClient({
+			backchannel_logout_uri: undefined,
+		});
+		await issueTokens({ client: oauthClient });
+		await auth.api.requestPasswordReset({
+			body: { email: "test@test.com", redirectTo: "/reset" },
+		});
+		const context = await auth.$context;
+		const updateMany = context.adapter.updateMany.bind(context.adapter);
+		const spy = vi.spyOn(context.adapter, "updateMany");
+		spy.mockImplementation(async (...args) => {
+			if (args[0].model === "oauthRefreshToken") {
+				throw new Error("token store unavailable");
+			}
+			return updateMany(...args);
+		});
+		try {
+			await expect(
+				auth.api.resetPassword({
+					body: {
+						token: resetPasswordToken,
+						newPassword: "reset-failure-12276",
+					},
+				}),
+			).rejects.toThrow("token store unavailable");
+		} finally {
+			spy.mockRestore();
+			// The password write precedes session deletion and cannot roll back.
+			await auth.api.requestPasswordReset({
+				body: { email: "test@test.com", redirectTo: "/reset" },
+			});
+			await auth.api.resetPassword({
+				body: { token: resetPasswordToken, newPassword: "test123456" },
+			});
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it.each(["oauthAccessToken", "oauthRefreshToken", "oauthClient"])(
+		"revokes offline grants despite a failed %s notification lookup",
+		async (model) => {
+			await auth.api.revokeSessions({ headers });
+			headers = (await signInWithTestUser()).headers;
+			const oauthClient = await registerClient();
+			const earlier = await issueTokens({ client: oauthClient });
+			await client.signOut({ fetchOptions: { headers } });
+			headers = (await signInWithTestUser()).headers;
+			await issueTokens({ client: oauthClient });
+			const context = await auth.$context;
+			const findMany = context.adapter.findMany.bind(context.adapter);
+			const spy = vi.spyOn(context.adapter, "findMany");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === model)
+					throw new Error("notification lookup failed");
+				return findMany(...args);
+			});
+			try {
+				await auth.api.revokeSessions({ headers });
+			} finally {
+				spy.mockRestore();
+			}
+			await expectAllClientTokensRevoked(oauthClient.client_id);
+			expect(
+				(await refreshTokenGrant(oauthClient, earlier.refresh_token!)).error
+					?.status,
+			).toBe(400);
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("surfaces a sweep failure after notification planning fails", async () => {
+		const oauthClient = await registerClient();
+		await issueTokens({ client: oauthClient });
+		const context = await auth.$context;
+		const errors = vi.spyOn(context.logger, "error");
+		const findMany = context.adapter.findMany.bind(context.adapter);
+		vi.spyOn(context.adapter, "findMany").mockImplementation(
+			async (...args) => {
+				if (args[0].model === "oauthAccessToken")
+					throw new Error("notification lookup failed");
+				return findMany(...args);
+			},
+		);
+		const updateMany = context.adapter.updateMany.bind(context.adapter);
+		vi.spyOn(context.adapter, "updateMany").mockImplementation(
+			async (...args) => {
+				if (args[0].model === "oauthRefreshToken")
+					throw new Error("token write failed");
+				return updateMany(...args);
+			},
+		);
+		await expect(auth.api.revokeSessions({ headers })).rejects.toMatchObject({
+			status: "INTERNAL_SERVER_ERROR",
+		});
+		expect(errors).toHaveBeenCalledWith(
+			"back-channel logout: token revocation update failed",
+			expect.objectContaining({ message: "token write failed" }),
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("keeps grants when deletion is vetoed after notification planning fails", async () => {
+		const oauthClient = await registerClient();
+		const tokens = await issueTokens({ client: oauthClient });
+		const context = await auth.$context;
+		const findMany = context.adapter.findMany.bind(context.adapter);
+		const spy = vi.spyOn(context.adapter, "findMany");
+		spy.mockImplementation(async (...args) => {
+			if (args[0].model === "oauthAccessToken")
+				throw new Error("notification lookup failed");
+			return findMany(...args);
+		});
+		shouldVetoSessionDeletion = true;
+		try {
+			await auth.api.revokeSessions({ headers });
+		} finally {
+			spy.mockRestore();
+			shouldVetoSessionDeletion = false;
+		}
+		const { refreshTokens } = await readClientTokenRevocation(
+			oauthClient.client_id,
+		);
+		for (const token of refreshTokens) expect(token.revoked ?? null).toBeNull();
+		expect(
+			(await refreshTokenGrant(oauthClient, tokens.refresh_token!)).error,
+		).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it.each([
+		["oauthRefreshToken", 1],
+		["oauthAccessToken", 1],
+		["oauthRefreshToken", 3],
+		["oauthAccessToken", 3],
+	] as const)(
+		"delivers logout despite a failed %s sweep for %i sessions",
+		async (model, sessionCount) => {
+			await auth.api.revokeSessions({ headers });
+			headers = (await signInWithTestUser()).headers;
+			const oauthClient = await registerClient();
+			await issueTokens({ client: oauthClient });
+			for (let i = 1; i < sessionCount; i++) {
+				headers = (await signInWithTestUser()).headers;
+				await issueTokens({ client: oauthClient });
+			}
+			const context = await auth.$context;
+			const errors = vi.spyOn(context.logger, "error");
+			const updateMany = context.adapter.updateMany.bind(context.adapter);
+			const spy = vi.spyOn(context.adapter, "updateMany");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === model) throw new Error("token write failed");
+				return updateMany(...args);
+			});
+			try {
+				await expect(
+					auth.api.revokeSessions({ headers }),
+				).rejects.toMatchObject({ status: "INTERNAL_SERVER_ERROR" });
+				expect(errors).toHaveBeenCalledWith(
+					"back-channel logout: token revocation update failed",
+					expect.objectContaining({ message: "token write failed" }),
+				);
+				await waitForDispatches(sessionCount);
+				expect(rp.received).toHaveLength(sessionCount);
+				expect(
+					new Set(
+						rp.received.map((request) => decodeJwt(request.logoutToken!).sid),
+					).size,
+				).toBe(sessionCount);
+			} finally {
+				spy.mockRestore();
+			}
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("sweeps user grants once while delivering logout for every session", async () => {
+		await auth.api.revokeSessions({ headers });
+		headers = (await signInWithTestUser()).headers;
+		const oauthClient = await registerClient();
+		await issueTokens({ client: oauthClient });
+		for (let i = 0; i < 2; i++) {
+			headers = (await signInWithTestUser()).headers;
+			await issueTokens({ client: oauthClient });
+		}
+		const context = await auth.$context;
+		const updates = vi.spyOn(context.adapter, "updateMany");
+		await auth.api.revokeSessions({ headers });
+		const sweeps = updates.mock.calls.filter(
+			([args]) =>
+				(args.model === "oauthAccessToken" ||
+					args.model === "oauthRefreshToken") &&
+				args.where?.some((condition) => condition.field === "userId"),
+		);
+		expect(sweeps).toHaveLength(2);
+		await waitForDispatches(3);
+		expect(rp.received).toHaveLength(3);
+		await expectAllClientTokensRevoked(oauthClient.client_id);
+	});
+
 	it("revokes access tokens on session end even when no refresh token was issued", async () => {
 		// Without `offline_access` in scope, `handleAuthorizationCodeGrant` never
 		// mints a refresh token. Access tokens must still be revoked when the
@@ -784,6 +1280,26 @@ describe("oauth back-channel logout (jwt plugin disabled)", async () => {
 			where: [{ field: "clientId", value: oauthClient.client_id }],
 		});
 		for (const t of after) expect(t.revoked).toBeInstanceOf(Date);
+	});
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("does not attempt signing during revoke-all with the jwt plugin disabled", async () => {
+		const signed = await signInWithTestUser();
+		const context = await auth.$context;
+		const errors = vi.spyOn(context.logger, "error");
+		const updates = vi.spyOn(context.adapter, "updateMany");
+		await expect(
+			auth.api.revokeSessions({ headers: signed.headers }),
+		).resolves.toEqual({ status: true });
+		expect(errors).not.toHaveBeenCalled();
+		expect(
+			updates.mock.calls.filter(
+				([args]) =>
+					["oauthRefreshToken", "oauthAccessToken"].includes(args.model) &&
+					args.where?.some((condition) => condition.field === "userId"),
+			),
+		).toHaveLength(2);
 	});
 });
 

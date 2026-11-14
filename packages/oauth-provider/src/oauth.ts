@@ -24,7 +24,8 @@ import { validateOAuthProviderExtensions } from "./extensions";
 import { introspectEndpoint } from "./introspect";
 import type { BackchannelLogoutPlan } from "./logout";
 import {
-	applyBackchannelLogoutPlan,
+	endsAllUserGrants,
+	executeBackchannelLogoutPlan,
 	prepareBackchannelLogoutPlan,
 	rpInitiatedLogoutConfirmationEndpoint,
 	rpInitiatedLogoutEndpoint,
@@ -588,6 +589,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 										{
 											sessionId: session.id,
 											userId: session.userId,
+											revokeAllUserGrants: endsAllUserGrants(hookCtx.path),
 										},
 									);
 									if (!plan) return;
@@ -611,16 +613,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 										backchannelLogoutPlansByContext.delete(hookCtx);
 									}
 									if (!plan) return;
-									const logoutTask = applyBackchannelLogoutPlan(
-										hookCtx,
-										plan,
-									).catch((error) => {
-										hookCtx.context.logger.error(
-											"Back-channel logout failed after session deletion",
-											error,
+									try {
+										await executeBackchannelLogoutPlan(
+											hookCtx,
+											plan,
+											logoutPlanBySessionId,
 										);
-									});
-									await hookCtx.context.runInBackgroundOrAwait(logoutTask);
+									} finally {
+										if (logoutPlanBySessionId.size === 0)
+											backchannelLogoutPlansByContext.delete(hookCtx);
+									}
 								},
 							},
 						},
