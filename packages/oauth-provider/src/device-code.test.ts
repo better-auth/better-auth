@@ -441,11 +441,14 @@ describe("oauth-provider device-code grant", async () => {
 		const successes = results.filter((result) => result.error === null);
 		expect(successes).toHaveLength(1);
 		expect(successes[0]?.data?.token_type).toBe("DPoP");
-		// The loser either finds the code claimed or sees the winner's poll time.
+		// The loser finds the proof already used, finds the code claimed, or
+		// sees the winner's poll time.
 		const loser = results.find((result) => result.error !== null)?.error as
 			| { error?: string }
 			| undefined;
-		expect(["invalid_grant", "slow_down"]).toContain(loser?.error);
+		expect(["invalid_dpop_proof", "invalid_grant", "slow_down"]).toContain(
+			loser?.error,
+		);
 	});
 
 	it("accepts a confidential client authenticated with Basic without body client_id", async () => {
