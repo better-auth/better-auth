@@ -141,6 +141,10 @@ If your app needs to require 2FA for those sign-in methods, add custom hook hand
   When a 2FA-enabled user signs in via a credential endpoint, the plugin issues a 2FA challenge instead of completing the sign-in. As part of this, the pending session is discarded and `ctx.context.newSession` is reset to `null` — there is no authenticated session until the user verifies the second factor. Server-side hooks (e.g. `after` hooks on the sign-in endpoints) that read `ctx.context.newSession` must null-check it before accessing `newSession.user`, otherwise they will throw while a 2FA challenge is in flight.
 </Callout>
 
+<Callout type="warn">
+  The 2FA challenge is a verification record. If you use [secondary storage](/docs/concepts/database#secondary-storage) with an eventually consistent store, transient read misses are retried automatically (a read sleeps up to \~500ms across its retries, a consume up to \~200ms total across the whole candidate key pass, only when the first read misses) — but if the store lags for longer than a moment, set [`verification.storeInDatabase: true`](/docs/reference/options#verification) so verification falls back to the database, otherwise sign-in verification can fail with `INVALID_TWO_FACTOR_COOKIE`.
+</Callout>
+
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
 
 ```tsx
