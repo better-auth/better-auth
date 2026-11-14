@@ -448,6 +448,7 @@ describe("createDpopReplayStore with the auth context", () => {
  * A proof stays acceptable through the whole second at the end of its window,
  * because `nowSeconds` is floored. Its replay reservation must outlive that
  * second in every store.
+ * @see https://datatracker.ietf.org/doc/html/rfc9449#section-11.1
  */
 describe("replay reservation at the end of the proof window", () => {
 	const proofMaxAgeSeconds = 60;
