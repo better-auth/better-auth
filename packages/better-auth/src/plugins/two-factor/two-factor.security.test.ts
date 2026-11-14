@@ -2,7 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { createOTP } from "@better-auth/utils/otp";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -553,6 +553,36 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 				asResponse: true,
 			});
 			expect(verified.status).toBe(401);
+		}
+		expect(sentOTPs).toEqual([]);
+	});
+
+	it("sends no OTP for a challenge with an invalid expiry", async () => {
+		const challengeHeaders = await startChallenge();
+		const challengeRow = await db.findOne<Verification>({
+			model: "verification",
+			where: [{ field: "value", value: userId }],
+		});
+		// The database rejects an invalid date, but a corrupt secondary-storage
+		// entry can still carry one.
+		const { internalAdapter } = await auth.$context;
+		const lookup = vi
+			.spyOn(internalAdapter, "findVerificationValue")
+			.mockResolvedValueOnce({
+				...challengeRow!,
+				expiresAt: new Date(Number.NaN),
+			});
+		sentOTPs.length = 0;
+
+		try {
+			const sent = await auth.api.sendTwoFactorOTP({
+				body: {},
+				headers: challengeHeaders,
+				asResponse: true,
+			});
+			expect(sent.status).toBe(401);
+		} finally {
+			lookup.mockRestore();
 		}
 		expect(sentOTPs).toEqual([]);
 	});

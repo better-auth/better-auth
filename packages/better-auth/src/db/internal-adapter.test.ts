@@ -420,7 +420,7 @@ describe("internal adapter test", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/12593
 	 */
-	it("returns an expired verification value to at most one lookup between cleanups", async () => {
+	it("returns an expired verification value to only the first of sequential lookups between cleanups", async () => {
 		const opts = {
 			database: new DatabaseSync(":memory:"),
 		} satisfies BetterAuthOptions;

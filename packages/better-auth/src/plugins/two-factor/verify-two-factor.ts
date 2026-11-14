@@ -53,7 +53,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			);
 		if (
 			!verificationToken ||
-			new Date(verificationToken.expiresAt).getTime() < Date.now()
+			!(new Date(verificationToken.expiresAt).getTime() > Date.now())
 		) {
 			throw APIError.from(
 				"UNAUTHORIZED",
