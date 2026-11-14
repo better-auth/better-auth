@@ -342,9 +342,9 @@ The provider also serves both well-known documents at their issuer-relative path
 
 Errors use the [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) format. The built-in grants authenticate the client before they look up the grant, so an unknown `client_id` returns `invalid_client`, not `invalid_grant`.
 
-When a response carries a `WWW-Authenticate` challenge, it also lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, so a browser client on another origin can read the challenge. This applies to every challenge, including those from client registration. Names that a hook already exposed stay in the list.
+Every 401 from an endpoint that authenticates a client or an access token carries a `WWW-Authenticate` challenge, as [RFC 9110 §15.5.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2) requires. This includes the token, introspection, revocation, and client registration endpoints. A failed client authentication, including a request with no client credentials, gets a `Basic` challenge ([RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2)).
 
-A 401 with no challenge has nothing to expose. For example, introspection and revocation answer a request with no client credentials with `401 invalid_client` and no `WWW-Authenticate` header. [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) requires the challenge only when the client tried to authenticate with the `Authorization` header.
+The response also lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, so a browser client on another origin can read the challenge. Names that a hook already exposed stay in the list.
 
 | Error                    | Status | Returned when                                                                                                                            |
 | ------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |

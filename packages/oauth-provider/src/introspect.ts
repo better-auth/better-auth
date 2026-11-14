@@ -688,10 +688,14 @@ export async function introspectEndpoint(
 	} = destructureCredentials(credentials);
 
 	if (!client_id || (!client_secret && !preVerified)) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "missing required credentials",
-			error: "invalid_client",
-		});
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				error_description: "missing required credentials",
+				error: "invalid_client",
+			},
+			challengeHeaders("Basic"),
+		);
 	}
 
 	// Check token
