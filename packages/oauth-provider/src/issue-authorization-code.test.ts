@@ -4,13 +4,44 @@ import { deriveDpopJkt, generateCodeChallenge } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin } from "better-auth/types";
-import { exportJWK, generateKeyPair } from "jose";
+import type { JWK } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProvider } from "./oauth";
 import { getOAuthProviderApi } from "./token";
 import type { StoredAuthorizationQuery } from "./types";
 import type { OAuthClient } from "./types/oauth";
 import { storeToken } from "./utils";
+
+const issueCodeEndpoint = "http://localhost:3000/api/auth/test/issue-code";
+
+async function createDpopKey() {
+	const { privateKey, publicKey } = await generateKeyPair("ES256", {
+		extractable: true,
+	});
+	const publicJwk = await exportJWK(publicKey);
+	return { privateKey, publicJwk, jkt: await deriveDpopJkt(publicJwk) };
+}
+
+async function createDpopProof(
+	key: Awaited<ReturnType<typeof createDpopKey>>,
+	url: string,
+	nonce?: string,
+) {
+	return new SignJWT({
+		jti: generateRandomString(16),
+		htm: "POST",
+		htu: url,
+		iat: Math.floor(Date.now() / 1000),
+		...(nonce ? { nonce } : {}),
+	})
+		.setProtectedHeader({
+			typ: "dpop+jwt",
+			alg: "ES256",
+			jwk: key.publicJwk as JWK,
+		})
+		.sign(key.privateKey);
+}
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/10414
@@ -115,12 +146,26 @@ describe("provider.issueAuthorizationCode", async () => {
 		return { query, verifier };
 	}
 
-	function issueCode(query: Record<string, unknown>) {
+	/**
+	 * Sends `query` to the issuing endpoint as the client would, with the
+	 * client's secret when it has one.
+	 */
+	function issueCode(
+		query: Record<string, unknown>,
+		extraHeaders: Record<string, string> = {},
+	) {
+		const secret = [confidentialClient, publicClient, consentClient].find(
+			(registered) => registered.client_id === query.client_id,
+		)?.client_secret;
 		return client.$fetch<{
 			code: string;
 			expiresAt: string;
 			redirectURL: string | null;
-		}>("/test/issue-code", { method: "POST", headers, body: query });
+		}>("/test/issue-code", {
+			method: "POST",
+			headers: { ...Object.fromEntries(headers), ...extraHeaders },
+			body: { ...(secret ? { client_secret: secret } : {}), ...query },
+		});
 	}
 
 	async function authorizeForCode(query: Record<string, string>) {
@@ -207,18 +252,37 @@ describe("provider.issueAuthorizationCode", async () => {
 		);
 	});
 
-	it("leaves client credentials out of the stored request", async () => {
+	it("authenticates the client and leaves its secret out of the code", async () => {
 		const query = await authorizationQuery();
-		const issued = await issueCode({
-			...query,
-			client_secret: confidentialClient.client_secret,
-			client_assertion: "assertion",
-			client_assertion_type:
-				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-		});
+		const issued = await issueCode(query);
 		expect(issued.error).toBeNull();
 		const row = await findCodeRow(issued.data!.code);
 		expect(JSON.parse(row!.value).query).toEqual(query);
+	});
+
+	it("rejects a confidential client without its credentials", async () => {
+		const query = await authorizationQuery();
+		const issued = await issueCode({ ...query, client_secret: undefined });
+		expect(errorCode(issued)).toBe("invalid_client");
+	});
+
+	it("rejects a client_id that differs from the authenticated client", async () => {
+		const basicClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_basic",
+				skip_consent: true,
+			},
+		});
+		const basic = btoa(`${basicClient.client_id}:${basicClient.client_secret}`);
+		const { query } = await codeRequest(publicClient);
+		const issued = await issueCode(query, {
+			authorization: `Basic ${basic}`,
+		});
+		expect(issued.error?.status).toBe(400);
+		expect(errorCode(issued)).toBe("invalid_request");
 	});
 
 	it("returns a redirect URL whose code redeems with its redirect_uri", async () => {
@@ -279,6 +343,36 @@ describe("provider.issueAuthorizationCode", async () => {
 			code_verifier: verifier,
 		});
 		expect(errorCode(tokens)).toBe("invalid_dpop_proof");
+	});
+
+	it("binds the code to the key of the request's DPoP proof", async () => {
+		const key = await createDpopKey();
+		const { query, verifier } = await codeRequest(publicClient);
+		const issued = await issueCode(query, {
+			DPoP: await createDpopProof(key, issueCodeEndpoint),
+		});
+		expect(issued.error).toBeNull();
+		const row = await findCodeRow(issued.data!.code);
+		expect(JSON.parse(row!.value).query.dpop_jkt).toBe(key.jkt);
+
+		const tokens = await exchange({
+			code: issued.data!.code,
+			client_id: publicClient.client_id,
+			code_verifier: verifier,
+		});
+		expect(errorCode(tokens)).toBe("invalid_dpop_proof");
+	});
+
+	it("rejects a dpop_jkt that differs from the DPoP proof key", async () => {
+		const key = await createDpopKey();
+		const otherKey = await createDpopKey();
+		const { query } = await codeRequest(publicClient, {
+			dpop_jkt: otherKey.jkt,
+		});
+		const issued = await issueCode(query, {
+			DPoP: await createDpopProof(key, issueCodeEndpoint),
+		});
+		expect(errorCode(issued)).toBe("invalid_request");
 	});
 
 	// Each check `/oauth2/authorize` applies also applies here, and fails with
@@ -424,6 +518,7 @@ describe("provider.issueAuthorizationCode hook isolation", async () => {
 			body: {
 				response_type: "code",
 				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
 				redirect_uri: redirectUri,
 				scope: "openid",
 				code_challenge: challenge,
@@ -467,14 +562,8 @@ describe.each([
 							ctx,
 							ctx.context.getPlugin("oauth-provider")!.options,
 						);
-						const { clientId } = await provider.authenticateClient({
-							requireCredentials: false,
-						});
 						const issued = await provider.issueAuthorizationCode({
-							query: {
-								...(ctx.body as StoredAuthorizationQuery),
-								client_id: clientId,
-							},
+							query: ctx.body,
 							session: ctx.context.session,
 						});
 						return ctx.json({ code: issued.code });
@@ -592,3 +681,120 @@ describe.each([
 		});
 	},
 );
+
+/**
+ * @see https://www.rfc-editor.org/rfc/rfc9449#section-8
+ */
+describe("provider.issueAuthorizationCode with required DPoP nonces", async () => {
+	const redirectUri = "https://client.example.com/callback";
+	const issuer = {
+		id: "test-code-issuer",
+		endpoints: {
+			testIssueCode: createAuthEndpoint(
+				"/test/issue-code",
+				{ method: "POST", use: [sessionMiddleware] },
+				async (ctx) => {
+					const provider = getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+					);
+					const issued = await provider.issueAuthorizationCode({
+						query: ctx.body,
+						session: ctx.context.session,
+					});
+					return ctx.json({ code: issued.code });
+				},
+			),
+		},
+	} satisfies BetterAuthPlugin;
+
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL: "http://localhost:3000/api/auth/",
+		advanced: { skipTrailingSlashes: true },
+		plugins: [
+			issuer,
+			jwt({ jwt: { issuer: "http://localhost:3000" } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				dpop: { nonce: { required: true } },
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	it("challenges for a nonce before consuming a private_key_jwt assertion", async () => {
+		const { privateKey, publicKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const keyClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "private_key_jwt",
+				skip_consent: true,
+				jwks: {
+					keys: [
+						{
+							...(await exportJWK(publicKey)),
+							kid: "issue-key",
+							alg: "RS256",
+							use: "sig",
+						},
+					],
+				},
+			},
+		});
+		const now = Math.floor(Date.now() / 1000);
+		const assertion = await new SignJWT({})
+			.setProtectedHeader({ alg: "RS256", kid: "issue-key" })
+			.setIssuer(keyClient.client_id)
+			.setSubject(keyClient.client_id)
+			.setAudience("http://localhost:3000")
+			.setIssuedAt(now)
+			.setExpirationTime(now + 60)
+			.setJti(generateRandomString(16))
+			.sign(privateKey);
+		const body = {
+			response_type: "code",
+			client_id: keyClient.client_id,
+			scope: "openid",
+			code_challenge: await generateCodeChallenge(generateRandomString(43)),
+			code_challenge_method: "S256",
+			client_assertion_type:
+				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+			client_assertion: assertion,
+		};
+		const key = await createDpopKey();
+		const send = (proof: string) =>
+			client.$fetch<{ code: string }>("/test/issue-code", {
+				method: "POST",
+				headers: { ...Object.fromEntries(headers), DPoP: proof },
+				body,
+			});
+
+		let nonce = "";
+		const challenged = await client.$fetch("/test/issue-code", {
+			method: "POST",
+			headers: {
+				...Object.fromEntries(headers),
+				DPoP: await createDpopProof(key, issueCodeEndpoint),
+			},
+			body,
+			onError(ctx) {
+				nonce = ctx.response.headers.get("DPoP-Nonce") ?? "";
+			},
+		});
+		expect((challenged.error as { error?: string } | null)?.error).toBe(
+			"use_dpop_nonce",
+		);
+		expect(nonce).not.toBe("");
+
+		const issued = await send(
+			await createDpopProof(key, issueCodeEndpoint, nonce),
+		);
+		expect(issued.error).toBeNull();
+		expect(issued.data?.code).toEqual(expect.any(String));
+	});
+});

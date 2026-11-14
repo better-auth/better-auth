@@ -336,13 +336,21 @@ export interface VerifyResourceRequestParams {
 export interface IssueAuthorizationCodeParams {
 	/**
 	 * The authorization request parameters, as `/oauth2/authorize` accepts
-	 * them. `redirect_uri` is optional: without it the code is only returned,
-	 * and the token request must omit `redirect_uri` too (RFC 6749 §4.1.3).
-	 * To bind the code to a DPoP key (RFC 9449 §10), set `dpop_jkt`, for
-	 * example from the `jkt` that `verifyDpopProof` returns. A `request_uri`
-	 * or `request` object is not accepted; pass the parameters themselves.
+	 * them, usually the request body. `redirect_uri` is optional: without it
+	 * the code is only returned, and the token request must omit
+	 * `redirect_uri` too (RFC 6749 §4.1.3). `client_id` may be left out when
+	 * the client authenticates with HTTP Basic; when present, it must match
+	 * the authenticated client. Client credentials in the query, such as
+	 * `client_secret`, are used to authenticate the client and are not stored.
+	 * A `request_uri` or `request` object is not accepted; pass the parameters
+	 * themselves.
 	 */
-	query: Omit<StoredAuthorizationQuery, "request_uri" | "request">;
+	query: Omit<
+		StoredAuthorizationQuery,
+		"request_uri" | "request" | "client_id"
+	> & {
+		client_id?: string;
+	};
 	/** The signed-in user's session the code is issued for. */
 	session: {
 		session: Session & Record<string, unknown>;
@@ -418,23 +426,28 @@ export interface OAuthProviderApi {
 	 * session or an elapsed `max_age`, and `interaction_required` for a
 	 * `prompt` other than `none` or a `signup` or `postLogin` redirect, and
 	 * `access_denied` when the session cannot meet an essential `acr`. Errors
-	 * are HTTP 400 `APIError`s with these OAuth error codes, or with the codes
+	 * are HTTP 400 `APIError`s with these OAuth error codes, with
+	 * `invalid_client` when client authentication fails, or with the codes
 	 * `/oauth2/authorize` returns for an invalid client or request.
 	 *
-	 * Authenticating the user is the caller's responsibility: pass only a
-	 * session the user proved in this request or already holds. The code is
-	 * issued for that session's user; account selection does not run.
+	 * The client sends this request directly, so it is handled as
+	 * `/oauth2/par` handles a push: a confidential client must authenticate
+	 * with the credentials it uses at the token endpoint, a public client is
+	 * identified by `client_id`, and a DPoP proof on the request binds the code
+	 * to its key (RFC 9449 §10). With `dpop.nonce.required`, the nonce
+	 * challenge runs before client authentication, so a retry can resend a
+	 * one-time client assertion. An endpoint that accepts form-encoded bodies
+	 * must set `cloneRequest: true`, as for `authenticateClient`.
 	 *
 	 * A required PAR policy, from `pushedAuthorizationRequests.required` or the
 	 * client's `require_pushed_authorization_requests`, does not apply. It keeps
 	 * parameters out of the browser URL at `/oauth2/authorize`, and this method
-	 * receives them from the caller. A `request_uri`, including one from
-	 * `/oauth2/par`, is rejected. Authenticating the client is also the
-	 * caller's responsibility: call
-	 * {@link OAuthProviderApi.authenticateClient} with
-	 * `requireCredentials: false` first, as `/oauth2/par` does, and pass its
-	 * `clientId` as `client_id`. Client authentication parameters in `query`
-	 * are not stored with the code.
+	 * receives them from the client directly. A `request_uri`, including one
+	 * from `/oauth2/par`, is rejected.
+	 *
+	 * Authenticating the user is the caller's responsibility: pass only a
+	 * session the user proved in this request or already holds. The code is
+	 * issued for that session's user; account selection does not run.
 	 */
 	issueAuthorizationCode: (
 		params: IssueAuthorizationCodeParams,
@@ -490,8 +503,9 @@ export interface OAuthProviderApi {
 	 *
 	 * Call it before consuming a one-time credential, so the client's retry
 	 * with the nonce can still redeem it. Do not also call it on a request that
-	 * reaches `issueTokens` or `resolveConfirmation`: they verify the proof
-	 * themselves, and a second verification rejects its `jti` as replayed.
+	 * reaches `issueTokens`, `resolveConfirmation`, or `issueAuthorizationCode`:
+	 * they verify the proof themselves, and a second verification rejects its
+	 * `jti` as replayed.
 	 */
 	verifyDpopProof: {
 		(params: { required: true }): Promise<VerifiedDpopProof>;

@@ -21,9 +21,9 @@ import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { mapIssuesToOAuthError } from "./oauth-endpoint";
 import {
+	authenticateAuthorizationRequest,
 	consumePushedAuthorizationRequest,
 	isPushedAuthorizationRequestEnabled,
-	withoutClientAuthentication,
 } from "./par";
 import { resolveResourcePolicy } from "./resources";
 import {
@@ -1251,32 +1251,21 @@ export async function issueAuthorizationCode(
 		);
 	}
 	const { session, user } = params.session;
-	// Untyped callers can still send these, so they are rejected at runtime too.
-	const requestQuery: StoredAuthorizationQuery = params.query;
-	if (requestQuery.request_uri !== undefined) {
-		tokenError(
-			"BAD_REQUEST",
-			"invalid_request",
+	// The client sends this request directly, as it would to /oauth2/par, so
+	// it authenticates the same way.
+	const { params: requestQuery, bindDpopProof } =
+		await authenticateAuthorizationRequest(
+			ctx,
+			opts,
+			{ ...params.query },
 			"pass the authorization request parameters, not a request_uri",
 		);
-	}
-	if (requestQuery.request !== undefined) {
-		tokenError(
-			"BAD_REQUEST",
-			"request_not_supported",
-			"request object not supported",
-		);
-	}
-	// A caller that authenticated the client may pass its credentials along
-	// with the request; they must not be stored with the code.
-	const validation = await parseAuthorizationRequest(
-		ctx,
-		opts,
-		withoutClientAuthentication({ ...requestQuery }),
-		{ redirectUriOptional: true },
-	);
+	const validation = await parseAuthorizationRequest(ctx, opts, requestQuery, {
+		redirectUriOptional: true,
+	});
 	const { client } = validation;
 	let query: StoredAuthorizationQuery = validation.query;
+	await bindDpopProof(query);
 
 	const promptSet = query.prompt ? parsePrompt(query.prompt) : undefined;
 	if (promptSet && [...promptSet].some((prompt) => prompt !== "none")) {

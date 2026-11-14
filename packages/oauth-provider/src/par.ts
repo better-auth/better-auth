@@ -53,6 +53,64 @@ export function withoutClientAuthentication(
 	return copy;
 }
 
+/**
+ * Reads an authorization request that a client sends directly to the
+ * authorization server, as at `/oauth2/par` (RFC 9126 §2.1). Authenticates
+ * the client, after a DPoP nonce challenge so a nonce retry can resend a
+ * one-time client assertion (RFC 9449 §8). Returns the request parameters
+ * without client credentials and with the authenticated `client_id`.
+ * `bindDpopProof` then verifies the request's DPoP proof, if any, and sets
+ * `dpop_jkt` to its key (RFC 9449 §10).
+ */
+export async function authenticateAuthorizationRequest(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	body: Record<string, unknown>,
+	requestUriErrorDescription: string,
+) {
+	const provider = getOAuthProviderApi(ctx, opts, "authorization_code");
+	await provider.challengeDpopNonce();
+	// Public clients identify themselves with client_id alone; confidential
+	// clients must authenticate.
+	const { clientId } = await provider.authenticateClient({
+		requireCredentials: false,
+	});
+
+	const params = withoutClientAuthentication(body);
+	if (params.request_uri !== undefined) {
+		tokenError("BAD_REQUEST", "invalid_request", requestUriErrorDescription);
+	}
+	if (params.request !== undefined) {
+		tokenError(
+			"BAD_REQUEST",
+			"request_not_supported",
+			"request object not supported",
+		);
+	}
+	if (params.client_id !== undefined && params.client_id !== clientId) {
+		tokenError(
+			"BAD_REQUEST",
+			"invalid_request",
+			"client_id does not match the authenticated client",
+		);
+	}
+	params.client_id = clientId;
+
+	const bindDpopProof = async (query: { dpop_jkt?: unknown }) => {
+		const proof = await provider.verifyDpopProof();
+		if (!proof) return;
+		if (query.dpop_jkt !== undefined && query.dpop_jkt !== proof.jkt) {
+			tokenError(
+				"BAD_REQUEST",
+				"invalid_request",
+				"dpop_jkt does not match the DPoP proof key",
+			);
+		}
+		query.dpop_jkt = proof.jkt;
+	};
+	return { clientId, params, bindDpopProof };
+}
+
 export function isPushedAuthorizationRequestEnabled(
 	opts: OAuthOptions<Scope[]>,
 ): boolean {
@@ -75,56 +133,15 @@ export async function pushedAuthorizationRequestEndpoint(
 	if (!isPushedAuthorizationRequestEnabled(opts)) {
 		throw new APIError("NOT_FOUND");
 	}
-	const provider = getOAuthProviderApi(ctx, opts, "authorization_code");
-	// Before client authentication consumes a one-time assertion, so the
-	// nonce retry can resend it (RFC 9449 §8).
-	await provider.challengeDpopNonce();
-	// Public clients identify themselves with client_id alone; confidential
-	// clients must authenticate (RFC 9126 §2.1).
-	const { clientId } = await provider.authenticateClient({
-		requireCredentials: false,
-	});
-
-	const params = withoutClientAuthentication(
-		isRecord(ctx.body) ? ctx.body : {},
-	);
-	if (params.request_uri !== undefined) {
-		tokenError(
-			"BAD_REQUEST",
-			"invalid_request",
+	const { clientId, params, bindDpopProof } =
+		await authenticateAuthorizationRequest(
+			ctx,
+			opts,
+			isRecord(ctx.body) ? ctx.body : {},
 			"request_uri must not be pushed",
 		);
-	}
-	if (params.request !== undefined) {
-		tokenError(
-			"BAD_REQUEST",
-			"request_not_supported",
-			"request object not supported",
-		);
-	}
-	if (params.client_id !== undefined && params.client_id !== clientId) {
-		tokenError(
-			"BAD_REQUEST",
-			"invalid_request",
-			"client_id does not match the authenticated client",
-		);
-	}
-	params.client_id = clientId;
-
 	await parseAuthorizationRequest(ctx, opts, params);
-
-	// RFC 9449 §10.1: a proof on the push binds the code to its key.
-	const proof = await provider.verifyDpopProof();
-	if (proof) {
-		if (params.dpop_jkt !== undefined && params.dpop_jkt !== proof.jkt) {
-			tokenError(
-				"BAD_REQUEST",
-				"invalid_request",
-				"dpop_jkt does not match the DPoP proof key",
-			);
-		}
-		params.dpop_jkt = proof.jkt;
-	}
+	await bindDpopProof(params);
 
 	const id = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const expiresIn =

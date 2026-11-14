@@ -94,7 +94,7 @@ Your resolver must enforce what the built-in endpoint does: each value expires q
 
 ## Issue codes from your own endpoint
 
-A plugin endpoint can complete authorization for a signed-in user and return the authorization code itself, instead of sending the user through `/oauth2/authorize`. A native app that signs the user in with its own UI is one example. Call `issueAuthorizationCode` on the provider API with the authorization request parameters and the user's session:
+A plugin endpoint can complete authorization for a signed-in user and return the authorization code itself, instead of sending the user through `/oauth2/authorize`. A native app that signs the user in with its own UI is one example. Call `issueAuthorizationCode` on the provider API with the client's request parameters and the user's session:
 
 ```ts title="code-issuer-plugin.ts"
 import { getOAuthProviderApi } from "@better-auth/oauth-provider";
@@ -113,18 +113,8 @@ export const codeIssuer = () =>
             ctx,
             ctx.context.getPlugin("oauth-provider")!.options,
           );
-          // Sends a required DPoP nonce challenge before client
-          // authentication uses up a one-time client assertion.
-          await provider.challengeDpopNonce();
-          // Checks the credentials of a confidential client. A public client
-          // is identified by its client_id alone.
-          const { clientId } = await provider.authenticateClient({
-            requireCredentials: false,
-          });
-          // Binds the code to the client's DPoP key when it sends a proof.
-          const proof = await provider.verifyDpopProof();
           const { code } = await provider.issueAuthorizationCode({
-            query: { ...ctx.body, client_id: clientId, dpop_jkt: proof?.jkt },
+            query: ctx.body,
             session: ctx.context.session,
           });
           return ctx.json({ authorization_code: code });
@@ -134,7 +124,16 @@ export const codeIssuer = () =>
   }) satisfies BetterAuthPlugin;
 ```
 
-The provider checks the request as `/oauth2/authorize` does: the client, scopes, claims, resources, and PKCE. The session you pass is the account the code is for, so account selection does not run. It issues the code only when the client has `skip_consent` or the user already consented to everything requested. Any step that would show a page fails instead, with a 400 error:
+The client sends this request directly, so the provider handles it as `/oauth2/par` handles a pushed request:
+
+* A confidential client must send the credentials it uses at the token endpoint. Without this check, anyone who copies the client's requests could start authorization in its name. The provider leaves the credentials out of the stored request.
+* A public client, such as most native apps, is identified by its `client_id` alone. It has no credentials, so its `client_id` does not prove which app sent the request.
+* A `DPoP` proof on the request binds the code to its key ([RFC 9449 §10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)). The client must then prove the same key at the token endpoint. A `dpop_jkt` that names a different key fails with `invalid_request`. Do not also call `verifyDpopProof` on this request, because a second verification rejects the proof as replayed.
+* With `dpop.nonce.required` on, a proof without a current nonce fails with `use_dpop_nonce` before client authentication. The client's retry can then reuse a one-time client assertion.
+
+If your endpoint accepts `application/x-www-form-urlencoded` bodies, set `cloneRequest: true` in its endpoint options. Client authentication re-reads the raw form body.
+
+The provider then checks the request as `/oauth2/authorize` does: the client, scopes, claims, resources, and PKCE. The session you pass is the account the code is for, so account selection does not run. It issues the code only when the client has `skip_consent` or the user already consented to everything requested. Any step that would show a page fails instead, with a 400 error:
 
 | Error                  | When                                                                                                                       |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -147,18 +146,11 @@ Send the user to `/oauth2/authorize` when you get one of these errors. Request v
 
 Pass the request parameters themselves. A `request_uri` fails with `invalid_request`, including one from `/oauth2/par`. That reference is for the browser step of `/oauth2/authorize`. A `request` object fails with `request_not_supported`.
 
-A [required PAR policy](#require-pushed-requests) does not apply here, whether you set it for every client or the client registered it. The policy keeps authorization parameters out of the browser URL. Your endpoint receives them in a direct request from its caller, as `/oauth2/par` does.
-
-PAR also authenticates the client before the user sees a page, and your endpoint takes over that check. The example calls [`authenticateClient`](/docs/plugins/oauth-provider/reference#provider-extensions) with `requireCredentials: false`, as `/oauth2/par` does. It calls [`challengeDpopNonce`](/docs/plugins/oauth-provider/tokens#nonces-on-your-own-endpoints) first, so a retry after a `use_dpop_nonce` error can reuse the client's assertion:
-
-* A confidential client must send the credentials it uses at the token endpoint. Without this check, anyone who copies the client's requests can start authorization in its name.
-* A public client, such as most native apps, is identified by its `client_id` alone. It has no credentials, so its `client_id` does not prove which app sent the request.
-
-Pass the `clientId` that `authenticateClient` returns as `client_id`, so the code is issued to the client that authenticated. The provider leaves `client_secret`, `client_assertion`, and `client_assertion_type` out of the stored request. If your endpoint accepts `application/x-www-form-urlencoded` bodies, set `cloneRequest: true` in its endpoint options, because client authentication re-reads the raw form body.
+A [required PAR policy](#require-pushed-requests) does not apply here, whether you set it for every client or the client registered it. The policy keeps authorization parameters out of the browser URL. Your endpoint receives them in a direct, client-authenticated request, as `/oauth2/par` does.
 
 `redirect_uri` is optional. When the request has one, it must be registered for the client, and the result's `redirectURL` carries the code, `state`, and `iss`. Without one, the token request must omit `redirect_uri` too ([RFC 6749 §4.1.3](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3)). The code expires after `codeExpiresIn` and redeems once at the token endpoint, like a code from `/oauth2/authorize`.
 
-Your endpoint must authenticate the user before it calls `issueAuthorizationCode`. The method trusts the session you pass. To bind the code to a DPoP key ([RFC 9449 §10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)), pass the `jkt` from [`verifyDpopProof`](/docs/plugins/oauth-provider/tokens#nonces-on-your-own-endpoints) as `dpop_jkt`, as the example does. The client must then prove the same key at the token endpoint. To accept only DPoP-bound clients, call `verifyDpopProof({ required: true })`.
+Your endpoint must authenticate the user before it calls `issueAuthorizationCode`. The method trusts the session you pass.
 
 ## Login page
 
