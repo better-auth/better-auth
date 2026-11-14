@@ -535,9 +535,12 @@ Returned when `dpop.nonce.required` is on and the DPoP proof has no nonce, or on
 
 Token exchange has its own conditions for these errors. See [Token exchange errors](/docs/plugins/oauth-provider/tokens#token-exchange-errors).
 
-Authorization codes and device codes are single-use, and the token endpoint consumes one only after the request passes validation. A request rejected for its `code_verifier`, `redirect_uri`, `resource`, client, or DPoP proof or nonce leaves the code redeemable until it expires, so the client can retry with a corrected request. This includes a proof whose `jti` was already used: the server records the `jti` before it consumes the code. When two requests send the same code with the same proof at once, one gets tokens and the other gets `invalid_dpop_proof`.
+Authorization codes and device codes are single-use, and the token endpoint consumes one only after the request passes validation. A request rejected for its `code_verifier`, `redirect_uri`, `resource`, client, or DPoP proof or nonce leaves the code redeemable until it expires, so the client can retry with a corrected request. This includes a proof whose `jti` was already used, because the server records the `jti` before it consumes the code.
 
-Presenting an authorization code that was already redeemed returns `invalid_grant` and revokes the tokens issued from it. Two requests that redeem the same authorization code at once are handled the same way: one receives tokens, the other gets `invalid_grant`, and the losing request can revoke the tokens the first one just received.
+Presenting an authorization code that was already redeemed returns `invalid_grant` and revokes the tokens issued from it. When two requests redeem the same authorization code at once:
+
+* If both carry the same DPoP proof, one receives tokens and the other gets `invalid_dpop_proof`. The losing request never reaches the code, so the tokens the first one received stay valid.
+* Otherwise, one receives tokens, the other gets `invalid_grant`, and the losing request can revoke the tokens the first one just received.
 
 When `adminCreateOAuthClient` links resources, an invalid identifier fails validation with `VALIDATION_ERROR`, an unknown or disabled resource returns `invalid_target`, and a `resourcePrivileges` denial returns `401`. The call creates nothing in each case.
 

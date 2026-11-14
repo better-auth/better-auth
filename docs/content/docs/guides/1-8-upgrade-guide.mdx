@@ -282,9 +282,11 @@ This applies if you bind tokens with DPoP or mTLS, or write a `clientAuthenticat
 * A `client_credentials` token is now bound to the `confirmation` that a `clientAuthentication` strategy returns, such as an mTLS certificate thumbprint. When the strategy returns a DPoP key (`jkt`), the token type is `DPoP`, and the client must send a DPoP proof to every protected resource.
 * A confirmation that is not a DPoP key no longer satisfies a required DPoP binding. When a client registers with `dpop_bound_access_tokens: true`, or a resource sets `dpopBoundAccessTokensRequired: true`, such an issuance fails with `invalid_dpop_proof`.
 * A malformed `confirmation` fails the request with `server_error`. A confirmation must have exactly one member, `jkt` or `x5t#S256`, with a non-empty string value.
+* A token request whose DPoP proof is rejected no longer uses up its authorization code or device code, so the client can retry with a new proof. This includes a proof whose `jti` was already used.
+* When two requests send the same code with the same DPoP proof at once, the losing request gets `invalid_dpop_proof`. Before, it got `invalid_grant`.
 * With `oauthTokenExchange()`, a client that exchanges its own DPoP-bound access token must prove the same key, with a DPoP proof or a matching `confirmation`. A client that exchanges its own certificate-bound token must return the same `confirmation` from its strategy, or the exchange fails with `invalid_request`. DPoP checks now run before `allowExchange`.
 
-**What to do:** return a confirmation from a strategy only for the key or certificate the client proved. Clients whose strategy returns a `jkt` must send DPoP proofs.
+**What to do:** return a confirmation from a strategy only for the key or certificate the client proved. Clients whose strategy returns a `jkt` must send DPoP proofs. A client that treats `invalid_grant` as "this code was already sent" should treat `invalid_dpop_proof` the same way when it reuses a proof.
 
 ### Consent reference hook runs once
 
