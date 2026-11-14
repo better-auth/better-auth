@@ -10,6 +10,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import type { DeviceAuthorizationGrant } from ".";
 import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
+import { isUniqueConstraintError } from "./routes";
 import type { DeviceCode } from "./schema";
 
 describe("device approval session authority", () => {
@@ -1912,6 +1913,116 @@ describe("device authorization with custom options", async () => {
 		expect(response.user_code).toBe("USERCODE2");
 	});
 
+	it("should retry Drizzle-style wrapped unique constraint errors during issuance (error.cause)", async () => {
+		const deviceCodes = ["device-code-1", "device-code-2"];
+		const userCodes = ["USERCODE1", "USERCODE2"];
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					generateDeviceCode: () => deviceCodes.shift()!,
+					generateUserCode: () => userCodes.shift()!,
+				}),
+			],
+		});
+
+		const adapter = (await auth.$context).adapter;
+		const create = adapter.create.bind(adapter);
+		let failedDeviceCodeCreate = false;
+		vi.spyOn(adapter, "create").mockImplementation(async (input) => {
+			if (input.model === "deviceCode" && !failedDeviceCodeCreate) {
+				failedDeviceCodeCreate = true;
+				const drizzleError = new Error(
+					'Failed query: insert into "device_code" ("id", "device_code", "user_code") values ($1, $2, $3)',
+				);
+				Object.assign(drizzleError, {
+					name: "DrizzleQueryError",
+					cause: Object.assign(
+						new Error(
+							'duplicate key value violates unique constraint "device_code_user_code_unique"',
+						),
+						{ code: "23505" },
+					),
+				});
+				throw drizzleError;
+			}
+			return create(input);
+		});
+		const response = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		expect(response.device_code).toBe("device-code-2");
+		expect(response.user_code).toBe("USERCODE2");
+	});
+
+	it("should fail after maximum retries when wrapped unique constraint errors persist", async () => {
+		const generateDeviceCode = vi.fn(() => "device-code");
+		const generateUserCode = vi.fn(() => "USERCODE");
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization({ generateDeviceCode, generateUserCode })],
+		});
+
+		const adapter = (await auth.$context).adapter;
+		vi.spyOn(adapter, "create").mockImplementation(async (input) => {
+			if (input.model === "deviceCode") {
+				const drizzleError = new Error("Failed query: insert into device_code");
+				Object.assign(drizzleError, {
+					name: "DrizzleQueryError",
+					cause: Object.assign(new Error("duplicate key"), { code: "23505" }),
+				});
+				throw drizzleError;
+			}
+			throw new Error("unexpected model");
+		});
+
+		await expect(
+			auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "server_error",
+				error_description: "Failed to generate a unique device code",
+			},
+		});
+
+		expect(generateDeviceCode).toHaveBeenCalledTimes(3);
+		expect(generateUserCode).toHaveBeenCalledTimes(3);
+	});
+
+	it("should propagate non-unique wrapped errors without retrying", async () => {
+		const generateDeviceCode = vi.fn(() => "device-code");
+		const generateUserCode = vi.fn(() => "USERCODE");
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization({ generateDeviceCode, generateUserCode })],
+		});
+
+		const adapter = (await auth.$context).adapter;
+		const queryError = new Error("Failed query: syntax error");
+		Object.assign(queryError, {
+			name: "DrizzleQueryError",
+			cause: Object.assign(new Error("syntax error at or near 'SELECT'"), {
+				code: "42601",
+			}),
+		});
+
+		vi.spyOn(adapter, "create").mockImplementation(async (input) => {
+			if (input.model === "deviceCode") {
+				throw queryError;
+			}
+			throw new Error("unexpected model");
+		});
+
+		await expect(
+			auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			}),
+		).rejects.toThrow("Failed query: syntax error");
+
+		expect(generateDeviceCode).toHaveBeenCalledTimes(1);
+		expect(generateUserCode).toHaveBeenCalledTimes(1);
+	});
+
 	it("should return a controlled server error when generators cannot produce unique codes", async () => {
 		const generateDeviceCode = vi.fn(() => "device-code");
 		const generateUserCode = vi.fn(() => "USERCODE");
@@ -2246,5 +2357,71 @@ describe("verificationUri option", async () => {
 		expect(response.verification_uri_complete).toContain(
 			`user_code=${response.user_code}`,
 		);
+	});
+});
+
+describe("isUniqueConstraintError cause inspection", () => {
+	it("detects direct unique violation identifiers and messages", () => {
+		expect(isUniqueConstraintError({ code: "23505" })).toBe(true);
+		expect(isUniqueConstraintError({ code: "P2002" })).toBe(true);
+		expect(isUniqueConstraintError({ errno: "1062" })).toBe(true);
+		expect(isUniqueConstraintError({ errcode: "2067" })).toBe(true);
+		expect(isUniqueConstraintError({ number: 2601 })).toBe(true);
+		expect(
+			isUniqueConstraintError({
+				message: 'duplicate key value violates unique constraint "table_col_unique"',
+			}),
+		).toBe(true);
+		expect(
+			isUniqueConstraintError({
+				message: "UNIQUE constraint failed: table.col",
+			}),
+		).toBe(true);
+	});
+
+	it("detects unique violations nested in error.cause (Drizzle wrapped errors)", () => {
+		const wrapped = new Error(
+			'Failed query: insert into "device_code" ("id") values ($1)',
+		);
+		Object.assign(wrapped, {
+			name: "DrizzleQueryError",
+			cause: Object.assign(
+				new Error('duplicate key value violates unique constraint "device_code_user_code_unique"'),
+				{ code: "23505" },
+			),
+		});
+		expect(isUniqueConstraintError(wrapped)).toBe(true);
+	});
+
+	it("detects unique violations nested multiple levels deep in error.cause", () => {
+		const level3 = { code: "ER_DUP_ENTRY" };
+		const level2 = { message: "driver wrapper", cause: level3 };
+		const level1 = { message: "query wrapper", cause: level2 };
+		expect(isUniqueConstraintError(level1)).toBe(true);
+	});
+
+	it("returns false for non-unique wrapped errors", () => {
+		const wrapped = new Error("Failed query: syntax error");
+		Object.assign(wrapped, {
+			name: "DrizzleQueryError",
+			cause: Object.assign(new Error("syntax error at or near 'SELECT'"), {
+				code: "42601",
+			}),
+		});
+		expect(isUniqueConstraintError(wrapped)).toBe(false);
+	});
+
+	it("safely handles circular cause references without stack overflow", () => {
+		const circular: Record<string, unknown> = { message: "generic error" };
+		circular.cause = circular;
+		expect(isUniqueConstraintError(circular)).toBe(false);
+	});
+
+	it("returns false for non-object and nullish values", () => {
+		expect(isUniqueConstraintError(null)).toBe(false);
+		expect(isUniqueConstraintError(undefined)).toBe(false);
+		expect(isUniqueConstraintError("not an error")).toBe(false);
+		expect(isUniqueConstraintError(123)).toBe(false);
+		expect(isUniqueConstraintError({})).toBe(false);
 	});
 });

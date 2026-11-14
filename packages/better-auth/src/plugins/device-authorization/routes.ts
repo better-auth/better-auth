@@ -31,8 +31,8 @@ const UNIQUE_CONSTRAINT_ERROR_IDENTIFIERS = new Set([
 	"SQLITE_CONSTRAINT_UNIQUE",
 ]);
 
-function isUniqueConstraintError(error: unknown) {
-	if (typeof error !== "object" || error === null) return false;
+export function isUniqueConstraintError(error: unknown, depth = 0): boolean {
+	if (typeof error !== "object" || error === null || depth > 4) return false;
 
 	const details = error as Record<string, unknown>;
 	const identifiers = [
@@ -50,10 +50,18 @@ function isUniqueConstraintError(error: unknown) {
 	}
 
 	const message = details.message;
-	return (
+	if (
 		typeof message === "string" &&
 		/unique(?: key)? constraint|duplicate (?:entry|key)|e11000/i.test(message)
-	);
+	) {
+		return true;
+	}
+
+	if ("cause" in details && details.cause) {
+		return isUniqueConstraintError(details.cause, depth + 1);
+	}
+
+	return false;
 }
 
 const defaultUserCodePattern = new RegExp(`^[${defaultCharset}]+$`, "i");
