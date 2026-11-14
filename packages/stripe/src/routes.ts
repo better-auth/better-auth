@@ -25,10 +25,11 @@ import type {
 } from "./types";
 import {
 	escapeStripeSearchValue,
-	getPlanByName,
+	findPlanByName,
 	getPlans,
 	isActiveOrTrialing,
 	isPendingCancel,
+	resolveBillingPortalSessionParams,
 	resolvePlanItem,
 	resolveQuantity,
 } from "./utils";
@@ -289,7 +290,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				);
 			}
 
-			const plan = await getPlanByName(options, ctx.body.plan);
+			// Resolve plans once so every lookup in this request uses one snapshot.
+			const plans = await getPlans(options.subscription);
+			const plan = findPlanByName(plans, ctx.body.plan);
 			if (!plan) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -577,7 +580,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 			// Get the current price ID from the active Stripe subscription
 			const resolvedPlan = activeSubscription
-				? await resolvePlanItem(options, activeSubscription.items.data)
+				? await resolvePlanItem(options, activeSubscription.items.data, plans)
 				: undefined;
 			const planItem = resolvedPlan?.item;
 			const stripeSubscriptionPriceId = planItem?.price.id;
@@ -720,7 +723,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				}
 
 				const oldPlan = activeOrTrialingSubscription
-					? await getPlanByName(options, activeOrTrialingSubscription.plan)
+					? findPlanByName(plans, activeOrTrialingSubscription.plan)
 					: undefined;
 
 				// Build a price replacement map:
@@ -967,32 +970,50 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					upgradeUrl = getUrl(ctx, ctx.body.returnUrl || "/");
 				} else {
 					// Immediate change via Billing Portal
+					const portalSessionParams = await resolveBillingPortalSessionParams(
+						options,
+						() => ({
+							user,
+							session,
+							referenceId,
+							customerType,
+							action: "upgrade-subscription",
+							subscription: dbSubscription ?? undefined,
+							plan,
+						}),
+						ctx,
+						plans,
+					);
 					({ url: upgradeUrl } = await client.billingPortal.sessions
-						.create({
-							customer: customerId,
-							return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
-							flow_data: {
-								type: "subscription_update_confirm",
-								after_completion: {
-									type: "redirect",
-									redirect: {
-										return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
+						.create(
+							{
+								...portalSessionParams.params,
+								customer: customerId,
+								return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
+								flow_data: {
+									type: "subscription_update_confirm",
+									after_completion: {
+										type: "redirect",
+										redirect: {
+											return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
+										},
+									},
+									subscription_update_confirm: {
+										subscription: activeSubscription.id,
+										items: [
+											{
+												id: planItem.id,
+												price: priceIdToUse,
+												...(isAutoManagedSeats || isMetered
+													? {}
+													: { quantity: ctx.body.seats || 1 }),
+											},
+										],
 									},
 								},
-								subscription_update_confirm: {
-									subscription: activeSubscription.id,
-									items: [
-										{
-											id: planItem.id,
-											price: priceIdToUse,
-											...(isAutoManagedSeats || isMetered
-												? {}
-												: { quantity: ctx.body.seats || 1 }),
-										},
-									],
-								},
 							},
-						})
+							...portalSessionParams.requestOptions,
+						)
 						.catch(async (e) => {
 							throw ctx.error("BAD_REQUEST", {
 								message: e.message,
@@ -1324,17 +1345,34 @@ export const cancelSubscription = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
+			const portalSessionParams = await resolveBillingPortalSessionParams(
+				options,
+				(plans) => ({
+					user: ctx.context.session.user,
+					session: ctx.context.session.session,
+					referenceId,
+					customerType: ctx.context.customerType,
+					action: "cancel-subscription",
+					subscription,
+					plan: findPlanByName(plans, subscription.plan),
+				}),
+				ctx,
+			);
 			const { url } = await client.billingPortal.sessions
-				.create({
-					customer: subscription.stripeCustomerId,
-					return_url: getUrl(ctx, ctx.body?.returnUrl || "/"),
-					flow_data: {
-						type: "subscription_cancel",
-						subscription_cancel: {
-							subscription: activeSubscription.id,
+				.create(
+					{
+						...portalSessionParams.params,
+						customer: subscription.stripeCustomerId,
+						return_url: getUrl(ctx, ctx.body?.returnUrl || "/"),
+						flow_data: {
+							type: "subscription_cancel",
+							subscription_cancel: {
+								subscription: activeSubscription.id,
+							},
 						},
 					},
-				})
+					...portalSessionParams.requestOptions,
+				)
 				.catch(async (e) => {
 					if (e.message?.includes("already set to be canceled")) {
 						/**
@@ -1980,12 +2018,40 @@ export const createBillingPortal = (options: StripeOptions) => {
 				throw APIError.from("NOT_FOUND", STRIPE_ERROR_CODES.CUSTOMER_NOT_FOUND);
 			}
 
+			const portalSessionParams = await resolveBillingPortalSessionParams(
+				options,
+				async (plans) => {
+					const subscription = await ctx.context.adapter
+						.findMany<Subscription>({
+							model: "subscription",
+							where: [{ field: "referenceId", value: referenceId }],
+						})
+						.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
+					return {
+						user,
+						session: ctx.context.session.session,
+						referenceId,
+						customerType,
+						action: "billing-portal",
+						subscription,
+						plan: subscription
+							? findPlanByName(plans, subscription.plan)
+							: undefined,
+					};
+				},
+				ctx,
+			);
+
 			try {
-				const { url } = await client.billingPortal.sessions.create({
-					locale: ctx.body.locale,
-					customer: customerId,
-					return_url: getUrl(ctx, ctx.body.returnUrl),
-				});
+				const { url } = await client.billingPortal.sessions.create(
+					{
+						...portalSessionParams.params,
+						locale: ctx.body.locale ?? portalSessionParams.params.locale,
+						customer: customerId,
+						return_url: getUrl(ctx, ctx.body.returnUrl),
+					},
+					...portalSessionParams.requestOptions,
+				);
 
 				return ctx.json({
 					url,
