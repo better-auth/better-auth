@@ -1459,6 +1459,27 @@ async function createUserTokens(
 			error_description: "issueTokens does not accept act with refreshToken",
 		});
 	}
+	if (params.authorizationDetails && existingRefreshToken) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description:
+				"issueTokens does not accept authorizationDetails with refreshToken",
+		});
+	}
+	// RFC 9396 §9.1: a detail that names `locations` goes only to a token for
+	// one of them, so a token for another resource does not reveal it.
+	const issuedDetails = params.authorizationDetails?.filter(
+		(detail) =>
+			!detail.locations ||
+			detail.locations.some((location) => params.resources?.includes(location)),
+	);
+	const grantedClaims = issuedDetails?.length
+		? { authorization_details: issuedDetails }
+		: undefined;
+	const perRequestClaims =
+		grantedClaims || params.accessTokenClaims
+			? { ...params.accessTokenClaims, ...grantedClaims }
+			: undefined;
 
 	const iat = Math.floor(Date.now() / 1000);
 	const baseExpiry = user
@@ -1508,9 +1529,11 @@ async function createUserTokens(
 	// pure machine-to-machine client that was never authorized for one.
 	// A delegated issuance gets no refresh token: refreshed tokens do not carry
 	// `act`, so a refresh would turn delegated access into impersonation.
+	// Refreshed tokens carry neither `act` nor authorization details.
 	const isRefreshToken =
 		user &&
 		!params.act &&
+		!params.authorizationDetails?.length &&
 		clientAllowsGrant(client, "refresh_token") &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
@@ -1625,7 +1648,7 @@ async function createUserTokens(
 				resources: params.resources,
 				referenceId,
 				metadata,
-				perRequestClaims: params.accessTokenClaims,
+				perRequestClaims,
 				resourcePolicyClaims: grantIssuance.resourceCustomClaims,
 			})
 		: undefined;
@@ -1677,7 +1700,7 @@ async function createUserTokens(
 						// is what revokes them by grant.
 						grantId: isRefreshToken ? grantId : undefined,
 						accessTokenClaims: toStoredAccessTokenClaims(
-							params.accessTokenClaims,
+							perRequestClaims,
 							opts,
 						),
 					},
@@ -1729,6 +1752,7 @@ async function createUserTokens(
 	const responseBody: OAuthTokenResponse = {
 		...customFields,
 		...(params.tokenResponse ?? {}),
+		...grantedClaims,
 		access_token: accessToken,
 		expires_in: exp - iat,
 		expires_at: exp,

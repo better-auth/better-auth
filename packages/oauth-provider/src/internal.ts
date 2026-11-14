@@ -6,7 +6,10 @@
  * use the public endpoints and plugin APIs instead.
  */
 
-export { getAcrValuesSupported } from "./authentication-context";
+export {
+	getAcrValuesSupported,
+	LEVEL_0_ACR,
+} from "./authentication-context";
 export {
 	type PublicClientJwksValidationResult,
 	validatePublicClientJwks,
@@ -24,6 +27,8 @@ export {
 export { resolveResourcePolicy } from "./resources";
 export {
 	parseClientMetadata,
+	parseScopes,
+	tokenError,
 	toResourceList,
 	validateClientScopes,
 } from "./utils";

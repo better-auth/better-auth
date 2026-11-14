@@ -266,6 +266,13 @@ export interface AuthServerMetadata {
 	 */
 	require_pushed_authorization_requests?: boolean;
 	/**
+	 * Authorization details types this server accepts, contributed by an
+	 * extension such as CIBA.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9396#section-10
+	 */
+	authorization_details_types_supported?: string[];
+	/**
 	 * Boolean value specifying whether the OP supports HTTP-based (front-channel)
 	 * logout, with true indicating support.
 	 *
