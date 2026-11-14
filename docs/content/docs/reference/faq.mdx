@@ -185,16 +185,20 @@ This page contains frequently asked questions, common issues, and other helpful 
     <Callout type="warn">
       **For Yarn v1 / pnpm v9 users:**
 
-      Manually install `better-call` and add it to both `dependencies` and `resolutions` to force it to be hoisted to the top level:
+      Manually install `better-call` and add it to both `dependencies` and `resolutions` to force it to be hoisted to the top level.
+
+      Use the exact `better-call` version that your `better-auth` version depends on. To find it, open `node_modules/better-auth/package.json` and look for `better-call` under `dependencies`. Better Auth plugins declare a `better-call` peer dependency that matches that version. A range such as `^1.4.5` can resolve a newer minor version that they don't support.
+
+      For example, `better-auth` 1.7.23 depends on `better-call` 1.4.5:
 
       ```json title="package.json"
       {
         "dependencies": {
-          "better-call": "^1.1.8",
+          "better-call": "1.4.5",
           // ... other dependencies
         },
         "resolutions": {
-          "better-call": "^1.1.8"
+          "better-call": "1.4.5"
         }
       }
       ```

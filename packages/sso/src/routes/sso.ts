@@ -2160,7 +2160,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				) {
 					throw error;
 				}
-				if (error instanceof APIError && error.statusCode === 400) {
+				if (isAPIError(error) && error.statusCode === 400) {
 					const errorCode = (error.body?.code || "saml_error").toLowerCase();
 					let redirectUrl = resolvedErrorRedirectUrl;
 					if (!redirectUrl) {
