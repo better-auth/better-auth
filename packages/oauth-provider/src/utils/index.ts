@@ -6,6 +6,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import {
 	constantTimeEqual,
+	derivePurposeKey,
 	makeSignature,
 	symmetricDecrypt,
 	symmetricEncrypt,
@@ -1268,6 +1269,9 @@ export const ENCRYPTED_USER_ID_CLAIM = "ba_uid";
  */
 export const ENCRYPTED_ACTOR_CHAIN_CLAIM = "ba_act";
 
+const accessTokenSubjectKey = (ctx: GenericEndpointContext) =>
+	derivePurposeKey(ctx.context.secretConfig, "oauth-access-token-subject");
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -1366,8 +1370,8 @@ export async function resolveAccessTokenSubject(
 	if (opts.accessTokenSubject !== "pairwise") return subjects;
 	const presented = await resolvePresentedSubjects(ctx, opts, subjects, client);
 	if (presented.sub === userId) return presented;
-	const encrypt = (data: string) =>
-		symmetricEncrypt({ key: ctx.context.secretConfig, data });
+	const key = accessTokenSubjectKey(ctx);
+	const encrypt = (data: string) => symmetricEncrypt({ key, data });
 	return {
 		...presented,
 		[ENCRYPTED_USER_ID_CLAIM]: await encrypt(userId),
@@ -1390,11 +1394,13 @@ export async function restoreAccessTokenUserIds(
 ): Promise<boolean> {
 	const encryptedUserId = payload[ENCRYPTED_USER_ID_CLAIM];
 	const encryptedAct = payload[ENCRYPTED_ACTOR_CHAIN_CLAIM];
+	if (encryptedUserId === undefined && encryptedAct === undefined) return true;
 	delete payload[ENCRYPTED_USER_ID_CLAIM];
 	delete payload[ENCRYPTED_ACTOR_CHAIN_CLAIM];
+	const key = accessTokenSubjectKey(ctx);
 	const decrypt = (data: unknown) => {
 		if (typeof data !== "string") throw new TypeError("not a string");
-		return symmetricDecrypt({ key: ctx.context.secretConfig, data });
+		return symmetricDecrypt({ key, data });
 	};
 	try {
 		if (encryptedUserId !== undefined) {

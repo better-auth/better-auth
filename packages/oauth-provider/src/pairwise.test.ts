@@ -1,5 +1,5 @@
 import { createAuthClient } from "better-auth/client";
-import { generateRandomString } from "better-auth/crypto";
+import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
@@ -867,6 +867,28 @@ describe("pairwise sub in JWT access tokens", async () => {
 		);
 		expect(introspection).toMatchObject({ active: true, sub: pairwiseSub });
 		expect(introspection).not.toHaveProperty("ba_uid");
+	});
+
+	it("treats a token whose ba_uid does not decrypt as inactive", async () => {
+		const tokens = await getTokens(pairwiseClient);
+		// The claim has its own key, so the Better Auth secret cannot open it.
+		const ba_uid = await symmetricEncrypt({
+			key: (await auth.$context).secretConfig,
+			data: user.id,
+		});
+		const { token } = await auth.api.signJWT({
+			body: { payload: { ...decodeJwt(tokens.access_token), ba_uid } },
+		});
+		expect((await userInfo(token)).error?.status).toBe(401);
+		const { data: introspection } = await postForm<Record<string, unknown>>(
+			"/oauth2/introspect",
+			{
+				token,
+				client_id: pairwiseClient.client_id,
+				client_secret: pairwiseClient.client_secret!,
+			},
+		);
+		expect(introspection).toEqual({ active: false });
 	});
 
 	it("keeps the pairwise sub on refreshed access tokens", async () => {

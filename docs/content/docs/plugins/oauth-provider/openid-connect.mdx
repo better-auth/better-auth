@@ -215,7 +215,7 @@ Resource servers that read `sub` from those tokens then see a different value fo
 
 The option also covers tokens from [delegation](/docs/plugins/oauth-provider/tokens#delegate-to-an-actor). Each user named in `act`, at every level, carries the `sub` that the token's client sees for that user. That is the same `sub` the client saw in the user's own access token. A service named in `act` keeps its client ID.
 
-The token also carries a `ba_uid` claim: the user ID encrypted with the Better Auth secret, with a fresh nonce for each token so the value does not link users across clients. UserInfo, introspection, and token exchange read the user from it. A delegated token also carries `ba_act`, its `act` with user IDs, encrypted the same way. Resource servers should ignore both claims. Rotating the Better Auth secret without keeping the old one makes existing tokens inactive.
+The token also carries a `ba_uid` claim: the user ID encrypted with a key derived from the Better Auth secret, with a fresh nonce for each token so the value does not link users across clients. UserInfo, introspection, and token exchange read the user from it. A delegated token also carries `ba_act`, its `act` with user IDs, encrypted the same way. Resource servers should ignore both claims. Rotating the Better Auth secret without keeping the old one makes existing tokens inactive.
 
 Endpoints you build on the [provider API](/docs/plugins/oauth-provider/reference) still receive the user ID in `sub`, and can call `resolveSubject` to get the value a client sees.
 
