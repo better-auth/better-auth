@@ -1,26 +1,14 @@
 import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
-import type { SchemaClient, Scope } from "@better-auth/oauth-provider";
+import type {
+	OAuthAuthorizationDetail,
+	SchemaClient,
+	Scope,
+} from "@better-auth/oauth-provider";
 import type { InferOptionSchema, User } from "better-auth/types";
 import type { schema } from "./schema";
 
 /** CIBA token delivery modes this plugin implements (CIBA §5). */
 export type CibaDeliveryMode = "poll" | "ping";
-
-/**
- * One RFC 9396 authorization detail: a structured permission, such as a
- * payment to approve. `type` selects the deployment-defined fields.
- *
- * @see https://www.rfc-editor.org/rfc/rfc9396.html#section-2
- */
-export interface CibaAuthorizationDetail {
-	type: string;
-	locations?: string[];
-	actions?: string[];
-	datatypes?: string[];
-	identifier?: string;
-	privileges?: string[];
-	[field: string]: unknown;
-}
 
 /** An authorization details type clients may request. */
 export interface CibaAuthorizationDetailsType {
@@ -32,7 +20,7 @@ export interface CibaAuthorizationDetailsType {
 	 * through `completeCibaRequest`.
 	 */
 	validate: (
-		detail: CibaAuthorizationDetail,
+		detail: OAuthAuthorizationDetail,
 		input: { client: SchemaClient<Scope[]> },
 		ctx: GenericEndpointContext,
 	) => Awaitable<boolean>;
@@ -70,7 +58,7 @@ export interface CibaNotification {
 	 * RFC 9396 details of what the client asks to do, such as a payment to
 	 * approve. Show them to the user before they decide.
 	 */
-	authorizationDetails?: CibaAuthorizationDetail[] | undefined;
+	authorizationDetails?: OAuthAuthorizationDetail[] | undefined;
 	/**
 	 * Absolute link that opens the provider's sign-in and consent pages for
 	 * this request. Send it to the user.
@@ -154,9 +142,9 @@ export interface CibaOptions {
 	 * carries `authorization_details` fails with `invalid_authorization_details`.
 	 *
 	 * Granted details are returned in the token response and as the
-	 * `authorization_details` claim of the JWT access token, so a request with
-	 * details must name a `resource`. Refreshed tokens would not carry them, so
-	 * such a request is issued no refresh token.
+	 * `authorization_details` claim of a JWT access token, or at introspection
+	 * of an opaque one. Refreshed tokens would not carry them, so such a request
+	 * is issued no refresh token.
 	 *
 	 * @example
 	 * ```ts
