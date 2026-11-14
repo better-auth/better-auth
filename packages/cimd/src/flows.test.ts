@@ -1421,6 +1421,9 @@ describe("CIMD - extension client metadata", async () => {
 	});
 });
 
+/**
+ * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout
+ */
 describe("CIMD - RP-initiated logout for metadata document clients", async () => {
 	const authServerBaseUrl = "http://localhost:3109";
 	const redirectUri = "http://127.0.0.1:5109/callback";
@@ -1571,5 +1574,26 @@ describe("CIMD - RP-initiated logout for metadata document clients", async () =>
 		expect(stored?.postLogoutRedirectUris).toEqual([
 			"https://mcp-logout-race.example.com/logged-out",
 		]);
+	});
+
+	it("lets an administrator grant and revoke logout on a document client without changing its metadata", async () => {
+		const clientId = "https://mcp-logout-admin.example.com/client.json";
+		const { application_type: _applicationType, ...document } =
+			documentFor(clientId);
+		stubMetadataFetch(clientId, {
+			...document,
+			redirect_uris: ["http://localhost:5199/callback"],
+		});
+		allowEndSession = false;
+		await authorize(clientId);
+		expect((await storedClient(clientId))?.applicationType).toBeFalsy();
+
+		for (const enable_end_session of [true, false]) {
+			const updated = await authorizationServer.api.adminUpdateOAuthClient({
+				headers,
+				body: { client_id: clientId, update: { enable_end_session } },
+			});
+			expect(Boolean(updated.enable_end_session)).toBe(enable_end_session);
+		}
 	});
 });

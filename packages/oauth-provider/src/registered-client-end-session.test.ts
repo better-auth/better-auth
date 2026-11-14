@@ -79,6 +79,9 @@ async function createProvider(
 	};
 }
 
+/**
+ * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout
+ */
 describe("RP-initiated logout for registered clients", () => {
 	it("keeps refusing logout for dynamically registered clients by default", async () => {
 		const provider = await createProvider();

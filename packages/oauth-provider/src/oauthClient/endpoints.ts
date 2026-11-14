@@ -379,9 +379,14 @@ export async function updateClientEndpoint(
 		updatedMetadata.frontchannel_logout_uri = undefined;
 		updatedMetadata.frontchannel_logout_session_required = undefined;
 	}
-	await checkOAuthClient(updatedMetadata, opts, {
-		ctx,
-	});
+	// A cross-owner update leaves the client's metadata as stored. Metadata
+	// document and dynamic clients were validated under their own rules, which
+	// a re-check under the managed rules here could reject.
+	if (!isCrossOwnerServerConfiguration) {
+		await checkOAuthClient(updatedMetadata, opts, {
+			ctx,
+		});
+	}
 	// An owner cannot add a logout target that authorization would not
 	// redirect to; entries already stored, such as an admin's, are kept.
 	if (
