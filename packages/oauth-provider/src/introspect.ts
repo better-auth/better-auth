@@ -1,11 +1,15 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { isAPIError } from "better-auth/api";
-import { stripAccessTokenAuthorizationScheme } from "better-auth/oauth2";
+import {
+	getDpopJktFromPayload,
+	stripAccessTokenAuthorizationScheme,
+} from "better-auth/oauth2";
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
+import { buildResourceServerChallenge } from "./resource-challenge";
 import {
 	getResourceCustomClaims,
 	isAudienceClaimAllowed,
@@ -475,6 +479,10 @@ export async function validateAccessToken(
 		.payload;
 }
 
+/**
+ * Requires an active bearer access token. A DPoP-bound token is refused,
+ * because a raw token string carries no proof to check its binding against.
+ */
 export async function requireActiveAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -482,8 +490,20 @@ export async function requireActiveAccessToken(
 	clientId?: string,
 ): Promise<ActiveAccessTokenPayload> {
 	const payload = await validateAccessToken(ctx, opts, token, clientId);
-	if (payload.active) return payload as ActiveAccessTokenPayload;
-	throw createInvalidAccessTokenError();
+	if (!payload.active) throw createInvalidAccessTokenError();
+	if (getDpopJktFromPayload(payload)) {
+		const error = new APIError("UNAUTHORIZED", {
+			error: "invalid_token",
+			error_description:
+				"DPoP-bound access token requires verifyResourceRequest",
+		});
+		throw (
+			buildResourceServerChallenge(error, undefined, {
+				dpopSigningAlgorithms: opts.dpop?.signingAlgorithms,
+			}) ?? error
+		);
+	}
+	return payload as ActiveAccessTokenPayload;
 }
 
 /**

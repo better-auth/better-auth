@@ -558,10 +558,12 @@ export interface OAuthProviderApi {
 		clientId?: string,
 	) => Awaitable<JWTPayload>;
 	/**
-	 * Validates an access token for a protected resource and throws the OAuth
-	 * bearer challenge when the token is inactive or unknown. It checks the
-	 * token only: it does not verify a DPoP proof for a DPoP-bound token. A
-	 * protected endpoint should use `verifyResourceRequest` instead.
+	 * Requires an active bearer access token and throws the OAuth challenge when
+	 * the token is inactive or unknown. A DPoP-bound token fails with
+	 * `invalid_token`, because a token string alone cannot prove the client
+	 * holds its key. A protected endpoint should use `verifyResourceRequest`,
+	 * which accepts both. To read a token's claims whatever its binding, such
+	 * as a token-exchange subject token, use `validateAccessToken`.
 	 */
 	requireActiveAccessToken: (
 		token: string,

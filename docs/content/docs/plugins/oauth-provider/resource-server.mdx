@@ -295,7 +295,7 @@ When `audience` is a URL, the `Bearer` challenge also points to its [protected r
 
 A DPoP-bound token fails through `auth.api`, because there is no HTTP request to check the proof against. A bearer token works there.
 
-`requireActiveAccessToken` on the provider API only checks that a token is active. It does not check a DPoP proof, so prefer `verifyResourceRequest` for a protected endpoint.
+`requireActiveAccessToken` on the provider API accepts only an active bearer token. It refuses a DPoP-bound token with 401 `invalid_token`, because a token string alone cannot prove the client holds the key. Use `verifyResourceRequest` for a protected endpoint.
 
 ## Introspection
 
