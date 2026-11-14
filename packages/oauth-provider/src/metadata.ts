@@ -24,11 +24,7 @@ import type {
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
 } from "./types/oauth";
-import {
-	getAuthEndpointUrl,
-	getJwtPlugin,
-	mergeDiscoveryMetadata,
-} from "./utils";
+import { getAuthEndpointUrl, getJwtPlugin } from "./utils";
 
 export function authServerMetadata(
 	ctx: GenericEndpointContext,
@@ -159,25 +155,19 @@ function buildAuthServerMetadata(
 		authMetadata.require_pushed_authorization_requests =
 			opts.pushedAuthorizationRequests?.required === true;
 	}
-	return { jwtPluginOptions, clientDiscoveries, authMetadata };
+	return { jwtPluginOptions, authMetadata };
 }
 
 export function oauthAuthorizationServerMetadata(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ): AuthServerMetadata {
-	const { clientDiscoveries, authMetadata } = buildAuthServerMetadata(
-		ctx,
-		opts,
-	);
+	const { authMetadata } = buildAuthServerMetadata(ctx, opts);
 	return applyOAuthProviderMetadataExtensions(
 		ctx,
 		opts,
 		"oauth-authorization-server",
-		{
-			...mergeDiscoveryMetadata(clientDiscoveries),
-			...authMetadata,
-		},
+		authMetadata,
 	);
 }
 
@@ -185,8 +175,7 @@ export function oidcServerMetadata(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]> & { claims?: string[] },
 ) {
-	const { jwtPluginOptions, clientDiscoveries, authMetadata } =
-		buildAuthServerMetadata(ctx, opts);
+	const { jwtPluginOptions, authMetadata } = buildAuthServerMetadata(ctx, opts);
 	const metadata: Omit<
 		OIDCMetadata,
 		"id_token_signing_alg_values_supported"
@@ -227,10 +216,7 @@ export function oidcServerMetadata(
 		ctx,
 		opts,
 		"openid-configuration",
-		{
-			...mergeDiscoveryMetadata(clientDiscoveries),
-			...metadata,
-		},
+		metadata,
 	);
 }
 
