@@ -435,11 +435,12 @@ export interface OAuthProviderApi {
 	 * the HTTP request with the credentials it uses at the token endpoint,
 	 * read from the request body or `Authorization` header, a public client is
 	 * identified by `client_id`, and a DPoP proof on the request binds the code
-	 * to its key (RFC 9449 §10). A proof from a key other than `dpop_jkt`
-	 * fails with `invalid_dpop_proof` before its `jti` is used up. With `dpop.nonce.required`, the nonce
-	 * challenge runs before client authentication, so a retry can resend a
-	 * one-time client assertion. An endpoint that accepts form-encoded bodies
-	 * must set `cloneRequest: true`, as for `authenticateClient`.
+	 * to its key (RFC 9449 §10). When `query` has a `dpop_jkt`, a proof from
+	 * another key fails with `invalid_dpop_proof` before its `jti` is used up.
+	 * With `dpop.nonce.required`, the nonce challenge runs before client
+	 * authentication, so a retry can resend a one-time client assertion. An
+	 * endpoint that accepts form-encoded bodies must set `cloneRequest: true`,
+	 * as for `authenticateClient`.
 	 *
 	 * A required PAR policy, from `pushedAuthorizationRequests.required` or the
 	 * client's `require_pushed_authorization_requests`, does not apply. It keeps
