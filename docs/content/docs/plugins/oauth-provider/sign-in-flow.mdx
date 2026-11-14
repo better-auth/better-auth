@@ -133,7 +133,7 @@ The provider checks the request as `/oauth2/authorize` does: the client, scopes,
 | `interaction_required` | The request has a `prompt` other than `none`, or `signup.shouldRedirect` or `postLogin.shouldRedirect` returns a redirect. |
 | `access_denied`        | The session cannot meet an essential `acr` the request names.                                                              |
 
-Send the user to `/oauth2/authorize` when you get one of these errors.
+Send the user to `/oauth2/authorize` when you get one of these errors. Other errors, such as `invalid_client` or `invalid_scope`, mean the request itself is invalid, as they do at `/oauth2/authorize`. Pass the request parameters themselves: a `request_uri` or `request` object is rejected.
 
 `redirect_uri` is optional. When the request has one, it must be registered for the client, and the result's `redirectURL` carries the code, `state`, and `iss`. Without one, the token request must omit `redirect_uri` too ([RFC 6749 §4.1.3](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3)). The code expires after `codeExpiresIn` and redeems once at the token endpoint, like a code from `/oauth2/authorize`.
 

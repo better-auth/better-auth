@@ -1250,21 +1250,23 @@ export async function issueAuthorizationCode(
 		);
 	}
 	const { session, user } = params.session;
-	if (params.query.request_uri !== undefined) {
+	// Untyped callers can still send these, so they are rejected at runtime too.
+	const requestQuery: StoredAuthorizationQuery = params.query;
+	if (requestQuery.request_uri !== undefined) {
 		tokenError(
 			"BAD_REQUEST",
 			"invalid_request",
 			"pass the authorization request parameters, not a request_uri",
 		);
 	}
-	if (params.query.request !== undefined) {
+	if (requestQuery.request !== undefined) {
 		tokenError(
 			"BAD_REQUEST",
 			"request_not_supported",
 			"request object not supported",
 		);
 	}
-	const validation = await parseAuthorizationRequest(ctx, opts, params.query, {
+	const validation = await parseAuthorizationRequest(ctx, opts, requestQuery, {
 		redirectUriOptional: true,
 	});
 	const { client } = validation;

@@ -331,7 +331,7 @@ export interface VerifyResourceRequestParams {
 }
 
 /**
- * Input to {@link OAuthProviderApi.issueAuthorizationCode}.
+ * Parameters of {@link OAuthProviderApi.issueAuthorizationCode}.
  */
 export interface IssueAuthorizationCodeParams {
 	/**
@@ -339,9 +339,10 @@ export interface IssueAuthorizationCodeParams {
 	 * them. `redirect_uri` is optional: without it the code is only returned,
 	 * and the token request must omit `redirect_uri` too (RFC 6749 §4.1.3).
 	 * To bind the code to a DPoP key (RFC 9449 §10), set `dpop_jkt`, for
-	 * example from the `jkt` that `verifyDpopProof` returns.
+	 * example from the `jkt` that `verifyDpopProof` returns. A `request_uri`
+	 * or `request` object is not accepted; pass the parameters themselves.
 	 */
-	query: StoredAuthorizationQuery;
+	query: Omit<StoredAuthorizationQuery, "request_uri" | "request">;
 	/** The signed-in user's session the code is issued for. */
 	session: {
 		session: Session & Record<string, unknown>;
@@ -415,8 +416,10 @@ export interface OAuthProviderApi {
 	 * covers the request. A step that would show a page fails instead:
 	 * `consent_required` without consent, `login_required` for an expired
 	 * session or an elapsed `max_age`, and `interaction_required` for a
-	 * `prompt` other than `none` or a `signup` or `postLogin` redirect. Errors
-	 * are HTTP 400 `APIError`s with these OAuth error codes.
+	 * `prompt` other than `none` or a `signup` or `postLogin` redirect, and
+	 * `access_denied` when the session cannot meet an essential `acr`. Errors
+	 * are HTTP 400 `APIError`s with these OAuth error codes, or with the codes
+	 * `/oauth2/authorize` returns for an invalid client or request.
 	 *
 	 * Authenticating the user is the caller's responsibility: pass only a
 	 * session the user proved in this request or already holds.
