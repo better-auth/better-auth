@@ -201,7 +201,7 @@ export function apiKey(
 							}
 						}
 
-						const { apiKey } = await validateApiKey({
+						const { apiKey, user } = await validateApiKey({
 							key,
 							ctx,
 							lookupOpts: config,
@@ -230,9 +230,8 @@ export function apiKey(
 							throw APIError.from("UNAUTHORIZED", msg);
 						}
 
-						const user = await ctx.context.internalAdapter.findUserById(
-							apiKey.referenceId,
-						);
+						// `validateApiKey` resolves the owner and rejects a missing or
+						// banned user before claiming usage.
 						if (!user) {
 							const msg = API_KEY_ERROR_CODES.INVALID_REFERENCE_ID_FROM_API_KEY;
 							throw APIError.from("UNAUTHORIZED", msg);
