@@ -57,9 +57,11 @@ The PAR endpoint checks the parameters as the authorize endpoint would. An unreg
 
 Each `request_uri` has these limits ([RFC 9126 §4](https://datatracker.ietf.org/doc/html/rfc9126#section-4)):
 
-* It expires after `expiresIn` seconds, `60` by default. The value must be below `600`, the limit FAPI 2.0 sets.
-* It works once. The authorize endpoint consumes it on first use. Reloading the original authorize URL fails with `invalid_request_uri`, and the client must push a new request. The login, consent, and other screens resume from the [signed query](#how-the-redirect-works), which stays valid for `codeExpiresIn`, as it does for any authorization request.
-* It works only with the `client_id` that pushed it.
+* The client must send the user to the authorize endpoint within `expiresIn` seconds, `60` by default. The value must be below `600`, the limit FAPI 2.0 sets.
+* It issues one authorization code. Until then, the user can reload the authorize URL. The login, consent, and other screens resume from the [signed query](#how-the-redirect-works).
+* After the first visit to the authorize endpoint, it stays valid for `codeExpiresIn`, the lifetime of the signed query. A sign-in that takes longer than `expiresIn` still completes.
+* Once the code is issued, the `request_uri` fails with `invalid_request_uri`. Continuing the same request again, such as by submitting the login form twice, sends `invalid_request_uri` to the client's redirect URI.
+* It works only with the `client_id` that pushed it. The authorize endpoint discards it when another client presents it.
 
 The authorize endpoint uses only the pushed parameters. It ignores any other parameter added to the authorize URL besides `client_id`.
 
@@ -86,7 +88,7 @@ An authorization request without `request_uri` then fails with `invalid_request`
 
 ### Resolve your own request URIs
 
-`requestUriResolver` resolves `request_uri` values that your own endpoint issues. With both PAR options set, the authorize endpoint first looks up values that `/oauth2/par` issued, and calls your resolver for any other value, including one that expired or was already used. Return `null` for values you did not issue. A request your resolver returns counts as pushed under a required policy.
+`requestUriResolver` resolves `request_uri` values that your own endpoint issues. With both PAR options set, the authorize endpoint first looks up values that `/oauth2/par` issued, and calls your resolver for any other value, including one that expired or already issued its code. Return `null` for values you did not issue. The authorize endpoint calls your resolver on each visit, including a reload. A request your resolver returns counts as pushed under a required policy.
 
 Your resolver must enforce what the built-in endpoint does: each value expires quickly, works once, and works only for the client that pushed it. To bind the code to a DPoP key from your endpoint, call [`verifyDpopProof`](/docs/plugins/oauth-provider/tokens#nonces-on-your-own-endpoints) there and store the proof's `jkt` as `dpop_jkt` with the request.
 

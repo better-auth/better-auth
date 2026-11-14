@@ -23,10 +23,12 @@ import { mapIssuesToOAuthError } from "./oauth-endpoint";
 import {
 	consumePushedAuthorizationRequest,
 	isPushedAuthorizationRequestEnabled,
+	loadPushedAuthorizationRequest,
 } from "./par";
 import { resolveResourcePolicy } from "./resources";
 import {
 	canonicalizeOAuthQueryParams,
+	getSignedQueryExpiresIn,
 	postLoginClearedParam,
 	setSignedOAuthQueryParameterNames,
 	signedQueryIssuedAtParam,
@@ -566,8 +568,9 @@ export async function authorizeEndpoint(
 		});
 	}
 
-	// Resolve request_uri (PAR) before processing
-	if (requestUri !== undefined) {
+	// Resolve request_uri (PAR) before processing. A resumed request carries
+	// the parameters this server signed after resolving it.
+	if (requestUri !== undefined && settings?.isAuthorize === true) {
 		const clientId = getStringParameter(query.client_id);
 		if (!clientId) {
 			return authorizeRedirectOnError(opts)({
@@ -587,7 +590,7 @@ export async function authorizeEndpoint(
 		// Values issued by /oauth2/par are resolved here; any other value goes
 		// to the app's resolver.
 		const pushed = builtInPar
-			? await consumePushedAuthorizationRequest(ctx, opts, requestUri, clientId)
+			? await loadPushedAuthorizationRequest(ctx, opts, requestUri, clientId)
 			: ({ status: "not_found" } as const);
 		const resolvedParams =
 			pushed.status === "found"
@@ -603,11 +606,15 @@ export async function authorizeEndpoint(
 			});
 		}
 		// RFC 9126 §4: all params come from the stored request, not the URL.
-		// Only client_id is carried from the authorization URL.
+		// Only client_id is carried from the authorization URL. A request_uri
+		// from /oauth2/par stays in the query, so code issuance can use it up.
 		const urlClientId = query.client_id;
 		query = { ...resolvedParams } as unknown as OAuthAuthorizationQuery;
 		if (urlClientId) {
 			query.client_id = urlClientId;
+		}
+		if (pushed.status === "found") {
+			query.request_uri = requestUri;
 		}
 	}
 	ctx.query = query;
@@ -659,8 +666,7 @@ export async function authorizeEndpoint(
 	query = validation.query;
 
 	// Required PAR applies to requests that reach this endpoint directly.
-	// Resumed requests carry the parameters this server signed after resolving
-	// the pushed request, so they never hold a request_uri.
+	// Resumed requests carry the parameters this server signed.
 	if (
 		settings?.isAuthorize === true &&
 		requestUri === undefined &&
@@ -1471,6 +1477,19 @@ async function createAuthorizationCodeURL(
 	opts: OAuthOptions<Scope[]>,
 	approval: AuthorizationCodeApproval & { query: OAuthAuthorizationQuery },
 ) {
+	const requestUri = approval.query.request_uri;
+	if (
+		requestUri !== undefined &&
+		!(await consumePushedAuthorizationRequest(ctx, opts, requestUri))
+	) {
+		return formatErrorURL(
+			approval.query.redirect_uri,
+			"invalid_request_uri",
+			"request_uri is invalid or expired",
+			approval.query.state,
+			getIssuer(ctx, opts),
+		);
+	}
 	const { code } = await storeAuthorizationCode(ctx, opts, approval);
 	return getAuthorizationCodeURL(
 		ctx,
@@ -1521,7 +1540,7 @@ async function signParams(
 	// Add expiration to query parameters
 	const issuedAt = Date.now();
 	const iat = Math.floor(issuedAt / 1000);
-	const exp = iat + (opts.codeExpiresIn ?? 600);
+	const exp = iat + getSignedQueryExpiresIn(opts);
 	const params = serializeAuthorizationQuery(
 		ctx.query as OAuthAuthorizationQuery,
 	);

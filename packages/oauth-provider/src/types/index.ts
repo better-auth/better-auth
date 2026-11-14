@@ -2036,8 +2036,8 @@ export interface OAuthOptions<
 	 * Pushed authorization requests (RFC 9126).
 	 *
 	 * When enabled, clients authenticate to `POST /oauth2/par` with the
-	 * authorization request parameters and receive a single-use `request_uri`
-	 * for `/oauth2/authorize`. A DPoP proof on the pushed request binds the
+	 * authorization request parameters and receive a `request_uri` for
+	 * `/oauth2/authorize` that issues one authorization code. A DPoP proof on the pushed request binds the
 	 * authorization code to its key (RFC 9449 §10.1).
 	 *
 	 * @see https://datatracker.ietf.org/doc/html/rfc9126
@@ -2059,8 +2059,10 @@ export interface OAuthOptions<
 		 */
 		required?: boolean;
 		/**
-		 * Lifetime of a `request_uri` in seconds: a positive whole number below
-		 * 600.
+		 * Seconds the client has to send the user to `/oauth2/authorize` with a
+		 * `request_uri`: a positive whole number below 600. After the first visit,
+		 * the `request_uri` stays valid for `codeExpiresIn`, the lifetime of the
+		 * signed query that carries the request through login and consent.
 		 *
 		 * @default 60
 		 */
@@ -2076,7 +2078,9 @@ export interface OAuthOptions<
 	 * With `pushedAuthorizationRequests.enabled`, the authorize endpoint first
 	 * looks up `request_uri` values issued by `/oauth2/par`. It calls this
 	 * resolver for any value it does not hold, including one that expired or
-	 * was already used, so return null for values you did not issue.
+	 * already issued its code, so return null for values you did not issue.
+	 * The resolver runs on each visit to the authorize endpoint, including a
+	 * reload.
 	 */
 	requestUriResolver?: (input: {
 		requestUri: string;
