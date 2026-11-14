@@ -84,6 +84,8 @@ To require it from one client, register the client with `require_pushed_authoriz
 
 An authorization request without `request_uri` then fails with `invalid_request` and the description `pushed authorization request is required`. With `required: true`, discovery also advertises `require_pushed_authorization_requests: true`. The login, consent, and other screens keep working, because they resume from the signed query.
 
+The policy applies to `/oauth2/authorize`. It does not apply to codes that your own endpoint issues with `issueAuthorizationCode`. See [Issue codes from your own endpoint](#issue-codes-from-your-own-endpoint).
+
 ### Resolve your own request URIs
 
 `requestUriResolver` resolves `request_uri` values that your own endpoint issues. With both PAR options set, the authorize endpoint first looks up values that `/oauth2/par` issued, and calls your resolver for any other value, including one that expired or was already used. Return `null` for values you did not issue. A request your resolver returns counts as pushed under a required policy.
@@ -133,7 +135,14 @@ The provider checks the request as `/oauth2/authorize` does: the client, scopes,
 | `interaction_required` | The request has a `prompt` other than `none`, or `signup.shouldRedirect` or `postLogin.shouldRedirect` returns a redirect. |
 | `access_denied`        | The session cannot meet an essential `acr` the request names.                                                              |
 
-Send the user to `/oauth2/authorize` when you get one of these errors. Request validation errors, such as `invalid_client` or `invalid_scope`, mean the request itself is invalid, as they do at `/oauth2/authorize`. Errors your own hooks throw, such as from `consentReferenceId`, pass through unchanged. Pass the request parameters themselves: a `request_uri` or `request` object is rejected.
+Send the user to `/oauth2/authorize` when you get one of these errors. Request validation errors, such as `invalid_client` or `invalid_scope`, mean the request itself is invalid, as they do at `/oauth2/authorize`. Errors your own hooks throw, such as from `consentReferenceId`, pass through unchanged.
+
+Pass the request parameters themselves. A `request_uri` fails with `invalid_request`, including one from `/oauth2/par`. That reference is for the browser step of `/oauth2/authorize`. A `request` object fails with `request_not_supported`.
+
+A [required PAR policy](#require-pushed-requests) does not apply here, whether you set it for every client or the client registered it. The policy keeps authorization parameters out of the browser URL. Your endpoint receives them in a direct request from its caller, as `/oauth2/par` does. PAR also authenticates the client before the user sees a page. Your endpoint takes over that check:
+
+* When the client authenticates at the token endpoint, call [`authenticateClient`](/docs/plugins/oauth-provider/reference#provider-extensions) before `issueAuthorizationCode`. Then pass the `clientId` it returns as `client_id`. Without this check, anyone who copies the client's requests can start authorization in its name.
+* A public client, such as most native apps, has no credentials to check. Its `client_id` does not prove which app sent the request.
 
 `redirect_uri` is optional. When the request has one, it must be registered for the client, and the result's `redirectURL` carries the code, `state`, and `iss`. Without one, the token request must omit `redirect_uri` too ([RFC 6749 §4.1.3](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3)). The code expires after `codeExpiresIn` and redeems once at the token endpoint, like a code from `/oauth2/authorize`.
 

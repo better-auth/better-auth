@@ -419,3 +419,144 @@ describe("provider.issueAuthorizationCode hook isolation", async () => {
 		expect(issued.error).toBeNull();
 	});
 });
+
+/**
+ * Required PAR guards authorization requests that reach `/oauth2/authorize`
+ * through the user agent (RFC 9126 §1). A plugin endpoint receives the
+ * parameters from its own caller, so the policy does not apply to it.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc9126#section-5
+ */
+describe.each([
+	{
+		name: "for every client",
+		pushedAuthorizationRequests: { enabled: true, required: true },
+		clientMetadata: {},
+	},
+	{
+		name: "per client",
+		pushedAuthorizationRequests: { enabled: true },
+		clientMetadata: { require_pushed_authorization_requests: true },
+	},
+])(
+	"provider.issueAuthorizationCode with PAR required $name",
+	async ({ pushedAuthorizationRequests, clientMetadata }) => {
+		const redirectUri = "https://client.example.com/callback";
+		const issuer = {
+			id: "test-code-issuer",
+			endpoints: {
+				testIssueCode: createAuthEndpoint(
+					"/test/issue-code",
+					{ method: "POST", use: [sessionMiddleware] },
+					async (ctx) => {
+						const provider = getOAuthProviderApi(
+							ctx,
+							ctx.context.getPlugin("oauth-provider")!.options,
+						);
+						const issued = await provider.issueAuthorizationCode({
+							query: ctx.body as StoredAuthorizationQuery,
+							session: ctx.context.session,
+						});
+						return ctx.json({ code: issued.code });
+					},
+				),
+			},
+		} satisfies BetterAuthPlugin;
+
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			baseURL: "http://localhost:3000/api/auth/",
+			advanced: { skipTrailingSlashes: true },
+			plugins: [
+				issuer,
+				jwt({ jwt: { issuer: "http://localhost:3000" } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					pushedAuthorizationRequests,
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		let oauthClient: OAuthClient;
+		beforeAll(async () => {
+			oauthClient = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					grant_types: ["authorization_code"],
+					redirect_uris: [redirectUri],
+					token_endpoint_auth_method: "client_secret_post",
+					skip_consent: true,
+					...clientMetadata,
+				},
+			});
+		});
+
+		async function authorizationParams() {
+			return {
+				response_type: "code",
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				scope: "openid",
+				state: "par-state",
+				code_challenge: await generateCodeChallenge(generateRandomString(43)),
+				code_challenge_method: "S256",
+			};
+		}
+
+		function issueCode(query: Record<string, unknown>) {
+			return client.$fetch<{ code: string }>("/test/issue-code", {
+				method: "POST",
+				headers,
+				body: query,
+			});
+		}
+
+		it("issues a code for the request /oauth2/authorize rejects", async () => {
+			const params = await authorizationParams();
+			let location = "";
+			await client.$fetch(
+				`/oauth2/authorize?${new URLSearchParams(params).toString()}`,
+				{
+					headers,
+					onError(ctx) {
+						location = ctx.response.headers.get("location") ?? "";
+					},
+				},
+			);
+			const authorizeError = new URL(location).searchParams;
+			expect(authorizeError.get("error")).toBe("invalid_request");
+			expect(authorizeError.get("error_description")).toBe(
+				"pushed authorization request is required",
+			);
+
+			const issued = await issueCode(params);
+			expect(issued.error).toBeNull();
+			expect(issued.data?.code).toEqual(expect.any(String));
+		});
+
+		it("still rejects a request_uri from /oauth2/par", async () => {
+			const pushed = await client.$fetch<{ request_uri: string }>(
+				"/oauth2/par",
+				{
+					method: "POST",
+					headers: { "content-type": "application/x-www-form-urlencoded" },
+					body: new URLSearchParams({
+						...(await authorizationParams()),
+						client_secret: oauthClient.client_secret!,
+					}),
+				},
+			);
+			expect(pushed.data?.request_uri).toEqual(expect.any(String));
+
+			const issued = await issueCode({
+				client_id: oauthClient.client_id,
+				request_uri: pushed.data!.request_uri,
+			});
+			expect(issued.error?.status).toBe(400);
+			expect((issued.error as { error?: string } | null)?.error).toBe(
+				"invalid_request",
+			);
+		});
+	},
+);

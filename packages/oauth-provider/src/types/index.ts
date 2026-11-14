@@ -423,6 +423,15 @@ export interface OAuthProviderApi {
 	 *
 	 * Authenticating the user is the caller's responsibility: pass only a
 	 * session the user proved in this request or already holds.
+	 *
+	 * A required PAR policy, from `pushedAuthorizationRequests.required` or the
+	 * client's `require_pushed_authorization_requests`, does not apply. It keeps
+	 * parameters out of the browser URL at `/oauth2/authorize`, and this method
+	 * receives them from the caller. A `request_uri`, including one from
+	 * `/oauth2/par`, is rejected. Authenticating the client is also the
+	 * caller's responsibility: for a client that authenticates at the token
+	 * endpoint, call {@link OAuthProviderApi.authenticateClient} first and pass
+	 * its `clientId` as `client_id`.
 	 */
 	issueAuthorizationCode: (
 		params: IssueAuthorizationCodeParams,
