@@ -16,3 +16,4 @@ export {
 	type RegisterClientMetadataDocumentInput,
 	registerClientMetadataDocument,
 } from "./register";
+export { getLocalJwksSource } from "./utils";

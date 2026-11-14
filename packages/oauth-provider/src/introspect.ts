@@ -6,7 +6,7 @@ import {
 } from "better-auth/oauth2";
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
-import type { JSONWebKeySet, JWTPayload } from "jose";
+import type { JWTPayload } from "jose";
 import { createLocalJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
 import {
@@ -28,6 +28,7 @@ import {
 	destructureCredentials,
 	extractClientCredentials,
 	getClient,
+	getJwksSource,
 	getJwtPlugin,
 	getStoredToken,
 	isInvalidJwtError,
@@ -128,8 +129,7 @@ async function validateJwtAccessToken(
 			error: "invalid_request",
 		});
 	}
-	const jwtPlugin = getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin.options;
+	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 	const baseURL = ctx.context.baseURL ?? "";
 	const userInfoAud = `${baseURL}/oauth2/userinfo`;
 	const expectedIssuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
@@ -141,14 +141,7 @@ async function validateJwtAccessToken(
 	try {
 		// Do NOT pass `audience` to jose's verifier. Verify signature + issuer
 		// here, then validate `aud` manually against the resource model below.
-		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
-			? jwtPluginOptions.jwks.remoteUrl
-			: async (): Promise<JSONWebKeySet | undefined> => {
-					const jwksRes = await jwtPlugin.endpoints.getJwks(ctx);
-					// @ts-expect-error response is a JSONWebKeySet but within the response field
-					return jwksRes?.response as JSONWebKeySet | undefined;
-				};
-		const jwks = await getJwks(token, { jwksFetch, jwksCacheKey: jwtPlugin });
+		const jwks = await getJwks(token, getJwksSource(ctx.context));
 		const verified = await jwtVerify<JWTPayload & { azp?: string }>(
 			token,
 			createLocalJWKSet(jwks),

@@ -5,7 +5,7 @@ import {
 	stripAccessTokenAuthorizationScheme,
 } from "better-auth/oauth2";
 import { APIError } from "better-call";
-import type { JSONWebKeySet, JWTPayload } from "jose";
+import type { JWTPayload } from "jose";
 import { createLocalJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import { isAudienceClaimAllowed } from "./resources";
 import { decodeRefreshToken, invalidateRefreshFamily } from "./token";
@@ -18,6 +18,7 @@ import type {
 import {
 	destructureCredentials,
 	extractClientCredentials,
+	getJwksSource,
 	getJwtPlugin,
 	getStoredToken,
 	isInvalidJwtError,
@@ -56,8 +57,7 @@ async function revokeJwtAccessToken(
 			error: "invalid_request",
 		});
 	}
-	const jwtPlugin = getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin.options;
+	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 
 	// Verify signature + issuer first, then validate `aud` against the OAuth
 	// resource model. Do not pass jose's `audience` option here: access-token
@@ -65,19 +65,7 @@ async function revokeJwtAccessToken(
 	// audience.
 	let jwtPayload: JWTPayload & { azp?: string };
 	try {
-		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
-			? jwtPluginOptions.jwks.remoteUrl
-			: async (): Promise<JSONWebKeySet | undefined> => {
-					const jwksRes = await jwtPlugin.endpoints.getJwks(ctx);
-					// @ts-expect-error response is a JSONWebKeySet but within the response field
-					return jwksRes?.response as JSONWebKeySet | undefined;
-				};
-		const jwks = await getJwks(token, {
-			jwksFetch,
-			// The plugin instance is stable across requests, so the key set
-			// fetched by the per-request closure above is cached under it.
-			jwksCacheKey: jwtPlugin,
-		});
+		const jwks = await getJwks(token, getJwksSource(ctx.context));
 		const verified = await jwtVerify<JWTPayload & { azp?: string }>(
 			token,
 			createLocalJWKSet(jwks),

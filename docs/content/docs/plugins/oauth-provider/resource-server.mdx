@@ -76,7 +76,7 @@ export const serverClient = createAuthClient({
 The defaults come from your auth server's resolved base URL. That URL includes `basePath`, such as `https://auth.example.com/api/auth`:
 
 * `issuer` defaults to `jwt.issuer` when the JWT plugin sets it. Otherwise, it defaults to the base URL, which matches the issuer the provider signs.
-* `jwksUrl` defaults to `jwks.remoteUrl` when the JWT plugin sets it. Otherwise, it defaults to the base URL followed by `jwks.jwksPath`, which is `/jwks` by default.
+* Without `jwksUrl`, the signing keys are read from the auth instance in-process, with no request to its own `/jwks` endpoint. When the JWT plugin sets `jwks.remoteUrl`, the keys are fetched from that URL instead. Set `jwksUrl` to fetch them from another URL.
 * `audience` defaults to the base URL. See the warning below.
 
 With a dynamic `baseURL`, the base URL is known only per request, so the defaults that use it are empty. Pass `issuer`, `jwksUrl`, and `audience` explicitly.
