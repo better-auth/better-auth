@@ -19,6 +19,7 @@ import type { AuthInfo } from "@modelcontextprotocol/server";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { createAuthClient } from "better-auth/client";
 import { deriveDpopAth } from "better-auth/oauth2";
+import type { Jwk } from "better-auth/plugins/jwt";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
@@ -924,6 +925,31 @@ describe("requireMcpAuth co-located with the authorization server", async () => 
 		expect((await verifyFirst(mcpRequest(firstToken))).status).toBe(200);
 		expect((await verifySecond(mcpRequest(secondToken))).status).toBe(200);
 		expect((await verifyFirst(mcpRequest(firstToken))).status).toBe(200);
+	});
+
+	it("gives a custom jwt adapter.getJwks the MCP request", async () => {
+		const tenantsSeen: (string | null | undefined)[] = [];
+		const tenantKeys = await createColocatedInstance(
+			jwt({
+				adapter: {
+					getJwks: async (ctx) => {
+						tenantsSeen.push(ctx.headers?.get("x-tenant"));
+						return ctx.context.adapter.findMany<Jwk>({ model: "jwks" });
+					},
+				},
+			}),
+		);
+		const accessToken = await tenantKeys.issueAccessToken();
+		tenantsSeen.length = 0;
+		const request = mcpRequest(accessToken);
+		request.headers.set("x-tenant", "acme");
+
+		const response = await requireMcpAuth(tenantKeys.instance.auth, () =>
+			Response.json({ ok: true }),
+		)(request);
+
+		expect(response.status).toBe(200);
+		expect(tenantsSeen).toEqual(["acme"]);
 	});
 
 	it("fetches an explicit jwksUrl over HTTP", async () => {
