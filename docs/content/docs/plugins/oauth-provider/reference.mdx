@@ -423,7 +423,7 @@ Pass it the payload, the request's method and `DPoP` header, and:
 
 * `authorization`: the `Authorization` header parsed with `parseAccessTokenAuthorization`. When the header is missing or its `scheme` is neither `Bearer` nor `DPoP`, reject the request before you validate the token. Pass its `token` to `requireActiveAccessToken`, because the proof's `ath` is checked against it.
 * `url`: your `baseURL` plus the part of the request path below its base path. Do not take the host from `request.url` or from forwarded headers. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
-* `replayStore`: `createDpopReplayStore(ctx.context.internalAdapter)`, created on each request. Without a replay store, a captured proof can be sent again within its `proofMaxAgeSeconds`. For its storage requirement, see [Verify access tokens](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
+* `replayStore`: `createDpopReplayStore(ctx.context)`, created on each request. It records each proof where your auth instance keeps verification values, as [Verify access tokens](/docs/plugins/oauth-provider/resource-server#verify-access-tokens) describes. Without a replay store, a captured proof can be sent again within its `proofMaxAgeSeconds`.
 * `proofMaxAgeSeconds` and `signingAlgorithms`: the values from your `dpop` options.
 
 An `auth.api` call has no HTTP request to check a proof against. When `ctx.request` is missing and `getDpopJktFromPayload(payload)` returns a value, reject the call with `invalid_token`.
