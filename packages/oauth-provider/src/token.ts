@@ -6,15 +6,8 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "better-auth/crypto";
-import type {
-	DpopReplayReservation,
-	DpopReplayStore,
-} from "better-auth/oauth2";
-import {
-	createDpopReplayStore,
-	generateCodeChallenge,
-	getConfirmationJkt,
-} from "better-auth/oauth2";
+import type { DpopReplayStore } from "better-auth/oauth2";
+import { generateCodeChallenge, getConfirmationJkt } from "better-auth/oauth2";
 import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
@@ -1134,12 +1127,9 @@ async function resolveDpopTokenBinding(
 /**
  * Checks the token request's DPoP proof before a one-time code is consumed,
  * under the resource policy issuance applies, so a rejected proof leaves the
- * code for a retry.
- *
- * The proof's `jti` is not recorded yet: call `recordReplay` once the code is
- * consumed, then pass `confirmation` to issuance. Recording it earlier would
- * report the loser of a concurrent redemption as a replayed proof instead of a
- * spent code.
+ * code for a retry. The proof's `jti` is recorded here too (RFC 9449 §11.1):
+ * a proof that was already used fails before it can spend a fresh code. Pass
+ * `confirmation` to issuance.
  */
 export async function checkDpopProofBeforeConsume(
 	ctx: GenericEndpointContext,
@@ -1150,39 +1140,18 @@ export async function checkDpopProofBeforeConsume(
 		resources?: string[];
 		verificationValue?: VerificationValue;
 	},
-): Promise<{
-	confirmation?: Confirmation;
-	recordReplay: () => Promise<void>;
-}> {
+): Promise<{ confirmation?: Confirmation }> {
 	const policy = await resolveResourcePolicy(ctx, opts, {
 		resource: params.resources,
 		clientId: params.client.clientId,
 		requestedScopes: params.scopes,
 	});
-	let reservation: DpopReplayReservation | undefined;
 	const confirmation = await resolveDpopTokenBinding(ctx, opts, {
 		client: params.client,
 		grantIssuance: policy,
 		verificationValue: params.verificationValue,
-		replayStore: {
-			reserve: (pending) => {
-				reservation = pending;
-				return true;
-			},
-		},
 	});
-	return {
-		confirmation,
-		recordReplay: async () => {
-			if (!reservation) return;
-			const reserved = await createDpopReplayStore(
-				ctx.context.internalAdapter,
-			).reserve({ ...reservation, now: new Date() });
-			if (!reserved) {
-				throwInvalidDpopProof("DPoP proof jti has already been used");
-			}
-		},
-	};
+	return { confirmation };
 }
 
 type RefreshTokenRotationReplayRequest = {
@@ -2153,7 +2122,6 @@ async function handleAuthorizationCodeGrant(
 			true,
 		);
 	}
-	await dpop.recordReplay();
 
 	return createUserTokens(ctx, opts, {
 		client,
