@@ -963,3 +963,111 @@ describe("requireMcpAuth co-located with the authorization server", async () => 
 		expect(requestUrl(keyFetch.mock.calls[0]![0]).href).toBe(remoteUrl);
 	});
 });
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc7662#section-4
+ */
+describe("requireMcpAuth checks tokens against the provider's records", async () => {
+	const origin = "https://records.example.test";
+	const baseURL = `${origin}/api/auth`;
+
+	async function createProvider(options: {
+		disableJwtPlugin?: boolean;
+		revocableJwtAccessTokens?: boolean;
+	}) {
+		const instance = await getTestInstance({
+			baseURL: origin,
+			advanced: { useSecureCookies: false },
+			plugins: [
+				...(options.disableJwtPlugin ? [] : [jwt()]),
+				mcp({
+					loginPage: "/login",
+					consentPage: "/consent",
+					resource: baseURL,
+					scopes: ["mcp:base"],
+					clientPrivileges: () => true,
+					...options,
+				}),
+			],
+		});
+		const { headers } = await instance.signInWithTestUser();
+		const client = await instance.auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_post",
+				redirect_uris: [REDIRECT_URI],
+				client_credentials_scopes: ["mcp:base"],
+			},
+		});
+		const credentials = {
+			client_id: client.client_id,
+			client_secret: client.client_secret!,
+		};
+		const post = (path: string, body: Record<string, string>) =>
+			instance.customFetchImpl(`${baseURL}${path}`, {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({ ...credentials, ...body }),
+			});
+
+		async function issueAccessToken() {
+			const response = await post("/oauth2/token", {
+				grant_type: "client_credentials",
+				scope: "mcp:base",
+				resource: baseURL,
+			});
+			expect(response.status).toBe(200);
+			return ((await response.json()) as { access_token: string }).access_token;
+		}
+
+		async function revoke(token: string) {
+			const response = await post("/oauth2/revoke", {
+				token,
+				token_type_hint: "access_token",
+			});
+			expect(response.status).toBe(200);
+		}
+
+		const protect = requireMcpAuth(instance.auth, () =>
+			Response.json({ ok: true }),
+		);
+		const callMcp = (accessToken: string) =>
+			protect(
+				new Request(`${origin}/mcp`, {
+					headers: { Authorization: `Bearer ${accessToken}` },
+				}),
+			);
+
+		return { issueAccessToken, revoke, callMcp };
+	}
+
+	it("accepts an opaque access token", async () => {
+		const provider = await createProvider({ disableJwtPlugin: true });
+		const accessToken = await provider.issueAccessToken();
+
+		expect((await provider.callMcp(accessToken)).status).toBe(200);
+	});
+
+	it("rejects an opaque access token after revocation", async () => {
+		const provider = await createProvider({ disableJwtPlugin: true });
+		const accessToken = await provider.issueAccessToken();
+		await provider.revoke(accessToken);
+
+		const response = await provider.callMcp(accessToken);
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toContain(
+			'error="invalid_token"',
+		);
+	});
+
+	it("rejects a revocable JWT access token after revocation", async () => {
+		const provider = await createProvider({ revocableJwtAccessTokens: true });
+		const accessToken = await provider.issueAccessToken();
+		expect((await provider.callMcp(accessToken)).status).toBe(200);
+		await provider.revoke(accessToken);
+
+		expect((await provider.callMcp(accessToken)).status).toBe(401);
+	});
+});
