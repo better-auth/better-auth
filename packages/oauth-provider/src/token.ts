@@ -825,14 +825,14 @@ async function isReuseByIssuingClient(
 	if (!consumed.success || consumed.data.clientId !== clientId) return false;
 	const { codeChallenge, codeChallengeMethod } = consumed.data;
 	if (!codeChallenge) return true;
-	return verifyCodeChallenge(codeVerifier, codeChallenge, codeChallengeMethod);
+	return matchesCodeChallenge(codeVerifier, codeChallenge, codeChallengeMethod);
 }
 
 /**
  * Whether `codeVerifier` matches the code's PKCE challenge (RFC 7636 §4.6).
  * Only `S256` is accepted, so a stored `plain` challenge never matches.
  */
-async function verifyCodeChallenge(
+async function matchesCodeChallenge(
 	codeVerifier: string | undefined,
 	codeChallenge: string | undefined,
 	codeChallengeMethod: string | undefined,
@@ -2075,12 +2075,12 @@ async function handleAuthorizationCodeGrant(
 		}
 
 		// Both sides used PKCE - verify the challenge
-		const verified = await verifyCodeChallenge(
+		const matched = await matchesCodeChallenge(
 			code_verifier,
 			verificationValue.query.code_challenge,
 			verificationValue.query.code_challenge_method,
 		);
-		if (!verified) {
+		if (!matched) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "code verification failed",
 				error: "invalid_grant",
