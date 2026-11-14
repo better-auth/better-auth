@@ -1,6 +1,7 @@
 import type { JWK, JWTPayload } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { DpopReplayStore } from "./dpop";
 import {
 	createDpopReplayStore,
 	createInMemoryDpopReplayStore,
@@ -440,6 +441,80 @@ describe("createDpopReplayStore with the auth context", () => {
 			expiresAt: reservation.expiresAt,
 		});
 		expect(increment).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * A proof stays acceptable through the whole second at the end of its window,
+ * because `nowSeconds` is floored. Its replay reservation must outlive that
+ * second in every store.
+ * @see https://datatracker.ietf.org/doc/html/rfc9449#section-11.1
+ */
+describe("replay reservation at the end of the proof window", () => {
+	const proofMaxAgeSeconds = 60;
+	const setTime = (offsetMs: number) =>
+		vi.setSystemTime(nowSeconds * 1000 + offsetMs);
+
+	async function expectReplayRejectedInFinalSecond(
+		replayStore: DpopReplayStore,
+	) {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		try {
+			const proofJwt = await createProof();
+			const options = {
+				proofJwt,
+				method,
+				url,
+				proofMaxAgeSeconds,
+				replayStore,
+			};
+			setTime(500);
+			await verifyDpopProof(options);
+			setTime(proofMaxAgeSeconds * 1000 + 900);
+			await expect(verifyDpopProof(options)).rejects.toMatchObject({
+				code: "invalid_dpop_proof",
+				message: "DPoP proof jti has already been used",
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+	}
+
+	it("keeps the in-memory reservation", async () => {
+		await expectReplayRejectedInFinalSecond(createInMemoryDpopReplayStore());
+	});
+
+	it("keeps the secondary-storage reservation", async () => {
+		const expiries = new Map<string, number>();
+		await expectReplayRejectedInFinalSecond(
+			createDpopReplayStore({
+				internalAdapter: { reserveVerificationValue: async () => true },
+				secondaryStorage: {
+					increment: (key, ttl) => {
+						const expiry = expiries.get(key);
+						if (expiry !== undefined && expiry > Date.now()) return 2;
+						expiries.set(key, Date.now() + ttl * 1000);
+						return 1;
+					},
+				},
+				options: {},
+			}),
+		);
+	});
+
+	it("keeps the database reservation", async () => {
+		// Expired verification rows can be deleted, which frees the identifier.
+		const rows = new Map<string, Date>();
+		await expectReplayRejectedInFinalSecond(
+			createDpopReplayStore({
+				reserveVerificationValue: async ({ identifier, expiresAt }) => {
+					const existing = rows.get(identifier);
+					if (existing && existing.getTime() > Date.now()) return false;
+					rows.set(identifier, expiresAt);
+					return true;
+				},
+			}),
+		);
 	});
 });
 
