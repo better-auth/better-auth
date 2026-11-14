@@ -10,6 +10,8 @@ export const TWO_FACTOR_ERROR_CODES = defineErrorCodes({
 	TWO_FACTOR_NOT_ENABLED: "Two factor isn't enabled",
 	BACKUP_CODES_NOT_ENABLED: "Backup codes aren't enabled",
 	INVALID_BACKUP_CODE: "Invalid backup code",
+	BACKUP_CODES_NOT_VIEWABLE:
+		"Backup codes are stored hashed and cannot be viewed",
 	INVALID_CODE: "Invalid code",
 	TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE:
 		"Too many attempts. Please request a new code.",
