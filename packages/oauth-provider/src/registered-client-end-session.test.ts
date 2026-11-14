@@ -223,4 +223,141 @@ describe("RP-initiated logout for registered clients", () => {
 		});
 		expect(client.enable_end_session).toBeUndefined();
 	});
+
+	it("applies the policy and the origin rule to clients from createOAuthClient", async () => {
+		const policy = vi.fn(() => true);
+		const provider = await createProvider({
+			clientRegistrationEnableEndSession: policy,
+		});
+		const client = await provider.auth.api.createOAuthClient({
+			headers: provider.headers,
+			body: {
+				redirect_uris: [redirectUri],
+				post_logout_redirect_uris: [logoutRedirectUri],
+			},
+		});
+		expect(client.enable_end_session).toBe(true);
+		expect(policy).toHaveBeenCalledWith(
+			expect.objectContaining({ registrationSource: "createOAuthClient" }),
+		);
+
+		await expect(
+			provider.auth.api.createOAuthClient({
+				headers: provider.headers,
+				body: {
+					redirect_uris: [redirectUri],
+					post_logout_redirect_uris: ["https://attacker.example/landing"],
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_client_metadata" },
+		});
+	});
+
+	it("keeps an owner's updates from adding a post-logout URI outside the redirect origins", async () => {
+		const provider = await createProvider({
+			clientRegistrationEnableEndSession: true,
+		});
+		const client = await provider.auth.api.createOAuthClient({
+			headers: provider.headers,
+			body: {
+				redirect_uris: [redirectUri],
+				post_logout_redirect_uris: [logoutRedirectUri],
+			},
+		});
+
+		await expect(
+			provider.auth.api.updateOAuthClient({
+				headers: provider.headers,
+				body: {
+					client_id: client.client_id,
+					update: {
+						post_logout_redirect_uris: [
+							logoutRedirectUri,
+							"https://attacker.example/landing",
+						],
+					},
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_client_metadata" },
+		});
+
+		const moved = await provider.auth.api.updateOAuthClient({
+			headers: provider.headers,
+			body: {
+				client_id: client.client_id,
+				update: {
+					redirect_uris: ["https://new-rp.example.com/callback"],
+					post_logout_redirect_uris: [
+						logoutRedirectUri,
+						"https://new-rp.example.com/logged-out",
+					],
+				},
+			},
+		});
+		expect(moved.post_logout_redirect_uris).toEqual([
+			logoutRedirectUri,
+			"https://new-rp.example.com/logged-out",
+		]);
+	});
+
+	it("keeps post-logout URIs an administrator set when the owner updates the client", async () => {
+		const provider = await createProvider();
+		const client = await provider.auth.api.adminCreateOAuthClient({
+			headers: provider.headers,
+			body: {
+				redirect_uris: [redirectUri],
+				post_logout_redirect_uris: ["https://elsewhere.example/landing"],
+				enable_end_session: true,
+			},
+		});
+		const updated = await provider.auth.api.updateOAuthClient({
+			headers: provider.headers,
+			body: {
+				client_id: client.client_id,
+				update: {
+					redirect_uris: ["https://rp2.example.com/callback"],
+					post_logout_redirect_uris: ["https://elsewhere.example/landing"],
+				},
+			},
+		});
+		expect(updated.redirect_uris).toEqual(["https://rp2.example.com/callback"]);
+	});
+
+	it("lets an administrator take back logout from a client without an owner", async () => {
+		const provider = await createProvider({
+			clientRegistrationEnableEndSession: true,
+		});
+		const registration = await provider.registerOpenClient({
+			post_logout_redirect_uris: [logoutRedirectUri],
+		});
+		const client = await registration.json();
+		expect(client.enable_end_session).toBe(true);
+
+		const revoked = await provider.auth.api.adminUpdateOAuthClient({
+			headers: provider.headers,
+			body: {
+				client_id: client.client_id,
+				update: { enable_end_session: false },
+			},
+		});
+		expect(revoked.enable_end_session).toBeFalsy();
+		const response = await provider.endSession({
+			client_id: client.client_id,
+			post_logout_redirect_uri: logoutRedirectUri,
+		});
+		expect(response.status).toBe(401);
+
+		// Other fields of a client the caller does not own stay off limits.
+		await expect(
+			provider.auth.api.adminUpdateOAuthClient({
+				headers: provider.headers,
+				body: {
+					client_id: client.client_id,
+					update: { enable_end_session: true, client_name: "Renamed" },
+				},
+			}),
+		).rejects.toMatchObject({ statusCode: 401 });
+	});
 });

@@ -25,7 +25,9 @@ describe("public oauth-provider types", () => {
 	it("types the registered-client logout policy from the package entrypoint", () => {
 		expectTypeOf<
 			ClientRegistrationEndSessionInput["registrationSource"]
-		>().toEqualTypeOf<"dynamic" | "clientMetadataDocument">();
+		>().toEqualTypeOf<
+			"dynamic" | "clientMetadataDocument" | "createOAuthClient"
+		>();
 		expectTypeOf<
 			ClientRegistrationEndSessionInput["client"]["client_id"]
 		>().toEqualTypeOf<string>();

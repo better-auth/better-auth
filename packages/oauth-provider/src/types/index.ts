@@ -912,9 +912,13 @@ export interface ClientRegistrationEndSessionInput {
 	};
 	/**
 	 * `"dynamic"` for `POST /oauth2/register`, `"clientMetadataDocument"` for a
-	 * client created from its Client ID Metadata Document.
+	 * client created from its Client ID Metadata Document, and
+	 * `"createOAuthClient"` for a signed-in user's `POST /oauth2/create-client`.
 	 */
-	registrationSource: "dynamic" | "clientMetadataDocument";
+	registrationSource:
+		| "dynamic"
+		| "clientMetadataDocument"
+		| "createOAuthClient";
 }
 
 /**
@@ -1360,10 +1364,10 @@ export interface OAuthOptions<
 	 */
 	clientRegistrationRequirePKCE?: boolean;
 	/**
-	 * Whether clients created through dynamic client registration or a Client
-	 * ID Metadata Document may use RP-Initiated Logout at
-	 * `/oauth2/end-session`, the same permission `enable_end_session` gives an
-	 * admin-created client.
+	 * Whether clients created through dynamic client registration, a Client
+	 * ID Metadata Document, or `createOAuthClient` may use RP-Initiated Logout
+	 * at `/oauth2/end-session`, the same permission `enable_end_session` gives
+	 * an admin-created client.
 	 *
 	 * Pass `true` to allow it for every such client, or a function that decides
 	 * per client. The decision is made once, when the client is created, and a
@@ -1375,7 +1379,8 @@ export interface OAuthOptions<
 	 * anywhere authorization could not. Loopback hosts (`localhost`,
 	 * `127.0.0.1`, `[::1]`) match on any port, and private-use URIs match on
 	 * scheme and authority. Otherwise registration fails with
-	 * `invalid_client_metadata`.
+	 * `invalid_client_metadata`. The same rule applies to entries an owner adds
+	 * through `updateOAuthClient` to any client allowed to log out.
 	 *
 	 * @see https://better-auth.com/docs/plugins/oauth-provider/openid-connect#registered-clients
 	 *
