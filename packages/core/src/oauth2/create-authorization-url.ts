@@ -36,7 +36,7 @@ function withoutQueryParams(endpoint: string, params: URLSearchParams) {
 		.split("&")
 		.filter((pair) => {
 			const [name] = new URLSearchParams(pair).keys();
-			return pair && name !== undefined && !params.has(name);
+			return name === undefined || !params.has(name);
 		});
 	url.search = kept.join("&");
 	return url.href;

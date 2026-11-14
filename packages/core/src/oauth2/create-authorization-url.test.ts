@@ -74,6 +74,17 @@ describe("createAuthorizationURL", () => {
 		expect(url.searchParams.get("client_id")).toBe("client-123");
 	});
 
+	it("keeps empty segments in the authorization endpoint's query", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			authorizationEndpoint:
+				"https://idp.example/authorize?tenant=acme&&value=~&",
+		});
+
+		expect(url.search).toMatch(/^\?tenant=acme&&value=~&[^&]/);
+		expect(url.searchParams.get("client_id")).toBe("client-123");
+	});
+
 	it("replaces an authorization endpoint query parameter it also sets", async () => {
 		const url = await createAuthorizationURL({
 			...baseInput,
