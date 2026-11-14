@@ -655,9 +655,10 @@ export interface OAuthUserInfoExtensionInput {
  *   registered is rejected at setup, since the second would otherwise be
  *   silently unreachable.
  * - Additive kinds (`metadata`, `claims`) never override authorization-server
- *   core; a key already owned by the provider is kept, and a key two extensions
- *   both contribute resolves to the first-registered extension, with a
- *   logged warning.
+ *   core; a key already owned by the provider is kept. When two extensions
+ *   contribute the same metadata key as lists, the lists combine in
+ *   registration order without duplicates; any other collision resolves to
+ *   the first-registered extension, with a logged warning.
  */
 export interface OAuthProviderExtension {
 	/**

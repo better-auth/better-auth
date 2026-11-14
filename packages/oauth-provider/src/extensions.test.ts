@@ -1037,7 +1037,7 @@ describe("oauth-provider extensions", async () => {
 	/**
 	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/reference#provider-extensions
 	 */
-	it("warns when two extensions contribute the same metadata key", async () => {
+	it("combines lists two extensions contribute and warns on other collisions", async () => {
 		const makeMetadataExtensionPlugin = (
 			id: string,
 			metadata: Record<string, unknown>,
@@ -1057,11 +1057,13 @@ describe("oauth-provider extensions", async () => {
 					consentPage: "/consent",
 				}),
 				makeMetadataExtensionPlugin("meta-ext-a", {
-					authorization_details_types_supported: ["type_a"],
+					authorization_details_types_supported: ["type_a", "type_b"],
+					mixed_shape_field: ["first"],
 					only_in_a: true,
 				}),
 				makeMetadataExtensionPlugin("meta-ext-b", {
-					authorization_details_types_supported: ["type_b"],
+					authorization_details_types_supported: ["type_b", "type_c"],
+					mixed_shape_field: "second",
 					issuer: "https://ignored.example.com",
 				}),
 			],
@@ -1076,9 +1078,12 @@ describe("oauth-provider extensions", async () => {
 			>;
 		expect(openIdConfig.authorization_details_types_supported).toEqual([
 			"type_a",
+			"type_b",
+			"type_c",
 		]);
+		expect(openIdConfig.mixed_shape_field).toEqual(["first"]);
 		expect(warn.mock.calls.map(([message]) => message)).toEqual([
-			'oauth-provider: two extensions contributed the discovery metadata key "authorization_details_types_supported" to openid-configuration; keeping the first-registered value.',
+			'oauth-provider: two extensions contributed the discovery metadata key "mixed_shape_field" to openid-configuration; keeping the first-registered value.',
 		]);
 	});
 
