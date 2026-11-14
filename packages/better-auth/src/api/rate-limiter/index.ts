@@ -171,7 +171,9 @@ function createDatabaseStorageWrapper(
 			// Rows of keys that never return (e.g. one-off client IPs) are never
 			// swept by the reset path below, so sweep here too. Kept outside the
 			// `try` so a sweep failure cannot be mistaken for a lost create race.
-			await deleteExpiredRowsIfDue(now);
+			// A fresh timestamp: `now` predates the awaited create, and the throttle
+			// should count from when the sweep actually starts.
+			await deleteExpiredRowsIfDue(Date.now());
 			return { allowed: true, retryAfter: null };
 		}
 
@@ -258,7 +260,9 @@ function createDatabaseStorageWrapper(
 	// known here and an earlier request's longer window would be forgotten. A
 	// cutoff built from the static windows could then delete a live counter and
 	// let a limited client through, so skip this sweep when any such rule exists.
-	// The reset path still sweeps, using the window resolved for that request.
+	// The reset path is unchanged: it still sweeps with the window resolved for
+	// its own request, so a longer window of another function-valued rule is not
+	// accounted for there.
 	const deleteExpiredRowsIfDue = async (now: number) => {
 		if (hasFunctionValuedRules(ctx)) {
 			return;
