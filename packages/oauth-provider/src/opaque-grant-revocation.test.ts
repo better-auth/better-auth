@@ -6,7 +6,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 
@@ -214,6 +214,48 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 				expect(await isActive(server, raced.data.access_token)).toBe(false);
 			} else {
 				expect(raced.error?.status).toBe(400);
+			}
+		});
+
+		/**
+		 * The reuse teardown runs after the rotation's swap and before the
+		 * rotation stores its new refresh token, so its delete misses that row.
+		 *
+		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+		 */
+		it("fails a rotation that stores its refresh token after reuse revoked the grant", async () => {
+			const first = await authorize(server);
+			const ctx = await server.auth.$context;
+			const create = ctx.adapter.create.bind(ctx.adapter);
+			const reached = Promise.withResolvers<void>();
+			const released = Promise.withResolvers<void>();
+			const spy = vi.spyOn(ctx.adapter, "create");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === "oauthRefreshToken") {
+					spy.mockRestore();
+					reached.resolve();
+					await released.promise;
+				}
+				return create(...args);
+			});
+			try {
+				const rotating = requestRefresh(server, first.refresh_token);
+				await reached.promise;
+				const reused = await requestRefresh(server, first.refresh_token);
+				released.resolve();
+				const rotated = await rotating;
+
+				expect(reused.error?.status).toBe(400);
+				expect(rotated.error?.status).toBe(400);
+				expect(
+					await ctx.adapter.count({
+						model: "oauthRefreshToken",
+						where: [{ field: "clientId", value: server.options.clientId }],
+					}),
+				).toBe(0);
+			} finally {
+				released.resolve();
+				spy.mockRestore();
 			}
 		});
 	},

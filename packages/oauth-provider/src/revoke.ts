@@ -12,7 +12,7 @@ import type {
 import {
 	findToken,
 	jwtRevocationMarker,
-	revokeGrantAccessTokens,
+	markGrantRevoked,
 } from "./token-lookup";
 import type { OAuthOptions, OAuthRefreshToken, Scope } from "./types";
 import {
@@ -96,7 +96,7 @@ async function revokeRefreshToken(
 	// the refresh token is marked revoked, so a failed write leaves the refresh
 	// token usable and the request failed, never a revoked refresh token with
 	// live JWTs. If marking the row then throws, the JWTs are already revoked.
-	await revokeGrantAccessTokens(ctx, opts, {
+	await markGrantRevoked(ctx, opts, {
 		grantId: refreshToken.grantId,
 		clientId,
 	});

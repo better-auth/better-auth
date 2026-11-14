@@ -549,7 +549,7 @@ describe.each(["sqlite", "postgres"] as const)(
 				expect(refreshed.body.token_type).toBe("DPoP");
 			});
 
-			it("redeems a code once when challenged and retried concurrently", async () => {
+			it("never redeems a code twice when challenged and retried concurrently", async () => {
 				const key = await createDpopKey();
 				const { code, codeVerifier } = await authorizeForCode();
 				const body = await codeRequestBody(code, codeVerifier);
@@ -569,8 +569,10 @@ describe.each(["sqlite", "postgres"] as const)(
 					"use_dpop_nonce",
 				]);
 
-				// One nonce serves several proofs (RFC 9449 §11.1); the code still
-				// redeems exactly once.
+				// One nonce serves several proofs (RFC 9449 §11.1). The second
+				// redemption is a reuse of the code, which revokes the grant the
+				// first is issuing (RFC 6749 §4.1.2). Whether the first fails too
+				// depends on which finishes first on a real database.
 				const nonce = challenges[0]!.response.headers.get("DPoP-Nonce");
 				const redemptions = await Promise.all([
 					postToken(
@@ -590,11 +592,11 @@ describe.each(["sqlite", "postgres"] as const)(
 						}),
 					),
 				]);
-				const statuses = redemptions.map((r) => r.response.status).sort();
-				expect(statuses).toEqual([200, 400]);
-				expect(
-					redemptions.find((r) => r.response.status === 400)?.body.error,
-				).toBe("invalid_grant");
+				const failed = redemptions.filter((r) => r.response.status !== 200);
+				expect(failed.length).toBeGreaterThanOrEqual(1);
+				expect(failed.map((r) => r.body.error)).toEqual(
+					failed.map(() => "invalid_grant"),
+				);
 			});
 		});
 
