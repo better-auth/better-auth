@@ -635,6 +635,8 @@ When `clientId` is `undefined`, the call behaves as if you had not passed it, an
 
 A public client sends no credentials, so for a public client the handle is the only thing that ties a request to the flow. Anyone who holds the handle can continue the flow as that client. To prevent this, bind the handle to the client's DPoP key with [`expectedJkt`](/docs/plugins/oauth-provider/tokens#bind-later-requests-to-a-dpop-key).
 
+On the request that issues the code, do not call `authenticateClient()`. Set `client_id` in the [`issueAuthorizationCode`](/docs/plugins/oauth-provider/sign-in-flow#issue-codes-from-your-own-endpoint) query to the stored client instead. The method authenticates the request as that client by the same rules.
+
 To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html/rfc7800#section-3)), pass `confirmation` to `issueTokens`. A `clientAuthentication` strategy can also return the sender constraint it proved as `confirmation`, such as a DPoP key thumbprint (`jkt`) or a certificate thumbprint (`x5t#S256`):
 
 * The built-in `client_credentials` grant binds its token to that confirmation.

@@ -2,10 +2,10 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { generateRandomString } from "better-auth/crypto";
 import { APIError } from "better-call";
 import { parseAuthorizationRequest } from "./authorize";
-import { verifyEndpointDpopProof } from "./dpop";
+import { getDpopProofJwt, verifyEndpointDpopProof } from "./dpop";
 import { getOAuthProviderApi } from "./token";
 import type { OAuthOptions, Scope } from "./types";
-import { isRecord, storeToken, throwInvalidClient, tokenError } from "./utils";
+import { isRecord, storeToken, tokenError } from "./utils";
 
 export const PUSHED_AUTHORIZATION_REQUEST_PATH = "/oauth2/par";
 
@@ -59,8 +59,10 @@ function withoutClientAuthentication(
  * authorization server, as at `/oauth2/par` (RFC 9126 §2.1). Authenticates
  * the client, after a DPoP nonce challenge so a nonce retry can resend a
  * one-time client assertion (RFC 9449 §8). Returns the request parameters
- * without client credentials and with the authenticated `client_id`; a
- * `client_id` naming another client fails with `invalid_client`.
+ * without client credentials and with the authenticated `client_id`. A
+ * `client_id` in `body` is the expected client (see `authenticateClient`'s
+ * `clientId`), so a request naming another client fails with
+ * `invalid_client`.
  * `bindDpopProof` then verifies the request's DPoP proof, if any, and sets
  * `dpop_jkt` to its key (RFC 9449 §10). A proof from a key other than
  * `dpop_jkt` fails with `invalid_dpop_proof`.
@@ -74,8 +76,11 @@ export async function authenticateAuthorizationRequest(
 	const provider = getOAuthProviderApi(ctx, opts, "authorization_code");
 	await provider.challengeDpopNonce();
 	// Public clients identify themselves with client_id alone; confidential
-	// clients must authenticate.
-	const { clientId, method } = await provider.authenticateClient({
+	// clients must authenticate. A `client_id` the caller set from stored
+	// state stands in for one the request left out, and any client the request
+	// names must be that client.
+	const { clientId } = await provider.authenticateClient({
+		clientId: typeof body.client_id === "string" ? body.client_id : undefined,
 		requireCredentials: false,
 	});
 
@@ -90,14 +95,11 @@ export async function authenticateAuthorizationRequest(
 			"request object not supported",
 		);
 	}
-	if (params.client_id !== undefined && params.client_id !== clientId) {
-		throwInvalidClient("client_id does not match the authenticated client", {
-			method,
-		});
-	}
 	params.client_id = clientId;
 
 	const bindDpopProof = async (query: { dpop_jkt?: string }) => {
+		// A `dpop_jkt` without a proof still binds the code (RFC 9449 §10).
+		if (!getDpopProofJwt(ctx)) return;
 		// Checked as the token endpoint checks a code's key: before the nonce
 		// and the `jti`, so a proof from another key is not used up.
 		const proof = await verifyEndpointDpopProof(ctx, opts, {

@@ -133,6 +133,21 @@ The client sends this request directly, so the provider handles it as `/oauth2/p
 
 If your endpoint accepts `application/x-www-form-urlencoded` bodies, set `cloneRequest: true` in its endpoint options. Client authentication re-reads the raw form body.
 
+Some endpoints take several requests to finish, such as a sign-in that returns a handle the client sends back on its next request. The handle already names the client, so the request that issues the code can leave out `client_id`. Set `client_id` and `dpop_jkt` in `query` from the state you stored with the handle:
+
+```ts
+const { handle, ...request } = ctx.body;
+const pending = await findPendingSignIn(handle); // your own storage
+if (!pending) throw new APIError("BAD_REQUEST", { error: "invalid_session" });
+
+const { code } = await provider.issueAuthorizationCode({
+  query: { ...request, client_id: pending.clientId, dpop_jkt: pending.dpopJkt },
+  session: ctx.context.session,
+});
+```
+
+The request is then authenticated as the stored client. A `client_id`, Basic credentials, or a client assertion for another client fails with `invalid_client`, and a DPoP proof from another key fails with `invalid_dpop_proof`. Reject an unknown or expired handle before the call, because without a stored client the request is authenticated as whichever client it names. Leave the handle out of `query`, because the provider stores the query with the code. Earlier requests of the flow bind to the same client and key with [`authenticateClient`'s `clientId`](/docs/plugins/oauth-provider/reference#provider-extensions) and [`verifyDpopProof`'s `expectedJkt`](/docs/plugins/oauth-provider/tokens#bind-later-requests-to-a-dpop-key).
+
 The provider then checks the request as `/oauth2/authorize` does: the client, scopes, claims, resources, and PKCE. The session you pass is the account the code is for, so account selection does not run. It issues the code only when the client has `skip_consent` or the user already consented to everything requested. Any step that would show a page fails instead, with a 400 error:
 
 | Error                  | When                                                                                                                       |

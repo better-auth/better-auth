@@ -354,9 +354,13 @@ export interface IssueAuthorizationCodeParams {
 	 * the code is only returned, and the token request must omit
 	 * `redirect_uri` too (RFC 6749 §4.1.3). The client authenticates with the
 	 * HTTP request itself, its body or `Authorization` header, not with this
-	 * query. `client_id` may be left out; when present, it must match the
-	 * authenticated client, or the call fails with `invalid_client`. Client credentials in the query, such as the
-	 * `client_secret` of a forwarded body, are not stored. A `request_uri` or
+	 * query. `client_id` names the expected client: a request that leaves it
+	 * out is authenticated as that client, and one that names another client
+	 * fails with `invalid_client`. On a later request of a flow your endpoint
+	 * started, set it from the state you stored, and set `dpop_jkt` to the key
+	 * the flow started with instead of calling `verifyDpopProof`. Client
+	 * credentials in the query, such as the `client_secret` of a forwarded
+	 * body, are not stored. A `request_uri` or
 	 * `request` object is not accepted; pass the parameters themselves.
 	 */
 	query: Omit<
