@@ -144,6 +144,7 @@ Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refres
 This applies if a generic OAuth provider uses `private_key_jwt` with `createPrivateKeyJwtClientAssertionGetter`, or an OIDC SSO provider uses `tokenEndpointAuthentication: "private_key_jwt"`. Each assertion is now signed for the authorization server's issuer instead of the token endpoint URL. This follows [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4).
 
 * Generic OAuth takes the issuer from the provider's discovery document. A provider configured without `discoveryUrl` has no issuer, so it still signs for the token endpoint URL.
+* The `microsoftEntraId` helper still signs for the token endpoint URL, the only audience Microsoft Entra ID documents.
 * SSO uses the provider's registered `issuer`, which discovery must match.
 
 Every assertion that `createPrivateKeyJwtClientAssertionGetter` or `signPrivateKeyJwtClientAssertion` signs now carries the JOSE header `typ: "client-authentication+jwt"`. Before, it carried `typ: "JWT"`.

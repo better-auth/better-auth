@@ -3237,6 +3237,35 @@ describe("oauth2", async () => {
 			expect(msConfig.requireIdTokenVerification).toBe(true);
 		});
 
+		it("signs private_key_jwt assertions for the token endpoint, not the discovered issuer", async () => {
+			const { privateKey } = await generateKeyPair("RS256", {
+				extractable: true,
+			});
+			const tokenEndpoint = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				tenantId,
+				tokenEndpointAuth: {
+					method: "private_key_jwt",
+					getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+						privateKeyJwk: await exportJWK(privateKey),
+					}),
+				},
+			});
+			if (msConfig.tokenEndpointAuth?.method !== "private_key_jwt") {
+				throw new Error("expected private_key_jwt");
+			}
+
+			const assertion = await msConfig.tokenEndpointAuth.getClientAssertion({
+				clientId: "ms-client-id",
+				tokenEndpoint,
+				grantType: "authorization_code",
+				issuer: `https://login.microsoftonline.com/${tenantId}/v2.0`,
+			});
+
+			expect(decodeJwt(assertion).aud).toBe(tokenEndpoint);
+		});
+
 		it("should handle tenant ID as GUID", () => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",

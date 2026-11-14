@@ -86,6 +86,17 @@ export function microsoftEntraId(
 	const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
 	const discoveryUrl = `https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`;
 	const userInfoUrl = "https://graph.microsoft.com/oidc/userinfo";
+	const configuredAuth = options.tokenEndpointAuth;
+	const tokenEndpointAuth: MicrosoftEntraIdOptions["tokenEndpointAuth"] =
+		configuredAuth?.method === "private_key_jwt"
+			? {
+					method: "private_key_jwt",
+					// Entra ID documents only its token endpoint as the client assertion
+					// audience, so the discovered issuer must not reach the getter.
+					getClientAssertion: ({ issuer: _issuer, ...context }) =>
+						configuredAuth.getClientAssertion(context),
+				}
+			: configuredAuth;
 
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
@@ -182,7 +193,7 @@ export function microsoftEntraId(
 		userInfoUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
-		tokenEndpointAuth: options.tokenEndpointAuth,
+		tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		endSessionEndpoint: options.endSessionEndpoint,

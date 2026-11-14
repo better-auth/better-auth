@@ -431,6 +431,8 @@ getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
 
 A custom `getClientAssertion` receives the discovered issuer as `issuer`. The field is `undefined` when the provider has no discovery document or the document has no issuer.
 
+The `microsoftEntraId` helper never passes the issuer to the getter, so its assertions are signed for the tenant's token endpoint URL. Microsoft Entra ID documents only that URL as the assertion audience.
+
 **discoveryHeaders**: (Optional) Custom headers to include in the discovery request. Useful for providers that require special headers. Better Auth sends these headers only to the origin (scheme, host, and port) of `discoveryUrl`:
 
 * The discovery request follows a redirect only within that origin. If `discoveryUrl` redirects to another origin, discovery fails and Better Auth logs an error. Set `discoveryUrl` to the final URL.
