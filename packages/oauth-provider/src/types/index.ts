@@ -331,6 +331,41 @@ export interface VerifyResourceRequestParams {
 }
 
 /**
+ * Parameters of {@link OAuthProviderApi.issueAuthorizationCode}.
+ */
+export interface IssueAuthorizationCodeParams {
+	/**
+	 * The authorization request parameters, as `/oauth2/authorize` accepts
+	 * them. `redirect_uri` is optional: without it the code is only returned,
+	 * and the token request must omit `redirect_uri` too (RFC 6749 §4.1.3).
+	 * To bind the code to a DPoP key (RFC 9449 §10), set `dpop_jkt`, for
+	 * example from the `jkt` that `verifyDpopProof` returns. A `request_uri`
+	 * or `request` object is not accepted; pass the parameters themselves.
+	 */
+	query: Omit<StoredAuthorizationQuery, "request_uri" | "request">;
+	/** The signed-in user's session the code is issued for. */
+	session: {
+		session: Session & Record<string, unknown>;
+		user: User & Record<string, unknown>;
+	};
+}
+
+/**
+ * An authorization code from {@link OAuthProviderApi.issueAuthorizationCode}.
+ */
+export interface IssuedAuthorizationCode {
+	/** The single-use code the client redeems at the token endpoint. */
+	code: string;
+	/** When the code expires, set by `codeExpiresIn`. */
+	expiresAt: Date;
+	/**
+	 * The client's `redirect_uri` with `code`, `state`, and `iss` added, when
+	 * the request carried a `redirect_uri`.
+	 */
+	redirectURL?: string;
+}
+
+/**
  * The OAuth Provider's server-side capability surface, bound to a request `ctx`.
  * A grant handler receives one as `provider`; a companion plugin's own endpoint
  * obtains one with `getOAuthProviderApi(ctx, opts, grantType?)`. The same object
@@ -370,6 +405,28 @@ export interface OAuthProviderApi {
 	 * calling it.
 	 */
 	issueTokens: (params: OAuthTokenIssueParams) => Awaitable<OAuthTokenResponse>;
+	/**
+	 * Issues an authorization code for a signed-in user and returns it instead
+	 * of redirecting, for an endpoint that completes authorization outside
+	 * `/oauth2/authorize`. The token endpoint redeems it like any other code.
+	 *
+	 * The request is checked as `/oauth2/authorize` checks it: the client, the
+	 * `redirect_uri` when present, scopes, claims, resources, and PKCE. The code
+	 * is issued only when the client skips consent or the user's stored consent
+	 * covers the request. A step that would show a page fails instead:
+	 * `consent_required` without consent, `login_required` for an expired
+	 * session or an elapsed `max_age`, and `interaction_required` for a
+	 * `prompt` other than `none` or a `signup` or `postLogin` redirect, and
+	 * `access_denied` when the session cannot meet an essential `acr`. Errors
+	 * are HTTP 400 `APIError`s with these OAuth error codes, or with the codes
+	 * `/oauth2/authorize` returns for an invalid client or request.
+	 *
+	 * Authenticating the user is the caller's responsibility: pass only a
+	 * session the user proved in this request or already holds.
+	 */
+	issueAuthorizationCode: (
+		params: IssueAuthorizationCodeParams,
+	) => Promise<IssuedAuthorizationCode>;
 	/**
 	 * Resolves the sender-constraint the tokens for this request will carry: the
 	 * `confirmation` the client proved at authentication, or else the DPoP proof

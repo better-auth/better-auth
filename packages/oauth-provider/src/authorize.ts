@@ -5,7 +5,6 @@ import { INSECURE_REDIRECT_URI_MESSAGE } from "@better-auth/core/utils/redirect-
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
-import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import {
 	getAcrValuesSupported,
@@ -34,6 +33,8 @@ import {
 } from "./signed-query";
 import { getSupportedClaims } from "./standard-claims";
 import type {
+	IssueAuthorizationCodeParams,
+	IssuedAuthorizationCode,
 	OAuthAuthenticationContext,
 	OAuthAuthorizationQuery,
 	OAuthInteractionQuery,
@@ -41,6 +42,7 @@ import type {
 	OAuthOptions,
 	SchemaClient,
 	Scope,
+	StoredAuthorizationQuery,
 	VerificationValue,
 } from "./types";
 import { authorizationQuerySchema, RedirectUriSyntaxSchema } from "./types/zod";
@@ -56,7 +58,9 @@ import {
 	isRecord,
 	isRedirectUriTransportAllowed,
 	parsePrompt,
+	parseScopes,
 	storeToken,
+	tokenError,
 	toResourceList,
 } from "./utils";
 
@@ -135,7 +139,7 @@ function deriveResponseMode(
 	return "query";
 }
 
-export const authorizationQueryErrorCodesByField = {
+const authorizationQueryErrorCodesByField = {
 	response_type: { invalid: "unsupported_response_type" },
 	resource: { invalid: "invalid_target" },
 } as const;
@@ -682,7 +686,6 @@ export async function authorizeEndpoint(
 				...approval,
 				// An authorization request always carries its validated redirect_uri.
 				query: approval.query as OAuthAuthorizationQuery,
-				clientId: client.clientId,
 				resource: toResourceList(approval.query.resource) ?? [],
 			}),
 	});
@@ -727,10 +730,17 @@ function invalidAuthorizationRequest(
  * pushed request is checked as the front-channel request would be
  * (RFC 9126 §2.1).
  */
-export async function validateAuthorizationRequest(
+async function validateAuthorizationRequest(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	query: OAuthAuthorizationQuery,
+	options?: {
+		/**
+		 * Accept a request without `redirect_uri`, for a code returned to the
+		 * caller instead of through a redirect (RFC 6749 §4.1.3).
+		 */
+		redirectUriOptional?: boolean;
+	},
 ): Promise<AuthorizationRequestValidation> {
 	if (!query.response_type) {
 		return invalidAuthorizationRequest(
@@ -786,7 +796,9 @@ export async function validateAuthorizationRequest(
 	const registeredUris = client.redirectUris ?? [];
 	const isWebClient = client.applicationType === "web";
 	let isValidRedirectUri = false;
-	if (query.redirect_uri) {
+	if (!query.redirect_uri && options?.redirectUriOptional === true) {
+		isValidRedirectUri = true;
+	} else if (query.redirect_uri) {
 		if (!isRedirectUriTransportAllowed(opts, query.redirect_uri, isWebClient)) {
 			return invalidAuthorizationRequest(
 				"invalid_request",
@@ -942,6 +954,36 @@ export async function validateAuthorizationRequest(
 	}
 
 	return { valid: true, query, client };
+}
+
+/**
+ * Parses and validates authorization request parameters received outside the
+ * front channel, throwing an OAuth error response for an invalid request.
+ */
+export async function parseAuthorizationRequest(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: unknown,
+	options?: Parameters<typeof validateAuthorizationRequest>[3],
+) {
+	const parsed = authorizationQuerySchema.safeParse(params);
+	if (!parsed.success) {
+		const { error, error_description } = mapIssuesToOAuthError(
+			parsed.error.issues,
+			authorizationQueryErrorCodesByField,
+		);
+		tokenError("BAD_REQUEST", error, error_description);
+	}
+	const validation = await validateAuthorizationRequest(
+		ctx,
+		opts,
+		parsed.data as OAuthAuthorizationQuery,
+		options,
+	);
+	if (!validation.valid) {
+		tokenError("BAD_REQUEST", validation.error, validation.error_description);
+	}
+	return validation;
 }
 
 /**
@@ -1170,13 +1212,7 @@ async function runAuthorizationInteraction(
 	);
 
 	// Prompt again whenever a requested scope, claim, or resource is not covered.
-	if (
-		!consent ||
-		!consentCovers(consent, scopes, resources) ||
-		!userInfoClaims.every((claim) =>
-			(consent.requestedUserInfoClaims ?? []).includes(claim),
-		)
-	) {
+	if (!consent || !consentCovers(consent, scopes, resources, userInfoClaims)) {
 		if (promptNone) {
 			return redirectWithAuthorizationError(
 				ctx,
@@ -1192,6 +1228,165 @@ async function runAuthorizationInteraction(
 	}
 
 	return approve();
+}
+
+/**
+ * Issues an authorization code for a signed-in user without a redirect, for a
+ * plugin endpoint that completes authorization outside `/oauth2/authorize`.
+ * The request is checked as `/oauth2/authorize` checks it, and each step that
+ * would show a page fails instead with the OIDC Core §3.1.2.6 error that
+ * `prompt=none` returns.
+ */
+export async function issueAuthorizationCode(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: IssueAuthorizationCodeParams,
+): Promise<IssuedAuthorizationCode> {
+	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
+		tokenError(
+			"BAD_REQUEST",
+			"unsupported_response_type",
+			"the authorization_code grant is disabled",
+		);
+	}
+	const { session, user } = params.session;
+	// Untyped callers can still send these, so they are rejected at runtime too.
+	const requestQuery: StoredAuthorizationQuery = params.query;
+	if (requestQuery.request_uri !== undefined) {
+		tokenError(
+			"BAD_REQUEST",
+			"invalid_request",
+			"pass the authorization request parameters, not a request_uri",
+		);
+	}
+	if (requestQuery.request !== undefined) {
+		tokenError(
+			"BAD_REQUEST",
+			"request_not_supported",
+			"request object not supported",
+		);
+	}
+	const validation = await parseAuthorizationRequest(ctx, opts, requestQuery, {
+		redirectUriOptional: true,
+	});
+	const { client } = validation;
+	let query: StoredAuthorizationQuery = validation.query;
+
+	const promptSet = query.prompt ? parsePrompt(query.prompt) : undefined;
+	if (promptSet && [...promptSet].some((prompt) => prompt !== "none")) {
+		tokenError(
+			"BAD_REQUEST",
+			"interaction_required",
+			"the requested prompt needs the authorization endpoint",
+		);
+	}
+	const now = new Date();
+	if (
+		session.userId !== user.id ||
+		new Date(session.expiresAt) <= now ||
+		(query.max_age !== undefined &&
+			!isWithinMaxAge(new Date(session.createdAt), query.max_age, now))
+	) {
+		tokenError("BAD_REQUEST", "login_required", "authentication required");
+	}
+	if (query.max_age !== undefined) {
+		query = removeMaxAgeFromAuthorizationQuery(query);
+	}
+
+	const headers = ctx.request?.headers ?? ctx.headers ?? new Headers();
+	const scopes = parseScopes(query.scope);
+	const resources = toResourceList(query.resource) ?? [];
+	// Each hook gets its own copy of the query.
+	const hookContext = () => ({
+		user,
+		session,
+		scopes,
+		query: serializeAuthorizationQuery(query),
+	});
+	// The caller chose the session, so account selection does not apply.
+	if (
+		(await opts.signup?.shouldRedirect?.({ headers, ...hookContext() })) ||
+		(await opts.postLogin?.shouldRedirect({
+			headers,
+			...hookContext(),
+			isContinuation: false,
+		}))
+	) {
+		tokenError(
+			"BAD_REQUEST",
+			"interaction_required",
+			"End-User interaction is required",
+		);
+	}
+
+	const referenceId = await getConsentReferenceId(opts, hookContext());
+	if (!client.skipConsent) {
+		const consent = await findConsent(
+			ctx,
+			client.clientId,
+			user.id,
+			referenceId,
+		);
+		const userInfoClaims = getRequestedUserInfoClaims(
+			query.claims,
+			getSupportedClaims(opts),
+		);
+		if (
+			!consent ||
+			!consentCovers(consent, scopes, resources, userInfoClaims)
+		) {
+			tokenError(
+				"BAD_REQUEST",
+				"consent_required",
+				"End-User consent is required",
+			);
+		}
+	}
+
+	const authenticationContext = await resolveAuthenticationContext(opts, {
+		user,
+		session,
+		client,
+		scopes,
+		headers,
+		query,
+	});
+	// OIDC Core §5.5.1.1: an unmet essential acr is a failed authentication.
+	if (
+		!canSatisfyEssentialAcrRequest(
+			query.claims,
+			authenticationContext.acr ?? LEVEL_0_ACR,
+		)
+	) {
+		tokenError(
+			"BAD_REQUEST",
+			"access_denied",
+			"essential acr requirement cannot be met",
+		);
+	}
+
+	const { code, expiresAt } = await storeAuthorizationCode(ctx, opts, {
+		query,
+		userId: user.id,
+		sessionId: session.id,
+		authTime: new Date(session.createdAt).getTime(),
+		...authenticationContext,
+		referenceId,
+		resource: resources,
+	});
+	return {
+		code,
+		expiresAt,
+		redirectURL: query.redirect_uri
+			? getAuthorizationCodeURL(
+					ctx,
+					opts,
+					query.redirect_uri,
+					query.state,
+					code,
+				)
+			: undefined,
+	};
 }
 
 function serializeAuthorizationQuery(query: OAuthInteractionQuery) {
@@ -1211,58 +1406,79 @@ function serializeAuthorizationQuery(query: OAuthInteractionQuery) {
 	return params;
 }
 
-/** Stores a single-use authorization code and returns the client redirect URL carrying it. */
-async function createAuthorizationCodeURL(
+type AuthorizationCodeApproval = {
+	query: StoredAuthorizationQuery;
+	userId: string;
+	sessionId: string;
+	authTime: number;
+	acr?: string;
+	amr?: string[];
+	referenceId?: string;
+	resource?: string[];
+};
+
+/** Stores a single-use authorization code for an approved request. */
+async function storeAuthorizationCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	verificationValue: {
-		query: OAuthAuthorizationQuery;
-		clientId: string;
-		userId: string;
-		sessionId: string;
-		authTime: number;
-		acr?: string;
-		amr?: string[];
-		referenceId?: string;
-		resource?: string[];
-	},
+	approval: AuthorizationCodeApproval,
 ) {
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.codeExpiresIn ?? 600);
+	const expiresAt = new Date(exp * 1000);
 
-	const data: Omit<Verification, "id" | "createdAt"> = {
+	await ctx.context.internalAdapter.createVerificationValue({
 		identifier: await storeToken(opts.storeTokens, code, "authorization_code"),
+		createdAt: new Date(iat * 1000),
 		updatedAt: new Date(iat * 1000),
-		expiresAt: new Date(exp * 1000),
+		expiresAt,
 		value: JSON.stringify({
 			type: "authorization_code",
-			query: verificationValue.query,
-			userId: verificationValue.userId,
-			sessionId: verificationValue?.sessionId,
-			referenceId: verificationValue.referenceId,
-			authTime: verificationValue.authTime,
-			acr: verificationValue.acr,
-			amr: verificationValue.amr,
-			resource: verificationValue.resource,
+			query: approval.query,
+			userId: approval.userId,
+			sessionId: approval.sessionId,
+			referenceId: approval.referenceId,
+			authTime: approval.authTime,
+			acr: approval.acr,
+			amr: approval.amr,
+			resource: approval.resource,
 		} satisfies VerificationValue),
-	};
-	await ctx.context.internalAdapter.createVerificationValue({
-		...data,
-		createdAt: new Date(iat * 1000),
 	});
+	return { code, expiresAt };
+}
 
-	const redirectUriWithCode = new URL(verificationValue.query.redirect_uri);
+/** The client redirect URL that delivers `code` (RFC 6749 §4.1.2, RFC 9207). */
+function getAuthorizationCodeURL(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	redirectUri: string,
+	state: string | undefined,
+	code: string,
+) {
+	const redirectUriWithCode = new URL(redirectUri);
 	redirectUriWithCode.searchParams.set("code", code);
-	if (verificationValue.query.state) {
-		redirectUriWithCode.searchParams.set(
-			"state",
-			verificationValue.query.state,
-		);
+	if (state) {
+		redirectUriWithCode.searchParams.set("state", state);
 	}
 	redirectUriWithCode.searchParams.set("iss", getIssuer(ctx, opts));
-
 	return redirectUriWithCode.toString();
+}
+
+/** Stores a single-use authorization code and returns the client redirect URL carrying it. */
+async function createAuthorizationCodeURL(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	approval: AuthorizationCodeApproval & { query: OAuthAuthorizationQuery },
+) {
+	const { code } = await storeAuthorizationCode(ctx, opts, approval);
+	return getAuthorizationCodeURL(
+		ctx,
+		opts,
+		approval.query.redirect_uri,
+		approval.query.state,
+		code,
+	);
 }
 
 async function redirectWithPromptCode(

@@ -779,21 +779,28 @@ export function parseScopes(scope: string | null | undefined): string[] {
 }
 
 /**
- * Whether a stored consent covers every requested scope and resource. Shared by
+ * Whether a stored consent covers every requested scope, resource, and
+ * UserInfo claim. Shared by
  * authorization and grants that need prior consent, so the coverage rule cannot
  * drift between them. Each caller still chooses which consent rows to check.
  *
  * @internal
  */
 export function consentCovers(
-	consent: Pick<OAuthConsent<Scope[]>, "scopes" | "resources">,
+	consent: Pick<
+		OAuthConsent<Scope[]>,
+		"scopes" | "resources" | "requestedUserInfoClaims"
+	>,
 	scopes: readonly string[],
 	resources: readonly string[],
+	userInfoClaims: readonly string[] = [],
 ): boolean {
 	const consentedResources = consent.resources ?? [];
+	const consentedClaims = consent.requestedUserInfoClaims ?? [];
 	return (
 		scopes.every((scope) => consent.scopes.includes(scope)) &&
-		resources.every((resource) => consentedResources.includes(resource))
+		resources.every((resource) => consentedResources.includes(resource)) &&
+		userInfoClaims.every((claim) => consentedClaims.includes(claim))
 	);
 }
 

@@ -1,14 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { generateRandomString } from "better-auth/crypto";
 import { APIError } from "better-call";
-import {
-	authorizationQueryErrorCodesByField,
-	validateAuthorizationRequest,
-} from "./authorize";
-import { mapIssuesToOAuthError } from "./oauth-endpoint";
+import { parseAuthorizationRequest } from "./authorize";
 import { getOAuthProviderApi } from "./token";
-import type { OAuthAuthorizationQuery, OAuthOptions, Scope } from "./types";
-import { authorizationQuerySchema } from "./types/zod";
+import type { OAuthOptions, Scope } from "./types";
 import { isRecord, storeToken, tokenError } from "./utils";
 
 export const PUSHED_AUTHORIZATION_REQUEST_PATH = "/oauth2/par";
@@ -108,22 +103,7 @@ export async function pushedAuthorizationRequestEndpoint(
 	}
 	params.client_id = clientId;
 
-	const parsed = authorizationQuerySchema.safeParse(params);
-	if (!parsed.success) {
-		const { error, error_description } = mapIssuesToOAuthError(
-			parsed.error.issues,
-			authorizationQueryErrorCodesByField,
-		);
-		tokenError("BAD_REQUEST", error, error_description);
-	}
-	const validation = await validateAuthorizationRequest(
-		ctx,
-		opts,
-		parsed.data as OAuthAuthorizationQuery,
-	);
-	if (!validation.valid) {
-		tokenError("BAD_REQUEST", validation.error, validation.error_description);
-	}
+	await parseAuthorizationRequest(ctx, opts, params);
 
 	// RFC 9449 §10.1: a proof on the push binds the code to its key.
 	const proof = await provider.verifyDpopProof();
