@@ -32,14 +32,27 @@ const currentUserContextStorage = new AsyncLocalStorage<CurrentUserContext>();
 /**
  * Runs the cleanup of every instance this file created, such as dropping its
  * database. Each cleanup runs once, even if it throws, since it also closes
- * the connection a retry would need.
+ * the connection a retry would need. A failing cleanup does not stop the
+ * others; afterwards this rethrows its error, or an `AggregateError` when
+ * several fail.
  *
  * @internal
  */
 export async function cleanupTestInstances() {
+	const errors: unknown[] = [];
 	for (const cleanup of cleanupSet) {
 		cleanupSet.delete(cleanup);
-		await cleanup();
+		try {
+			await cleanup();
+		} catch (error) {
+			errors.push(error);
+		}
+	}
+	if (errors.length === 1) {
+		throw errors[0];
+	}
+	if (errors.length > 1) {
+		throw new AggregateError(errors, "Failed to clean up test instances");
 	}
 }
 
