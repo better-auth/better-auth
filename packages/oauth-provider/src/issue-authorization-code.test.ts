@@ -709,8 +709,7 @@ describe("provider.issueAuthorizationCode with required DPoP nonces", async () =
 	} satisfies BetterAuthPlugin;
 
 	const { auth, client, signInWithTestUser } = await getTestInstance({
-		baseURL: "http://localhost:3000/api/auth/",
-		advanced: { skipTrailingSlashes: true },
+		baseURL: "http://localhost:3000/api/auth",
 		plugins: [
 			issuer,
 			jwt({ jwt: { issuer: "http://localhost:3000" } }),
@@ -751,7 +750,7 @@ describe("provider.issueAuthorizationCode with required DPoP nonces", async () =
 			.setProtectedHeader({ alg: "RS256", kid: "issue-key" })
 			.setIssuer(keyClient.client_id)
 			.setSubject(keyClient.client_id)
-			.setAudience("http://localhost:3000")
+			.setAudience(issueCodeEndpoint)
 			.setIssuedAt(now)
 			.setExpirationTime(now + 60)
 			.setJti(generateRandomString(16))
