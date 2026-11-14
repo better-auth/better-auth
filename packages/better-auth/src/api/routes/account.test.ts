@@ -616,6 +616,89 @@ describe("account", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12453
+	 */
+	describe("refresh failure cause", () => {
+		async function createExpiredGithubAccount() {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				logger: { disabled: true },
+				socialProviders: {
+					github: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+			const ctx = await auth.$context;
+			const { user, headers } = await signInWithTestUser();
+			const account = await ctx.internalAdapter.createAccount({
+				userId: user.id,
+				providerId: "github",
+				accountId: "github-refresh-unavailable",
+				accessToken: "expired-access-token",
+				refreshToken: "refresh-token",
+				accessTokenExpiresAt: new Date(Date.now() - 60_000),
+			});
+			return { auth, user, headers, account };
+		}
+
+		it("should keep a provider server error as a server-only cause", async () => {
+			const { auth, user, headers, account } =
+				await createExpiredGithubAccount();
+			server.use(
+				http.post(
+					"https://github.com/login/oauth/access_token",
+					() => new HttpResponse("Bad Gateway", { status: 502 }),
+				),
+			);
+			const body = { accountId: account.id, userId: user.id };
+
+			await expect(auth.api.getAccessToken({ body })).rejects.toMatchObject({
+				body: { code: "FAILED_TO_GET_ACCESS_TOKEN" },
+				cause: { status: 502 },
+			});
+			await expect(auth.api.refreshToken({ body })).rejects.toMatchObject({
+				body: { code: "FAILED_TO_REFRESH_ACCESS_TOKEN" },
+				cause: { status: 502 },
+			});
+
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/get-access-token", {
+					method: "POST",
+					headers: {
+						...Object.fromEntries(headers),
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({ accountId: account.id }),
+				}),
+			);
+			expect(response.status).toBe(400);
+			await expect(response.json()).resolves.toEqual({
+				code: "FAILED_TO_GET_ACCESS_TOKEN",
+				message: "Failed to get a valid access token",
+			});
+		});
+
+		it("should keep a provider network failure as the cause", async () => {
+			const { auth, user, account } = await createExpiredGithubAccount();
+			server.use(
+				http.post("https://github.com/login/oauth/access_token", () =>
+					HttpResponse.error(),
+				),
+			);
+
+			await expect(
+				auth.api.getAccessToken({
+					body: { accountId: account.id, userId: user.id },
+				}),
+			).rejects.toMatchObject({
+				body: { code: "FAILED_TO_GET_ACCESS_TOKEN" },
+				cause: expect.any(TypeError),
+			});
+		});
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8345
 	 */
 	it("should get account info using the local account ID", async () => {
