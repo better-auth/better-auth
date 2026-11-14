@@ -26,6 +26,7 @@ import type {
 	Scope,
 } from "./types";
 import {
+	challengeHeaders,
 	destructureCredentials,
 	extractClientCredentials,
 	getAuthEndpointUrl,
@@ -520,9 +521,7 @@ function createInvalidAccessTokenError() {
 			error_description: INVALID_ACCESS_TOKEN_ERROR_DESCRIPTION,
 			error: "invalid_token",
 		},
-		{
-			"WWW-Authenticate": INVALID_ACCESS_TOKEN_WWW_AUTHENTICATE,
-		},
+		challengeHeaders(INVALID_ACCESS_TOKEN_WWW_AUTHENTICATE),
 	);
 }
 

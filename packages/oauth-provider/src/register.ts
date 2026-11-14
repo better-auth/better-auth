@@ -41,6 +41,7 @@ import type {
 } from "./types";
 import type { GrantType, OAuthClient } from "./types/oauth";
 import {
+	challengeHeaders,
 	isInsecureRedirectUriAllowed,
 	isRedirectUriTransportAllowed,
 	parseClientMetadata,
@@ -351,7 +352,7 @@ export async function registerEndpoint(
 				error_description: "Authentication required for client registration",
 			},
 			{
-				"WWW-Authenticate": "Bearer",
+				...challengeHeaders("Bearer"),
 				...NO_STORE_HEADERS,
 			},
 		);

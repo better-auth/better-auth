@@ -702,6 +702,19 @@ export async function normalizeClientAuthenticationParameters(
 	};
 }
 
+/**
+ * Headers for a response that carries an authentication challenge.
+ * `WWW-Authenticate` is not a CORS-safelisted response header, so browsers
+ * hide it from cross-origin clients, such as a browser MCP client registering
+ * itself, unless the response exposes it.
+ */
+export function challengeHeaders(challenge: string) {
+	return {
+		"WWW-Authenticate": challenge,
+		"Access-Control-Expose-Headers": "WWW-Authenticate",
+	};
+}
+
 function basicToClientCredentials(authorization: string) {
 	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
 		return undefined;
@@ -716,7 +729,7 @@ function basicToClientCredentials(authorization: string) {
 				error_description: "invalid authorization header format",
 				error: "invalid_client",
 			},
-			{ "WWW-Authenticate": "Basic" },
+			challengeHeaders("Basic"),
 		);
 	}
 }
@@ -787,7 +800,7 @@ function throwInvalidClient(
 			error_description: errorDescription,
 			error: "invalid_client",
 		},
-		challengeScheme ? { "WWW-Authenticate": challengeScheme } : undefined,
+		challengeScheme ? challengeHeaders(challengeScheme) : undefined,
 	);
 }
 
