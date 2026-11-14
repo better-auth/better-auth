@@ -296,6 +296,23 @@ This applies if you bind tokens with DPoP or mTLS, or write a `clientAuthenticat
 
 Pairwise clients created after the upgrade with private-use redirect URIs, such as `com.example.app:/callback`, or loopback ones, such as `http://localhost:8787/callback`, each get their own `sub`. Before, unrelated clients of either kind could share one. Existing clients keep their current `sub`.
 
+### Access token claims set to `undefined` are left out
+
+This applies if `customAccessTokenClaims`, a resource's `customClaims`, an extension `claims.accessToken` contributor, or a grant's `accessTokenClaims` sets a claim to `undefined`. That claim is now left out, and a lower-priority claim with the same name keeps its value. Before, the `undefined` removed that claim from the access token.
+
+ID token and UserInfo claims already worked this way. The change also makes both token formats agree: a grant's `accessTokenClaims: { tenant: undefined }` removed an extension's `tenant` from a JWT access token, but opaque-token introspection still returned it, because stored claims cannot hold `undefined`.
+
+**What to do:** if you set a claim to `undefined` to override a lower-priority claim, set the value you want instead, such as `null`.
+
+```ts title="auth.ts"
+oauthProvider({
+  customAccessTokenClaims: ({ user }) => ({
+    // was: tenant: user?.tenantId, to remove an extension's tenant
+    tenant: user?.tenantId ?? null,
+  }),
+});
+```
+
 ### Extension and API authors
 
 This applies if you build on `extendOAuthProvider()` or implement the provider API yourself:
