@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
+import { isAPIError } from "better-auth/api";
 import {
 	getJwks,
 	stripAccessTokenAuthorizationScheme,
@@ -553,7 +554,7 @@ async function resolveAccessTokenValidation(
 		const payload = await validateJwtAccessToken(ctx, opts, token, clientId);
 		return { payload, requestedUserInfoClaims: [] };
 	} catch (err) {
-		if (err instanceof APIError) {
+		if (isAPIError(err)) {
 			// continue
 		} else if (err instanceof Error) {
 			throw err;
@@ -564,7 +565,7 @@ async function resolveAccessTokenValidation(
 	try {
 		return await validateOpaqueAccessToken(ctx, opts, token, clientId);
 	} catch (err) {
-		if (err instanceof APIError) {
+		if (isAPIError(err)) {
 			// nothing
 		} else if (err instanceof Error) {
 			throw err;
@@ -734,7 +735,7 @@ export async function introspectEndpoint(
 				);
 				return resolveIntrospectionSub(ctx, opts, payload, client);
 			} catch (error) {
-				if (error instanceof APIError) {
+				if (isAPIError(error)) {
 					if (token_type_hint === "access_token") {
 						throw error;
 					} // else continue
@@ -757,7 +758,7 @@ export async function introspectEndpoint(
 				);
 				return resolveIntrospectionSub(ctx, opts, payload, client);
 			} catch (error) {
-				if (error instanceof APIError) {
+				if (isAPIError(error)) {
 					if (token_type_hint === "refresh_token") {
 						throw error;
 					} // else continue
@@ -774,7 +775,7 @@ export async function introspectEndpoint(
 			error: "invalid_request",
 		});
 	} catch (error) {
-		if (error instanceof APIError) {
+		if (isAPIError(error)) {
 			if (isInactiveTokenError(error)) {
 				return {
 					active: false,
