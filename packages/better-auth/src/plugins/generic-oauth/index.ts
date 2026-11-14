@@ -145,7 +145,8 @@ function isIssuerOfDiscoveryUrl(
  * RFC 8414 §3.3: a document published for another issuer must not be used.
  */
 function checkDiscoveredIssuer(
-	config: GenericOAuthConfig & { discoveryUrl: string },
+	config: GenericOAuthConfig,
+	discoveryUrl: string,
 	discoveredIssuer: string | undefined,
 ): string | undefined {
 	if (config.issuer) {
@@ -154,13 +155,13 @@ function checkDiscoveredIssuer(
 			: `discovery issuer "${discoveredIssuer}" does not match the configured issuer "${config.issuer}".`;
 	}
 	if (discoveredIssuer === undefined) return undefined;
-	const matches = isIssuerOfDiscoveryUrl(discoveredIssuer, config.discoveryUrl);
+	const matches = isIssuerOfDiscoveryUrl(discoveredIssuer, discoveryUrl);
 	if (matches === undefined) {
-		return `discoveryUrl "${config.discoveryUrl}" is not a well-known URL, so its issuer cannot be checked. Set issuer to the issuer identifier the provider documents.`;
+		return `discoveryUrl "${discoveryUrl}" is not a well-known URL, so its issuer cannot be checked. Set issuer to the issuer identifier the provider documents.`;
 	}
 	return matches
 		? undefined
-		: `discovery issuer "${discoveredIssuer}" is not the issuer of discoveryUrl "${config.discoveryUrl}". If the provider publishes its document under another name for the same issuer, set issuer to the issuer identifier the provider documents.`;
+		: `discovery issuer "${discoveredIssuer}" is not the issuer of discoveryUrl "${discoveryUrl}". If the provider publishes its document under another name for the same issuer, set issuer to the issuer identifier the provider documents.`;
 }
 
 /** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
@@ -375,7 +376,8 @@ export const genericOAuth = <const ID extends string>(
 					return null;
 				});
 				const issuerError =
-					discovered && checkDiscoveredIssuer(c, discovered.issuer);
+					discovered &&
+					checkDiscoveredIssuer(c, c.discoveryUrl, discovered.issuer);
 				if (issuerError) {
 					ctx.logger.error(
 						`Provider "${c.providerId}": ${issuerError} Provider skipped.`,
