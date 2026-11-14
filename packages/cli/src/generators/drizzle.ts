@@ -199,7 +199,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				},
 				date: {
 					sqlite: `integer('${name}', { mode: 'timestamp_ms' })`,
-					pg: `timestamp('${name}')`,
+					pg: useTimestamptz
+						? `timestamp('${name}', { withTimezone: true })`
+						: `timestamp('${name}')`,
 					mysql: `timestamp('${name}', { fsp: 3 })`,
 				},
 				"number[]": {
@@ -235,6 +237,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		const useNumberId = options.advanced?.database?.generateId === "serial";
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
+		const useTimestamptz = options.advanced?.database?.useTimestamptz === true;
 
 		if (useUUIDs && databaseType === "pg") {
 			id = `uuid("id").default(sql\`pg_catalog.gen_random_uuid()\`).primaryKey()`;
