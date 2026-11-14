@@ -205,10 +205,10 @@ The provider now sets these access token claims itself:
 
 * `reference_id` holds the consent reference that `postLogin.consentReferenceId` returns, such as an organization. JWT access tokens include it, and introspection returns it.
 * `act` names the actor of a delegated token from token exchange.
-* `ba_uid` and `ba_act` hold the encrypted user ID and actor chain in JWT access tokens with a pairwise `sub`.
+* `ba_sub` holds encrypted user IDs in JWT access tokens with a pairwise `sub`. See [Pairwise `sub` in JWT access tokens](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens).
 * `grant_id` names the grant of a JWT access token. It is reserved only when you set `revocableJwtAccessTokens: true`.
 
-A value for any of these claims set by `customAccessTokenClaims`, an extension `claims.accessToken` contributor, or a resource's `customClaims` is now dropped with a warning.
+A value for any of these claims set by `customAccessTokenClaims`, an extension `claims.accessToken` contributor, or a resource's `customClaims` is now dropped with a warning. A JWT access token issued before you upgrade that carries your own `ba_sub` claim is inactive at UserInfo, introspection, and token exchange, because the provider cannot decrypt it. The client gets a working token at its next refresh.
 
 **What to do:** rename your own claim if you set one of these names. A custom grant that issues a delegated token passes `act` to `issueTokens`.
 

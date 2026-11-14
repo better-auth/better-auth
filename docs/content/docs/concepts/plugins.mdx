@@ -604,6 +604,19 @@ const myPlugin = () => {
 
 If `allowedRoles` is omitted, any organization member is accepted. Members with multiple roles are authorized when any one of their roles matches.
 
+#### `deriveEncryptionKey`
+
+Derives an encryption key for one purpose from the Better Auth secret. Use it when your plugin encrypts a value that leaves the server, such as a cookie or a token claim, so that a ciphertext made for one purpose cannot be decrypted as another. Pass a label unique to your plugin and the value it encrypts.
+
+```ts title="plugin.ts"
+import { deriveEncryptionKey, symmetricEncrypt } from "better-auth/crypto";
+
+const key = deriveEncryptionKey(ctx.context.secretConfig, "my-plugin:session-hint");
+const encrypted = await symmetricEncrypt({ key, data: hint });
+```
+
+Decrypt with `symmetricDecrypt` and the same label. When you rotate the Better Auth secret and keep the old version, values encrypted before the rotation still decrypt.
+
 ## Creating a client plugin
 
 If your endpoints need to be called from the client, you'll also need to create a client plugin. Better Auth clients can infer the endpoints from the server plugins. You can also add additional client-side logic.

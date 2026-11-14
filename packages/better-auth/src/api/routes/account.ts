@@ -19,7 +19,7 @@ import {
 	setAccountCookie,
 } from "../../cookies/session-store";
 import { symmetricEncrypt } from "../../crypto";
-import { derivePurposeKey } from "../../crypto/purpose";
+import { deriveEncryptionKey } from "../../crypto/purpose";
 import { parseAccountOutput } from "../../db/schema";
 import { resolveOAuthAccountKeyForAPI } from "../../oauth2/account-key";
 import { missingEmailLogMessage } from "../../oauth2/errors";
@@ -438,7 +438,7 @@ export const linkSocialAccount = createAuthEndpoint(
 				email: session.user.email,
 				encryptedSessionToken: isStateful(c)
 					? await symmetricEncrypt({
-							key: derivePurposeKey(
+							key: deriveEncryptionKey(
 								c.context.secretConfig,
 								"oauth-link-session-token",
 							),

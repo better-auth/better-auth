@@ -13,7 +13,7 @@ import { createEmailVerificationToken } from "../api";
 import { isStateful } from "../api/routes/session";
 import { setAccountCookie } from "../cookies/session-store";
 import { symmetricDecrypt } from "../crypto";
-import { derivePurposeKey } from "../crypto/purpose";
+import { deriveEncryptionKey } from "../crypto/purpose";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
 import type { StateData } from "../state";
 import type { Account, User } from "../types";
@@ -76,7 +76,10 @@ async function isLinkSessionLive(
 	if (!isStateful(c)) return true;
 	if (!link.encryptedSessionToken) return false;
 	const sessionToken = await symmetricDecrypt({
-		key: derivePurposeKey(c.context.secretConfig, "oauth-link-session-token"),
+		key: deriveEncryptionKey(
+			c.context.secretConfig,
+			"oauth-link-session-token",
+		),
 		data: link.encryptedSessionToken,
 	}).catch(() => null);
 	if (!sessionToken) return false;
