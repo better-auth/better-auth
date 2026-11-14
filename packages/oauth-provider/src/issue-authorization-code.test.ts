@@ -1,4 +1,9 @@
-import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
+import {
+	APIError,
+	createAuthEndpoint,
+	sessionMiddleware,
+} from "better-auth/api";
+import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { deriveDpopJkt, generateCodeChallenge } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -426,6 +431,12 @@ describe("provider.issueAuthorizationCode", async () => {
 			error: "interaction_required",
 		},
 		{
+			name: "prompt=login for a session from an earlier request",
+			client: () => confidentialClient,
+			extra: { redirect_uri: redirectUri, prompt: "login" },
+			error: "login_required",
+		},
+		{
 			name: "an elapsed max_age",
 			client: () => confidentialClient,
 			extra: { redirect_uri: redirectUri, max_age: 0 },
@@ -812,5 +823,203 @@ describe("provider.issueAuthorizationCode with required DPoP nonces", async () =
 		);
 		expect(issued.error).toBeNull();
 		expect(issued.data?.code).toEqual(expect.any(String));
+	});
+});
+
+/**
+ * OIDC Core §3.1.2.1 and §3.1.2.3: `prompt=login` and `max_age=0` require an
+ * authentication that happens after the request, which an endpoint performs
+ * when it signs the user in within the request that issues the code.
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+ */
+describe("provider.issueAuthorizationCode after a sign-in in the same request", async () => {
+	const redirectUri = "https://client.example.com/callback";
+
+	const getProvider = (ctx: Parameters<typeof getOAuthProviderApi>[0]) =>
+		getOAuthProviderApi(ctx, ctx.context.getPlugin("oauth-provider")!.options);
+
+	// Stands in for a native-app endpoint that checks the user's credentials and
+	// issues the code in one request.
+	const issuer = {
+		id: "test-sign-in-code-issuer",
+		endpoints: {
+			testSignInAndIssueCode: createAuthEndpoint(
+				"/test/sign-in-and-issue-code",
+				{ method: "POST" },
+				async (ctx) => {
+					// The client's credentials stay in the body, where client
+					// authentication reads them; the user's do not belong in `query`.
+					const { email, password, ...query } = ctx.body as {
+						email: string;
+						password: string;
+					} & Record<string, unknown>;
+					const found = await ctx.context.internalAdapter.findUserByEmail(
+						email,
+						{ includeAccounts: true },
+					);
+					const hash = found?.accounts.find(
+						(account) => account.providerId === "credential",
+					)?.password;
+					if (
+						!found ||
+						!hash ||
+						!(await ctx.context.password.verify({
+							hash,
+							password,
+						}))
+					) {
+						throw new APIError("UNAUTHORIZED");
+					}
+					const session = await ctx.context.internalAdapter.createSession(
+						found.user.id,
+					);
+					await setSessionCookie(ctx, { session, user: found.user });
+					const issued = await getProvider(ctx).issueAuthorizationCode({
+						query,
+						session: { session, user: found.user },
+					});
+					return ctx.json({
+						code: issued.code,
+						sessionCreatedAt: new Date(session.createdAt).getTime(),
+					});
+				},
+			),
+			testIssueCode: createAuthEndpoint(
+				"/test/issue-code",
+				{ method: "POST", use: [sessionMiddleware] },
+				async (ctx) => {
+					const issued = await getProvider(ctx).issueAuthorizationCode({
+						query: ctx.body as StoredAuthorizationQuery,
+						session: ctx.context.session,
+					});
+					return ctx.json({ code: issued.code });
+				},
+			),
+			testSessionRefreshed: createAuthEndpoint(
+				"/test/session-refreshed",
+				{ method: "GET", use: [sessionMiddleware] },
+				async (ctx) =>
+					ctx.json({
+						refreshed:
+							ctx.context.newSession?.session.id ===
+							ctx.context.session.session.id,
+					}),
+			),
+		},
+	} satisfies BetterAuthPlugin;
+
+	const { auth, client, signInWithTestUser, testUser } = await getTestInstance({
+		baseURL: "http://localhost:3000/api/auth/",
+		advanced: { skipTrailingSlashes: true },
+		// Every request refreshes the cookie session, so the session middleware
+		// sets it as this request's new session.
+		session: { updateAge: 0 },
+		plugins: [
+			issuer,
+			jwt({ jwt: { issuer: "http://localhost:3000" } }),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const context = await auth.$context;
+
+	let oauthClient: OAuthClient;
+	beforeAll(async () => {
+		oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_post",
+				skip_consent: true,
+			},
+		});
+	});
+
+	async function codeQuery(extra: Record<string, unknown>) {
+		return {
+			response_type: "code",
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+			redirect_uri: redirectUri,
+			scope: "openid",
+			code_challenge: await generateCodeChallenge(generateRandomString(43)),
+			code_challenge_method: "S256",
+			...extra,
+		};
+	}
+
+	function signInAndIssueCode(query: Record<string, unknown>) {
+		return client.$fetch<{ code: string; sessionCreatedAt: number }>(
+			"/test/sign-in-and-issue-code",
+			{
+				method: "POST",
+				body: {
+					...query,
+					email: testUser.email,
+					password: testUser.password,
+				},
+			},
+		);
+	}
+
+	async function storedCode(code: string) {
+		const row = await context.internalAdapter.findVerificationValue(
+			await storeToken("hashed", code, "authorization_code"),
+		);
+		return JSON.parse(row!.value) as {
+			query: StoredAuthorizationQuery;
+			authTime: number;
+		};
+	}
+
+	it("accepts prompt=login and records the new sign-in as auth_time", async () => {
+		const issued = await signInAndIssueCode(
+			await codeQuery({ prompt: "login" }),
+		);
+		expect(issued.error).toBeNull();
+		const stored = await storedCode(issued.data!.code);
+		expect(stored.query.prompt).toBeUndefined();
+		expect(stored.authTime).toBe(issued.data!.sessionCreatedAt);
+		expect(stored.query).not.toHaveProperty("password");
+		expect(stored.query).not.toHaveProperty("client_secret");
+	});
+
+	it("accepts max_age=0", async () => {
+		const issued = await signInAndIssueCode(await codeQuery({ max_age: 0 }));
+		expect(issued.error).toBeNull();
+		const stored = await storedCode(issued.data!.code);
+		expect(stored.query.max_age).toBeUndefined();
+	});
+
+	it("still rejects a prompt that needs a page", async () => {
+		const issued = await signInAndIssueCode(
+			await codeQuery({ prompt: "login consent" }),
+		);
+		expect(issued.error?.status).toBe(400);
+		expect((issued.error as { error?: string } | null)?.error).toBe(
+			"interaction_required",
+		);
+	});
+
+	it("rejects prompt=login for a session this request only refreshed", async () => {
+		const refreshed = await client.$fetch<{ refreshed: boolean }>(
+			"/test/session-refreshed",
+			{ headers },
+		);
+		expect(refreshed.data?.refreshed).toBe(true);
+
+		for (const extra of [{ prompt: "login" }, { max_age: 0 }]) {
+			const issued = await client.$fetch("/test/issue-code", {
+				method: "POST",
+				headers,
+				body: await codeQuery(extra),
+			});
+			expect(issued.error?.status).toBe(400);
+			expect(issued.error).toMatchObject({
+				error: "login_required",
+				error_description: "the request requires a new sign-in",
+			});
+		}
 	});
 });

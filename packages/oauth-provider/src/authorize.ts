@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { defineRequestState, hasRequestState } from "@better-auth/core/context";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
 import { INSECURE_REDIRECT_URI_MESSAGE } from "@better-auth/core/utils/redirect-uri";
@@ -83,6 +84,23 @@ export type OAuthRedirectResult = {
 	redirect: true;
 	url: string;
 };
+
+const sessionsCreatedInRequest = defineRequestState(() => new Set<string>());
+
+/**
+ * Records a session created during the current request. Such a session is a
+ * sign-in that happened after the authorization request arrived, which is what
+ * `prompt=login` and `max_age` ask for (OIDC Core §3.1.2.1).
+ */
+export async function recordSessionCreatedInRequest(sessionId: string) {
+	if (!(await hasRequestState())) return;
+	(await sessionsCreatedInRequest.get()).add(sessionId);
+}
+
+async function wasSessionCreatedInRequest(sessionId: string) {
+	if (!(await hasRequestState())) return false;
+	return (await sessionsCreatedInRequest.get()).has(sessionId);
+}
 
 function removeMaxAgeFromAuthorizationQuery<
 	Query extends { max_age?: number | undefined },
@@ -1268,7 +1286,10 @@ export async function issueAuthorizationCode(
 	await bindDpopProof(query);
 
 	const promptSet = query.prompt ? parsePrompt(query.prompt) : undefined;
-	if (promptSet && [...promptSet].some((prompt) => prompt !== "none")) {
+	if (
+		promptSet &&
+		[...promptSet].some((prompt) => prompt !== "none" && prompt !== "login")
+	) {
 		tokenError(
 			"BAD_REQUEST",
 			"interaction_required",
@@ -1276,13 +1297,25 @@ export async function issueAuthorizationCode(
 		);
 	}
 	const now = new Date();
-	if (
-		session.userId !== user.id ||
-		new Date(session.expiresAt) <= now ||
+	const requiresNewSignIn =
+		promptSet?.has("login") ||
 		(query.max_age !== undefined &&
-			!isWithinMaxAge(new Date(session.createdAt), query.max_age, now))
-	) {
+			!isWithinMaxAge(new Date(session.createdAt), query.max_age, now));
+	if (session.userId !== user.id || new Date(session.expiresAt) <= now) {
 		tokenError("BAD_REQUEST", "login_required", "authentication required");
+	}
+	if (requiresNewSignIn && !(await wasSessionCreatedInRequest(session.id))) {
+		tokenError(
+			"BAD_REQUEST",
+			"login_required",
+			"the request requires a new sign-in",
+		);
+	}
+	if (promptSet?.has("login")) {
+		// `login` cannot be combined with another accepted prompt, so the
+		// satisfied request has none left.
+		const { prompt: _prompt, ...queryWithoutPrompt } = query;
+		query = queryWithoutPrompt;
 	}
 	if (query.max_age !== undefined) {
 		query = removeMaxAgeFromAuthorizationQuery(query);

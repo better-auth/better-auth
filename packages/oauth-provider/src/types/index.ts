@@ -422,11 +422,14 @@ export interface OAuthProviderApi {
 	 * `redirect_uri` when present, scopes, claims, resources, and PKCE. The code
 	 * is issued only when the client skips consent or the user's stored consent
 	 * covers the request. A step that would show a page fails instead:
-	 * `consent_required` without consent, `login_required` for an expired
-	 * session or an elapsed `max_age`, and `interaction_required` for a
-	 * `prompt` other than `none` or a `signup` or `postLogin` redirect, and
-	 * `access_denied` when the session cannot meet an essential `acr`. Errors
-	 * are HTTP 400 `APIError`s with these OAuth error codes, with
+	 * - `consent_required` without consent.
+	 * - `login_required` for an expired session, or for `prompt=login` or an
+	 *   elapsed `max_age` when the session was not created in this request.
+	 * - `interaction_required` for a `prompt` other than `none` or `login`, or
+	 *   a `signup` or `postLogin` redirect.
+	 * - `access_denied` when the session cannot meet an essential `acr`.
+	 *
+	 * Errors are HTTP 400 `APIError`s with these OAuth error codes, with
 	 * `invalid_client` when client authentication fails, or with the codes
 	 * `/oauth2/authorize` returns for an invalid client or request.
 	 *
@@ -450,7 +453,11 @@ export interface OAuthProviderApi {
 	 *
 	 * Authenticating the user is the caller's responsibility: pass only a
 	 * session the user proved in this request or already holds. The code is
-	 * issued for that session's user; account selection does not run.
+	 * issued for that session's user; account selection does not run. A
+	 * session created in this request counts as the new sign-in that
+	 * `prompt=login` and `max_age` require (OIDC Core §3.1.2.1), so create one
+	 * only after checking the user's credentials. A session created inside a
+	 * database transaction counts only after the transaction commits.
 	 */
 	issueAuthorizationCode: (
 		params: IssueAuthorizationCodeParams,
