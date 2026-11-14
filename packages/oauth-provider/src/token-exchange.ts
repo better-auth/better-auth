@@ -21,6 +21,7 @@ import {
 	couldBeUserId,
 	findConsent,
 	isConfirmation,
+	isPublicClient,
 	isRecord,
 	parseScopes,
 	tokenError,
@@ -119,7 +120,7 @@ export interface OAuthTokenExchangeOptions {
 }
 
 // Names the authorization server owns inside the current actor's `act` entry.
-const RESERVED_ACTOR_CLAIMS = new Set(["sub", "iss", "act"]);
+const RESERVED_ACTOR_CLAIMS = new Set(["sub", "sub_profile", "iss", "act"]);
 
 function deny(description: string): never {
 	tokenError("BAD_REQUEST", "invalid_request", description);
@@ -219,12 +220,18 @@ async function resolveActor(
 	return { sub, user, token };
 }
 
+/** The actor's `sub_profile`: `"service"` for a client, `"user"` for a user. */
+function actorProfile(actor: OAuthTokenExchangeActor): string {
+	return actor.user ? "user" : "service";
+}
+
 // The value each `may_act` member this server can evaluate must equal.
 const MAY_ACT_MATCHERS: Record<
 	string,
 	(actor: OAuthTokenExchangeActor, issuer: string) => unknown
 > = {
 	sub: (actor) => actor.sub,
+	sub_profile: actorProfile,
 	client_id: (actor) => actor.token.client_id,
 	iss: (_, issuer) => issuer,
 };
@@ -239,11 +246,7 @@ function mayActAllows(
 	issuer: string,
 ): boolean {
 	if (!actor || !isRecord(mayAct)) return false;
-	const members = Object.entries(mayAct);
-	// An empty `may_act`, for example from a member whose value was undefined
-	// when the JWT was signed, names no one.
-	if (members.length === 0) return false;
-	return members.every(
+	return Object.entries(mayAct).every(
 		([member, value]) =>
 			Object.hasOwn(MAY_ACT_MATCHERS, member) &&
 			MAY_ACT_MATCHERS[member]!(actor, issuer) === value,
@@ -312,8 +315,8 @@ async function exchangeToken(
 	);
 	// Without client authentication, a DPoP proof of the subject token's key is
 	// what stops someone holding only a leaked token from exchanging it.
-	const isPublicClient = client.tokenEndpointAuthMethod === "none";
-	if (isPublicClient) {
+	const isPublic = isPublicClient(client);
+	if (isPublic) {
 		if (actorToken) deny("a public client cannot send actor_token");
 		// Fail before any lookup: the proof is checked against the subject
 		// token's key once that token is validated.
@@ -355,11 +358,11 @@ async function exchangeToken(
 		!subject.exp ||
 		// A public client cannot prove it is the resource server in the token's
 		// audience, so it may only exchange its own tokens.
-		(isPublicClient && subject.client_id !== client.clientId)
+		(isPublic && subject.client_id !== client.clientId)
 	) {
 		deny("subject_token is invalid");
 	}
-	if (isPublicClient && !getConfirmationJkt(subject.cnf)) {
+	if (isPublic && !getConfirmationJkt(subject.cnf)) {
 		deny("a public client may only exchange a DPoP-bound subject_token");
 	}
 	// RFC 9396 §9: the exchanged token would not carry the details the user
@@ -381,6 +384,15 @@ async function exchangeToken(
 	if (actor?.user?.id === user.id) {
 		deny("actor_token must not represent the subject token's user");
 	}
+	// `iss` and `sub_profile` alone would allow any actor. They are all that is
+	// left when `sub` was undefined as the JWT was signed.
+	if (
+		isRecord(subject.may_act) &&
+		subject.may_act.sub === undefined &&
+		subject.may_act.client_id === undefined
+	) {
+		deny("the subject token's may_act names no actor");
+	}
 	if (
 		subject.may_act !== undefined &&
 		!mayActAllows(
@@ -395,7 +407,11 @@ async function exchangeToken(
 	// issued token keeps the subject's chain unchanged.
 	const subjectAct = subject.act as OAuthActorClaim | undefined;
 	const act: OAuthActorClaim | undefined = actor
-		? { sub: actor.sub, ...(subjectAct ? { act: subjectAct } : {}) }
+		? {
+				sub: actor.sub,
+				sub_profile: actorProfile(actor),
+				...(subjectAct ? { act: subjectAct } : {}),
+			}
 		: subjectAct;
 
 	const exchangeable = parseScopes(subject.scope as string | undefined).filter(

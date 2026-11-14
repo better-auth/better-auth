@@ -107,7 +107,7 @@ Enables pairwise `sub` values for clients with `subject_type: "pairwise"`. Must 
 
 `accessTokenSubject` <span className="opacity-70">`"user" | "pairwise"`</span>
 
-The `sub` of JWT access tokens issued to a user. It has no effect on opaque access tokens, which the provider issues when the client requests no `resource` or the JWT plugin is disabled. `"user"` uses the user ID for every client. `"pairwise"` uses a pairwise client's ID token `sub` and names users in a delegated token's `act` the same way. So the provider can still find the users, the token carries the user ID, and for a delegated token its real actor chain, encrypted in a `ba_sub` claim. `"pairwise"` requires `pairwiseSecret`, or the plugin fails at startup. Defaults to `"user"`. See [Pairwise `sub` in JWT access tokens](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens).
+The `sub` of JWT access tokens issued to a user. It has no effect on opaque access tokens, which the provider issues when the client requests no `resource` or the JWT plugin is disabled. `"user"` uses the user ID for every client. `"pairwise"` uses a pairwise client's ID token `sub` and names users in `act` and `may_act` the same way. So the provider can still find the users, the token carries the user ID, and its real `act` and `may_act`, encrypted in a `ba_sub` claim. `"pairwise"` requires `pairwiseSecret`, or the plugin fails at startup. Defaults to `"user"`. See [Pairwise `sub` in JWT access tokens](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens).
 
 ### Clients and registration
 

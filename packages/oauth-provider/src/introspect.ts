@@ -541,11 +541,11 @@ async function resolveIntrospectionSubjects(
 			: await getClient(ctx, opts, issuerClientId);
 	if (!issuingClient) return payload;
 	const subjects = await resolvePresentedSubjects(
-		ctx,
 		opts,
 		{
 			sub: payload.sub as string,
 			...(payload.act ? { act: payload.act as OAuthActorClaim } : {}),
+			...(payload.may_act !== undefined ? { may_act: payload.may_act } : {}),
 		},
 		issuingClient,
 	);

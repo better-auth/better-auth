@@ -112,6 +112,19 @@ export const getJwtPlugin = (ctx: AuthContext) => {
 	return plugin;
 };
 
+/**
+ * Whether the client is public: registered with `token_endpoint_auth_method`
+ * `"none"`, so it has no credentials to authenticate with.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-2.1
+ * @internal
+ */
+export function isPublicClient(
+	client: Pick<SchemaClient<Scope[]>, "tokenEndpointAuthMethod">,
+): boolean {
+	return client.tokenEndpointAuthMethod === "none";
+}
+
 /** A plain JSON object: not `null` and not an array. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -899,8 +912,7 @@ export async function validateClientCredentials(
 
 	// Skip secret checks for pre-verified clients (already authenticated via assertion)
 	if (!preVerified) {
-		// Only token_endpoint_auth_method=none identifies a public client.
-		if (client.tokenEndpointAuthMethod !== "none" && !clientSecret) {
+		if (!isPublicClient(client) && !clientSecret) {
 			throwInvalidClient("client secret must be provided", {
 				method: authMethod,
 			});
@@ -1251,8 +1263,8 @@ export async function resolveSubjectIdentifier(
 }
 
 /**
- * Claim carrying the user ID, and the `act` chain with user IDs, encrypted in
- * a JWT access token whose subjects are pairwise. A pairwise `sub` cannot be
+ * Claim carrying the user ID, `act`, and `may_act` with user IDs, encrypted
+ * in a JWT access token whose subjects are pairwise. A pairwise `sub` cannot be
  * reversed, and JWT access tokens are not stored, so UserInfo, introspection,
  * and token exchange read the user from this claim. The ciphertext is
  * randomized per token, so it does not link a user across clients.
@@ -1281,86 +1293,71 @@ export function couldBeUserId(context: AuthContext, id: string): boolean {
 	return true;
 }
 
+/** The subjects a token names: its user, its actors, and its `may_act`. */
+interface TokenSubjects {
+	sub: string;
+	act?: OAuthActorClaim;
+	may_act?: unknown;
+}
+
 /**
- * Returns the `sub` and `act` that `client` sees. For a pairwise client, the
- * user and each user actor get that client's pairwise subject. A client
- * actor's `sub` is a registered client ID, which token exchange never accepts
- * when it is also a user ID, so it stays as is.
+ * Returns the subjects that `client` sees. For a pairwise client, the user,
+ * each user actor in `act`, and a user named by `may_act.sub` get that
+ * client's pairwise subject. An entry whose `sub_profile` is `"service"` names
+ * a client ID, which stays as is. Every other entry is presented as a user, so
+ * an unmarked client ID is hidden rather than a user ID revealed.
  *
  * @internal
  */
 export async function resolvePresentedSubjects(
-	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	subjects: { sub: string; act?: OAuthActorClaim },
+	subjects: TokenSubjects,
 	client: SchemaClient<Scope[]>,
-): Promise<{ sub: string; act?: OAuthActorClaim }> {
+): Promise<TokenSubjects> {
 	if (client.subjectType !== "pairwise" || !opts.pairwiseSecret) {
 		return subjects;
 	}
-	const sub = await resolveSubjectIdentifier(subjects.sub, client, opts);
-	if (!subjects.act) return { sub };
-	const actorSubs = new Set<string>();
-	for (
-		let entry: OAuthActorClaim | undefined = subjects.act;
-		entry;
-		entry = entry.act
-	) {
-		actorSubs.add(entry.sub);
-	}
-	const clientRows = await ctx.context.adapter.findMany<{ clientId: string }>({
-		model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
-		where: [{ field: "clientId", operator: "in", value: [...actorSubs] }],
-		select: ["clientId"],
-		limit: actorSubs.size,
-	});
-	const clientIds = new Set(clientRows.map((row) => row.clientId));
-	// A client ID that is also a user ID is presented as a user, so a
-	// collision can only hide a client ID, never reveal a user ID.
-	const ambiguous = [...clientIds].filter((id) =>
-		couldBeUserId(ctx.context, id),
-	);
-	if (ambiguous.length > 0) {
-		const userRows = await ctx.context.adapter.findMany<{ id: string }>({
-			model: "user",
-			where: [{ field: "id", operator: "in", value: ambiguous }],
-			select: ["id"],
-			limit: ambiguous.length,
-		});
-		for (const { id } of userRows) clientIds.delete(id);
-	}
-	const present = async (entry: OAuthActorClaim): Promise<OAuthActorClaim> => ({
+	const presentSub = async (sub: string, profile: unknown) =>
+		profile === "service" ? sub : resolveSubjectIdentifier(sub, client, opts);
+	const presentAct = async (
+		entry: OAuthActorClaim,
+	): Promise<OAuthActorClaim> => ({
 		...entry,
-		sub: clientIds.has(entry.sub)
-			? entry.sub
-			: await resolveSubjectIdentifier(entry.sub, client, opts),
-		...(entry.act ? { act: await present(entry.act) } : {}),
+		sub: await presentSub(entry.sub, entry.sub_profile),
+		...(entry.act ? { act: await presentAct(entry.act) } : {}),
 	});
-	return { sub, act: await present(subjects.act) };
+	const { act, may_act: mayAct } = subjects;
+	return {
+		...subjects,
+		sub: await resolveSubjectIdentifier(subjects.sub, client, opts),
+		...(act ? { act: await presentAct(act) } : {}),
+		...(isRecord(mayAct) && typeof mayAct.sub === "string"
+			? {
+					may_act: {
+						...mayAct,
+						sub: await presentSub(mayAct.sub, mayAct.sub_profile),
+					},
+				}
+			: {}),
+	};
 }
 
 /**
- * Returns the `sub` and `act` for a JWT access token issued to a user. When
- * `sub` is pairwise, `act` names user actors by pairwise subject too, and the
+ * Returns the subjects for a JWT access token issued to a user. When `sub` is
+ * pairwise, `act` and `may_act` name users by pairwise subject too, and the
  * user IDs are added encrypted. See `accessTokenSubject`.
  *
  * @internal
  */
 export async function resolveAccessTokenSubject(
 	ctx: GenericEndpointContext,
-	userId: string,
-	client: SchemaClient<Scope[]>,
 	opts: OAuthOptions<Scope[]>,
-	act: OAuthActorClaim | undefined,
-): Promise<{
-	sub: string;
-	act?: OAuthActorClaim;
-	[ENCRYPTED_SUBJECTS_CLAIM]?: string;
-}> {
-	const subjects = { sub: userId, ...(act ? { act } : {}) };
+	subjects: TokenSubjects,
+	client: SchemaClient<Scope[]>,
+): Promise<TokenSubjects & { [ENCRYPTED_SUBJECTS_CLAIM]?: string }> {
 	if (opts.accessTokenSubject !== "pairwise") return subjects;
-	const presented = await resolvePresentedSubjects(ctx, opts, subjects, client);
-	if (presented.sub === userId) return presented;
+	const presented = await resolvePresentedSubjects(opts, subjects, client);
+	if (presented.sub === subjects.sub) return presented;
 	return {
 		...presented,
 		[ENCRYPTED_SUBJECTS_CLAIM]: await symmetricEncrypt({
@@ -1371,7 +1368,7 @@ export async function resolveAccessTokenSubject(
 }
 
 /**
- * Restores the user ID as `sub`, and user IDs in `act`, on a verified JWT
+ * Restores the user IDs in `sub`, `act`, and `may_act` on a verified JWT
  * access token payload whose subjects are pairwise, and removes the encrypted
  * claim. Returns `false` when the claim does not decrypt.
  *
@@ -1385,7 +1382,7 @@ export async function restoreAccessTokenUserIds(
 	if (encrypted === undefined) return true;
 	delete payload[ENCRYPTED_SUBJECTS_CLAIM];
 	if (typeof encrypted !== "string") return false;
-	let subjects: { sub?: unknown; act?: OAuthActorClaim };
+	let subjects: { sub?: unknown; act?: OAuthActorClaim; may_act?: unknown };
 	try {
 		subjects = JSON.parse(
 			await symmetricDecrypt({
@@ -1399,6 +1396,7 @@ export async function restoreAccessTokenUserIds(
 	if (typeof subjects?.sub !== "string") return false;
 	payload.sub = subjects.sub;
 	if (subjects.act) payload.act = subjects.act;
+	if (subjects.may_act !== undefined) payload.may_act = subjects.may_act;
 	return true;
 }
 
@@ -1515,11 +1513,8 @@ export function isPKCERequired(
 	client: SchemaClient<Scope[]>,
 	request?: AuthorizationPKCEContext,
 ): false | PKCERequirementErrors {
-	// Determine if client is public
-	const isPublicClient = client.tokenEndpointAuthMethod === "none";
-
 	// PKCE always required for public clients
-	if (isPublicClient) {
+	if (isPublicClient(client)) {
 		return PKCERequirementErrors.PUBLIC_CLIENT;
 	}
 
