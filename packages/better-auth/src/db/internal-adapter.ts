@@ -307,9 +307,10 @@ export const createInternalAdapter = (
 			where = [{ field: "expiresAt", value: new Date(now), operator: "lt" }];
 		} else if (found && new Date(found.expiresAt).getTime() < now) {
 			// Not every reader checks `expiresAt`, so a lookup that finds an
-			// expired row deletes every expired row of that identifier, and no
-			// later lookup returns one. The throttled sweep only bounds table
-			// growth.
+			// expired row deletes every expired row of that identifier. The
+			// delete runs after the caller's transaction commits, so only a
+			// lookup inside that transaction can still see the row. The
+			// throttled sweep only bounds table growth.
 			where = [
 				{ field: "identifier", value: found.identifier },
 				{ field: "expiresAt", value: new Date(now), operator: "lt" },

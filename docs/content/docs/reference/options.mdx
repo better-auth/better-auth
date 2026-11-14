@@ -577,7 +577,7 @@ export const auth = betterAuth({
 
 * `modelName`: The model name for the verification table
 * `fields`: Map fields to different column names
-* `disableCleanup`: Disable deleting expired verification rows in the database. Without it, a verification lookup that finds an expired row deletes that row. Once a minute per server instance, a lookup also deletes every expired row.
+* `disableCleanup`: Disable deleting expired verification rows in the database. Without it, a verification lookup that finds an expired row deletes the expired rows for that identifier. Once a minute per server instance, a lookup or a consumed single-use value also deletes every expired row. These deletes run after the surrounding transaction commits, so another lookup in the same transaction can still return the expired row. Read a value that must be used only once with `consumeVerificationValue`.
 * `storeIdentifier`: How to store verification identifiers such as tokens and OTP keys. Supports `"plain"`, `"hashed"`, or a custom hasher. You can also use `{ default, overrides }` to apply different strategies per identifier prefix.
 * `storeInDatabase`: Store verification records in the database even when `secondaryStorage` is configured. Default is `false`.
 
