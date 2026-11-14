@@ -905,16 +905,20 @@ export async function checkDpopProofBeforeConsume(
 		scopes: string[];
 		resources?: string[];
 		verificationValue?: VerificationValue;
+		/** The policy already resolved for this client, scopes, and resources. */
+		policy?: ResolvedResourcePolicy;
 	},
 ): Promise<{
 	confirmation?: Confirmation;
 	recordReplay: () => Promise<void>;
 }> {
-	const policy = await resolveResourcePolicy(ctx, opts, {
-		resource: params.resources,
-		clientId: params.client.clientId,
-		requestedScopes: params.scopes,
-	});
+	const policy =
+		params.policy ??
+		(await resolveResourcePolicy(ctx, opts, {
+			resource: params.resources,
+			clientId: params.client.clientId,
+			requestedScopes: params.scopes,
+		}));
 	let reservation: DpopReplayReservation | undefined;
 	const confirmation = await resolveDpopTokenBinding(ctx, opts, {
 		client: params.client,
@@ -1484,7 +1488,9 @@ async function rejectAuthorizationCode(
 /**
  * Reads and checks the verification value without consuming it. The caller
  * consumes the code only after every request-level check passes, so a rejected
- * verifier, binding, or DPoP proof leaves the code for a retry.
+ * verifier, binding, or DPoP proof leaves the code for a retry. A DPoP proof
+ * whose `jti` was already used is the exception: it is detected after the
+ * claim, so it spends the code.
  */
 async function checkVerificationValue(
 	ctx: GenericEndpointContext,
