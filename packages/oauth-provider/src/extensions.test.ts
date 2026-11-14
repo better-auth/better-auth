@@ -1,4 +1,4 @@
-import { APIError } from "better-auth/api";
+import { APIError, createAuthEndpoint } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { CLIENT_ASSERTION_TYPE } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -69,6 +69,9 @@ describe("oauth-provider extensions", async () => {
 							confirmation,
 							accessTokenClaims: {
 								grant_claim: "grant-access",
+								// An `undefined` value is not supplied; the extension's
+								// value stays.
+								undefined_probe: undefined,
 								client_id: "malicious-client",
 							},
 							idTokenClaims: {
@@ -111,7 +114,7 @@ describe("oauth-provider extensions", async () => {
 								opaque_per_issuance: "persisted",
 								nested_claim: { tier: "gold", regions: ["eu", "us"] },
 								issued_for: new Date("2026-01-01T00:00:00.000Z"),
-								dropped_claim: undefined,
+								undefined_probe: undefined,
 								access_order_probe: "grant",
 								client_id: "malicious-grant-client",
 								sub: "malicious-grant-sub",
@@ -193,6 +196,7 @@ describe("oauth-provider extensions", async () => {
 					accessToken: () => ({
 						extension_access_claim: "extension-access",
 						access_order_probe: "extension",
+						undefined_probe: "extension",
 						client_id: "malicious-extension-client",
 						cnf: { jkt: "forged-by-extension" },
 					}),
@@ -212,6 +216,19 @@ describe("oauth-provider extensions", async () => {
 				},
 				clientDiscovery,
 			});
+		},
+		endpoints: {
+			testResourceClaims: createAuthEndpoint(
+				"/test/resource-claims",
+				{ method: "GET" },
+				async (ctx) => {
+					const provider = getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+					);
+					return ctx.json(await provider.verifyResourceRequest());
+				},
+			),
 		},
 	} satisfies BetterAuthPlugin;
 
@@ -598,6 +615,7 @@ describe("oauth-provider extensions", async () => {
 		const accessTokenPayload = decodeJwt(tokenResponse.data!.access_token);
 		expect(accessTokenPayload.extension_access_claim).toBe("extension-access");
 		expect(accessTokenPayload.grant_claim).toBe("grant-access");
+		expect(accessTokenPayload.undefined_probe).toBe("extension");
 		expect(accessTokenPayload.client_id).toBe(oauthClient!.client_id);
 		expect(accessTokenPayload.aud).toContain(resource);
 		// The auth strategy proved a confirmation, the grant forwarded it through
@@ -1183,11 +1201,27 @@ describe("oauth-provider extensions", async () => {
 		// Same precedence as the JWT mint: per-issuance claims override
 		// extension contributors.
 		expect(introspection.data?.access_order_probe).toBe("grant");
+		expect(introspection.data?.undefined_probe).toBe("extension");
 		// Reserved names stay owned by the authorization server.
 		expect(introspection.data?.client_id).toBe(oauthClient!.client_id);
 		expect(introspection.data?.sub).toBe(grantUser!.id);
 		expect(introspection.data?.act).toBeUndefined();
 		expect(introspection.data?.cnf).toBeUndefined();
+
+		// A resource route verifying the token in-process sees the same claims.
+		const resourceResponse = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/test/resource-claims`,
+			{ headers: { authorization: `Bearer ${accessToken}` } },
+		);
+		expect(resourceResponse.status).toBe(200);
+		expect(await resourceResponse.json()).toMatchObject({
+			opaque_per_issuance: "persisted",
+			nested_claim: { tier: "gold", regions: ["eu", "us"] },
+			access_order_probe: "grant",
+			undefined_probe: "extension",
+			client_id: oauthClient!.client_id,
+			sub: grantUser!.id,
+		});
 
 		// Reserved names are removed before storage, not only at introspection.
 		const ctx = await auth.$context;

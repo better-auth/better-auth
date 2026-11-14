@@ -75,7 +75,9 @@ function stripReservedClaims(
 
 /**
  * Per-issuance claims as stored on an opaque-token row: reserved names removed
- * and values in the JSON form a signed JWT would carry, on every adapter.
+ * and values in the JSON form a signed JWT would carry, on every adapter. The
+ * JWT mint resolves from this form too, so an `undefined` value is "not
+ * supplied" in both formats instead of removing a lower-precedence claim.
  */
 export function toStoredAccessTokenClaims(
 	claims: Record<string, unknown> | undefined,

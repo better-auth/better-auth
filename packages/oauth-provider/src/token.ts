@@ -1625,7 +1625,10 @@ async function createUserTokens(
 				resources: params.resources,
 				referenceId,
 				metadata,
-				perRequestClaims: params.accessTokenClaims,
+				perRequestClaims: toStoredAccessTokenClaims(
+					params.accessTokenClaims,
+					opts,
+				),
 				resourcePolicyClaims: grantIssuance.resourceCustomClaims,
 			})
 		: undefined;
