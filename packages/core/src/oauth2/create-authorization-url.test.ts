@@ -74,6 +74,10 @@ describe("createAuthorizationURL", () => {
 		expect(url.searchParams.get("client_id")).toBe("client-123");
 	});
 
+	/**
+	 * The query is opaque text, so empty `&`-separated segments are part of it.
+	 * @see https://www.rfc-editor.org/rfc/rfc3986#section-3.4
+	 */
 	it("keeps empty segments in the authorization endpoint's query", async () => {
 		const url = await createAuthorizationURL({
 			...baseInput,
