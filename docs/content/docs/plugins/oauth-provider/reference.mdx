@@ -342,6 +342,8 @@ The provider also serves both well-known documents at their issuer-relative path
 
 Errors use the [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) format. The built-in grants authenticate the client before they look up the grant, so an unknown `client_id` returns `invalid_client`, not `invalid_grant`.
 
+Every 401 from the provider, including client registration, also lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, so a browser client on another origin can read the challenge. Names that a hook already exposed stay in the list.
+
 | Error                    | Status | Returned when                                                                                                                            |
 | ------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `invalid_request`        | 400    | A required request field is missing or malformed.                                                                                        |
