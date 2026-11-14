@@ -105,7 +105,7 @@ describe("pushAuthorizationRequest", () => {
 
 		expect(customizeRequest).toHaveBeenCalledWith(
 			expect.objectContaining({
-				endpoint: "pushed_authorization_request",
+				endpointType: "pushed_authorization_request",
 				grantType: "authorization_code",
 				tokenEndpoint: "https://as.example.com/token",
 				issuer: "https://as.example.com",

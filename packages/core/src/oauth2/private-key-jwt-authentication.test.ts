@@ -185,7 +185,7 @@ describe("private_key_jwt OAuth2 helpers", () => {
 		});
 
 		expect(customizeRequest).toHaveBeenCalledWith(
-			expect.objectContaining({ endpoint: "token" }),
+			expect.objectContaining({ endpointType: "token" }),
 		);
 	});
 

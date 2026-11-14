@@ -85,9 +85,9 @@ export type {
 	TokenEndpointAuth,
 	TokenEndpointAuthMethod,
 	TokenEndpointRequestContext,
-	TokenEndpointRequestEndpoint,
 	TokenEndpointRequestHook,
 	TokenEndpointSecretAuthentication,
+	TokenEndpointType,
 } from "./token-endpoint-auth";
 export {
 	applyDefaultAccessTokenExpiry,

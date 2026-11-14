@@ -85,7 +85,7 @@ export async function pushAuthorizationRequest({
 		options,
 		tokenEndpoint: tokenEndpoint || pushedAuthorizationRequestEndpoint,
 		grantType: "authorization_code",
-		endpoint: "pushed_authorization_request",
+		endpointType: "pushed_authorization_request",
 		issuer,
 		tokenEndpointAuth,
 		authentication,
