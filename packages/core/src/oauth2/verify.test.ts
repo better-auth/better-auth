@@ -1071,6 +1071,166 @@ describe("verifyBearerToken", () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12242
+	 */
+	describe("expired JWKS cache fallback (stale-if-error)", () => {
+		it("should verify with expired cached set when refetch fails within max-stale window", async () => {
+			vi.resetModules();
+			const { verifyBearerToken: verify } = await import("./verify");
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockImplementationOnce(() =>
+				Promise.resolve(jwksResponse(publicJWK)),
+			);
+
+			// Initial fetch populates the cache
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			// Advance time past the 5-minute TTL, but within the 1-hour max-stale window
+			vi.useFakeTimers({ now: Date.now() + 5 * 60 * 1000 + 1 });
+
+			// Next refetch fails with a network error
+			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+			// Token should still verify successfully against the stale set
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			// A consecutive request within the cooldown should not attempt another refetch
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			expect(mockedFetch).toHaveBeenCalledTimes(2);
+
+			vi.useRealTimers();
+			mockedFetch.mockReset();
+			vi.resetModules();
+		});
+
+		it("should verify with expired cached set when refetch times out", async () => {
+			vi.resetModules();
+			const { verifyBearerToken: verify } = await import("./verify");
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockImplementationOnce(() =>
+				Promise.resolve(jwksResponse(publicJWK)),
+			);
+
+			// Initial fetch populates the cache
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			// Advance time past TTL
+			vi.useFakeTimers({ now: Date.now() + 5 * 60 * 1000 + 10 });
+
+			// The refetch hangs and never settles (exceeds 5s timeout)
+			mockedFetch.mockReturnValueOnce(new Promise(() => {}));
+
+			const verification = verify(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+			});
+
+			await vi.advanceTimersByTimeAsync(5_000);
+			await expect(verification).resolves.toMatchObject({ sub: "user-123" });
+
+			vi.useRealTimers();
+			mockedFetch.mockReset();
+			vi.resetModules();
+		});
+
+		it("should reject when refetch fails and cache has passed the max-stale window", async () => {
+			vi.resetModules();
+			const { verifyBearerToken: verify, JWKS_MAX_STALE_MS } = await import(
+				"./verify"
+			);
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockImplementationOnce(() =>
+				Promise.resolve(jwksResponse(publicJWK)),
+			);
+
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			// Advance time past the 1-hour max-stale window
+			vi.useFakeTimers({ now: Date.now() + JWKS_MAX_STALE_MS + 1000 });
+			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).rejects.toMatchObject({ message: "JWKS fetch failed" });
+
+			vi.useRealTimers();
+			mockedFetch.mockReset();
+			vi.resetModules();
+		});
+
+		it("should reject when refetch fails and the token has an unknown kid not in the stale set", async () => {
+			vi.resetModules();
+			const { verifyBearerToken: verify } = await import("./verify");
+			const oldKey = await createTestJWKS();
+			const unknownKey = await createTestJWKS();
+			const unknownToken = await createSignedToken(
+				unknownKey.privateKey,
+				unknownKey.kid,
+			);
+
+			mockedFetch.mockImplementationOnce(() =>
+				Promise.resolve(jwksResponse(oldKey.publicJWK)),
+			);
+
+			// Initial fetch populates cache with oldKey
+			await expect(
+				verify(await createSignedToken(oldKey.privateKey, oldKey.kid), {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			// Advance time past TTL
+			vi.useFakeTimers({ now: Date.now() + 5 * 60 * 1000 + 1 });
+			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+			// Unknown kid token cannot use stale set, must fail with fetch error
+			await expect(
+				verify(unknownToken, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).rejects.toMatchObject({ message: "JWKS fetch failed" });
+
+			vi.useRealTimers();
+			mockedFetch.mockReset();
+			vi.resetModules();
+		});
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9654
 	 */
 	it("should leave JWKS infrastructure failures as jose errors", async () => {
