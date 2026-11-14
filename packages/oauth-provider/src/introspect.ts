@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
+import { isAPIError } from "better-auth/api";
 import {
 	getDpopJktFromPayload,
 	stripAccessTokenAuthorizationScheme,
@@ -34,6 +35,7 @@ import type {
 import {
 	destructureCredentials,
 	extractClientCredentials,
+	getAuthEndpointUrl,
 	getClient,
 	getJwtPlugin,
 	parseClientMetadata,
@@ -582,7 +584,7 @@ export async function introspectEndpoint(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/introspect`,
+		getAuthEndpointUrl(ctx, "/oauth2/introspect"),
 	);
 	const {
 		clientId: client_id,
@@ -641,7 +643,7 @@ export async function introspectEndpoint(
 		);
 		return resolveIntrospectionSubjects(ctx, opts, payload, client);
 	} catch (error) {
-		if (error instanceof APIError) throw error;
+		if (isAPIError(error)) throw error;
 		logger.error("Introspection error:", error);
 		throw new APIError("INTERNAL_SERVER_ERROR");
 	}
