@@ -301,7 +301,7 @@ describe("mcp", () => {
 		)(new Request(MCP_RESOURCE));
 		expect(response.status).toBe(401);
 		expect(response.headers.get("www-authenticate")).toBe(
-			'Bearer resource_metadata="https://resource.example.test/.well-known/oauth-protected-resource/mcp"',
+			'Bearer resource_metadata="https://resource.example.test/.well-known/oauth-protected-resource/mcp", DPoP resource_metadata="https://resource.example.test/.well-known/oauth-protected-resource/mcp", algs="EdDSA ES256 ES512 PS256 RS256"',
 		);
 	});
 });

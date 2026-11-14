@@ -338,9 +338,18 @@ This section applies if you verify access tokens with `verifyAccessTokenRequest`
 
 ### Unsupported `Authorization` schemes have no error code
 
-`verifyAccessTokenRequest` now rejects an `Authorization` header with no scheme, or with a scheme other than `Bearer` or `DPoP`, such as `Basic`, the same way as a request with no header. The thrown 401 no longer has `error: "invalid_token"` or `error_description` in its `body`. `createResourceServerChallenge` and the MCP handler answer with a `Bearer` challenge that has only its `resource_metadata` link.
+`verifyAccessTokenRequest` now rejects an `Authorization` header with no scheme, or with a scheme other than `Bearer` or `DPoP`, such as `Basic`, the same way as a request with no header. The thrown 401 no longer has `error: "invalid_token"` or `error_description` in its `body`. `createResourceServerChallenge` and the MCP handler answer it as they answer a request without a token: with a `Bearer` and a `DPoP` challenge, each with only its `resource_metadata` link and `scope`, and with `algs` on the `DPoP` challenge.
 
 **What to do:** code that matched `body.error === "invalid_token"` for this case must check for a 401 without `body.error`.
+
+### Challenges offer DPoP and link to resource metadata
+
+`createResourceServerChallenge`, `verifyResourceRequest`, and the MCP handler now build their `WWW-Authenticate` challenges the same way:
+
+* A request without a token gets a `Bearer` and a `DPoP` challenge. Before, `createResourceServerChallenge` and the MCP handler sent only `Bearer`.
+* A `DPoP` challenge carries the `resource_metadata` link, as `Bearer` challenges already did. For a resource identifier that is not a URL, such as a `urn:`, `createResourceServerChallenge` throws when `resourceMetadataMappings` has no entry for it. `Bearer` challenges already did, and now `DPoP` challenges do too.
+
+**What to do:** add a `resourceMetadataMappings` entry for each resource identifier that is not a URL. Clients and tests that compare the whole header value must expect the `DPoP` challenge too.
 
 ### `authorization_details_types_supported` is a list
 

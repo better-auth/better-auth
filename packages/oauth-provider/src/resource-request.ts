@@ -109,10 +109,9 @@ export async function verifyResourceRequest(
 			"UNAUTHORIZED",
 			{ error_description: "access token not found", error: "invalid_request" },
 			{
-				"WWW-Authenticate": buildMissingCredentialsChallenge(
-					resource,
-					algorithms,
-				),
+				"WWW-Authenticate": buildMissingCredentialsChallenge(resource, {
+					dpopSigningAlgorithms: algorithms,
+				}),
 				"Access-Control-Expose-Headers": exposeChallengeHeader(ctx),
 			},
 		);

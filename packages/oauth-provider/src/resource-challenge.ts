@@ -63,15 +63,6 @@ function extractTokenError(error: APIError): {
 	return { errorCode, description };
 }
 
-function isDpopChallengeError(error: APIError) {
-	const { errorCode, description } = extractTokenError(error);
-	return (
-		!!errorCode &&
-		(DPOP_CHALLENGE_ERRORS.has(errorCode) ||
-			(errorCode === "invalid_token" && description.includes("DPoP")))
-	);
-}
-
 function presentedScheme(
 	request:
 		| Request
@@ -88,22 +79,56 @@ function presentedScheme(
 	return parseAccessTokenAuthorization(authorizationHeader)?.scheme;
 }
 
-/** Builds an RFC 9449 §7.1 `WWW-Authenticate: DPoP` challenge value. */
-function buildDpopChallengeValue(
-	errorCode: string,
-	description: unknown,
-	algorithms: readonly string[] = DPOP_SIGNING_ALGORITHMS,
-	scope?: string,
+/**
+ * RFC 9449 §7.2: a request that presented its token with the `DPoP` scheme
+ * gets a `DPoP` challenge. Without the scheme, only a DPoP-specific error,
+ * such as a DPoP-bound token sent with `Bearer`, gets one.
+ */
+function usesDpopChallenge(
+	error: APIError,
+	request:
+		| Request
+		| Pick<ResourceRequestInput, "authorizationHeader">
+		| undefined,
 ) {
-	const errorDescription = formatErrorDescription(description);
-	return [
-		`DPoP error="${quoteAuthParam(errorCode)}"`,
-		scope && `scope="${quoteAuthParam(scope)}"`,
+	const scheme = presentedScheme(request);
+	if (scheme === "DPoP") return true;
+	if (request && scheme !== "Bearer") return false;
+	const { errorCode, description } = extractTokenError(error);
+	return (
+		!!errorCode &&
+		(DPOP_CHALLENGE_ERRORS.has(errorCode) ||
+			(errorCode === "invalid_token" && description.includes("DPoP")))
+	);
+}
+
+/**
+ * RFC 9449 §7.1: a `DPoP` challenge for a request that presented a token,
+ * with the proof algorithms the resource accepts.
+ */
+function dpopChallengeParams(params: {
+	errorCode: string;
+	description: unknown;
+	algorithms: readonly string[] | undefined;
+	scope?: string;
+}) {
+	const errorDescription = formatErrorDescription(params.description);
+	return (metadataUrl: string | undefined) => [
+		`error="${quoteAuthParam(params.errorCode)}"`,
+		params.scope && `scope="${quoteAuthParam(params.scope)}"`,
 		errorDescription && `error_description="${errorDescription}"`,
-		`algs="${quoteAuthParam(algorithms.join(" "))}"`,
-	]
-		.filter((param) => !!param)
-		.join(", ");
+		resourceMetadataParam(metadataUrl),
+		algsParam(params.algorithms),
+	];
+}
+
+/** RFC 9728 §5.1, for `Bearer` and `DPoP` challenges alike. */
+function resourceMetadataParam(metadataUrl: string | undefined) {
+	return metadataUrl && `resource_metadata="${quoteAuthParam(metadataUrl)}"`;
+}
+
+function algsParam(algorithms: readonly string[] = DPOP_SIGNING_ALGORITHMS) {
+	return `algs="${quoteAuthParam(algorithms.join(" "))}"`;
 }
 
 /**
@@ -119,19 +144,9 @@ function challengeHeaders(challenge: string): Record<string, string> {
 
 function buildDpopChallengeHeaders(
 	error: APIError,
-	errorCode: string,
-	description: unknown,
-	opts?: {
-		dpopSigningAlgorithms?: readonly string[];
-	},
+	challenge: string,
 ): Record<string, string> {
-	const headers = challengeHeaders(
-		buildDpopChallengeValue(
-			errorCode,
-			description,
-			opts?.dpopSigningAlgorithms,
-		),
-	);
+	const headers = challengeHeaders(challenge);
 	// RFC 9449 §9: a `use_dpop_nonce` challenge carries the nonce to retry with
 	// in its own `DPoP-Nonce` header. The response must not be cached (§8.2),
 	// and a browser client can act on it only when it can read both headers.
@@ -201,7 +216,13 @@ function resolveResourceMetadataUrl(
 	return resourceMetadata;
 }
 
-function buildBearerChallenge(
+/**
+ * One challenge per protected resource, each with that resource's RFC 9728
+ * §5.1 `resource_metadata`, which applies to the `Bearer` and `DPoP` schemes
+ * alike.
+ */
+function buildChallenge(
+	scheme: "Bearer" | "DPoP",
 	resource: string | string[] | undefined,
 	opts: { resourceMetadataMappings?: Record<string, string> } | undefined,
 	authParams: (
@@ -217,7 +238,7 @@ function buildBearerChallenge(
 	return metadataUrls
 		.map((metadataUrl) => {
 			const params = authParams(metadataUrl).filter((param) => !!param);
-			return params.length ? `Bearer ${params.join(", ")}` : "Bearer";
+			return params.length ? `${scheme} ${params.join(", ")}` : scheme;
 		})
 		.join(", ");
 }
@@ -225,8 +246,8 @@ function buildBearerChallenge(
 /**
  * Create an OAuth resource-server challenge for a failed access-token request.
  *
- * Bearer challenges carry the RFC 9728 `resource_metadata` pointer; DPoP
- * challenges carry `algs` and no `resource_metadata`.
+ * Every challenge carries the RFC 9728 §5.1 `resource_metadata` pointer, and
+ * DPoP challenges also carry `algs`.
  *
  * Missing/invalid bearer credentials are reported with RFC 6750 plus the RFC
  * 9728 `resource_metadata` pointer. A 401 whose body has
@@ -296,18 +317,29 @@ export function createResourceServerChallenge(
  * can pick the one it holds a token for.
  */
 export function buildMissingCredentialsChallenge(
-	resource: string | undefined,
-	dpopSigningAlgorithms: readonly string[],
+	resource: string | string[] | undefined,
+	opts?: {
+		resourceMetadataMappings?: Record<string, string>;
+		dpopSigningAlgorithms?: readonly string[];
+	},
+	scope?: string,
 ): string {
-	const bearer = buildBearerChallenge(resource, undefined, (metadataUrl) => [
-		metadataUrl && `resource_metadata="${quoteAuthParam(metadataUrl)}"`,
+	const scopeParam = scope && `scope="${quoteAuthParam(scope)}"`;
+	const bearer = buildChallenge("Bearer", resource, opts, (metadataUrl) => [
+		resourceMetadataParam(metadataUrl),
+		scopeParam,
 	]);
-	return `${bearer}, DPoP algs="${quoteAuthParam(dpopSigningAlgorithms.join(" "))}"`;
+	const dpop = buildChallenge("DPoP", resource, opts, (metadataUrl) => [
+		resourceMetadataParam(metadataUrl),
+		scopeParam,
+		algsParam(opts?.dpopSigningAlgorithms),
+	]);
+	return `${bearer}, ${dpop}`;
 }
 
 /**
  * {@link createResourceServerChallenge} for a resource that may have no
- * identifier, such as UserInfo. Without `resource`, a Bearer challenge omits
+ * identifier, such as UserInfo. Without `resource`, a challenge omits
  * `resource_metadata`.
  */
 export function buildResourceServerChallenge(
@@ -318,41 +350,47 @@ export function buildResourceServerChallenge(
 	const challengeScope = serializeChallengeScopes(opts?.challengeScopes);
 	if (isAPIError(error) && error.status === "UNAUTHORIZED") {
 		const { errorCode, description } = extractTokenError(error);
-		// With a request, only a `Bearer` presentation may still need a DPoP
-		// challenge, for a DPoP-bound token; any other scheme, or none, never
-		// attempted DPoP.
-		const scheme = presentedScheme(opts?.request);
-		if (
-			scheme === "DPoP" ||
-			((!opts?.request || scheme === "Bearer") && isDpopChallengeError(error))
-		) {
+		if (usesDpopChallenge(error, opts?.request)) {
 			// Only the request's DPoP scheme can select this branch without an
 			// error code, and that request presented a token.
 			const dpopErrorCode = errorCode ?? "invalid_token";
+			const challenge = buildChallenge(
+				"DPoP",
+				resource,
+				opts,
+				dpopChallengeParams({
+					errorCode: dpopErrorCode,
+					description,
+					algorithms: opts?.dpopSigningAlgorithms,
+				}),
+			);
 			return new APIError(
 				"UNAUTHORIZED",
 				challengeBody(error.message, dpopErrorCode, description),
-				buildDpopChallengeHeaders(error, dpopErrorCode, description, opts),
+				buildDpopChallengeHeaders(error, challenge),
 			);
 		}
 		// RFC 6750 §3.1: only a request that presented a token which failed
-		// carries an error code; one that sent no credentials gets none.
-		const invalidToken = errorCode === "invalid_token";
-		const errorDescription = invalidToken
-			? formatErrorDescription(description)
-			: undefined;
+		// carries an error code. One that sent no credentials gets none, and is
+		// offered both schemes.
+		if (errorCode !== "invalid_token") {
+			return new APIError(
+				"UNAUTHORIZED",
+				challengeBody(error.message, undefined, description),
+				challengeHeaders(
+					buildMissingCredentialsChallenge(resource, opts, challengeScope),
+				),
+			);
+		}
+		const errorDescription = formatErrorDescription(description);
 		return new APIError(
 			"UNAUTHORIZED",
-			challengeBody(
-				error.message,
-				invalidToken ? errorCode : undefined,
-				description,
-			),
+			challengeBody(error.message, errorCode, description),
 			challengeHeaders(
-				buildBearerChallenge(resource, opts, (metadataUrl) => [
-					invalidToken && `error="invalid_token"`,
+				buildChallenge("Bearer", resource, opts, (metadataUrl) => [
+					`error="invalid_token"`,
 					errorDescription && `error_description="${errorDescription}"`,
-					metadataUrl && `resource_metadata="${quoteAuthParam(metadataUrl)}"`,
+					resourceMetadataParam(metadataUrl),
 					challengeScope && `scope="${quoteAuthParam(challengeScope)}"`,
 				]),
 			),
@@ -373,17 +411,25 @@ export function buildResourceServerChallenge(
 			typeof insufficientScope.description === "string"
 				? insufficientScope.description
 				: error.message;
-		// RFC 9449 §7.2: a request that presented its token with the `DPoP`
-		// scheme gets its error in a `DPoP` challenge, which allows `scope` (§7.1).
-		const dpopChallenge =
-			presentedScheme(opts?.request) === "DPoP"
-				? buildDpopChallengeValue(
-						"insufficient_scope",
-						insufficientScope.description,
-						opts?.dpopSigningAlgorithms,
+		// RFC 9449 §7.1 allows `scope` in a `DPoP` challenge.
+		const challenge = usesDpopChallenge(error, opts?.request)
+			? buildChallenge(
+					"DPoP",
+					resource,
+					opts,
+					dpopChallengeParams({
+						errorCode: "insufficient_scope",
+						description: insufficientScope.description,
+						algorithms: opts?.dpopSigningAlgorithms,
 						scope,
-					)
-				: undefined;
+					}),
+				)
+			: buildChallenge("Bearer", resource, opts, (metadataUrl) => [
+					`error="insufficient_scope"`,
+					scope && `scope="${quoteAuthParam(scope)}"`,
+					resourceMetadataParam(metadataUrl),
+					errorDescription && `error_description="${errorDescription}"`,
+				]);
 		return new APIError(
 			"FORBIDDEN",
 			challengeBody(
@@ -391,15 +437,7 @@ export function buildResourceServerChallenge(
 				"insufficient_scope",
 				insufficientScope.description,
 			),
-			challengeHeaders(
-				dpopChallenge ??
-					buildBearerChallenge(resource, opts, (metadataUrl) => [
-						`error="insufficient_scope"`,
-						scope && `scope="${quoteAuthParam(scope)}"`,
-						metadataUrl && `resource_metadata="${quoteAuthParam(metadataUrl)}"`,
-						errorDescription && `error_description="${errorDescription}"`,
-					]),
-			),
+			challengeHeaders(challenge),
 		);
 	}
 	return undefined;
