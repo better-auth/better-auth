@@ -317,18 +317,22 @@ export function createResourceServerChallenge(
  * can pick the one it holds a token for.
  */
 export function buildMissingCredentialsChallenge(
-	resource: string | undefined,
-	dpopSigningAlgorithms: readonly string[],
+	resource: string | string[] | undefined,
+	opts?: {
+		resourceMetadataMappings?: Record<string, string>;
+		dpopSigningAlgorithms?: readonly string[];
+	},
+	scope?: string,
 ): string {
-	const bearer = buildChallenge(
-		"Bearer",
-		resource,
-		undefined,
-		(metadataUrl) => [resourceMetadataParam(metadataUrl)],
-	);
-	const dpop = buildChallenge("DPoP", resource, undefined, (metadataUrl) => [
+	const scopeParam = scope && `scope="${quoteAuthParam(scope)}"`;
+	const bearer = buildChallenge("Bearer", resource, opts, (metadataUrl) => [
 		resourceMetadataParam(metadataUrl),
-		algsParam(dpopSigningAlgorithms),
+		scopeParam,
+	]);
+	const dpop = buildChallenge("DPoP", resource, opts, (metadataUrl) => [
+		scopeParam,
+		resourceMetadataParam(metadataUrl),
+		algsParam(opts?.dpopSigningAlgorithms),
 	]);
 	return `${bearer}, ${dpop}`;
 }
@@ -367,21 +371,24 @@ export function buildResourceServerChallenge(
 			);
 		}
 		// RFC 6750 §3.1: only a request that presented a token which failed
-		// carries an error code; one that sent no credentials gets none.
-		const invalidToken = errorCode === "invalid_token";
-		const errorDescription = invalidToken
-			? formatErrorDescription(description)
-			: undefined;
+		// carries an error code. One that sent no credentials gets none, and is
+		// offered both schemes.
+		if (errorCode !== "invalid_token") {
+			return new APIError(
+				"UNAUTHORIZED",
+				challengeBody(error.message, undefined, description),
+				challengeHeaders(
+					buildMissingCredentialsChallenge(resource, opts, challengeScope),
+				),
+			);
+		}
+		const errorDescription = formatErrorDescription(description);
 		return new APIError(
 			"UNAUTHORIZED",
-			challengeBody(
-				error.message,
-				invalidToken ? errorCode : undefined,
-				description,
-			),
+			challengeBody(error.message, errorCode, description),
 			challengeHeaders(
 				buildChallenge("Bearer", resource, opts, (metadataUrl) => [
-					invalidToken && `error="invalid_token"`,
+					`error="invalid_token"`,
 					errorDescription && `error_description="${errorDescription}"`,
 					resourceMetadataParam(metadataUrl),
 					challengeScope && `scope="${quoteAuthParam(challengeScope)}"`,

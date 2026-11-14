@@ -52,7 +52,7 @@ describe("resource server challenge", () => {
 
 		expect(error.status).toBe("UNAUTHORIZED");
 		expect(headers?.get("WWW-Authenticate")).toBe(
-			'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp/tools?tenant=a"',
+			'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp/tools?tenant=a", DPoP resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp/tools?tenant=a", algs="EdDSA ES256 ES512 PS256 RS256"',
 		);
 	});
 
@@ -64,7 +64,7 @@ describe("resource server challenge", () => {
 		const headers = new Headers(error.headers);
 
 		expect(headers?.get("WWW-Authenticate")).toBe(
-			'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/calendar", Bearer resource_metadata="https://files.example.com/.well-known/oauth-protected-resource"',
+			'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/calendar", Bearer resource_metadata="https://files.example.com/.well-known/oauth-protected-resource", DPoP resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/calendar", algs="EdDSA ES256 ES512 PS256 RS256", DPoP resource_metadata="https://files.example.com/.well-known/oauth-protected-resource", algs="EdDSA ES256 ES512 PS256 RS256"',
 		);
 	});
 
@@ -182,6 +182,21 @@ describe("resource server challenge", () => {
 				{ challengeScopes: ["files:read injected"] },
 			),
 		).toThrow("invalid challenge scope");
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-7.1
+	 */
+	it("offers both schemes to a request without credentials", () => {
+		const challenge = createResourceServerChallenge(
+			new APIError("UNAUTHORIZED", { message: "missing bearer token" }),
+			"https://api.example.com",
+			{ dpopSigningAlgorithms: ["ES256"], challengeScopes: ["files:read"] },
+		) as APIError;
+		expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+			'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", scope="files:read", DPoP scope="files:read", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", algs="ES256"',
+		);
+		expect(challenge.body).not.toHaveProperty("error");
 	});
 
 	/**
@@ -500,7 +515,7 @@ describe("resource server challenge", () => {
 		it("leaves the error code out when no token was presented", () => {
 			const challenge = catchChallenge("https://api.example.com");
 			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
-				'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"',
+				'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", DPoP resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", algs="EdDSA ES256 ES512 PS256 RS256"',
 			);
 			expect(challenge.body).not.toHaveProperty("error");
 			expect(challenge.body).not.toHaveProperty("error_description");
@@ -555,16 +570,20 @@ describe("resource server challenge", () => {
 		it.each([
 			["an unsupported scheme", "Basic dXNlcjpwYXNz"],
 			["a header with no scheme", "access-token"],
-		])("answers %s with a Bearer challenge", async (_, authorizationHeader) => {
-			const { error, request } = await rejectAuthorization(authorizationHeader);
-			const challenge = createResourceServerChallenge(error, resource, {
-				request,
-			}) as APIError;
+		])(
+			"answers %s as a request without credentials",
+			async (_, authorizationHeader) => {
+				const { error, request } =
+					await rejectAuthorization(authorizationHeader);
+				const challenge = createResourceServerChallenge(error, resource, {
+					request,
+				}) as APIError;
 
-			expect(challenge.statusCode).toBe(401);
-			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
-				'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp"',
-			);
-		});
+				expect(challenge.statusCode).toBe(401);
+				expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+					'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp", DPoP resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp", algs="EdDSA ES256 ES512 PS256 RS256"',
+				);
+			},
+		);
 	});
 });
