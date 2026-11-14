@@ -497,6 +497,7 @@ describe("id_token claim input — sessionId", async () => {
 	const harness = await bootHarness({
 		extensions: [
 			{
+				id: "test-claims",
 				claims: {
 					idToken: (input) => {
 						capturedInput = input;

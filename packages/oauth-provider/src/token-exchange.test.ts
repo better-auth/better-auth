@@ -918,6 +918,7 @@ describe("oauthTokenExchange", () => {
 			id: "test-confirming",
 			init(ctx) {
 				extendOAuthProvider(ctx, {
+					id: "test-confirming",
 					clientAuthentication: {
 						[authMethod]: {
 							assertionTypes: [assertionType],
@@ -1227,6 +1228,7 @@ describe("OAuthTokenIssueParams.maxExpiresAt", () => {
 			id: "test-delegating-grant",
 			init(ctx) {
 				extendOAuthProvider(ctx, {
+					id: "test-delegating-grant",
 					grants: {
 						[delegatingGrant]: async ({ ctx, provider }) => {
 							const { client } = await provider.authenticateClient();
@@ -1309,6 +1311,7 @@ describe("OAuthTokenIssueParams.maxExpiresAt", () => {
 			id: "test-capped-grant",
 			init(ctx) {
 				extendOAuthProvider(ctx, {
+					id: "test-capped-grant",
 					grants: {
 						[cappedGrant]: async ({ provider }) => {
 							const { client } = await provider.authenticateClient({
@@ -2220,6 +2223,7 @@ describe("oauthTokenExchange delegation", () => {
 				id: "test-bound-actor",
 				init(ctx) {
 					extendOAuthProvider(ctx, {
+						id: "test-bound-actor",
 						clientAuthentication: {
 							[authMethod]: {
 								assertionTypes: [assertionType],

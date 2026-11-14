@@ -55,7 +55,7 @@ export const cimd = (options: CimdOptions) => {
 		id: "cimd",
 		version: PACKAGE_VERSION,
 		init(ctx) {
-			extendOAuthProvider(ctx, { clientDiscovery: discovery });
+			extendOAuthProvider(ctx, { id: "cimd", clientDiscovery: discovery });
 		},
 	} satisfies BetterAuthPlugin;
 };

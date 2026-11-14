@@ -105,6 +105,12 @@ interface ExtensionKeys {
 function collectExtensionKeys(
 	extension: OAuthProviderExtension,
 ): ExtensionKeys {
+	const id: unknown = extension.id;
+	if (typeof id !== "string" || id.trim().length === 0) {
+		throw new BetterAuthError(
+			"OAuth Provider extensions need a non-empty string id, such as the id of the plugin that registers them.",
+		);
+	}
 	const grantTypes = Object.keys(extension.grants ?? {});
 	for (const grantType of grantTypes) {
 		assertExtensionGrantType(grantType);
@@ -127,12 +133,9 @@ function collectExtensionKeys(
 			assertionTypes.push(assertionType);
 		}
 	}
-	const clientDiscoveries = extension.clientDiscovery
-		? Array.isArray(extension.clientDiscovery)
-			? extension.clientDiscovery
-			: [extension.clientDiscovery]
-		: [];
-	const clientDiscoveryIds = clientDiscoveries.map((discovery) => discovery.id);
+	const clientDiscoveryIds = toArray(extension.clientDiscovery).map(
+		(discovery) => discovery.id,
+	);
 	for (const clientDiscoveryId of clientDiscoveryIds) {
 		assertNonEmptyExtensionValue("client discovery id", clientDiscoveryId);
 	}
@@ -155,16 +158,25 @@ function collectExtensionKeys(
 	};
 }
 
-function assertNoDuplicateAcrossExtensions(label: string, values: string[]) {
-	const seen = new Set<string>();
-	for (const value of values) {
-		if (seen.has(value)) {
-			throw new BetterAuthError(
-				`OAuth Provider extensions register ${label} "${value}" more than once. Extension contributions must be disjoint.`,
-			);
+function assertNoDuplicateAcrossExtensions(
+	label: string,
+	extensions: OAuthProviderExtension[],
+	values: (keys: ExtensionKeys) => string[],
+	keys: ExtensionKeys[],
+) {
+	const owners = new Map<string, string>();
+	keys.forEach((extensionKeys, index) => {
+		const extensionId = extensions[index]!.id;
+		for (const value of values(extensionKeys)) {
+			const owner = owners.get(value);
+			if (owner !== undefined) {
+				throw new BetterAuthError(
+					`OAuth Provider extensions "${owner}" and "${extensionId}" both register ${label} "${value}". Extension contributions must be disjoint.`,
+				);
+			}
+			owners.set(value, extensionId);
 		}
-		seen.add(value);
-	}
+	});
 }
 
 /**
@@ -177,27 +189,24 @@ function assertNoDuplicateAcrossExtensions(label: string, values: string[]) {
 export function validateOAuthProviderExtensions(
 	extensions: OAuthProviderExtension[] | undefined,
 ) {
-	const keys = (extensions ?? []).map(collectExtensionKeys);
-	assertNoDuplicateAcrossExtensions(
-		"grant type",
-		keys.flatMap((k) => k.grantTypes),
-	);
-	assertNoDuplicateAcrossExtensions(
-		"token_endpoint_auth_method",
-		keys.flatMap((k) => k.authMethods),
-	);
-	assertNoDuplicateAcrossExtensions(
-		"client_assertion_type",
-		keys.flatMap((k) => k.assertionTypes),
-	);
-	assertNoDuplicateAcrossExtensions(
-		"client discovery id",
-		keys.flatMap((k) => k.clientDiscoveryIds),
-	);
-	assertNoDuplicateAcrossExtensions(
-		"interaction request parameter",
-		keys.flatMap((k) => k.interactionRequestParameters),
-	);
+	const list = extensions ?? [];
+	const keys = list.map(collectExtensionKeys);
+	const ids = new Set<string>();
+	for (const { id } of list) {
+		if (ids.has(id)) {
+			throw new BetterAuthError(
+				`OAuth Provider extensions register the id "${id}" more than once. Each extension needs a unique id.`,
+			);
+		}
+		ids.add(id);
+	}
+	const check = (label: string, values: (k: ExtensionKeys) => string[]) =>
+		assertNoDuplicateAcrossExtensions(label, list, values, keys);
+	check("grant type", (k) => k.grantTypes);
+	check("token_endpoint_auth_method", (k) => k.authMethods);
+	check("client_assertion_type", (k) => k.assertionTypes);
+	check("client discovery id", (k) => k.clientDiscoveryIds);
+	check("interaction request parameter", (k) => k.interactionRequestParameters);
 }
 
 function getOAuthProviderExtensions(
@@ -214,11 +223,14 @@ function getOAuthProviderExtensions(
 export function getClientDiscoveries(
 	opts: OAuthOptions<Scope[]>,
 ): ClientDiscovery[] {
-	return getOAuthProviderExtensions(opts).flatMap((extension) => {
-		const discovery = extension.clientDiscovery;
-		if (!discovery) return [];
-		return Array.isArray(discovery) ? discovery : [discovery];
-	});
+	return getOAuthProviderExtensions(opts).flatMap((extension) =>
+		toArray(extension.clientDiscovery),
+	);
+}
+
+function toArray<T>(value: T | T[] | undefined): T[] {
+	if (value === undefined) return [];
+	return Array.isArray(value) ? value : [value];
 }
 
 /**
@@ -233,7 +245,8 @@ export function getClientDiscoveries(
  * result is shared across two `betterAuth()` instances) does not register it
  * twice. It throws if the oauth-provider plugin is not installed, if a grant
  * type or assertion type is not an absolute URI, if a client authentication
- * method reuses a built-in name, or if the extension registers a grant type,
+ * method reuses a built-in name, if another extension already uses its `id`,
+ * or if the extension registers a grant type,
  * auth method, assertion type, or client discovery identifier that another
  * extension already registered (contributions must be disjoint).
  *
@@ -241,6 +254,7 @@ export function getClientDiscoveries(
  * ```ts
  * init(ctx) {
  *   extendOAuthProvider(ctx, {
+ *     id: "my-plugin",
  *     grants: { "urn:example:grant": async ({ provider }) => provider.issueTokens(...) },
  *   });
  * }
@@ -414,42 +428,51 @@ export function applyOAuthProviderMetadataExtensions<
 	type: OAuthMetadataExtensionInput["type"],
 	core: T,
 ): T {
+	const extensions = getOAuthProviderExtensions(opts);
 	const warn = (message: string) =>
 		warnMetadataCollisionOnce(ctx, opts, message);
-	const discoveryMetadata: Record<string, unknown> = Object.assign(
-		{},
-		...getClientDiscoveries(opts).map(
-			(discovery) => discovery.discoveryMetadata,
-		),
-	);
-	for (const key of Object.keys(discoveryMetadata)) {
-		if (key in core) {
-			warn(
-				`oauth-provider: a client discovery contributed the discovery metadata key "${key}" to ${type}, which the provider sets; ignoring it.`,
-			);
+	const discoveryMetadata: Record<string, unknown> = {};
+	const discoveryOwners = new Map<string, string>();
+	for (const extension of extensions) {
+		for (const discovery of toArray(extension.clientDiscovery)) {
+			for (const [key, value] of Object.entries(
+				discovery.discoveryMetadata ?? {},
+			)) {
+				if (key in core) {
+					warn(
+						`oauth-provider: extension "${extension.id}" contributed the client discovery metadata key "${key}" to ${type}, which the provider sets; ignoring it.`,
+					);
+				}
+				discoveryMetadata[key] = value;
+				discoveryOwners.set(key, extension.id);
+			}
 		}
 	}
 	const document = { ...discoveryMetadata, ...core };
+	const owners = new Map<string, string>();
 	const next: Record<string, unknown> = { ...document };
-	for (const extension of getOAuthProviderExtensions(opts)) {
-		const contribution = extension.metadata?.({ ctx, opts, type, document });
-		for (const [key, value] of Object.entries(contribution ?? {})) {
+	for (const extension of extensions) {
+		const fields = extension.metadata?.({ ctx, opts, type, document });
+		for (const [key, value] of Object.entries(fields ?? {})) {
 			const existing = next[key];
+			const owner = owners.get(key);
+			const discoveryOwner = discoveryOwners.get(key);
 			if (key in core) {
 				warn(
-					`oauth-provider: an extension contributed the discovery metadata key "${key}" to ${type}, which the provider sets; ignoring it.`,
+					`oauth-provider: extension "${extension.id}" contributed the discovery metadata key "${key}" to ${type}, which the provider sets; ignoring it.`,
 				);
-			} else if (key in discoveryMetadata) {
+			} else if (discoveryOwner !== undefined) {
 				warn(
-					`oauth-provider: an extension contributed the discovery metadata key "${key}" to ${type}, which a client discovery sets; keeping the client discovery's value.`,
+					`oauth-provider: extension "${extension.id}" contributed the discovery metadata key "${key}" to ${type}, which the client discovery of "${discoveryOwner}" sets; keeping the client discovery's value.`,
 				);
-			} else if (!(key in next)) {
+			} else if (owner === undefined) {
 				next[key] = value;
+				owners.set(key, extension.id);
 			} else if (Array.isArray(existing) && Array.isArray(value)) {
 				next[key] = [...new Set([...existing, ...value])];
 			} else {
 				warn(
-					`oauth-provider: more than one extension contributed the discovery metadata key "${key}" to ${type}; keeping the first-registered value.`,
+					`oauth-provider: extensions "${owner}" and "${extension.id}" both contributed the discovery metadata key "${key}" to ${type}; keeping the value from "${owner}".`,
 				);
 			}
 		}
@@ -464,6 +487,7 @@ async function collectClaims(
 	) => Awaitable<Record<string, unknown> | undefined>,
 ) {
 	const claims: Record<string, unknown> = {};
+	const owners = new Map<string, string>();
 	// First contributor wins a key, matching metadata extensions. Extensions are
 	// expected to contribute disjoint claims, so a collision is a
 	// misconfiguration: keep the first value and warn rather than silently
@@ -471,13 +495,15 @@ async function collectClaims(
 	for (const extension of getOAuthProviderExtensions(opts)) {
 		const contribution = (await run(extension)) ?? {};
 		for (const [key, value] of Object.entries(contribution)) {
-			if (key in claims) {
+			const owner = owners.get(key);
+			if (owner !== undefined) {
 				logger.warn(
-					`oauth-provider: two extensions contributed the claim "${key}"; keeping the first-registered value.`,
+					`oauth-provider: extensions "${owner}" and "${extension.id}" both contributed the claim "${key}"; keeping the value from "${owner}".`,
 				);
 				continue;
 			}
 			claims[key] = value;
+			owners.set(key, extension.id);
 		}
 	}
 	return claims;

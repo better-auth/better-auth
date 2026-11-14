@@ -47,6 +47,7 @@ describe("oauth-provider extensions", async () => {
 		id: "test-oauth-extension",
 		init(ctx) {
 			extendOAuthProvider(ctx, {
+				id: "test-oauth-extension",
 				grants: {
 					[extensionGrant]: async ({ ctx, provider }) => {
 						observedCustomParam = (ctx.body as { custom_param?: string })
@@ -515,6 +516,7 @@ describe("oauth-provider extensions", async () => {
 				consentPage: "/consent",
 				extensions: [
 					{
+						id: "password-grant-extension",
 						grants: {
 							password: async () => {
 								throw new APIError("BAD_REQUEST", {
@@ -529,6 +531,20 @@ describe("oauth-provider extensions", async () => {
 		).toThrow("grant type must be an absolute URI");
 	});
 
+	it("rejects an extension without an id", () => {
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				extensions: [
+					{ metadata: () => ({}) } as unknown as OAuthProviderExtension,
+				],
+			}),
+		).toThrow(
+			"OAuth Provider extensions need a non-empty string id, such as the id of the plugin that registers them.",
+		);
+	});
+
 	it("registers an extension at most once per extension object", () => {
 		const provider = oauthProvider({
 			loginPage: "/login",
@@ -538,6 +554,7 @@ describe("oauth-provider extensions", async () => {
 			getPlugin: (id: string) => (id === "oauth-provider" ? provider : null),
 		} as unknown as Parameters<typeof extendOAuthProvider>[0];
 		const extension = {
+			id: "idempotent-extension",
 			grants: {
 				[extensionGrant]: async () => {
 					throw new APIError("BAD_REQUEST", {
@@ -717,6 +734,7 @@ describe("oauth-provider extensions", async () => {
 			id: "invalid-oauth-extension",
 			init(ctx) {
 				extendOAuthProvider(ctx, {
+					id: "invalid-oauth-extension",
 					grants: {
 						custom: async () => {
 							throw new APIError("BAD_REQUEST", {
@@ -752,6 +770,7 @@ describe("oauth-provider extensions", async () => {
 			id: "invalid-oauth-auth-method-extension",
 			init(ctx) {
 				extendOAuthProvider(ctx, {
+					id: "invalid-oauth-auth-method-extension",
 					clientAuthentication: {
 						private_key_jwt: {
 							assertionTypes: [extensionAssertionType],
@@ -792,6 +811,7 @@ describe("oauth-provider extensions", async () => {
 			id: "invalid-oauth-assertion-type-extension",
 			init(ctx) {
 				extendOAuthProvider(ctx, {
+					id: "invalid-oauth-assertion-type-extension",
 					clientAuthentication: {
 						[extensionAuthMethod]: {
 							assertionTypes: [CLIENT_ASSERTION_TYPE],
@@ -832,6 +852,7 @@ describe("oauth-provider extensions", async () => {
 			id: "invalid-oauth-empty-assertion-types-extension",
 			init(ctx) {
 				extendOAuthProvider(ctx, {
+					id: "invalid-oauth-empty-assertion-types-extension",
 					clientAuthentication: {
 						[extensionAuthMethod]: {
 							assertionTypes: [],
@@ -872,6 +893,7 @@ describe("oauth-provider extensions", async () => {
 				id,
 				init(ctx) {
 					extendOAuthProvider(ctx, {
+						id,
 						grants: {
 							[sharedGrant]: async () => {
 								throw new APIError("BAD_REQUEST", {
@@ -896,7 +918,9 @@ describe("oauth-provider extensions", async () => {
 					makeExtensionPlugin("ext-b"),
 				],
 			}),
-		).rejects.toThrow("register grant type");
+		).rejects.toThrow(
+			`OAuth Provider extensions "ext-a" and "ext-b" both register grant type "${sharedGrant}". Extension contributions must be disjoint.`,
+		);
 	});
 
 	it("rejects two extensions registering the same auth method", async () => {
@@ -906,6 +930,7 @@ describe("oauth-provider extensions", async () => {
 				id,
 				init(ctx) {
 					extendOAuthProvider(ctx, {
+						id,
 						clientAuthentication: {
 							[sharedMethod]: {
 								assertionTypes: [assertionType],
@@ -933,7 +958,9 @@ describe("oauth-provider extensions", async () => {
 					makeAuthExtensionPlugin("auth-ext-b", "urn:better-auth:test:b"),
 				],
 			}),
-		).rejects.toThrow("register token_endpoint_auth_method");
+		).rejects.toThrow(
+			'OAuth Provider extensions "auth-ext-a" and "auth-ext-b" both register token_endpoint_auth_method "shared_attestation_jwt".',
+		);
 	});
 
 	it("rejects two extensions registering the same assertion type", async () => {
@@ -943,6 +970,7 @@ describe("oauth-provider extensions", async () => {
 				id,
 				init(ctx) {
 					extendOAuthProvider(ctx, {
+						id,
 						clientAuthentication: {
 							[method]: {
 								assertionTypes: [sharedAssertion],
@@ -970,7 +998,9 @@ describe("oauth-provider extensions", async () => {
 					makeAssertionExtensionPlugin("assert-ext-b", "method_b_jwt"),
 				],
 			}),
-		).rejects.toThrow("register client_assertion_type");
+		).rejects.toThrow(
+			`OAuth Provider extensions "assert-ext-a" and "assert-ext-b" both register client_assertion_type "${sharedAssertion}".`,
+		);
 	});
 
 	it("rejects duplicate client discovery identifiers", async () => {
@@ -979,6 +1009,7 @@ describe("oauth-provider extensions", async () => {
 				id: pluginId,
 				init(ctx) {
 					extendOAuthProvider(ctx, {
+						id: pluginId,
 						clientDiscovery: {
 							id: "shared-client-discovery",
 							matches: () => false,
@@ -1001,7 +1032,39 @@ describe("oauth-provider extensions", async () => {
 					makeDiscoveryExtensionPlugin("discovery-ext-b"),
 				],
 			}),
-		).rejects.toThrow("register client discovery id");
+		).rejects.toThrow(
+			'OAuth Provider extensions "discovery-ext-a" and "discovery-ext-b" both register client discovery id "shared-client-discovery".',
+		);
+	});
+
+	it("rejects two extensions with the same id", async () => {
+		const makeNamedExtensionPlugin = (pluginId: string) =>
+			({
+				id: pluginId,
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						id: "shared-extension",
+						metadata: () => ({}),
+					});
+				},
+			}) satisfies BetterAuthPlugin;
+
+		await expect(
+			getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({ jwt: { issuer: authServerBaseUrl } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+					}),
+					makeNamedExtensionPlugin("named-ext-a"),
+					makeNamedExtensionPlugin("named-ext-b"),
+				],
+			}),
+		).rejects.toThrow(
+			'OAuth Provider extensions register the id "shared-extension" more than once. Each extension needs a unique id.',
+		);
 	});
 
 	it("resolves a metadata key collision to the first-registered extension", async () => {
@@ -1010,6 +1073,7 @@ describe("oauth-provider extensions", async () => {
 				id,
 				init(ctx) {
 					extendOAuthProvider(ctx, {
+						id,
 						metadata: () => ({ shared_metadata_field: value }),
 					});
 				},
@@ -1040,12 +1104,12 @@ describe("oauth-provider extensions", async () => {
 	it("keeps client discovery metadata, combines extension lists, and warns once per collision", async () => {
 		const makeExtensionPlugin = (
 			id: string,
-			extension: Parameters<typeof extendOAuthProvider>[1],
+			extension: Omit<Parameters<typeof extendOAuthProvider>[1], "id">,
 		) =>
 			({
 				id,
 				init(ctx) {
-					extendOAuthProvider(ctx, extension);
+					extendOAuthProvider(ctx, { ...extension, id });
 				},
 			}) satisfies BetterAuthPlugin;
 		const makeDiscovery = (
@@ -1112,10 +1176,11 @@ describe("oauth-provider extensions", async () => {
 		expect(openIdConfig.extension_list).toEqual(["x", "y"]);
 		expect(openIdConfig.mixed_shape_field).toEqual(["first"]);
 		expect(warn.mock.calls.map(([message]) => message)).toEqual([
-			'oauth-provider: a client discovery contributed the discovery metadata key "issuer" to openid-configuration, which the provider sets; ignoring it.',
-			'oauth-provider: an extension contributed the discovery metadata key "authorization_details_types_supported" to openid-configuration, which a client discovery sets; keeping the client discovery\'s value.',
-			'oauth-provider: an extension contributed the discovery metadata key "issuer" to openid-configuration, which the provider sets; ignoring it.',
-			'oauth-provider: more than one extension contributed the discovery metadata key "mixed_shape_field" to openid-configuration; keeping the first-registered value.',
+			'oauth-provider: extension "meta-ext-c" contributed the client discovery metadata key "issuer" to openid-configuration, which the provider sets; ignoring it.',
+			'oauth-provider: extension "meta-ext-a" contributed the discovery metadata key "authorization_details_types_supported" to openid-configuration, which the client discovery of "meta-ext-b" sets; keeping the client discovery\'s value.',
+			'oauth-provider: extension "meta-ext-a" contributed the discovery metadata key "issuer" to openid-configuration, which the provider sets; ignoring it.',
+			'oauth-provider: extension "meta-ext-b" contributed the discovery metadata key "authorization_details_types_supported" to openid-configuration, which the client discovery of "meta-ext-b" sets; keeping the client discovery\'s value.',
+			'oauth-provider: extensions "meta-ext-a" and "meta-ext-b" both contributed the discovery metadata key "mixed_shape_field" to openid-configuration; keeping the value from "meta-ext-a".',
 		]);
 	});
 
@@ -1496,6 +1561,7 @@ describe("oauth-provider client metadata extensions", async () => {
 				id: "client-metadata-extension",
 				init(ctx) {
 					extendOAuthProvider(ctx, {
+						id: "client-metadata-extension",
 						clientMetadata: {
 							fields: ["example_mode"],
 							validate: ({ client, metadata }) => {
@@ -1618,6 +1684,7 @@ describe("oauth-provider client metadata extensions", async () => {
 						id: "reserved-client-metadata-extension",
 						init(ctx) {
 							extendOAuthProvider(ctx, {
+								id: "reserved-client-metadata-extension",
 								clientMetadata: { fields: ["redirect_uris"] },
 							});
 						},
@@ -1647,6 +1714,7 @@ describe("client_credentials with a confirmation-proving strategy", async () => 
 		id: "test-confirmation-strategy",
 		init(ctx) {
 			extendOAuthProvider(ctx, {
+				id: "test-confirmation-strategy",
 				grants: {
 					[oneTimeGrant]: async ({ provider }) => {
 						const { client, confirmation } =
@@ -1814,6 +1882,7 @@ describe("oauth-provider extension client authentication confirmation", async ()
 				id: "malformed-confirmation-extension",
 				init(ctx) {
 					extendOAuthProvider(ctx, {
+						id: "malformed-confirmation-extension",
 						clientAuthentication: {
 							[authMethod]: {
 								assertionTypes: [assertionType],
@@ -1915,6 +1984,7 @@ it("keeps act on a JWT access token issued without a user", async () => {
 		id: "test-client-actor-grant",
 		init(ctx) {
 			extendOAuthProvider(ctx, {
+				id: "test-client-actor-grant",
 				grants: {
 					[grantType]: async ({ provider }) => {
 						const { client } = await provider.authenticateClient({
@@ -1977,6 +2047,7 @@ describe.each(["postgres", "mysql"] as const)(
 				id: "test-stored-claims-grant",
 				init(ctx) {
 					extendOAuthProvider(ctx, {
+						id: "test-stored-claims-grant",
 						grants: {
 							[grantType]: async ({ provider }) => {
 								const { client } = await provider.authenticateClient({
