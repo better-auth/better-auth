@@ -163,7 +163,7 @@ export function deleteApiKey({
 					message: error?.message,
 				});
 			}
-			deleteAllExpiredApiKeys(ctx.context);
+			ctx.context.runInBackground(deleteAllExpiredApiKeys(ctx.context));
 			return ctx.json({
 				success: true,
 			});

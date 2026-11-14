@@ -5514,3 +5514,114 @@ describe("api key creation uses a fresh session", async () => {
 		expect(second.error?.status).toBe(401);
 	});
 });
+
+describe("expired-key cleanup uses runInBackground across key routes", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			advanced: {
+				backgroundTasks: {
+					handler: (p) => {
+						backgroundTasks.push(p);
+					},
+				},
+			},
+			plugins: [apiKey()],
+		},
+		{
+			clientOptions: {
+				plugins: [apiKeyClient()],
+			},
+		},
+	);
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.useRealTimers();
+	});
+
+	it("passes expired-key cleanup promises to backgroundTasks.handler on create, get, list, update, and delete", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		const originalDeleteMany = ctx.adapter.deleteMany.bind(ctx.adapter);
+
+		let releaseCleanup: (() => void) | null = null;
+		let cleanupSettled = false;
+
+		vi.spyOn(ctx.adapter, "deleteMany").mockImplementation(async (args) => {
+			if (args.model === "apikey") {
+				await new Promise<void>((resolve) => {
+					releaseCleanup = resolve;
+				});
+				const res = await originalDeleteMany(args);
+				cleanupSettled = true;
+				return res;
+			}
+			return originalDeleteMany(args);
+		});
+
+		let fakeNow = Date.now() + 60_000;
+		const advancePastCleanupThrottle = () => {
+			fakeNow += 15_000;
+			vi.setSystemTime(new Date(fakeNow));
+			backgroundTasks.length = 0;
+			releaseCleanup = null;
+			cleanupSettled = false;
+		};
+
+		const assertCleanupTrackedInBackground = async () => {
+			expect(releaseCleanup).not.toBeNull();
+			expect(cleanupSettled).toBe(false);
+			expect(backgroundTasks.length).toBeGreaterThanOrEqual(1);
+
+			let bgSettledWhilePending = false;
+			const pendingBg = Promise.all(backgroundTasks).then(() => {
+				bgSettledWhilePending = true;
+			});
+			await Promise.resolve();
+			expect(bgSettledWhilePending).toBe(false);
+			expect(cleanupSettled).toBe(false);
+
+			releaseCleanup!();
+			await pendingBg;
+			expect(cleanupSettled).toBe(true);
+		};
+
+		vi.useFakeTimers();
+
+		advancePastCleanupThrottle();
+		const created = await auth.api.createApiKey({
+			body: { name: "bg-cleanup-key" },
+			headers,
+		});
+		await assertCleanupTrackedInBackground();
+
+		advancePastCleanupThrottle();
+		await auth.api.getApiKey({
+			query: { id: created.id },
+			headers,
+		});
+		await assertCleanupTrackedInBackground();
+
+		advancePastCleanupThrottle();
+		await auth.api.listApiKeys({ headers });
+		await assertCleanupTrackedInBackground();
+
+		advancePastCleanupThrottle();
+		await auth.api.updateApiKey({
+			body: {
+				keyId: created.id,
+				name: "bg-cleanup-key-updated",
+				userId: user.id,
+			},
+		});
+		await assertCleanupTrackedInBackground();
+
+		advancePastCleanupThrottle();
+		await auth.api.deleteApiKey({
+			body: { keyId: created.id },
+			headers,
+		});
+		await assertCleanupTrackedInBackground();
+	});
+});
