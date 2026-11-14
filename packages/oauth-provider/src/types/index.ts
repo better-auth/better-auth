@@ -768,8 +768,8 @@ export interface OAuthProviderExtension {
 	 * Additional discovery metadata fields. Core fields (`issuer`,
 	 * `token_endpoint`, advertised grants and auth methods, ...) stay owned by
 	 * the provider, and so do keys a client discovery sets; only absent keys
-	 * are added, and a contribution to a taken key logs a warning. To advertise
-	 * the claim names a
+	 * are added. A contribution to a taken key logs a warning, except that two
+	 * extensions' lists under one key combine. To advertise the claim names a
 	 * claims contributor emits, set `advertisedMetadata.claims_supported`: the
 	 * provider owns `claims_supported` and does not infer it from contributors.
 	 */

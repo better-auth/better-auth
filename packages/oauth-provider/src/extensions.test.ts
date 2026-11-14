@@ -1112,11 +1112,57 @@ describe("oauth-provider extensions", async () => {
 		expect(openIdConfig.extension_list).toEqual(["x", "y"]);
 		expect(openIdConfig.mixed_shape_field).toEqual(["first"]);
 		expect(warn.mock.calls.map(([message]) => message)).toEqual([
-			'oauth-provider: a client discovery contributed the discovery metadata key "issuer" to openid-configuration, which the provider sets; ignoring it.',
+			'oauth-provider: a client discovery contributed the discovery metadata key "issuer" to openid-configuration, which the provider owns; ignoring it.',
 			'oauth-provider: an extension contributed the discovery metadata key "authorization_details_types_supported" to openid-configuration, which a client discovery sets; keeping the client discovery\'s value.',
-			'oauth-provider: an extension contributed the discovery metadata key "issuer" to openid-configuration, which the provider sets; ignoring it.',
+			'oauth-provider: an extension contributed the discovery metadata key "issuer" to openid-configuration, which the provider owns; ignoring it.',
 			'oauth-provider: more than one extension contributed the discovery metadata key "mixed_shape_field" to openid-configuration; keeping the first-registered value.',
 		]);
+	});
+
+	/**
+	 * @see https://tc39.es/ecma262/#sec-object.assign
+	 */
+	it("publishes metadata keys that match Object.prototype names", async () => {
+		const instance = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+				}),
+				{
+					id: "prototype-names",
+					init(ctx) {
+						extendOAuthProvider(ctx, {
+							clientDiscovery: {
+								id: "prototype-names-discovery",
+								matches: () => false,
+								resolve: () => null,
+								discoveryMetadata: JSON.parse(
+									'{"__proto__": ["from_discovery"], "toString": "from_discovery"}',
+								),
+							},
+							metadata: () => JSON.parse('{"constructor": "from_extension"}'),
+						});
+					},
+				} satisfies BetterAuthPlugin,
+			],
+		});
+		const { logger } = await instance.auth.$context;
+		const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+		const openIdConfig = (await instance.auth.api.getOpenIdConfig()) as object;
+		expect(
+			Object.getOwnPropertyDescriptor(openIdConfig, "__proto__")?.value,
+		).toEqual(["from_discovery"]);
+		expect(
+			Object.getOwnPropertyDescriptor(openIdConfig, "toString")?.value,
+		).toBe("from_discovery");
+		expect(
+			Object.getOwnPropertyDescriptor(openIdConfig, "constructor")?.value,
+		).toBe("from_extension");
+		expect(warn).not.toHaveBeenCalled();
 	});
 
 	it("re-derives extension access-token claims on opaque-token introspection", async () => {
