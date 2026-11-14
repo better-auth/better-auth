@@ -281,8 +281,8 @@ describe("provider.issueAuthorizationCode", async () => {
 		const issued = await issueCode(query, {
 			authorization: `Basic ${basic}`,
 		});
-		expect(issued.error?.status).toBe(400);
-		expect(errorCode(issued)).toBe("invalid_request");
+		expect(issued.error?.status).toBe(401);
+		expect(errorCode(issued)).toBe("invalid_client");
 	});
 
 	it("returns a redirect URL whose code redeems with its redirect_uri", async () => {
@@ -372,7 +372,24 @@ describe("provider.issueAuthorizationCode", async () => {
 		const issued = await issueCode(query, {
 			DPoP: await createDpopProof(key, issueCodeEndpoint),
 		});
-		expect(errorCode(issued)).toBe("invalid_request");
+		expect(errorCode(issued)).toBe("invalid_dpop_proof");
+	});
+
+	it("does not use up a proof rejected for its key", async () => {
+		const key = await createDpopKey();
+		const otherKey = await createDpopKey();
+		const proof = await createDpopProof(key, issueCodeEndpoint);
+		const { query } = await codeRequest(publicClient);
+		const rejected = await issueCode(
+			{ ...query, dpop_jkt: otherKey.jkt },
+			{ DPoP: proof },
+		);
+		expect(errorCode(rejected)).toBe("invalid_dpop_proof");
+
+		const issued = await issueCode(query, { DPoP: proof });
+		expect(issued.error).toBeNull();
+		const row = await findCodeRow(issued.data!.code);
+		expect(JSON.parse(row!.value).query.dpop_jkt).toBe(key.jkt);
 	});
 
 	// Each check `/oauth2/authorize` applies also applies here, and fails with

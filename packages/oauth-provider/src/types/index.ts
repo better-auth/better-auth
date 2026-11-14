@@ -341,7 +341,7 @@ export interface IssueAuthorizationCodeParams {
 	 * `redirect_uri` too (RFC 6749 §4.1.3). The client authenticates with the
 	 * HTTP request itself, its body or `Authorization` header, not with this
 	 * query. `client_id` may be left out; when present, it must match the
-	 * authenticated client. Client credentials in the query, such as the
+	 * authenticated client, or the call fails with `invalid_client`. Client credentials in the query, such as the
 	 * `client_secret` of a forwarded body, are not stored. A `request_uri` or
 	 * `request` object is not accepted; pass the parameters themselves.
 	 */
@@ -435,7 +435,8 @@ export interface OAuthProviderApi {
 	 * the HTTP request with the credentials it uses at the token endpoint,
 	 * read from the request body or `Authorization` header, a public client is
 	 * identified by `client_id`, and a DPoP proof on the request binds the code
-	 * to its key (RFC 9449 §10). With `dpop.nonce.required`, the nonce
+	 * to its key (RFC 9449 §10). A proof from a key other than `dpop_jkt`
+	 * fails with `invalid_dpop_proof` before its `jti` is used up. With `dpop.nonce.required`, the nonce
 	 * challenge runs before client authentication, so a retry can resend a
 	 * one-time client assertion. An endpoint that accepts form-encoded bodies
 	 * must set `cloneRequest: true`, as for `authenticateClient`.

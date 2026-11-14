@@ -201,7 +201,7 @@ export async function verifyRequestDpopProof(
 export async function verifyEndpointDpopProof(
 	ctx: GenericEndpointContext,
 	opts: Pick<OAuthOptions<Scope[]>, "dpop">,
-	params?: { required?: boolean },
+	params?: { required?: boolean; expectedJkt?: string },
 ): Promise<VerifiedDpopProof | undefined> {
 	const proofJwt = getDpopProofJwt(ctx);
 	if (!proofJwt) {
@@ -219,6 +219,7 @@ export async function verifyEndpointDpopProof(
 		proofJwt,
 		method: ctx.request.method,
 		url: getEndpointUrl(ctx, ctx.path),
+		expectedJkt: params?.expectedJkt,
 	});
 }
 
