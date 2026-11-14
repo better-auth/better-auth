@@ -253,7 +253,7 @@ The provider then handles each request with `authorization_details` as follows:
 
 Your API must check `authorization_details` before it acts. For example, it checks that the payment it is asked to make matches the approved amount and recipient.
 
-The granted details belong to the provider. `customAccessTokenClaims` and a resource's `customClaims` cannot replace them in the token or at introspection.
+The granted details belong to the provider. `customAccessTokenClaims` and a resource's `customClaims` cannot replace them or add any, in the token or at introspection.
 
 A detail that lists `locations` is issued only in a token for one of those resources. When the poll narrows the token to other resources, that detail is left out of the response and the token (RFC 9396 §9.1). A detail without `locations` goes to every token.
 

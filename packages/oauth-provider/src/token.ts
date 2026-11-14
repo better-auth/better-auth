@@ -1459,7 +1459,7 @@ async function createUserTokens(
 			error_description: "issueTokens does not accept act with refreshToken",
 		});
 	}
-	if (params.authorizationDetails && existingRefreshToken) {
+	if (params.authorizationDetails?.length && existingRefreshToken) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error: "server_error",
 			error_description:
@@ -1473,7 +1473,9 @@ async function createUserTokens(
 			!detail.locations ||
 			detail.locations.some((location) => params.resources?.includes(location)),
 	);
-	const grantedClaims = issuedDetails?.length
+	// An empty list still goes to claim resolution, so no claim hook can add
+	// details the grant did not approve for this token.
+	const grantedClaims = issuedDetails
 		? { authorization_details: issuedDetails }
 		: undefined;
 	const perRequestClaims =
@@ -1752,7 +1754,7 @@ async function createUserTokens(
 	const responseBody: OAuthTokenResponse = {
 		...customFields,
 		...(params.tokenResponse ?? {}),
-		...grantedClaims,
+		...(issuedDetails?.length ? grantedClaims : {}),
 		access_token: accessToken,
 		expires_in: exp - iat,
 		expires_at: exp,

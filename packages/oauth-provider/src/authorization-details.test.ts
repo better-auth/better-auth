@@ -134,13 +134,17 @@ const issueDetails = {
 					const found = await ctx.context.internalAdapter.findUserByEmail(
 						(ctx.body as { login_hint: string }).login_hint,
 					);
-					const resource = (ctx.body as { resource?: string }).resource;
+					const body = ctx.body as { resource?: string; only?: "files" };
+					const resource = body.resource;
 					return provider.issueTokens({
 						client,
 						scopes: ["openid", "offline_access"],
 						user: found!.user,
 						resources: resource ? [resource] : undefined,
-						authorizationDetails: [forApi, forFiles, everywhere],
+						authorizationDetails:
+							body.only === "files"
+								? [forFiles]
+								: [forApi, forFiles, everywhere],
 					});
 				},
 			},
@@ -222,6 +226,21 @@ describe("issueTokens with authorizationDetails", async () => {
 			token: opaque.access_token as string,
 		});
 		expect(introspection.authorization_details).toEqual([everywhere]);
+	});
+
+	it("keeps custom claims from adding details when none apply to the token", async () => {
+		const jwtTokens = await issue({ resource, only: "files" });
+		expect(jwtTokens.authorization_details).toBeUndefined();
+		expect(
+			decodeJwt(jwtTokens.access_token as string).authorization_details,
+		).toBeUndefined();
+		const opaque = await issue({ only: "files" });
+		expect(opaque.authorization_details).toBeUndefined();
+		const introspection = await post("/oauth2/introspect", {
+			token: opaque.access_token as string,
+		});
+		expect(introspection.active).toBe(true);
+		expect(introspection.authorization_details).toBeUndefined();
 	});
 
 	it("issues no refresh token, because refreshed tokens would lose the details", async () => {

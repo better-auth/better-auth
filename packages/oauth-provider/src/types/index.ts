@@ -296,10 +296,10 @@ export interface OAuthTokenIssueParams {
 	 * RFC 9396 authorization details the user approved for this grant. The
 	 * authorization server returns them as `authorization_details` in the token
 	 * response and in a JWT access token, or at introspection of an opaque one,
-	 * and no claim hook can replace them. A detail with `locations` is issued
-	 * only to a token for one of those resources (RFC 9396 §9.1). An issuance
-	 * with details never includes a refresh token, because refreshed tokens do
-	 * not carry them. Passing it with `refreshToken` throws.
+	 * and no claim hook can replace them or add any. A detail with `locations`
+	 * is issued only to a token for one of those resources (RFC 9396 §9.1). An
+	 * issuance with details never includes a refresh token, because refreshed
+	 * tokens do not carry them. Passing details with `refreshToken` throws.
 	 */
 	authorizationDetails?: OAuthAuthorizationDetail[];
 	/**
