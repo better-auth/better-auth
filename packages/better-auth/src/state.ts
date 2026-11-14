@@ -287,10 +287,16 @@ export async function parseGenericState(
 
 		expireCookie(c, stateCookie);
 
-		// Delete verification value after retrieval
-		await c.context.internalAdapter.deleteVerificationByIdentifier(
+		const consumed = await c.context.internalAdapter.consumeVerificationValue(
 			getAuthStateVerificationIdentifier(state),
 		);
+		if (!consumed) {
+			throw new StateError("State mismatch: state already used or expired", {
+				code: "state_mismatch",
+				details: { state },
+				errorURL: parsedData.errorURL,
+			});
+		}
 	}
 
 	// Check expiration
