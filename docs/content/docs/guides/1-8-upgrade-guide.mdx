@@ -2,7 +2,7 @@
 icon: guidesV18UpgradeGuide
 sidebarTitle: "1.8 Upgrade Guide"
 title: Upgrading to Better Auth 1.8
-description: Upgrade Better Auth from 1.7 to 1.8, including schema changes and breaking changes in sign-up, phone numbers, One Tap, social provider profiles, the OAuth provider, device authorization, and SAML.
+description: Upgrade Better Auth from 1.7 to 1.8, including schema changes and breaking changes in sign-up, phone numbers, One Tap, social provider profiles, the OAuth provider, resource servers, device authorization, and SAML.
 ---
 
 Most projects upgrade to Better Auth 1.8 with one command:
@@ -21,24 +21,25 @@ Some areas change behavior or types. Use this table to choose the sections that 
 | Uses social login, generic OAuth, or One Tap | [Social and generic OAuth sign-in](#social-and-generic-oauth-sign-in)                     |
 | Uses the phone number plugin                 | [Phone number](#phone-number)                                                             |
 | Runs its own OAuth or OpenID provider        | [Schema changes](#schema-changes) and [As an identity provider](#as-an-identity-provider) |
+| Verifies access tokens as a resource server  | [Resource servers](#resource-servers)                                                     |
 | Uses the device authorization plugin         | [Device authorization](#device-authorization)                                             |
 | Uses SAML SSO                                | [Enterprise SSO](#enterprise-sso)                                                         |
 | Uses passkeys, Electron, or Drizzle          | [Other plugins and adapters](#other-plugins-and-adapters)                                 |
 
 ## Schema changes
 
-Only the OAuth provider plugins add columns in 1.8. Every new column is optional, so no data step is needed. Other projects can skip this section.
+Only the OAuth provider plugins add columns in 1.8. Every `oauthProvider()` setup needs them, even when the feature that uses a column is off. Every new column is optional, so no data step is needed. Other projects can skip this section.
 
 * `oauthProvider()` adds:
-  * `acr` and `amr` on `oauthRefreshToken`
-  * `act` on `oauthAccessToken`
+  * `acr`, `amr`, and `grantId` on `oauthRefreshToken`
+  * `act`, `grantId`, and `accessTokenClaims` on `oauthAccessToken`
   * `expiresAt`, `sectorIdentifier`, `frontchannelLogoutUri`, `frontchannelLogoutSessionRequired`, and `requirePushedAuthorizationRequests` on `oauthClient`
 * `oauthDeviceAuthorization()` adds `referenceId`, `authTime`, `acr`, and `amr` on `deviceCode`.
 
 Apply the schema, then deploy the 1.8 packages. With the built-in Kysely adapter, run `npx auth@latest migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth@latest generate`, review the output, and apply it with your migration tooling. MongoDB needs no migration.
 
 <Callout type="warn">
-  With the Kysely, Prisma, or Drizzle adapter, the default schema check fails every request until the new columns exist. With Prisma or Drizzle, a regenerated client or schema deployed before the migration fails every request that reads an OAuth client.
+  With the Kysely, Prisma, or Drizzle adapter, the default schema check fails every request until the new columns exist. With Prisma or Drizzle, a regenerated client or schema deployed before the migration fails every request that reads an OAuth client, token, or device code.
 </Callout>
 
 ***
@@ -139,6 +140,14 @@ tokenEndpointAuth: {
 
 Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refreshAccessToken`, or `refreshAccessTokenRequest` from `@better-auth/core/oauth2` that pass `authorization` in `headers` now throw.
 
+### New Generic OAuth and client options
+
+These are new and need no action:
+
+* Generic OAuth providers sign in through pushed authorization requests when the provider's discovery document sets `require_pushed_authorization_requests`. The `pushedAuthorizationRequest` option defaults to `"auto"`. Set it to `true` to always push, or to `false` to never push.
+* `createPrivateKeyJwtClientAssertionGetter` accepts `audience: "issuer"` for providers that require the issuer as the assertion audience, as FAPI 2.0 does. Generic OAuth passes the issuer from the provider's discovery document. Other callers must pass `issuer` themselves, or every token request fails. The default stays the token endpoint URL.
+* Client apps can send DPoP-bound requests with `createDpopFetch` from `better-auth/oauth2/dpop-client`.
+
 ### Social provider profile types match the provider
 
 This applies if you use `mapProfileToUser`, a custom `getUserInfo`, or read a provider's profile type. Each profile type now matches what the provider returns. Claims that depend on a scope or account setting are optional, and a provider that omits a value leaves the stored value unchanged when profile updates are enabled.
@@ -188,24 +197,26 @@ The phone number plugin now sets a user's number only after the user verifies it
 
 ## As an identity provider
 
-This section covers `@better-auth/oauth-provider`. Apply the [schema changes](#schema-changes) first. Every setup should read the first four sections. The rest apply only if you use the feature they name.
+This section covers `@better-auth/oauth-provider`. Apply the [schema changes](#schema-changes) first. Every setup should read the first six sections. The rest apply only if you use the feature they name.
 
-### `reference_id` and `act` claims are reserved
+### New access token claims are reserved
 
-The provider now sets the `reference_id` and `act` access token claims itself:
+The provider now sets these access token claims itself:
 
 * `reference_id` holds the consent reference that `postLogin.consentReferenceId` returns, such as an organization. JWT access tokens include it, and introspection returns it.
 * `act` names the actor of a delegated token from token exchange.
+* `ba_uid` and `ba_act` hold the encrypted user ID and actor chain in JWT access tokens with a pairwise `sub`.
+* `grant_id` names the grant of a JWT access token. It is reserved only when you set `revocableJwtAccessTokens: true`.
 
-A value for either claim set by `customAccessTokenClaims`, an extension `claims.accessToken` contributor, or a resource's `customClaims` is now dropped with a warning.
+A value for any of these claims set by `customAccessTokenClaims`, an extension `claims.accessToken` contributor, or a resource's `customClaims` is now dropped with a warning.
 
-**What to do:** rename your own claim if you set either name. A custom grant that issues a delegated token passes `act` to `issueTokens`.
+**What to do:** rename your own claim if you set one of these names. A custom grant that issues a delegated token passes `act` to `issueTokens`.
 
 ```ts title="auth.ts"
 oauthProvider({
   customAccessTokenClaims: ({ user }) => ({
     // was: reference_id
-    tenant_id: user.tenantId,
+    tenant_id: user?.tenantId,
   }),
 });
 ```
@@ -214,7 +225,7 @@ oauthProvider({
 
 `/oauth2/revoke` and `/oauth2/introspect` now find a token the way the RFCs describe. [Revocation](/docs/plugins/oauth-provider/tokens#revocation) documents the full behavior. These responses changed:
 
-* `/oauth2/revoke` returns `200` for an unknown or already revoked token. Before, it returned `400 invalid_request`. A valid JWT access token still returns `400 unsupported_token_type`.
+* `/oauth2/revoke` returns `200` for an unknown or already revoked token. Before, it returned `400 invalid_request`. A valid JWT access token still returns `400 unsupported_token_type`, unless you set `revocableJwtAccessTokens: true`.
 * A token sent with the wrong `token_type_hint` is found. Before, revoke returned `400` and introspection returned `{ "active": false }` for a valid token.
 * A confidential client that revokes a token issued to a different client gets `400 invalid_request`. A public client gets `200`, and the token stays valid.
 * A JWT-shaped token that fails verification, such as one with `alg: none` or a forged signature, is an invalid token: `200` from revoke, `{ "active": false }` from introspection, and `401 invalid_token` from UserInfo. Before, all three returned `500`.
@@ -222,6 +233,25 @@ oauthProvider({
 * In an extension grant, `provider.validateAccessToken` returns `{ active: false }` for an unknown token instead of throwing. `provider.requireActiveAccessToken` still throws.
 
 **What to do:** update clients and tests that expect the old status codes.
+
+### Revoking a refresh token revokes its grant
+
+Revoking a refresh token at `/oauth2/revoke` now deletes every opaque access token of its grant, including tokens issued before earlier refreshes. Before, only the access tokens issued with that exact refresh token were deleted, so an older token stayed active until it expired.
+
+* Opaque access tokens issued before you upgrade are still deleted only with the refresh token that issued them.
+* Replaying a revoked refresh token works as before. It deletes every refresh token the client holds for that user, and the opaque access tokens linked to them.
+* JWT access tokens stay valid until they expire. With `revocableJwtAccessTokens: true`, they are revoked too, but only where the auth server checks the token, such as introspection, UserInfo, or `verifyResourceRequest`, and only for tokens issued after you turned the option on. With secondary storage alone, an evicted entry makes a revoked token valid again. See [JWT revocation](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
+
+### Authorization code reuse revokes tokens only for the issuing client
+
+The provider still rejects every reuse of an authorization code. To stop someone who holds a leaked code from revoking a client's tokens, a reuse now revokes the tokens issued from the code only when it comes from the client the code was issued to:
+
+* The request must carry that client's `client_id`, with its credentials for a confidential client.
+* For a code issued with PKCE, the request must also carry the matching `code_verifier`.
+
+A confidential client that reuses a PKCE code with its secret but without the `code_verifier` no longer revokes its tokens. JWT access tokens issued from the code stay valid until they expire, with the same exception for `revocableJwtAccessTokens: true`.
+
+The provider remembers a redeemed code for the longer of `accessTokenExpiresIn` and `refreshTokenExpiresIn`, 30 days by default, and each refresh-token rotation extends that record. A reuse during that time revokes the tokens, even after the code itself has expired. Codes redeemed before you upgrade have no record, so reusing one revokes nothing. With secondary storage alone, an evicted record has the same effect.
 
 ### Repeated request parameters are rejected
 
@@ -270,8 +300,10 @@ Pairwise clients created after the upgrade with private-use redirect URIs, such 
 
 This applies if you build on `extendOAuthProvider()` or implement the provider API yourself:
 
-* Custom `OAuthProviderApi` implementations must add `verifyDpopProof()` and `issueDpopNonce()`.
+* Custom `OAuthProviderApi` implementations must add `verifyDpopProof()`, `issueDpopNonce()`, `challengeDpopNonce()`, `resolveConfirmation()`, `resolveSubject()`, `verifyResourceRequest()`, and `issueAuthorizationCode()`.
 * Extension grants now receive every `audience` value instead of only the last one.
+* An `accessTokenClaims` value that a grant passes to `issueTokens` for an opaque access token is now stored on the token. Introspection, `provider.validateAccessToken`, and token exchange subject-token checks such as `may_act` now see it. Keep personal data out of these claims, because they stay in the database until the token row is deleted.
+* When two extensions advertise the same list in discovery, such as `authorization_details_types_supported`, discovery publishes both lists combined, in registration order and without duplicates. Before, only the first-registered extension's list appeared. Other colliding keys still resolve to the first extension registered, with a warning.
 * `DpopBindingErrorCode` and `DpopProofErrorCode` from `@better-auth/core/oauth2` now include `use_dpop_nonce`. DPoP checks return it only when you pass a `nonce` option, but exhaustive checks over either type must handle it to typecheck:
 
   ```ts
@@ -286,6 +318,35 @@ This applies if you build on `extendOAuthProvider()` or implement the provider A
     }
   }
   ```
+
+### New in 1.8
+
+These provider features are new or opt-in, and need no action when you upgrade:
+
+* [Pushed authorization requests](/docs/plugins/oauth-provider/sign-in-flow#pushed-authorization-requests) at `/oauth2/par`, with `pushedAuthorizationRequests: { enabled: true }`.
+* Token exchange with `oauthTokenExchange()`, including DPoP-bound public clients with `publicClients: "dpop-bound"`.
+* A pairwise `sub` in JWT access tokens, with `accessTokenSubject: "pairwise"` and `pairwiseSecret`. Resource servers that key on `sub` then see a different value for the same user in each sector.
+* JWT access token revocation, with `revocableJwtAccessTokens: true`. Resource servers that verify tokens locally against the JWKS don't see it, so they must introspect.
+* RP-initiated logout for registered clients, with `clientRegistrationEnableEndSession`.
+* `verifyResourceRequest()` and `issueAuthorizationCode()` on the provider API, for plugin endpoints served by the auth server.
+
+***
+
+## Resource servers
+
+This section applies if you verify access tokens with `verifyAccessTokenRequest` from `better-auth/oauth2` or the resource client, answer with `createResourceServerChallenge` from `@better-auth/oauth-provider`, use the MCP handler, or call `getProtectedResourceMetadata`.
+
+### Unsupported `Authorization` schemes have no error code
+
+`verifyAccessTokenRequest` now rejects an `Authorization` header with no scheme, or with a scheme other than `Bearer` or `DPoP`, such as `Basic`, the same way as a request with no header. The thrown 401 no longer has `error: "invalid_token"` or `error_description` in its `body`. `createResourceServerChallenge` and the MCP handler answer with a `Bearer` challenge that has only its `resource_metadata` link.
+
+**What to do:** code that matched `body.error === "invalid_token"` for this case must check for a 401 without `body.error`.
+
+### `authorization_details_types_supported` is a list
+
+In protected resource metadata, `authorization_details_types_supported` is now typed as `string[]`, as RFC 9728 requires. Before, it accepted a single string, which produced metadata that was not a valid JSON array.
+
+**What to do:** if you pass this field to `getProtectedResourceMetadata`, wrap the value in an array.
 
 ***
 
@@ -356,35 +417,3 @@ Electron desktop sign-in now completes only after required two-factor verificati
 The Drizzle generator now emits non-nullable Relations v2 columns for fields whose `required` flag is omitted. Regenerating an existing schema can produce a nullability migration.
 
 **What to do:** backfill any `NULL` values in those columns before you apply the migration.
-
-***
-
-## Pending changes
-
-<Callout type="warn">
-  The changes in this section are not yet merged into the 1.8 branch. Move each entry into its section, or remove it, before the release candidate.
-</Callout>
-
-### Pending schema changes for `oauthProvider()`
-
-Every `oauthProvider()` setup needs these columns, even when the feature that uses them is off:
-
-* `oauthRefreshToken.grantId` and `oauthAccessToken.grantId`, from grant-wide token revocation.
-* `oauthAccessToken.accessTokenClaims`, from opaque access token claims.
-
-Requests fail until the columns exist.
-
-**What to do:** apply these columns the same way as the [schema changes](#schema-changes), before you deploy. The warning there about regenerated Prisma and Drizzle clients applies here too.
-
-### Pending behavior changes
-
-These pending changes need action from OAuth provider setups:
-
-* **Grant-wide token revocation:** revoking a refresh token at `/oauth2/revoke` now deletes every opaque access token of its grant, including tokens issued before earlier refreshes. Opaque access tokens issued before you upgrade are still deleted only with the refresh token that issued them. Replaying a revoked refresh token works as before: it deletes every refresh token the client holds for that user, and the opaque access tokens linked to them.
-* **Opaque access token claims:** a custom grant that passes `accessTokenClaims` while issuing opaque tokens will see them at introspection, `validateAccessToken`, and token exchange `may_act` checks.
-* **Authorization code reuse:** reuse revokes the code's tokens only when the request authenticates as the code's client and, for a PKCE code, carries the matching `code_verifier`. A reuse after the code would have expired no longer revokes anything.
-* **Unsupported `Authorization` schemes:** `verifyAccessTokenRequest` rejects a header with no scheme, or a scheme such as `Basic`, without an `error` code in the 401 body. Code that matched `body.error === "invalid_token"` for this case must check for a 401 without `body.error`.
-
-### Pending opt-in changes
-
-These pending changes are opt-in or additive and need no action: pairwise access token subjects (`accessTokenSubject: "pairwise"`), revocable JWT access tokens (`revocableJwtAccessTokens: true`), token exchange for public clients (`publicClients: "dpop-bound"`), in-process resource verification (`verifyResourceRequest`), and discovery metadata from extensions.

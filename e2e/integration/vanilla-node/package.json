@@ -11,6 +11,8 @@
     "vite": "^8.1.5"
   },
   "dependencies": {
+    "@better-auth/ciba": "workspace:*",
+    "@better-auth/cimd": "workspace:*",
     "@better-auth/oauth-provider": "workspace:*",
     "better-auth": "workspace:*",
     "kysely": "catalog:",

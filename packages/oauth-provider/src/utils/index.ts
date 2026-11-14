@@ -825,7 +825,7 @@ export function validateClientScopes(
 	}
 }
 
-function throwInvalidClient(
+export function throwInvalidClient(
 	errorDescription: string,
 	authentication?: {
 		method?: TokenEndpointAuthMethod;
@@ -1582,4 +1582,20 @@ export function isInsecureRedirectUriAllowed(
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * The public URL of an endpoint of this server: `baseURL` without trailing
+ * slashes, then `path`. A `baseURL` such as `https://example.com/api/auth/`
+ * would otherwise yield a double slash, which does not route.
+ */
+export function getAuthEndpointUrl(
+	ctx: Pick<GenericEndpointContext, "context">,
+	path: string,
+): string {
+	const { baseURL } = ctx.context;
+	let end = baseURL.length;
+	// A loop, not `/\/+$/`, which backtracks quadratically on runs of slashes.
+	while (end > 0 && baseURL[end - 1] === "/") end--;
+	return `${baseURL.slice(0, end)}${path}`;
 }

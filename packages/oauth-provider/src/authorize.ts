@@ -3,7 +3,7 @@ import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
 import { INSECURE_REDIRECT_URI_MESSAGE } from "@better-auth/core/utils/redirect-uri";
 import { appendQueryParams } from "@better-auth/core/utils/url";
-import { getSessionFromCtx } from "better-auth/api";
+import { getSessionFromCtx, isAPIError } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import { APIError } from "better-call";
 import {
@@ -21,6 +21,7 @@ import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { mapIssuesToOAuthError } from "./oauth-endpoint";
 import {
+	authenticateAuthorizationRequest,
 	consumePushedAuthorizationRequest,
 	isPushedAuthorizationRequestEnabled,
 } from "./par";
@@ -207,7 +208,7 @@ export function getAPIErrorURL(
 	error: unknown,
 	errorPage?: string,
 ) {
-	if (!(error instanceof APIError)) throw error;
+	if (!isAPIError(error)) throw error;
 	const body = error.body as
 		| { error?: OAuthErrorCode; error_description?: string }
 		| undefined;
@@ -902,7 +903,7 @@ async function validateAuthorizationRequest(
 				requestedScopes,
 			});
 		} catch (err) {
-			if (err instanceof APIError) {
+			if (isAPIError(err)) {
 				const error =
 					(err.body as { error?: string })?.error ?? "invalid_target";
 				const description =
@@ -1159,7 +1160,7 @@ async function runAuthorizationInteraction(
 				query,
 			});
 		} catch (error) {
-			if (!(error instanceof APIError)) throw error;
+			if (!isAPIError(error)) throw error;
 			if (request.errorURL) return handleRedirect(ctx, request.errorURL(error));
 			const body = error.body as
 				| { error?: OAuthErrorCode; error_description?: string }
@@ -1250,27 +1251,21 @@ export async function issueAuthorizationCode(
 		);
 	}
 	const { session, user } = params.session;
-	// Untyped callers can still send these, so they are rejected at runtime too.
-	const requestQuery: StoredAuthorizationQuery = params.query;
-	if (requestQuery.request_uri !== undefined) {
-		tokenError(
-			"BAD_REQUEST",
-			"invalid_request",
+	// The client sends this request directly, as it would to /oauth2/par, so
+	// it authenticates the same way.
+	const { params: requestQuery, bindDpopProof } =
+		await authenticateAuthorizationRequest(
+			ctx,
+			opts,
+			{ ...params.query },
 			"pass the authorization request parameters, not a request_uri",
 		);
-	}
-	if (requestQuery.request !== undefined) {
-		tokenError(
-			"BAD_REQUEST",
-			"request_not_supported",
-			"request object not supported",
-		);
-	}
 	const validation = await parseAuthorizationRequest(ctx, opts, requestQuery, {
 		redirectUriOptional: true,
 	});
 	const { client } = validation;
 	let query: StoredAuthorizationQuery = validation.query;
+	await bindDpopProof(query);
 
 	const promptSet = query.prompt ? parsePrompt(query.prompt) : undefined;
 	if (promptSet && [...promptSet].some((prompt) => prompt !== "none")) {
