@@ -291,11 +291,13 @@ It returns the token's claims in [introspection](#introspection) form, including
 | Missing or expired DPoP nonce                         | 401    | `DPoP` with `use_dpop_nonce` and a `DPoP-Nonce` header |
 | Missing scopes                                        | 403    | `insufficient_scope`, naming every missing scope       |
 
+Any other error, such as a database failure, is rethrown unchanged. Handle it like any other server error, not as an OAuth error.
+
 When `audience` is a URL, the `Bearer` challenge also points to its [protected resource metadata](#protected-resource-metadata). Every challenge lists `WWW-Authenticate` in `Access-Control-Expose-Headers`.
 
 A DPoP-bound token fails through `auth.api`, because there is no HTTP request to check the proof against. A bearer token works there.
 
-`requireActiveAccessToken` on the provider API accepts only an active bearer token. It refuses a DPoP-bound token with 401 `invalid_token`, because a token string alone cannot prove the client holds the key. Use `verifyResourceRequest` for a protected endpoint.
+`requireActiveAccessToken` on the provider API accepts only an active bearer token. It refuses a DPoP-bound token with 401 `invalid_token`, because a token string alone cannot prove the client holds the key. The error's `headers` carry a `DPoP` challenge and list `WWW-Authenticate` in `Access-Control-Expose-Headers`. If you catch the error, send those headers with the 401, because a client that supports only DPoP might not act on a `Bearer` challenge. Use `verifyResourceRequest` for a protected endpoint.
 
 ## Introspection
 
