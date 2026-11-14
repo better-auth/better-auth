@@ -20,7 +20,9 @@ function quoteAuthParam(value: string): string {
 	return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-function serializeChallengeScopes(scopes: readonly string[] | undefined) {
+export function serializeChallengeScopes(
+	scopes: readonly string[] | undefined,
+) {
 	if (!scopes) return undefined;
 	for (const scope of scopes) {
 		if (!OAUTH_SCOPE_TOKEN_PATTERN.test(scope)) {

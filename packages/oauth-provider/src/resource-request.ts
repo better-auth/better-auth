@@ -21,6 +21,7 @@ import { requireActiveAccessTokenWithClaims } from "./introspect";
 import {
 	buildMissingCredentialsChallenge,
 	buildResourceServerChallenge,
+	serializeChallengeScopes,
 } from "./resource-challenge";
 import type {
 	ActiveAccessTokenPayload,
@@ -109,9 +110,11 @@ export async function verifyResourceRequest(
 			"UNAUTHORIZED",
 			{ error_description: "access token not found", error: "invalid_request" },
 			{
-				"WWW-Authenticate": buildMissingCredentialsChallenge(resource, {
-					dpopSigningAlgorithms: algorithms,
-				}),
+				"WWW-Authenticate": buildMissingCredentialsChallenge(
+					resource,
+					{ dpopSigningAlgorithms: algorithms },
+					serializeChallengeScopes(params.scopes),
+				),
 				"Access-Control-Expose-Headers": exposeChallengeHeader(ctx),
 			},
 		);

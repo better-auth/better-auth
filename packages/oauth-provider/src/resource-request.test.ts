@@ -262,6 +262,14 @@ describe("provider.verifyResourceRequest", async () => {
 			);
 		});
 
+		it("names the required scopes in both challenges when no token is sent", async () => {
+			const response = await callResource({}, { scopes: "read write" });
+			expect(response.status).toBe(401);
+			expect(response.headers.get("WWW-Authenticate")).toBe(
+				`Bearer scope="read write", DPoP scope="read write", algs="${algs}"`,
+			);
+		});
+
 		it("treats an unsupported scheme as a request without a token", async () => {
 			const token = await issueToken({ scope: "read" });
 			const response = await callResource({ authorization: `Basic ${token}` });
