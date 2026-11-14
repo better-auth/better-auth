@@ -410,6 +410,22 @@ export const before = createAuthMiddleware(async (ctx) => {
 
 `challengeDpopNonce` checks only the proof's `nonce`. It does not verify the signature, `htm`, or `htu`, and it does not store the `jti`. The request must still verify the proof before you trust it. `verifyDpopProof` always verifies it. `issueTokens` and `resolveConfirmation` verify it only when no client-authentication `confirmation` is passed, because a `confirmation` replaces the proof. Within one request, that verification measures nonce freshness at the same time as the challenge, so a nonce that passes the challenge cannot expire before the proof is verified.
 
+### Bind later requests to a DPoP key
+
+Some plugin endpoints take several requests to finish, such as a sign-in that returns a session handle the client sends back on its next request. Anyone who obtains the handle could continue the flow. To stop this, require every later request to carry a proof from the key that started it. Store the `jkt` that `verifyDpopProof` returned on the first request, and pass it as `expectedJkt` on each later one:
+
+```ts
+// First request: store proof.jkt with the handle you return.
+const proof = await provider.verifyDpopProof({ required: true });
+
+// Later request: require a proof signed with the same key.
+await provider.verifyDpopProof({ expectedJkt: pending.dpopJkt });
+```
+
+With `expectedJkt`, the request must carry a proof signed with that key, even without `required: true`. A missing proof, or a proof signed with another key, fails with `invalid_dpop_proof`. With `dpop.nonce.required`, a proof from the expected key without a current nonce gets `use_dpop_nonce`, so the client can retry. When `expectedJkt` is `undefined`, the call behaves as if you had not passed it.
+
+On the request that issues the code with [`issueAuthorizationCode`](/docs/plugins/oauth-provider/sign-in-flow#issue-codes-from-your-own-endpoint), do not call `verifyDpopProof`. Set `dpop_jkt` in `query` to the stored key instead. The method checks the request's proof against it, and a second verification would reject the proof as replayed.
+
 ## Custom claims
 
 To add claims to access tokens, set `customAccessTokenClaims`. It receives `user`, `scopes`, `referenceId`, `resources`, and the client's `metadata`. It returns an object of claims to add. Use namespaced claim names, and see [RFC 9068 §2.2](https://datatracker.ietf.org/doc/html/rfc9068#section-2.2) for the claims the provider already sets. To stop a token from being issued, for example when the user has left the organization, throw from the callback.

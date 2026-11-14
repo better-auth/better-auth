@@ -202,7 +202,7 @@ export async function verifyEndpointDpopProof(
 ): Promise<VerifiedDpopProof | undefined> {
 	const proofJwt = getDpopProofJwt(ctx);
 	if (!proofJwt) {
-		if (params?.required) {
+		if (params?.required || params?.expectedJkt !== undefined) {
 			throwInvalidDpopProof("DPoP proof header is required");
 		}
 		return undefined;
