@@ -428,18 +428,23 @@ describe("internal adapter test", async () => {
 		const ctx = await init(opts);
 		// The first lookup runs the minute's cleanup.
 		await ctx.internalAdapter.findVerificationValue("cleanup:lookup");
-		await ctx.internalAdapter.createVerificationValue({
-			identifier: "expired:challenge",
-			value: "stale",
-			expiresAt: new Date(Date.now() - 1_000),
-		});
+		const add = (value: string, createdAgo: number, expiresIn: number) =>
+			ctx.internalAdapter.createVerificationValue({
+				identifier: "expired:challenge",
+				value,
+				createdAt: new Date(Date.now() - createdAgo),
+				expiresAt: new Date(Date.now() + expiresIn),
+			});
+		await add("valid", 3_000, 60_000);
+		await add("older", 2_000, -2_000);
+		await add("stale", 1_000, -1_000);
 
 		expect(
 			await ctx.internalAdapter.findVerificationValue("expired:challenge"),
 		).toMatchObject({ value: "stale" });
 		expect(
 			await ctx.internalAdapter.findVerificationValue("expired:challenge"),
-		).toBeNull();
+		).toMatchObject({ value: "valid" });
 	});
 
 	it("should delete expired verification values on find", async () => {

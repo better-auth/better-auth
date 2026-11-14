@@ -527,7 +527,7 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10000
 	 */
-	it("sends no OTP and records no attempt for an expired challenge", async () => {
+	it("sends no OTP for an expired challenge", async () => {
 		const challengeHeaders = await startChallenge();
 		const challengeRow = await db.findOne<Verification>({
 			model: "verification",

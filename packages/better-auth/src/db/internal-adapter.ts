@@ -1452,11 +1452,15 @@ export const createInternalAdapter = (
 					undefined,
 				);
 			} else if (found && new Date(found.expiresAt).getTime() < now) {
-				// Not every reader checks `expiresAt`, so an expired row is
-				// deleted when it is found and no later lookup returns it. The
-				// throttled sweep above only bounds table growth.
-				await deleteWithHooks(
-					[{ field: "id", value: found.id }],
+				// Not every reader checks `expiresAt`, so when a lookup finds an
+				// expired row, it deletes every expired row of that identifier
+				// and no later lookup returns one. The throttled sweep above only
+				// bounds table growth.
+				await deleteManyWithHooks(
+					[
+						{ field: "identifier", value: found.identifier },
+						{ field: "expiresAt", value: new Date(now), operator: "lt" },
+					],
 					"verification",
 					undefined,
 				);
