@@ -348,8 +348,9 @@ This section applies if you verify access tokens with `verifyAccessTokenRequest`
 
 * A request without a token gets a `Bearer` and a `DPoP` challenge. Before, `createResourceServerChallenge` and the MCP handler sent only `Bearer`.
 * A `DPoP` challenge carries the `resource_metadata` link, as `Bearer` challenges already did. For a resource identifier that is not a URL, such as a `urn:`, `createResourceServerChallenge` throws when `resourceMetadataMappings` has no entry for it. `Bearer` challenges already did, and now `DPoP` challenges do too.
+* `verifyResourceRequest` has no `resourceMetadataMappings` option and never throws for a missing entry. Without `audience`, or when `audience` is not a URL, its challenges leave out `resource_metadata`.
 
-**What to do:** add a `resourceMetadataMappings` entry for each resource identifier that is not a URL. Clients and tests that compare the whole header value must expect the `DPoP` challenge too.
+**What to do:** if you call `createResourceServerChallenge`, add a `resourceMetadataMappings` entry for each resource identifier that is not a URL. Clients and tests that compare the whole header value must expect the `DPoP` challenge too.
 
 ### `authorization_details_types_supported` is a list
 
