@@ -205,6 +205,21 @@
   - @better-auth/prisma-adapter@1.8.0-beta.0
   - @better-auth/telemetry@1.8.0-beta.0
 
+## 1.7.24
+
+### Patch Changes
+
+- [#12593](https://github.com/better-auth/better-auth/pull/12593) [`b77e783`](https://github.com/better-auth/better-auth/commit/b77e7834123ce5431af6467b3c758d01a2c9bb92) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Looking up a verification value now deletes expired verification rows at most once a minute per server instance, instead of on every lookup. This removes a delete query from most verification reads. Each flow still checks a value's expiry before it accepts the value.
+
+- Updated dependencies [[`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f)]:
+  - @better-auth/core@1.7.24
+  - @better-auth/drizzle-adapter@1.7.24
+  - @better-auth/kysely-adapter@1.7.24
+  - @better-auth/memory-adapter@1.7.24
+  - @better-auth/mongo-adapter@1.7.24
+  - @better-auth/prisma-adapter@1.7.24
+  - @better-auth/telemetry@1.7.24
+
 ## 1.7.23
 
 ### Patch Changes

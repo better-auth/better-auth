@@ -51,6 +51,8 @@ type ActiveSessionReference = {
 	readonly expiresAt: number;
 };
 
+const VERIFICATION_CLEANUP_INTERVAL_MS = 60_000;
+
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -64,6 +66,7 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
+	let nextVerificationCleanupAt = 0;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	// With secondary storage, the database is the authoritative session store
 	// only when sessions are written to it and revoked rows are deleted.
@@ -292,9 +295,14 @@ export const createInternalAdapter = (
 
 	// Best-effort maintenance: a failed sweep must not fail the request it rides on.
 	// Deferred past the caller's transaction so its rows' after-delete hooks run
-	// here, inside the catch, not after the caller's commit.
+	// here, inside the catch, not after the caller's commit. Readers either
+	// check `expiresAt` or, like revocation markers, treat any row they find as
+	// revoked, which fails closed. So the sweep only bounds table growth.
 	async function deleteExpiredVerifications() {
 		if (options.verification?.disableCleanup) return;
+		const now = Date.now();
+		if (now < nextVerificationCleanupAt) return;
+		nextVerificationCleanupAt = now + VERIFICATION_CLEANUP_INTERVAL_MS;
 		await queueAfterTransactionHook(async () => {
 			try {
 				await deleteManyWithHooks(

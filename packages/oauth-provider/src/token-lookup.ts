@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createHash } from "@better-auth/utils/hash";
+import { isAPIError } from "better-auth/api";
 import { getJwks } from "better-auth/oauth2";
-import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import {
 	createLocalJWKSet,
@@ -156,7 +156,7 @@ export async function findRefreshToken(
 		// `compactDecrypt` throws, means this is not a refresh token. Any other
 		// failure is real.
 		if (
-			(error instanceof APIError && error.statusCode === 400) ||
+			(isAPIError(error) && error.statusCode === 400) ||
 			error instanceof joseErrors.JOSEError
 		) {
 			return null;
