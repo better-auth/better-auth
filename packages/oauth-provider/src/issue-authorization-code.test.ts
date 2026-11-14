@@ -335,3 +335,87 @@ describe("provider.issueAuthorizationCode", async () => {
 		expect(withConsent.error).toBeNull();
 	});
 });
+
+describe("provider.issueAuthorizationCode hook isolation", async () => {
+	const redirectUri = "https://client.example.com/callback";
+	const issuer = {
+		id: "test-code-issuer",
+		endpoints: {
+			testIssueCode: createAuthEndpoint(
+				"/test/issue-code",
+				{ method: "POST", use: [sessionMiddleware] },
+				async (ctx) => {
+					const provider = getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+					);
+					const issued = await provider.issueAuthorizationCode({
+						query: ctx.body as StoredAuthorizationQuery,
+						session: ctx.context.session,
+					});
+					return ctx.json({ code: issued.code });
+				},
+			),
+		},
+	} satisfies BetterAuthPlugin;
+
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL: "http://localhost:3000/api/auth/",
+		advanced: { skipTrailingSlashes: true },
+		plugins: [
+			issuer,
+			jwt({ jwt: { issuer: "http://localhost:3000" } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				postLogin: {
+					page: "/select-organization",
+					// A hook that edits its query must not change what later hooks see.
+					shouldRedirect: ({ query }) => {
+						query.delete("client_id");
+						return false;
+					},
+					consentReferenceId: ({ query }) =>
+						query.get("client_id") ? undefined : "mutated",
+				},
+			}),
+		],
+	});
+	const { headers, user } = await signInWithTestUser();
+	const context = await auth.$context;
+
+	it("gives each hook its own copy of the query", async () => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_post",
+			},
+		});
+		await context.adapter.create({
+			model: "oauthConsent",
+			data: {
+				clientId: oauthClient.client_id,
+				userId: user.id,
+				scopes: ["openid"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const challenge = await generateCodeChallenge(generateRandomString(43));
+		const issued = await client.$fetch<{ code: string }>("/test/issue-code", {
+			method: "POST",
+			headers,
+			body: {
+				response_type: "code",
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				scope: "openid",
+				code_challenge: challenge,
+				code_challenge_method: "S256",
+			},
+		});
+		expect(issued.error).toBeNull();
+	});
+});

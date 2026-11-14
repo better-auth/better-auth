@@ -1294,18 +1294,19 @@ export async function issueAuthorizationCode(
 	const headers = ctx.request?.headers ?? ctx.headers ?? new Headers();
 	const scopes = parseScopes(query.scope);
 	const resources = toResourceList(query.resource) ?? [];
-	const hookArgs = {
+	// Each hook gets its own copy of the query.
+	const hookContext = () => ({
 		user,
 		session,
 		scopes,
 		query: serializeAuthorizationQuery(query),
-	};
+	});
 	// The caller chose the session, so account selection does not apply.
 	if (
-		(await opts.signup?.shouldRedirect?.({ headers, ...hookArgs })) ||
+		(await opts.signup?.shouldRedirect?.({ headers, ...hookContext() })) ||
 		(await opts.postLogin?.shouldRedirect({
 			headers,
-			...hookArgs,
+			...hookContext(),
 			isContinuation: false,
 		}))
 	) {
@@ -1316,7 +1317,7 @@ export async function issueAuthorizationCode(
 		);
 	}
 
-	const referenceId = await getConsentReferenceId(opts, hookArgs);
+	const referenceId = await getConsentReferenceId(opts, hookContext());
 	if (!client.skipConsent) {
 		const consent = await findConsent(
 			ctx,

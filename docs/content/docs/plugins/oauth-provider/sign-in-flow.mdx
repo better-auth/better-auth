@@ -111,9 +111,10 @@ export const codeIssuer = () =>
             ctx,
             ctx.context.getPlugin("oauth-provider")!.options,
           );
-          const proof = await provider.verifyDpopProof({ required: true });
+          // Binds the code to the client's DPoP key when it sends a proof.
+          const proof = await provider.verifyDpopProof();
           const { code } = await provider.issueAuthorizationCode({
-            query: { ...ctx.body, dpop_jkt: proof.jkt },
+            query: { ...ctx.body, dpop_jkt: proof?.jkt },
             session: ctx.context.session,
           });
           return ctx.json({ authorization_code: code });
@@ -123,7 +124,7 @@ export const codeIssuer = () =>
   }) satisfies BetterAuthPlugin;
 ```
 
-The provider checks the request as `/oauth2/authorize` does: the client, scopes, claims, resources, and PKCE. It issues the code only when the client has `skip_consent` or the user already consented to everything requested. Any step that would show a page fails instead, with a 400 error:
+The provider checks the request as `/oauth2/authorize` does: the client, scopes, claims, resources, and PKCE. The session you pass is the account the code is for, so account selection does not run. It issues the code only when the client has `skip_consent` or the user already consented to everything requested. Any step that would show a page fails instead, with a 400 error:
 
 | Error                  | When                                                                                                                       |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -136,7 +137,7 @@ Send the user to `/oauth2/authorize` when you get one of these errors.
 
 `redirect_uri` is optional. When the request has one, it must be registered for the client, and the result's `redirectURL` carries the code, `state`, and `iss`. Without one, the token request must omit `redirect_uri` too ([RFC 6749 §4.1.3](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3)). The code expires after `codeExpiresIn` and redeems once at the token endpoint, like a code from `/oauth2/authorize`.
 
-Your endpoint must authenticate the user before it calls `issueAuthorizationCode`. The method trusts the session you pass. To bind the code to a DPoP key ([RFC 9449 §10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)), pass the `jkt` from [`verifyDpopProof`](/docs/plugins/oauth-provider/tokens#nonces-on-your-own-endpoints) as `dpop_jkt`. The client must then prove the same key at the token endpoint.
+Your endpoint must authenticate the user before it calls `issueAuthorizationCode`. The method trusts the session you pass. To bind the code to a DPoP key ([RFC 9449 §10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)), pass the `jkt` from [`verifyDpopProof`](/docs/plugins/oauth-provider/tokens#nonces-on-your-own-endpoints) as `dpop_jkt`, as the example does. The client must then prove the same key at the token endpoint. To accept only DPoP-bound clients, call `verifyDpopProof({ required: true })`.
 
 ## Login page
 
