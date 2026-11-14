@@ -56,3 +56,43 @@ description: Kakao provider setup and usage.
     ```
   </Step>
 </Steps>
+
+## Sign In with Kakao using ID Token
+
+If your app signs in with Kakao's native SDKs (Android, iOS, or Flutter), you can pass the ID token to `signIn.social` to sign in without redirection.
+
+1. Enable [OpenID Connect](https://developers.kakao.com/docs/en/kakaologin/prerequisite#kakao-login-oidc) in the Kakao Developers console.
+2. ID tokens from the SDKs are issued for the app key used to initialize the SDK, so add your native app key to `clientId`. Keep the REST API key first, since the redirect flow uses the first key.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        kakao: {
+            clientId: [
+                process.env.KAKAO_REST_API_KEY as string, // [!code highlight]
+                process.env.KAKAO_NATIVE_APP_KEY as string, // [!code highlight]
+            ],
+            clientSecret: process.env.KAKAO_CLIENT_SECRET as string,
+        },
+    }
+})
+```
+
+```ts title="auth-client.ts"
+const data = await authClient.signIn.social({
+    provider: "kakao",
+    idToken: {
+        token: kakaoIdToken, // ID token from the Kakao SDK
+    },
+})
+```
+
+<Callout>
+  The user is created from the ID token claims (`sub`, `nickname`, `picture`, and `email`). The ID token has no email verification status, so `emailVerified` is `false`.
+
+  The ID token includes `email` only when the user consents to `account_email`. Without it, sign-in fails with `USER_EMAIL_NOT_FOUND`. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the `mapProfileToUser` fallback.
+</Callout>
+
+To receive an ID token in the redirect flow as well, add `openid` with the `scope` option.

@@ -1,4 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
+import { createRemoteJWKSet, decodeJwt } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
@@ -97,8 +98,26 @@ export interface KakaoProfile {
 	for_partner?: Partner | undefined;
 }
 
+/**
+ * @see https://developers.kakao.com/docs/en/kakaologin/rest-api#request-token-response-id-token
+ */
+interface KakaoIdTokenPayload {
+	/** Kakao user ID */
+	sub: string;
+	/** Nickname (consent required: profile/nickname) */
+	nickname?: string | undefined;
+	/** Thumbnail image URL (consent required: profile/profile image) */
+	picture?: string | undefined;
+	/** Email, present only when it is valid (consent required: email) */
+	email?: string | undefined;
+}
+
 export interface KakaoOptions extends ProviderOptions<KakaoProfile> {
-	clientId: string;
+	/**
+	 * The REST API key. To accept ID tokens from the Kakao SDKs, pass the
+	 * native app key as well, keeping the REST API key first.
+	 */
+	clientId: string | string[];
 }
 
 export const kakao = (options: KakaoOptions) => {
@@ -151,6 +170,44 @@ export const kakao = (options: KakaoOptions) => {
 						tokenEndpoint,
 					});
 				},
+		idToken: {
+			// https://developers.kakao.com/docs/en/kakaologin/rest-api#oidc-find-public-key
+			jwks: createRemoteJWKSet(
+				new URL("https://kauth.kakao.com/.well-known/jwks.json"),
+			),
+			issuer: "https://kauth.kakao.com",
+			audience: options.clientId,
+			algorithms: ["RS256"],
+		},
+		async getUserInfoFromIdToken(idToken) {
+			if (options.getUserInfo) {
+				return options.getUserInfo({ idToken });
+			}
+			const claims = decodeJwt<KakaoIdTokenPayload>(idToken);
+			const profile: KakaoProfile = {
+				// Same value as `id` from /v2/user/me, so both flows resolve to the same account.
+				id: Number(claims.sub),
+				kakao_account: {
+					email: claims.email,
+					profile: {
+						nickname: claims.nickname,
+						thumbnail_image_url: claims.picture,
+					},
+				},
+			};
+			const userMap = await options.mapProfileToUser?.(profile);
+			return {
+				user: {
+					name: claims.nickname || "",
+					email: claims.email,
+					image: claims.picture,
+					// The ID token carries no email verification status.
+					emailVerified: false,
+					...userMap,
+				},
+				data: profile,
+			};
+		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
