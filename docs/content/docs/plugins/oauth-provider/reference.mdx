@@ -709,9 +709,11 @@ Extension claims only add claim names. Your own callbacks can override profile c
 | ID token     | subject and authentication claims \< `customIdTokenClaims`. Extension and per-issuance `idTokenClaims` only add names and cannot set profile or email claims. | `iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`                                                                                                       |
 | UserInfo     | scope and `claims.userinfo` claims \< extension `claims.userInfo` (add only) \< `customUserInfoClaims`                                                        | `sub`, applied last                                                                                                                                                                                                                    |
 
+A claim set to `undefined` in any of these sources is left out, so a lower-priority claim with the same name keeps its value. To override a claim, set a value, such as `null`.
+
 Introspection returns per-issuance `accessTokenClaims` for both token formats. The provider issues a JWT access token when the request names a `resource` and the JWT plugin is enabled, and an opaque access token otherwise ([Token endpoint](/docs/plugins/oauth-provider/tokens#token-endpoint)). A JWT access token carries the claims in its signed payload. An opaque access token stores them as JSON in the `accessTokenClaims` column of `oauthAccessToken`, after removing the provider-owned names, and introspection merges them back in the same order as the table above. Only clients allowed to introspect the token receive them.
 
-Stored claims stay in the database until the token row is deleted. Keep personal data out of them when the resource server can look it up instead. Values read back in their JSON form, as they would from a JWT, so pass JSON-serializable values. A per-issuance claim set to `undefined` is left out of both formats, so a lower-priority claim with the same name, such as an extension's, keeps its value.
+Stored claims stay in the database until the token row is deleted. Keep personal data out of them when the resource server can look it up instead. Values read back in their JSON form, as they would from a JWT, so pass JSON-serializable values.
 
 ## Schema
 

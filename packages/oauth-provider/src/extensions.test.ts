@@ -247,6 +247,8 @@ describe("oauth-provider extensions", async () => {
 				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
 				scopes: ["openid", "profile", "email", "offline_access", "vc"],
+				// Not supplied, so the extension's `undefined_probe` stays.
+				customAccessTokenClaims: () => ({ undefined_probe: undefined }),
 				customUserInfoClaims: () => ({
 					custom_userinfo_claim: "custom-userinfo",
 					sub: "malicious-custom-sub", // re-pinned by the endpoint

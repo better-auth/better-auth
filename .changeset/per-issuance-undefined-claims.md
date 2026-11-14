@@ -2,6 +2,6 @@
 "@better-auth/oauth-provider": minor
 ---
 
-A per-issuance access-token claim set to `undefined` no longer removes a claim of the same name that an extension contributed. JWT access tokens now treat it as not supplied, as opaque-token introspection already did, so both formats return the extension's value.
+Access-token claims set to `undefined` are now left out instead of removing a claim of the same name from a lower-priority source. The rule covers every access-token claim source: extension claims, per-issuance `accessTokenClaims`, `customAccessTokenClaims`, and per-resource `customClaims`. It matches how ID token and UserInfo claims already work, and JWT and opaque access tokens now return the same claims.
 
-**Behavior change:** a custom grant that passed `accessTokenClaims: { name: undefined }` to remove an extension's claim from a JWT access token now gets the extension's value. To change that claim, pass a value, such as `null`.
+**Behavior change:** before, `customAccessTokenClaims: () => ({ tenant: user.tenantId })` with no `tenantId` removed a `tenant` claim that an extension or `issueTokens` set, in both token formats. A per-issuance `undefined` did the same in JWT access tokens. The lower-priority value now stays. To override it, return a value, such as `null`.

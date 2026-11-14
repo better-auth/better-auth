@@ -24,7 +24,11 @@ import {
 	LEVEL_0_ACR,
 	stripReservedIdTokenClaims,
 } from "./authentication-context";
-import { resolveAccessTokenClaims, toStoredAccessTokenClaims } from "./claims";
+import {
+	pickClaims,
+	resolveAccessTokenClaims,
+	toStoredAccessTokenClaims,
+} from "./claims";
 import { getRequestedUserInfoClaims } from "./claims-request";
 import {
 	challengeEndpointDpopNonce,
@@ -71,7 +75,6 @@ import {
 	consumedAuthorizationCodeSchema,
 	verificationValueSchema,
 } from "./types/zod";
-import { pickClaims } from "./userinfo";
 import {
 	assertConfirmation,
 	clientAllowsGrant,
@@ -1625,10 +1628,7 @@ async function createUserTokens(
 				resources: params.resources,
 				referenceId,
 				metadata,
-				perRequestClaims: toStoredAccessTokenClaims(
-					params.accessTokenClaims,
-					opts,
-				),
+				perRequestClaims: params.accessTokenClaims,
 				resourcePolicyClaims: grantIssuance.resourceCustomClaims,
 			})
 		: undefined;
