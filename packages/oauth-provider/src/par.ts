@@ -23,8 +23,6 @@ const STORED_TYPE = "pushed_authorization_request";
 type StoredPushedAuthorizationRequest = {
 	clientId: string;
 	query: Record<string, unknown>;
-	/** Set once `/oauth2/authorize` has loaded the request. */
-	loaded?: true;
 };
 
 /**
@@ -37,6 +35,11 @@ async function getStoredIdentifier(
 	id: string,
 ): Promise<string> {
 	return `${STORED_TYPE}:${await storeToken(opts.storeTokens, id, "request_uri")}`;
+}
+
+/** Where a pushed request lives after its first visit to `/oauth2/authorize`. */
+function getLoadedIdentifier(identifier: string) {
+	return `${identifier}:loaded`;
 }
 
 // Client authentication belongs to the push, not to the authorization request.
@@ -184,11 +187,11 @@ async function getRequestUriIdentifier(
 /**
  * Loads a `request_uri` issued by {@link pushedAuthorizationRequestEndpoint}
  * for the client that pushed it, without using it up, so the user agent can
- * reload the authorization URL (RFC 9126 §4). The first load extends the
- * value's lifetime to that of the signed query that carries the request
- * through login and consent, so a sign-in that outlasts `expires_in` can still
- * finish. {@link consumePushedAuthorizationRequest} uses it up when the code is
- * issued.
+ * reload the authorization URL (RFC 9126 §4). The first load moves the request
+ * to a value that lasts as long as the signed query that carries it through
+ * login and consent, so a sign-in that outlasts `expires_in` can still finish.
+ * That deadline is fixed at the first load. {@link consumePushedAuthorizationRequest}
+ * uses the request up when the code is issued.
  */
 export async function loadPushedAuthorizationRequest(
 	ctx: GenericEndpointContext,
@@ -199,27 +202,31 @@ export async function loadPushedAuthorizationRequest(
 	const identifier = await getRequestUriIdentifier(opts, requestUri);
 	if (!identifier) return { status: "not_found" };
 	const { internalAdapter } = ctx.context;
-	const verification = await internalAdapter.findVerificationValue(identifier);
+	const loadedIdentifier = getLoadedIdentifier(identifier);
+	const loaded = await internalAdapter.findVerificationValue(loadedIdentifier);
+	if (loaded && new Date(loaded.expiresAt).getTime() > Date.now()) {
+		const stored: StoredPushedAuthorizationRequest = JSON.parse(loaded.value);
+		if (stored.clientId !== clientId) {
+			await internalAdapter.deleteVerificationByIdentifier(loadedIdentifier);
+			return { status: "invalid" };
+		}
+		return { status: "found", query: stored.query };
+	}
+	// Consuming the pushed value makes exactly one first load create the
+	// loaded value. Updating the value in place could write it back after code
+	// issuance consumed it, letting it issue a second code.
+	const pushed = await internalAdapter.consumeVerificationValue(identifier);
+	if (!pushed) return { status: "not_found" };
+	const stored: StoredPushedAuthorizationRequest = JSON.parse(pushed.value);
+	if (stored.clientId !== clientId) return { status: "invalid" };
 	const now = Date.now();
-	if (!verification || new Date(verification.expiresAt).getTime() <= now) {
-		return { status: "not_found" };
-	}
-	const stored: StoredPushedAuthorizationRequest = JSON.parse(
-		verification.value,
-	);
-	if (stored.clientId !== clientId) {
-		await internalAdapter.deleteVerificationByIdentifier(identifier);
-		return { status: "invalid" };
-	}
-	if (!stored.loaded) {
-		await internalAdapter.updateVerificationByIdentifier(identifier, {
-			value: JSON.stringify({
-				...stored,
-				loaded: true,
-			} satisfies StoredPushedAuthorizationRequest),
-			expiresAt: new Date(now + getSignedQueryExpiresIn(opts) * 1000),
-		});
-	}
+	await internalAdapter.createVerificationValue({
+		identifier: loadedIdentifier,
+		value: pushed.value,
+		createdAt: new Date(now),
+		updatedAt: new Date(now),
+		expiresAt: new Date(now + getSignedQueryExpiresIn(opts) * 1000),
+	});
 	return { status: "found", query: stored.query };
 }
 
@@ -236,6 +243,6 @@ export async function consumePushedAuthorizationRequest(
 	const identifier = await getRequestUriIdentifier(opts, requestUri);
 	if (!identifier) return false;
 	return !!(await ctx.context.internalAdapter.consumeVerificationValue(
-		identifier,
+		getLoadedIdentifier(identifier),
 	));
 }

@@ -2091,7 +2091,8 @@ export interface OAuthOptions<
 		 * Seconds the client has to send the user to `/oauth2/authorize` with a
 		 * `request_uri`: a positive whole number below 600. After the first visit,
 		 * the `request_uri` stays valid for `codeExpiresIn`, the lifetime of the
-		 * signed query that carries the request through login and consent.
+		 * signed query that carries the request through login and consent. Later
+		 * redirects do not extend this deadline.
 		 *
 		 * @default 60
 		 */
@@ -2108,8 +2109,8 @@ export interface OAuthOptions<
 	 * looks up `request_uri` values issued by `/oauth2/par`. It calls this
 	 * resolver for any value it does not hold, including one that expired or
 	 * already issued its code, so return null for values you did not issue.
-	 * The resolver runs on each visit to the authorize endpoint, including a
-	 * reload.
+	 * For those values, the resolver runs on each visit to the authorize
+	 * endpoint, including a reload.
 	 */
 	requestUriResolver?: (input: {
 		requestUri: string;

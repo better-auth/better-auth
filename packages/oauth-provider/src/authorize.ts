@@ -29,6 +29,7 @@ import {
 import { resolveResourcePolicy } from "./resources";
 import {
 	canonicalizeOAuthQueryParams,
+	DEFAULT_CODE_EXPIRES_IN,
 	getSignedQueryExpiresIn,
 	postLoginClearedParam,
 	setSignedOAuthQueryParameterNames,
@@ -1426,7 +1427,7 @@ async function storeAuthorizationCode(
 ) {
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const iat = Math.floor(Date.now() / 1000);
-	const exp = iat + (opts.codeExpiresIn ?? 600);
+	const exp = iat + (opts.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN);
 	const expiresAt = new Date(exp * 1000);
 
 	await ctx.context.internalAdapter.createVerificationValue({
@@ -1472,11 +1473,18 @@ async function createAuthorizationCodeURL(
 	opts: OAuthOptions<Scope[]>,
 	approval: AuthorizationCodeApproval & { query: OAuthAuthorizationQuery },
 ) {
+	const { code } = await storeAuthorizationCode(ctx, opts, approval);
+	// The code is stored before the request_uri is used up, so a storage
+	// failure leaves the pushed request usable. The code is never delivered
+	// when the request_uri was already used, and is deleted.
 	const requestUri = approval.query.request_uri;
 	if (
 		requestUri !== undefined &&
 		!(await consumePushedAuthorizationRequest(ctx, opts, requestUri))
 	) {
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			await storeToken(opts.storeTokens, code, "authorization_code"),
+		);
 		return formatErrorURL(
 			approval.query.redirect_uri,
 			"invalid_request_uri",
@@ -1485,7 +1493,6 @@ async function createAuthorizationCodeURL(
 			getIssuer(ctx, opts),
 		);
 	}
-	const { code } = await storeAuthorizationCode(ctx, opts, approval);
 	return getAuthorizationCodeURL(
 		ctx,
 		opts,

@@ -1,3 +1,4 @@
+import type { BetterAuthOptions } from "better-auth";
 import { generateRandomString } from "better-auth/crypto";
 import { deriveDpopJkt, generateCodeChallenge } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -46,10 +47,12 @@ async function setup(
 	providerOptions: Partial<OAuthOptions<Scope[]>> = {
 		pushedAuthorizationRequests: { enabled: true },
 	},
+	authOptions: Pick<BetterAuthOptions, "secondaryStorage" | "session"> = {},
 ) {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
 		{
 			baseURL,
+			...authOptions,
 			plugins: [
 				jwt({ jwt: { issuer: baseURL } }),
 				oauthProvider({
@@ -173,6 +176,108 @@ async function setup(
 
 afterEach(() => {
 	vi.useRealTimers();
+});
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc9126#section-4
+ */
+describe("pushed authorization requests in secondary storage", async () => {
+	const store = new Map<string, string>();
+	// Holds the next write of a pushed request until `release` runs, so a
+	// second visit can finish in between.
+	let held: { reached: () => void; release: Promise<void> } | undefined;
+	let failNextCodeWrite = false;
+	const { createClient, authorizationParams, pushRequest, authorize } =
+		await setup(
+			{ pushedAuthorizationRequests: { enabled: true } },
+			{
+				session: { storeSessionInDatabase: true },
+				secondaryStorage: {
+					get: (key) => store.get(key) ?? null,
+					async set(key, value) {
+						if (failNextCodeWrite && value.includes("authorization_code")) {
+							failNextCodeWrite = false;
+							throw new Error("storage unavailable");
+						}
+						const hold = key.includes("pushed_authorization_request")
+							? held
+							: undefined;
+						if (hold) {
+							held = undefined;
+							hold.reached();
+							await hold.release;
+						}
+						store.set(key, value);
+					},
+					delete: (key) => {
+						store.delete(key);
+					},
+					getAndDelete(key) {
+						const value = store.get(key) ?? null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const next = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(next));
+						return next;
+					},
+				},
+			},
+		);
+	const client = await createClient();
+
+	it("issues one code when first visits overlap", async () => {
+		const { params } = await authorizationParams(client.client_id);
+		const pushed = await pushRequest({
+			...params,
+			client_id: client.client_id,
+			client_secret: client.client_secret!,
+		});
+		const visit = () =>
+			authorize({
+				client_id: client.client_id,
+				request_uri: pushed.body.request_uri as string,
+			});
+
+		let release!: () => void;
+		const reached = new Promise<void>((resolve) => {
+			held = {
+				reached: resolve,
+				release: new Promise((done) => {
+					release = done;
+				}),
+			};
+		});
+		const stalled = visit();
+		await reached;
+		const finished = await visit();
+		release();
+		const results = [await stalled, finished];
+
+		const codes = results.filter((url) => url.searchParams.get("code"));
+		expect(codes).toHaveLength(1);
+	});
+
+	it("keeps the request_uri when storing the code fails", async () => {
+		const { params } = await authorizationParams(client.client_id);
+		const pushed = await pushRequest({
+			...params,
+			client_id: client.client_id,
+			client_secret: client.client_secret!,
+		});
+		const visit = () =>
+			authorize({
+				client_id: client.client_id,
+				request_uri: pushed.body.request_uri as string,
+			});
+
+		failNextCodeWrite = true;
+		const failed = await visit();
+		expect(failed.searchParams.get("code")).toBeNull();
+		const retried = await visit();
+		expect(retried.searchParams.get("code")).toEqual(expect.any(String));
+	});
 });
 
 describe("pushed authorization requests", async () => {
@@ -394,7 +499,7 @@ describe("pushed authorization requests", async () => {
 				},
 			);
 			const continued = (await signIn.json()) as { url: string };
-			expect(new URL(continued.url).searchParams.get("code")).toEqual(
+			expect(new URL(continued.url, baseURL).searchParams.get("code")).toEqual(
 				expect.any(String),
 			);
 		});
@@ -420,7 +525,7 @@ describe("pushed authorization requests", async () => {
 					}),
 				}).then(
 					async (response) =>
-						new URL(((await response.json()) as { url: string }).url),
+						new URL(((await response.json()) as { url: string }).url, baseURL),
 				);
 
 			const first = await signIn();
