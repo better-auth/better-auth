@@ -24,7 +24,7 @@ import type {
 	SchemaClient,
 	Scope,
 } from "../types";
-import { getClient } from "./index";
+import { getAuthEndpointUrl, getClient } from "./index";
 
 type JwksCache = Map<string, { jwks: JSONWebKeySet; fetchedAt: number }>;
 type FetchedJwksResult =
@@ -555,13 +555,13 @@ export async function verifyClientAssertion(
 
 	// Fetch JWKS and verify signature + claims
 	const jwks = await fetchClientJwks(ctx, opts, client);
-	const tokenEndpoint = `${ctx.context.baseURL}/oauth2/token`;
+	const tokenEndpoint = getAuthEndpointUrl(ctx, "/oauth2/token");
 	const endpointAudience = expectedAudience ?? tokenEndpoint;
 	const issuerAudience = getIssuer(ctx, opts);
 	// RFC 9126 §2: the PAR endpoint also accepts the token endpoint URL.
 	const tokenEndpointAudience =
 		endpointAudience ===
-		`${ctx.context.baseURL}${PUSHED_AUTHORIZATION_REQUEST_PATH}`
+		getAuthEndpointUrl(ctx, PUSHED_AUTHORIZATION_REQUEST_PATH)
 			? [tokenEndpoint]
 			: [];
 	const acceptedAudiences = options?.endpointAudienceOnly
