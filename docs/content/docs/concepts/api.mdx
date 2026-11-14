@@ -104,11 +104,11 @@ const response = await auth.api.signInEmail({
 
 ### Error Handling
 
-When you call an API endpoint on the server, it will throw an error if the request fails. You can catch the error and handle it as you see fit. The error instance is an instance of `APIError`.
+When you call an API endpoint on the server, it throws an `APIError` if the request fails. Check for it with `isAPIError` rather than `instanceof APIError`: when an app resolves more than one copy of `better-call`, an `APIError` from one copy fails `instanceof` against the other.
 
 ```ts title="server.ts"
 import { auth } from "@/lib/auth"
-import { APIError, isAPIError } from "better-auth/api";
+import { isAPIError } from "better-auth/api";
 
 try {
     await auth.api.signInEmail({

@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
+import { isAPIError } from "better-auth/api";
 import {
 	getJwks,
 	stripAccessTokenAuthorizationScheme,
@@ -18,6 +19,7 @@ import type {
 import {
 	destructureCredentials,
 	extractClientCredentials,
+	getAuthEndpointUrl,
 	getJwksSource,
 	getJwtPlugin,
 	getStoredToken,
@@ -261,7 +263,7 @@ async function revokeAccessToken(
 	try {
 		return await revokeJwtAccessToken(ctx, opts, token);
 	} catch (err) {
-		if (err instanceof APIError) {
+		if (isAPIError(err)) {
 			// A confirmed JWT access token cannot be revoked: surface that rather
 			// than falling through to the opaque-token lookup.
 			if (err.body?.error === "unsupported_token_type") {
@@ -277,7 +279,7 @@ async function revokeAccessToken(
 	try {
 		return await revokeOpaqueAccessToken(ctx, opts, token, clientId);
 	} catch (err) {
-		if (err instanceof APIError) {
+		if (isAPIError(err)) {
 			// nothing
 		} else if (err instanceof Error) {
 			throw err;
@@ -312,7 +314,7 @@ export async function revokeEndpoint(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/revoke`,
+		getAuthEndpointUrl(ctx, "/oauth2/revoke"),
 	);
 	const {
 		clientId: client_id,
@@ -356,7 +358,7 @@ export async function revokeEndpoint(
 			try {
 				return await revokeAccessToken(ctx, opts, client.clientId, token);
 			} catch (error) {
-				if (error instanceof APIError) {
+				if (isAPIError(error)) {
 					if (
 						token_type_hint === "access_token" ||
 						error.body?.error === "unsupported_token_type"
@@ -381,7 +383,7 @@ export async function revokeEndpoint(
 					client.clientId,
 				);
 			} catch (error) {
-				if (error instanceof APIError) {
+				if (isAPIError(error)) {
 					if (token_type_hint === "refresh_token") {
 						throw error;
 					} // else continue
@@ -398,7 +400,7 @@ export async function revokeEndpoint(
 			error: "invalid_request",
 		});
 	} catch (error) {
-		if (error instanceof APIError) {
+		if (isAPIError(error)) {
 			// RFC 7009 §2.2.1: an explicit protocol error (unsupported_token_type)
 			// must surface; an unknown or already-invalid token still succeeds.
 			if (error.body?.error === "unsupported_token_type") {

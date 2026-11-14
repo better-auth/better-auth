@@ -8,7 +8,12 @@ import {
 	INSECURE_REDIRECT_URI_MESSAGE,
 	isNativePrivateUseRedirectUri,
 } from "@better-auth/core/utils/redirect-uri";
-import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
+import {
+	APIError,
+	getSessionFromCtx,
+	isAPIError,
+	NO_STORE_HEADERS,
+} from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import { assertValidClientJwks } from "./client-jwks";
@@ -690,7 +695,7 @@ export async function checkOAuthClient(
 					}
 				}
 			} catch (e) {
-				if (e instanceof APIError) throw e;
+				if (isAPIError(e)) throw e;
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_client_metadata",
 					error_description: "jwks_uri must be a valid URL",

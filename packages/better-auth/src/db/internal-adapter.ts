@@ -51,6 +51,8 @@ type ActiveSessionReference = {
 	readonly expiresAt: number;
 };
 
+const VERIFICATION_CLEANUP_INTERVAL_MS = 60_000;
+
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -64,6 +66,7 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
+	let nextVerificationCleanupAt = 0;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	// With secondary storage, the database is the authoritative session store
 	// only when sessions are written to it and revoked rows are deleted.
@@ -1430,7 +1433,14 @@ export const createInternalAdapter = (
 				verification = await findByIdentifier(identifier);
 			}
 
-			if (!options.verification?.disableCleanup) {
+			// Readers check `expiresAt` themselves, so the sweep only bounds
+			// table growth.
+			const now = Date.now();
+			if (
+				!options.verification?.disableCleanup &&
+				now >= nextVerificationCleanupAt
+			) {
+				nextVerificationCleanupAt = now + VERIFICATION_CLEANUP_INTERVAL_MS;
 				await deleteManyWithHooks(
 					[
 						{

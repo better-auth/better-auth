@@ -97,7 +97,7 @@
     "@better-auth/utils": "catalog:peer",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:^",
-    "better-call": "catalog:",
+    "better-call": "catalog:peer",
     "conf": "^15.0.2",
     "electron": ">=36.0.0"
   },
