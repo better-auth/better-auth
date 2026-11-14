@@ -231,7 +231,6 @@ oauthProvider({
 * A JWT-shaped token that fails verification, such as one with `alg: none` or a forged signature, is an invalid token: `200` from revoke, `{ "active": false }` from introspection, and `401 invalid_token` from UserInfo. Before, all three returned `500`.
 * At `/oauth2/token`, a refresh token without the configured `prefix.refreshToken` gets `400 invalid_grant`. Before, it got `400 invalid_token`.
 * In an extension grant, `provider.validateAccessToken` returns `{ active: false }` for an unknown token instead of throwing. `provider.requireActiveAccessToken` still throws.
-* `provider.requireActiveAccessToken` refuses a DPoP-bound token with `401 invalid_token`. Before, it accepted the token without checking a proof. Call `provider.verifyResourceRequest()` on a protected endpoint instead, which checks the proof.
 
 **What to do:** update clients and tests that expect the old status codes.
 
@@ -286,6 +285,26 @@ This applies if you bind tokens with DPoP or mTLS, or write a `clientAuthenticat
 * With `oauthTokenExchange()`, a client that exchanges its own DPoP-bound access token must prove the same key, with a DPoP proof or a matching `confirmation`. A client that exchanges its own certificate-bound token must return the same `confirmation` from its strategy, or the exchange fails with `invalid_request`. DPoP checks now run before `allowExchange`.
 
 **What to do:** return a confirmation from a strategy only for the key or certificate the client proved. Clients whose strategy returns a `jkt` must send DPoP proofs.
+
+### `requireActiveAccessToken` refuses DPoP-bound tokens
+
+This applies if a plugin endpoint calls `provider.requireActiveAccessToken` from `getOAuthProviderApi()`. It now refuses a DPoP-bound access token with `401 invalid_token` and a `DPoP` challenge. A token string alone cannot prove that the client holds the token's key, and before, the method accepted the token without a proof.
+
+This breaks the 1.7 recipe that calls `requireActiveAccessToken` and then `enforceDpopBinding` from `better-auth/oauth2` to check the proof. The first call now fails for every DPoP-bound token, so the proof check never runs.
+
+**What to do:** replace both calls with [`provider.verifyResourceRequest()`](/docs/plugins/oauth-provider/resource-server#endpoints-on-the-auth-server). It reads the token from the `Authorization` header, checks the DPoP proof with your `dpop` settings, including nonces, and then checks `audience` and `scopes`. Bearer tokens work as before.
+
+```ts title="reports-plugin.ts"
+// was:
+// const payload = await provider.requireActiveAccessToken(token);
+// await enforceDpopBinding({ payload, authorization, proofJwt, ... });
+const claims = await provider.verifyResourceRequest({
+  audience: "https://auth.example.com/api/auth/reports",
+  scopes: ["read:reports"],
+});
+```
+
+To read a token's claims whatever its binding, such as a token-exchange subject token, use `provider.validateAccessToken` instead.
 
 ### Consent reference hook runs once
 
