@@ -3,6 +3,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { APIError } from "better-call";
 import { parseAuthorizationRequest } from "./authorize";
 import { verifyEndpointDpopProof } from "./dpop";
+import { getSignedQueryExpiresIn } from "./signed-query";
 import { getOAuthProviderApi } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import { isRecord, storeToken, throwInvalidClient, tokenError } from "./utils";
@@ -22,6 +23,8 @@ const STORED_TYPE = "pushed_authorization_request";
 type StoredPushedAuthorizationRequest = {
 	clientId: string;
 	query: Record<string, unknown>;
+	/** Set once `/oauth2/authorize` has loaded the request. */
+	loaded?: true;
 };
 
 /**
@@ -164,39 +167,75 @@ export async function pushedAuthorizationRequestEndpoint(
 }
 
 export type PushedAuthorizationRequestLookup =
-	/** The value was not issued by this endpoint, or it expired. */
+	/** The value was not issued by this endpoint, it expired, or it was used. */
 	| { status: "not_found" }
-	/** The value was issued to another client; it is consumed regardless. */
+	/** The value was issued to another client; it is discarded regardless. */
 	| { status: "invalid" }
 	| { status: "found"; query: Record<string, unknown> };
 
+async function getRequestUriIdentifier(
+	opts: OAuthOptions<Scope[]>,
+	requestUri: string,
+): Promise<string | undefined> {
+	if (!requestUri.startsWith(REQUEST_URI_PREFIX)) return undefined;
+	return getStoredIdentifier(opts, requestUri.slice(REQUEST_URI_PREFIX.length));
+}
+
 /**
- * Consumes a `request_uri` issued by {@link pushedAuthorizationRequestEndpoint}.
- * The value is single-use and bound to the client that pushed it
- * (RFC 9126 §4).
+ * Loads a `request_uri` issued by {@link pushedAuthorizationRequestEndpoint}
+ * for the client that pushed it, without using it up, so the user agent can
+ * reload the authorization URL (RFC 9126 §4). The first load extends the
+ * value's lifetime to that of the signed query that carries the request
+ * through login and consent, so a sign-in that outlasts `expires_in` can still
+ * finish. {@link consumePushedAuthorizationRequest} uses it up when the code is
+ * issued.
  */
-export async function consumePushedAuthorizationRequest(
+export async function loadPushedAuthorizationRequest(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	requestUri: string,
 	clientId: string,
 ): Promise<PushedAuthorizationRequestLookup> {
-	if (!requestUri.startsWith(REQUEST_URI_PREFIX)) {
-		return { status: "not_found" };
-	}
-	const id = requestUri.slice(REQUEST_URI_PREFIX.length);
-	const verification =
-		await ctx.context.internalAdapter.consumeVerificationValue(
-			await getStoredIdentifier(opts, id),
-		);
-	if (!verification) {
+	const identifier = await getRequestUriIdentifier(opts, requestUri);
+	if (!identifier) return { status: "not_found" };
+	const { internalAdapter } = ctx.context;
+	const verification = await internalAdapter.findVerificationValue(identifier);
+	const now = Date.now();
+	if (!verification || new Date(verification.expiresAt).getTime() <= now) {
 		return { status: "not_found" };
 	}
 	const stored: StoredPushedAuthorizationRequest = JSON.parse(
 		verification.value,
 	);
 	if (stored.clientId !== clientId) {
+		await internalAdapter.deleteVerificationByIdentifier(identifier);
 		return { status: "invalid" };
 	}
+	if (!stored.loaded) {
+		await internalAdapter.updateVerificationByIdentifier(identifier, {
+			value: JSON.stringify({
+				...stored,
+				loaded: true,
+			} satisfies StoredPushedAuthorizationRequest),
+			expiresAt: new Date(now + getSignedQueryExpiresIn(opts) * 1000),
+		});
+	}
 	return { status: "found", query: stored.query };
+}
+
+/**
+ * Uses up a `request_uri` that {@link loadPushedAuthorizationRequest} loaded.
+ * Returns false when another request already used it or it expired, so one
+ * pushed request issues at most one authorization code.
+ */
+export async function consumePushedAuthorizationRequest(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	requestUri: string,
+): Promise<boolean> {
+	const identifier = await getRequestUriIdentifier(opts, requestUri);
+	if (!identifier) return false;
+	return !!(await ctx.context.internalAdapter.consumeVerificationValue(
+		identifier,
+	));
 }

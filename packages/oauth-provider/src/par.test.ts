@@ -183,6 +183,7 @@ describe("pushed authorization requests", async () => {
 		pushRequest,
 		authorize,
 		redeem,
+		customFetchImpl,
 	} = await setup();
 	const client = await createClient();
 	const credentials = {
@@ -332,6 +333,104 @@ describe("pushed authorization requests", async () => {
 			request_uri: requestUri,
 		});
 		expect(location.searchParams.get("code")).toEqual(expect.any(String));
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9126#section-4
+	 */
+	describe("until the authorization code is issued", () => {
+		it("accepts a reloaded request_uri, then issues one code", async () => {
+			const { params, codeVerifier } = await authorizationParams(
+				client.client_id,
+			);
+			const pushed = await pushRequest({ ...params, ...credentials });
+			const visit = (sessionHeaders?: Headers) =>
+				authorize(
+					{
+						client_id: client.client_id,
+						request_uri: pushed.body.request_uri as string,
+					},
+					sessionHeaders,
+				);
+
+			// A signed-out visit goes to login; reloading it does the same.
+			expect((await visit(new Headers())).pathname).toBe("/login");
+			expect((await visit(new Headers())).pathname).toBe("/login");
+
+			const issued = await visit();
+			const code = issued.searchParams.get("code");
+			expect(code).toEqual(expect.any(String));
+			const tokens = await redeem(credentials, code!, codeVerifier);
+			expect(tokens.response.status).toBe(200);
+
+			const replay = await visit();
+			expect(replay.searchParams.get("error")).toBe("invalid_request_uri");
+		});
+
+		it("completes a sign-in that outlasts expires_in", async () => {
+			const { params } = await authorizationParams(client.client_id);
+			const pushed = await pushRequest({ ...params, ...credentials });
+			const login = await authorize(
+				{
+					client_id: client.client_id,
+					request_uri: pushed.body.request_uri as string,
+				},
+				new Headers(),
+			);
+			expect(login.pathname).toBe("/login");
+
+			vi.useFakeTimers({ toFake: ["Date"] });
+			vi.setSystemTime(Date.now() + 120_000);
+			const signIn = await customFetchImpl(
+				`${baseURL}/api/auth/sign-in/email`,
+				{
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test123456",
+						oauth_query: login.searchParams.toString(),
+					}),
+				},
+			);
+			const continued = (await signIn.json()) as { url: string };
+			expect(new URL(continued.url).searchParams.get("code")).toEqual(
+				expect.any(String),
+			);
+		});
+
+		it("issues no second code from a request continued twice", async () => {
+			const { params } = await authorizationParams(client.client_id);
+			const pushed = await pushRequest({ ...params, ...credentials });
+			const login = await authorize(
+				{
+					client_id: client.client_id,
+					request_uri: pushed.body.request_uri as string,
+				},
+				new Headers(),
+			);
+			const signIn = () =>
+				customFetchImpl(`${baseURL}/api/auth/sign-in/email`, {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test123456",
+						oauth_query: login.searchParams.toString(),
+					}),
+				}).then(
+					async (response) =>
+						new URL(((await response.json()) as { url: string }).url),
+				);
+
+			const first = await signIn();
+			expect(first.searchParams.get("code")).toEqual(expect.any(String));
+			const second = await signIn();
+			expect(`${second.origin}${second.pathname}`).toBe(redirectUri);
+			expect(second.searchParams.get("error")).toBe("invalid_request_uri");
+			expect(second.searchParams.get("state")).toBe("par-state");
+			expect(second.searchParams.get("code")).toBeNull();
+		});
 	});
 
 	it("binds the request_uri to the client that pushed it", async () => {
@@ -775,7 +874,6 @@ describe("pushed authorization requests required for every client", async () => 
 			new Headers(),
 		);
 		expect(login.pathname).toBe("/login");
-		expect(login.searchParams.get("request_uri")).toBeNull();
 		expect(login.searchParams.get("state")).toBe("par-state");
 
 		const signIn = await customFetchImpl(`${baseURL}/api/auth/sign-in/email`, {
