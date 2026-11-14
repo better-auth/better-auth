@@ -123,3 +123,38 @@ Some of the actions are reactive. The client use [nano-store](https://github.com
       {/if}
     </div>
 ```
+
+## Running behind a proxy or tunnel
+
+Tools such as ngrok, Cloudflare Tunnel, and most load balancers terminate TLS and forward plain HTTP to your app. SvelteKit then reports the incoming request as `http://<host>` even though users reach it over HTTPS. Better Auth still recognizes the auth routes (auth-route detection ignores the scheme), but the scheme is used to build callback and redirect URLs, so unconfigured setups can send OAuth redirects to `http://`.
+
+Set the protocol explicitly, or opt into proxy headers:
+
+```ts title="lib/auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  baseURL: {
+    // List the exact hosts your app is served from. Avoid wildcards on a
+    // shared domain (like `*.ngrok-free.app`), which would trust every other
+    // tenant of that domain as an auth origin. Include the port when your
+    // deployment uses a non-default one, for example `"myapp.com:3000"`.
+    allowedHosts: ["myapp.com", "myapp.ngrok-free.app"],
+    protocol: "auto",
+  },
+  advanced: {
+    // Read `x-forwarded-proto` / `x-forwarded-host` (sent by ngrok,
+    // Vercel, Cloudflare, and most load balancers) when resolving the URL.
+    trustedProxyHeaders: true,
+  },
+});
+```
+
+<Callout>
+  SvelteKit derives the request origin from the `host` header and defaults the
+  protocol to `https`, so a proxy that forwards plain HTTP has to tell it the
+  real scheme. With `adapter-node`, set
+  `PROTOCOL_HEADER=x-forwarded-proto` and `HOST_HEADER=x-forwarded-host`. On
+  SvelteKit 3+, you can also pin the origin with `paths.origin` in
+  `vite.config.js`.
+</Callout>
