@@ -1,5 +1,17 @@
 # @better-auth/oauth-provider
 
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+- [#12598](https://github.com/better-auth/better-auth/pull/12598) [`d7f831c`](https://github.com/better-auth/better-auth/commit/d7f831cdd4ae3a5ebf591641d34a0b2561316aa8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Discovery no longer advertises endpoint URLs with a double slash when `baseURL` ends in `/`, such as `https://example.com/api/auth/`. Those URLs returned 404, so clients that followed discovery could not reach the token, introspection, revocation, or other endpoints. The client assertion audiences that `private_key_jwt` accepts now use the same single-slash endpoint URLs.
+
+- [#12503](https://github.com/better-auth/better-auth/pull/12503) [`87ede79`](https://github.com/better-auth/better-auth/commit/87ede7984d4df152ae3c0f5a58a2d08299b24281) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed errors from hooks and endpoints turning into generic 500 responses or skipping their error handling in the OAuth provider, Client ID Metadata Document, passkey, SSO, SCIM, and Stripe plugins when the app installs more than one copy of `better-call`.
+
+- [#12498](https://github.com/better-auth/better-auth/pull/12498) [`3dcbc10`](https://github.com/better-auth/better-auth/commit/3dcbc1044cf8bf2d51bd73273581a980c5400591) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `requireActiveAccessToken` documentation now states that it checks only the token. For a DPoP-bound token, your endpoint must also call `enforceDpopBinding` from `better-auth/oauth2` with the request and a shared replay store.
+
 ## 1.7.23
 
 ### Patch Changes
