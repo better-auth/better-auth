@@ -493,7 +493,9 @@ export async function verifyDpopProof({
 		htu: normalizedHtu,
 		jti,
 	});
-	const expiresAt = new Date((iat + proofMaxAgeSeconds) * 1000);
+	// `nowSeconds` is floored, so the window above accepts the proof until one
+	// second after `iat + proofMaxAgeSeconds`. The reservation must outlive it.
+	const expiresAt = new Date((iat + proofMaxAgeSeconds + 1) * 1000);
 	await reserveDpopReplay(replayStore, {
 		key: replayKey,
 		expiresAt,
