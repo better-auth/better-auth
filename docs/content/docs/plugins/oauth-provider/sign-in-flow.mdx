@@ -135,12 +135,10 @@ If your endpoint accepts `application/x-www-form-urlencoded` bodies, set `cloneR
 
 The provider then checks the request as `/oauth2/authorize` does: the client, scopes, claims, resources, and PKCE. The session you pass is the account the code is for, so account selection does not run. It issues the code only when the client has `skip_consent` or the user already consented to everything requested. Any step that would show a page fails instead, with a 400 error:
 
-| Error                  | When                                                                                                                       |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `consent_required`     | The user has not consented to the request.                                                                                 |
-| `login_required`       | The session expired, or is older than the request's `max_age`.                                                             |
-| `interaction_required` | The request has a `prompt` other than `none`, or `signup.shouldRedirect` or `postLogin.shouldRedirect` returns a redirect. |
-| `access_denied`        | The session cannot meet an essential `acr` the request names.                                                              |
+* `consent_required`: the user has not consented to the request.
+* `login_required`: the session expired. Also returned when the request asks for a new sign-in, with `prompt=login` or a `max_age` the session is older than, and your endpoint did not sign the user in during this request.
+* `interaction_required`: the request has a `prompt` other than `none` or `login`, or `signup.shouldRedirect` or `postLogin.shouldRedirect` returns a redirect.
+* `access_denied`: the session cannot meet an essential `acr` the request names.
 
 Send the user to `/oauth2/authorize` when you get one of these errors. Request validation errors, such as `invalid_client` or `invalid_scope`, mean the request itself is invalid, as they do at `/oauth2/authorize`. Errors your own hooks throw, such as from `consentReferenceId`, pass through unchanged.
 
@@ -151,6 +149,10 @@ A [required PAR policy](#require-pushed-requests) does not apply here, whether y
 `redirect_uri` is optional. When the request has one, it must be registered for the client, and the result's `redirectURL` carries the code, `state`, and `iss`. Without one, the token request must omit `redirect_uri` too ([RFC 6749 §4.1.3](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3)). The code expires after `codeExpiresIn` and redeems once at the token endpoint, like a code from `/oauth2/authorize`.
 
 Your endpoint must authenticate the user before it calls `issueAuthorizationCode`. The method trusts the session you pass.
+
+A client sends `prompt=login` or `max_age=0` to require a new sign-in, even when the user is already signed in ([OIDC Core §3.1.2.1](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest)). To accept these requests, your endpoint checks the user's credentials and creates the session in the same request that calls `issueAuthorizationCode`, for example with `ctx.context.internalAdapter.createSession(user.id)` and then `setSessionCookie(ctx, { session, user })`, imported from `better-auth/cookies`. Then it passes `{ session, user }` to `issueAuthorizationCode`, with only the authorization request parameters as `query`. Without such a session, the error description is `the request requires a new sign-in`. The provider records each session created during a request, and accepts the request only for one of those. A session from an earlier request does not count, even when this request refreshes it. A session created inside a database transaction counts once the transaction commits. The code's `auth_time` is the new session's creation time.
+
+Creating a session is what the provider treats as the new sign-in. Create one only after your endpoint has verified the user's credentials in that request.
 
 ## Login page
 

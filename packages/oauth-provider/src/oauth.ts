@@ -16,7 +16,11 @@ import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
 import type { AuthorizeEndpointSettings } from "./authorize";
-import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
+import {
+	authorizeEndpoint,
+	authorizeRedirectOnError,
+	recordSessionCreatedInRequest,
+} from "./authorize";
 import { claimsRequestParameterSchema } from "./claims-request";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
@@ -640,6 +644,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				options: {
 					databaseHooks: {
 						session: {
+							// Lets `issueAuthorizationCode` tell a sign-in in this request
+							// from a session that was only refreshed.
+							create: {
+								async after(session) {
+									await recordSessionCreatedInRequest(session.id);
+								},
+							},
 							delete: {
 								async before(session, hookCtx) {
 									if (!hookCtx) return;
