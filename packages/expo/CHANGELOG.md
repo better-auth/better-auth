@@ -1,5 +1,11 @@
 # @better-auth/expo
 
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `@better-auth/expo` now uses the `better-call` copy that `better-auth` installs instead of installing its own, so an Expo app no longer gets a second `better-call` copy.
+
 ## 1.7.23
 
 ## 1.7.22
