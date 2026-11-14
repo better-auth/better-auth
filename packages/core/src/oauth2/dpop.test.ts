@@ -363,6 +363,51 @@ describe("createDpopReplayStore", () => {
 	});
 });
 
+describe("createDpopReplayStore with the auth context", () => {
+	const reservation = {
+		key: "replay-key",
+		expiresAt: new Date(nowSeconds * 1000 + 90_500),
+		now: new Date(nowSeconds * 1000),
+	};
+	const reserveVerificationValue = vi.fn(async () => true);
+
+	it("records proofs in secondary storage when verification values live there", async () => {
+		const counts = new Map<string, number>();
+		const increment = vi.fn((key: string, _ttl: number) => {
+			const count = (counts.get(key) ?? 0) + 1;
+			counts.set(key, count);
+			return count;
+		});
+		const store = createDpopReplayStore({
+			internalAdapter: { reserveVerificationValue },
+			secondaryStorage: { increment },
+			options: {},
+		});
+
+		expect(await store.reserve(reservation)).toBe(true);
+		expect(await store.reserve(reservation)).toBe(false);
+		expect(increment).toHaveBeenCalledWith("dpop-proof:replay-key", 91);
+		expect(reserveVerificationValue).not.toHaveBeenCalled();
+	});
+
+	it("records proofs in the database when verification values are stored there", async () => {
+		const increment = vi.fn(() => 1);
+		const store = createDpopReplayStore({
+			internalAdapter: { reserveVerificationValue },
+			secondaryStorage: { increment },
+			options: { verification: { storeInDatabase: true } },
+		});
+
+		expect(await store.reserve(reservation)).toBe(true);
+		expect(reserveVerificationValue).toHaveBeenCalledWith({
+			identifier: "dpop-proof:replay-key",
+			value: "replay-key",
+			expiresAt: reservation.expiresAt,
+		});
+		expect(increment).not.toHaveBeenCalled();
+	});
+});
+
 describe("getConfirmationJkt", () => {
 	it("returns the jkt only for an object carrying a non-empty string jkt", () => {
 		expect(getConfirmationJkt({ jkt: "thumbprint" })).toBe("thumbprint");

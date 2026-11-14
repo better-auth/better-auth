@@ -873,9 +873,7 @@ async function resolveDpopTokenBinding(
 			expectedJkt,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore:
-				params.replayStore ??
-				createDpopReplayStore(ctx.context.internalAdapter),
+			replayStore: params.replayStore ?? createDpopReplayStore(ctx.context),
 		});
 		return { jkt: proof.jkt };
 	} catch (error) {
@@ -930,9 +928,10 @@ export async function checkDpopProofBeforeConsume(
 		confirmation,
 		recordReplay: async () => {
 			if (!reservation) return;
-			const reserved = await createDpopReplayStore(
-				ctx.context.internalAdapter,
-			).reserve({ ...reservation, now: new Date() });
+			const reserved = await createDpopReplayStore(ctx.context).reserve({
+				...reservation,
+				now: new Date(),
+			});
 			if (!reserved) {
 				throwInvalidDpopProof("DPoP proof jti has already been used");
 			}

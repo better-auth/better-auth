@@ -6,6 +6,7 @@ import {
 	importJWK,
 	jwtVerify,
 } from "jose";
+import type { SecondaryStorage } from "../db/type";
 
 export const DPOP_AUTHORIZATION_SCHEME = "DPoP";
 export const BEARER_AUTHORIZATION_SCHEME = "Bearer";
@@ -89,21 +90,56 @@ export interface DpopReplayReservations {
 }
 
 /**
- * Database-backed DPoP proof replay store built on the auth context's
- * verification reservation primitive (`internalAdapter.reserveVerificationValue`),
- * the same atomic single-use mechanism that guards SAML assertion ids and other
- * one-time tokens. A replayed proof collides on the deterministic reservation id
- * so `reserve` returns `false`, giving cross-instance anti-replay. Prefer this
- * over {@link createInMemoryDpopReplayStore} for any multi-instance or serverless
- * resource server. Requires database-backed verification storage; a
- * secondary-storage-only deployment rejects the proof (fails closed).
+ * The parts of the auth context (`await auth.$context`) that
+ * {@link createDpopReplayStore} reads to choose where it records proofs.
+ */
+export interface DpopReplayAuthContext {
+	internalAdapter: DpopReplayReservations;
+	secondaryStorage?: Pick<SecondaryStorage, "increment"> | undefined;
+	options: {
+		verification?: { storeInDatabase?: boolean | undefined } | undefined;
+		// Without it, options that omit `verification` share no property with
+		// this type, and TypeScript rejects them as a weak-type mismatch.
+		[option: string]: unknown;
+	};
+}
+
+/**
+ * Shared DPoP proof replay store backed by the auth instance's storage, so a
+ * proof used on one instance is rejected on every other. Prefer it over
+ * {@link createInMemoryDpopReplayStore} for any multi-instance or serverless
+ * resource server.
+ *
+ * Pass the auth context, `await auth.$context`. Proofs are then recorded in
+ * secondary storage when verification values live there, and otherwise in the
+ * database through the verification reservation that also guards SAML
+ * assertion ids. Passing only `internalAdapter` always uses the database, which
+ * throws on a deployment that keeps verification values only in secondary
+ * storage.
  */
 export function createDpopReplayStore(
-	reservations: DpopReplayReservations,
+	source: DpopReplayAuthContext | DpopReplayReservations,
 ): DpopReplayStore {
+	if ("internalAdapter" in source) {
+		const { secondaryStorage } = source;
+		if (secondaryStorage && !source.options.verification?.storeInDatabase) {
+			return {
+				// `increment` is atomic, so exactly one caller sees the first count.
+				reserve: async ({ key, expiresAt, now }) =>
+					(await secondaryStorage.increment(
+						`dpop-proof:${key}`,
+						Math.max(
+							1,
+							Math.ceil((expiresAt.getTime() - now.getTime()) / 1000),
+						),
+					)) === 1,
+			};
+		}
+		return createDpopReplayStore(source.internalAdapter);
+	}
 	return {
 		reserve: ({ key, expiresAt }) =>
-			reservations.reserveVerificationValue({
+			source.reserveVerificationValue({
 				identifier: `dpop-proof:${key}`,
 				value: key,
 				expiresAt,
