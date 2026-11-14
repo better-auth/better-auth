@@ -1,5 +1,5 @@
 `$x instanceof $c` where {
-	$c <: r"\w*APIError",
+	$c <: r"[\w.]*APIError",
 	$filename <: r".*/packages/[^/]+/src/.*",
 	not $filename <: r".*/packages/core/src/utils/is-api-error\.ts",
 	not $filename <: r".*\.test\.tsx?",
