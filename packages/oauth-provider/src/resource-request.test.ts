@@ -57,6 +57,18 @@ const resourcePlugin = {
 				});
 			},
 		),
+		testRequireActive: createAuthEndpoint(
+			"/test/require-active",
+			{ method: "POST", body: z.object({ token: z.string() }) },
+			async (ctx) => {
+				const provider = getOAuthProviderApi(
+					ctx,
+					ctx.context.getPlugin("oauth-provider")!.options,
+				);
+				const claims = await provider.requireActiveAccessToken(ctx.body.token);
+				return ctx.json({ client_id: claims.client_id });
+			},
+		),
 	},
 } satisfies BetterAuthPlugin;
 
@@ -414,6 +426,30 @@ describe("provider.verifyResourceRequest", async () => {
 			expect(await response.json()).toMatchObject({
 				error: "invalid_dpop_proof",
 			});
+		});
+
+		it("is refused by requireActiveAccessToken, which cannot check a proof", async () => {
+			const key = await createDpopKey();
+			const token = await issueToken({ scope: "read", dpopKey: key });
+			const error = await auth.api
+				.testRequireActive({ body: { token } })
+				.catch((e: APIError) => e);
+			expect(error).toMatchObject({
+				status: "UNAUTHORIZED",
+				body: {
+					error: "invalid_token",
+					error_description:
+						"DPoP-bound access token requires verifyResourceRequest",
+				},
+			});
+			expect(
+				new Headers((error as APIError).headers).get("WWW-Authenticate"),
+			).toMatch(/^DPoP error="invalid_token", /);
+
+			const bearer = await issueToken({ scope: "read" });
+			await expect(
+				auth.api.testRequireActive({ body: { token: bearer } }),
+			).resolves.toMatchObject({ client_id: expect.any(String) });
 		});
 
 		it("fails closed on an auth.api call without an HTTP request", async () => {

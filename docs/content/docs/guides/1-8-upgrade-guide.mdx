@@ -231,6 +231,7 @@ oauthProvider({
 * A JWT-shaped token that fails verification, such as one with `alg: none` or a forged signature, is an invalid token: `200` from revoke, `{ "active": false }` from introspection, and `401 invalid_token` from UserInfo. Before, all three returned `500`.
 * At `/oauth2/token`, a refresh token without the configured `prefix.refreshToken` gets `400 invalid_grant`. Before, it got `400 invalid_token`.
 * In an extension grant, `provider.validateAccessToken` returns `{ active: false }` for an unknown token instead of throwing. `provider.requireActiveAccessToken` still throws.
+* `provider.requireActiveAccessToken` refuses a DPoP-bound token with `401 invalid_token`. Before, it accepted the token without checking a proof. Call `provider.verifyResourceRequest()` on a protected endpoint instead, which checks the proof.
 
 **What to do:** update clients and tests that expect the old status codes.
 
