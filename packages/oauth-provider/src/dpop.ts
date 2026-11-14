@@ -15,6 +15,7 @@ import {
 	verifyDpopProof,
 } from "better-auth/oauth2";
 import type { OAuthOptions, Scope } from "./types";
+import { getAuthEndpointUrl } from "./utils";
 
 export function getDpopProofJwt(
 	ctx: Pick<GenericEndpointContext, "headers">,
@@ -33,11 +34,7 @@ export function getEndpointUrl(
 	ctx: Pick<GenericEndpointContext, "context" | "request">,
 	path: string,
 ): string {
-	const { baseURL } = ctx.context;
-	let end = baseURL.length;
-	// A loop, not `/\/+$/`, which backtracks quadratically on runs of slashes.
-	while (end > 0 && baseURL[end - 1] === "/") end--;
-	const base = baseURL.slice(0, end);
+	const base = getAuthEndpointUrl(ctx, "");
 	// `baseURL` stays empty when nothing configures it and no request set it.
 	if (!ctx.request || !base) return `${base}${path}`;
 	const basePath = new URL(base).pathname.replace(/\/$/, "");
@@ -201,7 +198,7 @@ export async function verifyRequestDpopProof(
 export async function verifyEndpointDpopProof(
 	ctx: GenericEndpointContext,
 	opts: Pick<OAuthOptions<Scope[]>, "dpop">,
-	params?: { required?: boolean },
+	params?: { required?: boolean; expectedJkt?: string },
 ): Promise<VerifiedDpopProof | undefined> {
 	const proofJwt = getDpopProofJwt(ctx);
 	if (!proofJwt) {
@@ -219,6 +216,7 @@ export async function verifyEndpointDpopProof(
 		proofJwt,
 		method: ctx.request.method,
 		url: getEndpointUrl(ctx, ctx.path),
+		expectedJkt: params?.expectedJkt,
 	});
 }
 

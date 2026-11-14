@@ -19,6 +19,7 @@ import type { OAuthOptions, OAuthRefreshToken, Scope } from "./types";
 import {
 	destructureCredentials,
 	extractClientCredentials,
+	getAuthEndpointUrl,
 	validateClientCredentials,
 } from "./utils";
 
@@ -164,7 +165,7 @@ export async function revokeEndpoint(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/revoke`,
+		getAuthEndpointUrl(ctx, "/oauth2/revoke"),
 	);
 	const {
 		clientId: client_id,

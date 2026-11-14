@@ -562,7 +562,7 @@ describe("pushed authorization requests", async () => {
 				{ DPoP: await createProof(key, parEndpoint) },
 			);
 			expect(pushed.response.status).toBe(400);
-			expect(pushed.body).toMatchObject({ error: "invalid_request" });
+			expect(pushed.body).toMatchObject({ error: "invalid_dpop_proof" });
 		});
 
 		it("rejects a proof for another endpoint", async () => {
