@@ -417,6 +417,28 @@ describe("internal adapter test", async () => {
 		expect(await remaining("cleanup:second")).toBe(0);
 	});
 
+	it("returns an expired verification value to at most one lookup between cleanups", async () => {
+		const opts = {
+			database: new DatabaseSync(":memory:"),
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(opts)).runMigrations();
+		const ctx = await init(opts);
+		// The first lookup runs the minute's cleanup.
+		await ctx.internalAdapter.findVerificationValue("cleanup:lookup");
+		await ctx.internalAdapter.createVerificationValue({
+			identifier: "expired:challenge",
+			value: "stale",
+			expiresAt: new Date(Date.now() - 1_000),
+		});
+
+		expect(
+			await ctx.internalAdapter.findVerificationValue("expired:challenge"),
+		).toMatchObject({ value: "stale" });
+		expect(
+			await ctx.internalAdapter.findVerificationValue("expired:challenge"),
+		).toBeNull();
+	});
+
 	it("should delete expired verification values on find", async () => {
 		await internalAdapter.createVerificationValue({
 			identifier: `test-id-1`,

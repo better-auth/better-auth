@@ -1433,28 +1433,36 @@ export const createInternalAdapter = (
 				verification = await findByIdentifier(identifier);
 			}
 
-			// Readers check `expiresAt` themselves, so the sweep only bounds
-			// table growth.
+			const found = (verification[0] as Verification | undefined) ?? null;
 			const now = Date.now();
-			if (
-				!options.verification?.disableCleanup &&
-				now >= nextVerificationCleanupAt
-			) {
+			if (options.verification?.disableCleanup) {
+				return found;
+			}
+			if (now >= nextVerificationCleanupAt) {
 				nextVerificationCleanupAt = now + VERIFICATION_CLEANUP_INTERVAL_MS;
 				await deleteManyWithHooks(
 					[
 						{
 							field: "expiresAt",
-							value: new Date(),
+							value: new Date(now),
 							operator: "lt",
 						},
 					],
 					"verification",
 					undefined,
 				);
+			} else if (found && new Date(found.expiresAt).getTime() < now) {
+				// Not every reader checks `expiresAt`, so an expired row is
+				// deleted when it is found and no later lookup returns it. The
+				// throttled sweep above only bounds table growth.
+				await deleteWithHooks(
+					[{ field: "id", value: found.id }],
+					"verification",
+					undefined,
+				);
 			}
 
-			return (verification[0] as Verification) || null;
+			return found;
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
 			const storageOption = getStorageOption(
