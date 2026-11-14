@@ -16,6 +16,7 @@ import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import {
 	decryptStoredClientSecret,
 	getClient,
+	getJwksSource,
 	getJwtPlugin,
 	isRedirectUriTransportAllowed,
 	resolveSubjectIdentifier,
@@ -698,11 +699,7 @@ async function verifyLogoutHint(
 				new TextDecoder().decode(verifiedPayload),
 			) as JWTPayload;
 		} else {
-			const jwtPluginOptions = getJwtPlugin(ctx.context).options;
-			const jwksUrl =
-				jwtPluginOptions?.jwks?.remoteUrl ??
-				`${ctx.context.baseURL}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`;
-			const jwks = await getJwks(hint, { jwksFetch: jwksUrl });
+			const jwks = await getJwks(hint, getJwksSource(ctx.context));
 			const { payload: verifiedPayload } = await compactVerify(
 				hint,
 				createLocalJWKSet(jwks),

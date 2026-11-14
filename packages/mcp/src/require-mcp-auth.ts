@@ -1,11 +1,12 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
+import { getLocalJwksSource } from "@better-auth/oauth-provider/internal";
 import type {
 	DpopReplayReservations,
 	DpopReplayStore,
 } from "better-auth/oauth2";
 import { createDpopReplayStore } from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
-import type { JSONWebKeySet, JWTPayload } from "jose";
+import type { JWTPayload } from "jose";
 import { createProtectedRequestHandler, validateMcpResource } from "./handler";
 
 export interface RequireMcpAuthOptions {
@@ -112,16 +113,11 @@ export const requireMcpAuth = <
 		// requesting its own `/jwks`, which fails on runtimes that block
 		// requests to their own hostname.
 		const jwtPlugin = authContext.getPlugin("jwt");
-		const localJwks =
-			!opts?.jwksUrl && jwtPlugin && !jwtPlugin.options?.jwks?.remoteUrl
-				? {
-						jwksFetch: async (): Promise<JSONWebKeySet | undefined> =>
-							jwtPlugin.endpoints.getJwks({ context: authContext }),
-						// Keyed per auth instance: one `jwt()` object can be shared by
-						// instances whose databases hold different keys.
-						jwksCacheKey: authContext,
-					}
-				: undefined;
+		const localJwks = opts?.jwksUrl
+			? undefined
+			: getLocalJwksSource(
+					authContext as Parameters<typeof getLocalJwksSource>[0],
+				);
 		// The JWT plugin disables its `/jwks` endpoint when keys are published at
 		// `jwks.remoteUrl`.
 		const jwksUrl =
