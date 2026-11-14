@@ -1,12 +1,12 @@
 import { generateRandomString } from "better-auth/crypto";
-import { deriveDpopJkt, generateCodeChallenge } from "better-auth/oauth2";
+import { generateCodeChallenge } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import type { JWK } from "jose";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import { createDpopKey, createDpopProof } from "./test-utils/dpop";
 import type { OAuthOptions, Scope } from "./types";
 
 const baseURL = "http://localhost:3000";
@@ -15,32 +15,6 @@ const authorizeEndpoint = `${baseURL}/api/auth/oauth2/authorize`;
 const tokenEndpoint = `${baseURL}/api/auth/oauth2/token`;
 const redirectUri = "https://rp.example.com/api/auth/callback/test";
 const requestUriPrefix = "urn:ietf:params:oauth:request_uri:";
-
-async function createDpopKey() {
-	const { privateKey, publicKey } = await generateKeyPair("ES256", {
-		extractable: true,
-	});
-	const publicJwk = await exportJWK(publicKey);
-	return { privateKey, publicJwk, jkt: await deriveDpopJkt(publicJwk) };
-}
-
-type DpopKey = Awaited<ReturnType<typeof createDpopKey>>;
-
-function createProof(key: DpopKey, url: string, nonce?: string) {
-	return new SignJWT({
-		jti: generateRandomString(16),
-		htm: "POST",
-		htu: url,
-		iat: Math.floor(Date.now() / 1000),
-		...(nonce ? { nonce } : {}),
-	})
-		.setProtectedHeader({
-			typ: "dpop+jwt",
-			alg: "ES256",
-			jwk: key.publicJwk as JWK,
-		})
-		.sign(key.privateKey);
-}
 
 async function setup(
 	providerOptions: Partial<OAuthOptions<Scope[]>> = {
@@ -508,7 +482,7 @@ describe("pushed authorization requests", async () => {
 			);
 			const pushed = await pushRequest(
 				{ ...params, ...credentials },
-				{ DPoP: await createProof(key, parEndpoint) },
+				{ DPoP: await createDpopProof(key, { url: parEndpoint }) },
 			);
 			expect(pushed.response.status).toBe(201);
 
@@ -523,7 +497,7 @@ describe("pushed authorization requests", async () => {
 				credentials,
 				code,
 				codeVerifier,
-				await createProof(otherKey, tokenEndpoint),
+				await createDpopProof(otherKey, { url: tokenEndpoint }),
 			);
 			expect(wrongKey.response.status).toBe(400);
 			expect(wrongKey.body).toMatchObject({ error: "invalid_dpop_proof" });
@@ -536,7 +510,7 @@ describe("pushed authorization requests", async () => {
 			);
 			const pushed = await pushRequest(
 				{ ...params, ...credentials },
-				{ DPoP: await createProof(key, parEndpoint) },
+				{ DPoP: await createDpopProof(key, { url: parEndpoint }) },
 			);
 			const location = await authorize({
 				client_id: client.client_id,
@@ -546,7 +520,7 @@ describe("pushed authorization requests", async () => {
 				credentials,
 				location.searchParams.get("code")!,
 				codeVerifier,
-				await createProof(key, tokenEndpoint),
+				await createDpopProof(key, { url: tokenEndpoint }),
 			);
 			expect(tokens.response.status).toBe(200);
 			expect(tokens.body.token_type).toBe("DPoP");
@@ -559,7 +533,7 @@ describe("pushed authorization requests", async () => {
 			const { params } = await authorizationParams(client.client_id);
 			const pushed = await pushRequest(
 				{ ...params, ...credentials, dpop_jkt: otherKey.jkt },
-				{ DPoP: await createProof(key, parEndpoint) },
+				{ DPoP: await createDpopProof(key, { url: parEndpoint }) },
 			);
 			expect(pushed.response.status).toBe(400);
 			expect(pushed.body).toMatchObject({ error: "invalid_request" });
@@ -570,7 +544,7 @@ describe("pushed authorization requests", async () => {
 			const { params } = await authorizationParams(client.client_id);
 			const pushed = await pushRequest(
 				{ ...params, ...credentials },
-				{ DPoP: await createProof(key, tokenEndpoint) },
+				{ DPoP: await createDpopProof(key, { url: tokenEndpoint }) },
 			);
 			expect(pushed.response.status).toBe(400);
 			expect(pushed.body).toMatchObject({ error: "invalid_dpop_proof" });
@@ -626,7 +600,7 @@ describe("pushed authorization requests with required DPoP nonces", async () => 
 		const body = { ...params, client_secret: client.client_secret! };
 
 		const challenged = await pushRequest(body, {
-			DPoP: await createProof(key, parEndpoint),
+			DPoP: await createDpopProof(key, { url: parEndpoint }),
 		});
 		expect(challenged.response.status).toBe(400);
 		expect(challenged.body).toMatchObject({ error: "use_dpop_nonce" });
@@ -635,7 +609,7 @@ describe("pushed authorization requests with required DPoP nonces", async () => 
 		expect(nonce).toBeTruthy();
 
 		const pushed = await pushRequest(body, {
-			DPoP: await createProof(key, parEndpoint, nonce!),
+			DPoP: await createDpopProof(key, { url: parEndpoint, nonce: nonce! }),
 		});
 		expect(pushed.response.status).toBe(201);
 		expect(pushed.response.headers.get("DPoP-Nonce")).toBeTruthy();
@@ -679,16 +653,15 @@ describe("pushed authorization requests with required DPoP nonces", async () => 
 		const key = await createDpopKey();
 
 		const challenged = await pushRequest(body, {
-			DPoP: await createProof(key, parEndpoint),
+			DPoP: await createDpopProof(key, { url: parEndpoint }),
 		});
 		expect(challenged.body).toMatchObject({ error: "use_dpop_nonce" });
 
 		const pushed = await pushRequest(body, {
-			DPoP: await createProof(
-				key,
-				parEndpoint,
-				challenged.response.headers.get("DPoP-Nonce")!,
-			),
+			DPoP: await createDpopProof(key, {
+				url: parEndpoint,
+				nonce: challenged.response.headers.get("DPoP-Nonce")!,
+			}),
 		});
 		expect(pushed.response.status).toBe(201);
 	});
