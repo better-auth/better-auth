@@ -27,6 +27,7 @@ import type {
 import {
 	destructureCredentials,
 	extractClientCredentials,
+	getAuthEndpointUrl,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
@@ -684,7 +685,7 @@ export async function introspectEndpoint(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/introspect`,
+		getAuthEndpointUrl(ctx, "/oauth2/introspect"),
 	);
 	const {
 		clientId: client_id,
