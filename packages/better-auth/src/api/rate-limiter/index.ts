@@ -253,7 +253,16 @@ function createDatabaseStorageWrapper(
 	// `lastRequest` is not indexed, so sweeping on every new key would scan the
 	// table on the hot path. Sweep at most once per longest window instead, which
 	// keeps expired rows to roughly two windows of age.
+	//
+	// A function-valued rule resolves its window per request, so it cannot be
+	// known here and an earlier request's longer window would be forgotten. A
+	// cutoff built from the static windows could then delete a live counter and
+	// let a limited client through, so skip this sweep when any such rule exists.
+	// The reset path still sweeps, using the window resolved for that request.
 	const deleteExpiredRowsIfDue = async (now: number) => {
+		if (hasFunctionValuedRules(ctx)) {
+			return;
+		}
 		const last = lastSweepAt.get(db);
 		if (last !== undefined && now - last < longestObservedWindow * 1000) {
 			return;
@@ -264,6 +273,12 @@ function createDatabaseStorageWrapper(
 	return {
 		consume,
 	};
+}
+
+function hasFunctionValuedRules(ctx: AuthContext) {
+	return Object.values(ctx.rateLimit.customRules ?? {}).some(
+		(rule) => typeof rule === "function",
+	);
 }
 
 function getConfiguredRateLimitWindows(ctx: AuthContext) {

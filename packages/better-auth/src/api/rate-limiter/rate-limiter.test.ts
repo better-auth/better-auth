@@ -534,6 +534,41 @@ describe("database rate-limit sweep for new keys", () => {
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/issues/12557
+ */
+describe("database rate-limit new-key sweep with function-valued rules", () => {
+	it("does not delete counters whose window only a function-valued rule knows", async () => {
+		const { auth, client } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				storage: "database",
+				window: 10,
+				max: 20,
+				customRules: {
+					"/sign-in/email": () => ({ window: 120, max: 1 }),
+				},
+			},
+		});
+		const ctx = await auth.$context;
+		// 61s old: past the static 60s windows but inside the dynamic 120s one.
+		const activeKey = createRateLimitKey("127.0.0.1", "/sign-in/email");
+		await ctx.adapter.create({
+			model: "rateLimit",
+			data: { key: activeKey, count: 1, lastRequest: Date.now() - 61_000 },
+		});
+
+		// A fresh key on another path takes the create path.
+		await client.getSession();
+
+		const row = await ctx.adapter.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: activeKey }],
+		});
+		expect(row).not.toBeNull();
+	});
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/issues/11519
  */
 describe("database rate-limit with a string lastRequest", async () => {
