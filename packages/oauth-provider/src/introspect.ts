@@ -9,6 +9,7 @@ import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
+import { exposeChallengeHeader } from "./dpop";
 import { buildResourceServerChallenge } from "./resource-challenge";
 import {
 	getResourceCustomClaims,
@@ -497,11 +498,16 @@ export async function requireActiveAccessToken(
 			error_description:
 				"DPoP-bound access token requires verifyResourceRequest",
 		});
-		throw (
-			buildResourceServerChallenge(error, undefined, {
-				dpopSigningAlgorithms: opts.dpop?.signingAlgorithms,
-			}) ?? error
+		const challenge = buildResourceServerChallenge(error, undefined, {
+			dpopSigningAlgorithms: opts.dpop?.signingAlgorithms,
+		});
+		if (!challenge) throw error;
+		const headers = new Headers(challenge.headers);
+		headers.set(
+			"Access-Control-Expose-Headers",
+			exposeChallengeHeader(ctx, headers.get("access-control-expose-headers")),
 		);
+		throw new APIError(challenge.status, challenge.body, headers);
 	}
 	return payload as ActiveAccessTokenPayload;
 }

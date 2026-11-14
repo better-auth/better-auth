@@ -61,6 +61,7 @@ const resourcePlugin = {
 			"/test/require-active",
 			{ method: "POST", body: z.object({ token: z.string() }) },
 			async (ctx) => {
+				ctx.setHeader("Access-Control-Expose-Headers", "X-Request-Id");
 				const provider = getOAuthProviderApi(
 					ctx,
 					ctx.context.getPlugin("oauth-provider")!.options,
@@ -206,11 +207,20 @@ async function setup(params: { nonceRequired?: boolean } = {}) {
 		});
 	}
 
-	return { auth, client, issueToken, callResource };
+	function callRequireActive(token: string) {
+		return customFetchImpl(`${baseURL}/api/auth/test/require-active`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ token }),
+		});
+	}
+
+	return { auth, client, issueToken, callResource, callRequireActive };
 }
 
 describe("provider.verifyResourceRequest", async () => {
-	const { auth, client, issueToken, callResource } = await setup();
+	const { auth, client, issueToken, callResource, callRequireActive } =
+		await setup();
 
 	describe("bearer tokens", () => {
 		it("accepts an opaque access token", async () => {
@@ -428,29 +438,46 @@ describe("provider.verifyResourceRequest", async () => {
 			});
 		});
 
-		it("is refused by requireActiveAccessToken, which cannot check a proof", async () => {
-			const key = await createDpopKey();
-			const token = await issueToken({ scope: "read", dpopKey: key });
-			const error = await auth.api
-				.testRequireActive({ body: { token } })
-				.catch((e: APIError) => e);
-			expect(error).toMatchObject({
-				status: "UNAUTHORIZED",
-				body: {
-					error: "invalid_token",
-					error_description:
-						"DPoP-bound access token requires verifyResourceRequest",
-				},
-			});
-			expect(
-				new Headers((error as APIError).headers).get("WWW-Authenticate"),
-			).toMatch(/^DPoP error="invalid_token", /);
+		it.each([
+			["opaque", undefined],
+			["JWT", apiResource],
+		])(
+			"refuses a DPoP-bound %s token in requireActiveAccessToken, which cannot check a proof",
+			async (_, resource) => {
+				const key = await createDpopKey();
+				const token = await issueToken({
+					scope: "read",
+					resource,
+					dpopKey: key,
+				});
+				expect(token.split(".")).toHaveLength(resource ? 3 : 1);
+				const error = await auth.api
+					.testRequireActive({ body: { token } })
+					.catch((e: APIError) => e);
+				expect(error).toMatchObject({
+					status: "UNAUTHORIZED",
+					body: {
+						error: "invalid_token",
+						error_description:
+							"DPoP-bound access token requires verifyResourceRequest",
+					},
+				});
+				expect(
+					new Headers((error as APIError).headers).get("WWW-Authenticate"),
+				).toMatch(/^DPoP error="invalid_token", /);
 
-			const bearer = await issueToken({ scope: "read" });
-			await expect(
-				auth.api.testRequireActive({ body: { token: bearer } }),
-			).resolves.toMatchObject({ client_id: expect.any(String) });
-		});
+				const response = await callRequireActive(token);
+				expect(response.status).toBe(401);
+				const exposed = response.headers.get("Access-Control-Expose-Headers");
+				expect(exposed).toContain("X-Request-Id");
+				expect(exposed).toContain("WWW-Authenticate");
+
+				const bearer = await issueToken({ scope: "read" });
+				await expect(
+					auth.api.testRequireActive({ body: { token: bearer } }),
+				).resolves.toMatchObject({ client_id: expect.any(String) });
+			},
+		);
 
 		it("fails closed on an auth.api call without an HTTP request", async () => {
 			const key = await createDpopKey();
