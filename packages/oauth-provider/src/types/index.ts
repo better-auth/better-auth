@@ -280,6 +280,11 @@ export interface OAuthProviderApi {
 	/**
 	 * Validates an access token for a protected resource and throws the OAuth
 	 * bearer challenge when the token is inactive or unknown.
+	 *
+	 * Checks the token, not the request: a DPoP-bound token returns `cnf.jkt`
+	 * without a proof check. Call `enforceDpopBinding` from `better-auth/oauth2`
+	 * with a shared replay store, as the UserInfo endpoint does, and reject a
+	 * DPoP-bound token when there is no HTTP request (RFC 9449 §6.2, §7.1).
 	 */
 	requireActiveAccessToken: (
 		token: string,
