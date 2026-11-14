@@ -1,5 +1,12 @@
 # @better-auth/mcp
 
+## 1.8.0-beta.10
+
+### Patch Changes
+
+- Updated dependencies [[`2124c93`](https://github.com/better-auth/better-auth/commit/2124c93bef985136654d869cfecce47c5ea4882a), [`1bdad2f`](https://github.com/better-auth/better-auth/commit/1bdad2f5ed8b064f82aaf803bc105ddd0e827fee), [`5833a83`](https://github.com/better-auth/better-auth/commit/5833a83c54f7d0f995595720f4b56f9714a70152), [`dd55cd5`](https://github.com/better-auth/better-auth/commit/dd55cd57f48e6cebaa750bc6b7ae562daeded1e3), [`e65ee9e`](https://github.com/better-auth/better-auth/commit/e65ee9ed7e41e3f37ba8eb413560f6c4a63e8f70), [`b6e1383`](https://github.com/better-auth/better-auth/commit/b6e1383afa020911a7d75dfa6ab000402e5018ad), [`aa33128`](https://github.com/better-auth/better-auth/commit/aa331287973a0c18e1c8ad64b3aff27f3387ef95), [`d703d4f`](https://github.com/better-auth/better-auth/commit/d703d4fa4b27e27b5ffd1b49081c527fc4866da5), [`23ad504`](https://github.com/better-auth/better-auth/commit/23ad50454291209898a56c9b7671afd1a21fbcba), [`d703d4f`](https://github.com/better-auth/better-auth/commit/d703d4fa4b27e27b5ffd1b49081c527fc4866da5), [`d3a3624`](https://github.com/better-auth/better-auth/commit/d3a362468f8ccaf9ef86ace4a7946f62e08b5812), [`670b682`](https://github.com/better-auth/better-auth/commit/670b682f4280cd9364143121dceb53f85c6165df), [`4b21a39`](https://github.com/better-auth/better-auth/commit/4b21a39e200fb9b06623b8bc183a57a26583bf7b), [`10243fd`](https://github.com/better-auth/better-auth/commit/10243fd48d2bf085c4e297870731b3d20b75e8be), [`9c5d7c2`](https://github.com/better-auth/better-auth/commit/9c5d7c21d696bcb0780e5306f30c080c5d9f706b), [`9c5d7c2`](https://github.com/better-auth/better-auth/commit/9c5d7c21d696bcb0780e5306f30c080c5d9f706b), [`a503a34`](https://github.com/better-auth/better-auth/commit/a503a34ea466fb0c01ae3089c9c7c5ab71c5bfe3)]:
+  - @better-auth/oauth-provider@1.8.0-beta.10
+
 ## 1.8.0-beta.9
 
 ### Patch Changes

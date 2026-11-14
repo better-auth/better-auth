@@ -1,5 +1,28 @@
 # better-auth
 
+## 1.8.0-beta.10
+
+### Minor Changes
+
+- [#12506](https://github.com/better-auth/better-auth/pull/12506) [`e2bcd77`](https://github.com/better-auth/better-auth/commit/e2bcd7739c194a70b8bfb3c1dbd1cbe77d3a6bda) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Client apps can now send DPoP-bound requests with `createDpopFetch` from `better-auth/oauth2/dpop-client`. It signs a proof for each request, keeps server nonces per origin, and retries once on `use_dpop_nonce`. The subpath uses only Web Crypto and Fetch, so it adds no server code to a browser or edge bundle.
+
+- [#12519](https://github.com/better-auth/better-auth/pull/12519) [`fa54cfd`](https://github.com/better-auth/better-auth/commit/fa54cfd50d83c3f16b520c6ba71f7aa9d8d24569) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Generic OAuth providers can now sign in through pushed authorization requests (RFC 9126). The new `pushedAuthorizationRequest` option defaults to `"auto"`, which pushes the request when discovery reports `require_pushed_authorization_requests`. Set it to `true` to always push, or to `false` to never push. The pushed request authenticates the client with the provider's token endpoint authentication, and the browser is sent to the authorization endpoint with only `client_id` and `request_uri` added. Set `pushedAuthorizationRequestUrl` for providers configured without discovery.
+
+- [#12524](https://github.com/better-auth/better-auth/pull/12524) [`32ad83b`](https://github.com/better-auth/better-auth/commit/32ad83b6dcd78d6a5dab91606545a9beb7a3e1ed) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Generic OAuth providers can now sign `private_key_jwt` client assertions for the authorization server's issuer, as FAPI 2.0 and RFC 10070 require.
+
+  Pass `audience: "issuer"` to `createPrivateKeyJwtClientAssertionGetter`. The default stays the token endpoint URL, so existing providers keep working. The issuer comes from the provider's discovery document, so `audience: "issuer"` works with Generic OAuth providers configured with `discoveryUrl`. Those providers also pass the discovered issuer to custom `getClientAssertion` functions as `issuer`. Other callers of the getter, such as the core token helpers and the SSO plugin, do not supply an issuer yet. When no issuer is supplied, each token request and pushed authorization request fails instead of falling back to the token endpoint.
+
+### Patch Changes
+
+- Updated dependencies [[`fa54cfd`](https://github.com/better-auth/better-auth/commit/fa54cfd50d83c3f16b520c6ba71f7aa9d8d24569), [`e2bcd77`](https://github.com/better-auth/better-auth/commit/e2bcd7739c194a70b8bfb3c1dbd1cbe77d3a6bda), [`e69b81b`](https://github.com/better-auth/better-auth/commit/e69b81b9272834091b2683d4873509fdc485f6c4), [`32ad83b`](https://github.com/better-auth/better-auth/commit/32ad83b6dcd78d6a5dab91606545a9beb7a3e1ed), [`dd5b072`](https://github.com/better-auth/better-auth/commit/dd5b072bc9f3acc5b270c536d843ef5d011cdf87)]:
+  - @better-auth/core@1.8.0-beta.10
+  - @better-auth/drizzle-adapter@1.8.0-beta.10
+  - @better-auth/kysely-adapter@1.8.0-beta.10
+  - @better-auth/memory-adapter@1.8.0-beta.10
+  - @better-auth/mongo-adapter@1.8.0-beta.10
+  - @better-auth/prisma-adapter@1.8.0-beta.10
+  - @better-auth/telemetry@1.8.0-beta.10
+
 ## 1.8.0-beta.9
 
 ### Patch Changes
