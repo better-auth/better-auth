@@ -2199,10 +2199,6 @@ describe("oauthTokenExchange delegation", () => {
 			["another issuer", { sub: "delegator", iss: "https://other.example" }],
 			["a member it cannot evaluate", { sub: "delegator", email: "a@b.c" }],
 			["a value that is not an object", "delegator"],
-			["an empty object", {}],
-			// A `sub` that was undefined when the JWT was signed leaves only these.
-			["only a kind", { sub_profile: "service" }],
-			["only an issuer", { iss: issuer }],
 		])("denies %s", async (_, mayAct) => {
 			const { delegator, delegate, state } = await bootWithMayAct();
 			state.mayAct =
@@ -2215,6 +2211,46 @@ describe("oauthTokenExchange delegation", () => {
 				error_description:
 					"the actor is not permitted by the subject token's may_act",
 			});
+		});
+
+		it.each<[string, Record<string, string>]>([
+			["an empty object", {}],
+			// A `sub` that was undefined when the JWT was signed leaves only these.
+			["only a kind", { sub_profile: "service" }],
+			["only an issuer", { iss: issuer }],
+		])("denies %s, which names no actor", async (_, mayAct) => {
+			const { delegate, state } = await bootWithMayAct();
+			state.mayAct = mayAct;
+			const { error } = await delegate();
+			expect(error).toMatchObject({
+				error: "invalid_request",
+				error_description: "the subject token's may_act names no actor",
+			});
+		});
+
+		it("allows only the named service to act as itself", async () => {
+			const {
+				delegator,
+				machineClient,
+				delegate,
+				exchangeAs,
+				userTokenForMcp,
+				actorTokenFor,
+				actorParams,
+				state,
+			} = await bootWithMayAct();
+			state.mayAct = { client_id: delegator.client_id, sub_profile: "service" };
+			expect((await delegate()).error).toBeNull();
+			const another = await machineClient([mcp, api]);
+			const subject = await userTokenForMcp();
+			const { error } = await exchangeAs(
+				another,
+				subject.access_token,
+				actorParams((await actorTokenFor(another)).access_token),
+			);
+			expect(error?.error_description).toBe(
+				"the actor is not permitted by the subject token's may_act",
+			);
 		});
 
 		it("denies an exchange without an actor", async () => {

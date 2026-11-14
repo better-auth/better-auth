@@ -21,6 +21,7 @@ import {
 	couldBeUserId,
 	findConsent,
 	isConfirmation,
+	isPublicClient,
 	isRecord,
 	parseScopes,
 	tokenError,
@@ -236,8 +237,8 @@ const MAY_ACT_MATCHERS: Record<
 };
 
 /**
- * RFC 8693 §4.4: every `may_act` member must match the actor, and `sub` or
- * `client_id` must name it. A member this server cannot evaluate fails closed.
+ * RFC 8693 §4.4: every `may_act` member must match the actor. A member this
+ * server cannot evaluate fails closed.
  */
 function mayActAllows(
 	mayAct: unknown,
@@ -245,9 +246,6 @@ function mayActAllows(
 	issuer: string,
 ): boolean {
 	if (!actor || !isRecord(mayAct)) return false;
-	// `iss` and `sub_profile` alone name no one, for example when `sub` was
-	// undefined when the JWT was signed and so was dropped.
-	if (mayAct.sub === undefined && mayAct.client_id === undefined) return false;
 	return Object.entries(mayAct).every(
 		([member, value]) =>
 			Object.hasOwn(MAY_ACT_MATCHERS, member) &&
@@ -317,8 +315,8 @@ async function exchangeToken(
 	);
 	// Without client authentication, a DPoP proof of the subject token's key is
 	// what stops someone holding only a leaked token from exchanging it.
-	const isPublicClient = client.tokenEndpointAuthMethod === "none";
-	if (isPublicClient) {
+	const isPublic = isPublicClient(client);
+	if (isPublic) {
 		if (actorToken) deny("a public client cannot send actor_token");
 		// Fail before any lookup: the proof is checked against the subject
 		// token's key once that token is validated.
@@ -360,11 +358,11 @@ async function exchangeToken(
 		!subject.exp ||
 		// A public client cannot prove it is the resource server in the token's
 		// audience, so it may only exchange its own tokens.
-		(isPublicClient && subject.client_id !== client.clientId)
+		(isPublic && subject.client_id !== client.clientId)
 	) {
 		deny("subject_token is invalid");
 	}
-	if (isPublicClient && !getConfirmationJkt(subject.cnf)) {
+	if (isPublic && !getConfirmationJkt(subject.cnf)) {
 		deny("a public client may only exchange a DPoP-bound subject_token");
 	}
 	// RFC 9396 §9: the exchanged token would not carry the details the user
@@ -385,6 +383,15 @@ async function exchangeToken(
 		: undefined;
 	if (actor?.user?.id === user.id) {
 		deny("actor_token must not represent the subject token's user");
+	}
+	// `iss` and `sub_profile` alone would allow any actor. They are all that is
+	// left when `sub` was undefined as the JWT was signed.
+	if (
+		isRecord(subject.may_act) &&
+		subject.may_act.sub === undefined &&
+		subject.may_act.client_id === undefined
+	) {
+		deny("the subject token's may_act names no actor");
 	}
 	if (
 		subject.may_act !== undefined &&

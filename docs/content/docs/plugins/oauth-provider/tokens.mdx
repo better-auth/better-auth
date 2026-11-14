@@ -680,6 +680,8 @@ A DPoP key ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449)) held by t
 * The request carries a DPoP proof from the subject token's key.
 * The request has no `actor_token`.
 
+A public client cannot get a `client_credentials` token, so any actor token it sent would be a user's token issued to the same app. The provider does not support that form of delegation for public clients.
+
 The exchanged token is bound to the same key. Someone who steals a public client's access token cannot exchange it without that key.
 
 Confidential clients still authenticate as before.
@@ -781,7 +783,7 @@ oauthProvider({
     resources?.includes("https://mcp.example.com")
       ? {
           may_act: {
-            sub: process.env.MCP_SERVER_CLIENT_ID,
+            client_id: process.env.MCP_SERVER_CLIENT_ID,
             sub_profile: "service",
           },
         }
@@ -796,6 +798,8 @@ Every member of `may_act` must match the actor:
 * `client_id` must equal the actor token's client, which is the exchanging client.
 * `iss` must equal this server's issuer.
 
+In the example, `client_id` with `sub_profile: "service"` allows only the MCP server acting as itself, with its own `client_credentials` token. `client_id` alone also allows users whose actor tokens were issued to that client.
+
 Any other member denies the exchange, because the provider cannot check it. A `may_act` without `sub` or `client_id` also denies it, because it names no one. That includes the example above when `MCP_SERVER_CLIENT_ID` is unset. A subject token with `may_act` also cannot be exchanged without an actor token.
 
 To name a user actor, set `sub` to the user ID, never to a pairwise `sub`. The exchange compares the user ID.
@@ -805,7 +809,7 @@ When the subject token's client uses pairwise subject identifiers, the provider 
 * Introspection always returns that value.
 * A JWT access token carries it with `accessTokenSubject: "pairwise"`. With the default `accessTokenSubject: "user"`, the JWT carries the user ID in `may_act`, as it does in `sub`.
 
-The provider treats every `sub` as a user ID unless `sub_profile` is `"service"`, and shows a `"service"` `sub` to every client unchanged. Use `"service"` only for client IDs. To name a service by `sub`, set `sub_profile: "service"`, as in the example above. Otherwise, a pairwise client sees a value that matches no client ID. To allow a service without naming a `sub`, use `client_id`. It also allows users whose actor tokens were issued to that client.
+The provider treats every `sub` as a user ID unless `sub_profile` is `"service"`, and shows a `"service"` `sub` to every client unchanged. Use `"service"` only for client IDs. To name a service by `sub` instead of `client_id`, set `sub_profile: "service"`. Otherwise, a pairwise client sees a value that matches no client ID.
 
 Other `may_act` members, such as an email address, reach the client as you wrote them.
 
@@ -909,7 +913,7 @@ A token exchange fails with one of these errors:
   * The actor token represents the subject token's user.
   * The actor token carries its own `act`.
   * The actor token is bound to a key the request does not prove, by a binding other than DPoP.
-  * The subject token's `may_act` does not match the actor, or the request has no actor.
+  * The subject token's `may_act` names no actor, does not match the actor, or the request has no actor.
   * The `act` chain would exceed `delegation.maxDepth`.
   * `requested_token_type` is unsupported.
   * The request sends neither `resource` nor `audience`.

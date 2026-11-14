@@ -48,7 +48,7 @@ export interface OAuthActorClaim {
 	 * client sees unchanged. Any other value, or none, marks `sub` as a user ID,
 	 * which a pairwise client sees as its pairwise subject for that user.
 	 */
-	sub_profile?: string;
+	sub_profile?: "service" | "user" | (string & {});
 	act?: OAuthActorClaim;
 	[claim: string]: unknown;
 }
