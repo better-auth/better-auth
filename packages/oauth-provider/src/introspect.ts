@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { stripAccessTokenAuthorizationScheme } from "better-auth/oauth2";
 import type { Session, User } from "better-auth/types";
@@ -32,6 +32,7 @@ import {
 	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
+	getOAuthProviderPlugin,
 	parseClientMetadata,
 	resolvePresentedSubjects,
 	restoreAccessTokenUserIds,
@@ -482,6 +483,26 @@ export async function requireActiveAccessToken(
 	const payload = await validateAccessToken(ctx, opts, token, clientId);
 	if (payload.active) return payload as ActiveAccessTokenPayload;
 	throw createInvalidAccessTokenError();
+}
+
+/**
+ * Introspects access tokens against this server's records, for a verifier in
+ * the same process such as `requireMcpAuth`. Accepts JWT and opaque access
+ * tokens, and reports a revoked token, one whose session ended, and one whose
+ * client is disabled as inactive. `sub` is the user ID even when the token's
+ * own `sub` is pairwise. `undefined` without an OAuth provider.
+ *
+ * @internal
+ */
+export function getLocalIntrospection(context: AuthContext, request?: Request) {
+	const provider = getOAuthProviderPlugin(context);
+	if (!provider) return undefined;
+	const ctx = {
+		context,
+		request,
+		headers: request?.headers,
+	} as GenericEndpointContext;
+	return (token: string) => validateAccessToken(ctx, provider.options, token);
 }
 
 /**

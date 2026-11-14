@@ -306,6 +306,16 @@ export interface VerifyAccessTokenOptions {
 	jwksCacheKey?: object;
 	/** If provided, can verify a token remotely */
 	remoteVerify?: VerifyAccessTokenRemote;
+	/**
+	 * In-process introspection used instead of `jwksUrl` and `remoteVerify`,
+	 * for a verifier running in the same process as the authorization server.
+	 * Resolves to the token's RFC 7662 introspection response.
+	 *
+	 * @internal
+	 */
+	introspect?: (
+		token: string,
+	) => Promise<JWTPayload & { active?: boolean | undefined }>;
 }
 
 export interface VerifyAccessTokenRequestOptions
@@ -487,6 +497,44 @@ async function getJwksForVerification(
 	return { jwks: (await refresh(cached)) ?? cached, kid };
 }
 
+/**
+ * Checks an RFC 7662 introspection response against the verifier's claim
+ * options. A response is a claim set with no JOSE header, so `typ` (RFC 9068
+ * §4) can only be enforced by local verification.
+ */
+function verifyIntrospectionResponse(
+	introspect: JWTPayload & { active?: boolean | undefined },
+	verifyOptions: VerifyAccessTokenOptions["verifyOptions"],
+	allowMissingAudience: boolean,
+): JWTPayload {
+	if (!introspect.active) throw invalidTokenError("token inactive");
+	// Audience is enforced by default: when `verifyOptions.audience` is set but
+	// the response omits `aud` (or it mismatches), `UnsecuredJWT.decode` throws
+	// and the token is rejected. Otherwise a token issued for a different
+	// resource or client on the same issuer would also pass. Only a caller that
+	// opted in with `remoteVerify.allowMissingAudience` skips that check.
+	try {
+		const unsecuredJwt = new UnsecuredJWT(introspect).encode();
+		const { typ: _typ, audience, ...claimOptions } = verifyOptions;
+		const skipAudience = !introspect.aud && allowMissingAudience;
+		return UnsecuredJWT.decode(
+			unsecuredJwt,
+			skipAudience ? claimOptions : { ...claimOptions, audience },
+		).payload;
+	} catch (error) {
+		if (error instanceof joseErrors.JWTExpired) {
+			throw invalidTokenError("token expired");
+		}
+		if (
+			error instanceof joseErrors.JOSEError &&
+			!isJoseInfrastructureError(error)
+		) {
+			throw invalidTokenError("invalid access token");
+		}
+		throw new Error(error as unknown as string);
+	}
+}
+
 async function verifyAccessTokenPayload(
 	token: string,
 	opts: VerifyAccessTokenOptions,
@@ -494,7 +542,13 @@ async function verifyAccessTokenPayload(
 	let payload: JWTPayload | undefined;
 	// Locally verify
 	const jwksFetch = opts.jwksFetch ?? opts.jwksUrl;
-	if (jwksFetch && !opts?.remoteVerify?.force) {
+	if (opts.introspect) {
+		payload = verifyIntrospectionResponse(
+			await opts.introspect(token),
+			opts.verifyOptions,
+			false,
+		);
+	} else if (jwksFetch && !opts?.remoteVerify?.force) {
 		try {
 			payload = await verifyJwsAccessToken(token, {
 				jwksFetch,
@@ -522,7 +576,7 @@ async function verifyAccessTokenPayload(
 	}
 
 	// Remote verify
-	if (opts?.remoteVerify) {
+	if (opts?.remoteVerify && !opts.introspect) {
 		const { data: introspect, error: introspectError } =
 			await fetchRefusingRedirects<
 				JWTPayload & {
@@ -549,38 +603,11 @@ async function verifyAccessTokenPayload(
 			throw new APIError("INTERNAL_SERVER_ERROR", {
 				message: "introspection failed",
 			});
-		if (!introspect.active) throw invalidTokenError("token inactive");
-		// Verifies payload using verify options (token valid through introspect).
-		// Audience is enforced by default: when `verifyOptions.audience` is set
-		// but the introspection response omits `aud` (or it mismatches),
-		// `UnsecuredJWT.decode` throws and the token is rejected. Otherwise a
-		// token issued for a different resource/client on the same issuer would
-		// also pass. Only drop the audience check when the caller has explicitly
-		// opted in via `remoteVerify.allowMissingAudience`.
-		// `typ` checks the JWT header (RFC 9068 §4). An introspection response is
-		// a claim set with no header, so only the local check can enforce it.
-		try {
-			const unsecuredJwt = new UnsecuredJWT(introspect).encode();
-			const { typ: _typ, audience, ...claimOptions } = opts.verifyOptions;
-			const skipAudience =
-				!introspect.aud && opts.remoteVerify.allowMissingAudience === true;
-			const verify = UnsecuredJWT.decode(
-				unsecuredJwt,
-				skipAudience ? claimOptions : { ...claimOptions, audience },
-			);
-			payload = verify.payload;
-		} catch (error) {
-			if (error instanceof joseErrors.JWTExpired) {
-				throw invalidTokenError("token expired");
-			}
-			if (
-				error instanceof joseErrors.JOSEError &&
-				!isJoseInfrastructureError(error)
-			) {
-				throw invalidTokenError("invalid access token");
-			}
-			throw new Error(error as unknown as string);
-		}
+		payload = verifyIntrospectionResponse(
+			introspect,
+			opts.verifyOptions,
+			opts.remoteVerify.allowMissingAudience === true,
+		);
 	}
 
 	if (!payload) throw invalidTokenError("no token payload");

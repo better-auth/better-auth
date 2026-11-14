@@ -336,7 +336,7 @@ describe("mcp plugin", async () => {
 
 			expect(response.status).toBe(401);
 			expect(response.headers.get("WWW-Authenticate")).toBe(
-				`Bearer error="invalid_token", error_description="no token payload", resource_metadata="${authServerBaseUrl}/.well-known/oauth-protected-resource/api/auth"`,
+				`Bearer error="invalid_token", error_description="token inactive", resource_metadata="${authServerBaseUrl}/.well-known/oauth-protected-resource/api/auth"`,
 			);
 		});
 

@@ -65,14 +65,15 @@ async function verifyJwtAccessToken(
 	const jwtPluginOptions = jwtPlugin.options;
 	const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
 		? jwtPluginOptions.jwks.remoteUrl
-		: async (): Promise<JSONWebKeySet | undefined> => {
-				const jwksRes = await jwtPlugin.endpoints.getJwks(ctx);
-				// @ts-expect-error response is a JSONWebKeySet but within the response field
-				return jwksRes?.response as JSONWebKeySet | undefined;
-			};
-	// The plugin instance is stable across requests, so the key set fetched by
-	// the per-request closure above is cached under it.
-	const jwks = await getJwks(token, { jwksFetch, jwksCacheKey: jwtPlugin });
+		: async (): Promise<JSONWebKeySet | undefined> =>
+				jwtPlugin.endpoints.getJwks({ context: ctx.context });
+	// Endpoints receive a per-request copy of the context, and one `jwt()`
+	// object can serve several auth instances. The adapter is the instance's
+	// key store, so the cached keys are scoped to it.
+	const jwks = await getJwks(token, {
+		jwksFetch,
+		jwksCacheKey: ctx.context.adapter,
+	});
 	let payload: JWTPayload;
 	try {
 		// Do not pass jose's `audience` option: access-token audiences are

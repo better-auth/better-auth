@@ -186,7 +186,7 @@ export const createMcpProtectedRequestHandler = (
  */
 export const createProtectedRequestHandler = (
 	options: McpProtectedRequestHandlerOptions &
-		Pick<VerifyAccessTokenOptions, "jwksFetch" | "jwksCacheKey">,
+		Pick<VerifyAccessTokenOptions, "jwksFetch" | "jwksCacheKey" | "introspect">,
 	handler: McpRequestHandler,
 ) => {
 	const resource = validateMcpResource(options.audience);
@@ -203,6 +203,7 @@ export const createProtectedRequestHandler = (
 		jwksUrl: options.jwksUrl,
 		jwksFetch: options.jwksFetch,
 		jwksCacheKey: options.jwksCacheKey,
+		introspect: options.introspect,
 		remoteVerify: options.remoteVerify,
 		requiredScopes: options.requiredScopes,
 		isScopeSatisfied: options.isScopeSatisfied,
