@@ -5,6 +5,7 @@ import type {
 } from "@better-auth/core";
 import type { Session, User } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { BetterFetchError } from "@better-fetch/fetch";
 import {
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
@@ -116,6 +117,54 @@ export function getCookie(cookie: string | null) {
 		return acc ? `${acc}; ${key}=${value.value}` : `${key}=${value.value}`;
 	}, "");
 	return toSend;
+}
+
+/**
+ * Compare deep-link destinations by host + pathname (query ignored).
+ * Custom-scheme URLs like `myapp://dashboard` and `myapp://error` both
+ * have empty pathnames, so host must be part of the match.
+ */
+export function matchesAuthCallbackDestination(
+	resultUrl: URL,
+	expected: string,
+): boolean {
+	try {
+		const expectedUrl = new URL(expected);
+		return (
+			resultUrl.protocol === expectedUrl.protocol &&
+			resultUrl.host === expectedUrl.host &&
+			resultUrl.pathname === expectedUrl.pathname
+		);
+	} catch {
+		const path = expected.startsWith("/")
+			? expected.split("?")[0]!
+			: `/${expected.split("?")[0]!}`;
+		return resultUrl.pathname === path;
+	}
+}
+
+/**
+ * True when the auth-session return URL is an OAuth error redirect.
+ * Prefers the configured errorCallbackURL destination; if unset, treats
+ * any return that is not the success callbackURL destination as an error
+ * so host-based deep links (`myapp://error` vs `myapp://dashboard`) and
+ * app query params like `callbackURL: "/dashboard?error=notice"` both work.
+ */
+export function isOAuthErrorRedirect(
+	resultUrl: URL,
+	error: string | null,
+	errorCallbackURL: string | undefined,
+	callbackURL: string | undefined,
+): boolean {
+	if (!error) return false;
+
+	if (errorCallbackURL) {
+		return matchesAuthCallbackDestination(resultUrl, errorCallbackURL);
+	}
+	if (callbackURL) {
+		return !matchesAuthCallbackDestination(resultUrl, callbackURL);
+	}
+	return true;
 }
 
 function getOAuthStateValue(
@@ -385,7 +434,12 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							(isSignInRequest || isLinkSocialRequest) &&
 							!context.request?.body.includes("idToken") // id token is used for silent sign-in
 						) {
-							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
+							const requestBody = JSON.parse(context.request.body) as {
+								callbackURL?: string;
+								errorCallbackURL?: string;
+							};
+							const callbackURL = requestBody?.callbackURL;
+							const errorCallbackURL = requestBody?.errorCallbackURL;
 							const to = callbackURL;
 							const signInURL = context.data?.url;
 							let Browser: typeof import("expo-web-browser") | undefined =
@@ -431,15 +485,35 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
 							const cookie = url.searchParams.get("cookie");
-							if (!cookie) return;
-							const update = await storage.updateItemAsync(
-								cookieName,
-								(currentValue) =>
-									getSetCookie(cookie, currentValue ?? undefined),
+							// errorCallbackURL redirects can include both `error` and a
+							// state-cookie cleanup Set-Cookie. Apply cookie updates first,
+							// then reject only when the return URL is the error callback
+							// so app query params like `?error=notice` on callbackURL
+							// are not treated as OAuth failures (#12349).
+							const error = url.searchParams.get("error");
+							const isOAuthError = isOAuthErrorRedirect(
+								url,
+								error,
+								errorCallbackURL,
+								callbackURL,
 							);
-							if (update) {
-								store?.notify("$sessionSignal");
+							if (cookie) {
+								const update = await storage.updateItemAsync(
+									cookieName,
+									(currentValue) =>
+										getSetCookie(cookie, currentValue ?? undefined),
+								);
+								if (update && !isOAuthError) {
+									store?.notify("$sessionSignal");
+								}
 							}
+							if (isOAuthError && error) {
+								throw new BetterFetchError(400, error, {
+									code: error,
+									message: error,
+								});
+							}
+							if (!cookie) return;
 						}
 					},
 				},
