@@ -82,7 +82,9 @@ export const drizzleResolver = (options: DrizzleResolverOptions): Resolver => {
 							: `t.text("${fieldName}").primaryKey()`,
 					foreignKeyId: ctx.useNumberId
 						? `t.integer("${fieldName}")`
-						: `t.text("${fieldName}")`,
+						: provider === "mysql"
+							? `t.varchar("${fieldName}", { length: 36 })`
+							: `t.text("${fieldName}")`,
 					"number[]": `${number}.array()`,
 					"string[]": `t.text("${fieldName}").array()`,
 				};
@@ -110,7 +112,10 @@ export const drizzleResolver = (options: DrizzleResolverOptions): Resolver => {
 				table.push(`\t${field.fieldName}: ${value},`);
 			}
 
-			const indexes = filterNonUniqueIndexes(ctx.schema);
+			const indexes = filterNonUniqueIndexes(ctx.schema).filter((field) => {
+				if (provider === "mysql") return !field.references;
+				return true;
+			});
 			if (indexes.length > 0) {
 				table.push("}, (table) => [");
 				for (const field of indexes) {
