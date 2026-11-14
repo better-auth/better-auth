@@ -928,7 +928,7 @@ function redirectOriginKey(uri: string): string | undefined {
 		: `${url.protocol}//${url.host}`;
 }
 
-function assertPostLogoutRedirectOrigins(
+export function assertPostLogoutRedirectOrigins(
 	postLogoutRedirectUris: string[] | undefined,
 	allowedOriginUris: string[],
 	allowedDescription: string,
@@ -968,6 +968,11 @@ export type CreateOAuthClientRegistrationInput =
 	  })
 	| (CreateOAuthClientRegistrationBaseInput & {
 			registrationSource: "managed";
+			/**
+			 * Created through `createOAuthClient` rather than an admin method, so
+			 * `clientRegistrationEnableEndSession` decides whether it may log out.
+			 */
+			selfService?: boolean;
 			/**
 			 * Resources to link to the new client. The caller must authorize the
 			 * `link` resource privilege for each one before persisting.
@@ -1158,41 +1163,47 @@ async function persistOAuthClientRegistration(
 		input.registrationSource === "clientMetadataDocument"
 			? input.existingClient
 			: undefined;
-	if (input.registrationSource !== "managed") {
+	const endSessionPolicySource =
+		input.registrationSource !== "managed"
+			? input.registrationSource
+			: input.selfService
+				? "createOAuthClient"
+				: undefined;
+	// A metadata document's own URL is also an origin its owner controls.
+	const isDocument = endSessionPolicySource === "clientMetadataDocument";
+	const assertEndSessionOrigins = () =>
+		assertPostLogoutRedirectOrigins(
+			body.post_logout_redirect_uris,
+			isDocument
+				? [...(body.redirect_uris ?? []), clientId]
+				: (body.redirect_uris ?? []),
+			isDocument ? "its redirect_uris or client_id" : "its redirect_uris",
+		);
+	// A refresh checks the stored decision inside its transaction below.
+	if (endSessionPolicySource && !existingClient) {
 		const policy = opts.clientRegistrationEnableEndSession;
-		const {
-			metadata: _metadata,
-			client_secret: _clientSecret,
-			client_secret_expires_at: _clientSecretExpiresAt,
-			client_id_issued_at: _clientIdIssuedAt,
-			user_id: _userId,
-			reference_id: _referenceId,
-			disabled: _disabled,
-			skip_consent: _skipConsent,
-			enable_end_session: _enableEndSession,
-			require_pkce: _requirePKCE,
-			...clientMetadata
-		} = body;
-		const enableEndSession = existingClient
-			? Boolean(existingClient.enableEndSession)
-			: typeof policy === "function"
-				? (await policy({
-						client: { ...clientMetadata, client_id: clientId },
-						registrationSource: input.registrationSource,
-					})) === true
-				: policy === true;
-		if (enableEndSession) {
-			// A metadata document's own URL is also an origin its owner controls.
-			const isDocument = input.registrationSource === "clientMetadataDocument";
-			assertPostLogoutRedirectOrigins(
-				body.post_logout_redirect_uris,
-				isDocument
-					? [...(body.redirect_uris ?? []), clientId]
-					: (body.redirect_uris ?? []),
-				isDocument ? "its redirect_uris or client_id" : "its redirect_uris",
-			);
+		let enableEndSession = policy === true;
+		if (typeof policy === "function") {
+			const {
+				metadata: _metadata,
+				client_secret: _clientSecret,
+				client_secret_expires_at: _clientSecretExpiresAt,
+				client_id_issued_at: _clientIdIssuedAt,
+				user_id: _userId,
+				reference_id: _referenceId,
+				disabled: _disabled,
+				skip_consent: _skipConsent,
+				enable_end_session: _enableEndSession,
+				require_pkce: _requirePKCE,
+				...clientMetadata
+			} = body;
+			enableEndSession =
+				(await policy({
+					client: { ...clientMetadata, client_id: clientId },
+					registrationSource: endSessionPolicySource,
+				})) === true;
 		}
-		// A refresh never writes this value (see the update below).
+		if (enableEndSession) assertEndSessionOrigins();
 		schema.enableEndSession = enableEndSession || undefined;
 	}
 	if (
@@ -1227,17 +1238,19 @@ async function persistOAuthClientRegistration(
 			let storedClient: SchemaClient<Scope[]>;
 			let created = false;
 			if (existingClient) {
-				// Merge with the row as it is now, inside the transaction, rather
-				// than as read before the document fetch, so admin changes made
-				// meanwhile are kept, and validate the result before saving it.
-				// Without extensions, a refresh leaves metadata alone.
+				// Read the row as it is now, inside the transaction, rather than
+				// as read before the document fetch, so a logout grant or admin
+				// metadata change made meanwhile is honored, and validate the
+				// result before saving it. Without extensions, a refresh leaves
+				// metadata alone.
+				const currentClient = await adapter.findOne<SchemaClient<Scope[]>>({
+					model: clientModel,
+					where: [{ field: "clientId", value: clientId }],
+				});
+				if (currentClient?.enableEndSession) assertEndSessionOrigins();
 				let metadata: Record<string, unknown> | null | undefined;
 				if (hasExtensionClientMetadata(opts)) {
 					const extensionFields = getExtensionClientMetadataFields(opts);
-					const currentClient = await adapter.findOne<SchemaClient<Scope[]>>({
-						model: clientModel,
-						where: [{ field: "clientId", value: clientId }],
-					});
 					const merged = stripReservedOAuthClientMetadataExtensions(
 						mergeDocumentExtensionMetadata(
 							extensionFields,
@@ -1633,6 +1646,7 @@ export async function createOAuthClientEndpoint(
 	const registrationInput: CreateOAuthClientRegistrationInput = {
 		metadata,
 		registrationSource: "managed",
+		selfService: !settings?.admin,
 		userId: referenceId ? undefined : session.session.userId,
 		referenceId,
 		clientCredentialsScopes,

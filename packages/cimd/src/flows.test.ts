@@ -49,11 +49,12 @@ function buildAuthorizeUrl(
 function stubMetadataFetch(
 	url: string,
 	document: Record<string, unknown>,
+	beforeResponse?: () => Promise<void>,
 ): void {
 	const originalFetch = globalThis.fetch.bind(globalThis);
 	vi.stubGlobal(
 		"fetch",
-		vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+		vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 			const requested =
 				typeof input === "string"
 					? input
@@ -61,12 +62,11 @@ function stubMetadataFetch(
 						? input.href
 						: input.url;
 			if (requested === url) {
-				return Promise.resolve(
-					new Response(JSON.stringify(document), {
-						status: 200,
-						headers: { "content-type": "application/json" },
-					}),
-				);
+				await beforeResponse?.();
+				return new Response(JSON.stringify(document), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				});
 			}
 			return originalFetch(input, init);
 		}),
@@ -1535,6 +1535,41 @@ describe("CIMD - RP-initiated logout for metadata document clients", async () =>
 		);
 		expect((await storedClient(clientId))?.postLogoutRedirectUris).toEqual([
 			"https://mcp-logout-moved.example.com/logged-out",
+		]);
+	});
+
+	it("checks post-logout URIs when an administrator grants logout during a refresh", async () => {
+		const clientId = "https://mcp-logout-race.example.com/client.json";
+		stubMetadataFetch(clientId, documentFor(clientId));
+		allowEndSession = false;
+		await authorize(clientId);
+		expect((await storedClient(clientId))?.enableEndSession).toBeFalsy();
+
+		vi.unstubAllGlobals();
+		stubMetadataFetch(
+			clientId,
+			{
+				...documentFor(clientId),
+				post_logout_redirect_uris: ["https://attacker.example/landing"],
+			},
+			// Another instance grants logout after this refresh read the client.
+			async () => {
+				const ctx = await authorizationServer.$context;
+				await ctx.adapter.update({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: clientId }],
+					update: { enableEndSession: true },
+				});
+			},
+		);
+		const refresh = await authorize(clientId);
+		expect(refresh.headers.get("location") ?? (await refresh.text())).toContain(
+			"invalid_client_metadata",
+		);
+		const stored = await storedClient(clientId);
+		expect(stored?.enableEndSession).toBe(true);
+		expect(stored?.postLogoutRedirectUris).toEqual([
+			"https://mcp-logout-race.example.com/logged-out",
 		]);
 	});
 });

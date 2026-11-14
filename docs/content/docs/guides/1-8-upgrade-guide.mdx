@@ -268,6 +268,7 @@ To stop a request from carrying two values that different parts of the server re
 
 * Updating a client with an empty `metadata` object now clears its stored metadata. Before, the old metadata stayed.
 * Sending `backchannel_logout_uri: null` or `frontchannel_logout_uri: null` to `/oauth2/update-client` or `adminUpdateOAuthClient` now clears the URI. Before, `null` was rejected.
+* On a client allowed to use RP-initiated logout, `updateOAuthClient` and `/oauth2/update-client` now reject a new `post_logout_redirect_uris` entry with `invalid_client_metadata` unless it shares a scheme, host, and port with one of the client's `redirect_uris`. Before, the owner could add any origin. Entries the client already has are kept, and `adminUpdateOAuthClient` is not limited. **What to do:** to send users to another origin after logout, add a redirect URI on that origin in the same update. See [Registered clients](/docs/plugins/oauth-provider/openid-connect#registered-clients).
 
 ### Client secret expiry takes effect
 

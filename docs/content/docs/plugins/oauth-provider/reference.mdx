@@ -161,7 +161,7 @@ Whether dynamically registered confidential clients require PKCE. Defaults to `t
 
 `clientRegistrationEnableEndSession` <span className="opacity-70">`boolean | (input) => boolean | Promise<boolean>`</span>
 
-Whether clients created through dynamic registration or a Client ID Metadata Document may use RP-initiated logout. The function form receives `{ client, registrationSource }`. Defaults to `false`. Each of their `post_logout_redirect_uris` must share a scheme, host, and port with one of their `redirect_uris`, or with the `client_id` URL of a metadata document client. Loopback hosts match on any port, and private-use URIs match on scheme and authority. See [Registered clients](/docs/plugins/oauth-provider/openid-connect#registered-clients).
+Whether clients created through dynamic registration, a Client ID Metadata Document, or `createOAuthClient` may use RP-initiated logout. The function form receives `{ client, registrationSource }`. Defaults to `false`. Each of their `post_logout_redirect_uris` must share a scheme, host, and port with one of their `redirect_uris`, or with the `client_id` URL of a metadata document client. Loopback hosts match on any port, and private-use URIs match on scheme and authority. See [Registered clients](/docs/plugins/oauth-provider/openid-connect#registered-clients).
 
 `clientRegistrationDefaultApplicationType` <span className="opacity-70">`"web" | "native" | "infer"`</span>
 

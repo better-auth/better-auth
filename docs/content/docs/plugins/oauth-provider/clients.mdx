@@ -89,7 +89,7 @@ Both methods:
 * run [`clientPrivileges`](#client-crud-privileges)
 * do not check that the user is an administrator
 
-So call them only from server code that only administrators can reach. When a browser calls that code with its session cookie, [check the request's `Origin`](/docs/reference/security#csrf-protection) first. `adminUpdateOAuthClient` also requires the user to own the client, with one exception described in [Client CRUD privileges](#client-crud-privileges).
+So call them only from server code that only administrators can reach. When a browser calls that code with its session cookie, [check the request's `Origin`](/docs/reference/security#csrf-protection) first. `adminUpdateOAuthClient` also requires the user to own the client, with the exceptions described in [Client CRUD privileges](#client-crud-privileges).
 
 The admin update takes the changes under `update`:
 
@@ -413,7 +413,10 @@ To limit which client actions a signed-in user may take, define `clientPrivilege
 
 It receives `action` (`create`, `read`, `update`, `delete`, `list`, `rotate`, or `configure-client-credentials-scopes`), `user`, `session`, `headers`, and, for an existing client, `clientId`. `clientId` comes from the request. It does not prove that the client exists or who owns it.
 
-Ownership is checked after this callback, so returning `true` does not grant access to another owner's client. There is one exception. An `adminUpdateOAuthClient` call that changes only `client_credentials_scopes` can change another owner's client when the callback approves both `update` and `configure-client-credentials-scopes`.
+Ownership is checked after this callback, so returning `true` does not grant access to another owner's client. `adminUpdateOAuthClient` has two exceptions, which also cover clients with no owner, such as anonymous registrations and metadata document clients:
+
+* A call that changes only `enable_end_session` needs the callback to approve `update`.
+* A call that also changes `client_credentials_scopes` needs it to approve both `update` and `configure-client-credentials-scopes`.
 
 ```ts title="auth.ts"
 oauthProvider({
