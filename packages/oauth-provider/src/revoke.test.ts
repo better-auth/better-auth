@@ -677,6 +677,45 @@ describe("oauth revoke - config", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9012
+	 */
+	it("returns 200 when the decoder rejects with an APIError from another copy of better-call", async () => {
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				formatRefreshToken: {
+					encrypt: (token) => `rt.${token}`,
+					decrypt: () => {
+						// Stands in for an APIError from a second better-call install,
+						// which fails `instanceof` against this package's copy.
+						throw Object.assign(new Error("not a refresh token"), {
+							name: "APIError",
+							status: "BAD_REQUEST",
+							statusCode: 400,
+							headers: new Headers(),
+							body: { error: "invalid_request" },
+						});
+					},
+				},
+			},
+		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: "unknown-token",
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.error).toBe(null);
+	});
+
+	/**
 	 * An expired JWT access token cannot be a refresh token, so the lookup must
 	 * stop before a `formatRefreshToken.decrypt` that throws on unknown input.
 	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
