@@ -407,8 +407,6 @@ genericOAuth({
 
 The assertion's `aud` claim names the server that should accept it. [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) requires the authorization server's issuer identifier as the only audience. Otherwise, a malicious authorization server can advertise another server's endpoint URL in its metadata. Your client then signs an assertion for that URL and sends it to the malicious server, which can replay it at the other server to act as your client. By default, `createPrivateKeyJwtClientAssertionGetter` signs for the issuer when it knows the issuer. Better Auth takes the issuer from the `issuer` field of the discovery document. Without a discovered issuer, the getter signs for the token endpoint URL.
 
-Signing for the issuer protects you only when the issuer is the real one. Generic OAuth does not check that the discovered `issuer` matches `discoveryUrl`, so a malicious discovery document can name another server's issuer. Set `discoveryUrl` only to a provider you trust, and serve it over HTTPS.
-
 Every assertion the getter signs carries the JOSE header `typ: "client-authentication+jwt"`, which RFC 10070 recommends.
 
 To require the issuer, set `audience: "issuer"`:
