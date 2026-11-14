@@ -472,6 +472,21 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 		return convertSetCookieToCookie(res.headers);
 	}
 
+	/** The verification row behind the challenge cookie in `challengeHeaders`. */
+	async function findChallengeRow(challengeHeaders: Headers) {
+		const cookie = challengeHeaders.get("cookie") ?? "";
+		const signed = decodeURIComponent(
+			/(?:^|;\s*)better-auth\.two_factor=([^;]+)/.exec(cookie)?.[1] ?? "",
+		);
+		const identifier = signed.slice(0, signed.lastIndexOf("."));
+		const row = await db.findOne<Verification>({
+			model: "verification",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(row?.value).toBe(userId);
+		return row!;
+	}
+
 	function countSessions(): Promise<Session[]> {
 		return db.findMany<Session>({
 			model: "session",
@@ -481,18 +496,14 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 
 	it("rejects an expired two-factor sign-in challenge even with a valid TOTP", async () => {
 		const challengeHeaders = await startChallenge();
-		const challengeRow = await db.findOne<Verification>({
-			model: "verification",
-			where: [{ field: "value", value: userId }],
-		});
-		expect(challengeRow).not.toBeNull();
+		const challengeRow = await findChallengeRow(challengeHeaders);
 
 		// Force the challenge past its expiry while leaving the row present, so
 		// the only thing standing between a stale cookie and a session is the
 		// server-side expiry gate.
 		await db.update({
 			model: "verification",
-			where: [{ field: "id", value: challengeRow!.id }],
+			where: [{ field: "id", value: challengeRow.id }],
 			update: { expiresAt: new Date(Date.now() - 60 * 1000) },
 		});
 
@@ -529,13 +540,10 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 	 */
 	it("sends no OTP for an expired challenge", async () => {
 		const challengeHeaders = await startChallenge();
-		const challengeRow = await db.findOne<Verification>({
-			model: "verification",
-			where: [{ field: "value", value: userId }],
-		});
+		const challengeRow = await findChallengeRow(challengeHeaders);
 		await db.update({
 			model: "verification",
-			where: [{ field: "id", value: challengeRow!.id }],
+			where: [{ field: "id", value: challengeRow.id }],
 			update: { expiresAt: new Date(Date.now() - 60 * 1000) },
 		});
 		sentOTPs.length = 0;
@@ -559,17 +567,14 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 
 	it("sends no OTP for a challenge with an invalid expiry", async () => {
 		const challengeHeaders = await startChallenge();
-		const challengeRow = await db.findOne<Verification>({
-			model: "verification",
-			where: [{ field: "value", value: userId }],
-		});
+		const challengeRow = await findChallengeRow(challengeHeaders);
 		// The database rejects an invalid date, but a corrupt secondary-storage
 		// entry can still carry one.
 		const { internalAdapter } = await auth.$context;
 		const lookup = vi
 			.spyOn(internalAdapter, "findVerificationValue")
 			.mockResolvedValueOnce({
-				...challengeRow!,
+				...challengeRow,
 				expiresAt: new Date(Number.NaN),
 			});
 		sentOTPs.length = 0;
