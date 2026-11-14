@@ -417,6 +417,9 @@ describe("internal adapter test", async () => {
 		expect(await remaining("cleanup:second")).toBe(0);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/12593
+	 */
 	it("returns an expired verification value to at most one lookup between cleanups", async () => {
 		const opts = {
 			database: new DatabaseSync(":memory:"),
