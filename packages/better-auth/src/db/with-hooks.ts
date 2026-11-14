@@ -262,18 +262,14 @@ export function getWithHooks(
 			| undefined,
 	) {
 		const context = tryGetCurrentAuthEndpointContext();
-		let entityToDelete: T | null = null;
-
-		try {
-			const entities = await (await getCurrentAdapter(adapter)).findMany<T>({
-				model,
-				where,
-				limit: 1,
-			});
-			entityToDelete = entities[0] || null;
-		} catch {
-			// If we can't find the entity, we'll still proceed with deletion
-		}
+		// A failed lookup must not be swallowed: the delete below only runs
+		// when the row was found, so a swallowed error would skip it silently.
+		const entities = await (await getCurrentAdapter(adapter)).findMany<T>({
+			model,
+			where,
+			limit: 1,
+		});
+		const entityToDelete: T | null = entities[0] || null;
 
 		if (entityToDelete) {
 			for (const { source, hooks } of hooksEntries) {

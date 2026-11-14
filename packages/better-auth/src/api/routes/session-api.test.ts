@@ -684,6 +684,54 @@ describe("session", async () => {
 		expect(revokeRes.data?.status).toBe(true);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12301
+	 */
+	it("should not report a revoked session when the session lookup fails", async () => {
+		const headers = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		const { adapter } = await auth.$context;
+		const findMany = adapter.findMany.bind(adapter);
+		const findManySpy = vi
+			.spyOn(adapter, "findMany")
+			.mockImplementation(async (args) => {
+				if (args.model === "session") {
+					throw new Error("connection lost");
+				}
+				return findMany(args);
+			});
+		onTestFinished(() => findManySpy.mockRestore());
+
+		const res = await client.revokeSession({
+			fetchOptions: {
+				headers,
+			},
+			token: session!.session.token,
+		});
+		findManySpy.mockRestore();
+
+		expect(res.data?.status).not.toBe(true);
+		expect(res.error?.status).toBe(500);
+		const stillSignedIn = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(stillSignedIn.data?.session.token).toBe(session!.session.token);
+	});
+
 	it("should return session headers", async () => {
 		const context = await auth.$context;
 		await runWithEndpointContext(
