@@ -366,14 +366,18 @@ Prefer inline `jwks` for clients whose host you do not control.
 
 The client sends `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer` and the signed `client_assertion` instead of a secret. The assertion is signed with `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, or `EdDSA`, and must contain:
 
-| Claim | Requirement                                                                   |
-| ----- | ----------------------------------------------------------------------------- |
-| `iss` | The `client_id`                                                               |
-| `sub` | The `client_id`                                                               |
-| `aud` | The URL of the endpoint that receives the assertion, or the provider's issuer |
-| `exp` | Required. At most `assertionMaxLifetime` (default 300 seconds) from now       |
-| `jti` | Required. A unique value for each assertion                                   |
-| `iat` | Optional. When present, not older than `assertionMaxLifetime`                 |
+| Claim | Requirement                                                             |
+| ----- | ----------------------------------------------------------------------- |
+| `iss` | The `client_id`                                                         |
+| `sub` | The `client_id`                                                         |
+| `aud` | The provider's issuer, and no other value                               |
+| `exp` | Required. At most `assertionMaxLifetime` (default 300 seconds) from now |
+| `jti` | Required. A unique value for each assertion                             |
+| `iat` | Optional. When present, not older than `assertionMaxLifetime`           |
+
+The same assertion audience applies at the token, introspection, revocation, and PAR endpoints. The issuer is the only accepted audience because [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) requires it. A client that signs for an endpoint URL can be tricked into signing an assertion that a malicious server replays here. Clients should also set the JOSE header `typ` to `client-authentication+jwt`. The provider accepts an assertion without it.
+
+To keep accepting clients that sign for the URL of the endpoint they call while you move them to the issuer, set `assertionAudience: "issuer-or-endpoint"`. See [`assertionAudience`](/docs/plugins/oauth-provider/reference) for what it accepts and the protection it removes.
 
 ### Rotating client keys
 

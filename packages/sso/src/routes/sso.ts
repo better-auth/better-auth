@@ -573,6 +573,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							"client_secret_basic",
 						privateKeyId: body.oidcConfig.privateKeyId,
 						privateKeyAlgorithm: body.oidcConfig.privateKeyAlgorithm,
+						clientAssertionAudience: body.oidcConfig.clientAssertionAudience,
 						jwksEndpoint: body.oidcConfig.jwksEndpoint,
 						pkce: body.oidcConfig.pkce,
 						discoveryEndpoint:
@@ -600,6 +601,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						hydratedOIDCConfig.tokenEndpointAuthentication,
 					privateKeyId: body.oidcConfig.privateKeyId,
 					privateKeyAlgorithm: body.oidcConfig.privateKeyAlgorithm,
+					clientAssertionAudience: body.oidcConfig.clientAssertionAudience,
 					jwksEndpoint: hydratedOIDCConfig.jwksEndpoint,
 					pkce: body.oidcConfig.pkce,
 					discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,
@@ -1434,14 +1436,21 @@ async function handleOIDCCallback(
 				? (rawAlg as PrivateKeyJwtSigningAlgorithm)
 				: undefined;
 
+		const getClientAssertion = createPrivateKeyJwtClientAssertionGetter({
+			privateKeyJwk: resolved.privateKeyJwk,
+			privateKeyPem: resolved.privateKeyPem,
+			kid: config.privateKeyId ?? resolved.kid,
+			algorithm,
+			// Enterprise identity providers commonly accept only their token
+			// endpoint URL, so signing for the issuer is opt-in.
+			audience: config.clientAssertionAudience ?? "token_endpoint",
+		});
 		tokenEndpointAuth = {
 			method: "private_key_jwt",
-			getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
-				privateKeyJwk: resolved.privateKeyJwk,
-				privateKeyPem: resolved.privateKeyPem,
-				kid: config.privateKeyId ?? resolved.kid,
-				algorithm,
-			}),
+			// Discovery is checked against this issuer, so an assertion signed for
+			// it can name it as its only audience (RFC 10070 §4).
+			getClientAssertion: (context) =>
+				getClientAssertion({ ...context, issuer: config.issuer }),
 		};
 	}
 

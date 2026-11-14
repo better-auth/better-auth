@@ -14,7 +14,12 @@ describe("baseURL with a trailing slash", async () => {
 		baseURL: "http://localhost:3000/api/auth/",
 		plugins: [
 			jwt(),
-			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				// Endpoint audiences are built from baseURL only in this mode.
+				assertionAudience: "issuer-or-endpoint",
+			}),
 		],
 	});
 	const { headers } = await signInWithTestUser();

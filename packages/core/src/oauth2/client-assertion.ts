@@ -108,13 +108,15 @@ export interface PrivateKeyJwtClientAssertionGetterOptions {
 	/**
 	 * The `aud` claim of the assertion.
 	 *
-	 * - `"token_endpoint"`: the token endpoint URL, as OpenID Connect Core 1.0
-	 *   §9 recommends.
 	 * - `"issuer"`: the authorization server's issuer identifier, as FAPI 2.0
-	 *   and RFC 10070 require. Signing fails when the caller does not provide
-	 *   the issuer.
+	 *   and RFC 10070 §4 require. Signing fails when the caller does not
+	 *   provide the issuer.
+	 * - `"token_endpoint"`: the token endpoint URL. Use it only for an
+	 *   authorization server that accepts nothing else.
 	 *
-	 * @default "token_endpoint"
+	 * When omitted, the assertion is signed for the issuer when the caller
+	 * provides it, for example from the provider's discovery document. When no
+	 * issuer is known, it falls back to the token endpoint URL.
 	 */
 	audience?: "token_endpoint" | "issuer";
 }
@@ -130,6 +132,8 @@ export interface PrivateKeyJwtClientAssertionGetterOptions {
  * - exp=now + 120s
  * - jti=unique
  * - iat=now
+ *
+ * The JOSE header sets `typ` to `client-authentication+jwt` (RFC 10070 §4).
  */
 export async function signPrivateKeyJwtClientAssertion({
 	clientId,
@@ -167,7 +171,10 @@ export async function signPrivateKeyJwtClientAssertion({
 	const now = Math.floor(Date.now() / 1000);
 	const jti = crypto.randomUUID();
 
-	const header: JWTHeaderParameters = { alg: resolvedAlg, typ: "JWT" };
+	const header: JWTHeaderParameters = {
+		alg: resolvedAlg,
+		typ: "client-authentication+jwt",
+	};
 	if (resolvedKid) {
 		header.kid = resolvedKid;
 	}
@@ -217,7 +224,7 @@ export function createPrivateKeyJwtClientAssertionGetter(
 		return signPrivateKeyJwtClientAssertion({
 			clientId,
 			tokenEndpoint,
-			audience: options.audience === "issuer" ? issuer : undefined,
+			audience: options.audience === "token_endpoint" ? undefined : issuer,
 			privateKeyJwk: options.privateKeyJwk,
 			privateKeyPem: options.privateKeyPem,
 			kid: options.kid,

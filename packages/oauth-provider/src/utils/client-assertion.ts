@@ -12,6 +12,7 @@ import {
 	createLocalJWKSet,
 	decodeJwt,
 	decodeProtectedHeader,
+	errors as joseErrors,
 	jwtVerify,
 } from "jose";
 import { getIssuer } from "../authorize";
@@ -324,10 +325,64 @@ async function refetchClientJwks(
 }
 
 /**
+ * Returns the `aud` values a client assertion presented at `endpoint` may
+ * carry, as set by `assertionAudience`:
+ * - `"issuer"` (default): only the issuer identifier (RFC 10070 §4, §5).
+ * - `"issuer-or-endpoint"`: `endpoint`, the issuer, and at the PAR endpoint
+ *   also the token endpoint URL.
+ *
+ * `endpoint` defaults to the token endpoint URL. With `endpointAudienceOnly`,
+ * it returns only `endpoint` in either mode. Endpoints that change client
+ * credentials use it, so an assertion minted for the token endpoint or the
+ * issuer cannot be redirected to them.
+ */
+export function getClientAssertionAudiences(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	endpoint?: string,
+	options?: { endpointAudienceOnly?: boolean },
+): string[] {
+	const tokenEndpoint = getAuthEndpointUrl(ctx, "/oauth2/token");
+	const servedEndpoint = endpoint ?? tokenEndpoint;
+	if (options?.endpointAudienceOnly) return [servedEndpoint];
+	const issuer = getIssuer(ctx, opts);
+	if (requiresSoleAudience(opts)) return [issuer];
+	// RFC 9126 §2: the PAR endpoint also accepts the token endpoint URL.
+	const parTokenEndpoint =
+		servedEndpoint ===
+		getAuthEndpointUrl(ctx, PUSHED_AUTHORIZATION_REQUEST_PATH)
+			? [tokenEndpoint]
+			: [];
+	return [...new Set([servedEndpoint, issuer, ...parTokenEndpoint])];
+}
+
+function requiresSoleAudience(opts: OAuthOptions<Scope[]>): boolean {
+	return (opts.assertionAudience ?? "issuer") === "issuer";
+}
+
+type ClientAssertionAudienceParams =
+	| {
+			/**
+			 * The accepted `aud` values, such as the `acceptedAudiences` a
+			 * client authentication strategy receives.
+			 */
+			acceptedAudiences: string[];
+			expectedAudience?: never;
+	  }
+	| {
+			/** @deprecated Pass `acceptedAudiences` instead. */
+			expectedAudience: string;
+			acceptedAudiences?: never;
+	  };
+
+/**
  * Enforces the assertion-hygiene claims every client-assertion authentication
  * method must check, independent of how the signature is verified or where the
  * verification keys come from:
- * - `aud` MUST include `expectedAudience` (RFC 7523 §3 rule 3),
+ * - `aud` MUST match `acceptedAudiences` (RFC 7523 §3 rule 3). With the
+ *   default `assertionAudience: "issuer"`, every `aud` value must be accepted,
+ *   so the issuer is the sole audience (RFC 10070 §4). With
+ *   `"issuer-or-endpoint"`, one accepted value is enough.
  * - `exp` MUST be present, unexpired, and at most `assertionMaxLifetime`
  *   seconds away (RFC 7523 §3 rule 4),
  * - `iat`, when present, MUST be within `assertionMaxLifetime`,
@@ -336,13 +391,16 @@ async function refetchClientJwks(
  *   replay across workers fails atomically.
  *
  * A custom {@link OAuthClientAuthenticationStrategy} should call this after
- * verifying the assertion signature, so an extension method inherits the same
- * replay, lifetime, and audience guarantees as the built-in `private_key_jwt`
- * path, which calls it too.
+ * verifying the assertion signature, passing the `acceptedAudiences` it
+ * received, so an extension method inherits the same replay, lifetime, and
+ * audience guarantees as the built-in `private_key_jwt` path, which calls it
+ * too.
  *
  * @param params.namespace Scopes the replay tombstone to the method and client,
  *   e.g. `` `${method}:${clientId}` ``, so the same `jti` can recur across
  *   distinct methods or clients but never within one.
+ * @param params.expectedAudience Deprecated. It is treated as
+ *   `acceptedAudiences: [expectedAudience]`.
  */
 export async function consumeClientAssertion(
 	ctx: GenericEndpointContext,
@@ -350,19 +408,68 @@ export async function consumeClientAssertion(
 	params: {
 		namespace: string;
 		payload: { aud?: unknown; exp?: unknown; iat?: unknown; jti?: unknown };
-		expectedAudience: string;
+	} & ClientAssertionAudienceParams,
+): Promise<void> {
+	const { namespace, payload } = params;
+	const hasAccepted = params.acceptedAudiences !== undefined;
+	const hasExpected = params.expectedAudience !== undefined;
+	if (hasAccepted === hasExpected) {
+		throw new Error(
+			"consumeClientAssertion requires exactly one of acceptedAudiences or expectedAudience",
+		);
+	}
+	await consumeAssertion(ctx, opts, {
+		namespace,
+		payload,
+		// The deprecated endpoint URL maps to what that endpoint accepts, so a
+		// strategy written against it follows `assertionAudience` too.
+		acceptedAudiences:
+			params.acceptedAudiences ??
+			getClientAssertionAudiences(ctx, opts, params.expectedAudience),
+		soleAudience: requiresSoleAudience(opts),
+	});
+}
+
+/**
+ * The `invalid_client` description for an assertion whose `aud` is not
+ * accepted. When only the issuer is accepted, it names the issuer, so the
+ * client knows what to sign for (RFC 10070 §4).
+ */
+function audienceErrorDescription(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	acceptedAudiences: string[],
+): string {
+	const issuer = getIssuer(ctx, opts);
+	return acceptedAudiences.length === 1 && acceptedAudiences[0] === issuer
+		? `client assertion aud must be the issuer ${issuer}`
+		: "client assertion aud is not an accepted audience";
+}
+
+async function consumeAssertion(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		namespace: string;
+		payload: { aud?: unknown; exp?: unknown; iat?: unknown; jti?: unknown };
+		acceptedAudiences: string[];
+		soleAudience: boolean;
 	},
 ): Promise<void> {
-	const { namespace, payload, expectedAudience } = params;
-
-	const audiences = Array.isArray(payload.aud)
+	const { namespace, payload, acceptedAudiences } = params;
+	const audiences: unknown[] = Array.isArray(payload.aud)
 		? payload.aud
 		: payload.aud != null
 			? [payload.aud]
 			: [];
-	if (!audiences.includes(expectedAudience)) {
+	const isAccepted = (value: unknown) =>
+		typeof value === "string" && acceptedAudiences.includes(value);
+	const audienceMatches = params.soleAudience
+		? audiences.length > 0 && audiences.every(isAccepted)
+		: audiences.some(isAccepted);
+	if (!audienceMatches) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "client assertion aud does not match the endpoint",
+			error_description: audienceErrorDescription(ctx, opts, acceptedAudiences),
 			error: "invalid_client",
 		});
 	}
@@ -451,17 +558,17 @@ export async function consumeClientAssertion(
 /**
  * Verifies a client assertion JWT for `private_key_jwt` authentication.
  *
- * Validates: signature, iss=client_id, sub=client_id, aud=the endpoint serving
- * the assertion or the normalized OP issuer, exp, assertion max lifetime,
- * jti uniqueness (replay prevention).
+ * Validates: signature, iss=client_id, sub=client_id, aud against
+ * {@link getClientAssertionAudiences} for `endpoint`, exp, assertion max
+ * lifetime, jti uniqueness (replay prevention).
  *
  * Returns the client record the signature was checked against, so a caller that
  * mutates the client can guard its write on exactly that snapshot.
  *
- * With `endpointAudienceOnly`, the issuer is not an accepted audience, so only
- * an assertion whose `aud` includes `expectedAudience` verifies. Endpoints that
- * change client credentials use it, so an assertion minted for the token
- * endpoint or the issuer cannot be redirected to them.
+ * `endpoint` is the URL of the endpoint serving the assertion, and defaults to
+ * the token endpoint. `endpointAudienceOnly` is passed to
+ * {@link getClientAssertionAudiences}, and an `aud` list then only has to
+ * include `endpoint`.
  *
  * `assertClient` runs on the looked-up client before any key is fetched or the
  * jti is consumed, so a caller can refuse a client it does not serve without
@@ -473,7 +580,7 @@ export async function verifyClientAssertion(
 	clientAssertion: string,
 	clientAssertionType: string,
 	clientIdHint?: string,
-	expectedAudience?: string,
+	endpoint?: string,
 	options?: {
 		endpointAudienceOnly?: boolean;
 		assertClient?: (client: SchemaClient<Scope[]>) => void;
@@ -555,24 +662,9 @@ export async function verifyClientAssertion(
 
 	// Fetch JWKS and verify signature + claims
 	const jwks = await fetchClientJwks(ctx, opts, client);
-	const tokenEndpoint = getAuthEndpointUrl(ctx, "/oauth2/token");
-	const endpointAudience = expectedAudience ?? tokenEndpoint;
-	const issuerAudience = getIssuer(ctx, opts);
-	// RFC 9126 §2: the PAR endpoint also accepts the token endpoint URL.
-	const tokenEndpointAudience =
-		endpointAudience ===
-		getAuthEndpointUrl(ctx, PUSHED_AUTHORIZATION_REQUEST_PATH)
-			? [tokenEndpoint]
-			: [];
-	const acceptedAudiences = options?.endpointAudienceOnly
-		? [endpointAudience]
-		: [
-				...new Set([
-					endpointAudience,
-					issuerAudience,
-					...tokenEndpointAudience,
-				]),
-			];
+	const acceptedAudiences = getClientAssertionAudiences(ctx, opts, endpoint, {
+		endpointAudienceOnly: options?.endpointAudienceOnly,
+	});
 	const verifyOpts = {
 		issuer: clientId,
 		subject: clientId,
@@ -619,6 +711,18 @@ export async function verifyClientAssertion(
 					error: "invalid_client",
 				});
 			}
+		} else if (
+			verifyErr instanceof joseErrors.JWTClaimValidationFailed &&
+			verifyErr.claim === "aud"
+		) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: audienceErrorDescription(
+					ctx,
+					opts,
+					acceptedAudiences,
+				),
+				error: "invalid_client",
+			});
 		} else {
 			throw new APIError("UNAUTHORIZED", {
 				error_description: "client assertion signature verification failed",
@@ -627,24 +731,15 @@ export async function verifyClientAssertion(
 		}
 	}
 
-	const assertionAudiences = Array.isArray(payload.aud)
-		? payload.aud
-		: [payload.aud];
-	// jwtVerify already matched the payload against this same audience set.
-	const acceptedAudience = assertionAudiences.find(
-		(value): value is string =>
-			typeof value === "string" && acceptedAudiences.includes(value),
-	)!;
-
 	// Audience, lifetime, and jti single-use replay protection, shared with
 	// extension client-auth methods through `consumeClientAssertion` so both
-	// paths enforce RFC 7523 §3 identically. jose already matched `aud` via
-	// `verifyOpts.audience`; the helper re-checks it so it is self-sufficient for
-	// callers that verify the signature without jose.
-	await consumeClientAssertion(ctx, opts, {
+	// paths enforce RFC 7523 §3 identically. jose only requires one `aud` value
+	// to match; this also applies the sole-audience rule of RFC 10070 §4.
+	await consumeAssertion(ctx, opts, {
 		namespace: `private_key_jwt:${clientId}`,
 		payload,
-		expectedAudience: acceptedAudience,
+		acceptedAudiences,
+		soleAudience: !options?.endpointAudienceOnly && requiresSoleAudience(opts),
 	});
 
 	return { clientId, client };

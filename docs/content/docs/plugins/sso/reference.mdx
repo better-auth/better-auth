@@ -301,6 +301,10 @@ Key id passed to `resolvePrivateKey` and sent as `kid`.
 
 Signing algorithm for `private_key_jwt`. Defaults to `"RS256"`.
 
+`clientAssertionAudience` <span className="opacity-70">`"issuer" | "token_endpoint"`</span>
+
+The `aud` of `private_key_jwt` assertions. Defaults to `"token_endpoint"`, the provider's token endpoint URL, which most identity providers require. Set `"issuer"` to sign for the provider's registered `issuer`, as [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) asks. A provider that follows RFC 10070, such as a Better Auth authorization server by default, accepts only the issuer.
+
 `scopes` <span className="opacity-70">`string[]`</span>
 
 Scopes to request. Defaults to `["openid", "email", "profile", "offline_access"]`.

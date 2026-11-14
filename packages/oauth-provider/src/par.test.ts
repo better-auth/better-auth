@@ -261,46 +261,52 @@ describe("pushed authorization requests", async () => {
 		expect(codes).toHaveLength(1);
 	});
 
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc10070#section-5
+	 */
 	it.each([
-		["the token endpoint", tokenEndpoint],
-		["the PAR endpoint", parEndpoint],
-		["the issuer", baseURL],
-	])("accepts a private_key_jwt assertion addressed to %s", async (_, aud) => {
-		const { privateKey, publicKey } = await generateKeyPair("RS256", {
-			extractable: true,
-		});
-		const keyClient = await createClient({
-			token_endpoint_auth_method: "private_key_jwt",
-			jwks: {
-				keys: [
-					{
-						...(await exportJWK(publicKey)),
-						kid: "par-key",
-						alg: "RS256",
-						use: "sig",
-					},
-				],
-			},
-		});
-		const now = Math.floor(Date.now() / 1000);
-		const assertion = await new SignJWT({})
-			.setProtectedHeader({ alg: "RS256", kid: "par-key" })
-			.setIssuer(keyClient.client_id)
-			.setSubject(keyClient.client_id)
-			.setAudience(aud)
-			.setIssuedAt(now)
-			.setExpirationTime(now + 60)
-			.setJti(generateRandomString(16))
-			.sign(privateKey);
-		const { params } = await authorizationParams(keyClient.client_id);
-		const pushed = await pushRequest({
-			...params,
-			client_assertion_type:
-				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-			client_assertion: assertion,
-		});
-		expect(pushed.response.status).toBe(201);
-	});
+		["accepts", "the issuer", baseURL, 201],
+		["rejects", "the token endpoint", tokenEndpoint, 401],
+		["rejects", "the PAR endpoint", parEndpoint, 401],
+	])(
+		"%s a private_key_jwt assertion addressed to %s",
+		async (_, __, aud, status) => {
+			const { privateKey, publicKey } = await generateKeyPair("RS256", {
+				extractable: true,
+			});
+			const keyClient = await createClient({
+				token_endpoint_auth_method: "private_key_jwt",
+				jwks: {
+					keys: [
+						{
+							...(await exportJWK(publicKey)),
+							kid: "par-key",
+							alg: "RS256",
+							use: "sig",
+						},
+					],
+				},
+			});
+			const now = Math.floor(Date.now() / 1000);
+			const assertion = await new SignJWT({})
+				.setProtectedHeader({ alg: "RS256", kid: "par-key" })
+				.setIssuer(keyClient.client_id)
+				.setSubject(keyClient.client_id)
+				.setAudience(aud)
+				.setIssuedAt(now)
+				.setExpirationTime(now + 60)
+				.setJti(generateRandomString(16))
+				.sign(privateKey);
+			const { params } = await authorizationParams(keyClient.client_id);
+			const pushed = await pushRequest({
+				...params,
+				client_assertion_type:
+					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+				client_assertion: assertion,
+			});
+			expect(pushed.response.status).toBe(status);
+		},
+	);
 
 	it("does not let a request_uri and an authorization code consume each other", async () => {
 		const first = await authorizationParams(client.client_id);
@@ -664,7 +670,7 @@ describe("pushed authorization requests with required DPoP nonces", async () => 
 			.setProtectedHeader({ alg: "RS256", kid: "par-key" })
 			.setIssuer(keyClient.client_id)
 			.setSubject(keyClient.client_id)
-			.setAudience(parEndpoint)
+			.setAudience(baseURL)
 			.setIssuedAt(now)
 			.setExpirationTime(now + 60)
 			.setJti(generateRandomString(16))

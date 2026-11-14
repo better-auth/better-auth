@@ -7,6 +7,7 @@ import type {
 	GenericOAuthConfig,
 	GenericOAuthUserInfo,
 } from "../index";
+import { signForTokenEndpoint } from "./token-endpoint-audience";
 
 export interface MicrosoftEntraIdOptions extends BaseOAuthProviderOptions {
 	/**
@@ -182,7 +183,8 @@ export function microsoftEntraId(
 		userInfoUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
-		tokenEndpointAuth: options.tokenEndpointAuth,
+		// Entra ID documents only its token endpoint as the assertion audience.
+		tokenEndpointAuth: signForTokenEndpoint(options.tokenEndpointAuth),
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		endSessionEndpoint: options.endSessionEndpoint,

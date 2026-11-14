@@ -49,7 +49,7 @@ oauthProvider({
 
 Discovery then advertises `pushed_authorization_request_endpoint`. The client uses it in three steps:
 
-1. The client sends the authorization parameters to `/oauth2/par` as a form-encoded POST. It authenticates as it does at the token endpoint. A `private_key_jwt` assertion can name the issuer, the token endpoint URL, or the PAR endpoint URL as its audience. A public client sends only `client_id`.
+1. The client sends the authorization parameters to `/oauth2/par` as a form-encoded POST. It authenticates as it does at the token endpoint. A `private_key_jwt` assertion names the issuer as its audience. A public client sends only `client_id`.
 2. The server answers `201` with `request_uri` and `expires_in`.
 3. The client sends the user to `/oauth2/authorize` with only `client_id` and `request_uri`.
 

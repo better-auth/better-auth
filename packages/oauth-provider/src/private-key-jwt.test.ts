@@ -35,8 +35,6 @@ describe("private_key_jwt authentication", async () => {
 	const customIssuer = "https://issuer.example.com";
 	const rpBaseUrl = "http://localhost:5000";
 	const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
-	const introspectEndpoint = `${authServerBaseUrl}/api/auth/oauth2/introspect`;
-	const revokeEndpoint = `${authServerBaseUrl}/api/auth/oauth2/revoke`;
 	const redirectUri = `${rpBaseUrl}/callback`;
 	const discoveryMetadataFetch = vi.fn(async () => {
 		throw new Error("managed client must not use a discovery transport");
@@ -158,7 +156,7 @@ describe("private_key_jwt authentication", async () => {
 			})
 			.setIssuer(cid)
 			.setSubject(cid)
-			.setAudience(overrides?.aud ?? tokenEndpoint)
+			.setAudience(overrides?.aud ?? customIssuer)
 			.setIssuedAt(now)
 			.setExpirationTime(overrides?.exp ?? now + 120);
 
@@ -277,6 +275,8 @@ describe("private_key_jwt authentication", async () => {
 		return {
 			ctx: { context } as unknown as GenericEndpointContext,
 			opts,
+			// The jwt plugin has no configured issuer, so the base URL is the issuer.
+			issuer: context.baseURL,
 		};
 	}
 
@@ -343,7 +343,7 @@ describe("private_key_jwt authentication", async () => {
 				providerA.ctx,
 				providerA.opts,
 				await signDiscoveredClientAssertion({
-					audience: audienceA,
+					audience: providerA.issuer,
 					clientId,
 					key: keyPairA.privateKey as CryptoKey,
 					keyId,
@@ -358,7 +358,7 @@ describe("private_key_jwt authentication", async () => {
 				providerB.ctx,
 				providerB.opts,
 				await signDiscoveredClientAssertion({
-					audience: audienceB,
+					audience: providerB.issuer,
 					clientId,
 					key: keyPairB.privateKey as CryptoKey,
 					keyId,
@@ -512,7 +512,7 @@ describe("private_key_jwt authentication", async () => {
 					provider.ctx,
 					provider.opts,
 					await signDiscoveredClientAssertion({
-						audience,
+						audience: provider.issuer,
 						clientId,
 						key: rsaPrivateKey,
 						keyId: "remote-validation-key",
@@ -530,7 +530,7 @@ describe("private_key_jwt authentication", async () => {
 					provider.ctx,
 					provider.opts,
 					await signDiscoveredClientAssertion({
-						audience,
+						audience: provider.issuer,
 						clientId,
 						key: rsaPrivateKey,
 						keyId: "remote-validation-key",
@@ -559,11 +559,14 @@ describe("private_key_jwt authentication", async () => {
 		expect(tokens.data?.token_type).toBe("Bearer");
 	});
 
-	it("should accept the configured issuer as a token audience", async () => {
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc10070#section-4
+	 */
+	it("should reject the token endpoint as a token audience", async () => {
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
 		const assertion = await signAssertion({
-			aud: customIssuer,
+			aud: tokenEndpoint,
 		});
 
 		const tokens = await exchangeCodeForTokens({
@@ -572,8 +575,8 @@ describe("private_key_jwt authentication", async () => {
 			assertion,
 		});
 
-		expect(tokens.data?.access_token).toBeDefined();
-		expect(tokens.data?.token_type).toBe("Bearer");
+		expect(tokens.error?.status).toBe(401);
+		expect(tokens.data?.access_token).toBeUndefined();
 	});
 
 	it("should exchange code using a trusted jwks_uri", async () => {
@@ -865,7 +868,7 @@ describe("private_key_jwt authentication", async () => {
 					exp: Math.floor(Date.now() / 1000) + 120,
 					jti,
 				},
-				expectedAudience: tokenEndpoint,
+				acceptedAudiences: [tokenEndpoint],
 			};
 			return Promise.allSettled(
 				Array.from({ length: attempts }, () =>
@@ -1070,11 +1073,8 @@ describe("private_key_jwt authentication", async () => {
 	});
 
 	it.each([
-		{
-			name: "issuer audience array",
-			audience: [customIssuer, "https://unrelated.example.com/introspect"],
-		},
-		{ name: "endpoint audience", audience: introspectEndpoint },
+		{ name: "issuer audience", audience: customIssuer },
+		{ name: "issuer audience array", audience: [customIssuer] },
 	])(
 		"should introspect an access token using private_key_jwt with $name",
 		async ({ audience }) => {
@@ -1110,7 +1110,7 @@ describe("private_key_jwt authentication", async () => {
 
 	it.each([
 		{ name: "issuer audience", audience: customIssuer },
-		{ name: "endpoint audience", audience: revokeEndpoint },
+		{ name: "issuer audience array", audience: [customIssuer] },
 	])(
 		"should revoke a refresh token using private_key_jwt with $name",
 		async ({ audience }) => {

@@ -391,10 +391,10 @@ genericOAuth({
             discoveryUrl: "https://idp.example.com/.well-known/openid-configuration",
             tokenEndpointAuth: {
                 method: "private_key_jwt",
-                getClientAssertion: async ({ clientId, tokenEndpoint, grantType }) => {
+                getClientAssertion: async ({ clientId, tokenEndpoint, grantType, issuer }) => {
                     return getWorkloadIdentityToken({
                         clientId,
-                        audience: tokenEndpoint,
+                        audience: issuer ?? tokenEndpoint,
                         grantType,
                     });
                 },
@@ -405,7 +405,11 @@ genericOAuth({
 });
 ```
 
-The assertion's `aud` claim names the server that should accept it. By default, `createPrivateKeyJwtClientAssertionGetter` uses the token endpoint URL, as OpenID Connect Core recommends. FAPI 2.0 and [RFC 10070](https://www.rfc-editor.org/rfc/rfc10070) require the authorization server's issuer identifier instead. To sign assertions for the issuer, set `audience: "issuer"`:
+The assertion's `aud` claim names the server that should accept it. [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) requires the authorization server's issuer identifier as the only audience. Otherwise, a malicious authorization server can advertise another server's endpoint URL in its metadata. Your client then signs an assertion for that URL and sends it to the malicious server, which can replay it at the other server to act as your client. By default, `createPrivateKeyJwtClientAssertionGetter` signs for the issuer when it knows the issuer. Better Auth takes the issuer from the `issuer` field of the discovery document. Without a discovered issuer, the getter signs for the token endpoint URL.
+
+Every assertion the getter signs carries the JOSE header `typ: "client-authentication+jwt"`, which RFC 10070 recommends.
+
+To require the issuer, set `audience: "issuer"`:
 
 ```ts
 getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
@@ -414,9 +418,20 @@ getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
 }),
 ```
 
-Better Auth takes the issuer from the `issuer` field of the discovery document, so `audience: "issuer"` requires `discoveryUrl`. Without a discovered issuer, each token request and pushed authorization request fails with an error instead of falling back to the token endpoint. Before you enable it, check that the provider accepts the issuer as the assertion audience. Some servers accept only the token endpoint URL and reject the request.
+With `audience: "issuer"`, each token request and pushed authorization request fails with an error when no issuer was discovered. It does not fall back to the token endpoint.
+
+Some servers accept only their token endpoint URL as the audience and reject an assertion signed for the issuer. For such a server, set `audience: "token_endpoint"`:
+
+```ts
+getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+    privateKeyJwk: { /* your JWK */ },
+    audience: "token_endpoint",
+}),
+```
 
 A custom `getClientAssertion` receives the discovered issuer as `issuer`. The field is `undefined` when the provider has no discovery document or the document has no issuer.
+
+The `okta` and `microsoftEntraId` helpers never pass the issuer to the getter, so their assertions are signed for the token endpoint URL. Okta and Microsoft Entra ID document only that URL as the assertion audience.
 
 **discoveryHeaders**: (Optional) Custom headers to include in the discovery request. Useful for providers that require special headers. Better Auth sends these headers only to the origin (scheme, host, and port) of `discoveryUrl`:
 
@@ -581,7 +596,7 @@ export const auth = betterAuth({
 });
 ```
 
-The pushed request authenticates your client the same way as the token request. Better Auth uses `clientSecret`, `authentication`, or `tokenEndpointAuth`, and sends `authorizationHeaders` with it. A `private_key_jwt` assertion getter receives the token endpoint URL as `tokenEndpoint`. RFC 9126 requires the provider to accept that URL as the assertion audience for pushed requests. A provider configured with `getToken` and no `tokenUrl` has no token endpoint, so the getter receives the pushed authorization request endpoint instead, which RFC 9126 also requires the provider to accept.
+The pushed request authenticates your client the same way as the token request. Better Auth uses `clientSecret`, `authentication`, or `tokenEndpointAuth`, and sends `authorizationHeaders` with it. A `private_key_jwt` assertion getter receives the same context as for the token request, including the discovered `issuer`. By default, `createPrivateKeyJwtClientAssertionGetter` signs the pushed request assertion for that issuer, as [RFC 10070 §5](https://www.rfc-editor.org/rfc/rfc10070#section-5) requires. The getter receives the token endpoint URL as `tokenEndpoint`. A provider configured with `getToken` and no `tokenUrl` has no token endpoint, so the getter receives the pushed authorization request endpoint instead. A getter without a known issuer signs for that URL.
 
 Pushing needs a pushed authorization request endpoint. Better Auth reads it from `pushed_authorization_request_endpoint` in the discovery document, or from `pushedAuthorizationRequestUrl`. If no endpoint is found, startup fails for a manually configured provider. A discovery provider is skipped and retried like any other failed discovery.
 

@@ -4,7 +4,13 @@ import { betterFetch } from "@better-fetch/fetch";
 import { createAuthClient } from "better-auth/client";
 import { organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
-import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify } from "jose";
+import {
+	createLocalJWKSet,
+	decodeJwt,
+	exportJWK,
+	generateKeyPair,
+	jwtVerify,
+} from "jose";
 import { OAuth2Server } from "oauth2-mock-server";
 import {
 	afterAll,
@@ -1917,11 +1923,9 @@ describe("OIDC SSO with private_key_jwt", async () => {
 		const { payload } = await jwtVerify(
 			tokenReq.client_assertion as string,
 			jwks,
-			{
-				algorithms: ["RS256"],
-				audience: `${server.issuer.url}/token`,
-			},
+			{ algorithms: ["RS256"] },
 		);
+		expect(payload.aud).toBe(`${server.issuer.url}/token`);
 		expect(payload.iss).toBe("private-key-jwt-client");
 		expect(payload.sub).toBe("private-key-jwt-client");
 
@@ -1929,6 +1933,45 @@ describe("OIDC SSO with private_key_jwt", async () => {
 			fetchOptions: { headers: sessionHeaders },
 		});
 		expect(session.data?.user.email).toBe("jwt-auth-user@private-key-jwt.com");
+	});
+
+	it("signs for the issuer when clientAssertionAudience asks for it", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			headers,
+			body: {
+				issuer: server.issuer.url!,
+				domain: "token-audience.com",
+				providerId: "token-audience-provider",
+				oidcConfig: {
+					clientId: "token-audience-client",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					tokenEndpointAuthentication: "private_key_jwt",
+					clientAssertionAudience: "issuer",
+					privateKeyId: "private-key-jwt-key",
+					privateKeyAlgorithm: "RS256",
+				},
+			},
+		});
+		capturedTokenRequest = undefined;
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "token-audience-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: { throw: true, onSuccess: cookieSetter(signInHeaders) },
+		});
+		await simulateOAuthFlow(res.url, signInHeaders);
+
+		const tokenRequest = capturedTokenRequest as unknown as Record<
+			string,
+			unknown
+		>;
+		const assertion = tokenRequest.client_assertion as string;
+		// RFC 10070 §4: the issuer is the only audience.
+		expect(decodeJwt(assertion).aud).toBe(server.issuer.url);
 	});
 
 	it("should redirect with no_private_key_available when resolvePrivateKey returns no key material", async () => {

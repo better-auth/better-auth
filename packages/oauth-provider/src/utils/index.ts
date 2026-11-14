@@ -1040,11 +1040,14 @@ export function destructureCredentials(
 /**
  * Extracts and resolves client credentials from the request.
  * Supports: client_secret_basic, client_secret_post, private_key_jwt, and none (public).
+ *
+ * `endpoint` is the URL of the endpoint serving the request. It sets the
+ * accepted client assertion audiences through `getClientAssertionAudiences`.
  */
 export async function extractClientCredentials(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	expectedAudience?: string,
+	endpoint: string,
 ): Promise<ExtractedCredentials | null> {
 	const body = { ...((ctx.body ?? {}) as Record<string, unknown>) };
 	await normalizeClientAuthenticationParameters(ctx.request, body);
@@ -1061,6 +1064,9 @@ export async function extractClientCredentials(
 		}
 		const assertion = body.client_assertion as string;
 		const assertionType = body.client_assertion_type as string;
+		const { getClientAssertionAudiences, verifyClientAssertion } = await import(
+			"./client-assertion"
+		);
 		const extensionStrategy = getExtensionClientAuthenticationStrategy(
 			opts,
 			assertionType,
@@ -1072,7 +1078,8 @@ export async function extractClientCredentials(
 				assertion,
 				assertionType,
 				clientId: body.client_id as string | undefined,
-				expectedAudience,
+				acceptedAudiences: getClientAssertionAudiences(ctx, opts, endpoint),
+				expectedAudience: endpoint,
 			});
 			assertConfirmation(
 				result.confirmation,
@@ -1085,16 +1092,13 @@ export async function extractClientCredentials(
 				confirmation: result.confirmation,
 			};
 		}
-		const { verifyClientAssertion: verify } = await import(
-			"./client-assertion"
-		);
-		const result = await verify(
+		const result = await verifyClientAssertion(
 			ctx,
 			opts,
 			assertion,
 			assertionType,
 			body.client_id as string | undefined,
-			expectedAudience,
+			endpoint,
 		);
 		return {
 			kind: "pre_verified",
