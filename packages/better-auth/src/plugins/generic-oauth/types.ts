@@ -165,6 +165,9 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * Custom function to exchange authorization code for tokens.
 	 * If provided, this function will be used instead of the default token exchange logic.
 	 * This is useful for providers with non-standard token endpoints.
+	 * It receives the configured `redirectURI` (falling back to the callback
+	 * URI when unset) and receives `codeVerifier` only when PKCE is enabled
+	 * (`pkce` defaults to `true`).
 	 * @param data - Authorization code exchange parameters
 	 * @returns A promise that resolves to OAuth2Tokens
 	 */
