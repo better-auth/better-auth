@@ -33,7 +33,7 @@ import {
 } from "./signed-query";
 import { getSupportedClaims } from "./standard-claims";
 import type {
-	IssueAuthorizationCodeInput,
+	IssueAuthorizationCodeParams,
 	IssuedAuthorizationCode,
 	OAuthAuthenticationContext,
 	OAuthAuthorizationQuery,
@@ -1240,7 +1240,7 @@ async function runAuthorizationInteraction(
 export async function issueAuthorizationCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	input: IssueAuthorizationCodeInput,
+	params: IssueAuthorizationCodeParams,
 ): Promise<IssuedAuthorizationCode> {
 	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
 		tokenError(
@@ -1249,22 +1249,22 @@ export async function issueAuthorizationCode(
 			"the authorization_code grant is disabled",
 		);
 	}
-	const { session, user } = input.session;
-	if (input.query.request_uri !== undefined) {
+	const { session, user } = params.session;
+	if (params.query.request_uri !== undefined) {
 		tokenError(
 			"BAD_REQUEST",
 			"invalid_request",
 			"pass the authorization request parameters, not a request_uri",
 		);
 	}
-	if (input.query.request !== undefined) {
+	if (params.query.request !== undefined) {
 		tokenError(
 			"BAD_REQUEST",
 			"request_not_supported",
 			"request object not supported",
 		);
 	}
-	const validation = await parseAuthorizationRequest(ctx, opts, input.query, {
+	const validation = await parseAuthorizationRequest(ctx, opts, params.query, {
 		redirectUriOptional: true,
 	});
 	const { client } = validation;

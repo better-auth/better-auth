@@ -333,7 +333,7 @@ export interface VerifyResourceRequestParams {
 /**
  * Input to {@link OAuthProviderApi.issueAuthorizationCode}.
  */
-export interface IssueAuthorizationCodeInput {
+export interface IssueAuthorizationCodeParams {
 	/**
 	 * The authorization request parameters, as `/oauth2/authorize` accepts
 	 * them. `redirect_uri` is optional: without it the code is only returned,
@@ -422,7 +422,7 @@ export interface OAuthProviderApi {
 	 * session the user proved in this request or already holds.
 	 */
 	issueAuthorizationCode: (
-		input: IssueAuthorizationCodeInput,
+		params: IssueAuthorizationCodeParams,
 	) => Promise<IssuedAuthorizationCode>;
 	/**
 	 * Resolves the sender-constraint the tokens for this request will carry: the

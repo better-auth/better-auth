@@ -224,9 +224,9 @@ export function getOAuthProviderApi(
 				confirmation,
 			};
 		},
-		issueAuthorizationCode: async (input) => {
+		issueAuthorizationCode: async (params) => {
 			const { issueAuthorizationCode } = await import("./authorize");
-			return issueAuthorizationCode(ctx, opts, input);
+			return issueAuthorizationCode(ctx, opts, params);
 		},
 		issueTokens: (params: OAuthTokenIssueParams) => {
 			if (!grantType) {
