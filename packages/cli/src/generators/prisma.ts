@@ -703,10 +703,25 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						isUnique || adapter.options?.usePlural === true
 							? `${relatedModel.toLowerCase()}`
 							: `${relatedModel.toLowerCase()}s`;
-					const existingField = builder.findByType("field", {
-						name: fieldName,
-						within: prismaModel?.properties,
-					});
+					const existingField =
+						builder.findByType("field", {
+							name: fieldName,
+							within: prismaModel?.properties,
+						}) ||
+						prismaModel?.properties?.some(
+							(property: any) =>
+								property.type === "field" &&
+								property.fieldType === relatedModel &&
+								!property.attributes?.some(
+									(attribute: any) =>
+										attribute.name === "relation" &&
+										attribute.args?.some(
+											(arg: any) =>
+												typeof arg.value === "string" ||
+												arg.value?.key === "name",
+										),
+								),
+						);
 					if (!existingField) {
 						builder
 							.model(modelName)
