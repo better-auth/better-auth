@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { APIError } from "@better-auth/core/error";
 import { betterAuth } from "better-auth";
 import chalk from "chalk";
 import { Command } from "commander";
@@ -207,9 +206,6 @@ export async function createAdminAction(opts: unknown) {
 		console.log(`Role: ${result.user?.role ?? options.role}`);
 		process.exit(0);
 	} catch (error) {
-		if (error instanceof APIError) {
-			exitWithError(error.message);
-		}
 		if (error instanceof Error) {
 			exitWithError(error.message);
 		}
