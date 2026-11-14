@@ -297,6 +297,8 @@ const items = await dpopFetch("https://api.example.com/items", {
 * Sends a streamed body only once, so a large upload is never held in memory for a retry. This covers a `ReadableStream` body and a `Request` whose body you don't replace in the second argument. The nonce from the response still applies to the next request. Pass a string, `URLSearchParams`, `FormData`, or `Blob` body to get the retry.
 * Signs each proof for the origin and path it requests. If a DPoP endpoint redirects to a different origin or path, the target rejects the proof, so don't put DPoP endpoints behind such redirects.
 
+On a redirect to another origin, `fetch` drops the `Authorization` header but still sends the `DPoP` header, so the other origin receives the proof without the access token. To decide whether to follow a redirect yourself, pass `redirect: "manual"` on a server, where the response exposes the `Location` header. Browsers hide the target of a manual redirect.
+
 `generateDpopKeyPair` creates an ES256 key whose private half cannot be exported. Tokens issued for a key only work with that key, so keep the key pair for as long as you keep the tokens. In a browser, store the `CryptoKeyPair` in IndexedDB, which preserves a non-exportable key. To use another algorithm, pass a key pair from `crypto.subtle.generateKey` for one that Better Auth accepts by default: ECDSA P-256 (`ES256`) or P-521 (`ES512`), Ed25519 (`EdDSA`), or an RSA key with SHA-256 and either PKCS #1 v1.5 (`RS256`) or PSS (`PS256`) padding. Its public key must be exportable, which it is by default.
 
 To bind the authorization code to the key before the token request, send the key's thumbprint as `dpop_jkt` on the authorization request ([§10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)):

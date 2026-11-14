@@ -477,6 +477,27 @@ describe("createDpopFetch", () => {
 			],
 		],
 		[
+			"a stream from another realm",
+			(url) => {
+				// A stream from an iframe fails this realm's `instanceof
+				// ReadableStream` but keeps the stream shape.
+				const stream = new Blob(["grant_type=client_credentials"]).stream();
+				const foreignStream = {
+					getReader: () => stream.getReader(),
+					[Symbol.asyncIterator]: () => stream[Symbol.asyncIterator](),
+				};
+				expect(foreignStream).not.toBeInstanceOf(ReadableStream);
+				return [
+					url,
+					{
+						method: "POST",
+						body: foreignStream as unknown as ReadableStream,
+						duplex: "half",
+					} as RequestInit,
+				];
+			},
+		],
+		[
 			"a Request with a body",
 			(url) => [
 				new Request(url, {
