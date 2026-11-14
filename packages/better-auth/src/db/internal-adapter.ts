@@ -394,17 +394,17 @@ export const createInternalAdapter = (
 			);
 			return createdAccount as T & Account;
 		},
-		listSessions: async (
+		listSessions: async <T extends Record<string, any> = Record<string, any>>(
 			userId: string,
 			options?: { onlyActiveSessions?: boolean | undefined } | undefined,
-		) => {
+		): Promise<(Omit<T, keyof Session> & Session)[]> => {
 			if (databaseSessionFallbackEnabled) {
 				// The database holds every session, including ones whose cached copy
 				// failed to write, so list from it. Expired rows are skipped, as the
 				// cached list does.
-				const sessions = await (
-					await getCurrentAdapter(adapter)
-				).findMany<Session>({
+				const sessions = await (await getCurrentAdapter(adapter)).findMany<
+					Omit<T, keyof Session> & Session
+				>({
 					model: "session",
 					where: [
 						{ field: "userId", value: userId },
@@ -426,7 +426,7 @@ export const createInternalAdapter = (
 				const now = Date.now();
 
 				const seenTokens = new Set<string>();
-				const sessions: Session[] = [];
+				const sessions: (Omit<T, keyof Session> & Session)[] = [];
 				const revokedBeforeByUser = new Map<string, number>();
 
 				for (const { token, expiresAt } of list) {
@@ -440,7 +440,7 @@ export const createInternalAdapter = (
 						const parsed = (
 							typeof data === "string" ? JSON.parse(data) : data
 						) as {
-							session: Session;
+							session: Omit<T, keyof Session> & Session;
 							user: User;
 						};
 						if (
@@ -462,9 +462,9 @@ export const createInternalAdapter = (
 				return sessions;
 			}
 
-			const sessions = await (
-				await getCurrentAdapter(adapter)
-			).findMany<Session>({
+			const sessions = await (await getCurrentAdapter(adapter)).findMany<
+				Omit<T, keyof Session> & Session
+			>({
 				model: "session",
 				where: [
 					{

@@ -135,10 +135,14 @@ export interface InternalAdapter<
 			T,
 	): Promise<T & Account>;
 
-	listSessions(
+	/**
+	 * Rows include the session fields added by plugins and
+	 * `session.additionalFields`. Pass `T` to type them.
+	 */
+	listSessions<T extends Record<string, any> = Record<string, any>>(
 		userId: string,
 		options?: { onlyActiveSessions?: boolean | undefined } | undefined,
-	): Promise<Session[]>;
+	): Promise<(Omit<T, keyof Session> & Session)[]>;
 
 	listUsers(
 		limit?: number | undefined,
