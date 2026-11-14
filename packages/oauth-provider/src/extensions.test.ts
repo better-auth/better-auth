@@ -1037,17 +1037,27 @@ describe("oauth-provider extensions", async () => {
 	/**
 	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/reference#provider-extensions
 	 */
-	it("combines lists two extensions contribute and warns on other collisions", async () => {
-		const makeMetadataExtensionPlugin = (
+	it("combines lists from extensions and client discoveries, warning once per collision", async () => {
+		const makeExtensionPlugin = (
 			id: string,
-			metadata: Record<string, unknown>,
+			extension: Parameters<typeof extendOAuthProvider>[1],
 		) =>
 			({
 				id,
 				init(ctx) {
-					extendOAuthProvider(ctx, { metadata: () => metadata });
+					extendOAuthProvider(ctx, extension);
 				},
 			}) satisfies BetterAuthPlugin;
+		const makeDiscovery = (
+			id: string,
+			discoveryMetadata: Record<string, unknown>,
+		) =>
+			({
+				id,
+				matches: () => false,
+				resolve: () => null,
+				discoveryMetadata,
+			}) satisfies ClientDiscovery;
 		const instance = await getTestInstance({
 			baseURL: authServerBaseUrl,
 			plugins: [
@@ -1056,34 +1066,52 @@ describe("oauth-provider extensions", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 				}),
-				makeMetadataExtensionPlugin("meta-ext-a", {
-					authorization_details_types_supported: ["type_a", "type_b"],
-					mixed_shape_field: ["first"],
-					only_in_a: true,
+				makeExtensionPlugin("meta-ext-a", {
+					metadata: () => ({
+						authorization_details_types_supported: ["type_a", "type_b"],
+						mixed_shape_field: ["first"],
+						issuer: "https://ignored.example.com",
+					}),
 				}),
-				makeMetadataExtensionPlugin("meta-ext-b", {
-					authorization_details_types_supported: ["type_b", "type_c"],
-					mixed_shape_field: "second",
-					issuer: "https://ignored.example.com",
+				makeExtensionPlugin("meta-ext-b", {
+					clientDiscovery: makeDiscovery("discovery-b", {
+						authorization_details_types_supported: ["type_c"],
+						discovery_flag: "first",
+					}),
+					metadata: () => ({
+						authorization_details_types_supported: ["type_b", "type_d"],
+						mixed_shape_field: "second",
+					}),
+				}),
+				makeExtensionPlugin("meta-ext-c", {
+					clientDiscovery: makeDiscovery("discovery-c", {
+						discovery_flag: "second",
+					}),
 				}),
 			],
 		});
 		const { logger } = await instance.auth.$context;
 		const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
+		await instance.auth.api.getOpenIdConfig();
 		const openIdConfig =
 			(await instance.auth.api.getOpenIdConfig()) as unknown as Record<
 				string,
 				unknown
 			>;
+		expect(openIdConfig.issuer).toBe(authServerBaseUrl);
 		expect(openIdConfig.authorization_details_types_supported).toEqual([
+			"type_c",
 			"type_a",
 			"type_b",
-			"type_c",
+			"type_d",
 		]);
+		expect(openIdConfig.discovery_flag).toBe("first");
 		expect(openIdConfig.mixed_shape_field).toEqual(["first"]);
 		expect(warn.mock.calls.map(([message]) => message)).toEqual([
-			'oauth-provider: two extensions contributed the discovery metadata key "mixed_shape_field" to openid-configuration; keeping the first-registered value.',
+			'oauth-provider: more than one extension contributed the discovery metadata key "discovery_flag" to openid-configuration; keeping the first-registered value.',
+			'oauth-provider: an extension contributed the discovery metadata key "issuer" to openid-configuration, which the provider sets; ignoring it.',
+			'oauth-provider: more than one extension contributed the discovery metadata key "mixed_shape_field" to openid-configuration; keeping the first-registered value.',
 		]);
 	});
 

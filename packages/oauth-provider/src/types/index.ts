@@ -189,7 +189,9 @@ export interface ClientDiscovery {
 	 * Fields merged into `/.well-known/oauth-authorization-server` and
 	 * `/.well-known/openid-configuration` responses. Useful for advertising
 	 * RFC-registered discovery flags like
-	 * `client_id_metadata_document_supported`.
+	 * `client_id_metadata_document_supported`. Merged before every extension's
+	 * `metadata()` result, under the same rules (see
+	 * {@link OAuthProviderExtension}).
 	 */
 	discoveryMetadata?: Record<string, unknown>;
 }
@@ -593,9 +595,9 @@ export interface OAuthMetadataExtensionInput {
 	opts: OAuthOptions<Scope[]>;
 	type: "oauth-authorization-server" | "openid-configuration";
 	/**
-	 * The discovery document the provider assembled (core authorization-server
-	 * fields plus any client-discovery metadata). Contributions from other
-	 * extensions are merged afterwards and are not reflected here, so a
+	 * The discovery document the provider assembled from its own settings.
+	 * Client-discovery metadata and contributions from other extensions are
+	 * merged afterwards and are not reflected here, so a
 	 * contributor decides what to add from provider state alone, independent of
 	 * extension registration order. The contributor returns the fields to add.
 	 */
@@ -654,11 +656,12 @@ export interface OAuthUserInfoExtensionInput {
  *   assertion type, or interaction parameter that another extension already
  *   registered is rejected at setup, since the second would otherwise be
  *   silently unreachable.
- * - Additive kinds (`metadata`, `claims`) never override authorization-server
- *   core; a key already owned by the provider is kept. When two extensions
- *   contribute the same metadata key as lists, the lists combine in
- *   registration order without duplicates; any other collision resolves to
- *   the first-registered extension, with a logged warning.
+ * - Additive kinds (`metadata`, `claims`, and a client discovery's
+ *   `discoveryMetadata`) never override authorization-server core; a metadata
+ *   key the provider sets is kept, with a logged warning. When two
+ *   contributions share a metadata key as lists, the lists combine without
+ *   duplicates; any other collision keeps the first contribution, with a
+ *   logged warning. Each metadata warning is logged once per provider.
  */
 export interface OAuthProviderExtension {
 	/**
@@ -678,7 +681,8 @@ export interface OAuthProviderExtension {
 	/**
 	 * Additional discovery metadata fields. Core fields (`issuer`,
 	 * `token_endpoint`, advertised grants and auth methods, ...) stay owned by
-	 * the provider; only absent keys are added. To advertise the claim names a
+	 * the provider; only absent keys are added, and a contribution to a core
+	 * key logs a warning. To advertise the claim names a
 	 * claims contributor emits, set `advertisedMetadata.claims_supported`: the
 	 * provider owns `claims_supported` and does not infer it from contributors.
 	 */

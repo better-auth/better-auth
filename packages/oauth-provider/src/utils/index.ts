@@ -21,7 +21,6 @@ import {
 import type { oauthProvider } from "../oauth";
 import { canonicalizeOAuthQueryParams } from "../signed-query";
 import type {
-	ClientDiscovery,
 	Confirmation,
 	GrantType,
 	OAuthActorClaim,
@@ -314,22 +313,6 @@ export async function getClient(
 	}
 
 	return dbClient;
-}
-
-/**
- * Merge `discoveryMetadata` from every contributed {@link ClientDiscovery}
- * into a single object. Entries are spread in order; later entries override
- * earlier ones on key collisions.
- *
- * @internal
- */
-export function mergeDiscoveryMetadata(
-	discoveries: ClientDiscovery[],
-): Record<string, unknown> {
-	return discoveries.reduce<Record<string, unknown>>(
-		(acc, d) => ({ ...acc, ...(d.discoveryMetadata ?? {}) }),
-		{},
-	);
 }
 
 /**
