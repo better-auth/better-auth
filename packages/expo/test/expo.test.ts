@@ -348,6 +348,10 @@ describe("expo", async () => {
 	it("should preserve unchanged client store session properties on signout", async () => {
 		const before = client.$store.atoms.session!.get();
 		await client.signOut();
+		// Sign-out refetches the session, so compare once that refetch settles.
+		await vi.waitFor(() =>
+			expect(client.$store.atoms.session!.get().isRefetching).toBe(false),
+		);
 		const after = client.$store.atoms.session!.get();
 
 		expect(after).toMatchObject({

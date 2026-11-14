@@ -57,7 +57,8 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					knownPathMethods[routePath] ||
 					options.method ||
 					(Object.keys(body).length > 0 ? "POST" : "GET");
-				return await client(routePath, {
+				let succeeded = false;
+				const result = await client(routePath, {
 					...options,
 					body: isPayloadMethod(method)
 						? {
@@ -69,34 +70,30 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					method,
 					async onSuccess(context) {
 						await options?.onSuccess?.(context);
-						if (!atomListeners || options.disableSignal) return;
-						/**
-						 * We trigger listeners
-						 */
-						const matches = atomListeners.filter((s) => s.matcher(routePath));
-						if (!matches.length) return;
-
-						const visited = new Set<ClientAtomListener["signal"]>();
-						for (const match of matches) {
-							const signal = atoms[match.signal as any];
-							if (!signal) return;
-							if (visited.has(match.signal)) {
-								continue;
-							}
-							visited.add(match.signal);
-							/**
-							 * To avoid race conditions we set the signal in a setTimeout
-							 */
-							const val = signal.get();
-							setTimeout(() => {
-								//@ts-expect-error
-								signal.set(!val);
-							}, 10);
-							// we also call the callback if it exists
-							match.callback?.(routePath);
-						}
+						succeeded = true;
 					},
 				});
+				if (!succeeded || !atomListeners || options.disableSignal)
+					return result;
+				/**
+				 * We trigger listeners
+				 */
+				// Signal once every success hook ran, so the refetch sends the credentials they persisted.
+				const matches = atomListeners.filter((s) => s.matcher(routePath));
+				const visited = new Set<ClientAtomListener["signal"]>();
+				for (const match of matches) {
+					const signal = atoms[match.signal as any];
+					if (!signal) break;
+					if (visited.has(match.signal)) {
+						continue;
+					}
+					visited.add(match.signal);
+					//@ts-expect-error
+					signal.set(!signal.get());
+					// we also call the callback if it exists
+					match.callback?.(routePath);
+				}
+				return result;
 			},
 		});
 	}
