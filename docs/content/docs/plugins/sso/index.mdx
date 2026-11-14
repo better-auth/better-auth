@@ -324,14 +324,32 @@ To list the providers you can manage, call `authClient.sso.providers()` (`GET /s
   Deleting a provider also deletes every `account` row linked to it. It does not end sessions that users started through the provider, or remove organization memberships it provisioned. If you delete a provider because its IdP was compromised, also revoke those users' sessions.
 </Callout>
 
-To block an update or delete of a stored provider, throw from [`guardProviderMutation`](/docs/plugins/sso/reference#plugin-options). The change is rejected with 409 `SSO_PROVIDER_MUTATION_REJECTED`. The guard runs after the provider row is locked, and it needs a database adapter with native transactions and async-context support. It receives:
+To block an update or delete of a stored provider, throw from [`guardProviderMutation`](/docs/plugins/sso/reference#plugin-options). The change is rejected with 409 `SSO_PROVIDER_MUTATION_REJECTED`. It receives:
 
 * `action`: `"update"` or `"delete"`.
 * `provider`: the `id`, `providerId`, and `organizationId` of the stored row.
 * `providerReference`: an opaque reference to that row's configuration. Never persist it.
 * `isAuthenticationBoundaryChange`, on update only. It is `true` for the identity fields above and for SAML signing certificate changes. It is `false` for OIDC client secret and SAML SP private key rotation.
 
-Read related state through the `database` in the guard's second argument, because it runs in the same transaction. For example, reject boundary changes while a directory sync is paired. To change the IdP trust configuration, unpair the directory, update the provider, and then pair it again.
+```ts title="auth.ts"
+sso({
+    guardProviderMutation: async ({ action, provider, providerReference }, { database }) => {
+        // Read the current provider state or your own policy tables, then throw to reject.
+    },
+})
+```
+
+With an adapter that supports native interactive transactions, the guard runs after the provider row is locked and before any provider or linked account write, so the guard and the mutation commit or roll back together. Read related state through the `database` in the guard's second argument because it runs in the same transaction. For example, reject boundary changes while a directory sync is paired. To change the IdP trust configuration, unpair the directory, update the provider, and then pair it again.
+
+Adapters that cannot run an interactive transaction callback, such as Drizzle on Cloudflare D1, use optimistic concurrency instead. Leave the adapter's transaction capability disabled (the Drizzle default) so Better Auth selects this path. The guard runs against a snapshot of the provider row, and the update or deletion is applied only while the provider's scalar columns are unchanged. If another request changes the provider in the meantime, the endpoint responds with 409 and the `SSO_PROVIDER_CHANGED` code without applying the mutation; retry the request to evaluate the guard against the new state. In this mode the guard's `database` handle is not transactional, so keep guards read-only: writes made by the guard before a lost concurrency check are not rolled back.
+
+Optimistic mode cannot serialize account linking with the provider write, and its equality predicates only cover scalar columns. It therefore rejects operations whose safety depends on those guarantees:
+
+* Changing provider identity fields returns 501 with `SSO_PROVIDER_IDENTITY_CHANGE_REQUIRES_NATIVE_TRANSACTIONS`. Use an adapter with native transactions to change the issuer, OIDC identity fields, or SAML identity fields.
+* Deleting a provider that still has linked accounts returns 501 with `SSO_PROVIDER_DELETE_WITH_LINKED_ACCOUNTS_REQUIRES_NATIVE_TRANSACTIONS`. Remove the linked accounts first, or use an adapter with native transactions. Deleting a provider with no linked accounts is supported.
+* Writing a non-scalar additional field returns 501 with `SSO_PROVIDER_NON_SCALAR_UPDATE_REQUIRES_NATIVE_TRANSACTIONS`, because optimistic equality predicates can only fence scalar columns.
+
+Updates that do not change the identity boundary and only write scalar fields, such as domain, client-secret, and signing-certificate changes, remain available. A concurrent account link that already passed its own provider check can still complete after the deletion check; fully closing this window requires accounts bound to an immutable provider instance, so use an adapter with native transactions when that guarantee is required.
 
 ## Next steps
 
