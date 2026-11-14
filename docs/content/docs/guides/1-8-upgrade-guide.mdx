@@ -32,7 +32,7 @@ Only the OAuth provider plugins add columns in 1.8. Every new column is optional
 * `oauthProvider()` adds:
   * `acr` and `amr` on `oauthRefreshToken`
   * `act` on `oauthAccessToken`
-  * `expiresAt`, `sectorIdentifier`, `frontchannelLogoutUri`, and `frontchannelLogoutSessionRequired` on `oauthClient`
+  * `expiresAt`, `sectorIdentifier`, `frontchannelLogoutUri`, `frontchannelLogoutSessionRequired`, and `requirePushedAuthorizationRequests` on `oauthClient`
 * `oauthDeviceAuthorization()` adds `referenceId`, `authTime`, `acr`, and `amr` on `deviceCode`.
 
 Apply the schema, then deploy the 1.8 packages. With the built-in Kysely adapter, run `npx auth@latest migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth@latest generate`, review the output, and apply it with your migration tooling. MongoDB needs no migration.
@@ -369,7 +369,6 @@ The Drizzle generator now emits non-nullable Relations v2 columns for fields who
 
 Every `oauthProvider()` setup needs these columns, even when the feature that uses them is off:
 
-* `oauthClient.requirePushedAuthorizationRequests`, a boolean that defaults to `false`, from pushed authorization requests.
 * `oauthRefreshToken.grantId` and `oauthAccessToken.grantId`, from grant-wide token revocation.
 * `oauthAccessToken.accessTokenClaims`, from opaque access token claims.
 
