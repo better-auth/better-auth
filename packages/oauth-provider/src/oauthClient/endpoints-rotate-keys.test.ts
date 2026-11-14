@@ -64,6 +64,9 @@ async function setup(
 		{ testWith },
 	);
 	const { headers } = await signInWithTestUser();
+	// The provider uses its base URL as the issuer, the audience every other
+	// client-authentication endpoint accepts.
+	const issuer = (await auth.$context).baseURL;
 
 	async function createClient(keys: TestKey[]) {
 		const client = await auth.api.adminCreateOAuthClient({
@@ -118,7 +121,7 @@ async function setup(
 			body: new URLSearchParams({
 				token: "not-a-real-token",
 				client_assertion_type: CLIENT_ASSERTION_TYPE,
-				client_assertion: await sign(clientId, key, introspectURL),
+				client_assertion: await sign(clientId, key, issuer),
 			}),
 		});
 		return response.status;

@@ -139,6 +139,21 @@ tokenEndpointAuth: {
 
 Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refreshAccessToken`, or `refreshAccessTokenRequest` from `@better-auth/core/oauth2` that pass `authorization` in `headers` now throw.
 
+### Generic OAuth signs assertions for the issuer
+
+This applies if a generic OAuth provider uses `private_key_jwt` with `createPrivateKeyJwtClientAssertionGetter`. When the provider's discovery document names an issuer, the getter now signs each assertion for that issuer instead of the token endpoint URL. This follows [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4). Without a discovered issuer, it still signs for the token endpoint URL.
+
+Every assertion that `createPrivateKeyJwtClientAssertionGetter` or `signPrivateKeyJwtClientAssertion` signs now carries the JOSE header `typ: "client-authentication+jwt"`. Before, it carried `typ: "JWT"`.
+
+**What to do:** if the provider accepts only its token endpoint URL as the audience, set `audience: "token_endpoint"`:
+
+```ts title="auth.ts"
+getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+  privateKeyJwk: { /* your JWK */ },
+  audience: "token_endpoint",
+}),
+```
+
 ### Social provider profile types match the provider
 
 This applies if you use `mapProfileToUser`, a custom `getUserInfo`, or read a provider's profile type. Each profile type now matches what the provider returns. Claims that depend on a scope or account setting are optional, and a provider that omits a value leaves the stored value unchanged when profile updates are enabled.
@@ -265,6 +280,29 @@ This applies if you bind tokens with DPoP or mTLS, or write a `clientAuthenticat
 ### Pairwise subjects for private-use and loopback redirect URIs
 
 Pairwise clients created after the upgrade with private-use redirect URIs, such as `com.example.app:/callback`, or loopback ones, such as `http://localhost:8787/callback`, each get their own `sub`. Before, unrelated clients of either kind could share one. Existing clients keep their current `sub`.
+
+### Client assertions must name the issuer as their audience
+
+This applies if any client authenticates with `private_key_jwt`, or you write a `clientAuthentication` strategy. A client assertion's `aud` must now be the provider's issuer and nothing else, at every endpoint that authenticates a client: token, introspection, revocation, PAR, and plugin endpoints. [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) and [§5](https://www.rfc-editor.org/rfc/rfc10070#section-5) require this to stop audience injection, where a malicious server replays an assertion that a client signed for an endpoint URL.
+
+A client that signs for the token endpoint URL, the PAR endpoint URL, or the URL of another endpoint now gets `invalid_client`. So does a client whose `aud` list names the issuer and another value. Before, any one of these values was accepted.
+
+**What to do:** update your clients to sign their assertions for the issuer. RFC 10070 §6 asks you to update clients before or together with the server. A Better Auth generic OAuth provider with a discovered issuer signs for it by default from 1.8, as [Generic OAuth signs assertions for the issuer](#generic-oauth-signs-assertions-for-the-issuer) describes.
+
+If you cannot update every client before you upgrade, set `assertionAudience: "issuer-or-endpoint"`. The provider then accepts the URL of the endpoint called, the issuer, or, at `/oauth2/par`, the token endpoint URL, as in 1.7. This setting keeps clients open to audience injection. Remove it once your clients sign for the issuer.
+
+```ts title="auth.ts"
+oauthProvider({
+  // Transitional: remove once every client signs for the issuer.
+  assertionAudience: "issuer-or-endpoint",
+});
+```
+
+`POST /oauth2/client/rotate-keys` is unchanged. Its assertion must still name the rotation endpoint URL.
+
+A `clientAuthentication` strategy now receives `acceptedAudiences`, the audiences the provider accepts under `assertionAudience`. Pass it to `consumeClientAssertion` in place of `expectedAudience`, as [Client authentication obligations](/docs/plugins/oauth-provider/reference#client-authentication-obligations) shows.
+
+The `expectedAudience` strategy input and the `expectedAudience` parameter of `consumeClientAssertion` are deprecated. A strategy that checks `aud` against `expectedAudience` accepts different audiences than the built-in `private_key_jwt` method does.
 
 ### Extension and API authors
 

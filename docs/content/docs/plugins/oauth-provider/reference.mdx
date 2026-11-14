@@ -183,6 +183,17 @@ Resources a registration may request. Each must be in `resources`. When both res
 
 Maximum lifetime in seconds of a `private_key_jwt` assertion. Defaults to `300`. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).
 
+`assertionAudience` <span className="opacity-70">`"issuer" | "issuer-or-endpoint"`</span>
+
+The `aud` values accepted in client assertions, such as `private_key_jwt` assertions, at every endpoint that authenticates a client. Defaults to `"issuer"`.
+
+* `"issuer"`: the assertion's `aud` must be the provider's issuer and nothing else, as [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) and [§5](https://www.rfc-editor.org/rfc/rfc10070#section-5) require. An `aud` list that also names another value is rejected.
+* `"issuer-or-endpoint"`: the behavior before 1.8. The assertion's `aud` must include the URL of the endpoint called, the issuer, or, at `/oauth2/par`, the token endpoint URL.
+
+`"issuer-or-endpoint"` is a transitional setting for clients that still sign for an endpoint URL. It is weaker: a client that signs for an endpoint URL can be tricked into signing an assertion that a malicious server replays here. Move your clients to the issuer, then remove the setting.
+
+`POST /oauth2/client/rotate-keys` accepts only its own URL in either mode.
+
 `allowClientKeyRotation` <span className="opacity-70">`boolean`</span>
 
 Enables `POST /oauth2/client/rotate-keys`. Startup fails on the memory adapter or with `advanced.database.generateId: "serial"`, which cannot keep assertions single-use. Defaults to `false`. See [Rotating client keys](/docs/plugins/oauth-provider/clients#rotating-client-keys).
@@ -685,19 +696,24 @@ A `clientAuthentication` strategy proves which client sent the assertion and ret
 
 ```ts
 import { consumeClientAssertion } from "@better-auth/oauth-provider";
-import { APIError } from "better-auth/api";
 
-authenticate: async ({ ctx, opts, assertion, expectedAudience }) => {
-  if (!expectedAudience) throw new APIError("BAD_REQUEST", { error: "invalid_client" });
+authenticate: async ({ ctx, opts, assertion, acceptedAudiences }) => {
   const payload = await verifyAssertionSignature(assertion); // your key source
   await consumeClientAssertion(ctx, opts, {
     namespace: `urn:example:attestation:${payload.sub}`,
     payload,
-    expectedAudience,
+    acceptedAudiences,
   });
   return { clientId: payload.sub };
 };
 ```
+
+`acceptedAudiences` holds the `aud` values the provider accepts at the endpoint called, as set by the `assertionAudience` option:
+
+* `"issuer"` (default): only the issuer. `consumeClientAssertion` then requires every `aud` value to be the issuer.
+* `"issuer-or-endpoint"`: the URL of the endpoint called, the issuer, and at `/oauth2/par` also the token endpoint URL. `consumeClientAssertion` then requires one `aud` value to be in the list.
+
+The strategy input also has `expectedAudience`, the URL of the endpoint called. It is deprecated. A strategy that checks `aud` against it accepts different audiences than the built-in `private_key_jwt` method does. Pass `acceptedAudiences` to `consumeClientAssertion` instead. `consumeClientAssertion` still accepts `expectedAudience`, and treats it as a list with that one value.
 
 ### Claim precedence
 

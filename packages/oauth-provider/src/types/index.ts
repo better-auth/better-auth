@@ -594,8 +594,24 @@ export interface OAuthClientAuthenticationInput {
 	assertionType: string;
 	clientId?: string;
 	/**
-	 * The endpoint URL the assertion was presented to. A strategy MUST bind the
-	 * assertion to this audience (see {@link OAuthClientAuthenticationStrategy.authenticate}).
+	 * The `aud` values this server accepts for the assertion, set by the
+	 * `assertionAudience` option. A strategy MUST bind the assertion to them,
+	 * for example by passing them to `consumeClientAssertion` (see
+	 * {@link OAuthClientAuthenticationStrategy.authenticate}).
+	 *
+	 * - `"issuer"` (default): only the issuer identifier, which must be the
+	 *   assertion's sole audience (RFC 10070 §4).
+	 * - `"issuer-or-endpoint"`: the URL of the endpoint called, the issuer, and
+	 *   at the PAR endpoint also the token endpoint URL. Any one of them may
+	 *   match.
+	 */
+	acceptedAudiences: string[];
+	/**
+	 * The URL of the endpoint the assertion was presented to.
+	 *
+	 * @deprecated Bind the assertion to `acceptedAudiences` instead. A strategy
+	 * that checks `aud` against this URL accepts and rejects different
+	 * audiences than the built-in `private_key_jwt` method does.
 	 */
 	expectedAudience?: string;
 }
@@ -631,7 +647,8 @@ export interface OAuthClientAuthenticationStrategy {
 	 * signature against its own key source, it MUST enforce the assertion-hygiene
 	 * checks the built-in `private_key_jwt` path enforces, or the provider will
 	 * accept a forged or replayed assertion:
-	 * - bind the assertion to `input.expectedAudience` (RFC 7523 §3 rule 3),
+	 * - bind the assertion to `input.acceptedAudiences` (RFC 7523 §3 rule 3,
+	 *   as updated by RFC 10070 §4),
 	 * - require a bounded `exp` (RFC 7523 §3 rule 4),
 	 * - reject replays via a single-use `jti`.
 	 *
@@ -1230,6 +1247,25 @@ export interface OAuthOptions<
 	 * @default 300 (5 minutes)
 	 */
 	assertionMaxLifetime?: number;
+	/**
+	 * The `aud` values accepted in client assertion JWTs, such as
+	 * `private_key_jwt` assertions, at every endpoint that authenticates a
+	 * client.
+	 *
+	 * - `"issuer"`: the assertion's `aud` must be this server's issuer
+	 *   identifier and nothing else, as RFC 10070 §4 and §5 require.
+	 * - `"issuer-or-endpoint"`: the behavior before 1.8, kept for clients that
+	 *   still sign for an endpoint. It accepts the URL of the endpoint called,
+	 *   the issuer, and at the PAR endpoint also the token endpoint URL. Any one
+	 *   of them may match. This is a transitional setting. It is weaker, because
+	 *   it leaves clients open to audience injection. Move your
+	 *   clients to the issuer and then remove it.
+	 *
+	 * `POST /oauth2/client/rotate-keys` accepts only its own URL in either mode.
+	 *
+	 * @default "issuer"
+	 */
+	assertionAudience?: "issuer" | "issuer-or-endpoint";
 	/**
 	 * Lets a confidential `private_key_jwt` client replace its own inline `jwks`
 	 * at `POST /oauth2/client/rotate-keys`, authenticated by a client assertion
