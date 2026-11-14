@@ -207,6 +207,20 @@ describe("provider.issueAuthorizationCode", async () => {
 		);
 	});
 
+	it("leaves client credentials out of the stored request", async () => {
+		const query = await authorizationQuery();
+		const issued = await issueCode({
+			...query,
+			client_secret: confidentialClient.client_secret,
+			client_assertion: "assertion",
+			client_assertion_type:
+				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+		});
+		expect(issued.error).toBeNull();
+		const row = await findCodeRow(issued.data!.code);
+		expect(JSON.parse(row!.value).query).toEqual(query);
+	});
+
 	it("returns a redirect URL whose code redeems with its redirect_uri", async () => {
 		const { query, verifier } = await codeRequest(confidentialClient, {
 			redirect_uri: redirectUri,
@@ -453,8 +467,14 @@ describe.each([
 							ctx,
 							ctx.context.getPlugin("oauth-provider")!.options,
 						);
+						const { clientId } = await provider.authenticateClient({
+							requireCredentials: false,
+						});
 						const issued = await provider.issueAuthorizationCode({
-							query: ctx.body as StoredAuthorizationQuery,
+							query: {
+								...(ctx.body as StoredAuthorizationQuery),
+								client_id: clientId,
+							},
 							session: ctx.context.session,
 						});
 						return ctx.json({ code: issued.code });
@@ -530,9 +550,20 @@ describe.each([
 				"pushed authorization request is required",
 			);
 
-			const issued = await issueCode(params);
+			const issued = await issueCode({
+				...params,
+				client_secret: oauthClient.client_secret,
+			});
 			expect(issued.error).toBeNull();
 			expect(issued.data?.code).toEqual(expect.any(String));
+		});
+
+		it("rejects the client without its credentials", async () => {
+			const issued = await issueCode(await authorizationParams());
+			expect(issued.error?.status).toBe(400);
+			expect((issued.error as { error?: string } | null)?.error).toBe(
+				"invalid_client",
+			);
 		});
 
 		it("still rejects a request_uri from /oauth2/par", async () => {
@@ -551,6 +582,7 @@ describe.each([
 
 			const issued = await issueCode({
 				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
 				request_uri: pushed.data!.request_uri,
 			});
 			expect(issued.error?.status).toBe(400);

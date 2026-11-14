@@ -42,6 +42,17 @@ const CLIENT_AUTHENTICATION_PARAMETERS = [
 	"client_assertion_type",
 ] as const;
 
+/** Copies `params` without the client authentication parameters. */
+export function withoutClientAuthentication(
+	params: Record<string, unknown>,
+): Record<string, unknown> {
+	const copy = { ...params };
+	for (const name of CLIENT_AUTHENTICATION_PARAMETERS) {
+		delete copy[name];
+	}
+	return copy;
+}
+
 export function isPushedAuthorizationRequestEnabled(
 	opts: OAuthOptions<Scope[]>,
 ): boolean {
@@ -74,12 +85,9 @@ export async function pushedAuthorizationRequestEndpoint(
 		requireCredentials: false,
 	});
 
-	const params: Record<string, unknown> = isRecord(ctx.body)
-		? { ...ctx.body }
-		: {};
-	for (const name of CLIENT_AUTHENTICATION_PARAMETERS) {
-		delete params[name];
-	}
+	const params = withoutClientAuthentication(
+		isRecord(ctx.body) ? ctx.body : {},
+	);
 	if (params.request_uri !== undefined) {
 		tokenError(
 			"BAD_REQUEST",

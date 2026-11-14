@@ -23,6 +23,7 @@ import { mapIssuesToOAuthError } from "./oauth-endpoint";
 import {
 	consumePushedAuthorizationRequest,
 	isPushedAuthorizationRequestEnabled,
+	withoutClientAuthentication,
 } from "./par";
 import { resolveResourcePolicy } from "./resources";
 import {
@@ -1266,9 +1267,14 @@ export async function issueAuthorizationCode(
 			"request object not supported",
 		);
 	}
-	const validation = await parseAuthorizationRequest(ctx, opts, requestQuery, {
-		redirectUriOptional: true,
-	});
+	// A caller that authenticated the client may pass its credentials along
+	// with the request; they must not be stored with the code.
+	const validation = await parseAuthorizationRequest(
+		ctx,
+		opts,
+		withoutClientAuthentication({ ...requestQuery }),
+		{ redirectUriOptional: true },
+	);
 	const { client } = validation;
 	let query: StoredAuthorizationQuery = validation.query;
 
