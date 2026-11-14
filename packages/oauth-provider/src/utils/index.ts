@@ -6,7 +6,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import {
 	constantTimeEqual,
-	derivePurposeKey,
+	deriveEncryptionKey,
 	makeSignature,
 	symmetricDecrypt,
 	symmetricEncrypt,
@@ -1251,26 +1251,18 @@ export async function resolveSubjectIdentifier(
 }
 
 /**
- * Claim carrying the encrypted user ID in a JWT access token whose `sub` is
- * pairwise. A pairwise `sub` cannot be reversed, and JWT access tokens are not
- * stored, so UserInfo, introspection, and token exchange read the user from
- * this claim. The ciphertext is randomized per token, so it does not link a
- * user across clients.
+ * Claim carrying the user ID, and the `act` chain with user IDs, encrypted in
+ * a JWT access token whose subjects are pairwise. A pairwise `sub` cannot be
+ * reversed, and JWT access tokens are not stored, so UserInfo, introspection,
+ * and token exchange read the user from this claim. The ciphertext is
+ * randomized per token, so it does not link a user across clients.
  *
  * @internal
  */
-export const ENCRYPTED_USER_ID_CLAIM = "ba_uid";
-
-/**
- * Claim carrying the encrypted `act` chain, with user IDs, next to
- * {@link ENCRYPTED_USER_ID_CLAIM}.
- *
- * @internal
- */
-export const ENCRYPTED_ACTOR_CHAIN_CLAIM = "ba_act";
+export const ENCRYPTED_SUBJECTS_CLAIM = "ba_sub";
 
 const accessTokenSubjectKey = (ctx: GenericEndpointContext) =>
-	derivePurposeKey(ctx.context.secretConfig, "oauth-access-token-subject");
+	deriveEncryptionKey(ctx.context.secretConfig, "oauth-access-token-subject");
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -1363,28 +1355,25 @@ export async function resolveAccessTokenSubject(
 ): Promise<{
 	sub: string;
 	act?: OAuthActorClaim;
-	[ENCRYPTED_USER_ID_CLAIM]?: string;
-	[ENCRYPTED_ACTOR_CHAIN_CLAIM]?: string;
+	[ENCRYPTED_SUBJECTS_CLAIM]?: string;
 }> {
 	const subjects = { sub: userId, ...(act ? { act } : {}) };
 	if (opts.accessTokenSubject !== "pairwise") return subjects;
 	const presented = await resolvePresentedSubjects(ctx, opts, subjects, client);
 	if (presented.sub === userId) return presented;
-	const key = accessTokenSubjectKey(ctx);
-	const encrypt = (data: string) => symmetricEncrypt({ key, data });
 	return {
 		...presented,
-		[ENCRYPTED_USER_ID_CLAIM]: await encrypt(userId),
-		...(act
-			? { [ENCRYPTED_ACTOR_CHAIN_CLAIM]: await encrypt(JSON.stringify(act)) }
-			: {}),
+		[ENCRYPTED_SUBJECTS_CLAIM]: await symmetricEncrypt({
+			key: accessTokenSubjectKey(ctx),
+			data: JSON.stringify(subjects),
+		}),
 	};
 }
 
 /**
  * Restores the user ID as `sub`, and user IDs in `act`, on a verified JWT
  * access token payload whose subjects are pairwise, and removes the encrypted
- * claims. Returns `false` when a claim does not decrypt.
+ * claim. Returns `false` when the claim does not decrypt.
  *
  * @internal
  */
@@ -1392,27 +1381,25 @@ export async function restoreAccessTokenUserIds(
 	ctx: GenericEndpointContext,
 	payload: JWTPayload,
 ): Promise<boolean> {
-	const encryptedUserId = payload[ENCRYPTED_USER_ID_CLAIM];
-	const encryptedAct = payload[ENCRYPTED_ACTOR_CHAIN_CLAIM];
-	if (encryptedUserId === undefined && encryptedAct === undefined) return true;
-	delete payload[ENCRYPTED_USER_ID_CLAIM];
-	delete payload[ENCRYPTED_ACTOR_CHAIN_CLAIM];
-	const key = accessTokenSubjectKey(ctx);
-	const decrypt = (data: unknown) => {
-		if (typeof data !== "string") throw new TypeError("not a string");
-		return symmetricDecrypt({ key, data });
-	};
+	const encrypted = payload[ENCRYPTED_SUBJECTS_CLAIM];
+	if (encrypted === undefined) return true;
+	delete payload[ENCRYPTED_SUBJECTS_CLAIM];
+	if (typeof encrypted !== "string") return false;
+	let subjects: { sub?: unknown; act?: OAuthActorClaim };
 	try {
-		if (encryptedUserId !== undefined) {
-			payload.sub = await decrypt(encryptedUserId);
-		}
-		if (encryptedAct !== undefined) {
-			payload.act = JSON.parse(await decrypt(encryptedAct));
-		}
-		return true;
+		subjects = JSON.parse(
+			await symmetricDecrypt({
+				key: accessTokenSubjectKey(ctx),
+				data: encrypted,
+			}),
+		);
 	} catch {
 		return false;
 	}
+	if (typeof subjects?.sub !== "string") return false;
+	payload.sub = subjects.sub;
+	if (subjects.act) payload.act = subjects.act;
+	return true;
 }
 
 /**

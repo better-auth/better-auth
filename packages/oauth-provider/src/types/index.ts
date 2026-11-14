@@ -2025,7 +2025,7 @@ export interface OAuthOptions<
 	/**
 	 * The `sub` of JWT access tokens issued to a user. `"pairwise"` gives
 	 * clients with `subject_type: "pairwise"` the same `sub` as their ID tokens,
-	 * and adds the user ID encrypted in a `ba_uid` claim so the provider can
+	 * and adds the user ID encrypted in a `ba_sub` claim so the provider can
 	 * still find the user. Requires `pairwiseSecret`.
 	 *
 	 * @default "user"

@@ -757,7 +757,7 @@ describe("pairwise sub in JWT access tokens", async () => {
 					resources: [resource],
 					enforcePerClientResources: false,
 					// A plugin claim cannot replace the internal subject claim.
-					customAccessTokenClaims: () => ({ ba_uid: "forged" }),
+					customAccessTokenClaims: () => ({ ba_sub: "forged" }),
 				}),
 			],
 		},
@@ -846,7 +846,7 @@ describe("pairwise sub in JWT access tokens", async () => {
 		expect(accessToken.sub).toBe(decodeJwt(tokens.id_token).sub);
 		expect(accessToken.sub).not.toBe(user.id);
 		expect(JSON.stringify(accessToken)).not.toContain(user.id);
-		expect(accessToken.ba_uid).not.toBe("forged");
+		expect(accessToken.ba_sub).not.toBe("forged");
 	});
 
 	it("still resolves the user at UserInfo and introspection", async () => {
@@ -866,18 +866,18 @@ describe("pairwise sub in JWT access tokens", async () => {
 			},
 		);
 		expect(introspection).toMatchObject({ active: true, sub: pairwiseSub });
-		expect(introspection).not.toHaveProperty("ba_uid");
+		expect(introspection).not.toHaveProperty("ba_sub");
 	});
 
-	it("treats a token whose ba_uid does not decrypt as inactive", async () => {
+	it("treats a token whose ba_sub does not decrypt as inactive", async () => {
 		const tokens = await getTokens(pairwiseClient);
 		// The claim has its own key, so the Better Auth secret cannot open it.
-		const ba_uid = await symmetricEncrypt({
+		const ba_sub = await symmetricEncrypt({
 			key: (await auth.$context).secretConfig,
-			data: user.id,
+			data: JSON.stringify({ sub: user.id }),
 		});
 		const { token } = await auth.api.signJWT({
-			body: { payload: { ...decodeJwt(tokens.access_token), ba_uid } },
+			body: { payload: { ...decodeJwt(tokens.access_token), ba_sub } },
 		});
 		expect((await userInfo(token)).error?.status).toBe(401);
 		const { data: introspection } = await postForm<Record<string, unknown>>(
@@ -910,7 +910,7 @@ describe("pairwise sub in JWT access tokens", async () => {
 	it("keeps the user ID for public clients and the client ID without a user", async () => {
 		const tokens = await getTokens(publicClient);
 		expect(decodeJwt(tokens.access_token).sub).toBe(user.id);
-		expect(decodeJwt(tokens.access_token)).not.toHaveProperty("ba_uid");
+		expect(decodeJwt(tokens.access_token)).not.toHaveProperty("ba_sub");
 
 		const { data, error } = await postForm<{ access_token: string }>(
 			"/oauth2/token",

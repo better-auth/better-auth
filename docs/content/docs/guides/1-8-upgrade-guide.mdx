@@ -190,15 +190,15 @@ The phone number plugin now sets a user's number only after the user verifies it
 
 This section covers `@better-auth/oauth-provider`. Apply the [schema changes](#schema-changes) first. Every setup should read the first four sections. The rest apply only if you use the feature they name.
 
-### `reference_id`, `act`, `ba_uid`, and `ba_act` claims are reserved
+### `reference_id`, `act`, and `ba_sub` claims are reserved
 
 The provider now sets these access token claims itself:
 
 * `reference_id` holds the consent reference that `postLogin.consentReferenceId` returns, such as an organization. JWT access tokens include it, and introspection returns it.
 * `act` names the actor of a delegated token from token exchange.
-* `ba_uid` and `ba_act` hold encrypted user IDs in JWT access tokens with a pairwise `sub`. See [Pairwise `sub` in JWT access tokens](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens).
+* `ba_sub` holds encrypted user IDs in JWT access tokens with a pairwise `sub`. See [Pairwise `sub` in JWT access tokens](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens).
 
-A value for any of these claims set by `customAccessTokenClaims`, an extension `claims.accessToken` contributor, or a resource's `customClaims` is now dropped with a warning. A JWT access token issued before you upgrade that carries your own `ba_uid` or `ba_act` claim is inactive at UserInfo, introspection, and token exchange, because the provider cannot decrypt it. The client gets a working token at its next refresh.
+A value for any of these claims set by `customAccessTokenClaims`, an extension `claims.accessToken` contributor, or a resource's `customClaims` is now dropped with a warning. A JWT access token issued before you upgrade that carries your own `ba_sub` claim is inactive at UserInfo, introspection, and token exchange, because the provider cannot decrypt it. The client gets a working token at its next refresh.
 
 **What to do:** rename your own claim if you set any of these names. A custom grant that issues a delegated token passes `act` to `issueTokens`.
 
