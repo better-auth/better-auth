@@ -256,10 +256,10 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const adapter = getOrgAdapter<O>(ctx.context, option as O);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -1049,10 +1049,10 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
 				);
 			}
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: invitation.organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId: invitation.organizationId },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -1245,7 +1245,26 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 				userId: invitation.inviterId,
 				organizationId: invitation.organizationId,
 			});
-			if (!member) {
+			const findResolvedInviter = async () => {
+				if (!options.resolveMembership) return null;
+				const user = await ctx.context.internalAdapter.findUserById(
+					invitation.inviterId,
+				);
+				if (!user) return null;
+				const resolved = await options.resolveMembership(
+					{
+						user,
+						session: null,
+						organizationId: invitation.organizationId,
+						member: null,
+						purpose: "inviter",
+					},
+					ctx,
+				);
+				return resolved ? user : null;
+			};
+			const inviter = member?.user ?? (await findResolvedInviter());
+			if (!inviter) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION,
@@ -1256,7 +1275,7 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 				...invitation,
 				organizationName: organization.name,
 				organizationSlug: organization.slug,
-				inviterEmail: member.user.email,
+				inviterEmail: inviter.email,
 			});
 		},
 	);
@@ -1296,10 +1315,10 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const isMember = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: orgId,
-			});
+			const isMember = await adapter.findCallerMember(
+				{ session, organizationId: orgId },
+				ctx,
+			);
 			if (!isMember) {
 				throw APIError.fromStatus("FORBIDDEN", {
 					message: "You are not a member of this organization",

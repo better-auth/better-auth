@@ -263,10 +263,10 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: ctx.context.session.user.id,
-				organizationId: activeOrganizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session: ctx.context.session, organizationId: activeOrganizationId },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"UNAUTHORIZED",

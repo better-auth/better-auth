@@ -668,6 +668,33 @@ export const auth = betterAuth({
 });
 ```
 
+#### Resolve Membership
+
+By default, a user can only act in an organization they are a member of. Use `resolveMembership` to change the membership the plugin uses for the signed-in user, for example to let platform admins act as owner in every organization:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { admin, organization } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    admin(),
+    organization({
+      resolveMembership: ({ user, member }) => {
+        if (user.role?.split(",").includes("admin")) return { role: "owner" };
+        return member;
+      },
+    }),
+  ],
+});
+```
+
+It receives the user's member row (or `null`) and the endpoint context, so it can decide per request by `ctx.path`. Return `member` to keep the default, `null` to refuse, or an object with a `role`. Nothing is written to the member table, so a resolved member doesn't appear in `listMembers`.
+
+<Callout>
+  `getInvitation` also calls it, with `purpose: "inviter"` and `session: null`, to check that an inviter without a member row may still invite.
+</Callout>
+
 #### Use Active Organization
 
 To retrieve the active organization for the user, you can call the `useActiveOrganization` hook. It returns the active organization for the user. Whenever the active organization changes, the hook will re-evaluate and return the new active organization.
@@ -2576,6 +2603,8 @@ await client.organization.create({
 **organizationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of organizations allowed for a user. By default, it's `unlimited`. You can set it to any number you want, or a function that returns a boolean. **If you provide a function, it should return `true` if the user has reached their organization limit (blocking further creation), or `false` if they have not reached their limit (allowing further creation).**
 
 **creatorRole**: `admin | owner` - The role of the user who creates the organization. By default, it's `owner`. You can set it to `admin`.
+
+**resolveMembership**: `(data, ctx) => Awaitable<{ role: string } | null>` - A function that returns the membership to use for the signed-in user in an organization, or `null` to refuse. See [Resolve Membership](#resolve-membership).
 
 **membershipLimit**: `number` | `((user: User, organization: Organization) => Promise<number> | number)` - The maximum number of members allowed in an organization. By default, it's `100`. You can set it to any number you want or a function that returns the limit number.
 

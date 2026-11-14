@@ -334,10 +334,10 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -569,10 +569,10 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				throw APIError.fromStatus("BAD_REQUEST");
 			}
 
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 
 			if (!member) {
 				throw APIError.from(
@@ -581,10 +581,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				);
 			}
 
-			const toBeUpdatedMember =
-				member.id !== ctx.body.memberId
-					? await adapter.findMemberById(ctx.body.memberId)
-					: member;
+			const toBeUpdatedMember = await adapter.findMemberById(ctx.body.memberId);
 
 			if (!toBeUpdatedMember) {
 				throw APIError.from(
@@ -613,7 +610,8 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			const isSettingCreatorRole = roleToSet.includes(creatorRole);
 
-			const memberIsUpdatingThemselves = member.id === toBeUpdatedMember.id;
+			const memberIsUpdatingThemselves =
+				toBeUpdatedMember.userId === session.user.id;
 
 			if (
 				(isUpdatingCreator && !updaterIsCreator) ||
@@ -834,10 +832,10 @@ export const getActiveMember = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -1010,10 +1008,10 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
-			const isMember = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId,
-			});
+			const isMember = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!isMember) {
 				throw APIError.from(
 					"FORBIDDEN",
@@ -1101,17 +1099,17 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
-			const isMember = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId,
-			});
+			const isMember = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!isMember) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				);
 			}
-			if (!ctx.query?.userId) {
+			if (!ctx.query?.userId || ctx.query.userId === session.user.id) {
 				return ctx.json<{ role: InferOrganizationRolesFromOption<O> }>({
 					role: isMember.role,
 				});

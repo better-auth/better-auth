@@ -441,10 +441,10 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -570,10 +570,10 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
+			const member = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -699,10 +699,10 @@ export const getOrganization = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				);
 			}
-			const isMember = await adapter.checkMembership({
-				userId: session.user.id,
-				organizationId: organization.id,
-			});
+			const isMember = await adapter.findCallerMember(
+				{ session, organizationId: organization.id },
+				ctx,
+			);
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw APIError.from(
@@ -796,10 +796,10 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				);
 			}
-			const isMember = await adapter.checkMembership({
-				userId: session.user.id,
-				organizationId: organization.id,
-			});
+			const isMember = await adapter.findCallerMember(
+				{ session, organizationId: organization.id },
+				ctx,
+			);
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw APIError.from(
@@ -938,10 +938,10 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				);
 			}
 
-			const isMember = await adapter.checkMembership({
-				userId: session.user.id,
-				organizationId,
-			});
+			const isMember = await adapter.findCallerMember(
+				{ session, organizationId },
+				ctx,
+			);
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw APIError.from(
