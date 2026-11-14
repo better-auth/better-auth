@@ -588,3 +588,5 @@ jwt({
 ```
 
 When a verifier in the same process reads the keys, `getJwks` receives the request being verified in `ctx.request` and `ctx.headers`. That applies to introspection, revocation, end-session, and `requireMcpAuth`. `oauthProviderResourceClient(auth)` verifies a token without a request, so those fields are empty there.
+
+Because `getJwks` can return different keys for each request, such as per tenant, these verifiers do not cache its result. They call it on every verification, so cache inside your store if reads are expensive. Keep any such cache keyed by whatever your store selects keys by.

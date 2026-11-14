@@ -124,11 +124,16 @@ function readJwksInProcess(
 	{ context, request, headers, path }: JwksReadContext,
 	jwtPlugin: ReturnType<typeof jwt>,
 ) {
+	const jwksFetch = async (): Promise<JSONWebKeySet | undefined> =>
+		jwtPlugin.endpoints.getJwks({ context, request, headers, path });
+	// A custom `adapter.getJwks` receives this request and may return different
+	// keys for each one, such as per tenant, so its keys are read on every
+	// verification instead of being shared across requests.
+	if (jwtPlugin.options?.adapter?.getJwks) {
+		return { jwksFetch };
+	}
 	return {
-		// A custom `jwt` `adapter.getJwks` receives this context, and may pick
-		// keys by the request it carries.
-		jwksFetch: async (): Promise<JSONWebKeySet | undefined> =>
-			jwtPlugin.endpoints.getJwks({ context, request, headers, path }),
+		jwksFetch,
 		// Endpoints receive a per-request copy of the context, and one `jwt()`
 		// object can serve several auth instances. The adapter is the instance's
 		// key store, so the cached keys are scoped to it.
