@@ -303,6 +303,8 @@ tokenEndpointAuth: {
 },
 ```
 
+The hook also runs for [pushed authorization requests](#pushed-authorization-requests), which authenticate the client the same way. To tell the two apart, read `endpointType`. It is `"token"` for token requests and `"pushed_authorization_request"` for a pushed request. A pushed request reports `grantType: "authorization_code"`, because it starts the authorization code flow. The hook also receives the discovered `issuer`, when there is one.
+
 **scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
 
 **redirectURI**: (Optional) The redirect URI to use for the OAuth flow. If not set, a default is constructed based on your app's base URL. Must include the `:providerId` placeholder (e.g., `https://example.com/api/auth/callback/my-provider`).

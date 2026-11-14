@@ -86,4 +86,30 @@ describe("pushAuthorizationRequest", () => {
 		).rejects.toThrow("request_uri");
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
+
+	it("tells a custom authentication hook that it is customizing a pushed request", async () => {
+		respondWith(
+			Response.json({ request_uri: "urn:example:1" }, { status: 201 }),
+		);
+		const customizeRequest = vi.fn();
+
+		await pushAuthorizationRequest({
+			authorizationURL,
+			authorizationEndpoint: "https://as.example.com/authorize",
+			pushedAuthorizationRequestEndpoint: "https://as.example.com/par",
+			options: { clientId: "client" },
+			tokenEndpoint: "https://as.example.com/token",
+			issuer: "https://as.example.com",
+			tokenEndpointAuth: { method: "custom", customizeRequest },
+		});
+
+		expect(customizeRequest).toHaveBeenCalledWith(
+			expect.objectContaining({
+				endpointType: "pushed_authorization_request",
+				grantType: "authorization_code",
+				tokenEndpoint: "https://as.example.com/token",
+				issuer: "https://as.example.com",
+			}),
+		);
+	});
 });
