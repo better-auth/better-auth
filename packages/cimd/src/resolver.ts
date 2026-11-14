@@ -13,7 +13,11 @@ import {
 	fetchClientMetadataDocument,
 	persistMetadataDocumentClient,
 } from "./client-store";
-import type { CimdOptions } from "./types";
+import type {
+	CimdMetadataResolution,
+	CimdMetadataResolver,
+	CimdOptions,
+} from "./types";
 import { isCimdClientIdUrlCandidate } from "./validate-metadata-document";
 
 const FETCH_BUDGET_WINDOW_MS = 60_000;
@@ -291,12 +295,19 @@ function createCacheEntry(
 }
 
 /**
- * Build the resolver for one plugin-owned CIMD metadata cache.
+ * Build a pure, context-free metadata resolver owning HTTP freshness,
+ * conditional revalidation (ETag / Last-Modified), rate-limiting, and
+ * in-flight request coalescing.
  *
- * The cache lives in this closure, so separate `cimd()` plugin instances never
- * share trust state or conditional validators.
+ * Exposing metadata resolution separately from transactional database
+ * persistence allows request-scoped runtimes (such as Cloudflare Workers)
+ * to share a process-wide or isolate-wide metadata cache across requests
+ * while each request performs database registration using its own isolated
+ * context.
  */
-export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
+export function createCimdMetadataResolver(
+	cimdOptions: CimdOptions,
+): CimdMetadataResolver {
 	const metadataRevalidationInterval =
 		cimdOptions.metadataRevalidationInterval ?? "60m";
 	const maxCacheEntries = cimdOptions.maxCacheEntries ?? 1_000;
@@ -307,9 +318,9 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 	}
 	const fetchPolicy = resolveMetadataFetchPolicy(cimdOptions);
 	const metadataCache = new Map<string, CimdMetadataCacheEntry>();
-	const inFlightResolutionByClientId = new Map<
+	const inFlightMetadataFetchByClientId = new Map<
 		string,
-		Promise<SchemaClient<Scope[]> | null>
+		Promise<CimdMetadataResolution>
 	>();
 	const lastFetchStartAtMsByClientId = new Map<string, number>();
 	const fetchStateByOrigin = new Map<string, OriginFetchState>();
@@ -342,7 +353,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				candidateClientId,
 				candidateLastFetchStartAtMs,
 			] of lastFetchStartAtMsByClientId) {
-				if (inFlightResolutionByClientId.has(candidateClientId)) {
+				if (inFlightMetadataFetchByClientId.has(candidateClientId)) {
 					continue;
 				}
 				if (
@@ -464,37 +475,29 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		};
 	};
 
-	return async (ctx, clientId, existingClient) => {
+	const resolveWithDetails = async (
+		clientId: string,
+		ctx?: GenericEndpointContext,
+	): Promise<CimdMetadataResolution | null> => {
 		if (!isCimdClientIdUrlCandidate(clientId)) {
 			return null;
 		}
 
-		const provider = ctx.context.getPlugin("oauth-provider");
-		if (!provider) {
-			throw new BetterAuthError(
-				"cimd discovery invoked without the oauth-provider plugin installed",
-			);
-		}
-		const oauthOptions = provider.options as OAuthOptions<Scope[]>;
 		const cachedEntry = readCacheEntry(clientId);
 		const nowMs = Date.now();
 
 		if (cachedEntry && cachedEntry.expiresAt > nowMs) {
-			if (existingClient) return existingClient;
-			return persistMetadataDocumentClient(
-				ctx,
-				clientId,
-				cachedEntry.metadata,
-				cimdOptions,
-				oauthOptions,
-			);
+			return {
+				metadata: cachedEntry.metadata,
+				isFresh: true,
+			};
 		}
 
-		const inFlightResolution = inFlightResolutionByClientId.get(clientId);
-		if (inFlightResolution !== undefined) return inFlightResolution;
+		const inFlightFetch = inFlightMetadataFetchByClientId.get(clientId);
+		if (inFlightFetch !== undefined) return inFlightFetch;
 
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
-		const resolution = (async () => {
+		const fetchPromise = (async (): Promise<CimdMetadataResolution> => {
 			const fetched = await fetchClientMetadataDocument(
 				ctx,
 				clientId,
@@ -517,14 +520,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				fetched.status === "modified"
 					? fetched.metadata
 					: (cachedEntry as CimdMetadataCacheEntry).metadata;
-			const storedClient = await persistMetadataDocumentClient(
-				ctx,
-				clientId,
-				metadata,
-				cimdOptions,
-				oauthOptions,
-				existingClient ?? undefined,
-			);
 
 			const cacheHeaders =
 				fetched.status === "modified"
@@ -544,23 +539,100 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			} else {
 				metadataCache.delete(clientId);
 			}
-			// Successful fetches are governed by HTTP freshness and origin/global
-			// budgets. Keep the per-client interval only as failed-fetch backoff.
 			lastFetchStartAtMsByClientId.delete(clientId);
-			return storedClient;
+			return {
+				metadata,
+				isFresh: false,
+			};
 		})();
-		inFlightResolutionByClientId.set(clientId, resolution);
+
+		inFlightMetadataFetchByClientId.set(clientId, fetchPromise);
 		try {
-			return await resolution;
+			return await fetchPromise;
 		} catch (error) {
 			lastFetchStartAtMsByClientId.delete(clientId);
 			lastFetchStartAtMsByClientId.set(clientId, Date.now());
 			throw error;
 		} finally {
-			if (inFlightResolutionByClientId.get(clientId) === resolution) {
-				inFlightResolutionByClientId.delete(clientId);
+			if (inFlightMetadataFetchByClientId.get(clientId) === fetchPromise) {
+				inFlightMetadataFetchByClientId.delete(clientId);
 			}
 			releaseMetadataFetchPermit();
+		}
+	};
+
+	const resolve = async (
+		clientId: string,
+		ctx?: GenericEndpointContext,
+	): Promise<OAuthClientMetadata | null> => {
+		const result = await resolveWithDetails(clientId, ctx);
+		return result ? result.metadata : null;
+	};
+
+	const evict = (clientId: string) => {
+		metadataCache.delete(clientId);
+	};
+
+	return Object.assign(
+		async (clientId: string, ctx?: GenericEndpointContext) =>
+			resolve(clientId, ctx),
+		{
+			resolve,
+			resolveMetadata: resolve,
+			resolveWithDetails,
+			evict,
+			invalidate: evict,
+		},
+	) as CimdMetadataResolver;
+}
+
+/**
+ * Build the resolver for one plugin-owned CIMD metadata cache.
+ *
+ * The cache lives in this closure, so separate `cimd()` plugin instances never
+ * share trust state or conditional validators unless an explicit `metadataResolver`
+ * is passed.
+ */
+export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
+	const metadataResolver =
+		cimdOptions.metadataResolver ?? createCimdMetadataResolver(cimdOptions);
+
+	return async (ctx, clientId, existingClient) => {
+		if (!isCimdClientIdUrlCandidate(clientId)) {
+			return null;
+		}
+
+		const provider = ctx.context.getPlugin("oauth-provider");
+		if (!provider) {
+			throw new BetterAuthError(
+				"cimd discovery invoked without the oauth-provider plugin installed",
+			);
+		}
+		const oauthOptions = provider.options as OAuthOptions<Scope[]>;
+
+		const resolution = await metadataResolver.resolveWithDetails(clientId, ctx);
+		if (!resolution) {
+			return null;
+		}
+
+		if (resolution.isFresh && existingClient) {
+			return existingClient;
+		}
+
+		try {
+			return await persistMetadataDocumentClient(
+				ctx,
+				clientId,
+				resolution.metadata,
+				cimdOptions,
+				oauthOptions,
+				existingClient ?? undefined,
+			);
+		} catch (error) {
+			if (!resolution.isFresh) {
+				metadataResolver.evict?.(clientId);
+			}
+			throw error;
 		}
 	};
 }
