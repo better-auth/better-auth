@@ -1,5 +1,4 @@
 import type { AwaitableFunction } from "../types";
-import { appendQueryParams } from "../utils/url";
 import type { ProviderOptions } from "./index";
 import { generateCodeChallenge, getPrimaryClientId } from "./utils";
 
@@ -25,20 +24,24 @@ export const RESERVED_AUTHORIZATION_PARAMS_SET: ReadonlySet<string> = new Set(
 );
 
 /**
- * Removes the endpoint's query parameters that `params` replaces. The rest of
- * the query keeps its original text, because re-serializing it would change
- * its encoding, such as `%20` to `+`, and break providers that sign the query.
+ * Adds `params` to the endpoint's query and removes the pairs they replace.
+ * The rest of the query keeps its original text, including empty segments,
+ * because re-serializing it would change its encoding, such as `%20` to `+`,
+ * and break providers that sign the query.
  */
-function withoutQueryParams(endpoint: string, params: URLSearchParams) {
+function withQueryParams(endpoint: string, params: URLSearchParams) {
 	const url = new URL(endpoint);
-	const kept = url.search
-		.slice(1)
-		.split("&")
-		.filter((pair) => {
-			const [name] = new URLSearchParams(pair).keys();
-			return name === undefined || !params.has(name);
-		});
-	url.search = kept.join("&");
+	const query = url.search.slice(1);
+	const kept = query
+		? query.split("&").filter((pair) => {
+				if (pair === "") return true;
+				// A leading "&" stops URLSearchParams from stripping a leading "?".
+				const [name = ""] = new URLSearchParams(`&${pair}`).keys();
+				return !params.has(name);
+			})
+		: [];
+	const added = params.toString();
+	url.search = (added ? [...kept, added] : kept).join("&");
 	return url.href;
 }
 
@@ -131,11 +134,8 @@ export async function createAuthorizationURL({
 		}
 	}
 	return new URL(
-		appendQueryParams(
-			withoutQueryParams(
-				options.authorizationEndpoint || authorizationEndpoint,
-				params,
-			),
+		withQueryParams(
+			options.authorizationEndpoint || authorizationEndpoint,
 			params,
 		),
 	);

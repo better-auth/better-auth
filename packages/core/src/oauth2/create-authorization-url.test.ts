@@ -82,11 +82,34 @@ describe("createAuthorizationURL", () => {
 		const url = await createAuthorizationURL({
 			...baseInput,
 			authorizationEndpoint:
-				"https://idp.example/authorize?tenant=acme&&value=~&",
+				"https://idp.example/authorize?tenant=acme&&value=~&&prompt=login",
+			prompt: "consent",
 		});
 
-		expect(url.search).toMatch(/^\?tenant=acme&&value=~&[^&]/);
-		expect(url.searchParams.get("client_id")).toBe("client-123");
+		expect(url.search).toMatch(/^\?tenant=acme&&value=~&&[^&]/);
+		expect(url.searchParams.getAll("prompt")).toEqual(["consent"]);
+	});
+
+	it("keeps an empty segment left after replacing the only other pair", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			authorizationEndpoint: "https://idp.example/authorize?prompt=login&",
+			prompt: "consent",
+		});
+
+		expect(url.search).toMatch(/^\?&[^&]/);
+		expect(url.searchParams.getAll("prompt")).toEqual(["consent"]);
+	});
+
+	it("replaces an authorization endpoint parameter named `?`", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			authorizationEndpoint: "https://idp.example/authorize?tenant=acme&?",
+			additionalParams: { "?": "new" },
+		});
+
+		expect(url.searchParams.getAll("?")).toEqual(["new"]);
+		expect(url.search).toMatch(/^\?tenant=acme&[^&]/);
 	});
 
 	it("replaces an authorization endpoint query parameter it also sets", async () => {
