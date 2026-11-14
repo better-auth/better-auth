@@ -67,7 +67,7 @@ describe("createMcpProtectedRequestHandler", () => {
 
 		expect(response.status).toBe(401);
 		expect(response.headers.get("WWW-Authenticate")).toBe(
-			'Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/mcp"',
+			'Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/mcp", DPoP resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/mcp", algs="EdDSA ES256 ES512 PS256 RS256"',
 		);
 	});
 

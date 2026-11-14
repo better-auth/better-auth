@@ -194,7 +194,7 @@ describe("resource server challenge", () => {
 			{ dpopSigningAlgorithms: ["ES256"], challengeScopes: ["files:read"] },
 		) as APIError;
 		expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
-			'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", scope="files:read", DPoP scope="files:read", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", algs="ES256"',
+			'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", scope="files:read", DPoP resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", scope="files:read", algs="ES256"',
 		);
 		expect(challenge.body).not.toHaveProperty("error");
 	});

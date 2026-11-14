@@ -330,8 +330,8 @@ export function buildMissingCredentialsChallenge(
 		scopeParam,
 	]);
 	const dpop = buildChallenge("DPoP", resource, opts, (metadataUrl) => [
-		scopeParam,
 		resourceMetadataParam(metadataUrl),
+		scopeParam,
 		algsParam(opts?.dpopSigningAlgorithms),
 	]);
 	return `${bearer}, ${dpop}`;
