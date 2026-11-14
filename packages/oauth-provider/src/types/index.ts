@@ -338,12 +338,12 @@ export interface IssueAuthorizationCodeParams {
 	 * The authorization request parameters, as `/oauth2/authorize` accepts
 	 * them, usually the request body. `redirect_uri` is optional: without it
 	 * the code is only returned, and the token request must omit
-	 * `redirect_uri` too (RFC 6749 §4.1.3). `client_id` may be left out when
-	 * the client authenticates with HTTP Basic; when present, it must match
-	 * the authenticated client. Client credentials in the query, such as
-	 * `client_secret`, are used to authenticate the client and are not stored.
-	 * A `request_uri` or `request` object is not accepted; pass the parameters
-	 * themselves.
+	 * `redirect_uri` too (RFC 6749 §4.1.3). The client authenticates with the
+	 * HTTP request itself, its body or `Authorization` header, not with this
+	 * query. `client_id` may be left out; when present, it must match the
+	 * authenticated client. Client credentials in the query, such as the
+	 * `client_secret` of a forwarded body, are not stored. A `request_uri` or
+	 * `request` object is not accepted; pass the parameters themselves.
 	 */
 	query: Omit<
 		StoredAuthorizationQuery,
@@ -431,8 +431,9 @@ export interface OAuthProviderApi {
 	 * `/oauth2/authorize` returns for an invalid client or request.
 	 *
 	 * The client sends this request directly, so it is handled as
-	 * `/oauth2/par` handles a push: a confidential client must authenticate
-	 * with the credentials it uses at the token endpoint, a public client is
+	 * `/oauth2/par` handles a push: a confidential client must authenticate on
+	 * the HTTP request with the credentials it uses at the token endpoint,
+	 * read from the request body or `Authorization` header, a public client is
 	 * identified by `client_id`, and a DPoP proof on the request binds the code
 	 * to its key (RFC 9449 §10). With `dpop.nonce.required`, the nonce
 	 * challenge runs before client authentication, so a retry can resend a

@@ -126,7 +126,7 @@ export const codeIssuer = () =>
 
 The client sends this request directly, so the provider handles it as `/oauth2/par` handles a pushed request:
 
-* A confidential client must send the credentials it uses at the token endpoint. Without this check, anyone who copies the client's requests could start authorization in its name. The provider leaves the credentials out of the stored request.
+* A confidential client must send the credentials it uses at the token endpoint, in the request body or the `Authorization` header. The provider reads them from the request your endpoint received, not from `query`. Without this check, anyone who copies the client's requests could start authorization in its name. The provider leaves the credentials out of the stored request.
 * A public client, such as most native apps, is identified by its `client_id` alone. It has no credentials, so its `client_id` does not prove which app sent the request.
 * A `DPoP` proof on the request binds the code to its key ([RFC 9449 §10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)). The client must then prove the same key at the token endpoint. A `dpop_jkt` that names a different key fails with `invalid_request`. Do not also call `verifyDpopProof` on this request, because a second verification rejects the proof as replayed.
 * With `dpop.nonce.required` on, a proof without a current nonce fails with `use_dpop_nonce` before client authentication. The client's retry can then reuse a one-time client assertion.

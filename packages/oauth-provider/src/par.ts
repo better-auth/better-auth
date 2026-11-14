@@ -43,7 +43,7 @@ const CLIENT_AUTHENTICATION_PARAMETERS = [
 ] as const;
 
 /** Copies `params` without the client authentication parameters. */
-export function withoutClientAuthentication(
+function withoutClientAuthentication(
 	params: Record<string, unknown>,
 ): Record<string, unknown> {
 	const copy = { ...params };
