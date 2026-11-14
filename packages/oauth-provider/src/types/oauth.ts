@@ -43,6 +43,12 @@ export type Confirmation = { jkt: string } | { "x5t#S256": string };
  */
 export interface OAuthActorClaim {
 	sub: string;
+	/**
+	 * The actor's kind. `"service"` marks `sub` as a client ID, which a pairwise
+	 * client sees unchanged. Any other value, or none, marks `sub` as a user ID,
+	 * which a pairwise client sees as its pairwise subject for that user.
+	 */
+	sub_profile?: string;
 	act?: OAuthActorClaim;
 	[claim: string]: unknown;
 }

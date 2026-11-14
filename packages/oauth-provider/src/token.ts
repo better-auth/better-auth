@@ -334,10 +334,15 @@ async function createJwtAccessToken(
 	const subject = user
 		? await resolveAccessTokenSubject(
 				ctx,
-				user.id,
-				client,
 				opts,
-				overrides?.act,
+				{
+					sub: user.id,
+					...(overrides?.act ? { act: overrides.act } : {}),
+					...(overrides?.accessTokenClaims?.may_act !== undefined
+						? { may_act: overrides.accessTokenClaims.may_act }
+						: {}),
+				},
+				client,
 			)
 		: {
 				sub: client.clientId,

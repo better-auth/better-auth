@@ -707,16 +707,21 @@ To get that token, register the service for both grants, `grant_types: [TOKEN_EX
 {
   "sub": "user_123",
   "client_id": "mcp-server",
-  "act": { "sub": "mcp-server" }
+  "act": {
+    "sub": "mcp-server",
+    "sub_profile": "service"
+  }
 }
 ```
 
-`act.sub` is the actor token's subject. For a `client_credentials` token, it is the client ID. For a user's token issued to the service, it is that user's ID. Introspection returns `act` for JWT and opaque access tokens.
+`act.sub` is the actor token's subject. For a `client_credentials` token, it is the client ID. For a user's token issued to the service, it is that user's ID. `act.sub_profile` names the actor's kind: `"service"` for a client and `"user"` for a user. Introspection returns `act` for JWT and opaque access tokens.
 
 When the exchanged token's client uses [pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers), it can see each user in `act` as the `sub` it sees for that user, instead of the user ID. Where it sees those values depends on the token format:
 
 * Introspection always returns those values.
 * A JWT access token carries them with `accessTokenSubject: "pairwise"`. With the default `accessTokenSubject: "user"`, the JWT carries user IDs in `act`, as it does in `sub`.
+
+A service named in `act` keeps its client ID, because its entry is marked `"service"`. That still holds after the service's client is deleted. A pairwise client sees an entry without `sub_profile`, such as one from a token delegated before the provider added it, as a user.
 
 `allowExchange`, `actorClaims`, and the [provider API](/docs/plugins/oauth-provider/reference#provider-extensions) receive user IDs.
 
@@ -728,7 +733,11 @@ A delegated token can be exchanged again. When the next service sends its own ac
 {
   "act": {
     "sub": "billing-service",
-    "act": { "sub": "mcp-server" }
+    "sub_profile": "service",
+    "act": {
+      "sub": "mcp-server",
+      "sub_profile": "service"
+    }
   }
 }
 ```
@@ -763,14 +772,19 @@ A token the client got by exchanging a user's token is also issued to the client
 
 #### Limit who may act with `may_act`
 
-A subject token with a `may_act` claim ([RFC 8693 §4.4](https://datatracker.ietf.org/doc/html/rfc8693#section-4.4)) names the only actor allowed to act for its user. The provider never adds `may_act` itself. Add it with `customAccessTokenClaims`, which also covers opaque tokens at introspection:
+A subject token with a `may_act` claim ([RFC 8693 §4.4](https://datatracker.ietf.org/doc/html/rfc8693#section-4.4)) names who may act for its user. The provider never adds `may_act` itself. Add it with `customAccessTokenClaims`, which also covers opaque tokens at introspection:
 
 ```ts title="auth.ts"
 oauthProvider({
   // ...
   customAccessTokenClaims: ({ resources }) =>
     resources?.includes("https://mcp.example.com")
-      ? { may_act: { sub: process.env.MCP_SERVER_CLIENT_ID } }
+      ? {
+          may_act: {
+            sub: process.env.MCP_SERVER_CLIENT_ID,
+            sub_profile: "service",
+          },
+        }
       : {},
 }),
 ```
@@ -778,12 +792,22 @@ oauthProvider({
 Every member of `may_act` must match the actor:
 
 * `sub` must equal the actor's `act.sub`.
+* `sub_profile` must equal the actor's kind: `"service"` or `"user"`.
 * `client_id` must equal the actor token's client, which is the exchanging client.
 * `iss` must equal this server's issuer.
 
-Any other member denies the exchange, because the provider cannot check it. So does an empty `may_act`. A subject token with `may_act` also cannot be exchanged without an actor token.
+Any other member denies the exchange, because the provider cannot check it. A `may_act` without `sub` or `client_id` also denies it, because it names no one. That includes the example above when `MCP_SERVER_CLIENT_ID` is unset. A subject token with `may_act` also cannot be exchanged without an actor token.
 
-To name a user actor, set `sub` to the user ID, never to a pairwise `sub`. The client a JWT access token was issued to can read its `may_act`. A `sub` that names a user therefore shows that user's ID to a client that should only see pairwise values. To allow a service to act, prefer `client_id`, which names no user.
+To name a user actor, set `sub` to the user ID, never to a pairwise `sub`. The exchange compares the user ID.
+
+When the subject token's client uses pairwise subject identifiers, the provider presents `may_act.sub` the way it presents users in `act`. The client then sees the `sub` it sees for that user, not the user ID:
+
+* Introspection always returns that value.
+* A JWT access token carries it with `accessTokenSubject: "pairwise"`. With the default `accessTokenSubject: "user"`, the JWT carries the user ID in `may_act`, as it does in `sub`.
+
+The provider treats every `sub` as a user ID unless `sub_profile` is `"service"`, and shows a `"service"` `sub` to every client unchanged. Use `"service"` only for client IDs. To name a service by `sub`, set `sub_profile: "service"`, as in the example above. Otherwise, a pairwise client sees a value that matches no client ID. To allow a service without naming a `sub`, use `client_id`. It also allows users whose actor tokens were issued to that client.
+
+Other `may_act` members, such as an email address, reach the client as you wrote them.
 
 #### Add fields to the actor
 
@@ -793,13 +817,15 @@ To name a user actor, set `sub` to the user ID, never to a pairwise `sub`. The c
 oauthTokenExchange({
   delegation: {
     actorClaims: ({ actor }) => ({
-      actor_type: actor.user ? "user" : "service",
+      actor_issued_at: actor.token.iat,
     }),
   },
 });
 ```
 
-The provider ignores the fields `sub`, `iss`, and `act` and logs a warning. The hook cannot change who acted or the earlier actors.
+The fields you return reach the token's client and its resource servers as you wrote them, even for a pairwise client. Do not return a user ID or another value that identifies a user to clients that should see only pairwise values.
+
+The provider ignores the fields `sub`, `sub_profile`, `iss`, and `act` and logs a warning. The hook cannot change who acted, the actor's kind, or the earlier actors.
 
 `act` belongs to the authorization server, like `cnf`. `customAccessTokenClaims`, claim contributors, and resource `customClaims` cannot set it.
 

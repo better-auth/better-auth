@@ -1733,13 +1733,16 @@ describe("oauthTokenExchange delegation", () => {
 		const { data, error } = await delegate();
 		expect(error).toBeNull();
 		const issued = decodeJwt(data!.access_token);
-		expect(issued.act).toEqual({ sub: delegator.client_id });
+		expect(issued.act).toEqual({
+			sub: delegator.client_id,
+			sub_profile: "service",
+		});
 		expect(issued.sub).toBe(
 			decodeJwt((await userTokenForMcp()).access_token).sub,
 		);
 		expect(await introspect(data!.access_token, delegator)).toMatchObject({
 			active: true,
-			act: { sub: delegator.client_id },
+			act: { sub: delegator.client_id, sub_profile: "service" },
 		});
 	});
 
@@ -1753,7 +1756,7 @@ describe("oauthTokenExchange delegation", () => {
 		expect(data!.access_token.split(".")).toHaveLength(1);
 		expect(await introspect(data!.access_token, delegator)).toMatchObject({
 			active: true,
-			act: { sub: delegator.client_id },
+			act: { sub: delegator.client_id, sub_profile: "service" },
 		});
 	});
 
@@ -1765,7 +1768,8 @@ describe("oauthTokenExchange delegation", () => {
 		expect(error).toBeNull();
 		expect(decodeJwt(data!.access_token).act).toEqual({
 			sub: downstream.client_id,
-			act: { sub: delegator.client_id },
+			sub_profile: "service",
+			act: { sub: delegator.client_id, sub_profile: "service" },
 		});
 	});
 
@@ -1780,7 +1784,8 @@ describe("oauthTokenExchange delegation", () => {
 		expect(error).toBeNull();
 		expect((await introspect(data!.access_token, downstream))?.act).toEqual({
 			sub: downstream.client_id,
-			act: { sub: delegator.client_id },
+			sub_profile: "service",
+			act: { sub: delegator.client_id, sub_profile: "service" },
 		});
 	});
 
@@ -1796,6 +1801,7 @@ describe("oauthTokenExchange delegation", () => {
 		expect(error).toBeNull();
 		expect(decodeJwt(data!.access_token).act).toEqual({
 			sub: delegator.client_id,
+			sub_profile: "service",
 		});
 	});
 
@@ -1933,7 +1939,7 @@ describe("oauthTokenExchange delegation", () => {
 					sub: delegator.client_id,
 					token: expect.objectContaining({ client_id: delegator.client_id }),
 				}),
-				act: { sub: delegator.client_id },
+				act: { sub: delegator.client_id, sub_profile: "service" },
 			}),
 		);
 	});
@@ -1952,6 +1958,7 @@ describe("oauthTokenExchange delegation", () => {
 			sub: "forged",
 			iss: "https://evil.example.com",
 			act: { sub: "forged" },
+			sub_profile: "user",
 			actor_type: "service",
 		}));
 		const { delegator, downstream, delegate, redelegate } =
@@ -1959,13 +1966,19 @@ describe("oauthTokenExchange delegation", () => {
 		const first = await delegate();
 		expect(decodeJwt(first.data!.access_token).act).toEqual({
 			sub: delegator.client_id,
+			sub_profile: "service",
 			actor_type: "service",
 		});
 		const { data } = await redelegate(first.data!.access_token);
 		expect(decodeJwt(data!.access_token).act).toEqual({
 			sub: downstream.client_id,
+			sub_profile: "service",
 			actor_type: "service",
-			act: { sub: delegator.client_id, actor_type: "service" },
+			act: {
+				sub: delegator.client_id,
+				sub_profile: "service",
+				actor_type: "service",
+			},
 		});
 	});
 
@@ -1994,6 +2007,7 @@ describe("oauthTokenExchange delegation", () => {
 		const delegated = await delegate();
 		expect(decodeJwt(delegated.data!.access_token).act).toEqual({
 			sub: delegator.client_id,
+			sub_profile: "service",
 		});
 	});
 
@@ -2036,7 +2050,8 @@ describe("oauthTokenExchange delegation", () => {
 		const { data } = await redelegate(first.data!.access_token);
 		expect(decodeJwt(data!.access_token).act).toEqual({
 			sub: downstream.client_id,
-			act: { sub: delegator.client_id },
+			sub_profile: "service",
+			act: { sub: delegator.client_id, sub_profile: "service" },
 		});
 	});
 
@@ -2123,6 +2138,7 @@ describe("oauthTokenExchange delegation", () => {
 		expect(error).toBeNull();
 		expect(decodeJwt(data!.access_token).act).toEqual({
 			sub: delegator.client_id,
+			sub_profile: "service",
 		});
 		expect(lookup).not.toHaveBeenCalledWith(delegator.client_id);
 		lookup.mockRestore();
@@ -2166,6 +2182,7 @@ describe("oauthTokenExchange delegation", () => {
 			const { delegator, delegate, state } = await bootWithMayAct();
 			state.mayAct = {
 				sub: delegator.client_id,
+				sub_profile: "service",
 				client_id: delegator.client_id,
 				iss: issuer,
 			};
@@ -2173,6 +2190,7 @@ describe("oauthTokenExchange delegation", () => {
 			expect(error).toBeNull();
 			expect(decodeJwt(data!.access_token).act).toEqual({
 				sub: delegator.client_id,
+				sub_profile: "service",
 			});
 		});
 
@@ -2182,6 +2200,9 @@ describe("oauthTokenExchange delegation", () => {
 			["a member it cannot evaluate", { sub: "delegator", email: "a@b.c" }],
 			["a value that is not an object", "delegator"],
 			["an empty object", {}],
+			// A `sub` that was undefined when the JWT was signed leaves only these.
+			["only a kind", { sub_profile: "service" }],
+			["only an issuer", { iss: issuer }],
 		])("denies %s", async (_, mayAct) => {
 			const { delegator, delegate, state } = await bootWithMayAct();
 			state.mayAct =
@@ -2300,7 +2321,10 @@ describe("oauthTokenExchange delegation", () => {
 			expect(error).toBeNull();
 			const issued = decodeJwt(data!.access_token);
 			expect(issued.cnf).toEqual(certificate);
-			expect(issued.act).toEqual({ sub: service.client_id });
+			expect(issued.act).toEqual({
+				sub: service.client_id,
+				sub_profile: "service",
+			});
 		});
 
 		it.each([
@@ -2372,7 +2396,10 @@ describe("oauthTokenExchange delegation", () => {
 			expect(data?.token_type).toBe("DPoP");
 			const issued = decodeJwt(data!.access_token);
 			expect(issued.cnf).toEqual({ jkt: await deriveDpopJkt(key.publicJwk) });
-			expect(issued.act).toEqual({ sub: delegator.client_id });
+			expect(issued.act).toEqual({
+				sub: delegator.client_id,
+				sub_profile: "service",
+			});
 		});
 	});
 });
@@ -2657,11 +2684,11 @@ describe("oauthTokenExchange delegation with pairwise subjects", () => {
 		// The service already saw this value as the actor token's `sub`.
 		const actorSub = decodeJwt(actorToken.access_token).sub;
 		expect(actorSub).not.toBe(actorUser.id);
-		expect(issued.act).toEqual({ sub: actorSub });
+		expect(issued.act).toEqual({ sub: actorSub, sub_profile: "user" });
 		expect(JSON.stringify(issued)).not.toContain(actorUser.id);
 		expect(await introspect(data!.access_token, service)).toMatchObject({
 			active: true,
-			act: { sub: actorSub },
+			act: { sub: actorSub, sub_profile: "user" },
 		});
 	});
 
@@ -2674,7 +2701,9 @@ describe("oauthTokenExchange delegation with pairwise subjects", () => {
 		const { error } = await delegateAsUser();
 		expect(error).toBeNull();
 		expect(allowExchange).toHaveBeenCalledWith(
-			expect.objectContaining({ act: { sub: actorUser.id } }),
+			expect.objectContaining({
+				act: { sub: actorUser.id, sub_profile: "user" },
+			}),
 		);
 	});
 
@@ -2727,11 +2756,13 @@ describe("oauthTokenExchange delegation with pairwise subjects", () => {
 			const expectedAct = {
 				// A client actor keeps its client ID.
 				sub: downstream.client_id,
+				sub_profile: "service",
 				act: {
 					sub: await actorSubFor(downstream, {
 						resource: api,
 						redirectURI: downstreamRedirect,
 					}),
+					sub_profile: "user",
 				},
 			};
 			expect(expectedAct.act.sub).not.toBe(actorUser.id);
@@ -2752,9 +2783,13 @@ describe("oauthTokenExchange delegation with pairwise subjects", () => {
 		const { data, error } = await delegateAsUser();
 		expect(error).toBeNull();
 		// The JWT carries the user ID in `sub` and `act`, as before.
-		expect(decodeJwt(data!.access_token).act).toEqual({ sub: actorUser.id });
+		expect(decodeJwt(data!.access_token).act).toEqual({
+			sub: actorUser.id,
+			sub_profile: "user",
+		});
 		expect((await introspect(data!.access_token, service))?.act).toEqual({
 			sub: await actorSubFor(service),
+			sub_profile: "user",
 		});
 	});
 
@@ -2767,6 +2802,7 @@ describe("oauthTokenExchange delegation with pairwise subjects", () => {
 		expect(actorSub).not.toBe(actorUser.id);
 		expect((await introspect(data!.access_token, service))?.act).toEqual({
 			sub: actorSub,
+			sub_profile: "user",
 		});
 	});
 
@@ -2795,24 +2831,26 @@ describe("oauthTokenExchange delegation with pairwise subjects", () => {
 		expect(error).toBeNull();
 		const actorSub = await actorSubFor(service);
 		expect(actorSub).not.toBe(actorUser.id);
-		expect(decodeJwt(data!.access_token).act).toEqual({ sub: actorSub });
+		expect(decodeJwt(data!.access_token).act).toEqual({
+			sub: actorSub,
+			sub_profile: "user",
+		});
 		expect((await introspect(data!.access_token, service))?.act).toEqual({
 			sub: actorSub,
+			sub_profile: "user",
 		});
 	});
 
-	it("keeps every client actor's ID beyond the adapter's find-many limit", async () => {
+	it("keeps a client actor's ID after that client is deleted", async () => {
 		const {
+			auth,
 			createClient,
 			actorTokenFor,
 			actorParams,
 			exchangeAs,
 			introspect,
 			userTokenForMcp,
-		} = await bootUserActor({
-			exchange: { delegation: { maxDepth: 3 } },
-			bootOptions: { advanced: { database: { defaultFindManyLimit: 2 } } },
-		});
+		} = await bootUserActor();
 		const machine = (resources: string[]) =>
 			createClient({
 				grant_types: [TOKEN_EXCHANGE_GRANT_TYPE, "client_credentials"],
@@ -2822,14 +2860,13 @@ describe("oauthTokenExchange delegation with pairwise subjects", () => {
 				resources,
 				subject_type: "pairwise",
 			});
-		// Three client actors, one more than the limit.
-		const hops = [
-			{ requester: await machine([mcp, api]), resource: api },
-			{ requester: await machine([api, other]), resource: other },
-			{ requester: await machine([other, api]), resource: api },
-		];
+		const first = await machine([mcp, api]);
+		const second = await machine([api, other]);
 		let token = (await userTokenForMcp()).access_token;
-		for (const { requester, resource } of hops) {
+		for (const [requester, resource] of [
+			[first, api],
+			[second, other],
+		] as const) {
 			const { data, error } = await exchangeAs(requester, token, {
 				...actorParams((await actorTokenFor(requester)).access_token),
 				resource,
@@ -2837,11 +2874,83 @@ describe("oauthTokenExchange delegation with pairwise subjects", () => {
 			expect(error).toBeNull();
 			token = data!.access_token;
 		}
-		const [first, second, last] = hops.map((hop) => hop.requester);
-		expect((await introspect(token, last!))?.act).toEqual({
-			sub: last!.client_id,
-			act: { sub: second!.client_id, act: { sub: first!.client_id } },
+		await (await auth.$context).adapter.delete({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: first.client_id }],
 		});
+		expect((await introspect(token, second))?.act).toEqual({
+			sub: second.client_id,
+			sub_profile: "service",
+			act: { sub: first.client_id, sub_profile: "service" },
+		});
+	});
+
+	it.each<[string, { disableJwtPlugin?: boolean }]>([
+		["JWT", {}],
+		["opaque", { disableJwtPlugin: true }],
+	])(
+		"presents a may_act user as the sub the %s token's client sees",
+		async (_, bootOptions) => {
+			const state: { mayAct?: unknown } = {};
+			const {
+				service,
+				actorUser,
+				actorToken,
+				userTokenForMcp,
+				exchangeAs,
+				actorParams,
+				introspect,
+				actorSubFor,
+			} = await bootUserActor({
+				bootOptions,
+				providerOptions: {
+					accessTokenSubject: "pairwise",
+					customAccessTokenClaims: () =>
+						state.mayAct === undefined ? {} : { may_act: state.mayAct },
+				},
+			});
+			const actorSub = await actorSubFor(service);
+			expect(actorSub).not.toBe(actorUser.id);
+			state.mayAct = { sub: actorUser.id };
+			const subject = await userTokenForMcp({
+				requester: service,
+				scope: "openid read",
+			});
+			if (!bootOptions.disableJwtPlugin) {
+				const payload = decodeJwt(subject.access_token);
+				expect(payload.may_act).toEqual({ sub: actorSub });
+				expect(JSON.stringify(payload)).not.toContain(actorUser.id);
+			}
+			expect(
+				(await introspect(subject.access_token, service))?.may_act,
+			).toEqual({ sub: actorSub });
+			// The exchange still matches the stored user ID.
+			const { error } = await exchangeAs(
+				service,
+				subject.access_token,
+				actorParams(actorToken.access_token),
+			);
+			expect(error).toBeNull();
+		},
+	);
+
+	it("keeps a may_act client ID that is marked as a service", async () => {
+		const mayAct = { sub: "", sub_profile: "service" };
+		const { service, userTokenForMcp, introspect } = await bootUserActor({
+			providerOptions: {
+				accessTokenSubject: "pairwise",
+				customAccessTokenClaims: () => ({ may_act: mayAct }),
+			},
+		});
+		mayAct.sub = service.client_id;
+		const subject = await userTokenForMcp({
+			requester: service,
+			scope: "openid read",
+		});
+		expect(decodeJwt(subject.access_token).may_act).toEqual(mayAct);
+		expect((await introspect(subject.access_token, service))?.may_act).toEqual(
+			mayAct,
+		);
 	});
 
 	it("matches may_act against the actor's user ID", async () => {
@@ -2857,6 +2966,12 @@ describe("oauthTokenExchange delegation with pairwise subjects", () => {
 		expect((await delegateAsUser()).error?.error_description).toBe(
 			"the actor is not permitted by the subject token's may_act",
 		);
+		state.mayAct = { sub: actorUser.id, sub_profile: "service" };
+		expect((await delegateAsUser()).error?.error_description).toBe(
+			"the actor is not permitted by the subject token's may_act",
+		);
+		state.mayAct = { sub: actorUser.id, sub_profile: "user" };
+		expect((await delegateAsUser()).error).toBeNull();
 		state.mayAct = { sub: actorUser.id };
 		expect((await delegateAsUser()).error).toBeNull();
 	});

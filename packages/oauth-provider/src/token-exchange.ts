@@ -119,7 +119,7 @@ export interface OAuthTokenExchangeOptions {
 }
 
 // Names the authorization server owns inside the current actor's `act` entry.
-const RESERVED_ACTOR_CLAIMS = new Set(["sub", "iss", "act"]);
+const RESERVED_ACTOR_CLAIMS = new Set(["sub", "sub_profile", "iss", "act"]);
 
 function deny(description: string): never {
 	tokenError("BAD_REQUEST", "invalid_request", description);
@@ -219,19 +219,25 @@ async function resolveActor(
 	return { sub, user, token };
 }
 
+/** The actor's `sub_profile`: `"service"` for a client, `"user"` for a user. */
+function actorProfile(actor: OAuthTokenExchangeActor): string {
+	return actor.user ? "user" : "service";
+}
+
 // The value each `may_act` member this server can evaluate must equal.
 const MAY_ACT_MATCHERS: Record<
 	string,
 	(actor: OAuthTokenExchangeActor, issuer: string) => unknown
 > = {
 	sub: (actor) => actor.sub,
+	sub_profile: actorProfile,
 	client_id: (actor) => actor.token.client_id,
 	iss: (_, issuer) => issuer,
 };
 
 /**
- * RFC 8693 §4.4: every `may_act` member must match the actor. A member this
- * server cannot evaluate fails closed.
+ * RFC 8693 §4.4: every `may_act` member must match the actor, and `sub` or
+ * `client_id` must name it. A member this server cannot evaluate fails closed.
  */
 function mayActAllows(
 	mayAct: unknown,
@@ -239,11 +245,10 @@ function mayActAllows(
 	issuer: string,
 ): boolean {
 	if (!actor || !isRecord(mayAct)) return false;
-	const members = Object.entries(mayAct);
-	// An empty `may_act`, for example from a member whose value was undefined
-	// when the JWT was signed, names no one.
-	if (members.length === 0) return false;
-	return members.every(
+	// `iss` and `sub_profile` alone name no one, for example when `sub` was
+	// undefined when the JWT was signed and so was dropped.
+	if (mayAct.sub === undefined && mayAct.client_id === undefined) return false;
+	return Object.entries(mayAct).every(
 		([member, value]) =>
 			Object.hasOwn(MAY_ACT_MATCHERS, member) &&
 			MAY_ACT_MATCHERS[member]!(actor, issuer) === value,
@@ -395,7 +400,11 @@ async function exchangeToken(
 	// issued token keeps the subject's chain unchanged.
 	const subjectAct = subject.act as OAuthActorClaim | undefined;
 	const act: OAuthActorClaim | undefined = actor
-		? { sub: actor.sub, ...(subjectAct ? { act: subjectAct } : {}) }
+		? {
+				sub: actor.sub,
+				sub_profile: actorProfile(actor),
+				...(subjectAct ? { act: subjectAct } : {}),
+			}
 		: subjectAct;
 
 	const exchangeable = parseScopes(subject.scope as string | undefined).filter(
