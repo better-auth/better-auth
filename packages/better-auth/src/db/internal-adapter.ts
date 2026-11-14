@@ -33,6 +33,7 @@ import {
 	parseSessionOutput,
 	parseUserOutput,
 } from "./schema";
+import { scheduleSessionLimit, selectSessionsOverLimit } from "./session-limit";
 import {
 	getStorageOption,
 	processIdentifier,
@@ -293,7 +294,101 @@ export const createInternalAdapter = (
 		}
 	}
 
-	return {
+	/**
+	 * Enforces `session.maxPerUser` for the session with `token`, unless it no
+	 * longer exists or has expired.
+	 */
+	async function enforceSessionLimit(token: string, maxPerUser: number) {
+		// A hook may have deleted the session since it was created, and
+		// `findSession` returns expired sessions too.
+		const current = await internalAdapter.findSession(token);
+		if (
+			!current ||
+			new Date(current.session.expiresAt).getTime() <= Date.now()
+		) {
+			return;
+		}
+		const { session } = current;
+		// Matches the adapter factory's default `findMany` limit.
+		const pageSize = Math.max(
+			options.advanced?.database?.defaultFindManyLimit ?? 100,
+			1,
+		);
+		const attempted = new Set<string>();
+		const revoke = async (sessions: Session[]) => {
+			const tokens = selectSessionsOverLimit(
+				session,
+				sessions,
+				maxPerUser,
+			).filter((t) => !attempted.has(t));
+			// Delete hooks only see one page of the sessions a bulk delete
+			// matches, and some databases cap bound parameters at 100, so revoke
+			// in small batches.
+			const batchSize = Math.min(pageSize, 50);
+			for (let i = 0; i < tokens.length; i += batchSize) {
+				const batch = tokens.slice(i, i + batchSize);
+				for (const t of batch) attempted.add(t);
+				await internalAdapter.deleteSessions(batch);
+			}
+			return tokens.length;
+		};
+
+		if (secondaryStorage && !databaseSessionFallbackEnabled) {
+			// The cached list holds all of the user's sessions.
+			await revoke(
+				await internalAdapter.listSessions(session.userId, {
+					onlyActiveSessions: true,
+				}),
+			);
+			if (!attempted.size) return;
+			// `deleteSessions` leaves revoked tokens in the list, and every later
+			// `listSessions` reads each entry, so drop them.
+			const now = Date.now();
+			const list =
+				safeJSONParse<ActiveSessionReference[]>(
+					await secondaryStorage.get(`active-sessions-${session.userId}`),
+				) ?? [];
+			await setActiveSessionReferences(
+				session.userId,
+				list.filter((s) => s.expiresAt > now && !attempted.has(s.token)),
+				now,
+			);
+			return;
+		}
+
+		const activeSessions = (): Where[] => [
+			{ field: "userId", value: session.userId },
+			{ field: "expiresAt", value: new Date(), operator: "gt" },
+		];
+		// Most new sessions are within the limit. Counting first also keeps the
+		// read's `limit` small when `maxPerUser` is large.
+		const activeCount = await (await getCurrentAdapter(adapter)).count({
+			model: "session",
+			where: activeSessions(),
+		});
+		if (activeCount <= maxPerUser) return;
+		// Reads the newest sessions and reads again after revoking. Sessions that
+		// can't be revoked (impersonation sessions, sessions created within the
+		// same second, or revocations a delete hook vetoed) can fill a read and
+		// hide older sessions, so a read that finds nothing new to revoke widens
+		// until it covers every session.
+		let windowSize = maxPerUser + pageSize;
+		for (;;) {
+			const sessions = await (
+				await getCurrentAdapter(adapter)
+			).findMany<Session>({
+				model: "session",
+				where: activeSessions(),
+				sortBy: { field: "createdAt", direction: "desc" },
+				limit: windowSize,
+			});
+			const revoked = await revoke(sessions);
+			if (sessions.length < windowSize) return;
+			if (revoked === 0) windowSize *= 2;
+		}
+	}
+
+	const internalAdapter: InternalAdapter = {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt">,
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
@@ -686,6 +781,13 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 			);
+			const maxPerUser = options.session?.maxPerUser;
+			if (res && maxPerUser !== undefined && !res.impersonatedBy) {
+				await scheduleSessionLimit({
+					enforce: () => enforceSessionLimit(res.token, maxPerUser),
+					logger,
+				});
+			}
 			return res as Session;
 		},
 		findSession: async (
@@ -1771,4 +1873,5 @@ export const createInternalAdapter = (
 		},
 		refreshUserSessions,
 	};
+	return internalAdapter;
 };

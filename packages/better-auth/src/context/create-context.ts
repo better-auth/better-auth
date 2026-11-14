@@ -145,6 +145,22 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 		}
 	}
 
+	const maxSessionsPerUser = options.session?.maxPerUser;
+	if (
+		maxSessionsPerUser !== undefined &&
+		(!Number.isSafeInteger(maxSessionsPerUser) || maxSessionsPerUser < 1)
+	) {
+		throw new BetterAuthError(
+			`session.maxPerUser must be a positive integer, received ${maxSessionsPerUser}.`,
+		);
+	}
+	// Stateless sessions live in cookies, so there is nothing to revoke.
+	if (maxSessionsPerUser !== undefined && !isStateful) {
+		throw new BetterAuthError(
+			"session.maxPerUser needs a database or secondaryStorage to revoke sessions.",
+		);
+	}
+
 	const baseURL = isDynamicConfig
 		? undefined
 		: getBaseURL(

@@ -292,6 +292,36 @@ describe("base context creation", () => {
 			expect(res.sessionConfig.freshAge).toBe(0);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12342
+		 */
+		it.each([
+			0,
+			-1,
+			1.5,
+			Number.NaN,
+			Number.POSITIVE_INFINITY,
+			Number.MAX_VALUE,
+		])("should reject session.maxPerUser = %s", async (maxPerUser) => {
+			await expect(initBase({ session: { maxPerUser } })).rejects.toThrow(
+				"session.maxPerUser must be a positive integer",
+			);
+		});
+
+		it("should accept a positive integer session.maxPerUser", async () => {
+			const res = await initBase({
+				database: new DatabaseSync(":memory:"),
+				session: { maxPerUser: 1 },
+			});
+			expect(res.options.session?.maxPerUser).toBe(1);
+		});
+
+		it("should reject session.maxPerUser without a server-side session store", async () => {
+			await expect(initBase({ session: { maxPerUser: 1 } })).rejects.toThrow(
+				"session.maxPerUser needs a database or secondaryStorage",
+			);
+		});
+
 		it("should return false for cookieRefreshCache when undefined", async () => {
 			const res = await initBase({
 				database: new DatabaseSync(":memory:"),
