@@ -4531,11 +4531,11 @@ describe("oauth2", async () => {
 	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation
 	 */
 	describe("discovered issuer", () => {
-		function serveDiscovery(discoveryUrl: string, issuer: string) {
+		function serveDiscovery(discoveryUrl: string, issuer?: string) {
 			mswServer.use(
 				http.get(discoveryUrl, () =>
 					HttpResponse.json({
-						issuer,
+						...(issuer === undefined ? {} : { issuer }),
 						authorization_endpoint: "https://idp.test/authorize",
 						token_endpoint: "https://idp.test/token",
 					}),
@@ -4609,6 +4609,20 @@ describe("oauth2", async () => {
 
 			expect(await registeredIssuer({ discoveryUrl })).toBeUndefined();
 			expect(await registeredIssuer({ discoveryUrl, issuer })).toBe(issuer);
+		});
+
+		it("skips a provider with a non-well-known discovery URL whose document has no issuer", async () => {
+			const discoveryUrl = "https://idp.test/oauth/metadata";
+			serveDiscovery(discoveryUrl);
+
+			expect(await registeredIssuer({ discoveryUrl })).toBeUndefined();
+		});
+
+		it("skips a provider whose discovered issuer differs from the discovery URL outside its origin", async () => {
+			const discoveryUrl = "https://idp.test/.well-known/openid-configuration";
+			serveDiscovery(discoveryUrl, "https://attacker@idp.test");
+
+			expect(await registeredIssuer({ discoveryUrl })).toBeUndefined();
 		});
 
 		it("skips a provider whose discovery document does not match the configured issuer", async () => {

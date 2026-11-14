@@ -110,34 +110,26 @@ const WELL_KNOWN_DOCUMENTS = [
 ] as const;
 
 /**
- * Whether `issuer` is the issuer identifier `discoveryUrl` was built from, or
- * `undefined` when `discoveryUrl` is not a well-known URL.
+ * The issuer identifiers `discoveryUrl` can be built from, or `undefined` when
+ * it is not a well-known URL.
  *
  * OpenID Connect Discovery 1.0 §4 appends the well-known path to the issuer,
- * after removing a trailing slash. RFC 8414 §3.1 inserts it between the host
- * and the issuer's path.
+ * and RFC 8414 §3.1 inserts it between the host and the issuer's path. Both
+ * remove a terminating `/` from the issuer first.
  */
-function isIssuerOfDiscoveryUrl(
-	issuer: string,
-	discoveryUrl: string,
-): boolean | undefined {
-	const discovery = new URL(discoveryUrl);
-	if (!discovery.pathname.includes("/.well-known/")) return undefined;
-	let issuerUrl: URL;
-	try {
-		issuerUrl = new URL(issuer);
-	} catch {
-		return false;
+function issuersOfDiscoveryUrl(discoveryUrl: string): string[] | undefined {
+	const { origin, pathname } = new URL(discoveryUrl);
+	const issuers: string[] = [];
+	for (const document of WELL_KNOWN_DOCUMENTS) {
+		const wellKnown = `/.well-known/${document}`;
+		if (pathname.endsWith(wellKnown)) {
+			issuers.push(`${origin}${pathname.slice(0, -wellKnown.length)}`);
+		}
+		if (pathname.startsWith(`${wellKnown}/`)) {
+			issuers.push(`${origin}${pathname.slice(wellKnown.length)}`);
+		}
 	}
-	if (issuerUrl.search || issuerUrl.hash) return false;
-	let path = issuerUrl.pathname;
-	while (path.endsWith("/")) path = path.slice(0, -1);
-	const target = `${discovery.origin}${discovery.pathname}`;
-	return WELL_KNOWN_DOCUMENTS.some(
-		(document) =>
-			target === `${issuerUrl.origin}${path}/.well-known/${document}` ||
-			target === `${issuerUrl.origin}/.well-known/${document}${path}`,
-	);
+	return issuers.length > 0 ? issuers : undefined;
 }
 
 /**
@@ -154,11 +146,16 @@ function checkDiscoveredIssuer(
 			? undefined
 			: `discovery issuer "${discoveredIssuer}" does not match the configured issuer "${config.issuer}".`;
 	}
-	if (discoveredIssuer === undefined) return undefined;
-	const matches = isIssuerOfDiscoveryUrl(discoveredIssuer, discoveryUrl);
-	if (matches === undefined) {
+	const expected = issuersOfDiscoveryUrl(discoveryUrl);
+	if (!expected) {
 		return `discoveryUrl "${discoveryUrl}" is not a well-known URL, so its issuer cannot be checked. Set issuer to the issuer identifier the provider documents.`;
 	}
+	if (discoveredIssuer === undefined) return undefined;
+	// Issuer identifiers compare as exact strings, apart from the terminating `/`.
+	const matches = expected.some(
+		(issuer) =>
+			discoveredIssuer === issuer || discoveredIssuer === `${issuer}/`,
+	);
 	return matches
 		? undefined
 		: `discovery issuer "${discoveredIssuer}" is not the issuer of discoveryUrl "${discoveryUrl}". If the provider publishes its document under another name for the same issuer, set issuer to the issuer identifier the provider documents.`;

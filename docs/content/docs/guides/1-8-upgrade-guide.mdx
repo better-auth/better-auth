@@ -146,7 +146,7 @@ Unless `issuer` is set, `discoveryUrl` must now be a well-known URL, and the dis
 
 A common case is an issuer with a path, such as `https://auth.example.com/api/auth`, whose discovery document is read from the root, `https://auth.example.com/.well-known/openid-configuration`. That URL belongs to the issuer `https://auth.example.com`, so the provider is now skipped.
 
-**What to do:** if a provider is skipped after the upgrade, check its documentation for its issuer identifier. For an issuer with a path, point `discoveryUrl` at `{issuer}/.well-known/openid-configuration`. If the provider publishes discovery at a path that is not a well-known URL, or under another name for the same issuer, such as a tenant domain instead of the tenant ID, set `issuer` to that identifier. See [`issuer`](/docs/plugins/generic-oauth#configuration).
+**What to do:** if a provider is skipped after the upgrade, check its documentation for its issuer identifier. For an issuer with a path, point `discoveryUrl` at the provider's documented well-known URL for that issuer: either `{issuer}/.well-known/openid-configuration`, or the RFC 8414 form with `/.well-known/oauth-authorization-server` inserted between the host and the issuer's path. If the provider publishes discovery at a path that is not a well-known URL, or under another name for the same issuer, such as a tenant domain instead of the tenant ID, set `issuer` to that identifier. See [`issuer`](/docs/plugins/generic-oauth#configuration).
 
 ### New Generic OAuth and client options
 

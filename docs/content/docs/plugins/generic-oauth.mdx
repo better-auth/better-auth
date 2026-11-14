@@ -220,6 +220,7 @@ interface GenericOAuthConfig {
     context: OAuthAccountKeyContext<GenericOAuthUserInfo>,
   ) => string | number | Promise<string | number>;
   discoveryUrl?: string;
+  issuer?: string;
   requireIdTokenVerification?: boolean;
   authorizationUrl?: string;
   pushedAuthorizationRequest?: boolean | "auto";
@@ -256,7 +257,7 @@ interface GenericOAuthConfig {
 **issuer**: (Optional) The provider's issuer identifier, used only with `discoveryUrl`. A discovery document for another issuer could point sign-in at endpoints and keys that belong to a different server, so Better Auth checks the document's `issuer` before using it:
 
 * With `issuer` set, the document's `issuer` must equal it exactly.
-* Without `issuer`, `discoveryUrl` must be a well-known URL, and the document's `issuer` must be the one it is built from. Both the OpenID Connect form, `https://idp.example.com/tenant/.well-known/openid-configuration`, and the RFC 8414 form, `https://idp.example.com/.well-known/oauth-authorization-server/tenant`, are recognized, with or without a trailing slash on the issuer.
+* Without `issuer`, `discoveryUrl` must be a well-known URL, and the document's `issuer` must be the one it is built from. Both the OpenID Connect form, `https://idp.example.com/tenant/.well-known/openid-configuration`, and the RFC 8414 form, `https://idp.example.com/.well-known/oauth-authorization-server/tenant`, are recognized. The document's `issuer` must match exactly, apart from one optional trailing slash.
 
 When the issuer does not match, Better Auth logs an error and skips the provider. Some providers publish discovery under another name for the same issuer, for example a tenant domain in the URL and the tenant ID in `issuer`. Other providers publish discovery at a path that is not a well-known URL, such as `/oauth/metadata`, so the issuer cannot be derived from it. For both, set `issuer` to the issuer identifier the provider documents. Do not copy the value from an error message without checking it against the provider's documentation.
 
