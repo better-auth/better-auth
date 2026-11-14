@@ -257,6 +257,9 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 				}
 				throw ctx.redirect(payload.callbackURL);
 			}
+			const provider = ctx.context.socialProviders.find(
+				(p) => p.id === payload.account.providerId,
+			);
 			let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 			try {
 				result = await handleOAuthUserInfo(ctx, {
@@ -264,6 +267,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					account: payload.account,
 					callbackURL: payload.callbackURL,
 					disableSignUp: payload.disableSignUp,
+					overrideUserInfo: provider?.options?.overrideUserInfoOnSignIn,
 					source: {
 						method: "oauth",
 						oauth: {
@@ -533,13 +537,16 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							proxyCallbackURL.searchParams.get("callbackURL") ||
 							stateData.callbackURL;
 
+						// Spread mapped fields from mapProfileToUser (and provider
+						// defaults) the same way /callback/:id does, so additional
+						// user schema fields survive the production → preview relay.
+						// @see https://github.com/better-auth/better-auth/issues/12429
 						const payload: PassthroughPayload = {
 							userInfo: {
+								...userInfo,
 								id: accountKey.accountId,
 								email: userInfo.email,
 								name: userInfo.name || "",
-								image: userInfo.image,
-								emailVerified: userInfo.emailVerified,
 							},
 							profile: providerProfile,
 							scopes: tokens.scopes,
