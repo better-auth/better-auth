@@ -825,7 +825,7 @@ export function validateClientScopes(
 	}
 }
 
-function throwInvalidClient(
+export function throwInvalidClient(
 	errorDescription: string,
 	authentication?: {
 		method?: TokenEndpointAuthMethod;

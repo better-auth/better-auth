@@ -944,6 +944,12 @@ importers:
 
   e2e/integration/vanilla-node:
     dependencies:
+      '@better-auth/ciba':
+        specifier: workspace:*
+        version: link:../../../packages/ciba
+      '@better-auth/cimd':
+        specifier: workspace:*
+        version: link:../../../packages/cimd
       '@better-auth/oauth-provider':
         specifier: workspace:*
         version: link:../../../packages/oauth-provider

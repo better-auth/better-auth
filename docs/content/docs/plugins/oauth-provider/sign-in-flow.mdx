@@ -65,7 +65,7 @@ The authorize endpoint uses only the pushed parameters. It ignores any other par
 
 ### Bind the code to a DPoP key
 
-A client can send a `DPoP` proof with the push. Its `htm` must be `POST`, and its `htu` must be the full public URL of `/oauth2/par`. Behind a proxy, set `baseURL` to the public URL so the server checks the same value. The server then binds the authorization code to that key ([RFC 9449 §10.1](https://datatracker.ietf.org/doc/html/rfc9449#section-10.1)). The token request must carry a proof signed by the same key. A pushed `dpop_jkt` that names a different key fails with `invalid_request`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
+A client can send a `DPoP` proof with the push. Its `htm` must be `POST`, and its `htu` must be the full public URL of `/oauth2/par`. Behind a proxy, set `baseURL` to the public URL so the server checks the same value. The server then binds the authorization code to that key ([RFC 9449 §10.1](https://datatracker.ietf.org/doc/html/rfc9449#section-10.1)). The token request must carry a proof signed by the same key. A pushed `dpop_jkt` that names a different key fails with `invalid_dpop_proof`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
 
 ### Require pushed requests
 
@@ -84,6 +84,8 @@ To require it from one client, register the client with `require_pushed_authoriz
 
 An authorization request without `request_uri` then fails with `invalid_request` and the description `pushed authorization request is required`. With `required: true`, discovery also advertises `require_pushed_authorization_requests: true`. The login, consent, and other screens keep working, because they resume from the signed query.
 
+The policy applies to `/oauth2/authorize`. It does not apply to codes that your own endpoint issues with `issueAuthorizationCode`. See [Issue codes from your own endpoint](#issue-codes-from-your-own-endpoint).
+
 ### Resolve your own request URIs
 
 `requestUriResolver` resolves `request_uri` values that your own endpoint issues. With both PAR options set, the authorize endpoint first looks up values that `/oauth2/par` issued, and calls your resolver for any other value, including one that expired or was already used. Return `null` for values you did not issue. A request your resolver returns counts as pushed under a required policy.
@@ -92,7 +94,7 @@ Your resolver must enforce what the built-in endpoint does: each value expires q
 
 ## Issue codes from your own endpoint
 
-A plugin endpoint can complete authorization for a signed-in user and return the authorization code itself, instead of sending the user through `/oauth2/authorize`. A native app that signs the user in with its own UI is one example. Call `issueAuthorizationCode` on the provider API with the authorization request parameters and the user's session:
+A plugin endpoint can complete authorization for a signed-in user and return the authorization code itself, instead of sending the user through `/oauth2/authorize`. A native app that signs the user in with its own UI is one example. Call `issueAuthorizationCode` on the provider API with the client's request parameters and the user's session:
 
 ```ts title="code-issuer-plugin.ts"
 import { getOAuthProviderApi } from "@better-auth/oauth-provider";
@@ -111,10 +113,8 @@ export const codeIssuer = () =>
             ctx,
             ctx.context.getPlugin("oauth-provider")!.options,
           );
-          // Binds the code to the client's DPoP key when it sends a proof.
-          const proof = await provider.verifyDpopProof();
           const { code } = await provider.issueAuthorizationCode({
-            query: { ...ctx.body, dpop_jkt: proof?.jkt },
+            query: ctx.body,
             session: ctx.context.session,
           });
           return ctx.json({ authorization_code: code });
@@ -124,7 +124,16 @@ export const codeIssuer = () =>
   }) satisfies BetterAuthPlugin;
 ```
 
-The provider checks the request as `/oauth2/authorize` does: the client, scopes, claims, resources, and PKCE. The session you pass is the account the code is for, so account selection does not run. It issues the code only when the client has `skip_consent` or the user already consented to everything requested. Any step that would show a page fails instead, with a 400 error:
+The client sends this request directly, so the provider handles it as `/oauth2/par` handles a pushed request:
+
+* A confidential client must send the credentials it uses at the token endpoint, in the request body or the `Authorization` header. The provider reads them from the request your endpoint received, not from `query`. Without this check, anyone who copies the client's requests could start authorization in its name. The provider leaves the credentials out of the stored request. A `client_id` that names another client fails with `invalid_client`.
+* A public client, such as most native apps, is identified by its `client_id` alone. It has no credentials, so its `client_id` does not prove which app sent the request.
+* A `DPoP` proof on the request binds the code to its key ([RFC 9449 §10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)). The client must then prove the same key at the token endpoint. A `dpop_jkt` that names a different key fails with `invalid_dpop_proof`, and the proof stays usable for a corrected request. Do not also call `verifyDpopProof` on this request, because a second verification rejects the proof as replayed.
+* With `dpop.nonce.required` on, a proof without a current nonce fails with `use_dpop_nonce` before client authentication. The client's retry can then reuse a one-time client assertion.
+
+If your endpoint accepts `application/x-www-form-urlencoded` bodies, set `cloneRequest: true` in its endpoint options. Client authentication re-reads the raw form body.
+
+The provider then checks the request as `/oauth2/authorize` does: the client, scopes, claims, resources, and PKCE. The session you pass is the account the code is for, so account selection does not run. It issues the code only when the client has `skip_consent` or the user already consented to everything requested. Any step that would show a page fails instead, with a 400 error:
 
 | Error                  | When                                                                                                                       |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -133,11 +142,15 @@ The provider checks the request as `/oauth2/authorize` does: the client, scopes,
 | `interaction_required` | The request has a `prompt` other than `none`, or `signup.shouldRedirect` or `postLogin.shouldRedirect` returns a redirect. |
 | `access_denied`        | The session cannot meet an essential `acr` the request names.                                                              |
 
-Send the user to `/oauth2/authorize` when you get one of these errors. Request validation errors, such as `invalid_client` or `invalid_scope`, mean the request itself is invalid, as they do at `/oauth2/authorize`. Errors your own hooks throw, such as from `consentReferenceId`, pass through unchanged. Pass the request parameters themselves: a `request_uri` or `request` object is rejected.
+Send the user to `/oauth2/authorize` when you get one of these errors. Request validation errors, such as `invalid_client` or `invalid_scope`, mean the request itself is invalid, as they do at `/oauth2/authorize`. Errors your own hooks throw, such as from `consentReferenceId`, pass through unchanged.
+
+Pass the request parameters themselves. A `request_uri` fails with `invalid_request`, including one from `/oauth2/par`. That reference is for the browser step of `/oauth2/authorize`. A `request` object fails with `request_not_supported`.
+
+A [required PAR policy](#require-pushed-requests) does not apply here, whether you set it for every client or the client registered it. The policy keeps authorization parameters out of the browser URL. Your endpoint receives them in a direct, client-authenticated request, as `/oauth2/par` does.
 
 `redirect_uri` is optional. When the request has one, it must be registered for the client, and the result's `redirectURL` carries the code, `state`, and `iss`. Without one, the token request must omit `redirect_uri` too ([RFC 6749 §4.1.3](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3)). The code expires after `codeExpiresIn` and redeems once at the token endpoint, like a code from `/oauth2/authorize`.
 
-Your endpoint must authenticate the user before it calls `issueAuthorizationCode`. The method trusts the session you pass. To bind the code to a DPoP key ([RFC 9449 §10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)), pass the `jkt` from [`verifyDpopProof`](/docs/plugins/oauth-provider/tokens#nonces-on-your-own-endpoints) as `dpop_jkt`, as the example does. The client must then prove the same key at the token endpoint. To accept only DPoP-bound clients, call `verifyDpopProof({ required: true })`.
+Your endpoint must authenticate the user before it calls `issueAuthorizationCode`. The method trusts the session you pass.
 
 ## Login page
 
