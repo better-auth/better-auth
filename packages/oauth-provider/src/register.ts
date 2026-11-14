@@ -803,6 +803,7 @@ export interface OAuthClientRegistrationResult {
 	clientSecret?: string;
 	resources: string[];
 	created: boolean;
+	updated: boolean;
 }
 
 export interface RegisterClientMetadataDocumentInput {
@@ -844,6 +845,174 @@ function isClientRegistrationCollision(
 			candidate.kind === "oauth-client-resource-link-unique") &&
 		"cause" in candidate
 	);
+}
+
+function deepEqual(a: unknown, b: unknown): boolean {
+	if (a === b) return true;
+	if (a == null || b == null) return a === b;
+	if (typeof a !== typeof b) return false;
+
+	if (typeof a === "object") {
+		if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+		if (Array.isArray(a) && Array.isArray(b)) {
+			if (a.length !== b.length) return false;
+			for (let i = 0; i < a.length; i++) {
+				if (!deepEqual(a[i], b[i])) return false;
+			}
+			return true;
+		}
+
+		const objA = a as Record<string, unknown>;
+		const objB = b as Record<string, unknown>;
+		const keysA = Object.keys(objA);
+		const keysB = Object.keys(objB);
+
+		if (keysA.length !== keysB.length) return false;
+
+		for (const key of keysA) {
+			if (!Object.hasOwn(objB, key)) return false;
+			if (!deepEqual(objA[key], objB[key])) return false;
+		}
+
+		return true;
+	}
+
+	return false;
+}
+
+function areStringArraysEqual(
+	a: readonly string[] | null | undefined,
+	b: readonly string[] | null | undefined,
+): boolean {
+	const listA = a ?? [];
+	const listB = b ?? [];
+	if (listA.length !== listB.length) return false;
+	const sortedA = [...listA].sort();
+	const sortedB = [...listB].sort();
+	for (let i = 0; i < sortedA.length; i++) {
+		if (sortedA[i] !== sortedB[i]) return false;
+	}
+	return true;
+}
+
+function areJwksEqual(
+	a: string | null | undefined,
+	b: string | null | undefined,
+): boolean {
+	if (!a && !b) return true;
+	if (!a || !b) return false;
+	if (a === b) return true;
+	try {
+		return deepEqual(JSON.parse(a), JSON.parse(b));
+	} catch {
+		return a === b;
+	}
+}
+
+function areMetadataEqual(
+	a: Record<string, unknown> | string | null | undefined,
+	b: Record<string, unknown> | string | null | undefined,
+): boolean {
+	const parsedA = parseClientMetadata(a ?? undefined);
+	const parsedB = parseClientMetadata(b ?? undefined);
+	const keysA = Object.keys(parsedA ?? {});
+	const keysB = Object.keys(parsedB ?? {});
+	if (keysA.length === 0 && keysB.length === 0) return true;
+	if (keysA.length !== keysB.length) return false;
+	return deepEqual(parsedA, parsedB);
+}
+
+/**
+ * Compares an existing client record against refreshed metadata to determine
+ * whether any SDK-owned client metadata has changed.
+ *
+ * Operator-owned fields (`clientCredentialsScopes`, `disabled`, `skipConsent`,
+ * `enableEndSession`) and immutable audit fields (`createdAt`, `updatedAt`, `id`)
+ * are not evaluated here.
+ */
+export function hasClientMetadataChanged(
+	existing: SchemaClient<Scope[]>,
+	refreshed: Partial<SchemaClient<Scope[]>>,
+): boolean {
+	if ((existing.name ?? undefined) !== (refreshed.name ?? undefined))
+		return true;
+	if ((existing.uri ?? undefined) !== (refreshed.uri ?? undefined)) return true;
+	if ((existing.icon ?? undefined) !== (refreshed.icon ?? undefined))
+		return true;
+	if ((existing.tos ?? undefined) !== (refreshed.tos ?? undefined)) return true;
+	if ((existing.policy ?? undefined) !== (refreshed.policy ?? undefined))
+		return true;
+	if (
+		(existing.softwareId ?? undefined) !== (refreshed.softwareId ?? undefined)
+	)
+		return true;
+	if (
+		(existing.softwareVersion ?? undefined) !==
+		(refreshed.softwareVersion ?? undefined)
+	)
+		return true;
+	if (
+		(existing.softwareStatement ?? undefined) !==
+		(refreshed.softwareStatement ?? undefined)
+	)
+		return true;
+	if (
+		(existing.tokenEndpointAuthMethod ?? undefined) !==
+		(refreshed.tokenEndpointAuthMethod ?? undefined)
+	)
+		return true;
+	if (
+		(existing.applicationType ?? null) !== (refreshed.applicationType ?? null)
+	)
+		return true;
+	if ((existing.jwksUri ?? undefined) !== (refreshed.jwksUri ?? undefined))
+		return true;
+	if (
+		(existing.backchannelLogoutUri ?? undefined) !==
+		(refreshed.backchannelLogoutUri ?? undefined)
+	)
+		return true;
+	if (
+		(existing.subjectType ?? undefined) !== (refreshed.subjectType ?? undefined)
+	)
+		return true;
+
+	if (
+		(existing.requirePKCE ?? undefined) !== (refreshed.requirePKCE ?? undefined)
+	)
+		return true;
+	if (
+		Boolean(existing.dpopBoundAccessTokens) !==
+		Boolean(refreshed.dpopBoundAccessTokens)
+	)
+		return true;
+	if (
+		Boolean(existing.backchannelLogoutSessionRequired) !==
+		Boolean(refreshed.backchannelLogoutSessionRequired)
+	)
+		return true;
+
+	if (!areStringArraysEqual(existing.redirectUris, refreshed.redirectUris))
+		return true;
+	if (
+		!areStringArraysEqual(
+			existing.postLogoutRedirectUris,
+			refreshed.postLogoutRedirectUris,
+		)
+	)
+		return true;
+	if (!areStringArraysEqual(existing.contacts, refreshed.contacts)) return true;
+	if (!areStringArraysEqual(existing.grantTypes, refreshed.grantTypes))
+		return true;
+	if (!areStringArraysEqual(existing.responseTypes, refreshed.responseTypes))
+		return true;
+	if (!areStringArraysEqual(existing.scopes, refreshed.scopes)) return true;
+
+	if (!areJwksEqual(existing.jwks, refreshed.jwks)) return true;
+	if (!areMetadataEqual(existing.metadata, refreshed.metadata)) return true;
+
+	return false;
 }
 
 /**
@@ -1001,7 +1170,25 @@ async function persistOAuthClientRegistration(
 			const adapter = await getCurrentAdapter(ctx.context.adapter);
 			let storedClient: SchemaClient<Scope[]>;
 			let created = false;
+			let updated = false;
 			if (existingClient) {
+				const currentClient = await adapter.findOne<SchemaClient<Scope[]>>({
+					model: clientModel,
+					where: [
+						{ field: "clientId", value: clientId },
+						{
+							field: "clientDiscoveryId",
+							value: clientDiscoveryId,
+						},
+					],
+				});
+				if (!currentClient) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_client",
+						error_description: "client no longer exists",
+					});
+				}
+
 				// Server-owned fields (disabled, consent and logout settings, the
 				// ceiling) can change while this refresh fetches metadata, so the
 				// refresh never writes them.
@@ -1012,28 +1199,37 @@ async function persistOAuthClientRegistration(
 					enableEndSession: _enableEndSession,
 					...refreshed
 				} = schema;
-				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
-					model: clientModel,
-					where: [
-						{ field: "clientId", value: clientId },
-						{
-							field: "clientDiscoveryId",
-							value: clientDiscoveryId,
+				const metadataChanged = hasClientMetadataChanged(
+					currentClient,
+					refreshed,
+				);
+				if (metadataChanged) {
+					const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
+						model: clientModel,
+						where: [
+							{ field: "clientId", value: clientId },
+							{
+								field: "clientDiscoveryId",
+								value: clientDiscoveryId,
+							},
+						],
+						update: {
+							...refreshed,
+							createdAt: currentClient.createdAt,
+							updatedAt: new Date(iat * 1000),
 						},
-					],
-					update: {
-						...refreshed,
-						createdAt: existingClient.createdAt,
-						updatedAt: new Date(iat * 1000),
-					},
-				});
-				if (!updatedClient) {
-					throw new APIError("BAD_REQUEST", {
-						error: "invalid_client",
-						error_description: "client no longer exists",
 					});
+					if (!updatedClient) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_client",
+							error_description: "client no longer exists",
+						});
+					}
+					storedClient = updatedClient;
+					updated = true;
+				} else {
+					storedClient = currentClient;
 				}
-				storedClient = updatedClient;
 			} else {
 				try {
 					storedClient = await adapter.create<SchemaClient<Scope[]>>({
@@ -1099,7 +1295,7 @@ async function persistOAuthClientRegistration(
 					throw error;
 				}
 			}
-			return { client: storedClient, created };
+			return { client: storedClient, created, updated };
 		},
 	);
 
@@ -1108,6 +1304,7 @@ async function persistOAuthClientRegistration(
 		clientSecret,
 		resources,
 		created: persistenceResult.created,
+		updated: persistenceResult.updated,
 	};
 }
 
