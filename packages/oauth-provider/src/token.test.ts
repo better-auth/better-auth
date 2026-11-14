@@ -6156,3 +6156,88 @@ describe("oauth token - refresh family revocation with serial ids", async () => 
 		expect(database.oauthAccessToken?.[0]?.refreshId).toBeUndefined();
 	});
 });
+
+describe("DPoP with secondary storage and no database-backed verification", async () => {
+	const store = new Map<string, string>();
+	const baseURL = "http://localhost:3000";
+	const tokenEndpoint = `${baseURL}/api/auth/oauth2/token`;
+	const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		secondaryStorage: {
+			get: (key) => store.get(key) ?? null,
+			set: (key, value) => void store.set(key, value),
+			delete: (key) => void store.delete(key),
+			getAndDelete: (key) => {
+				const value = store.get(key) ?? null;
+				store.delete(key);
+				return value;
+			},
+			increment: (key) => {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
+		},
+		session: { storeSessionInDatabase: true },
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				clientPrivileges: () => true,
+			}),
+		],
+	});
+
+	it("issues a DPoP-bound token and rejects a replayed proof", async () => {
+		const { headers } = await signInWithTestUser();
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read"],
+			},
+		});
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const proof = await new SignJWT({
+			jti: generateRandomString(16),
+			htm: "POST",
+			htu: tokenEndpoint,
+			iat: Math.floor(Date.now() / 1000),
+		})
+			.setProtectedHeader({
+				typ: "dpop+jwt",
+				alg: "ES256",
+				jwk: (await exportJWK(publicKey)) as JWK,
+			})
+			.sign(privateKey);
+		const requestToken = () =>
+			customFetchImpl(tokenEndpoint, {
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					DPoP: proof,
+				},
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: client.client_id,
+					client_secret: client.client_secret!,
+					scope: "read",
+				}).toString(),
+			});
+
+		const issued = await requestToken();
+		expect(issued.status).toBe(200);
+		expect(await issued.json()).toMatchObject({ token_type: "DPoP" });
+
+		const replayed = await requestToken();
+		expect(replayed.status).toBe(400);
+		expect(await replayed.json()).toMatchObject({
+			error: "invalid_dpop_proof",
+		});
+	});
+});

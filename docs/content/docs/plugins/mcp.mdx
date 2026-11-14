@@ -376,6 +376,6 @@ Both helpers expose `WWW-Authenticate` to browser clients on other origins. If y
 
   If the handler runs on several instances or on serverless, pass a shared store as `dpop.replayStore`:
 
-  * If the handler runs in the same app as your Better Auth server, use `createDpopReplayStore`, as shown in [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens). It needs database-backed verification storage. If you configure secondary storage, also set `verification.storeInDatabase: true`. Otherwise every DPoP request fails.
+  * If the handler runs in the same app as your Better Auth server, use `createDpopReplayStore(await auth.$context)`, as shown in [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens). It records proofs in secondary storage or the database, wherever your auth instance keeps verification values.
   * Otherwise, implement `DpopReplayStore` on storage that every instance shares. Its `reserve` method must record the proof's `key` until at least `expiresAt` in one atomic step, and return `false` if the key is already recorded. If `reserve` throws, the request fails.
 </Callout>

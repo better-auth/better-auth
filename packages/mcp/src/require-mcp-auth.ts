@@ -1,7 +1,7 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
 import { getLocalJwksSource } from "@better-auth/oauth-provider/internal";
 import type {
-	DpopReplayReservations,
+	DpopReplayAuthContext,
 	DpopReplayStore,
 } from "better-auth/oauth2";
 import { createDpopReplayStore } from "better-auth/oauth2";
@@ -78,9 +78,7 @@ export const requireMcpAuth = <
 	Auth extends {
 		options: BetterAuthOptions;
 		$context: Promise<
-			Pick<AuthContext, "baseURL" | "getPlugin"> & {
-				internalAdapter: DpopReplayReservations;
-			}
+			Pick<AuthContext, "baseURL" | "getPlugin"> & DpopReplayAuthContext
 		>;
 	},
 >(
@@ -101,7 +99,7 @@ export const requireMcpAuth = <
 		// provider issued. Override via `opts` for a custom `jwt.issuer`, a
 		// distinct resource, or a non-default JWKS location.
 		const authContext = await auth.$context;
-		const { baseURL, internalAdapter } = authContext;
+		const { baseURL } = authContext;
 		if (!baseURL) {
 			throw new Error(
 				"requireMcpAuth requires a resolvable base URL. For dynamic base URLs use `createMcpProtectedRequestHandler` with explicit verification options.",
@@ -137,10 +135,10 @@ export const requireMcpAuth = <
 				dpop: {
 					proofMaxAgeSeconds: opts?.dpop?.proofMaxAgeSeconds,
 					signingAlgorithms: opts?.dpop?.signingAlgorithms,
-					// Default to the database-backed store so proof replay is
+					// Default to the auth instance's shared store so proof replay is
 					// rejected across instances, not just within one process.
 					replayStore:
-						opts?.dpop?.replayStore ?? createDpopReplayStore(internalAdapter),
+						opts?.dpop?.replayStore ?? createDpopReplayStore(authContext),
 				},
 			},
 			handler,
