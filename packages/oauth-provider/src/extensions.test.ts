@@ -1037,7 +1037,7 @@ describe("oauth-provider extensions", async () => {
 	/**
 	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/reference#provider-extensions
 	 */
-	it("combines lists from extensions and client discoveries, warning once per collision", async () => {
+	it("keeps client discovery metadata, combines extension lists, and warns once per collision", async () => {
 		const makeExtensionPlugin = (
 			id: string,
 			extension: Parameters<typeof extendOAuthProvider>[1],
@@ -1067,10 +1067,12 @@ describe("oauth-provider extensions", async () => {
 					consentPage: "/consent",
 				}),
 				makeExtensionPlugin("meta-ext-a", {
-					metadata: () => ({
+					metadata: ({ document }) => ({
 						authorization_details_types_supported: ["type_a", "type_b"],
+						extension_list: ["x"],
 						mixed_shape_field: ["first"],
 						issuer: "https://ignored.example.com",
+						seen_discovery_flag: Reflect.get(document, "discovery_flag"),
 					}),
 				}),
 				makeExtensionPlugin("meta-ext-b", {
@@ -1080,12 +1082,14 @@ describe("oauth-provider extensions", async () => {
 					}),
 					metadata: () => ({
 						authorization_details_types_supported: ["type_b", "type_d"],
+						extension_list: ["x", "y"],
 						mixed_shape_field: "second",
 					}),
 				}),
 				makeExtensionPlugin("meta-ext-c", {
 					clientDiscovery: makeDiscovery("discovery-c", {
 						discovery_flag: "second",
+						issuer: "https://ignored-discovery.example.com",
 					}),
 				}),
 			],
@@ -1102,14 +1106,14 @@ describe("oauth-provider extensions", async () => {
 		expect(openIdConfig.issuer).toBe(authServerBaseUrl);
 		expect(openIdConfig.authorization_details_types_supported).toEqual([
 			"type_c",
-			"type_a",
-			"type_b",
-			"type_d",
 		]);
-		expect(openIdConfig.discovery_flag).toBe("first");
+		expect(openIdConfig.discovery_flag).toBe("second");
+		expect(openIdConfig.seen_discovery_flag).toBe("second");
+		expect(openIdConfig.extension_list).toEqual(["x", "y"]);
 		expect(openIdConfig.mixed_shape_field).toEqual(["first"]);
 		expect(warn.mock.calls.map(([message]) => message)).toEqual([
-			'oauth-provider: more than one extension contributed the discovery metadata key "discovery_flag" to openid-configuration; keeping the first-registered value.',
+			'oauth-provider: a client discovery contributed the discovery metadata key "issuer" to openid-configuration, which the provider sets; ignoring it.',
+			'oauth-provider: an extension contributed the discovery metadata key "authorization_details_types_supported" to openid-configuration, which a client discovery sets; keeping the client discovery\'s value.',
 			'oauth-provider: an extension contributed the discovery metadata key "issuer" to openid-configuration, which the provider sets; ignoring it.',
 			'oauth-provider: more than one extension contributed the discovery metadata key "mixed_shape_field" to openid-configuration; keeping the first-registered value.',
 		]);

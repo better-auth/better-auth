@@ -397,12 +397,14 @@ function warnMetadataCollisionOnce(
 }
 
 /**
- * Merges each client discovery's `discoveryMetadata`, then each extension's
- * `metadata()` result, into the provider's `document`. Keys the provider sets
- * are kept. Two lists under one key combine without duplicates; any other
- * shared key keeps the first value. Every ignored contribution logs a warning.
- * `metadata()` sees only the provider's `document`, so contributions stay
- * order-independent.
+ * Builds the discovery document from the provider's `core` fields, each client
+ * discovery's `discoveryMetadata` (later discoveries override earlier ones),
+ * and each extension's `metadata()` result. Keys the provider sets are kept,
+ * and extensions only add keys no client discovery set. Two extension lists
+ * under one key combine without duplicates; any other shared extension key
+ * keeps the first value. Every ignored contribution logs a warning.
+ * `metadata()` sees the provider and client-discovery fields only, so
+ * contributions stay order-independent.
  */
 export function applyOAuthProviderMetadataExtensions<
 	T extends AuthServerMetadata | OIDCMetadata,
@@ -410,25 +412,36 @@ export function applyOAuthProviderMetadataExtensions<
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	type: OAuthMetadataExtensionInput["type"],
-	document: T,
+	core: T,
 ): T {
-	const contributions = [
+	const warn = (message: string) =>
+		warnMetadataCollisionOnce(ctx, opts, message);
+	const discoveryMetadata: Record<string, unknown> = Object.assign(
+		{},
 		...getClientDiscoveries(opts).map(
 			(discovery) => discovery.discoveryMetadata,
 		),
-		...getOAuthProviderExtensions(opts).map((extension) =>
-			extension.metadata?.({ ctx, opts, type, document }),
-		),
-	];
-	const warn = (message: string) =>
-		warnMetadataCollisionOnce(ctx, opts, message);
+	);
+	for (const key of Object.keys(discoveryMetadata)) {
+		if (key in core) {
+			warn(
+				`oauth-provider: a client discovery contributed the discovery metadata key "${key}" to ${type}, which the provider sets; ignoring it.`,
+			);
+		}
+	}
+	const document = { ...discoveryMetadata, ...core };
 	const next: Record<string, unknown> = { ...document };
-	for (const contribution of contributions) {
+	for (const extension of getOAuthProviderExtensions(opts)) {
+		const contribution = extension.metadata?.({ ctx, opts, type, document });
 		for (const [key, value] of Object.entries(contribution ?? {})) {
 			const existing = next[key];
-			if (key in document) {
+			if (key in core) {
 				warn(
 					`oauth-provider: an extension contributed the discovery metadata key "${key}" to ${type}, which the provider sets; ignoring it.`,
+				);
+			} else if (key in discoveryMetadata) {
+				warn(
+					`oauth-provider: an extension contributed the discovery metadata key "${key}" to ${type}, which a client discovery sets; keeping the client discovery's value.`,
 				);
 			} else if (!(key in next)) {
 				next[key] = value;
