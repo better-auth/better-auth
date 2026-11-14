@@ -767,7 +767,8 @@ describe("provider.issueAuthorizationCode with required DPoP nonces", async () =
 			.setProtectedHeader({ alg: "RS256", kid: "issue-key" })
 			.setIssuer(keyClient.client_id)
 			.setSubject(keyClient.client_id)
-			.setAudience(issueCodeEndpoint)
+			// RFC 10070 §4: the issuer is the only audience.
+			.setAudience("http://localhost:3000")
 			.setIssuedAt(now)
 			.setExpirationTime(now + 60)
 			.setJti(generateRandomString(16))
