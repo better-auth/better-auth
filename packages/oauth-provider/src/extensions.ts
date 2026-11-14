@@ -381,9 +381,11 @@ export function getExtensionClientAuthenticationStrategy(
 /**
  * Merges each registered extension's `metadata()` contribution into `document`,
  * first-wins: the provider owns every key it already wrote, so an extension can
- * add fields but never override core. A key two extensions contribute keeps the
- * first-registered value and logs a warning. Each contributor sees the base `document`,
- * not the running accumulation, so contributions stay order-independent.
+ * add fields but never override core. When two extensions contribute the same
+ * key, two lists combine in registration order without duplicates; any other
+ * pair keeps the first-registered value and logs a warning. Each contributor
+ * sees the base `document`, not the running accumulation, so contributions
+ * stay order-independent.
  */
 export function applyOAuthProviderMetadataExtensions<
 	T extends AuthServerMetadata | OIDCMetadata,
@@ -400,9 +402,14 @@ export function applyOAuthProviderMetadataExtensions<
 			if (!(key in next)) {
 				next[key] = value;
 			} else if (!(key in document)) {
-				ctx.context.logger.warn(
-					`oauth-provider: two extensions contributed the discovery metadata key "${key}" to ${type}; keeping the first-registered value.`,
-				);
+				const existing = next[key];
+				if (Array.isArray(existing) && Array.isArray(value)) {
+					next[key] = [...new Set([...existing, ...value])];
+				} else {
+					ctx.context.logger.warn(
+						`oauth-provider: two extensions contributed the discovery metadata key "${key}" to ${type}; keeping the first-registered value.`,
+					);
+				}
 			}
 		}
 	}
