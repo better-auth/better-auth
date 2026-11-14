@@ -143,7 +143,9 @@ Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refres
 
 When `discoveryUrl` is a well-known URL, the discovery document's `issuer` must now be the issuer the URL is built from. Otherwise Better Auth logs an error that names the provider and both values, and skips the provider. Before, the document was used whatever issuer it named.
 
-**What to do:** if a provider is skipped after the upgrade, check its documentation for its issuer identifier. If the provider publishes discovery under another name for the same issuer, such as a tenant domain instead of the tenant ID, set `issuer` to that identifier. See [`issuer`](/docs/plugins/generic-oauth#configuration).
+A common case is an issuer with a path, such as `https://auth.example.com/api/auth`, whose discovery document is read from the root, `https://auth.example.com/.well-known/openid-configuration`. That URL belongs to the issuer `https://auth.example.com`, so the provider is now skipped.
+
+**What to do:** if a provider is skipped after the upgrade, check its documentation for its issuer identifier. For an issuer with a path, point `discoveryUrl` at `{issuer}/.well-known/openid-configuration`. If the provider publishes discovery under another name for the same issuer, such as a tenant domain instead of the tenant ID, set `issuer` to that identifier. See [`issuer`](/docs/plugins/generic-oauth#configuration).
 
 ### Social provider profile types match the provider
 

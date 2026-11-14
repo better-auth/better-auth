@@ -131,7 +131,7 @@ describe("private_key_jwt e2e", async () => {
 							providerId,
 							clientId: oauthClient.client_id,
 							redirectURI: redirectUri,
-							discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
+							discoveryUrl: `${authServerBaseUrl}/api/auth/.well-known/openid-configuration`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
 							tokenEndpointAuth: {
@@ -273,7 +273,7 @@ describe("private_key_jwt e2e", async () => {
 							providerId,
 							clientId: oauthJwksUriClient.client_id,
 							redirectURI: redirectUri,
-							discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
+							discoveryUrl: `${authServerBaseUrl}/api/auth/.well-known/openid-configuration`,
 							scopes: ["openid", "profile", "email"],
 							pkce: true,
 							tokenEndpointAuth: {

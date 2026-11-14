@@ -284,7 +284,7 @@ describe("oauth", async () => {
 		server = await listen(
 			async (req, res) => {
 				// Adds openid-config as the endpoint manually since server-endpoint
-				if (req.url === "/.well-known/openid-configuration") {
+				if (req.url === "/api/auth/.well-known/openid-configuration") {
 					const config = await authorizationServer.api.getOpenIdConfig();
 					res.setHeader("Content-Type", "application/json");
 					res.end(JSON.stringify(config));
@@ -952,7 +952,7 @@ describe("oauth", async () => {
 
 		// The RP (Relying Party) - the client
 		const { customFetchImpl: customFetchImplRP } = await createTestInstance({
-			discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
+			discoveryUrl: `${authServerBaseUrl}/api/auth/.well-known/openid-configuration`,
 		});
 
 		const client = createAuthClient({
