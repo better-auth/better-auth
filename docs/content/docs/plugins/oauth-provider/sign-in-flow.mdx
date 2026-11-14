@@ -90,6 +90,54 @@ An authorization request without `request_uri` then fails with `invalid_request`
 
 Your resolver must enforce what the built-in endpoint does: each value expires quickly, works once, and works only for the client that pushed it. To bind the code to a DPoP key from your endpoint, call [`verifyDpopProof`](/docs/plugins/oauth-provider/tokens#nonces-on-your-own-endpoints) there and store the proof's `jkt` as `dpop_jkt` with the request.
 
+## Issue codes from your own endpoint
+
+A plugin endpoint can complete authorization for a signed-in user and return the authorization code itself, instead of sending the user through `/oauth2/authorize`. A native app that signs the user in with its own UI is one example. Call `issueAuthorizationCode` on the provider API with the authorization request parameters and the user's session:
+
+```ts title="code-issuer-plugin.ts"
+import { getOAuthProviderApi } from "@better-auth/oauth-provider";
+import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
+import type { BetterAuthPlugin } from "better-auth/types";
+
+export const codeIssuer = () =>
+  ({
+    id: "code-issuer",
+    endpoints: {
+      issueCode: createAuthEndpoint(
+        "/app/authorize",
+        { method: "POST", use: [sessionMiddleware] },
+        async (ctx) => {
+          const provider = getOAuthProviderApi(
+            ctx,
+            ctx.context.getPlugin("oauth-provider")!.options,
+          );
+          const proof = await provider.verifyDpopProof({ required: true });
+          const { code } = await provider.issueAuthorizationCode({
+            query: { ...ctx.body, dpop_jkt: proof.jkt },
+            session: ctx.context.session,
+          });
+          return ctx.json({ authorization_code: code });
+        },
+      ),
+    },
+  }) satisfies BetterAuthPlugin;
+```
+
+The provider checks the request as `/oauth2/authorize` does: the client, scopes, claims, resources, and PKCE. It issues the code only when the client has `skip_consent` or the user already consented to everything requested. Any step that would show a page fails instead, with a 400 error:
+
+| Error                  | When                                                                                                                       |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `consent_required`     | The user has not consented to the request.                                                                                 |
+| `login_required`       | The session expired, or is older than the request's `max_age`.                                                             |
+| `interaction_required` | The request has a `prompt` other than `none`, or `signup.shouldRedirect` or `postLogin.shouldRedirect` returns a redirect. |
+| `access_denied`        | The session cannot meet an essential `acr` the request names.                                                              |
+
+Send the user to `/oauth2/authorize` when you get one of these errors.
+
+`redirect_uri` is optional. When the request has one, it must be registered for the client, and the result's `redirectURL` carries the code, `state`, and `iss`. Without one, the token request must omit `redirect_uri` too ([RFC 6749 §4.1.3](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3)). The code expires after `codeExpiresIn` and redeems once at the token endpoint, like a code from `/oauth2/authorize`.
+
+Your endpoint must authenticate the user before it calls `issueAuthorizationCode`. The method trusts the session you pass. To bind the code to a DPoP key ([RFC 9449 §10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)), pass the `jkt` from [`verifyDpopProof`](/docs/plugins/oauth-provider/tokens#nonces-on-your-own-endpoints) as `dpop_jkt`. The client must then prove the same key at the token endpoint.
+
 ## Login page
 
 To send users to your sign-in page, set `loginPage`. When the sign-in request carries `oauth_query` and creates a session, the plugin continues the authorization flow. With `oauthProviderClient`, your page needs no OAuth code.
