@@ -129,7 +129,7 @@ The `acr` and `amr` are stored with the authorization code or device code and wi
 
 ## UserInfo
 
-`/oauth2/userinfo` accepts GET and POST and returns claims for an access token whose scopes include `openid`. A token without `openid` gets 400 `invalid_scope`. An expired or revoked token, or one whose session has ended, gets 401 `invalid_token` ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)).
+`/oauth2/userinfo` accepts GET and POST and returns claims for an access token whose scopes include `openid`. Send the token as `Authorization: Bearer <token>`, or `DPoP <token>` for a DPoP-bound token. A header without one of those schemes counts as no token. A token without `openid` gets 403 `insufficient_scope`, with a challenge naming `openid`. An expired or revoked token, or one whose session has ended, gets 401 `invalid_token` ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)).
 
 Every 401 from UserInfo carries a `WWW-Authenticate` challenge that tells the client how to retry. The response also lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, so a browser client on another origin can read the challenge.
 

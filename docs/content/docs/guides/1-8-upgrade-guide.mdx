@@ -296,6 +296,15 @@ This applies if you bind tokens with DPoP or mTLS, or write a `clientAuthenticat
 
 Pairwise clients created after the upgrade with private-use redirect URIs, such as `com.example.app:/callback`, or loopback ones, such as `http://localhost:8787/callback`, each get their own `sub`. Before, unrelated clients of either kind could share one. Existing clients keep their current `sub`.
 
+### UserInfo errors follow RFC 6750
+
+`/oauth2/userinfo` now reports its errors the way [RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1) describes, as OpenID Connect requires:
+
+* An access token without the `openid` scope gets `403 insufficient_scope` with a `WWW-Authenticate` challenge naming `openid`. Before, it got `400 invalid_scope`.
+* An `Authorization` header without the `Bearer` or `DPoP` scheme, such as a bare token, is treated as no credentials and gets a `401` challenge. Before, UserInfo read the whole header value as the token.
+
+**What to do:** send the access token as `Authorization: Bearer <token>`, or `DPoP <token>` for a DPoP-bound token. Update clients and tests that match on `invalid_scope` from UserInfo.
+
 ### Extension and API authors
 
 This applies if you build on `extendOAuthProvider()` or implement the provider API yourself:

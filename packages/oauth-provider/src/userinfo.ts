@@ -65,9 +65,13 @@ export function pickClaims(
 }
 
 function getUserInfoAccessToken(ctx: GenericEndpointContext) {
-	const authorization = ctx.headers?.get("authorization");
+	// RFC 6750 §3.1: a header without the `Bearer` or `DPoP` scheme carries no
+	// usable credentials, so it is answered like a request without a token.
+	const parsedAuthorization = parseAccessTokenAuthorization(
+		ctx.headers?.get("authorization"),
+	);
 	const headerAccessTokenAuthorization =
-		parseAccessTokenAuthorization(authorization);
+		parsedAuthorization?.scheme === "Unknown" ? undefined : parsedAuthorization;
 	const bodyToken =
 		ctx.request?.method === "POST"
 			? ((ctx.body as { access_token?: string } | undefined)?.access_token ??
@@ -106,20 +110,18 @@ export async function userInfoEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	// TODO: converge on parseBearerToken (utils) once we decide whether userinfo
-	// should keep accepting a non-Bearer Authorization value as a bare token; the
-	// shared parser is strict and would reject that fallback.
 	const { authorization } = getUserInfoAccessToken(ctx);
+	// OIDC Core §5.3.3 reports UserInfo errors as RFC 6750 §3.1 does: a token
+	// without `openid` gets 403 `insufficient_scope`.
 	const { payload: jwt, requestedUserInfoClaims: requestedClaims } =
-		await verifyResourceRequest(ctx, opts, {}, authorization ?? null);
+		await verifyResourceRequest(
+			ctx,
+			opts,
+			{ scopes: ["openid"] },
+			authorization ?? null,
+		);
 
 	const scopes = (jwt.scope as string | undefined)?.split(" ");
-	if (!scopes?.includes("openid")) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "Missing required scope",
-			error: "invalid_scope",
-		});
-	}
 
 	if (!jwt.sub) {
 		throw new APIError("BAD_REQUEST", {
