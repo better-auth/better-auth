@@ -3,5 +3,5 @@
 	$filename <: r".*/packages/[^/]+/src/.*",
 	not $filename <: r".*/packages/core/src/utils/is-api-error\.ts",
 	not $filename <: r".*\.test\.tsx?",
-	register_diagnostic(span=$x, message="Use isAPIError() from @better-auth/core/utils/is-api-error. instanceof misses an APIError from another copy of better-call.")
+	register_diagnostic(span=$x, message="Use isAPIError() from better-auth/api or @better-auth/core/utils/is-api-error. instanceof misses an APIError from another copy of better-call.")
 }
