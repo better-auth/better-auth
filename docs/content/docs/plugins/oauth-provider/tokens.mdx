@@ -310,7 +310,7 @@ authorizationUrl.searchParams.set("dpop_jkt", await deriveDpopKeyJkt(keyPair));
 To send requests your own way, use the building blocks `createDpopFetch` uses:
 
 * `await createDpopProof({ keyPair, method, url, accessToken, nonce })` returns a proof for the `DPoP` header.
-* `await isDpopNonceError(response)` tells whether a response asks for a retry with the nonce in its `DPoP-Nonce` header.
+* `await isDpopNonceChallenge(response)` tells whether a response asks for a retry with the nonce in its `DPoP-Nonce` header.
 * `createDpopNonceCache()` keeps the latest nonce for each origin. Pass your own `{ get, set }` object as `nonceCache` to keep nonces somewhere else, such as IndexedDB.
 
 To send requests with another fetch implementation, pass it as `fetch`. `createDpopFetch` calls it as a plain function, so bind a method first, such as `env.SERVICE.fetch.bind(env.SERVICE)` for a Cloudflare service binding.
