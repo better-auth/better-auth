@@ -2078,3 +2078,155 @@ describe("oauth authorize - custom redirect URI safety", async () => {
 		expect(location).toContain("error=invalid_redirect");
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12257
+ */
+describe("oauth authorize - requireOpenId", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const registeredUri = "https://app.example.com/api/auth/callback";
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					requireOpenId: true,
+				}),
+				jwt(),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+	let clientId: string;
+
+	beforeAll(async () => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [registeredUri],
+				skip_consent: true,
+			},
+		});
+		clientId = oauthClient.client_id;
+	});
+
+	async function authorize(scope?: string) {
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", clientId);
+		authUrl.searchParams.set("redirect_uri", registeredUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("state", "require-openid-test");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+		if (scope !== undefined) {
+			authUrl.searchParams.set("scope", scope);
+		}
+
+		let location = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			redirect: "manual",
+			onResponse(context) {
+				location = context.response.headers.get("location") || "";
+			},
+		});
+		return new URL(location);
+	}
+
+	it.each([
+		{ name: "no scope", scope: undefined },
+		{ name: "an empty scope", scope: "" },
+		{ name: "scopes without openid", scope: "profile email" },
+	])("redirects invalid_scope to the client for $name", async ({ scope }) => {
+		const location = await authorize(scope);
+
+		expect(`${location.origin}${location.pathname}`).toBe(registeredUri);
+		expect(location.searchParams.get("error")).toBe("invalid_scope");
+		expect(location.searchParams.get("state")).toBe("require-openid-test");
+		expect(location.searchParams.get("code")).toBeNull();
+	});
+
+	it("issues a code when the request includes openid", async () => {
+		const location = await authorize("openid profile");
+
+		expect(`${location.origin}${location.pathname}`).toBe(registeredUri);
+		expect(location.searchParams.get("error")).toBeNull();
+		expect(location.searchParams.get("code")).toBeTruthy();
+		expect(location.searchParams.get("state")).toBe("require-openid-test");
+	});
+
+	it("does not leak the error to an unregistered redirect_uri", async () => {
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", clientId);
+		authUrl.searchParams.set("redirect_uri", "https://evil.example.com/cb");
+		authUrl.searchParams.set("response_type", "code");
+
+		let location = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			redirect: "manual",
+			onResponse(context) {
+				location = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(location).toContain(`${authServerBaseUrl}/api/auth/error`);
+		expect(location).toContain("error=invalid_redirect");
+		expect(location).not.toContain("evil.example.com");
+	});
+});
+
+describe("oauth authorize - without requireOpenId", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const registeredUri = "https://app.example.com/api/auth/callback";
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+				}),
+				jwt(),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+
+	it.each([
+		{ name: "scopes without openid", scope: "profile" },
+		{ name: "no scope", scope: undefined },
+	])("keeps serving requests with $name", async ({ scope }) => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [registeredUri],
+				skip_consent: true,
+			},
+		});
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("redirect_uri", registeredUri);
+		authUrl.searchParams.set("response_type", "code");
+		if (scope !== undefined) {
+			authUrl.searchParams.set("scope", scope);
+		}
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let location = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			redirect: "manual",
+			onResponse(context) {
+				location = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(new URL(location).searchParams.get("code")).toBeTruthy();
+	});
+});

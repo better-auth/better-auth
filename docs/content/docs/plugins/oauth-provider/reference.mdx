@@ -77,6 +77,10 @@ Lets `/oauth2/public-client-prelogin` answer before sign-in when the request car
 
 Scopes clients may request. Without `openid`, the provider is OAuth only. Defaults to `["openid", "profile", "email", "offline_access"]`. See [Scopes](/docs/plugins/oauth-provider/tokens#scopes).
 
+`requireOpenId` <span className="opacity-70">`boolean`</span>
+
+Requires every authorization request to include the `openid` scope, so the provider only serves OpenID Connect requests. A request without `openid`, or with no `scope` at all, is redirected to the client's `redirect_uri` with `invalid_scope`. Defaults to `false`, where a request with no `scope` receives the client's registered scopes. `openid` must be in `scopes`, or the plugin fails at startup.
+
 `advertisedMetadata` <span className="opacity-70">`{ scopes_supported?, claims_supported? }`</span>
 
 Overrides what discovery advertises. Every `scopes_supported` value must be in `scopes`. See [Discovery metadata](/docs/plugins/oauth-provider/openid-connect#discovery-metadata).

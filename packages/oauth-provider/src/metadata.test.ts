@@ -402,6 +402,23 @@ describe("oauth metadata", async () => {
 		);
 	});
 
+	it("should fail if requireOpenId is set without the openid scope", async () => {
+		expect(() =>
+			getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						scopes: ["profile", "email"],
+						requireOpenId: true,
+					}),
+					jwt(),
+				],
+			}),
+		).toThrowError("requireOpenId requires openid in scopes");
+	});
+
 	it("should advertise custom claims", async () => {
 		const customClaims = ["http://example.com/roles"];
 		const { auth } = await createTestInstance({
