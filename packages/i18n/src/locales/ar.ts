@@ -9,6 +9,7 @@ export const ar: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "فشل في إنشاء الجلسة",
 	FAILED_TO_UPDATE_USER: "فشل في تحديث المستخدم",
 	FAILED_TO_GET_SESSION: "فشل في الحصول على الجلسة",
+	FAILED_TO_DELETE_SESSION: "فشل في حذف الجلسة",
 	INVALID_PASSWORD: "كلمة المرور غير صالحة",
 	INVALID_EMAIL: "البريد الإلكتروني غير صالح",
 	INVALID_EMAIL_OR_PASSWORD: "البريد الإلكتروني أو كلمة المرور غير صالحة",
