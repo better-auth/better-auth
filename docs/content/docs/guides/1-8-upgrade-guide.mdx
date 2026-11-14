@@ -39,7 +39,7 @@ Only the OAuth provider plugins add columns in 1.8. Every `oauthProvider()` setu
 Apply the schema, then deploy the 1.8 packages. With the built-in Kysely adapter, run `npx auth@latest migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth@latest generate`, review the output, and apply it with your migration tooling. MongoDB needs no migration.
 
 <Callout type="warn">
-  With the Kysely, Prisma, or Drizzle adapter, the default schema check fails every request until the new columns exist. With Prisma or Drizzle, a regenerated client or schema deployed before the migration fails every request that reads an OAuth client or token.
+  With the Kysely, Prisma, or Drizzle adapter, the default schema check fails every request until the new columns exist. With Prisma or Drizzle, a regenerated client or schema deployed before the migration fails every request that reads an OAuth client, token, or device code.
 </Callout>
 
 ***
@@ -145,7 +145,7 @@ Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refres
 These are new and need no action:
 
 * Generic OAuth providers sign in through pushed authorization requests when the provider's discovery document sets `require_pushed_authorization_requests`. The `pushedAuthorizationRequest` option defaults to `"auto"`. Set it to `true` to always push, or to `false` to never push.
-* `createPrivateKeyJwtClientAssertionGetter` accepts `audience: "issuer"` for providers that require the issuer as the assertion audience, as FAPI 2.0 does. It works only for Generic OAuth providers configured with `discoveryUrl`. Elsewhere no issuer is supplied, so every token request fails. The default stays the token endpoint URL.
+* `createPrivateKeyJwtClientAssertionGetter` accepts `audience: "issuer"` for providers that require the issuer as the assertion audience, as FAPI 2.0 does. Generic OAuth passes the issuer from the provider's discovery document. Other callers must pass `issuer` themselves, or every token request fails. The default stays the token endpoint URL.
 * Client apps can send DPoP-bound requests with `createDpopFetch` from `better-auth/oauth2/dpop-client`.
 
 ### Social provider profile types match the provider
@@ -240,7 +240,7 @@ Revoking a refresh token at `/oauth2/revoke` now deletes every opaque access tok
 
 * Opaque access tokens issued before you upgrade are still deleted only with the refresh token that issued them.
 * Replaying a revoked refresh token works as before. It deletes every refresh token the client holds for that user, and the opaque access tokens linked to them.
-* JWT access tokens stay valid until they expire. With `revocableJwtAccessTokens: true`, they are revoked too, but only for resource servers that introspect them, and only for tokens issued after you turned the option on. See [JWT revocation](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
+* JWT access tokens stay valid until they expire. With `revocableJwtAccessTokens: true`, they are revoked too, but only where the auth server checks the token, such as introspection, UserInfo, or `verifyResourceRequest`, and only for tokens issued after you turned the option on. With secondary storage alone, an evicted entry makes a revoked token valid again. See [JWT revocation](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
 
 ### Authorization code reuse revokes tokens only for the issuing client
 
