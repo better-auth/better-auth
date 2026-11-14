@@ -67,7 +67,7 @@ async function revokeJwtAccessToken(
 	// audience.
 	let jwtPayload: JWTPayload & { azp?: string };
 	try {
-		const jwks = await getJwks(token, getJwksSource(ctx.context));
+		const jwks = await getJwks(token, getJwksSource(ctx));
 		const verified = await jwtVerify<JWTPayload & { azp?: string }>(
 			token,
 			createLocalJWKSet(jwks),
