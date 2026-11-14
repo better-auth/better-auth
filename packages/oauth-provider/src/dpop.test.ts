@@ -6,8 +6,6 @@ import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
 	createDpopNonce,
-	deriveDpopAth,
-	deriveDpopJkt,
 	refreshAccessTokenRequest,
 	verifyAccessTokenRequest,
 } from "better-auth/oauth2";
@@ -15,14 +13,15 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth/types";
 import type { APIError } from "better-call";
-import type { JWK } from "jose";
-import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
+import { decodeJwt } from "jose";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import * as z from "zod";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-resource";
 import { oauthProvider } from "./oauth";
 import { createResourceServerChallenge } from "./resource-challenge";
+import type { DpopKey } from "./test-utils/dpop";
+import { createDpopKey, createDpopProof } from "./test-utils/dpop";
 import { getOAuthProviderApi } from "./token";
 import type { OAuthProviderApi } from "./types";
 
@@ -124,43 +123,6 @@ const dpopCompanion = {
 		),
 	},
 } satisfies BetterAuthPlugin;
-
-async function createDpopKey() {
-	const { privateKey, publicKey } = await generateKeyPair("ES256", {
-		extractable: true,
-	});
-	const publicJwk = await exportJWK(publicKey);
-	return { privateKey, publicJwk, jkt: await deriveDpopJkt(publicJwk) };
-}
-
-type DpopKey = Awaited<ReturnType<typeof createDpopKey>>;
-
-async function createProof(
-	key: DpopKey,
-	params: {
-		method: string;
-		url: string;
-		nonce?: string | null;
-		accessToken?: string;
-	},
-) {
-	return new SignJWT({
-		jti: generateRandomString(16),
-		htm: params.method,
-		htu: params.url,
-		iat: Math.floor(Date.now() / 1000),
-		...(params.nonce ? { nonce: params.nonce } : {}),
-		...(params.accessToken
-			? { ath: await deriveDpopAth(params.accessToken) }
-			: {}),
-	})
-		.setProtectedHeader({
-			typ: "dpop+jwt",
-			alg: "ES256",
-			jwk: key.publicJwk as JWK,
-		})
-		.sign(key.privateKey);
-}
 
 /** Mints a nonce as if the server issued it `secondsAgo` seconds ago. */
 async function nonceIssuedAgo(secret: string, secondsAgo: number) {
@@ -292,12 +254,12 @@ async function setupNonceProvider(params: {
 		const body = await codeRequestBody(code, codeVerifier);
 		const challenge = await postToken(
 			body,
-			await createProof(key, { method: "POST", url: tokenEndpoint }),
+			await createDpopProof(key, { method: "POST", url: tokenEndpoint }),
 		);
 		const nonce = challenge.response.headers.get("DPoP-Nonce");
 		const issued = await postToken(
 			body,
-			await createProof(key, { method: "POST", url: tokenEndpoint, nonce }),
+			await createDpopProof(key, { method: "POST", url: tokenEndpoint, nonce }),
 		);
 		expect(issued.response.status).toBe(200);
 		return {
@@ -366,7 +328,7 @@ describe.each(["sqlite", "postgres"] as const)(
 
 				const challenge = await postToken(
 					body,
-					await createProof(key, { method: "POST", url: tokenEndpoint }),
+					await createDpopProof(key, { method: "POST", url: tokenEndpoint }),
 				);
 
 				expect(challenge.response.status).toBe(400);
@@ -385,7 +347,7 @@ describe.each(["sqlite", "postgres"] as const)(
 
 				const issued = await postToken(
 					body,
-					await createProof(key, {
+					await createDpopProof(key, {
 						method: "POST",
 						url: tokenEndpoint,
 						nonce,
@@ -417,7 +379,7 @@ describe.each(["sqlite", "postgres"] as const)(
 
 				const challenge = await postToken(
 					body,
-					await createProof(key, {
+					await createDpopProof(key, {
 						method: "POST",
 						url: tokenEndpoint,
 						nonce: foreignNonce,
@@ -434,7 +396,11 @@ describe.each(["sqlite", "postgres"] as const)(
 
 				const issued = await postToken(
 					body,
-					await createProof(key, { method: "POST", url: tokenEndpoint, nonce }),
+					await createDpopProof(key, {
+						method: "POST",
+						url: tokenEndpoint,
+						nonce,
+					}),
 				);
 				expect(issued.response.status).toBe(200);
 			});
@@ -446,7 +412,7 @@ describe.each(["sqlite", "postgres"] as const)(
 
 				const challenge = await postToken(
 					body,
-					await createProof(key, {
+					await createDpopProof(key, {
 						method: "POST",
 						url: tokenEndpoint,
 						nonce: await nonceIssuedAgo(authSecret, 301),
@@ -463,7 +429,7 @@ describe.each(["sqlite", "postgres"] as const)(
 
 				const issued = await postToken(
 					await codeRequestBody(code, codeVerifier),
-					await createProof(key, {
+					await createDpopProof(key, {
 						method: "POST",
 						url: tokenEndpoint,
 						nonce: await nonceIssuedAgo(authSecret, 290),
@@ -478,7 +444,7 @@ describe.each(["sqlite", "postgres"] as const)(
 				const { code, codeVerifier } = await authorizeForCode();
 				const body = await codeRequestBody(code, codeVerifier);
 				const nonce = await nonceIssuedAgo(authSecret, 299);
-				const proof = await createProof(key, {
+				const proof = await createDpopProof(key, {
 					method: "POST",
 					url: tokenEndpoint,
 					nonce,
@@ -532,14 +498,14 @@ describe.each(["sqlite", "postgres"] as const)(
 
 				const challenge = await postToken(
 					body,
-					await createProof(key, { method: "POST", url: tokenEndpoint }),
+					await createDpopProof(key, { method: "POST", url: tokenEndpoint }),
 				);
 				expect(challenge.response.status).toBe(400);
 				expect(challenge.body.error).toBe("use_dpop_nonce");
 
 				const refreshed = await postToken(
 					body,
-					await createProof(key, {
+					await createDpopProof(key, {
 						method: "POST",
 						url: tokenEndpoint,
 						nonce: challenge.response.headers.get("DPoP-Nonce"),
@@ -557,11 +523,11 @@ describe.each(["sqlite", "postgres"] as const)(
 				const challenges = await Promise.all([
 					postToken(
 						body,
-						await createProof(key, { method: "POST", url: tokenEndpoint }),
+						await createDpopProof(key, { method: "POST", url: tokenEndpoint }),
 					),
 					postToken(
 						body,
-						await createProof(key, { method: "POST", url: tokenEndpoint }),
+						await createDpopProof(key, { method: "POST", url: tokenEndpoint }),
 					),
 				]);
 				expect(challenges.map((c) => c.body.error)).toEqual([
@@ -575,7 +541,7 @@ describe.each(["sqlite", "postgres"] as const)(
 				const redemptions = await Promise.all([
 					postToken(
 						body,
-						await createProof(key, {
+						await createDpopProof(key, {
 							method: "POST",
 							url: tokenEndpoint,
 							nonce,
@@ -583,7 +549,7 @@ describe.each(["sqlite", "postgres"] as const)(
 					),
 					postToken(
 						body,
-						await createProof(key, {
+						await createDpopProof(key, {
 							method: "POST",
 							url: tokenEndpoint,
 							nonce,
@@ -618,7 +584,10 @@ describe.each(["sqlite", "postgres"] as const)(
 				});
 
 			const challenge = await issue(
-				await createProof(key, { method: "POST", url: pluginIssueEndpoint }),
+				await createDpopProof(key, {
+					method: "POST",
+					url: pluginIssueEndpoint,
+				}),
 			);
 			expect(challenge.status).toBe(400);
 			expect(await challenge.json()).toMatchObject({ error: "use_dpop_nonce" });
@@ -626,7 +595,7 @@ describe.each(["sqlite", "postgres"] as const)(
 			expect(challenge.headers.get("Cache-Control")).toBe("no-store");
 
 			const issued = await issue(
-				await createProof(key, {
+				await createDpopProof(key, {
 					method: "POST",
 					url: pluginIssueEndpoint,
 					nonce: challenge.headers.get("DPoP-Nonce"),
@@ -651,7 +620,7 @@ describe.each(["sqlite", "postgres"] as const)(
 
 				const challenge = await getUserInfo(
 					accessToken,
-					await createProof(key, {
+					await createDpopProof(key, {
 						method: "GET",
 						url: userinfoEndpoint,
 						accessToken,
@@ -673,7 +642,7 @@ describe.each(["sqlite", "postgres"] as const)(
 
 				const userinfo = await getUserInfo(
 					accessToken,
-					await createProof(key, {
+					await createDpopProof(key, {
 						method: "GET",
 						url: userinfoEndpoint,
 						accessToken,
@@ -693,7 +662,7 @@ describe.each(["sqlite", "postgres"] as const)(
 
 				const userinfo = await getUserInfo(
 					accessToken,
-					await createProof(key, {
+					await createDpopProof(key, {
 						method: "GET",
 						url: userinfoEndpoint,
 						accessToken,
@@ -721,7 +690,7 @@ describe.each(["sqlite", "postgres"] as const)(
 				const error = (await verifyResourceRequest(
 					resourceRequest(
 						accessToken,
-						await createProof(key, {
+						await createDpopProof(key, {
 							method: "GET",
 							url: resourceUrl,
 							accessToken,
@@ -745,7 +714,7 @@ describe.each(["sqlite", "postgres"] as const)(
 					verifyResourceRequest(
 						resourceRequest(
 							accessToken,
-							await createProof(key, {
+							await createDpopProof(key, {
 								method: "GET",
 								url: resourceUrl,
 								accessToken,
@@ -767,7 +736,7 @@ describe.each(["sqlite", "postgres"] as const)(
 					verifyAccessTokenRequest(
 						{
 							authorizationHeader: `DPoP ${accessToken}`,
-							dpopProofJwt: await createProof(key, {
+							dpopProofJwt: await createDpopProof(key, {
 								method: "GET",
 								url: resourceUrl,
 								accessToken,
@@ -831,7 +800,7 @@ describe("DPoP nonce challenge on userinfo with hook-exposed headers", async () 
 		const challenge = await customFetchImpl(endpoint, {
 			headers: {
 				authorization: `DPoP ${accessToken}`,
-				DPoP: await createProof(key, {
+				DPoP: await createDpopProof(key, {
 					method: "GET",
 					url: endpoint,
 					accessToken,
@@ -870,7 +839,7 @@ describe("DPoP nonce lifetime shared with the resource client", async () => {
 			verifyResourceRequest(
 				resourceRequest(
 					accessToken,
-					await createProof(key, {
+					await createDpopProof(key, {
 						method: "GET",
 						url: resourceUrl,
 						accessToken,
@@ -932,7 +901,11 @@ describe("DPoP nonces on a companion endpoint", async () => {
 	}
 
 	function bindProof(key: DpopKey, nonce?: string | null) {
-		return createProof(key, { method: "POST", url: pluginBindEndpoint, nonce });
+		return createDpopProof(key, {
+			method: "POST",
+			url: pluginBindEndpoint,
+			nonce,
+		});
 	}
 
 	it("challenges a proof without a nonce and accepts the retry", async () => {
@@ -1046,7 +1019,7 @@ describe("DPoP proofs on a companion endpoint without nonces", async () => {
 			method: "POST",
 			headers: {
 				"content-type": "application/json",
-				DPoP: await createProof(key, {
+				DPoP: await createDpopProof(key, {
 					method: "POST",
 					url: pluginBindEndpoint,
 				}),
@@ -1072,7 +1045,7 @@ describe("DPoP proofs on a companion endpoint without nonces", async () => {
 		const response = await customFetchImpl(endpoint, {
 			method: "POST",
 			headers: {
-				DPoP: await createProof(key, { method: "POST", url: endpoint }),
+				DPoP: await createDpopProof(key, { method: "POST", url: endpoint }),
 			},
 		});
 
@@ -1125,7 +1098,7 @@ describe("challengeDpopNonce with nonces required", async () => {
 
 	/** A proof whose nonce expires one second after the request arrives. */
 	async function proofWithExpiringNonce(key: DpopKey) {
-		return createProof(key, {
+		return createDpopProof(key, {
 			method: "POST",
 			url: tokenEndpoint,
 			nonce: await nonceIssuedAgo(context.secret, 299),
@@ -1146,7 +1119,7 @@ describe("challengeDpopNonce with nonces required", async () => {
 			const staged = stagedChallenges;
 
 			const response = await challenge(
-				await createProof(key, { method: "POST", url: challengeEndpoint }),
+				await createDpopProof(key, { method: "POST", url: challengeEndpoint }),
 			);
 
 			expect(response.status).toBe(400);
@@ -1163,7 +1136,7 @@ describe("challengeDpopNonce with nonces required", async () => {
 			const nonce = await createDpopNonce({ secret: context.secret });
 
 			const response = await challenge(
-				await createProof(key, {
+				await createDpopProof(key, {
 					method: "POST",
 					url: challengeEndpoint,
 					nonce,
@@ -1194,7 +1167,7 @@ describe("challengeDpopNonce with nonces required", async () => {
 
 			const rejected = await postToken(
 				body,
-				await createProof(key, { method: "POST", url: tokenEndpoint }),
+				await createDpopProof(key, { method: "POST", url: tokenEndpoint }),
 			);
 
 			expect(rejected.response.status).toBe(400);
@@ -1202,7 +1175,7 @@ describe("challengeDpopNonce with nonces required", async () => {
 			expect(stagedByHook).toBe(staged);
 			const issued = await postToken(
 				body,
-				await createProof(key, {
+				await createDpopProof(key, {
 					method: "POST",
 					url: tokenEndpoint,
 					nonce: rejected.response.headers.get("DPoP-Nonce"),

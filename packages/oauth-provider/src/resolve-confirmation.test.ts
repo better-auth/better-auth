@@ -1,13 +1,10 @@
-import { generateRandomString } from "better-auth/crypto";
-import { deriveDpopJkt } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin } from "better-auth/types";
-import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 import { extendOAuthProvider } from "./extensions";
 import { oauthProvider } from "./oauth";
+import { createDpopKey, createDpopProof } from "./test-utils/dpop";
 import type { Confirmation } from "./types/oauth";
 
 const tokenEndpoint = "http://localhost:3000/api/auth/oauth2/token";
@@ -43,31 +40,6 @@ const boundGrantPlugin = {
 		});
 	},
 } satisfies BetterAuthPlugin;
-
-async function createDpopKey() {
-	const { privateKey, publicKey } = await generateKeyPair("ES256", {
-		extractable: true,
-	});
-	const publicJwk = await exportJWK(publicKey);
-	return { privateKey, publicJwk, jkt: await deriveDpopJkt(publicJwk) };
-}
-
-type DpopKey = Awaited<ReturnType<typeof createDpopKey>>;
-
-function createProof(key: DpopKey) {
-	return new SignJWT({
-		jti: generateRandomString(16),
-		htm: "POST",
-		htu: tokenEndpoint,
-		iat: Math.floor(Date.now() / 1000),
-	})
-		.setProtectedHeader({
-			typ: "dpop+jwt",
-			alg: "ES256",
-			jwk: key.publicJwk as JWK,
-		})
-		.sign(key.privateKey);
-}
 
 describe("resolveConfirmation with expectedJkt", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -115,7 +87,7 @@ describe("resolveConfirmation with expectedJkt", async () => {
 	it("binds the tokens to the expected key when the proof uses it", async () => {
 		const result = await requestTokens(
 			{ expected_jkt: boundKey.jkt },
-			await createProof(boundKey),
+			await createDpopProof(boundKey, { url: tokenEndpoint }),
 		);
 		expect(result.status).toBe(200);
 		expect(result.body.token_type).toBe("DPoP");
@@ -124,7 +96,7 @@ describe("resolveConfirmation with expectedJkt", async () => {
 	it("rejects a proof signed with a different key", async () => {
 		const result = await requestTokens(
 			{ expected_jkt: boundKey.jkt },
-			await createProof(otherKey),
+			await createDpopProof(otherKey, { url: tokenEndpoint }),
 		);
 		expect(result.status).toBe(400);
 		expect(result.body.error).toBe("invalid_dpop_proof");
@@ -149,7 +121,7 @@ describe("resolveConfirmation with expectedJkt", async () => {
 	it("rejects a client-authentication confirmation with a different key", async () => {
 		const result = await requestTokens(
 			{ expected_jkt: boundKey.jkt, confirmation_jkt: otherKey.jkt },
-			await createProof(boundKey),
+			await createDpopProof(boundKey, { url: tokenEndpoint }),
 		);
 		expect(result.status).toBe(400);
 		expect(result.body.error).toBe("invalid_dpop_proof");
