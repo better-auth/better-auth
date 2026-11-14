@@ -1176,12 +1176,59 @@ describe("oauth-provider extensions", async () => {
 		expect(openIdConfig.extension_list).toEqual(["x", "y"]);
 		expect(openIdConfig.mixed_shape_field).toEqual(["first"]);
 		expect(warn.mock.calls.map(([message]) => message)).toEqual([
-			'oauth-provider: extension "meta-ext-c" contributed the client discovery metadata key "issuer" to openid-configuration, which the provider sets; ignoring it.',
+			'oauth-provider: extension "meta-ext-c" contributed the client discovery metadata key "issuer" to openid-configuration, which the provider owns; ignoring it.',
 			'oauth-provider: extension "meta-ext-a" contributed the discovery metadata key "authorization_details_types_supported" to openid-configuration, which the client discovery of "meta-ext-b" sets; keeping the client discovery\'s value.',
-			'oauth-provider: extension "meta-ext-a" contributed the discovery metadata key "issuer" to openid-configuration, which the provider sets; ignoring it.',
+			'oauth-provider: extension "meta-ext-a" contributed the discovery metadata key "issuer" to openid-configuration, which the provider owns; ignoring it.',
 			'oauth-provider: extension "meta-ext-b" contributed the discovery metadata key "authorization_details_types_supported" to openid-configuration, which the client discovery of "meta-ext-b" sets; keeping the client discovery\'s value.',
 			'oauth-provider: extensions "meta-ext-a" and "meta-ext-b" both contributed the discovery metadata key "mixed_shape_field" to openid-configuration; keeping the value from "meta-ext-a".',
 		]);
+	});
+
+	/**
+	 * @see https://tc39.es/ecma262/#sec-object.assign
+	 */
+	it("publishes metadata keys that match Object.prototype names", async () => {
+		const instance = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+				}),
+				{
+					id: "prototype-names",
+					init(ctx) {
+						extendOAuthProvider(ctx, {
+							id: "prototype-names",
+							clientDiscovery: {
+								id: "prototype-names-discovery",
+								matches: () => false,
+								resolve: () => null,
+								discoveryMetadata: JSON.parse(
+									'{"__proto__": ["from_discovery"], "toString": "from_discovery"}',
+								),
+							},
+							metadata: () => JSON.parse('{"constructor": "from_extension"}'),
+						});
+					},
+				} satisfies BetterAuthPlugin,
+			],
+		});
+		const { logger } = await instance.auth.$context;
+		const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+		const openIdConfig = (await instance.auth.api.getOpenIdConfig()) as object;
+		expect(
+			Object.getOwnPropertyDescriptor(openIdConfig, "__proto__")?.value,
+		).toEqual(["from_discovery"]);
+		expect(
+			Object.getOwnPropertyDescriptor(openIdConfig, "toString")?.value,
+		).toBe("from_discovery");
+		expect(
+			Object.getOwnPropertyDescriptor(openIdConfig, "constructor")?.value,
+		).toBe("from_extension");
+		expect(warn).not.toHaveBeenCalled();
 	});
 
 	it("re-derives extension access-token claims on opaque-token introspection", async () => {

@@ -413,7 +413,7 @@ function warnMetadataCollisionOnce(
 /**
  * Builds the discovery document from the provider's `core` fields, each client
  * discovery's `discoveryMetadata` (later discoveries override earlier ones),
- * and each extension's `metadata()` result. Keys the provider sets are kept,
+ * and each extension's `metadata()` result. Keys the provider owns are kept,
  * and extensions only add keys no client discovery set. Two extension lists
  * under one key combine without duplicates; any other shared extension key
  * keeps the first value. Every ignored contribution logs a warning.
@@ -431,16 +431,17 @@ export function applyOAuthProviderMetadataExtensions<
 	const extensions = getOAuthProviderExtensions(opts);
 	const warn = (message: string) =>
 		warnMetadataCollisionOnce(ctx, opts, message);
-	const discoveryMetadata: Record<string, unknown> = {};
+	// Null-prototype targets keep own keys such as `__proto__` as plain data.
+	const discoveryMetadata: Record<string, unknown> = Object.create(null);
 	const discoveryOwners = new Map<string, string>();
 	for (const extension of extensions) {
 		for (const discovery of toArray(extension.clientDiscovery)) {
 			for (const [key, value] of Object.entries(
 				discovery.discoveryMetadata ?? {},
 			)) {
-				if (key in core) {
+				if (Object.hasOwn(core, key)) {
 					warn(
-						`oauth-provider: extension "${extension.id}" contributed the client discovery metadata key "${key}" to ${type}, which the provider sets; ignoring it.`,
+						`oauth-provider: extension "${extension.id}" contributed the client discovery metadata key "${key}" to ${type}, which the provider owns; ignoring it.`,
 					);
 				}
 				discoveryMetadata[key] = value;
@@ -450,16 +451,19 @@ export function applyOAuthProviderMetadataExtensions<
 	}
 	const document = { ...discoveryMetadata, ...core };
 	const owners = new Map<string, string>();
-	const next: Record<string, unknown> = { ...document };
+	const next: Record<string, unknown> = Object.assign(
+		Object.create(null),
+		document,
+	);
 	for (const extension of extensions) {
 		const fields = extension.metadata?.({ ctx, opts, type, document });
 		for (const [key, value] of Object.entries(fields ?? {})) {
 			const existing = next[key];
 			const owner = owners.get(key);
 			const discoveryOwner = discoveryOwners.get(key);
-			if (key in core) {
+			if (Object.hasOwn(core, key)) {
 				warn(
-					`oauth-provider: extension "${extension.id}" contributed the discovery metadata key "${key}" to ${type}, which the provider sets; ignoring it.`,
+					`oauth-provider: extension "${extension.id}" contributed the discovery metadata key "${key}" to ${type}, which the provider owns; ignoring it.`,
 				);
 			} else if (discoveryOwner !== undefined) {
 				warn(
@@ -477,7 +481,8 @@ export function applyOAuthProviderMetadataExtensions<
 			}
 		}
 	}
-	return next as T;
+	const published: Record<string, unknown> = { ...next };
+	return published as T;
 }
 
 async function collectClaims(
