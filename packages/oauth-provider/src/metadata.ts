@@ -24,7 +24,11 @@ import type {
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
 } from "./types/oauth";
-import { getJwtPlugin, mergeDiscoveryMetadata } from "./utils";
+import {
+	getAuthEndpointUrl,
+	getJwtPlugin,
+	mergeDiscoveryMetadata,
+} from "./utils";
 
 export function authServerMetadata(
 	ctx: GenericEndpointContext,
@@ -47,17 +51,17 @@ export function authServerMetadata(
 	const metadata: AuthServerMetadata = {
 		scopes_supported: overrides?.scopes_supported,
 		issuer: validateIssuerUrl(opts?.jwt?.issuer ?? baseURL),
-		authorization_endpoint: `${baseURL}/oauth2/authorize`,
-		token_endpoint: `${baseURL}/oauth2/token`,
+		authorization_endpoint: getAuthEndpointUrl(ctx, "/oauth2/authorize"),
+		token_endpoint: getAuthEndpointUrl(ctx, "/oauth2/token"),
 		jwks_uri: overrides?.jwt_disabled
 			? undefined
 			: (opts?.jwks?.remoteUrl ??
-				`${baseURL}${opts?.jwks?.jwksPath ?? "/jwks"}`),
+				getAuthEndpointUrl(ctx, opts?.jwks?.jwksPath ?? "/jwks")),
 		registration_endpoint: overrides?.dynamic_client_registration_supported
-			? `${baseURL}/oauth2/register`
+			? getAuthEndpointUrl(ctx, "/oauth2/register")
 			: undefined,
-		introspection_endpoint: `${baseURL}/oauth2/introspect`,
-		revocation_endpoint: `${baseURL}/oauth2/revoke`,
+		introspection_endpoint: getAuthEndpointUrl(ctx, "/oauth2/introspect"),
+		revocation_endpoint: getAuthEndpointUrl(ctx, "/oauth2/revoke"),
 		response_types_supported:
 			overrides?.grant_types_supported &&
 			!overrides.grant_types_supported.includes("authorization_code")
@@ -148,7 +152,10 @@ function buildAuthServerMetadata(
 	// RFC 9126 §5: the endpoint advertises PAR; `request_uri_parameter_supported`
 	// stays false because it covers request objects hosted by the client.
 	if (isPushedAuthorizationRequestEnabled(opts)) {
-		authMetadata.pushed_authorization_request_endpoint = `${ctx.context.baseURL}${PUSHED_AUTHORIZATION_REQUEST_PATH}`;
+		authMetadata.pushed_authorization_request_endpoint = getAuthEndpointUrl(
+			ctx,
+			PUSHED_AUTHORIZATION_REQUEST_PATH,
+		);
 		authMetadata.require_pushed_authorization_requests =
 			opts.pushedAuthorizationRequests?.required === true;
 	}
@@ -178,7 +185,6 @@ export function oidcServerMetadata(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]> & { claims?: string[] },
 ) {
-	const baseURL = ctx.context.baseURL;
 	const { jwtPluginOptions, clientDiscoveries, authMetadata } =
 		buildAuthServerMetadata(ctx, opts);
 	const metadata: Omit<
@@ -190,7 +196,7 @@ export function oidcServerMetadata(
 		...authMetadata,
 		claims_supported: getSupportedClaims(opts),
 		claims_parameter_supported: true,
-		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
+		userinfo_endpoint: getAuthEndpointUrl(ctx, "/oauth2/userinfo"),
 		subject_types_supported: opts.pairwiseSecret
 			? ["public", "pairwise"]
 			: ["public"],
@@ -206,7 +212,7 @@ export function oidcServerMetadata(
 				jwtPluginOptions?.jwks?.keyPairConfigs?.map((c) => c.alg) ?? [];
 			return Array.from(new Set<JWSAlgorithms>([primary, ...extras]));
 		})(),
-		end_session_endpoint: `${baseURL}/oauth2/end-session`,
+		end_session_endpoint: getAuthEndpointUrl(ctx, "/oauth2/end-session"),
 		request_parameter_supported: false,
 		request_uri_parameter_supported: false,
 		prompt_values_supported: [

@@ -476,6 +476,8 @@ Some endpoints behave differently with other plugins or requests:
 
 Errors use the [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) format. The built-in grants authenticate the client before they look up the grant, so an unknown `client_id` returns `invalid_client`, not `invalid_grant`.
 
+Every 401 from the provider, including client registration, also lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, so a browser client on another origin can read the challenge. Names that a hook already exposed stay in the list.
+
 `invalid_request` <span className="opacity-70">400</span>
 
 Returned when a required request field is missing or malformed, or a parameter is sent more than once. Only `resource` and `audience` may repeat.

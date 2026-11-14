@@ -1,8 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createHash } from "@better-auth/utils/hash";
+import { isAPIError } from "better-auth/api";
 import { getJwks } from "better-auth/oauth2";
-import { APIError } from "better-call";
-import type { JSONWebKeySet, JWTPayload } from "jose";
+import type { JWTPayload } from "jose";
 import {
 	createLocalJWKSet,
 	decodeProtectedHeader,
@@ -15,7 +15,7 @@ import type {
 	OAuthRefreshToken,
 	Scope,
 } from "./types";
-import { getJwtPlugin, getStoredToken } from "./utils";
+import { getJwksSource, getJwtPlugin, getStoredToken } from "./utils";
 
 /** Signature, issuer, and `azp` are verified; audience and client are not. */
 export type JwtAccessTokenPayload = JWTPayload & { azp: string; sid?: string };
@@ -61,19 +61,8 @@ async function verifyJwtAccessToken(
 	} catch {
 		return null;
 	}
-	const jwtPlugin = getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin.options;
-	const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
-		? jwtPluginOptions.jwks.remoteUrl
-		: async (): Promise<JSONWebKeySet | undefined> =>
-				jwtPlugin.endpoints.getJwks({ context: ctx.context });
-	// Endpoints receive a per-request copy of the context, and one `jwt()`
-	// object can serve several auth instances. The adapter is the instance's
-	// key store, so the cached keys are scoped to it.
-	const jwks = await getJwks(token, {
-		jwksFetch,
-		jwksCacheKey: ctx.context.adapter,
-	});
+	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
+	const jwks = await getJwks(token, getJwksSource(ctx.context));
 	let payload: JWTPayload;
 	try {
 		// Do not pass jose's `audience` option: access-token audiences are
@@ -157,7 +146,7 @@ export async function findRefreshToken(
 		// `compactDecrypt` throws, means this is not a refresh token. Any other
 		// failure is real.
 		if (
-			(error instanceof APIError && error.statusCode === 400) ||
+			(isAPIError(error) && error.statusCode === 400) ||
 			error instanceof joseErrors.JOSEError
 		) {
 			return null;

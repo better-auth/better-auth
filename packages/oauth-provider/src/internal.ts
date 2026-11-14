@@ -24,6 +24,7 @@ export {
 } from "./register";
 export { resolveResourcePolicy } from "./resources";
 export {
+	getLocalJwksSource,
 	parseClientMetadata,
 	toResourceList,
 	validateClientScopes,

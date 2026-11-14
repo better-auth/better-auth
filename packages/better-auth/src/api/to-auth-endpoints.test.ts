@@ -1525,3 +1525,57 @@ describe("before hook request headers", async () => {
 		expect(res).toMatchObject({ injected: "yes" });
 	});
 });
+
+/**
+ * `Access-Control-Expose-Headers` is a list, so a thrown challenge that
+ * exposes `WWW-Authenticate` must keep the names a hook or the endpoint
+ * already exposed.
+ * @see https://fetch.spec.whatwg.org/#http-access-control-expose-headers
+ */
+describe("Access-Control-Expose-Headers on APIError", async () => {
+	const challenge = {
+		"WWW-Authenticate": "Bearer",
+		"Access-Control-Expose-Headers": "WWW-Authenticate",
+	};
+	const endpoints = {
+		exposeThenThrow: createAuthEndpoint(
+			"/expose-then-throw",
+			{ method: "GET" },
+			async (c) => {
+				c.setHeader("Access-Control-Expose-Headers", "X-Request-Id");
+				throw new APIError("UNAUTHORIZED", { message: "no token" }, challenge);
+			},
+		),
+		throwAfterHook: createAuthEndpoint(
+			"/throw-after-hook",
+			{ method: "GET" },
+			async () => {
+				throw new APIError("UNAUTHORIZED", { message: "no token" }, challenge);
+			},
+		),
+	};
+	const authContext = init({
+		hooks: {
+			before: createAuthMiddleware(async (c) => {
+				if (c.path === "/throw-after-hook") {
+					c.setHeader("Access-Control-Expose-Headers", "X-Request-Id");
+				}
+			}),
+		},
+	});
+	const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+	it("keeps the names the endpoint exposed before it threw", async () => {
+		const response = await authEndpoints.exposeThenThrow({ asResponse: true });
+		expect(response.headers.get("access-control-expose-headers")).toBe(
+			"X-Request-Id, WWW-Authenticate",
+		);
+	});
+
+	it("keeps the names a before hook exposed", async () => {
+		const response = await authEndpoints.throwAfterHook({ asResponse: true });
+		expect(response.headers.get("access-control-expose-headers")).toBe(
+			"X-Request-Id, WWW-Authenticate",
+		);
+	});
+});

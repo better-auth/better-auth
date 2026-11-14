@@ -382,6 +382,41 @@ describe("internal adapter test", async () => {
 		expect(session.data?.session).toBeDefined();
 	});
 
+	it("deletes expired verification values at most once a minute", async () => {
+		const opts = {
+			database: new DatabaseSync(":memory:"),
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(opts)).runMigrations();
+		const ctx = await init(opts);
+		const expire = (identifier: string) =>
+			ctx.internalAdapter.createVerificationValue({
+				identifier,
+				value: "stale",
+				expiresAt: new Date(Date.now() - 1_000),
+			});
+		const remaining = (identifier: string) =>
+			ctx.adapter.count({
+				model: "verification",
+				where: [{ field: "identifier", value: identifier }],
+			});
+
+		await expire("cleanup:first");
+		await ctx.internalAdapter.findVerificationValue("cleanup:lookup");
+		expect(await remaining("cleanup:first")).toBe(0);
+
+		await expire("cleanup:second");
+		await ctx.internalAdapter.findVerificationValue("cleanup:lookup");
+		expect(await remaining("cleanup:second")).toBe(1);
+
+		vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 61_000 });
+		try {
+			await ctx.internalAdapter.findVerificationValue("cleanup:lookup");
+		} finally {
+			vi.useRealTimers();
+		}
+		expect(await remaining("cleanup:second")).toBe(0);
+	});
+
 	it("should delete expired verification values on find", async () => {
 		await internalAdapter.createVerificationValue({
 			identifier: `test-id-1`,

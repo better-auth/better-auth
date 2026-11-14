@@ -1,5 +1,6 @@
 {
   "root": true,
+  "plugins": ["./biome-plugins/no-instanceof-api-error.grit"],
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "vcs": {
     "enabled": true,
