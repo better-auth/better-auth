@@ -1,3 +1,4 @@
+import type { BetterFetchOption } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 import { fetchRefusingRedirects } from "./reject-redirects";
@@ -37,6 +38,13 @@ interface RefreshAccessTokenRequestBaseInput {
 interface RefreshAccessTokenInput extends RefreshAccessTokenRequestInput {
 	options: Partial<ProviderOptions>;
 	tokenEndpoint: string;
+	/**
+	 * The fetch implementation for the request, such as one from
+	 * `createDpopFetch` to send DPoP proofs (RFC 9449).
+	 *
+	 * @default globalThis.fetch
+	 */
+	fetch?: BetterFetchOption["customFetchImpl"];
 }
 
 /**
@@ -141,6 +149,7 @@ export async function refreshAccessToken({
 	extraParams,
 	resource,
 	headers: extraHeaders,
+	fetch,
 }: RefreshAccessTokenInput): Promise<OAuth2Tokens> {
 	const { body, headers } = await refreshAccessTokenRequest({
 		refreshToken,
@@ -165,6 +174,7 @@ export async function refreshAccessToken({
 		method: "POST",
 		body,
 		headers,
+		customFetchImpl: fetch,
 	});
 	if (error) {
 		throw error;

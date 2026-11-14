@@ -589,6 +589,71 @@ If the pushed request fails, for example because the provider rejects it, sign-i
 
 Set `pushedAuthorizationRequest: false` only for a provider whose discovery document claims to require PAR when it does not. Better Auth logs a warning at startup, because a provider that does require PAR rejects every browser-redirect sign-in.
 
+### DPoP
+
+Some providers issue sender-constrained tokens with DPoP (RFC 9449). A DPoP-bound access token only works together with a proof signed by your key, so a token that leaks from your database or logs cannot be used on its own. To request DPoP-bound tokens, set `dpop` with a key pair:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
+
+const keyPair = await loadDpopKeyPair();
+
+export const auth = betterAuth({
+    plugins: [
+        genericOAuth({
+            config: [
+                {
+                    providerId: "example",
+                    discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
+                    clientId: process.env.EXAMPLE_CLIENT_ID,
+                    clientSecret: process.env.EXAMPLE_CLIENT_SECRET,
+                    dpop: { keyPair },
+                },
+            ],
+        }),
+    ],
+});
+```
+
+With `dpop` set, Better Auth:
+
+* Sends `dpop_jkt`, the key's thumbprint, with the authorization request, so the provider binds the authorization code to your key.
+* Sends a DPoP proof with the code exchange, token refresh, and [pushed authorization request](#pushed-authorization-requests).
+* Calls the userinfo endpoint with `Authorization: DPoP` and a proof when the provider returns a DPoP token.
+* Retries a request once when the provider asks for a DPoP nonce.
+
+A provider can still return a `Bearer` token, for example when it does not support DPoP. Better Auth then uses it as a `Bearer` token. A custom `getToken` or `getUserInfo` replaces the request Better Auth would send, so it must send its own proofs.
+
+Tokens bound to a key only work with that key. Use one key pair that survives restarts and is the same on every server instance, and keep it for as long as stored tokens live. A key from `generateDpopKeyPair` lives only in memory. To load a stored key instead, import a private EC P-256 JWK from your secret store:
+
+```ts title="dpop-key.ts"
+export async function loadDpopKeyPair() {
+    const jwk = JSON.parse(process.env.DPOP_PRIVATE_JWK!);
+    const { d: _privateKey, ...publicJwk } = jwk;
+    const algorithm = { name: "ECDSA", namedCurve: "P-256" };
+    return {
+        privateKey: await crypto.subtle.importKey("jwk", jwk, algorithm, false, ["sign"]),
+        publicKey: await crypto.subtle.importKey("jwk", publicJwk, algorithm, true, ["verify"]),
+    };
+}
+```
+
+To call the provider's APIs with a DPoP-bound access token from `getAccessToken`, send the request through `createDpopFetch` with the same key pair, and use the `DPoP` scheme:
+
+```ts
+import { createDpopFetch } from "better-auth/oauth2/dpop-client";
+
+const dpopFetch = createDpopFetch({ keyPair });
+const { accessToken } = await auth.api.getAccessToken({
+    body: { providerId: "example" },
+    headers,
+});
+const response = await dpopFetch("https://api.example.com/items", {
+    headers: { Authorization: `DPoP ${accessToken}` },
+});
+```
+
 ### IDP-Initiated Flows
 
 Some OAuth providers (e.g., [Clever](https://dev.clever.com/docs/oauth-implementation#initiating-logins)) let the identity provider redirect users to your callback URL without first having the user click a "sign in" button in your app. These callbacks arrive with a `code` parameter but no `state`, which would normally be rejected because the missing `state` breaks the standard CSRF check.
