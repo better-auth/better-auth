@@ -416,7 +416,7 @@ It receives `action` (`create`, `read`, `update`, `delete`, `list`, `rotate`, or
 Ownership is checked after this callback, so returning `true` does not grant access to another owner's client. `adminUpdateOAuthClient` has two exceptions, which also cover clients with no owner, such as anonymous registrations and metadata document clients:
 
 * A call that changes only `enable_end_session` needs the callback to approve `update`.
-* A call that also changes `client_credentials_scopes` needs it to approve both `update` and `configure-client-credentials-scopes`.
+* A call that changes `client_credentials_scopes`, with or without `enable_end_session`, needs it to approve both `update` and `configure-client-credentials-scopes`.
 
 ```ts title="auth.ts"
 oauthProvider({

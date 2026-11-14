@@ -326,6 +326,10 @@ describe("RP-initiated logout for registered clients", () => {
 			},
 		});
 		expect(updated.redirect_uris).toEqual(["https://rp2.example.com/callback"]);
+		expect(updated.post_logout_redirect_uris).toEqual([
+			"https://elsewhere.example/landing",
+		]);
+		expect(updated.enable_end_session).toBe(true);
 	});
 
 	it("lets an administrator take back logout from a client without an owner", async () => {
