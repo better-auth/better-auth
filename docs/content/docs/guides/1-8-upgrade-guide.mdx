@@ -285,7 +285,7 @@ Pairwise clients created after the upgrade with private-use redirect URIs, such 
 
 This applies if any client authenticates with `private_key_jwt`, or you write a `clientAuthentication` strategy. A client assertion's `aud` must now be the provider's issuer and nothing else, at every endpoint that authenticates a client: token, introspection, revocation, PAR, and plugin endpoints. [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) and [§5](https://www.rfc-editor.org/rfc/rfc10070#section-5) require this to stop audience injection, where a malicious server replays an assertion that a client signed for an endpoint URL.
 
-A client that signs for the token endpoint URL, the PAR endpoint URL, or the URL of another endpoint now gets `invalid_client`. So does a client whose `aud` list names the issuer and another value. Before, any one of these values was accepted.
+A client that signs for the token endpoint URL, the PAR endpoint URL, or the URL of another endpoint now gets `invalid_client`. So does a client whose `aud` list names the issuer and another value. The error description names the issuer to sign for, as in `client assertion aud must be the issuer https://example.com/api/auth`. Before, any one of these values was accepted.
 
 **What to do:** update your clients to sign their assertions for the issuer. RFC 10070 §6 asks you to update clients before or together with the server. A Better Auth generic OAuth provider with a discovered issuer signs for it by default from 1.8, as [Generic OAuth signs assertions for the issuer](#generic-oauth-signs-assertions-for-the-issuer) describes.
 

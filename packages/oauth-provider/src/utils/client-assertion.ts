@@ -12,6 +12,7 @@ import {
 	createLocalJWKSet,
 	decodeJwt,
 	decodeProtectedHeader,
+	errors as joseErrors,
 	jwtVerify,
 } from "jose";
 import { getIssuer } from "../authorize";
@@ -426,6 +427,22 @@ export async function consumeClientAssertion(
 	});
 }
 
+/**
+ * The `invalid_client` description for an assertion whose `aud` is not
+ * accepted. When only the issuer is accepted, it names the issuer, so the
+ * client knows what to sign for (RFC 10070 §4).
+ */
+function audienceErrorDescription(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	acceptedAudiences: string[],
+): string {
+	const issuer = getIssuer(ctx, opts);
+	return acceptedAudiences.length === 1 && acceptedAudiences[0] === issuer
+		? `client assertion aud must be the issuer ${issuer}`
+		: "client assertion aud is not an accepted audience";
+}
+
 async function consumeAssertion(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -449,7 +466,7 @@ async function consumeAssertion(
 		: audiences.some(isAccepted);
 	if (!audienceMatches) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "client assertion aud is not an accepted audience",
+			error_description: audienceErrorDescription(ctx, opts, acceptedAudiences),
 			error: "invalid_client",
 		});
 	}
@@ -691,6 +708,18 @@ export async function verifyClientAssertion(
 					error: "invalid_client",
 				});
 			}
+		} else if (
+			verifyErr instanceof joseErrors.JWTClaimValidationFailed &&
+			verifyErr.claim === "aud"
+		) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: audienceErrorDescription(
+					ctx,
+					opts,
+					acceptedAudiences,
+				),
+				error: "invalid_client",
+			});
 		} else {
 			throw new APIError("UNAUTHORIZED", {
 				error_description: "client assertion signature verification failed",

@@ -227,6 +227,22 @@ describe("client assertion audience", () => {
 			},
 		);
 
+		it.each([
+			["private_key_jwt", tokenEndpoint],
+			["private_key_jwt", [issuer, "x"]],
+			["strategy", tokenEndpoint],
+		] as const)(
+			"tells a %s client to sign for the issuer",
+			async (method, aud) => {
+				const audience = typeof aud === "string" ? aud : [...aud];
+				const token = await requestToken(await methods[method](audience));
+				expect(token.body).toEqual({
+					error: "invalid_client",
+					error_description: `client assertion aud must be the issuer ${issuer}`,
+				});
+			},
+		);
+
 		it("offers a strategy only the issuer as the accepted audience", async () => {
 			observedAcceptedAudiences.length = 0;
 			await requestToken(await methods.strategy(issuer));
