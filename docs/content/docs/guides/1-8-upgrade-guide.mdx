@@ -96,7 +96,7 @@ A session created from an API key with `enableSessionForAPIKeys` is refused on t
 
 ### Expired verification rows are cleaned up on use
 
-Expired verification rows are now also deleted when a single-use value, such as a magic link, an OTP, or an issued nonce, is used. Before, cleanup ran only when a value was looked up. `verification.disableCleanup` turns off both kinds of cleanup.
+Expired verification rows are now also deleted when a single-use value, such as a magic link, an OTP, or an issued nonce, is used. Before, cleanup ran only when a value was looked up. Cleanup now runs at most once a minute per server instance, instead of on every lookup. Each flow still checks a value's expiry before it accepts the value. `verification.disableCleanup` turns off both kinds of cleanup.
 
 ***
 
