@@ -104,6 +104,13 @@ const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
 // key. Bounds how often tokens naming made-up `kid` values make a source fetch.
 const JWKS_REFETCH_COOLDOWN_MS = 30 * 1000;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
+/**
+ * Maximum age an expired cached JWKS is trusted for verification when a refetch
+ * fails or times out (RFC 5861 stale-if-error).
+ *
+ * @internal
+ */
+export const JWKS_MAX_STALE_MS = 60 * 60 * 1000;
 
 function getJwksCacheEntry<K>(
 	cache: {
@@ -445,10 +452,34 @@ async function getJwksForVerification(
 				? getJwksCacheEntry(functionJwksCache, opts.jwksCacheKey)
 				: { fetchedAt: 0, refetchedAt: 0 };
 
+	const now = Date.now();
 	const cached =
-		Date.now() - entry.fetchedAt < JWKS_CACHE_TTL_MS ? entry.jwks : undefined;
+		now - entry.fetchedAt < JWKS_CACHE_TTL_MS ? entry.jwks : undefined;
 	if (!cached) {
-		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
+		const stale =
+			entry.jwks && now - entry.fetchedAt < JWKS_MAX_STALE_MS
+				? entry.jwks
+				: undefined;
+		const canUseStale =
+			stale && (!kid || stale.keys.some((jwk) => jwk.kid === kid));
+
+		if (canUseStale && now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) {
+			const refresh = (failed: JSONWebKeySet) =>
+				refreshJwks(entry, failed, opts.jwksFetch);
+			return { jwks: stale, kid, refresh };
+		}
+
+		try {
+			return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
+		} catch (error) {
+			entry.refetchedAt = Date.now();
+			if (canUseStale) {
+				const refresh = (failed: JSONWebKeySet) =>
+					refreshJwks(entry, failed, opts.jwksFetch);
+				return { jwks: stale, kid, refresh };
+			}
+			throw error;
+		}
 	}
 	const refresh = (failed: JSONWebKeySet) =>
 		refreshJwks(entry, failed, opts.jwksFetch);
