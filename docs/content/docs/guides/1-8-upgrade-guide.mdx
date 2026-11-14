@@ -139,6 +139,12 @@ tokenEndpointAuth: {
 
 Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refreshAccessToken`, or `refreshAccessTokenRequest` from `@better-auth/core/oauth2` that pass `authorization` in `headers` now throw.
 
+### Generic OAuth checks the discovered issuer
+
+When `discoveryUrl` is a well-known URL, the discovery document's `issuer` must now be the issuer the URL is built from. Otherwise Better Auth logs an error that names the provider and both values, and skips the provider. Before, the document was used whatever issuer it named.
+
+**What to do:** if a provider is skipped after the upgrade, check its documentation for its issuer identifier. If the provider publishes discovery under another name for the same issuer, such as a tenant domain instead of the tenant ID, set `issuer` to that identifier. See [`issuer`](/docs/plugins/generic-oauth#configuration).
+
 ### Social provider profile types match the provider
 
 This applies if you use `mapProfileToUser`, a custom `getUserInfo`, or read a provider's profile type. Each profile type now matches what the provider returns. Claims that depend on a scope or account setting are optional, and a provider that omits a value leaves the stored value unchanged when profile updates are enabled.

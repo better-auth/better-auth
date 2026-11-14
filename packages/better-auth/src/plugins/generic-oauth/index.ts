@@ -104,6 +104,42 @@ function isClientSecretTokenEndpointAuth(
 	);
 }
 
+const WELL_KNOWN_DOCUMENTS = [
+	"openid-configuration",
+	"oauth-authorization-server",
+] as const;
+
+/**
+ * Whether `issuer` is the issuer identifier `discoveryUrl` was built from, or
+ * `undefined` when `discoveryUrl` is not a well-known URL.
+ *
+ * OpenID Connect Discovery 1.0 §4 appends the well-known path to the issuer,
+ * after removing a trailing slash. RFC 8414 §3.1 inserts it between the host
+ * and the issuer's path.
+ */
+function isIssuerOfDiscoveryUrl(
+	issuer: string,
+	discoveryUrl: string,
+): boolean | undefined {
+	const discovery = new URL(discoveryUrl);
+	if (!discovery.pathname.includes("/.well-known/")) return undefined;
+	let issuerUrl: URL;
+	try {
+		issuerUrl = new URL(issuer);
+	} catch {
+		return false;
+	}
+	if (issuerUrl.search || issuerUrl.hash) return false;
+	let path = issuerUrl.pathname;
+	while (path.endsWith("/")) path = path.slice(0, -1);
+	const target = `${discovery.origin}${discovery.pathname}`;
+	return WELL_KNOWN_DOCUMENTS.some(
+		(document) =>
+			target === `${issuerUrl.origin}${path}/.well-known/${document}` ||
+			target === `${issuerUrl.origin}/.well-known/${document}${path}`,
+	);
+}
+
 /** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
 const DISCOVERY_RETRY_TIMEOUT_MS = 10_000;
 const MAX_DISCOVERY_REDIRECTS = 5;
@@ -315,6 +351,22 @@ export const genericOAuth = <const ID extends string>(
 					);
 					return null;
 				});
+				// RFC 8414 §3.3: a document for another issuer must not be used.
+				const issuerMismatch =
+					discovered &&
+					(c.issuer
+						? discovered.issuer !== c.issuer
+						: discovered.issuer !== undefined &&
+							isIssuerOfDiscoveryUrl(discovered.issuer, c.discoveryUrl) ===
+								false);
+				if (discovered && issuerMismatch) {
+					ctx.logger.error(
+						c.issuer
+							? `Provider "${c.providerId}": discovery issuer "${discovered.issuer}" does not match the configured issuer "${c.issuer}". Provider skipped.`
+							: `Provider "${c.providerId}": discovery issuer "${discovered.issuer}" is not the issuer of discoveryUrl "${c.discoveryUrl}". If the provider publishes its document under another name for the same issuer, set issuer to the issuer identifier the provider documents. Provider skipped.`,
+					);
+					continue;
+				}
 				if (discovered) {
 					authorizationUrl ??= discovered.authorization_endpoint;
 					tokenUrl ??= discovered.token_endpoint;
