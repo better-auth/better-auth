@@ -74,10 +74,12 @@ A string uses the plugin defaults. An object sets per-resource policy:
 
 In a request for several resources, a `signingAlgorithm` or `signingKeyId` set on one of them applies to the whole token, and resources without one do not conflict with it. The request fails with `invalid_request` only when two resources set different values, because one token carries one signature. To fix it, set the same value on both resources, or leave it unset on one of them.
 
+Omit `allowedScopes` (or pass `null` at runtime) to allow every requested scope. A non-empty array is an allowlist; scopes outside it are removed and an empty intersection is rejected with `invalid_scope`. In config, an empty array (`[]`) is rejected at construction to prevent ambiguity with blocking access (use `disabled: true` to stop issuing tokens). Pass `null` through the admin API to remove the restriction; `[]` is rejected there too. Admin responses serialize an unrestricted allowlist as `null`, which echoes back cleanly.
+
 The resources you configure are written to the `oauthResource` table at startup. Set `resourceSeedMode` to choose what happens to a row that already exists:
 
 * `insertOnly` (default): only adds missing rows, so edits made through the admin endpoints survive restarts.
-* `merge`: adds missing rows and updates the fields present in the config.
+* `merge`: adds missing rows and updates the fields present in the config. In `merge` seed mode, omitting `allowedScopes` preserves the existing row's allowlist; to clear an existing allowlist, use the admin update endpoint with `allowedScopes: null` (persisted as `[]`), or re-seed using `overwrite` mode.
 * `overwrite`: replaces existing rows with the config values.
 
 ### Manage resources at runtime
@@ -104,7 +106,7 @@ await auth.api.adminLinkClientResource({
 Deleting a resource makes introspection report its tokens as inactive, while `disabled: true` only stops new issuance. If your API verifies JWTs locally with the JWKS, it keeps accepting them until they expire. Use [introspection](/docs/plugins/oauth-provider/resource-server#introspection) if you need deletion to cut off access immediately. To attach resources during dynamic registration, see [Resources for registered clients](/docs/plugins/oauth-provider/clients#resources-for-registered-clients).
 
 <Callout type="warn">
-  If you use Prisma on PostgreSQL, CockroachDB, or MongoDB, declare `allowedScopes` on every resource. Prisma cannot write `null` to a list column, so a resource without `allowedScopes` cannot be stored. Requests that use any configured resource fail until every resource declares it. For the resource the [MCP plugin](/docs/plugins/mcp) adds, declare it in `resources` with the same identifier.
+  **Migration warning:** Resources whose stored `allowedScopes` is empty currently refuse every token. This includes Prisma rows where SQL `NULL` was read back as `[]`. After upgrading, those resources allow every requested scope. If you relied on an empty array to block a resource, set `disabled: true` for it through the admin update endpoint before upgrading; config-level `disabled: true` reaches existing rows only in `merge` or `overwrite` seed mode. Existing rows are not rewritten and no database migration is required. A `resources` entry with `allowedScopes: []` now fails validation.
 </Callout>
 
 ## Lifetimes
