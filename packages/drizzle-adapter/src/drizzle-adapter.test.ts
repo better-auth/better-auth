@@ -525,6 +525,109 @@ describe("drizzle-adapter", () => {
 		});
 	});
 
+	// Both entry points carry their own copy of consumeOne, so every case
+	// below runs against each; a fix landing in one copy but not the other is
+	// caught here, without a database.
+	describe.each([
+		{ relations: "Relations v1", adapterFactory: drizzleAdapter },
+		{ relations: "Relations v2", adapterFactory: drizzleRelationsV2Adapter },
+	])("consumeOne ($relations)", ({ adapterFactory }) => {
+		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+		const verificationTable = pgTable("verification", {
+			id: text("id"),
+			identifier: text("identifier"),
+			value: text("value"),
+			expiresAt: timestamp("expiresAt"),
+			createdAt: timestamp("createdAt"),
+			updatedAt: timestamp("updatedAt"),
+		});
+
+		function createConsumeDb(returned: unknown[]) {
+			const calls: {
+				whereArgs?: unknown[];
+				selectGuard?: unknown[];
+			} = {};
+			const returning = vi.fn().mockResolvedValue(returned);
+			const deleteWhere = vi.fn((...args: unknown[]) => {
+				calls.whereArgs = args;
+				return { returning };
+			});
+			const targetIds = sql`select id from verification`;
+			const selectLimit = vi.fn().mockReturnValue(targetIds);
+			const selectWhere = vi.fn((...args: unknown[]) => {
+				calls.selectGuard = args;
+				return { limit: selectLimit };
+			});
+			const selectFrom = vi.fn().mockReturnValue({ where: selectWhere });
+			const db = {
+				_: { fullSchema: { verification: verificationTable } },
+				select: vi.fn().mockReturnValue({ from: selectFrom }),
+				delete: vi.fn().mockReturnValue({ where: deleteWhere }),
+			} as any;
+			return { db, calls, targetIds };
+		}
+
+		function flattenSqlChunks(expr: SQL): unknown[] {
+			return expr.queryChunks.flatMap((chunk) =>
+				is(chunk, SQL) ? [chunk, ...flattenSqlChunks(chunk)] : [chunk],
+			);
+		}
+
+		function createAdapter(db: any) {
+			return adapterFactory(db, { provider: "pg" })({
+				secret: defaultSecret,
+			});
+		}
+
+		it("deletes at most one row and repeats the guard in the outer WHERE (#12618)", async () => {
+			const row = {
+				id: "v1",
+				identifier: "someone@example.com",
+				value: "old",
+				expiresAt: new Date(),
+			};
+			const { db, calls, targetIds } = createConsumeDb([row]);
+			const adapter = createAdapter(db);
+
+			const result = await adapter.consumeOne({
+				model: "verification",
+				where: [
+					{ field: "id", value: "v1" },
+					{ field: "value", value: "old" },
+				],
+			});
+
+			expect(result).toEqual(row);
+			expect(db.select).toHaveBeenCalledTimes(1);
+			expect(calls.selectGuard).toHaveLength(1);
+
+			// Under READ COMMITTED, PostgreSQL re-evaluates a DELETE's own WHERE against
+			// the new row version after waiting on a concurrent writer, but not an uncorrelated
+			// subquery's. Repeating the guard in the DELETE prevents deleting a row when a concurrent
+			// writer moved it out of the guard (#12618).
+			expect(calls.whereArgs).toHaveLength(1);
+			const deleteGuard = calls.whereArgs?.[0];
+			expect(is(deleteGuard, SQL)).toBe(true);
+			const predicate = flattenSqlChunks(deleteGuard as SQL);
+			expect(predicate).toContain(targetIds);
+			expect(predicate).toContain(calls.selectGuard?.[0]);
+			expect(predicate).toContainEqual({ value: [" and "] });
+			expect(predicate).not.toContainEqual({ value: [" or "] });
+		});
+
+		it("returns null when the guard matches no row", async () => {
+			const { db } = createConsumeDb([]);
+			const adapter = createAdapter(db);
+
+			const result = await adapter.consumeOne({
+				model: "verification",
+				where: [{ field: "id", value: "nonexistent" }],
+			});
+
+			expect(result).toBeNull();
+		});
+	});
+
 	// Both entry points carry their own copy of incrementOne, so every case
 	// below runs against each; a fix landing in one copy but not the other is
 	// caught here, without a database.
