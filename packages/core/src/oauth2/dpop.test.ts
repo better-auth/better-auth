@@ -367,6 +367,41 @@ describe("enforceDpopBinding", () => {
 	});
 });
 
+describe("createInMemoryDpopReplayStore", () => {
+	const at = (seconds: number) => new Date((nowSeconds + seconds) * 1000);
+
+	it("rejects a key until its reservation expires, then accepts it again", () => {
+		const store = createInMemoryDpopReplayStore();
+		const reserve = (now: number) =>
+			store.reserve({ key: "replay-key", expiresAt: at(5), now: at(now) });
+
+		expect(reserve(0)).toBe(true);
+		expect(reserve(4)).toBe(false);
+		// Expiry is checked on lookup, not only when expired entries are swept.
+		expect(reserve(5)).toBe(true);
+	});
+
+	it("keeps unexpired reservations of other keys across a sweep", () => {
+		const store = createInMemoryDpopReplayStore();
+		expect(store.reserve({ key: "short", expiresAt: at(1), now: at(0) })).toBe(
+			true,
+		);
+		expect(store.reserve({ key: "long", expiresAt: at(600), now: at(0) })).toBe(
+			true,
+		);
+
+		expect(
+			store.reserve({ key: "other", expiresAt: at(700), now: at(120) }),
+		).toBe(true);
+		expect(
+			store.reserve({ key: "long", expiresAt: at(700), now: at(121) }),
+		).toBe(false);
+		expect(
+			store.reserve({ key: "short", expiresAt: at(700), now: at(121) }),
+		).toBe(true);
+	});
+});
+
 describe("createDpopReplayStore", () => {
 	it("delegates to reserveVerificationValue, namespaces the key, and rejects a replay", async () => {
 		const seen = new Set<string>();
@@ -388,6 +423,51 @@ describe("createDpopReplayStore", () => {
 		expect(await store.reserve(reservation)).toBe(true);
 		expect(await store.reserve(reservation)).toBe(false);
 		expect(identifiers.every((id) => id.startsWith("dpop-proof:"))).toBe(true);
+	});
+});
+
+describe("createDpopReplayStore with the auth context", () => {
+	const reservation = {
+		key: "replay-key",
+		expiresAt: new Date(nowSeconds * 1000 + 90_500),
+		now: new Date(nowSeconds * 1000),
+	};
+	const reserveVerificationValue = vi.fn(async () => true);
+
+	it("records proofs in secondary storage when verification values live there", async () => {
+		const counts = new Map<string, number>();
+		const increment = vi.fn((key: string, _ttl: number) => {
+			const count = (counts.get(key) ?? 0) + 1;
+			counts.set(key, count);
+			return count;
+		});
+		const store = createDpopReplayStore({
+			internalAdapter: { reserveVerificationValue },
+			secondaryStorage: { increment },
+			options: {},
+		});
+
+		expect(await store.reserve(reservation)).toBe(true);
+		expect(await store.reserve(reservation)).toBe(false);
+		expect(increment).toHaveBeenCalledWith("dpop-proof:replay-key", 91);
+		expect(reserveVerificationValue).not.toHaveBeenCalled();
+	});
+
+	it("records proofs in the database when verification values are stored there", async () => {
+		const increment = vi.fn(() => 1);
+		const store = createDpopReplayStore({
+			internalAdapter: { reserveVerificationValue },
+			secondaryStorage: { increment },
+			options: { verification: { storeInDatabase: true } },
+		});
+
+		expect(await store.reserve(reservation)).toBe(true);
+		expect(reserveVerificationValue).toHaveBeenCalledWith({
+			identifier: "dpop-proof:replay-key",
+			value: "replay-key",
+			expiresAt: reservation.expiresAt,
+		});
+		expect(increment).not.toHaveBeenCalled();
 	});
 });
 

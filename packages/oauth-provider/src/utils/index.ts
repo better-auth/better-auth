@@ -12,7 +12,7 @@ import {
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
-import type { JWTPayload } from "jose";
+import type { JSONWebKeySet, JWTPayload } from "jose";
 import {
 	getClientDiscoveries,
 	getExtensionClientAuthenticationStrategy,
@@ -103,12 +103,55 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
  * Gets the JWT Plugin
  * @internal
  */
+const findJwtPlugin = (ctx: AuthContext) =>
+	ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+
 export const getJwtPlugin = (ctx: AuthContext) => {
-	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+	const plugin = findJwtPlugin(ctx);
 	if (!plugin) {
 		throw new BetterAuthError("jwt_config");
 	}
 	return plugin;
+};
+
+function readJwksInProcess(
+	context: AuthContext,
+	jwtPlugin: ReturnType<typeof jwt>,
+) {
+	return {
+		jwksFetch: async (): Promise<JSONWebKeySet | undefined> =>
+			jwtPlugin.endpoints.getJwks({ context }),
+		// Endpoints receive a per-request copy of the context, and one `jwt()`
+		// object can serve several auth instances. The adapter is the instance's
+		// key store, so the cached keys are scoped to it.
+		jwksCacheKey: context.adapter,
+	};
+}
+
+/**
+ * Source of this server's signing keys, for verifying tokens it issued. Keys
+ * published at `jwks.remoteUrl` are fetched from there; otherwise they are read
+ * in-process, so no request goes to this server's own `/jwks`. That read skips
+ * the router, so hooks and the rate limiter on `/jwks` do not run for it.
+ */
+export const getJwksSource = (context: AuthContext) => {
+	const jwtPlugin = getJwtPlugin(context);
+	const remoteUrl = jwtPlugin.options?.jwks?.remoteUrl;
+	return remoteUrl
+		? { jwksFetch: remoteUrl }
+		: readJwksInProcess(context, jwtPlugin);
+};
+
+/**
+ * In-process source of this server's signing keys for a verifier in the same
+ * process, or `undefined` without a JWT plugin or when the keys are published
+ * at `jwks.remoteUrl`. See {@link getJwksSource}.
+ */
+export const getLocalJwksSource = (context: AuthContext) => {
+	const jwtPlugin = findJwtPlugin(context);
+	return jwtPlugin && !jwtPlugin.options?.jwks?.remoteUrl
+		? readJwksInProcess(context, jwtPlugin)
+		: undefined;
 };
 
 /** A plain JSON object: not `null` and not an array. */
@@ -706,6 +749,19 @@ export async function normalizeClientAuthenticationParameters(
 	};
 }
 
+/**
+ * Headers for a response that carries an authentication challenge.
+ * `WWW-Authenticate` is not a CORS-safelisted response header, so browsers
+ * hide it from cross-origin clients, such as a browser MCP client registering
+ * itself, unless the response exposes it.
+ */
+export function challengeHeaders(challenge: string) {
+	return {
+		"WWW-Authenticate": challenge,
+		"Access-Control-Expose-Headers": "WWW-Authenticate",
+	};
+}
+
 function basicToClientCredentials(authorization: string) {
 	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
 		return undefined;
@@ -720,7 +776,7 @@ function basicToClientCredentials(authorization: string) {
 				error_description: "invalid authorization header format",
 				error: "invalid_client",
 			},
-			{ "WWW-Authenticate": "Basic" },
+			challengeHeaders("Basic"),
 		);
 	}
 }
@@ -843,7 +899,7 @@ export function throwInvalidClient(
 			error_description: errorDescription,
 			error: "invalid_client",
 		},
-		challengeScheme ? { "WWW-Authenticate": challengeScheme } : undefined,
+		challengeScheme ? challengeHeaders(challengeScheme) : undefined,
 	);
 }
 
