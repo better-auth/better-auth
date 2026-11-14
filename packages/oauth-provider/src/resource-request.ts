@@ -145,7 +145,7 @@ export async function verifyResourceRequest(
 				url: getEndpointUrl(ctx, ctx.path ?? ""),
 				proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 				signingAlgorithms: opts.dpop?.signingAlgorithms,
-				replayStore: createDpopReplayStore(ctx.context.internalAdapter),
+				replayStore: createDpopReplayStore(ctx.context),
 				nonce,
 			});
 		} catch (error) {

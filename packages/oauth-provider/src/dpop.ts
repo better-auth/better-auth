@@ -159,7 +159,10 @@ export async function verifyRequestDpopProof(
 		method: string;
 		url: string;
 		expectedJkt?: string;
-		/** Defaults to the database-backed store. */
+		/**
+		 * Defaults to the auth instance's store: secondary storage when it is
+		 * configured and `verification.storeInDatabase` is off, else the database.
+		 */
 		replayStore?: DpopReplayStore;
 	},
 ): Promise<VerifiedDpopProof> {
@@ -171,8 +174,7 @@ export async function verifyRequestDpopProof(
 			...proofParams,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore:
-				replayStore ?? createDpopReplayStore(ctx.context.internalAdapter),
+			replayStore: replayStore ?? createDpopReplayStore(ctx.context),
 			nonce,
 			// The time the request arrived, which the token endpoint's nonce check
 			// also used, not the time a grant reaches issuance.

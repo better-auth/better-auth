@@ -2,7 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createHash } from "@better-auth/utils/hash";
 import { isAPIError } from "better-auth/api";
 import { getJwks } from "better-auth/oauth2";
-import type { JSONWebKeySet, JWTPayload } from "jose";
+import type { JWTPayload } from "jose";
 import {
 	createLocalJWKSet,
 	decodeProtectedHeader,
@@ -15,7 +15,7 @@ import type {
 	OAuthRefreshToken,
 	Scope,
 } from "./types";
-import { getJwtPlugin, getStoredToken } from "./utils";
+import { getJwksSource, getJwtPlugin, getStoredToken } from "./utils";
 
 /** Signature, issuer, and `azp` are verified; audience and client are not. */
 export type JwtAccessTokenPayload = JWTPayload & { azp: string; sid?: string };
@@ -61,18 +61,8 @@ async function verifyJwtAccessToken(
 	} catch {
 		return null;
 	}
-	const jwtPlugin = getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin.options;
-	const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
-		? jwtPluginOptions.jwks.remoteUrl
-		: async (): Promise<JSONWebKeySet | undefined> => {
-				const jwksRes = await jwtPlugin.endpoints.getJwks(ctx);
-				// @ts-expect-error response is a JSONWebKeySet but within the response field
-				return jwksRes?.response as JSONWebKeySet | undefined;
-			};
-	// The plugin instance is stable across requests, so the key set fetched by
-	// the per-request closure above is cached under it.
-	const jwks = await getJwks(token, { jwksFetch, jwksCacheKey: jwtPlugin });
+	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
+	const jwks = await getJwks(token, getJwksSource(ctx.context));
 	let payload: JWTPayload;
 	try {
 		// Do not pass jose's `audience` option: access-token audiences are

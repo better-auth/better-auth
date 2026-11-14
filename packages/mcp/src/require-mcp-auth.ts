@@ -1,11 +1,12 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
+import { getLocalJwksSource } from "@better-auth/oauth-provider/internal";
 import type {
-	DpopReplayReservations,
+	DpopReplayAuthContext,
 	DpopReplayStore,
 } from "better-auth/oauth2";
 import { createDpopReplayStore } from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
-import type { JSONWebKeySet, JWTPayload } from "jose";
+import type { JWTPayload } from "jose";
 import { createProtectedRequestHandler, validateMcpResource } from "./handler";
 
 export interface RequireMcpAuthOptions {
@@ -107,10 +108,10 @@ export const requireMcpAuth = <
 	Auth extends {
 		options: BetterAuthOptions;
 		$context: Promise<
-			Pick<AuthContext, "baseURL" | "getPlugin"> & {
-				internalAdapter: DpopReplayReservations;
-				secret?: string;
-			}
+			Pick<AuthContext, "baseURL" | "getPlugin"> &
+				DpopReplayAuthContext & {
+					secret?: string;
+				}
 		>;
 	},
 >(
@@ -131,7 +132,7 @@ export const requireMcpAuth = <
 		// provider issued. Override via `opts` for a custom `jwt.issuer`, a
 		// distinct resource, or a non-default JWKS location.
 		const authContext = await auth.$context;
-		const { baseURL, internalAdapter, secret } = authContext;
+		const { baseURL, secret } = authContext;
 		if (!baseURL) {
 			throw new Error(
 				"requireMcpAuth requires a resolvable base URL. For dynamic base URLs use `createMcpProtectedRequestHandler` with explicit verification options.",
@@ -150,16 +151,11 @@ export const requireMcpAuth = <
 		// requesting its own `/jwks`, which fails on runtimes that block
 		// requests to their own hostname.
 		const jwtPlugin = authContext.getPlugin("jwt");
-		const localJwks =
-			!opts?.jwksUrl && jwtPlugin && !jwtPlugin.options?.jwks?.remoteUrl
-				? {
-						jwksFetch: async (): Promise<JSONWebKeySet | undefined> =>
-							jwtPlugin.endpoints.getJwks({ context: authContext }),
-						// Keyed per auth instance: one `jwt()` object can be shared by
-						// instances whose databases hold different keys.
-						jwksCacheKey: authContext,
-					}
-				: undefined;
+		const localJwks = opts?.jwksUrl
+			? undefined
+			: getLocalJwksSource(
+					authContext as Parameters<typeof getLocalJwksSource>[0],
+				);
 		// The JWT plugin disables its `/jwks` endpoint when keys are published at
 		// `jwks.remoteUrl`.
 		const jwksUrl =
@@ -179,10 +175,10 @@ export const requireMcpAuth = <
 				dpop: {
 					proofMaxAgeSeconds: opts?.dpop?.proofMaxAgeSeconds,
 					signingAlgorithms: opts?.dpop?.signingAlgorithms,
-					// Default to the database-backed store so proof replay is
+					// Default to the auth instance's shared store so proof replay is
 					// rejected across instances, not just within one process.
 					replayStore:
-						opts?.dpop?.replayStore ?? createDpopReplayStore(internalAdapter),
+						opts?.dpop?.replayStore ?? createDpopReplayStore(authContext),
 					nonce:
 						nonce && nonceSecret
 							? {
