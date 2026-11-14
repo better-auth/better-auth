@@ -339,6 +339,41 @@ describe("enforceDpopBinding", () => {
 	});
 });
 
+describe("createInMemoryDpopReplayStore", () => {
+	const at = (seconds: number) => new Date((nowSeconds + seconds) * 1000);
+
+	it("rejects a key until its reservation expires, then accepts it again", () => {
+		const store = createInMemoryDpopReplayStore();
+		const reserve = (now: number) =>
+			store.reserve({ key: "replay-key", expiresAt: at(5), now: at(now) });
+
+		expect(reserve(0)).toBe(true);
+		expect(reserve(4)).toBe(false);
+		// Expiry is checked on lookup, not only when expired entries are swept.
+		expect(reserve(5)).toBe(true);
+	});
+
+	it("keeps unexpired reservations of other keys across a sweep", () => {
+		const store = createInMemoryDpopReplayStore();
+		expect(store.reserve({ key: "short", expiresAt: at(1), now: at(0) })).toBe(
+			true,
+		);
+		expect(store.reserve({ key: "long", expiresAt: at(600), now: at(0) })).toBe(
+			true,
+		);
+
+		expect(
+			store.reserve({ key: "other", expiresAt: at(700), now: at(120) }),
+		).toBe(true);
+		expect(
+			store.reserve({ key: "long", expiresAt: at(700), now: at(121) }),
+		).toBe(false);
+		expect(
+			store.reserve({ key: "short", expiresAt: at(700), now: at(121) }),
+		).toBe(true);
+	});
+});
+
 describe("createDpopReplayStore", () => {
 	it("delegates to reserveVerificationValue, namespaces the key, and rejects a replay", async () => {
 		const seen = new Set<string>();

@@ -58,17 +58,28 @@ export interface DpopReplayStore {
 	reserve: (reservation: DpopReplayReservation) => Promise<boolean> | boolean;
 }
 
+// Expired reservations are swept at most this often, so each request does not
+// scan every proof recorded within the replay window.
+const DPOP_REPLAY_SWEEP_INTERVAL_MS = 60_000;
+
 export function createInMemoryDpopReplayStore(): DpopReplayStore {
 	const reservations = new Map<string, number>();
+	let nextSweepMs = 0;
 	return {
 		reserve({ key, expiresAt, now }) {
 			const nowMs = now.getTime();
-			for (const [storedKey, expiresAtMs] of reservations) {
-				if (expiresAtMs <= nowMs) {
-					reservations.delete(storedKey);
+			if (nowMs >= nextSweepMs) {
+				for (const [storedKey, expiresAtMs] of reservations) {
+					if (expiresAtMs <= nowMs) {
+						reservations.delete(storedKey);
+					}
 				}
+				nextSweepMs = nowMs + DPOP_REPLAY_SWEEP_INTERVAL_MS;
 			}
-			if (reservations.has(key)) return false;
+			const storedExpiresAtMs = reservations.get(key);
+			if (storedExpiresAtMs !== undefined && storedExpiresAtMs > nowMs) {
+				return false;
+			}
 			reservations.set(key, expiresAt.getTime());
 			return true;
 		},
