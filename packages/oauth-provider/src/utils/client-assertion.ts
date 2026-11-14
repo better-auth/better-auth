@@ -420,9 +420,11 @@ export async function consumeClientAssertion(
 	await consumeAssertion(ctx, opts, {
 		namespace,
 		payload,
-		acceptedAudiences: params.acceptedAudiences ?? [
-			params.expectedAudience as string,
-		],
+		// The deprecated endpoint URL maps to what that endpoint accepts, so a
+		// strategy written against it follows `assertionAudience` too.
+		acceptedAudiences:
+			params.acceptedAudiences ??
+			getClientAssertionAudiences(ctx, opts, params.expectedAudience),
 		soleAudience: requiresSoleAudience(opts),
 	});
 }

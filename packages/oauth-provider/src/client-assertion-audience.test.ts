@@ -343,12 +343,20 @@ describe("client assertion audience", () => {
 			).resolves.toBeUndefined();
 		});
 
-		it("still accepts the deprecated expectedAudience", async () => {
+		it("applies the issuer rule to the deprecated expectedAudience", async () => {
+			// A strategy written for 1.7 passes the endpoint URL it was given.
+			await expect(
+				consumeClientAssertion(ctx, opts, {
+					namespace: "test:deprecated",
+					payload: payload(tokenEndpoint),
+					expectedAudience: tokenEndpoint,
+				}),
+			).rejects.toMatchObject(invalidClient);
 			await expect(
 				consumeClientAssertion(ctx, opts, {
 					namespace: "test:deprecated",
 					payload: payload(issuer),
-					expectedAudience: issuer,
+					expectedAudience: tokenEndpoint,
 				}),
 			).resolves.toBeUndefined();
 		});

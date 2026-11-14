@@ -48,6 +48,13 @@ export interface OIDCConfig {
 	privateKeyId?: string | undefined;
 	/** Signing algorithm for private_key_jwt. @default "RS256" */
 	privateKeyAlgorithm?: string | undefined;
+	/**
+	 * The `aud` of private_key_jwt assertions: the provider's `issuer`, as
+	 * RFC 10070 §4 requires, or its token endpoint URL for a provider that
+	 * accepts only that.
+	 * @default "issuer"
+	 */
+	clientAssertionAudience?: ("issuer" | "token_endpoint") | undefined;
 	jwksEndpoint?: string | undefined;
 	mapping?: OIDCMapping | undefined;
 	/**

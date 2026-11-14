@@ -814,6 +814,8 @@ function mergeOIDCConfig(
 		privateKeyId: updates.privateKeyId ?? current.privateKeyId,
 		privateKeyAlgorithm:
 			updates.privateKeyAlgorithm ?? current.privateKeyAlgorithm,
+		clientAssertionAudience:
+			updates.clientAssertionAudience ?? current.clientAssertionAudience,
 	};
 }
 

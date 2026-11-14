@@ -128,6 +128,8 @@ To choose how Better Auth authenticates at the token endpoint, set `tokenEndpoin
 
 For `private_key_jwt`, supply the key with the `resolvePrivateKey` plugin option, which keeps keys out of the database, or with `defaultSSO[].privateKey`, which wins when both exist. Registration returns 400 without either. In `oidcConfig`, you can also set `privateKeyId` (passed to `resolvePrivateKey` as `keyId` and sent as the assertion's `kid`) and `privateKeyAlgorithm` (default `RS256`).
 
+Each assertion names the provider's `issuer` as its only audience, as [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) requires. If the provider rejects it and accepts only its token endpoint URL, set `clientAssertionAudience: "token_endpoint"` in `oidcConfig`.
+
 ```ts title="auth.ts"
 export const auth = betterAuth({
 	plugins: [
