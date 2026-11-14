@@ -148,7 +148,7 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 	const maxSessionsPerUser = options.session?.maxPerUser;
 	if (
 		maxSessionsPerUser !== undefined &&
-		(!Number.isInteger(maxSessionsPerUser) || maxSessionsPerUser < 1)
+		(!Number.isSafeInteger(maxSessionsPerUser) || maxSessionsPerUser < 1)
 	) {
 		throw new BetterAuthError(
 			`session.maxPerUser must be a positive integer, received ${maxSessionsPerUser}.`,

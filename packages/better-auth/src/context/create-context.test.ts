@@ -295,14 +295,18 @@ describe("base context creation", () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/12342
 		 */
-		it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
-			"should reject session.maxPerUser = %s",
-			async (maxPerUser) => {
-				await expect(initBase({ session: { maxPerUser } })).rejects.toThrow(
-					"session.maxPerUser must be a positive integer",
-				);
-			},
-		);
+		it.each([
+			0,
+			-1,
+			1.5,
+			Number.NaN,
+			Number.POSITIVE_INFINITY,
+			Number.MAX_VALUE,
+		])("should reject session.maxPerUser = %s", async (maxPerUser) => {
+			await expect(initBase({ session: { maxPerUser } })).rejects.toThrow(
+				"session.maxPerUser must be a positive integer",
+			);
+		});
 
 		it("should accept a positive integer session.maxPerUser", async () => {
 			const res = await initBase({

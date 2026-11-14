@@ -404,15 +404,15 @@ describe("session.maxPerUser", () => {
 	});
 
 	it("stops revoking when a delete hook vetoes the revocation", async () => {
-		let deleteAttempts = 0;
+		const deleteAttempts: string[] = [];
 		const { signIn, isActive } = await getMaxSessionsTestInstance(1, {
 			// Small enough that every read fills the window and reads again.
 			advanced: { database: { defaultFindManyLimit: 1 } },
 			databaseHooks: {
 				session: {
 					delete: {
-						async before() {
-							deleteAttempts++;
+						async before(session) {
+							deleteAttempts.push(session.id);
 							return false;
 						},
 					},
@@ -423,10 +423,12 @@ describe("session.maxPerUser", () => {
 
 		const first = await signIn();
 		advanceClock();
-		deleteAttempts = 0;
+		deleteAttempts.length = 0;
 		const second = await signIn();
 
-		expect(deleteAttempts).toBe(1);
+		// Each older session is attempted once, and none is retried.
+		expect(deleteAttempts).toContain(first.session.id);
+		expect(new Set(deleteAttempts).size).toBe(deleteAttempts.length);
 		expect(await isActive(first.headers)).toBe(true);
 		expect(await isActive(second.headers)).toBe(true);
 	});
@@ -692,5 +694,82 @@ describe("session.maxPerUser", () => {
 		expect(await listSessionIds(own.user.id)).toEqual(
 			[next.session.id, impersonation.session.id].sort(),
 		);
+	});
+
+	it("revokes older sessions hidden behind impersonation sessions", async () => {
+		const { auth, ctx, db, signIn, signInWithUser, isActive } =
+			await getMaxSessionsTestInstance(1, {
+				plugins: [admin()],
+				// Small enough that impersonation sessions fill the first read.
+				advanced: { database: { defaultFindManyLimit: 1 } },
+			});
+		useFakeClock();
+
+		const adminEmail = "admin@test.com";
+		const adminPassword = "admin-password";
+		const { user: adminUser } = await auth.api.signUpEmail({
+			body: { email: adminEmail, password: adminPassword, name: "Admin" },
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "id", value: adminUser.id }],
+			update: { role: "admin" },
+		});
+		const { headers: adminHeaders } = await signInWithUser(
+			adminEmail,
+			adminPassword,
+		);
+
+		advanceClock();
+		const own = await signIn();
+		const impersonations = [];
+		for (let i = 0; i < 3; i++) {
+			advanceClock();
+			impersonations.push(
+				await auth.api.impersonateUser({
+					body: { userId: own.user.id },
+					headers: adminHeaders,
+				}),
+			);
+		}
+		advanceClock();
+		const next = await signIn();
+		expect(await isActive(own.headers)).toBe(false);
+		expect(await isActive(next.headers)).toBe(true);
+		// `listSessions` reads one row with this page size, so check each one.
+		for (const { session } of impersonations) {
+			expect(await ctx.internalAdapter.findSession(session.token)).toBeTruthy();
+		}
+	});
+
+	it("revokes older sessions hidden behind a vetoed revocation", async () => {
+		let vetoAll = true;
+		let vetoedToken: string | undefined;
+		const { signIn, isActive } = await getMaxSessionsTestInstance(1, {
+			// Small enough that the vetoed session fills the first read.
+			advanced: { database: { defaultFindManyLimit: 1 } },
+			databaseHooks: {
+				session: {
+					delete: {
+						async before(session) {
+							return !vetoAll && session.token !== vetoedToken;
+						},
+					},
+				},
+			},
+		});
+		useFakeClock();
+
+		const oldest = await signIn();
+		advanceClock();
+		const vetoed = await signIn();
+		vetoAll = false;
+		vetoedToken = vetoed.session.token;
+		advanceClock();
+		const next = await signIn();
+
+		expect(await isActive(oldest.headers)).toBe(false);
+		expect(await isActive(vetoed.headers)).toBe(true);
+		expect(await isActive(next.headers)).toBe(true);
 	});
 });

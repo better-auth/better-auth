@@ -353,24 +353,35 @@ export const createInternalAdapter = (
 			return;
 		}
 
-		// Reads the newest `maxPerUser + pageSize` sessions and reads again after
-		// revoking, until a read finds nothing new to revoke (for example, when a
-		// delete hook vetoed it).
-		const windowSize = maxPerUser + pageSize;
+		const activeSessions = (): Where[] => [
+			{ field: "userId", value: session.userId },
+			{ field: "expiresAt", value: new Date(), operator: "gt" },
+		];
+		// Most new sessions are within the limit. Counting first also keeps the
+		// read's `limit` small when `maxPerUser` is large.
+		const activeCount = await (await getCurrentAdapter(adapter)).count({
+			model: "session",
+			where: activeSessions(),
+		});
+		if (activeCount <= maxPerUser) return;
+		// Reads the newest sessions and reads again after revoking. Sessions that
+		// can't be revoked (impersonation sessions, sessions created within the
+		// same second, or revocations a delete hook vetoed) can fill a read and
+		// hide older sessions, so a read that finds nothing new to revoke widens
+		// until it covers every session.
+		let windowSize = maxPerUser + pageSize;
 		for (;;) {
 			const sessions = await (
 				await getCurrentAdapter(adapter)
 			).findMany<Session>({
 				model: "session",
-				where: [
-					{ field: "userId", value: session.userId },
-					{ field: "expiresAt", value: new Date(), operator: "gt" },
-				],
+				where: activeSessions(),
 				sortBy: { field: "createdAt", direction: "desc" },
 				limit: windowSize,
 			});
 			const revoked = await revoke(sessions);
-			if (sessions.length < windowSize || revoked === 0) return;
+			if (sessions.length < windowSize) return;
+			if (revoked === 0) windowSize *= 2;
 		}
 	}
 
