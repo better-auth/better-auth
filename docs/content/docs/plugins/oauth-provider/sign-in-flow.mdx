@@ -113,6 +113,9 @@ export const codeIssuer = () =>
             ctx,
             ctx.context.getPlugin("oauth-provider")!.options,
           );
+          // Sends a required DPoP nonce challenge before client
+          // authentication uses up a one-time client assertion.
+          await provider.challengeDpopNonce();
           // Checks the credentials of a confidential client. A public client
           // is identified by its client_id alone.
           const { clientId } = await provider.authenticateClient({
@@ -146,7 +149,7 @@ Pass the request parameters themselves. A `request_uri` fails with `invalid_requ
 
 A [required PAR policy](#require-pushed-requests) does not apply here, whether you set it for every client or the client registered it. The policy keeps authorization parameters out of the browser URL. Your endpoint receives them in a direct request from its caller, as `/oauth2/par` does.
 
-PAR also authenticates the client before the user sees a page, and your endpoint takes over that check. The example calls [`authenticateClient`](/docs/plugins/oauth-provider/reference#provider-extensions) with `requireCredentials: false`, as `/oauth2/par` does:
+PAR also authenticates the client before the user sees a page, and your endpoint takes over that check. The example calls [`authenticateClient`](/docs/plugins/oauth-provider/reference#provider-extensions) with `requireCredentials: false`, as `/oauth2/par` does. It calls [`challengeDpopNonce`](/docs/plugins/oauth-provider/tokens#nonces-on-your-own-endpoints) first, so a retry after a `use_dpop_nonce` error can reuse the client's assertion:
 
 * A confidential client must send the credentials it uses at the token endpoint. Without this check, anyone who copies the client's requests can start authorization in its name.
 * A public client, such as most native apps, is identified by its `client_id` alone. It has no credentials, so its `client_id` does not prove which app sent the request.
