@@ -1586,11 +1586,16 @@ describe("CIMD - RP-initiated logout for metadata document clients", async () =>
 		});
 		allowEndSession = false;
 		await authorize(clientId);
+		const readClient = async () => {
+			const stored = await storedClient(clientId);
+			if (!stored) throw new Error(`${clientId} was not stored`);
+			return stored;
+		};
 		const {
 			enableEndSession: _before,
 			updatedAt: _updatedAt,
 			...registered
-		} = (await storedClient(clientId)) ?? {};
+		} = await readClient();
 		expect(registered.applicationType).toBeFalsy();
 
 		for (const enable_end_session of [true, false]) {
@@ -1598,11 +1603,7 @@ describe("CIMD - RP-initiated logout for metadata document clients", async () =>
 				headers,
 				body: { client_id: clientId, update: { enable_end_session } },
 			});
-			const {
-				enableEndSession,
-				updatedAt: _,
-				...rest
-			} = (await storedClient(clientId)) ?? {};
+			const { enableEndSession, updatedAt: _, ...rest } = await readClient();
 			expect(enableEndSession).toBe(enable_end_session);
 			expect(rest).toEqual(registered);
 		}
