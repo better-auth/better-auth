@@ -153,32 +153,6 @@ describe("OAuth account identity contract", () => {
 });
 
 describe("microsoft provider", () => {
-	it("passes a specific tenant's issuer to client assertions", async () => {
-		const tenantId = "11111111-2222-3333-4444-555555555555";
-		const getClientAssertion = vi.fn(async () => "assertion");
-		mockedBetterFetch.mockResolvedValueOnce({
-			data: { access_token: "access-token", token_type: "Bearer" },
-			error: null,
-		});
-
-		await microsoft({
-			clientId: credentials.clientId,
-			tenantId,
-			clientAssertion: getClientAssertion,
-		}).validateAuthorizationCode({
-			code: "auth-code",
-			codeVerifier: baseVerifier,
-			redirectURI: baseCallback,
-		});
-
-		expect(getClientAssertion).toHaveBeenCalledWith({
-			clientId: credentials.clientId,
-			tokenEndpoint: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-			grantType: "authorization_code",
-			issuer: `https://login.microsoftonline.com/${tenantId}/v2.0`,
-		} satisfies ClientAssertionContext);
-	});
-
 	it("sends client assertions instead of client secrets for authorization code exchange", async () => {
 		const assertion = "test-microsoft-client-assertion";
 		const getClientAssertion = vi.fn(async () => assertion);

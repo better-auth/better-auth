@@ -174,15 +174,6 @@ export const microsoft = (options: MicrosoftOptions) => {
 	}
 	const authorizationEndpoint = `${authority}/${tenant}/oauth2/v2.0/authorize`;
 	const tokenEndpoint = `${authority}/${tenant}/oauth2/v2.0/token`;
-	/**
-	 * Issuer varies per tenant for multi-tenant endpoints, so it is known only
-	 * for a specific tenant.
-	 * @see https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols#endpoints
-	 */
-	const issuer =
-		tenant !== "common" && tenant !== "organizations" && tenant !== "consumers"
-			? `${authority}/${tenant}/v2.0`
-			: undefined;
 	if (options.clientSecret && options.clientAssertion) {
 		throw new BetterAuthError(
 			"Microsoft Entra ID clientAssertion cannot be combined with clientSecret",
@@ -234,7 +225,6 @@ export const microsoft = (options: MicrosoftOptions) => {
 				redirectURI,
 				options,
 				tokenEndpoint,
-				issuer,
 				tokenEndpointAuth,
 			});
 		},
@@ -243,7 +233,17 @@ export const microsoft = (options: MicrosoftOptions) => {
 			algorithms: ["RS256"],
 			audience: options.clientId,
 			maxTokenAge: "1h",
-			issuer,
+			/**
+			 * Issuer varies per tenant for multi-tenant endpoints, so only validate it for
+			 * specific tenants.
+			 * @see https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols#endpoints
+			 */
+			issuer:
+				tenant !== "common" &&
+				tenant !== "organizations" &&
+				tenant !== "consumers"
+					? `${authority}/${tenant}/v2.0`
+					: undefined,
 			/**
 			 * The multi-tenant endpoints (common/organizations/consumers) skip the
 			 * issuer check above because the issuer varies per tenant, and the
@@ -358,7 +358,6 @@ export const microsoft = (options: MicrosoftOptions) => {
 							scope: scopes.join(" "), // Include the scopes in request to microsoft
 						},
 						tokenEndpoint,
-						issuer,
 						tokenEndpointAuth,
 					});
 				},
