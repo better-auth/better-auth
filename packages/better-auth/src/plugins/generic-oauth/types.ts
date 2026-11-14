@@ -54,6 +54,18 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	discoveryUrl?: string | undefined;
 	/**
+	 * The provider's issuer identifier. The discovery document's `issuer` must
+	 * equal it exactly, or the provider is skipped.
+	 *
+	 * Without it, `discoveryUrl` must be a well-known URL, and the discovered
+	 * issuer must be the one it is built from (RFC 8414 §3.3). Set it when
+	 * `discoveryUrl` is not a well-known URL, or when the provider publishes
+	 * discovery under a different name for the same issuer, such as a tenant
+	 * domain instead of the tenant ID. Used only with
+	 * `discoveryUrl`.
+	 */
+	issuer?: string | undefined;
+	/**
 	 * Require discovery to provide the issuer and JWKS metadata needed to verify
 	 * ID tokens before this provider is registered.
 	 *

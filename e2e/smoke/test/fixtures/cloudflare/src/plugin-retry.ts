@@ -62,6 +62,10 @@ const options = {
 					get discoveryUrl() {
 						return `${stallURL}/discovery`;
 					},
+					// Not a well-known URL, so the issuer must be configured.
+					get issuer() {
+						return stallURL;
+					},
 					clientId: "client",
 					clientSecret: "secret",
 				},

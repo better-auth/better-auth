@@ -140,6 +140,14 @@ tokenEndpointAuth: {
 
 Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refreshAccessToken`, or `refreshAccessTokenRequest` from `@better-auth/core/oauth2` that pass `authorization` in `headers` now throw.
 
+### Generic OAuth checks the discovered issuer
+
+Unless `issuer` is set, `discoveryUrl` must now be a well-known URL, and the discovery document's `issuer` must be the issuer the URL is built from. Otherwise Better Auth logs an error that names the provider and both values, and skips the provider. Before, the document was used whatever issuer it named.
+
+A common case is an issuer with a path, such as `https://auth.example.com/api/auth`, whose discovery document is read from the root, `https://auth.example.com/.well-known/openid-configuration`. That URL belongs to the issuer `https://auth.example.com`, so the provider is now skipped.
+
+**What to do:** if a provider is skipped after the upgrade, check its documentation for its issuer identifier. For an issuer with a path, point `discoveryUrl` at `{issuer}/.well-known/openid-configuration`. If the provider publishes discovery at a path that is not a well-known URL, or under another name for the same issuer, such as a tenant domain instead of the tenant ID, set `issuer` to that identifier. See [`issuer`](/docs/plugins/generic-oauth#configuration).
+
 ### New Generic OAuth and client options
 
 These are new and need no action:

@@ -4526,6 +4526,105 @@ describe("oauth2", async () => {
 		expect(provider?.issuer).toBe(`http://localhost:${port}`);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8414#section-3.3
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation
+	 */
+	describe("discovered issuer", () => {
+		function serveDiscovery(discoveryUrl: string, issuer: string) {
+			mswServer.use(
+				http.get(discoveryUrl, () =>
+					HttpResponse.json({
+						issuer,
+						authorization_endpoint: "https://idp.test/authorize",
+						token_endpoint: "https://idp.test/token",
+					}),
+				),
+			);
+		}
+
+		async function registeredIssuer(config: {
+			discoveryUrl: string;
+			issuer?: string;
+		}) {
+			const { auth } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "issuer-check",
+								clientId,
+								clientSecret,
+								...config,
+							},
+						],
+					}),
+				],
+			});
+			const ctx = await auth.$context;
+			const provider = ctx.socialProviders.find((p) => p.id === "issuer-check");
+			return provider ? (provider.issuer ?? null) : undefined;
+		}
+
+		it("skips a provider whose discovery document names another issuer", async () => {
+			const discoveryUrl =
+				"https://idp.test/tenant-a/.well-known/openid-configuration";
+			serveDiscovery(discoveryUrl, "https://idp.test/tenant-b");
+
+			expect(await registeredIssuer({ discoveryUrl })).toBeUndefined();
+		});
+
+		it("accepts an issuer with a trailing slash", async () => {
+			const discoveryUrl = "https://idp.test/.well-known/openid-configuration";
+			serveDiscovery(discoveryUrl, "https://idp.test/");
+
+			expect(await registeredIssuer({ discoveryUrl })).toBe(
+				"https://idp.test/",
+			);
+		});
+
+		it("accepts an RFC 8414 well-known URL for an issuer with a path", async () => {
+			const discoveryUrl =
+				"https://idp.test/.well-known/oauth-authorization-server/tenant-a";
+			serveDiscovery(discoveryUrl, "https://idp.test/tenant-a");
+
+			expect(await registeredIssuer({ discoveryUrl })).toBe(
+				"https://idp.test/tenant-a",
+			);
+		});
+
+		it("accepts the configured issuer when the discovery URL names the tenant differently", async () => {
+			const discoveryUrl =
+				"https://idp.test/contoso.example/v2.0/.well-known/openid-configuration";
+			const issuer = "https://idp.test/7f0c2d4e/v2.0";
+			serveDiscovery(discoveryUrl, issuer);
+
+			expect(await registeredIssuer({ discoveryUrl, issuer })).toBe(issuer);
+		});
+
+		it("skips a provider with a non-well-known discovery URL unless issuer is set", async () => {
+			const discoveryUrl = "https://idp.test/oauth/metadata";
+			const issuer = "https://idp.test";
+			serveDiscovery(discoveryUrl, issuer);
+
+			expect(await registeredIssuer({ discoveryUrl })).toBeUndefined();
+			expect(await registeredIssuer({ discoveryUrl, issuer })).toBe(issuer);
+		});
+
+		it("skips a provider whose discovery document does not match the configured issuer", async () => {
+			const discoveryUrl =
+				"https://idp.test/contoso.example/v2.0/.well-known/openid-configuration";
+			serveDiscovery(discoveryUrl, "https://idp.test/other/v2.0");
+
+			expect(
+				await registeredIssuer({
+					discoveryUrl,
+					issuer: "https://idp.test/7f0c2d4e/v2.0",
+				}),
+			).toBeUndefined();
+		});
+	});
+
 	describe("tokenEndpointAuth", () => {
 		it("should send client_assertion instead of client_secret at the token endpoint", async () => {
 			issueIdTokenFor("oauth2");
@@ -6060,6 +6159,7 @@ describe("oauth2", async () => {
 								{
 									providerId: "gated",
 									discoveryUrl: `${gated.url}${discoveryPath}`,
+									issuer,
 									discoveryHeaders: gate,
 									clientId: "gated-client",
 									clientSecret: "gated-secret",
