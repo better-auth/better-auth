@@ -19,6 +19,7 @@ import type {
 import {
 	destructureCredentials,
 	extractClientCredentials,
+	getAuthEndpointUrl,
 	getJwtPlugin,
 	getStoredToken,
 	isInvalidJwtError,
@@ -325,7 +326,7 @@ export async function revokeEndpoint(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/revoke`,
+		getAuthEndpointUrl(ctx, "/oauth2/revoke"),
 	);
 	const {
 		clientId: client_id,

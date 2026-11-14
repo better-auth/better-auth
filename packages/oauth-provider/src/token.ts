@@ -59,6 +59,7 @@ import {
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
+	getAuthEndpointUrl,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
@@ -163,7 +164,7 @@ export function getOAuthProviderApi(
 				// or a plugin's own endpoint out-of-grant. A fixed token-endpoint
 				// audience would let an assertion be replayed across endpoints, or
 				// reject a valid assertion minted for the real endpoint.
-				`${ctx.context.baseURL}${ctx.path ?? "/oauth2/token"}`,
+				getAuthEndpointUrl(ctx, ctx.path ?? "/oauth2/token"),
 			);
 			const { clientId, clientSecret, preVerified, authMethod, confirmation } =
 				destructureCredentials(credentials);
@@ -1600,7 +1601,7 @@ async function handleAuthorizationCodeGrant(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/token`,
+		getAuthEndpointUrl(ctx, "/oauth2/token"),
 	);
 	const {
 		clientId: client_id,
@@ -1850,7 +1851,7 @@ async function handleClientCredentialsGrant(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/token`,
+		getAuthEndpointUrl(ctx, "/oauth2/token"),
 	);
 	const {
 		clientId: client_id,
@@ -1936,7 +1937,7 @@ async function handleRefreshTokenGrant(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/token`,
+		getAuthEndpointUrl(ctx, "/oauth2/token"),
 	);
 	const {
 		clientId: client_id,
