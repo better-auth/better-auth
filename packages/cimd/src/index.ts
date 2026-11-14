@@ -2,8 +2,8 @@ import type { ClientDiscovery } from "@better-auth/oauth-provider";
 import { extendOAuthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin } from "better-auth";
 import { CIMD_CLIENT_DISCOVERY_ID } from "./client-store";
-import { createCimdResolver } from "./resolver";
-import type { CimdOptions } from "./types";
+import { createCimdMetadataResolver, createCimdResolver } from "./resolver";
+import type { CimdMetadataResolver, CimdOptions } from "./types";
 import { isCimdClientIdUrlCandidate } from "./validate-metadata-document";
 import { PACKAGE_VERSION } from "./version";
 
@@ -22,16 +22,37 @@ declare module "@better-auth/core" {
  * `oauthProvider({ extensions: [{ clientDiscovery }] })`; most users should
  * install the {@link cimd} plugin instead, which contributes this discovery
  * alongside whatever else is configured.
+ *
+ * Accepts either full {@link CimdOptions} or a pre-created {@link CimdMetadataResolver}.
+ * When a metadata resolver is passed, the discovery consumes its shared metadata cache
+ * and fetch rate limits while keeping database registration isolated to each request's
+ * endpoint context.
  */
 export function createCimdClientDiscovery(
-	options: CimdOptions,
+	options: CimdOptions | CimdMetadataResolver,
+	additionalOptions?: Partial<CimdOptions>,
 ): ClientDiscovery {
-	const resolver = createCimdResolver(options);
+	const resolvedOptions: CimdOptions =
+		typeof options === "function" || "resolveWithDetails" in options
+			? {
+					fetchClientMetadataResource:
+						additionalOptions?.fetchClientMetadataResource ??
+						(() => {
+							throw new Error(
+								"fetchClientMetadataResource is required for discovery-owned resources",
+							);
+						}),
+					...additionalOptions,
+					metadataResolver: options as CimdMetadataResolver,
+				}
+			: options;
+
+	const resolver = createCimdResolver(resolvedOptions);
 	return {
 		id: CIMD_CLIENT_DISCOVERY_ID,
 		matches: isCimdClientIdUrlCandidate,
 		resolve: resolver,
-		fetchClientMetadataResource: options.fetchClientMetadataResource,
+		fetchClientMetadataResource: resolvedOptions.fetchClientMetadataResource,
 		discoveryMetadata: { client_id_metadata_document_supported: true },
 	};
 }
@@ -65,6 +86,8 @@ export type {
 	CimdClientRefreshedEvent,
 	CimdMetadataFetchPolicy,
 	CimdMetadataProfile,
+	CimdMetadataResolution,
+	CimdMetadataResolver,
 	CimdOptions,
 } from "./types";
 export type {
@@ -76,3 +99,4 @@ export {
 	validateCimdMetadata,
 	validateClientIdUrl,
 } from "./validate-metadata-document";
+export { createCimdMetadataResolver };

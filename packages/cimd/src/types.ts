@@ -8,6 +8,58 @@ import type {
 
 export type CimdMetadataProfile = "mcp-2026-07-28";
 
+export interface CimdMetadataResolution {
+	/** Validated metadata document. */
+	metadata: OAuthClientMetadata;
+	/**
+	 * Whether the metadata was served directly from an unexpired cache entry
+	 * without performing network revalidation.
+	 */
+	isFresh: boolean;
+}
+
+export interface CimdMetadataResolver {
+	/**
+	 * Resolve and validate the Client ID Metadata Document for a candidate
+	 * `client_id` URL. Returns `null` if the URL is not a valid candidate.
+	 */
+	(
+		clientId: string,
+		context?: GenericEndpointContext,
+	): Promise<OAuthClientMetadata | null>;
+	/**
+	 * Resolve and validate the Client ID Metadata Document for a candidate
+	 * `client_id` URL. Returns `null` if the URL is not a valid candidate.
+	 */
+	resolve(
+		clientId: string,
+		context?: GenericEndpointContext,
+	): Promise<OAuthClientMetadata | null>;
+	/**
+	 * Canonical alias for `resolve`.
+	 */
+	resolveMetadata(
+		clientId: string,
+		context?: GenericEndpointContext,
+	): Promise<OAuthClientMetadata | null>;
+	/**
+	 * Resolve metadata document with additional freshness details for
+	 * fine-grained client reconciliation.
+	 */
+	resolveWithDetails(
+		clientId: string,
+		context?: GenericEndpointContext,
+	): Promise<CimdMetadataResolution | null>;
+	/**
+	 * Evict a client's metadata from the local cache.
+	 */
+	evict(clientId: string): void;
+	/**
+	 * Canonical alias for `evict`.
+	 */
+	invalidate(clientId: string): void;
+}
+
 export interface CimdClientCreatedEvent {
 	/** Newly persisted discovery-owned OAuth client. */
 	client: SchemaClient<Scope[]>;
@@ -83,6 +135,14 @@ export interface CimdOptions {
 	 * them at its runtime-specific network boundary.
 	 */
 	fetchClientMetadataResource: ClientMetadataResourceFetch;
+	/**
+	 * Pre-constructed metadata resolver to use instead of creating a new one.
+	 *
+	 * When provided, discovery consumes this resolver's shared cache, fetch
+	 * policy, and in-flight request coalescing across request-scoped contexts
+	 * (e.g. in Cloudflare Workers or serverless functions).
+	 */
+	metadataResolver?: CimdMetadataResolver;
 	/**
 	 * Apply an additional protocol profile to otherwise generic draft-02
 	 * metadata validation.

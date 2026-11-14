@@ -1,6 +1,8 @@
 import type {
 	CimdClientCreatedEvent,
 	CimdClientRefreshedEvent,
+	CimdMetadataResolution,
+	CimdMetadataResolver,
 	CimdMetadataValidationOptions,
 	CimdMetadataValidationResult,
 	CimdOptions,
@@ -28,6 +30,7 @@ function assertValidationResultNarrowing(
 describe("public CIMD surface", () => {
 	it("exports the canonical discovery and validation vocabulary", () => {
 		expect(cimdExports).toHaveProperty("createCimdClientDiscovery");
+		expect(cimdExports).toHaveProperty("createCimdMetadataResolver");
 		expect(cimdExports).toHaveProperty("isCimdClientIdUrlCandidate");
 		expect(cimdExports).not.toHaveProperty("cimdClientDiscovery");
 		expect(cimdExports).not.toHaveProperty("isUrlClientId");
@@ -35,7 +38,13 @@ describe("public CIMD surface", () => {
 			"originBoundFields",
 		);
 		expectTypeOf<CimdOptions>().toHaveProperty("metadataRevalidationInterval");
+		expectTypeOf<CimdOptions>().toHaveProperty("metadataResolver");
 		expectTypeOf<CimdOptions>().not.toHaveProperty("refreshRate");
+		expectTypeOf<CimdMetadataResolution>().toHaveProperty("metadata");
+		expectTypeOf<CimdMetadataResolution>().toHaveProperty("isFresh");
+		expectTypeOf<CimdMetadataResolver>().toBeCallableWith(
+			"https://client.example/metadata.json",
+		);
 		void assertValidationResultNarrowing;
 	});
 

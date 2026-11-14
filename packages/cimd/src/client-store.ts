@@ -132,7 +132,7 @@ function readResponseCacheHeaders(
  * be joined with that entry by the caller.
  */
 export async function fetchClientMetadataDocument(
-	ctx: GenericEndpointContext,
+	ctx: GenericEndpointContext | undefined,
 	clientIdUrl: string,
 	cimdOptions: CimdOptions,
 	validators?: { etag?: string; lastModified?: string },
@@ -143,7 +143,7 @@ export async function fetchClientMetadataDocument(
 	if (cimdOptions.isMetadataDocumentUrlAllowed) {
 		const allowed = await cimdOptions.isMetadataDocumentUrlAllowed(
 			clientIdUrl,
-			ctx,
+			ctx as GenericEndpointContext,
 		);
 		if (!allowed) {
 			throw invalidClient(
@@ -246,7 +246,9 @@ export async function fetchClientMetadataDocument(
 		});
 		if (!validation.valid) throw invalidClient(validation.error);
 		for (const warning of validation.warnings ?? []) {
-			ctx.context.logger.warn(`cimd metadata document warning: ${warning}`);
+			ctx?.context?.logger?.warn?.(
+				`cimd metadata document warning: ${warning}`,
+			);
 		}
 
 		return {
