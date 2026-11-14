@@ -207,7 +207,7 @@ export function getAPIErrorURL(
 	error: unknown,
 	errorPage?: string,
 ) {
-	if (!(error instanceof APIError)) throw error;
+	if (!isAPIError(error)) throw error;
 	const body = error.body as
 		| { error?: OAuthErrorCode; error_description?: string }
 		| undefined;
@@ -1159,7 +1159,7 @@ async function runAuthorizationInteraction(
 				query,
 			});
 		} catch (error) {
-			if (!(error instanceof APIError)) throw error;
+			if (!isAPIError(error)) throw error;
 			if (request.errorURL) return handleRedirect(ctx, request.errorURL(error));
 			const body = error.body as
 				| { error?: OAuthErrorCode; error_description?: string }

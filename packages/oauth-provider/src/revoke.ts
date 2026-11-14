@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
+import { isAPIError } from "better-auth/api";
 import { stripAccessTokenAuthorizationScheme } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import { isAudienceClaimAllowed, userInfoResource } from "./resources";
@@ -230,7 +231,7 @@ export async function revokeEndpoint(
 		}
 		return null;
 	} catch (error) {
-		if (error instanceof APIError) throw error;
+		if (isAPIError(error)) throw error;
 		logger.error("Revocation error:", error);
 		throw new APIError("INTERNAL_SERVER_ERROR");
 	}

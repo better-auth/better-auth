@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
+import { isAPIError } from "better-auth/api";
 import { stripAccessTokenAuthorizationScheme } from "better-auth/oauth2";
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
@@ -621,7 +622,7 @@ export async function introspectEndpoint(
 		);
 		return resolveIntrospectionSubjects(ctx, opts, payload, client);
 	} catch (error) {
-		if (error instanceof APIError) throw error;
+		if (isAPIError(error)) throw error;
 		logger.error("Introspection error:", error);
 		throw new APIError("INTERNAL_SERVER_ERROR");
 	}
