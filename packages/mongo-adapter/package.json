@@ -4,7 +4,7 @@
   "description": "Mongo adapter for Better Auth",
   "type": "module",
   "license": "MIT",
-  "homepage": "https://www.better-auth.com/docs/adapters/mongodb",
+  "homepage": "https://www.better-auth.com/docs/adapters/mongo",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
