@@ -140,6 +140,29 @@ function isIssuerOfDiscoveryUrl(
 	);
 }
 
+/**
+ * Returns why a discovered issuer must not be used, or `undefined` when it can.
+ * RFC 8414 §3.3: a document published for another issuer must not be used.
+ */
+function checkDiscoveredIssuer(
+	config: GenericOAuthConfig & { discoveryUrl: string },
+	discoveredIssuer: string | undefined,
+): string | undefined {
+	if (config.issuer) {
+		return discoveredIssuer === config.issuer
+			? undefined
+			: `discovery issuer "${discoveredIssuer}" does not match the configured issuer "${config.issuer}".`;
+	}
+	if (discoveredIssuer === undefined) return undefined;
+	const matches = isIssuerOfDiscoveryUrl(discoveredIssuer, config.discoveryUrl);
+	if (matches === undefined) {
+		return `discoveryUrl "${config.discoveryUrl}" is not a well-known URL, so its issuer cannot be checked. Set issuer to the issuer identifier the provider documents.`;
+	}
+	return matches
+		? undefined
+		: `discovery issuer "${discoveredIssuer}" is not the issuer of discoveryUrl "${config.discoveryUrl}". If the provider publishes its document under another name for the same issuer, set issuer to the issuer identifier the provider documents.`;
+}
+
 /** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
 const DISCOVERY_RETRY_TIMEOUT_MS = 10_000;
 const MAX_DISCOVERY_REDIRECTS = 5;
@@ -351,19 +374,11 @@ export const genericOAuth = <const ID extends string>(
 					);
 					return null;
 				});
-				// RFC 8414 §3.3: a document for another issuer must not be used.
-				const issuerMismatch =
-					discovered &&
-					(c.issuer
-						? discovered.issuer !== c.issuer
-						: discovered.issuer !== undefined &&
-							isIssuerOfDiscoveryUrl(discovered.issuer, c.discoveryUrl) ===
-								false);
-				if (discovered && issuerMismatch) {
+				const issuerError =
+					discovered && checkDiscoveredIssuer(c, discovered.issuer);
+				if (issuerError) {
 					ctx.logger.error(
-						c.issuer
-							? `Provider "${c.providerId}": discovery issuer "${discovered.issuer}" does not match the configured issuer "${c.issuer}". Provider skipped.`
-							: `Provider "${c.providerId}": discovery issuer "${discovered.issuer}" is not the issuer of discoveryUrl "${c.discoveryUrl}". If the provider publishes its document under another name for the same issuer, set issuer to the issuer identifier the provider documents. Provider skipped.`,
+						`Provider "${c.providerId}": ${issuerError} Provider skipped.`,
 					);
 					continue;
 				}

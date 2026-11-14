@@ -4602,6 +4602,15 @@ describe("oauth2", async () => {
 			expect(await registeredIssuer({ discoveryUrl, issuer })).toBe(issuer);
 		});
 
+		it("skips a provider with a non-well-known discovery URL unless issuer is set", async () => {
+			const discoveryUrl = "https://idp.test/oauth/metadata";
+			const issuer = "https://idp.test";
+			serveDiscovery(discoveryUrl, issuer);
+
+			expect(await registeredIssuer({ discoveryUrl })).toBeUndefined();
+			expect(await registeredIssuer({ discoveryUrl, issuer })).toBe(issuer);
+		});
+
 		it("skips a provider whose discovery document does not match the configured issuer", async () => {
 			const discoveryUrl =
 				"https://idp.test/contoso.example/v2.0/.well-known/openid-configuration";
@@ -6150,6 +6159,7 @@ describe("oauth2", async () => {
 								{
 									providerId: "gated",
 									discoveryUrl: `${gated.url}${discoveryPath}`,
+									issuer,
 									discoveryHeaders: gate,
 									clientId: "gated-client",
 									clientSecret: "gated-secret",
