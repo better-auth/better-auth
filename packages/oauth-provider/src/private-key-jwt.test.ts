@@ -618,7 +618,7 @@ describe("private_key_jwt authentication", async () => {
 			"https://trusted.example.com/.well-known/jwks.json",
 			expect.objectContaining({
 				headers: { accept: "application/json" },
-				redirect: "error",
+				redirect: "manual",
 			}),
 		);
 		expect(discoveryMetadataFetch).not.toHaveBeenCalled();

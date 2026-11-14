@@ -345,7 +345,7 @@ describe("private_key_jwt e2e", async () => {
 			"https://trusted.example.com/.well-known/jwks.json",
 			expect.objectContaining({
 				headers: { accept: "application/json" },
-				redirect: "error",
+				redirect: "manual",
 			}),
 		);
 		expect(callbackUrl).toContain("/success");

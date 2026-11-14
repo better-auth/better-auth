@@ -188,7 +188,8 @@ async function fetchJwksFromUri(
 		const response = await fetchClientMetadataResource(jwksUri, {
 			signal: controller.signal,
 			headers: { accept: "application/json" },
-			redirect: "error",
+			// Not "error": Workers rejects it. The status check refuses 3xx and opaque redirects.
+			redirect: "manual",
 		});
 		if (response.redirected) {
 			throw new Error("JWKS fetch redirected");
