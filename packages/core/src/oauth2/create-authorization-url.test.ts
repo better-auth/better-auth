@@ -112,6 +112,16 @@ describe("createAuthorizationURL", () => {
 		expect(url.search).toMatch(/^\?tenant=acme&[^&]/);
 	});
 
+	it("keeps a leading `?` in the authorization endpoint's first parameter name", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			authorizationEndpoint: "https://idp.example/authorize??state=stale",
+		});
+
+		expect(url.search).toMatch(/^\?\?state=stale&/);
+		expect(url.searchParams.getAll("state")).toEqual(["state-xyz"]);
+	});
+
 	it("replaces an authorization endpoint query parameter it also sets", async () => {
 		const url = await createAuthorizationURL({
 			...baseInput,

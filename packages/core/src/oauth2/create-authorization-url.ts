@@ -41,7 +41,9 @@ function withQueryParams(endpoint: string, params: URLSearchParams) {
 			})
 		: [];
 	const added = params.toString();
-	url.search = (added ? [...kept, added] : kept).join("&");
+	const search = (added ? [...kept, added] : kept).join("&");
+	// The setter strips one leading "?", which would drop it from a kept name.
+	url.search = search ? `?${search}` : "";
 	return url.href;
 }
 
