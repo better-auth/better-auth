@@ -169,19 +169,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schema: getAuthTables(options),
 		usePlural: false,
 	});
+	// Schema keys win over aliases, as in `getDefaultModelName`.
+	const getTable = (model: string) =>
+		tables[model] ??
+		Object.entries(tables).find(
+			([tableKey, table]) =>
+				model === table.modelName || model === getModelName(tableKey),
+		)?.[1];
 	const isMigrationDisabled = (model: string) =>
-		Object.entries(tables).some(([tableKey, table]) => {
-			if (table.disableMigrations !== true) {
-				return false;
-			}
-			const customModelName = table.modelName || tableKey;
-			return (
-				model === tableKey ||
-				model === customModelName ||
-				model === getModelName(tableKey) ||
-				model === getModelName(customModelName)
-			);
-		});
+		getTable(model)?.disableMigrations === true;
 	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
 		Object.keys(tables)
 			.filter((tableKey) => !isMigrationDisabled(tableKey))
@@ -256,6 +252,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				const referencedOriginalModel = attr.references.model;
 				if (isMigrationDisabled(referencedOriginalModel)) {
 					continue;
+				}
+				if (!getTable(referencedOriginalModel)) {
+					throw new BetterAuthError(
+						`"${table}.${field}" references "${referencedOriginalModel}", which is not in the Better Auth schema.`,
+					);
 				}
 				const referencedCustomModel =
 					tables[referencedOriginalModel]?.modelName || referencedOriginalModel;

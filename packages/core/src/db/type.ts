@@ -226,7 +226,7 @@ export type DBFieldAttributeConfig = {
 	references?:
 		| {
 				/**
-				 * The model to reference.
+				 * The schema key of the model to reference.
 				 */
 				model: string;
 				/**

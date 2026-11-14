@@ -4,6 +4,7 @@ import {
 	getDatabaseIndexStringLength,
 	resolveDatabaseSchemaIndexes,
 } from "@better-auth/core/db/internal";
+import { BetterAuthError } from "@better-auth/core/error";
 import { toSnakeCase } from "@better-auth/core/utils/string";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
@@ -83,19 +84,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		schema: tables,
 		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
+	// Schema keys win over aliases, as in `getDefaultModelName`.
+	const getTable = (model: string) =>
+		tables[model] ??
+		Object.entries(tables).find(
+			([tableKey, table]) =>
+				model === table.modelName || model === getModelName(tableKey),
+		)?.[1];
 	const isMigrationDisabled = (model: string) =>
-		Object.entries(tables).some(([tableKey, table]) => {
-			if (table.disableMigrations !== true) {
-				return false;
-			}
-			const customModelName = table.modelName || tableKey;
-			return (
-				model === tableKey ||
-				model === customModelName ||
-				model === getModelName(tableKey) ||
-				model === getModelName(customModelName)
-			);
-		});
+		getTable(model)?.disableMigrations === true;
 	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
 		Object.keys(tables)
 			.filter((tableKey) => !isMigrationDisabled(tableKey))
@@ -373,6 +370,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}
 							const referencesDisabledModel =
 								attr.references && isMigrationDisabled(attr.references.model);
+							if (
+								attr.references &&
+								!referencesDisabledModel &&
+								!getTable(attr.references.model)
+							) {
+								throw new BetterAuthError(
+									`"${tableKey}.${field}" references "${attr.references.model}", which is not in the Better Auth schema.`,
+								);
+							}
 
 							return `${fieldName}: ${type}${attr.required !== false ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
