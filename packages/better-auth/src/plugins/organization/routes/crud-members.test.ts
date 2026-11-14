@@ -408,6 +408,116 @@ describe("listMembers with >100 members", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12053
+ */
+describe("removeMember with >100 members", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				// A function limit leaves listMembers on its default page of 100.
+				membershipLimit: async () => 500,
+			}),
+		],
+	});
+	const ctx = await auth.$context;
+	const { headers } = await signInWithTestUser();
+
+	/**
+	 * The signed-in user creates the organization as its only owner, then
+	 * 110 members whose role contains the creator role without being it
+	 * ("co-owner") are inserted, so that a `contains` lookup capped at 100
+	 * rows sees none of what follows.
+	 */
+	async function createLargeOrganization(slug: string) {
+		const org = await auth.api.createOrganization({
+			body: { name: slug, slug },
+			headers,
+		});
+		if (!org) throw new Error("Organization not created");
+		for (let i = 0; i < 110; i++) {
+			const user = await ctx.adapter.create<{ id: string }>({
+				model: "user",
+				data: { email: `${slug}-${i}@test.com`, name: `${slug}-${i}` },
+			});
+			// Fixed, ordered ids: removeMember pages through owner candidates
+			// sorted by id, so these 110 fill the first page deterministically.
+			await ctx.adapter.create({
+				model: "member",
+				forceAllowId: true,
+				data: {
+					id: `${slug}-member-${String(i).padStart(3, "0")}`,
+					organizationId: org.id,
+					userId: user.id,
+					role: "co-owner",
+					createdAt: new Date(),
+				},
+			});
+		}
+		const creator = await auth.api.getActiveMember({
+			query: { organizationId: org.id },
+			headers,
+		});
+		if (!creator) throw new Error("Creator not found");
+		return { org, creator };
+	}
+
+	it("should remove the creator when the other owner sits past the first 100 members", async () => {
+		const { org, creator } = await createLargeOrganization("late-owner-org");
+		const secondOwnerUser = await ctx.adapter.create<{ id: string }>({
+			model: "user",
+			data: {
+				email: "late-owner-org-second-owner@test.com",
+				name: "late-owner-org-second-owner",
+			},
+		});
+		// An id that sorts after every co-owner above, so the only other owner
+		// is reachable only from the second page of candidates.
+		await ctx.adapter.create({
+			model: "member",
+			forceAllowId: true,
+			data: {
+				id: "late-owner-org-member-zzz",
+				organizationId: org.id,
+				userId: secondOwnerUser.id,
+				role: "owner",
+				createdAt: new Date(),
+			},
+		});
+
+		const removed = await auth.api.removeMember({
+			body: {
+				organizationId: org.id,
+				memberIdOrEmail: creator.id,
+			},
+			headers,
+		});
+		expect(removed?.member.id).toBe(creator.id);
+		expect(
+			await ctx.adapter.count({
+				model: "member",
+				where: [{ field: "organizationId", value: org.id }],
+			}),
+		).toBe(111);
+	});
+
+	it("should refuse to remove the only owner of an organization above 100 members", async () => {
+		const { org, creator } = await createLargeOrganization("single-owner-org");
+		await expect(
+			auth.api.removeMember({
+				body: {
+					organizationId: org.id,
+					memberIdOrEmail: creator.id,
+				},
+				headers,
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES
+				.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER.message,
+		);
+	});
+});
+
 describe("updateMemberRole", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		plugins: [organization()],
