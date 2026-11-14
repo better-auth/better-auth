@@ -166,7 +166,7 @@ if (pageIcons.length !== 173) {
 }
 if (hash !== expectedHash) {
 	errors.push(
-		`registry hash differs from origin/main: expected ${expectedHash}, received ${hash}`,
+		`sidebar icon snapshot changed: expected ${expectedHash}, received ${hash}. If you added, moved, or changed a page icon on purpose, update expectedHash and the expected page icon count in docs/scripts/validate-sidebar-icons.ts.`,
 	);
 }
 if (errors.length > 0) {
@@ -174,5 +174,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-	`[validate-sidebar-icons] ${sectionIcons.length} sections and ${pageIcons.length} page icons matched origin/main`,
+	`[validate-sidebar-icons] ${sectionIcons.length} sections and ${pageIcons.length} page icons matched the snapshot`,
 );

@@ -76,7 +76,7 @@ export const serverClient = createAuthClient({
 The defaults come from your auth server's resolved base URL. That URL includes `basePath`, such as `https://auth.example.com/api/auth`:
 
 * `issuer` defaults to `jwt.issuer` when the JWT plugin sets it. Otherwise, it defaults to the base URL, which matches the issuer the provider signs.
-* `jwksUrl` defaults to `jwks.remoteUrl` when the JWT plugin sets it. Otherwise, it defaults to the base URL followed by `jwks.jwksPath`, which is `/jwks` by default.
+* Without `jwksUrl`, the signing keys are read from the auth instance in-process, with no request to its own `/jwks` endpoint. When the JWT plugin sets `jwks.remoteUrl`, the keys are fetched from that URL instead. Set `jwksUrl` to fetch them from another URL.
 * `audience` defaults to the base URL. See the warning below.
 
 With a dynamic `baseURL`, the base URL is known only per request, so nothing defaults to it. `jwt.issuer` and `jwks.remoteUrl` still apply when the JWT plugin sets them. Pass `audience`, and any of `issuer` and `jwksUrl` the JWT plugin does not set, explicitly.
@@ -120,14 +120,14 @@ To accept bearer tokens alone on a route, use `verifyBearerToken`. It takes a ra
   For DPoP-bound tokens:
 
   * The proof is checked against `request.url`. A proxy in front of the API must forward the external scheme, host, and path.
-  * The replay store rejects a proof that was already used. The default store is in memory. It is safe only for a single instance. If your API runs on several instances or on serverless, pass a shared store, as below. The shared store needs database-backed verification storage, and rejects DPoP requests when only secondary storage is configured.
+  * The replay store rejects a proof that was already used. The default store is in memory. It is safe only for a single instance. If your API runs on several instances or on serverless, pass a shared store, as below. The shared store records each proof where your auth instance keeps verification values: in [secondary storage](/docs/concepts/database#secondary-storage) when you configure it without `verification.storeInDatabase`, and otherwise in the database.
 </Callout>
 
 ```ts title="api/posts.ts"
 import { createDpopReplayStore } from "better-auth/oauth2";
 import { auth } from "@/lib/auth";
 
-const replayStore = createDpopReplayStore((await auth.$context).internalAdapter);
+const replayStore = createDpopReplayStore(await auth.$context);
 
 // Pass it with the other options, as in the example above:
 // verifyAccessTokenRequest(input, { jwksUrl, verifyOptions, dpop: { replayStore } })

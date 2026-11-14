@@ -171,8 +171,7 @@ export async function verifyRequestDpopProof(
 			...proofParams,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore:
-				replayStore ?? createDpopReplayStore(ctx.context.internalAdapter),
+			replayStore: replayStore ?? createDpopReplayStore(ctx.context),
 			nonce,
 			// The time the request arrived, which the token endpoint's nonce check
 			// also used, not the time a grant reaches issuance.

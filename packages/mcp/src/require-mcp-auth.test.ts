@@ -27,6 +27,7 @@ const authWith = (baseURL: string, resolvedBaseURL: string) => ({
 	$context: Promise.resolve({
 		baseURL: resolvedBaseURL,
 		internalAdapter: internalAdapterStub,
+		options: {},
 		getPlugin: () => null,
 	}),
 });
@@ -186,6 +187,7 @@ describe("requireMcpAuth", () => {
 				$context: Promise.resolve({
 					baseURL: "https://app.example.com/api/auth",
 					internalAdapter: internalAdapterStub,
+					options: {},
 					getPlugin: () => null,
 					secret,
 				}),

@@ -7,7 +7,7 @@ import type {
 	OAuthOptions,
 	Scope,
 } from "../types";
-import { parseBearerToken } from "./index";
+import { challengeHeaders, parseBearerToken } from "./index";
 
 /**
  * Builds an RFC 6750 §3 Bearer challenge for the registration endpoint. The
@@ -26,7 +26,7 @@ function registrationBearerError(
 		status,
 		{ error, error_description: errorDescription },
 		{
-			"WWW-Authenticate": `Bearer error="${error}"`,
+			...challengeHeaders(`Bearer error="${error}"`),
 			...NO_STORE_HEADERS,
 		},
 	);

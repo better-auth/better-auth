@@ -63,6 +63,29 @@ describe("createAuthorizationURL", () => {
 		expect(url.searchParams.get("identity_provider")).toBe("OktaSSO");
 	});
 
+	it("keeps the authorization endpoint's existing query text unchanged", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			authorizationEndpoint:
+				"https://idp.example/authorize?tenant=acme%20inc&value=~",
+		});
+
+		expect(url.search).toMatch(/^\?tenant=acme%20inc&value=~&/);
+		expect(url.searchParams.get("client_id")).toBe("client-123");
+	});
+
+	it("replaces an authorization endpoint query parameter it also sets", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			authorizationEndpoint:
+				"https://idp.example/authorize?prompt=login&tenant=acme%20inc",
+			prompt: "consent",
+		});
+
+		expect(url.searchParams.getAll("prompt")).toEqual(["consent"]);
+		expect(url.search).toMatch(/^\?tenant=acme%20inc&/);
+	});
+
 	it("exposes the reserved param list for downstream consumers", () => {
 		expect(RESERVED_AUTHORIZATION_PARAMS).toEqual([
 			"state",

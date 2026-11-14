@@ -95,8 +95,39 @@ export function getOperationId(endpoint: Endpoint, fallback?: string): string {
 }
 
 /**
- * Merge a set of response headers onto the dispatch's accumulator, appending
- * `set-cookie` (multiple cookies are legal) and replacing everything else.
+ * Write one header onto `target`: `set-cookie` is appended (multiple cookies
+ * are legal), `access-control-expose-headers` gains the names it lacks (the
+ * value is a list, so a later source must not drop names an earlier one
+ * exposed), and every other header is replaced.
+ */
+function mergeHeader(target: Headers, key: string, value: string) {
+	const name = key.toLowerCase();
+	if (name === "set-cookie") {
+		target.append(key, value);
+		return;
+	}
+	if (name === "access-control-expose-headers") {
+		const exposed = (target.get(key) ?? "")
+			.split(",")
+			.map((header) => header.trim())
+			.filter(Boolean);
+		for (const header of value.split(",").map((part) => part.trim())) {
+			if (
+				header &&
+				!exposed.some((item) => item.toLowerCase() === header.toLowerCase())
+			) {
+				exposed.push(header);
+			}
+		}
+		target.set(key, exposed.join(", "));
+		return;
+	}
+	target.set(key, value);
+}
+
+/**
+ * Merge a set of response headers onto the dispatch's accumulator with
+ * {@link mergeHeader}.
  */
 function mergeResponseHeaders(
 	context: InternalContext["context"],
@@ -104,13 +135,8 @@ function mergeResponseHeaders(
 ) {
 	if (!headers) return;
 	headers.forEach((value, key) => {
-		if (!context.responseHeaders) {
-			context.responseHeaders = new Headers({ [key]: value });
-		} else if (key.toLowerCase() === "set-cookie") {
-			context.responseHeaders.append(key, value);
-		} else {
-			context.responseHeaders.set(key, value);
-		}
+		context.responseHeaders ??= new Headers();
+		mergeHeader(context.responseHeaders, key, value);
 	});
 }
 
@@ -124,7 +150,8 @@ function mergeResponseHeaders(
  * `c.redirect()` reuses `ctx.responseHeaders` as `e.headers`, so when both
  * point at the same object iterating each would duplicate every `set-cookie`;
  * the identity check skips that copy. Explicit error headers override
- * accumulated ones, while cookies from both accumulate.
+ * accumulated ones, while cookies and exposed header names from both
+ * accumulate.
  */
 function mergeAPIErrorHeaders(error: APIError): Headers | null {
 	const ctxHeaders = (
@@ -140,11 +167,7 @@ function mergeAPIErrorHeaders(error: APIError): Headers | null {
 		headers.append(key, value);
 	});
 	errHeaders?.forEach((value, key) => {
-		if (key.toLowerCase() === "set-cookie") {
-			headers.append(key, value);
-		} else {
-			headers.set(key, value);
-		}
+		mergeHeader(headers, key, value);
 	});
 	return headers;
 }
