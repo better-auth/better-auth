@@ -303,6 +303,8 @@ tokenEndpointAuth: {
 },
 ```
 
+The hook also runs for [pushed authorization requests](#pushed-authorization-requests), which authenticate the client the same way. To tell the two apart, read `endpoint`. It is `"token"` for token requests and `"pushed_authorization_request"` for a pushed request. A pushed request reports `grantType: "authorization_code"`, because it starts the authorization code flow. The hook also receives the discovered `issuer`, when there is one.
+
 **scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
 
 **redirectURI**: (Optional) The redirect URI to use for the OAuth flow. If not set, a default is constructed based on your app's base URL. Must include the `:providerId` placeholder (e.g., `https://example.com/api/auth/callback/my-provider`).
@@ -413,6 +415,8 @@ getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
     audience: "issuer",
 }),
 ```
+
+These assertions also carry the JWT type `client-authentication+jwt` in their header, as RFC 10070 recommends. Assertions for the token endpoint keep the type `JWT`.
 
 Better Auth takes the issuer from the `issuer` field of the discovery document, so `audience: "issuer"` requires `discoveryUrl`. Without a discovered issuer, each token request and pushed authorization request fails with an error instead of falling back to the token endpoint. Before you enable it, check that the provider accepts the issuer as the assertion audience. Some servers accept only the token endpoint URL and reject the request.
 

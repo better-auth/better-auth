@@ -1466,6 +1466,7 @@ async function handleOIDCCallback(
 			),
 			options: tokenRequestOptions,
 			tokenEndpoint,
+			issuer: config.issuer,
 			tokenEndpointAuth,
 		});
 		const { data, error } = await fetchOIDCEndpoint<object>(

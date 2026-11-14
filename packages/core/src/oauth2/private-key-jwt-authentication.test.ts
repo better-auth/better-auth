@@ -7,6 +7,7 @@ vi.mock("@better-fetch/fetch", () => ({
 }));
 
 import { betterFetch } from "@better-fetch/fetch";
+import type { ClientAssertionContext } from "./client-assertion";
 import {
 	CLIENT_ASSERTION_TYPE,
 	createPrivateKeyJwtClientAssertionGetter,
@@ -126,6 +127,66 @@ describe("private_key_jwt OAuth2 helpers", () => {
 		expect(body.get("client_secret")).toBeNull();
 		expect(body.get("client_assertion")).toBe("custom-client-assertion");
 		expect(headers.authorization).toBeUndefined();
+	});
+
+	it("passes the issuer to assertion getters on every token request", async () => {
+		const issuer = "https://idp.example.com";
+		const getClientAssertion = vi.fn(
+			async (_context: ClientAssertionContext) => "custom-client-assertion",
+		);
+		const tokenEndpointAuth = {
+			method: "private_key_jwt" as const,
+			getClientAssertion,
+		};
+		mockedBetterFetch.mockResolvedValue({
+			data: { access_token: "access-token", token_type: "Bearer" },
+			error: null,
+		});
+
+		await validateAuthorizationCode({
+			code: "auth-code",
+			redirectURI: "https://rp.example.com/callback",
+			options: { clientId },
+			tokenEndpoint,
+			tokenEndpointAuth,
+			issuer,
+		});
+		await refreshAccessToken({
+			refreshToken: "refresh-token",
+			options: { clientId },
+			tokenEndpoint,
+			tokenEndpointAuth,
+			issuer,
+		});
+		await clientCredentialsToken({
+			options: { clientId },
+			tokenEndpoint,
+			scope: "api",
+			tokenEndpointAuth,
+			issuer,
+		});
+
+		expect(getClientAssertion.mock.calls.map(([context]) => context)).toEqual([
+			{ clientId, tokenEndpoint, grantType: "authorization_code", issuer },
+			{ clientId, tokenEndpoint, grantType: "refresh_token", issuer },
+			{ clientId, tokenEndpoint, grantType: "client_credentials", issuer },
+		]);
+	});
+
+	it("tells a custom authentication hook that it is customizing a token request", async () => {
+		const customizeRequest = vi.fn();
+
+		await authorizationCodeRequest({
+			code: "auth-code",
+			redirectURI: "https://rp.example.com/callback",
+			options: { clientId },
+			tokenEndpoint,
+			tokenEndpointAuth: { method: "custom", customizeRequest },
+		});
+
+		expect(customizeRequest).toHaveBeenCalledWith(
+			expect.objectContaining({ endpoint: "token" }),
+		);
 	});
 
 	it("signs refresh-token assertions with the request tokenEndpoint", async () => {

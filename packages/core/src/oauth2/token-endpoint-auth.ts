@@ -33,6 +33,15 @@ export type TokenEndpointAuthMethod = TokenEndpointAuth["method"];
 export type TokenEndpointSecretAuthentication = "basic" | "post";
 
 /**
+ * The endpoint a client-authenticated request goes to: the token endpoint, or
+ * the pushed authorization request endpoint (RFC 9126), which authenticates
+ * the client the same way.
+ */
+export type TokenEndpointRequestEndpoint =
+	| "token"
+	| "pushed_authorization_request";
+
+/**
  * Mutable token request state passed to a custom authentication strategy.
  */
 export interface TokenEndpointRequestContext {
@@ -41,6 +50,13 @@ export interface TokenEndpointRequestContext {
 	options: TokenEndpointClientOptions;
 	tokenEndpoint: string;
 	grantType: ClientAssertionGrantType;
+	/** The endpoint this request goes to. */
+	endpoint: TokenEndpointRequestEndpoint;
+	/**
+	 * The authorization server's issuer identifier, when the caller knows it,
+	 * for example from discovery.
+	 */
+	issuer?: string | undefined;
 }
 
 /**
@@ -77,7 +93,9 @@ export function setCallerTokenRequestHeaders(
 }
 
 export interface ApplyTokenEndpointAuthInput
-	extends TokenEndpointRequestContext {
+	extends Omit<TokenEndpointRequestContext, "endpoint"> {
+	/** @default "token" */
+	endpoint?: TokenEndpointRequestEndpoint | undefined;
 	tokenEndpointAuth?: TokenEndpointAuth | undefined;
 	authentication?: TokenEndpointSecretAuthentication | undefined;
 }
@@ -217,6 +235,8 @@ export async function applyTokenEndpointAuth({
 	options,
 	tokenEndpoint,
 	grantType,
+	endpoint = "token",
+	issuer,
 	tokenEndpointAuth,
 	authentication,
 }: ApplyTokenEndpointAuthInput) {
@@ -244,6 +264,8 @@ export async function applyTokenEndpointAuth({
 			options,
 			tokenEndpoint,
 			grantType,
+			endpoint,
+			issuer,
 		});
 		assertCompleteManualClientAssertion(body);
 		return;
@@ -263,6 +285,7 @@ export async function applyTokenEndpointAuth({
 				clientId,
 				tokenEndpoint,
 				grantType,
+				...(issuer ? { issuer } : {}),
 			},
 		});
 		setClientId(body, clientId);
