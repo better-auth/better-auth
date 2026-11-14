@@ -1,5 +1,5 @@
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
-import { APIError } from "better-auth/api";
+import { tokenError } from "@better-auth/oauth-provider/internal";
 
 /**
  * Error descriptions for the backchannel authentication endpoint (CIBA §13),
@@ -31,8 +31,6 @@ export const CIBA_ERROR_CODES = defineErrorCodes({
 	SCOPE_NOT_REQUESTED: "The approved scopes must be among the requested scopes",
 	INVALID_AUTHORIZATION_DETAILS:
 		"The authorization_details are malformed, of an unsupported type, or invalid for their type",
-	AUTHORIZATION_DETAILS_REQUIRE_RESOURCE:
-		"A request with authorization_details must name a resource, so its access token can carry them",
 	AUTHORIZATION_DETAILS_ON_POLL:
 		"authorization_details is not accepted when polling the token endpoint",
 	UNSUPPORTED_ACR:
@@ -45,5 +43,5 @@ export function oauthError(
 	description: string,
 	status: "BAD_REQUEST" | "INTERNAL_SERVER_ERROR" = "BAD_REQUEST",
 ): never {
-	throw new APIError(status, { error, error_description: description });
+	return tokenError(status, error, description);
 }

@@ -17,6 +17,7 @@ import {
 	isValidOidcClaimsRequest,
 } from "./claims-request";
 import { getExtensionInteractionRequest } from "./extensions";
+import { oauthAuthorizationServerMetadata } from "./metadata";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { mapIssuesToOAuthError } from "./oauth-endpoint";
@@ -838,6 +839,20 @@ async function validateAuthorizationRequest(
 			"invalid_redirect",
 			"invalid redirect uri",
 			"server",
+		);
+	}
+	// RFC 9396 §5: once discovery advertises types, the parameter is recognized
+	// and must not be ignored, but only extension grants such as CIBA issue
+	// authorization details. Otherwise RFC 6749 §3.1 has it ignored.
+	if (
+		"authorization_details" in query &&
+		oauthAuthorizationServerMetadata(ctx, opts)
+			.authorization_details_types_supported?.length
+	) {
+		return invalidAuthorizationRequest(
+			"invalid_authorization_details",
+			"authorization_details is not supported at the authorization endpoint",
+			"client",
 		);
 	}
 	// Check for invalid scopes if requested from query

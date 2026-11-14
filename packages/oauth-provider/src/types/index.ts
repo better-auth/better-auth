@@ -259,7 +259,8 @@ export interface OAuthTokenIssueParams {
 	 *
 	 * Reserved RFC 9068 claim names stay owned by the authorization server and
 	 * are removed. The plugin's `customAccessTokenClaims` and a resource's
-	 * `customClaims` override a claim of the same name.
+	 * `customClaims` override a claim of the same name. Pass RFC 9396 details
+	 * as {@link OAuthTokenIssueParams.authorizationDetails} instead.
 	 */
 	accessTokenClaims?: Record<string, unknown>;
 	/**
@@ -292,6 +293,16 @@ export interface OAuthTokenIssueParams {
 	 */
 	act?: OAuthActorClaim;
 	/**
+	 * RFC 9396 authorization details the user approved for this grant. The
+	 * authorization server returns them as `authorization_details` in the token
+	 * response and in a JWT access token, or at introspection of an opaque one,
+	 * and no claim hook can replace them. A detail with `locations` is issued
+	 * only to a token for one of those resources (RFC 9396 §9.1). An issuance
+	 * with details never includes a refresh token, because refreshed tokens do
+	 * not carry them. Passing it with `refreshToken` throws.
+	 */
+	authorizationDetails?: OAuthAuthorizationDetail[];
+	/**
 	 * Latest time the access token may expire. The authorization server issues
 	 * the earlier of this and its configured lifetime, so a grant derived from
 	 * another token (for example RFC 8693 token exchange) cannot outlive it.
@@ -299,6 +310,22 @@ export interface OAuthTokenIssueParams {
 	 * and ID tokens are not capped, so such a grant should not issue them.
 	 */
 	maxExpiresAt?: Date;
+}
+
+/**
+ * An RFC 9396 authorization detail: a `type`, the common fields, and any
+ * fields the type defines.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc9396.html#section-2
+ */
+export interface OAuthAuthorizationDetail {
+	type: string;
+	locations?: string[];
+	actions?: string[];
+	datatypes?: string[];
+	identifier?: string;
+	privileges?: string[];
+	[field: string]: unknown;
 }
 
 export interface OAuthTokenResponse {

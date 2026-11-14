@@ -240,16 +240,28 @@ Check every field in `validate`, and reject unknown fields and missing required 
 
 The provider then handles each request with `authorization_details` as follows:
 
-1. It rejects the request with `invalid_authorization_details` when the value is not a non-empty JSON array of objects, a `type` is not listed, or `validate` returns `false`. Without `authorizationDetailsTypes`, every request with `authorization_details` is rejected this way.
-2. It requires a `resource`, so the access token is a JWT that can carry the details to your API.
-3. It shows the details to the user, as `authorizationDetails` in `sendNotification` and as `authorization_details` on the consent page. Approval from the link grants all of them.
-4. It returns the granted details as `authorization_details` in the token response and in the JWT access token.
+1. It rejects the request with `invalid_authorization_details` when any of these is true:
 
-Your API must check the `authorization_details` claim before it acts, such as that the payment it is asked to make matches the approved amount and recipient.
+   * The value is not a non-empty JSON array of objects.
+   * A `type` is not listed in `authorizationDetailsTypes`.
+   * A `type` is not among the types the client registered, when it registered any.
+   * `validate` returns `false`.
+
+   Without `authorizationDetailsTypes`, every request with `authorization_details` is rejected this way.
+2. It shows the details to the user, as `authorizationDetails` in `sendNotification` and as `authorization_details` on the consent page. Approval from the link grants all of them.
+3. It returns the granted details as `authorization_details` in the token response. A JWT access token carries them as a claim. For an opaque access token, introspection returns them.
+
+Your API must check `authorization_details` before it acts. For example, it checks that the payment it is asked to make matches the approved amount and recipient.
+
+The granted details belong to the provider. `customAccessTokenClaims` and a resource's `customClaims` cannot replace them in the token or at introspection.
 
 A detail that lists `locations` is issued only in a token for one of those resources. When the poll narrows the token to other resources, that detail is left out of the response and the token (RFC 9396 §9.1). A detail without `locations` goes to every token.
 
-A refreshed or exchanged token would not carry the details. So the provider issues no refresh token when the user approves authorization details, even with `offline_access`, and leaves `offline_access` out of the returned `scope`. Token exchange rejects an access token that carries `authorization_details`. Discovery metadata lists the types as `authorization_details_types_supported`.
+A refreshed or exchanged token would not carry the details. So the provider issues no refresh token when the user approves authorization details, even with `offline_access`, and leaves `offline_access` out of the returned `scope`. Token exchange rejects an access token that carries `authorization_details`.
+
+Discovery metadata lists the types as `authorization_details_types_supported`. Only `/oauth2/bc-authorize` accepts them. So `/oauth2/authorize` and `/oauth2/par` reject a request with `authorization_details` with `invalid_authorization_details`, instead of ignoring the details the client asked for.
+
+To limit a client to some of the types, register it with `authorization_details_types` (RFC 9396 §10), such as `["payment_initiation"]`. Registration fails with `invalid_client_metadata` when a type is not in `authorizationDetailsTypes`. A client without the field may request every listed type.
 
 ## Decide from your own app
 
@@ -307,16 +319,16 @@ The ID token carries only the `auth_time`, `acr`, and `amr` you pass; without `a
 
 Starts a request. It accepts only `application/x-www-form-urlencoded` (CIBA §7.1), authenticates the client, and returns `auth_req_id`, `expires_in`, and `interval`. Each IP address can start 10 requests per minute. Discovery metadata advertises it as `backchannel_authentication_endpoint`, with `backchannel_token_delivery_modes_supported` set to `deliveryModes` and `backchannel_user_code_parameter_supported` set to `false`. With `authorizationDetailsTypes`, it also lists `authorization_details_types_supported`.
 
-| Parameter                   | Required  | Description                                                                                                                                                                 |
-| --------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scope`                     | yes       | Space-delimited scopes. Must include `openid`.                                                                                                                              |
-| `login_hint`                | yes       | Identifies the user, by email unless you set `resolveUser`.                                                                                                                 |
-| `client_notification_token` | ping only | An RFC 6750 bearer token of at most 1024 characters, sent back on the ping callback.                                                                                        |
-| `binding_message`           | no        | Up to 64 characters of plain text, in any script, shown in the notification, on the consent page, and by the client.                                                        |
-| `requested_expiry`          | no        | Requested lifetime in seconds, a positive integer. Capped at `expiresIn`.                                                                                                   |
-| `resource`                  | no        | One or more resource indicators the token is bound to.                                                                                                                      |
-| `acr_values`                | no        | Space-separated ACR values in order of preference, up to 1024 characters. See [Request a stronger sign-in](#request-a-stronger-sign-in).                                    |
-| `authorization_details`     | no        | A JSON array of RFC 9396 authorization details, up to 4096 characters once URL-encoded. Requires `resource`. See [Approve structured actions](#approve-structured-actions). |
+| Parameter                   | Required  | Description                                                                                                                                            |
+| --------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `scope`                     | yes       | Space-delimited scopes. Must include `openid`.                                                                                                         |
+| `login_hint`                | yes       | Identifies the user, by email unless you set `resolveUser`.                                                                                            |
+| `client_notification_token` | ping only | An RFC 6750 bearer token of at most 1024 characters, sent back on the ping callback.                                                                   |
+| `binding_message`           | no        | Up to 64 characters of plain text, in any script, shown in the notification, on the consent page, and by the client.                                   |
+| `requested_expiry`          | no        | Requested lifetime in seconds, a positive integer. Capped at `expiresIn`.                                                                              |
+| `resource`                  | no        | One or more resource indicators the token is bound to.                                                                                                 |
+| `acr_values`                | no        | Space-separated ACR values in order of preference, up to 1024 characters. See [Request a stronger sign-in](#request-a-stronger-sign-in).               |
+| `authorization_details`     | no        | A JSON array of RFC 9396 authorization details, up to 4096 characters once URL-encoded. See [Approve structured actions](#approve-structured-actions). |
 
 ### `POST /oauth2/token`
 
@@ -382,16 +394,16 @@ export const cibaOptionsType = {
 
 The backchannel endpoint returns these [CIBA §13](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#auth_error_response) errors:
 
-| Error                           | Meaning                                                                                                                                                    |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `invalid_request`               | A required parameter is missing or malformed, the request uses a hint other than `login_hint`, or a ping client sent no valid `client_notification_token`. |
-| `invalid_scope`                 | `scope` does not include `openid`, the client may not request it, or a requested resource does not allow `openid`.                                         |
-| `invalid_client`                | The client did not authenticate, or is public and `allowPublicClients` is off.                                                                             |
-| `unauthorized_client`           | The client is not registered for the CIBA grant with a delivery mode this server supports.                                                                 |
-| `invalid_binding_message`       | The binding message is longer than 64 characters or contains control or invisible formatting characters.                                                   |
-| `unknown_user_id`               | No user matches the `login_hint`.                                                                                                                          |
-| `invalid_target`                | A `resource` is malformed or unknown.                                                                                                                      |
-| `invalid_authorization_details` | `authorization_details` is malformed, has a type that is not in `authorizationDetailsTypes`, fails its type's `validate`, or comes without a `resource`.   |
+| Error                           | Meaning                                                                                                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `invalid_request`               | A required parameter is missing or malformed, the request uses a hint other than `login_hint`, or a ping client sent no valid `client_notification_token`.               |
+| `invalid_scope`                 | `scope` does not include `openid`, the client may not request it, or a requested resource does not allow `openid`.                                                       |
+| `invalid_client`                | The client did not authenticate, or is public and `allowPublicClients` is off.                                                                                           |
+| `unauthorized_client`           | The client is not registered for the CIBA grant with a delivery mode this server supports.                                                                               |
+| `invalid_binding_message`       | The binding message is longer than 64 characters or contains control or invisible formatting characters.                                                                 |
+| `unknown_user_id`               | No user matches the `login_hint`.                                                                                                                                        |
+| `invalid_target`                | A `resource` is malformed or unknown.                                                                                                                                    |
+| `invalid_authorization_details` | `authorization_details` is malformed, has a type that is not in `authorizationDetailsTypes`, is not among the client's registered types, or fails its type's `validate`. |
 
 The token poll returns:
 
@@ -446,8 +458,7 @@ The plugin adds one model, `cibaRequest`:
 * Push delivery is not supported.
 * Only `login_hint` is supported; `id_token_hint` and `login_hint_token` are rejected with `invalid_request`.
 * `user_code` and signed authentication requests are not supported.
-* Authorization details reach your API only in JWT access tokens. They are not stored on refresh tokens or opaque access tokens, so a request with authorization details needs a `resource`, gets no refresh token, and cannot be exchanged.
-* Only `/oauth2/bc-authorize` accepts authorization details. Discovery lists `authorization_details_types_supported` for the whole server, but `/oauth2/authorize` ignores `authorization_details`.
-* A client cannot register the authorization details types it may use. Every client may request every type in `authorizationDetailsTypes`.
+* Refresh tokens do not store authorization details, so a request with authorization details gets no refresh token, and its access token cannot be exchanged.
+* Only `/oauth2/bc-authorize` accepts authorization details.
 * There is no API that lists a user's pending requests. To show them in your app, keep the `requestId`s that `sendNotification` receives.
 * There is no per-user limit on requests; the limit applies per IP address.
