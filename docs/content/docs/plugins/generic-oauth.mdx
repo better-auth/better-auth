@@ -630,7 +630,7 @@ Tokens bound to a key only work with that key. Use one key pair that survives re
 ```ts title="dpop-key.ts"
 export async function loadDpopKeyPair() {
     const jwk = JSON.parse(process.env.DPOP_PRIVATE_JWK!);
-    const { d: _privateKey, ...publicJwk } = jwk;
+    const publicJwk = { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y };
     const algorithm = { name: "ECDSA", namedCurve: "P-256" };
     return {
         privateKey: await crypto.subtle.importKey("jwk", jwk, algorithm, false, ["sign"]),
@@ -644,9 +644,15 @@ To call the provider's APIs with a DPoP-bound access token from `getAccessToken`
 ```ts
 import { createDpopFetch } from "better-auth/oauth2/dpop-client";
 
+const accounts = await auth.api.listUserAccounts({ headers });
+const account = accounts.find((account) => account.providerId === "example");
+if (!account) {
+    throw new Error("Example account is not linked");
+}
+
 const dpopFetch = createDpopFetch({ keyPair });
 const { accessToken } = await auth.api.getAccessToken({
-    body: { providerId: "example" },
+    body: { accountId: account.id },
     headers,
 });
 const response = await dpopFetch("https://api.example.com/items", {

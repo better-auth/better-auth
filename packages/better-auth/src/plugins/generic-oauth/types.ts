@@ -129,9 +129,9 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * sends `dpop_jkt` with the authorization request to bind the code to the
 	 * key. It retries once when the provider asks for a DPoP nonce.
 	 *
-	 * Tokens the provider binds to the key work only with proofs from the same
-	 * key, so keep the pair for as long as stored tokens live. A custom
-	 * `getToken` or `getUserInfo` must send its own proofs.
+	 * A protected resource accepts a token the provider binds to the key only
+	 * with a proof from the same key, so keep the pair for as long as stored
+	 * tokens live. A custom `getToken` or `getUserInfo` must send its own proofs.
 	 */
 	dpop?:
 		| {

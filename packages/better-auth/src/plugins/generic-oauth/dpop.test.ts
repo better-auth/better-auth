@@ -28,7 +28,11 @@ const NONCE = "server-nonce-1";
  */
 async function startAuthorizationServer() {
 	const requests: RecordedRequest[] = [];
-	const settings = { tokenType: "DPoP", advertisePar: false };
+	const settings = {
+		tokenType: "DPoP",
+		advertisePar: false,
+		requireDpop: true,
+	};
 
 	const server = createServer(async (req, res) => {
 		const chunks: Buffer[] = [];
@@ -64,7 +68,7 @@ async function startAuthorizationServer() {
 			return json(201, { request_uri: "urn:example:pushed", expires_in: 60 });
 		}
 		if (path === "/token") {
-			if (proofNonce !== NONCE) {
+			if (settings.requireDpop && proofNonce !== NONCE) {
 				return json(400, { error: "use_dpop_nonce" });
 			}
 			return json(200, {
@@ -111,6 +115,7 @@ describe("generic-oauth DPoP", async () => {
 		Object.assign(authorizationServer.settings, {
 			tokenType: "DPoP",
 			advertisePar: false,
+			requireDpop: true,
 		});
 	});
 	afterAll(async () => {
@@ -257,11 +262,18 @@ describe("generic-oauth DPoP", async () => {
 
 	it("sends no DPoP proof without the dpop option", async () => {
 		authorizationServer.settings.tokenType = "Bearer";
+		authorizationServer.settings.requireDpop = false;
 		const instance = await createInstance({ dpop: undefined });
-		const { authorizationURL } = await signIn(instance);
+		const { authorizationURL, callback } = await signIn(instance);
 
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe("/dashboard");
 		expect(authorizationURL.searchParams.has("dpop_jkt")).toBe(false);
+		expect(authorizationServer.at("/token")).toHaveLength(1);
 		const [token] = authorizationServer.at("/token");
 		expect(token?.headers.dpop).toBeUndefined();
+		const [userinfo] = authorizationServer.at("/userinfo");
+		expect(userinfo?.headers.authorization).toBe("Bearer dpop-access-token");
+		expect(userinfo?.headers.dpop).toBeUndefined();
 	});
 });
