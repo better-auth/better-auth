@@ -1,3 +1,4 @@
+import type { Jwk } from "better-auth/plugins/jwt";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -38,8 +39,9 @@ async function createProvider(jwtPlugin = jwt()) {
 	const clientId = client.client_id;
 	const clientSecret = client.client_secret!;
 
-	async function issueAccessToken() {
+	async function issueAccessToken(headers?: Record<string, string>) {
 		const tokens = await instance.auth.api.oauth2Token({
+			headers,
 			body: {
 				grant_type: "client_credentials",
 				client_id: clientId,
@@ -51,12 +53,15 @@ async function createProvider(jwtPlugin = jwt()) {
 		return tokens.access_token;
 	}
 
-	async function introspect(token: string) {
+	async function introspect(token: string, headers?: Record<string, string>) {
 		const response = await instance.customFetchImpl(
 			`${baseURL}/oauth2/introspect`,
 			{
 				method: "POST",
-				headers: { "content-type": "application/x-www-form-urlencoded" },
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					...headers,
+				},
 				body: new URLSearchParams({
 					token,
 					client_id: clientId,
@@ -68,7 +73,30 @@ async function createProvider(jwtPlugin = jwt()) {
 		return (await response.json()) as { active: boolean };
 	}
 
-	return { instance, headers, clientId, issueAccessToken, introspect };
+	async function revoke(token: string, headers?: Record<string, string>) {
+		return instance.customFetchImpl(`${baseURL}/oauth2/revoke`, {
+			method: "POST",
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+				...headers,
+			},
+			body: new URLSearchParams({
+				token,
+				token_type_hint: "access_token",
+				client_id: clientId,
+				client_secret: clientSecret,
+			}),
+		});
+	}
+
+	return {
+		instance,
+		headers,
+		clientId,
+		issueAccessToken,
+		introspect,
+		revoke,
+	};
 }
 
 /** A runtime that cannot send a request to its own hostname. */
@@ -163,5 +191,107 @@ describe("oauthProviderResourceClient with the auth instance", () => {
 
 		expect(routeFetch).toHaveBeenCalled();
 		expect(String(routeFetch.mock.calls[0]![0])).toBe(jwksUrl);
+	});
+});
+
+describe("a custom jwt adapter.getJwks", () => {
+	const tenantHeader = "x-tenant";
+
+	/** Picks signing keys by a request header, as a multi-tenant key store does. */
+	function tenantKeyStore() {
+		const tenantsSeen: (string | null | undefined)[] = [];
+		const plugin = jwt({
+			adapter: {
+				getJwks: async (ctx) => {
+					tenantsSeen.push(ctx.headers?.get(tenantHeader));
+					return ctx.context.adapter.findMany<Jwk>({ model: "jwks" });
+				},
+			},
+		});
+		return { plugin, tenantsSeen };
+	}
+
+	it("receives the introspection request", async () => {
+		const { plugin, tenantsSeen } = tenantKeyStore();
+		const { introspect, issueAccessToken } = await createProvider(plugin);
+		const token = await issueAccessToken();
+		tenantsSeen.length = 0;
+
+		expect(await introspect(token, { [tenantHeader]: "acme" })).toMatchObject({
+			active: true,
+		});
+		expect(tenantsSeen).toEqual(["acme"]);
+	});
+
+	it("receives the revocation request", async () => {
+		const { plugin, tenantsSeen } = tenantKeyStore();
+		const { revoke, issueAccessToken } = await createProvider(plugin);
+		const token = await issueAccessToken();
+		tenantsSeen.length = 0;
+
+		const response = await revoke(token, { [tenantHeader]: "acme" });
+
+		// A verified JWT access token is self-contained, so revocation reports it
+		// as unsupported after reading the keys.
+		expect(await response.json()).toMatchObject({
+			error: "unsupported_token_type",
+		});
+		expect(tenantsSeen).toEqual(["acme"]);
+	});
+
+	it("receives the end-session request", async () => {
+		const { plugin, tenantsSeen } = tenantKeyStore();
+		const { instance, headers, clientId } = await createProvider(plugin);
+		const session = await instance.auth.api.getSession({ headers });
+		const { token: hint } = await instance.auth.api.signJWT({
+			body: {
+				payload: {
+					iss: baseURL,
+					aud: clientId,
+					sub: session!.user.id,
+					sid: session!.session.id,
+				},
+			},
+		});
+		tenantsSeen.length = 0;
+
+		await instance.customFetchImpl(
+			`${baseURL}/oauth2/end-session?id_token_hint=${encodeURIComponent(hint)}`,
+			{ headers: { [tenantHeader]: "acme" } },
+		);
+
+		expect(tenantsSeen).toEqual(["acme"]);
+		expect(await instance.auth.api.getSession({ headers })).toBeNull();
+	});
+
+	/**
+	 * Each tenant has its own signing keys. A key loaded for one tenant must
+	 * not verify a token presented in another tenant's request.
+	 */
+	it("is asked again for every verification", async () => {
+		const keysByTenant = new Map<string, Jwk[]>();
+		const tenantOf = (ctx: { headers?: Headers | undefined }) =>
+			ctx.headers?.get(tenantHeader) ?? "none";
+		const plugin = jwt({
+			adapter: {
+				getJwks: async (ctx) => keysByTenant.get(tenantOf(ctx)) ?? [],
+				createJwk: async (data, ctx) => {
+					const key = { ...data, id: crypto.randomUUID() };
+					const tenant = tenantOf(ctx);
+					keysByTenant.set(tenant, [...(keysByTenant.get(tenant) ?? []), key]);
+					return key;
+				},
+			},
+		});
+		const { introspect, issueAccessToken } = await createProvider(plugin);
+		const acmeToken = await issueAccessToken({ [tenantHeader]: "acme" });
+		await issueAccessToken({ [tenantHeader]: "globex" });
+
+		expect(
+			await introspect(acmeToken, { [tenantHeader]: "acme" }),
+		).toMatchObject({ active: true });
+		expect(
+			await introspect(acmeToken, { [tenantHeader]: "globex" }),
+		).toMatchObject({ active: false });
 	});
 });

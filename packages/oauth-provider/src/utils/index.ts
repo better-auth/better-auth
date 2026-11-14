@@ -99,13 +99,13 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
 	> | null;
 };
 
+const findJwtPlugin = (ctx: AuthContext) =>
+	ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+
 /**
  * Gets the JWT Plugin
  * @internal
  */
-const findJwtPlugin = (ctx: AuthContext) =>
-	ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
-
 export const getJwtPlugin = (ctx: AuthContext) => {
 	const plugin = findJwtPlugin(ctx);
 	if (!plugin) {
@@ -114,13 +114,23 @@ export const getJwtPlugin = (ctx: AuthContext) => {
 	return plugin;
 };
 
+type JwksReadContext = Pick<GenericEndpointContext, "context"> &
+	Partial<Pick<GenericEndpointContext, "request" | "headers" | "path">>;
+
 function readJwksInProcess(
-	context: AuthContext,
+	{ context, request, headers, path }: JwksReadContext,
 	jwtPlugin: ReturnType<typeof jwt>,
 ) {
+	const jwksFetch = async (): Promise<JSONWebKeySet | undefined> =>
+		jwtPlugin.endpoints.getJwks({ context, request, headers, path });
+	// A custom `adapter.getJwks` receives this request and may return different
+	// keys for each one, such as per tenant, so its keys are read on every
+	// verification instead of being shared across requests.
+	if (jwtPlugin.options?.adapter?.getJwks) {
+		return { jwksFetch };
+	}
 	return {
-		jwksFetch: async (): Promise<JSONWebKeySet | undefined> =>
-			jwtPlugin.endpoints.getJwks({ context }),
+		jwksFetch,
 		// Endpoints receive a per-request copy of the context, and one `jwt()`
 		// object can serve several auth instances. The adapter is the instance's
 		// key store, so the cached keys are scoped to it.
@@ -129,28 +139,36 @@ function readJwksInProcess(
 }
 
 /**
- * Source of this server's signing keys, for verifying tokens it issued. Keys
- * published at `jwks.remoteUrl` are fetched from there; otherwise they are read
- * in-process, so no request goes to this server's own `/jwks`. That read skips
- * the router, so hooks and the rate limiter on `/jwks` do not run for it.
+ * Source of this server's signing keys, for verifying tokens it issued in an
+ * endpoint. Keys published at `jwks.remoteUrl` are fetched from there;
+ * otherwise they are read in-process with the endpoint's request, so no
+ * request goes to this server's own `/jwks`. That read skips the router, so
+ * hooks and the rate limiter on `/jwks` do not run for it.
  */
-export const getJwksSource = (context: AuthContext) => {
-	const jwtPlugin = getJwtPlugin(context);
+export const getJwksSource = (ctx: GenericEndpointContext) => {
+	const jwtPlugin = getJwtPlugin(ctx.context);
 	const remoteUrl = jwtPlugin.options?.jwks?.remoteUrl;
 	return remoteUrl
 		? { jwksFetch: remoteUrl }
-		: readJwksInProcess(context, jwtPlugin);
+		: readJwksInProcess(ctx, jwtPlugin);
 };
 
 /**
  * In-process source of this server's signing keys for a verifier in the same
  * process, or `undefined` without a JWT plugin or when the keys are published
- * at `jwks.remoteUrl`. See {@link getJwksSource}.
+ * at `jwks.remoteUrl`. Pass the request being verified when there is one, so
+ * a custom key store can read it. See {@link getJwksSource}.
  */
-export const getLocalJwksSource = (context: AuthContext) => {
+export const getLocalJwksSource = (
+	context: AuthContext,
+	request?: Request | undefined,
+) => {
 	const jwtPlugin = findJwtPlugin(context);
 	return jwtPlugin && !jwtPlugin.options?.jwks?.remoteUrl
-		? readJwksInProcess(context, jwtPlugin)
+		? readJwksInProcess(
+				{ context, request, headers: request?.headers },
+				jwtPlugin,
+			)
 		: undefined;
 };
 

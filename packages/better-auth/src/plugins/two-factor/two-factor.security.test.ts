@@ -2,7 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { createOTP } from "@better-auth/utils/otp";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -417,9 +417,18 @@ describe("two-factor security: chunked session_data is fully scrubbed on 2FA-req
  * because only the first caller wins the delete-and-return.
  */
 describe("two-factor security: 2FA challenge is single-use and expiry-bounded", async () => {
+	const sentOTPs: string[] = [];
 	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 		secret: DEFAULT_SECRET,
-		plugins: [twoFactor()],
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendOTP: ({ otp }) => {
+						sentOTPs.push(otp);
+					},
+				},
+			}),
+		],
 	});
 
 	const { headers } = await signInWithTestUser();
@@ -513,6 +522,69 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 
 		const sessionsAfter = await countSessions();
 		expect(sessionsAfter.length).toBe(sessionsBefore.length);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10000
+	 */
+	it("sends no OTP for an expired challenge", async () => {
+		const challengeHeaders = await startChallenge();
+		const challengeRow = await db.findOne<Verification>({
+			model: "verification",
+			where: [{ field: "value", value: userId }],
+		});
+		await db.update({
+			model: "verification",
+			where: [{ field: "id", value: challengeRow!.id }],
+			update: { expiresAt: new Date(Date.now() - 60 * 1000) },
+		});
+		sentOTPs.length = 0;
+
+		for (let i = 0; i < 2; i++) {
+			const sent = await auth.api.sendTwoFactorOTP({
+				body: {},
+				headers: challengeHeaders,
+				asResponse: true,
+			});
+			expect(sent.status).toBe(401);
+			const verified = await auth.api.verifyTwoFactorOTP({
+				body: { code: "000000" },
+				headers: challengeHeaders,
+				asResponse: true,
+			});
+			expect(verified.status).toBe(401);
+		}
+		expect(sentOTPs).toEqual([]);
+	});
+
+	it("sends no OTP for a challenge with an invalid expiry", async () => {
+		const challengeHeaders = await startChallenge();
+		const challengeRow = await db.findOne<Verification>({
+			model: "verification",
+			where: [{ field: "value", value: userId }],
+		});
+		// The database rejects an invalid date, but a corrupt secondary-storage
+		// entry can still carry one.
+		const { internalAdapter } = await auth.$context;
+		const lookup = vi
+			.spyOn(internalAdapter, "findVerificationValue")
+			.mockResolvedValueOnce({
+				...challengeRow!,
+				expiresAt: new Date(Number.NaN),
+			});
+		sentOTPs.length = 0;
+
+		try {
+			const sent = await auth.api.sendTwoFactorOTP({
+				body: {},
+				headers: challengeHeaders,
+				asResponse: true,
+			});
+			expect(sent.status).toBe(401);
+		} finally {
+			lookup.mockRestore();
+		}
+		expect(sentOTPs).toEqual([]);
 	});
 
 	it("two concurrent verifications of the same challenge yield exactly one session", async () => {

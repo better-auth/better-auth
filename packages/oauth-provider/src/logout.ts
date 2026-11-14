@@ -856,7 +856,7 @@ async function verifyLogoutHint(
 				new TextDecoder().decode(verifiedPayload),
 			) as JWTPayload;
 		} else {
-			const jwks = await getJwks(hint, getJwksSource(ctx.context));
+			const jwks = await getJwks(hint, getJwksSource(ctx));
 			const { payload: verifiedPayload } = await compactVerify(
 				hint,
 				createLocalJWKSet(jwks),

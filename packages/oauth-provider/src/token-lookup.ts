@@ -62,7 +62,7 @@ async function verifyJwtAccessToken(
 		return null;
 	}
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
-	const jwks = await getJwks(token, getJwksSource(ctx.context));
+	const jwks = await getJwks(token, getJwksSource(ctx));
 	let payload: JWTPayload;
 	try {
 		// Do not pass jose's `audience` option: access-token audiences are
