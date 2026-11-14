@@ -8,6 +8,7 @@ import {
 } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import { withExposedHeaders } from "./dpop";
+import { challengeHeaders } from "./utils";
 
 const DPOP_CHALLENGE_ERRORS = new Set(["invalid_dpop_proof", "use_dpop_nonce"]);
 const OAUTH_SCOPE_TOKEN_PATTERN = /^[\x21\x23-\x5b\x5d-\x7e]+$/;
@@ -106,17 +107,6 @@ function buildDpopChallengeValue(
 		.join(", ");
 }
 
-/**
- * `WWW-Authenticate` is not a CORS-safelisted response header, so browsers
- * hide it from cross-origin clients unless the response exposes it.
- */
-function challengeHeaders(challenge: string): Record<string, string> {
-	return {
-		"WWW-Authenticate": challenge,
-		"Access-Control-Expose-Headers": "WWW-Authenticate",
-	};
-}
-
 function buildDpopChallengeHeaders(
 	error: APIError,
 	errorCode: string,
@@ -125,7 +115,7 @@ function buildDpopChallengeHeaders(
 		dpopSigningAlgorithms?: readonly string[];
 	},
 ): Record<string, string> {
-	const headers = challengeHeaders(
+	const headers: Record<string, string> = challengeHeaders(
 		buildDpopChallengeValue(
 			errorCode,
 			description,
