@@ -1380,6 +1380,112 @@ describe("oauth-proxy", async () => {
 			expect(typeof (previewUsers[0] as any)?.registeredAt).toBe("string");
 		});
 
+		it("preserves and decodes plugin-defined date fields through passthrough proxy", async () => {
+			const timestampString = "2026-11-12T12:00:00.000Z";
+			const customPlugin = () =>
+				({
+					id: "custom-date-plugin",
+					schema: {
+						user: {
+							fields: {
+								joinedDate: {
+									type: "date",
+									required: false,
+								},
+							},
+						},
+					},
+				}) satisfies BetterAuthPlugin;
+
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					plugins: [oAuthProxy(), customPlugin()],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+							mapProfileToUser: () => ({
+								joinedDate: timestampString,
+							}),
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+						}),
+						customPlugin(),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const res = await preview.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+
+			expect(encryptedProfile).toBeTruthy();
+
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("/dashboard");
+					},
+				},
+			);
+
+			const previewCtx = await preview.auth.$context;
+			const previewUsers = await previewCtx.internalAdapter.listUsers();
+			expect(previewUsers.length).toBe(1);
+			expect((previewUsers[0] as any)?.joinedDate).toBeInstanceOf(Date);
+			expect(((previewUsers[0] as any)?.joinedDate as Date).toISOString()).toBe(
+				timestampString,
+			);
+		});
+
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10562
 		 */

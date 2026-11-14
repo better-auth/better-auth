@@ -149,15 +149,22 @@ function decodePassthroughPayload(
 				}
 			}
 		}
-		const userFields = options?.user?.additionalFields;
-		if (
-			userFields &&
-			rawPayload.userInfo &&
-			typeof rawPayload.userInfo === "object"
-		) {
+		let userFields: Record<string, any> = {
+			...(options?.user?.additionalFields ?? {}),
+		};
+		for (const plugin of options?.plugins || []) {
+			const pluginUserFields = plugin.schema?.user?.fields;
+			if (pluginUserFields) {
+				userFields = {
+					...userFields,
+					...pluginUserFields,
+				};
+			}
+		}
+		if (rawPayload.userInfo && typeof rawPayload.userInfo === "object") {
 			for (const [key, fieldConfig] of Object.entries(userFields)) {
 				if (
-					fieldConfig.type === "date" &&
+					fieldConfig?.type === "date" &&
 					typeof rawPayload.userInfo[key] === "string"
 				) {
 					const d = new Date(rawPayload.userInfo[key]);
