@@ -555,35 +555,35 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 			await expectRevoked(server, grant.accessToken);
 		});
 
-		it("revokes the JWT of a redemption that a concurrent replay of its code overtakes", async () => {
+		it("issues no JWT to a redemption that a concurrent replay of its code overtakes", async () => {
 			const { redeem } = await authorizeCode(server, { offline: true });
 			const ctx = await server.auth.$context;
-			// Hold the winning redemption before it stores its refresh token until
-			// the losing request has finished revoking.
-			let releaseWinner!: () => void;
-			const loserFinished = new Promise<void>((resolve) => {
-				releaseWinner = resolve;
+			// Hold the first redemption before it stores its refresh token until
+			// the replay has finished revoking.
+			let releaseFirst!: () => void;
+			const replayFinished = new Promise<void>((resolve) => {
+				releaseFirst = resolve;
 			});
 			const create = ctx.adapter.create;
 			const spy = vi.spyOn(ctx.adapter, "create").mockImplementation((async (
 				args: Parameters<typeof create>[0],
 			) => {
-				if (args.model === "oauthRefreshToken") await loserFinished;
+				if (args.model === "oauthRefreshToken") await replayFinished;
 				return create.call(ctx.adapter, args);
 			}) as typeof create);
 			try {
 				const responses = await Promise.all(
 					[redeem(), redeem()].map((request) =>
 						request.then((response) => {
-							if (response.error) releaseWinner();
+							if (response.error) releaseFirst();
 							return response;
 						}),
 					),
 				);
-				const winner = responses.find((response) => response.data);
-				const loser = responses.find((response) => response.error);
-				expect(loser?.error?.status).toBe(400);
-				await expectRevoked(server, winner!.data!.access_token!);
+				for (const response of responses) {
+					expect(response.data).toBe(null);
+					expect(response.error?.status).toBe(400);
+				}
 			} finally {
 				spy.mockRestore();
 			}
