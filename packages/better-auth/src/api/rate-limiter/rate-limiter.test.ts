@@ -310,6 +310,150 @@ describe("database rate-limit pruning", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12557
+ */
+describe("database rate-limit pruning on new IP requests", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const { auth, db } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			window: 10,
+			max: 10,
+		},
+		advanced: {
+			ipAddress: {
+				ipAddressHeaders: ["x-forwarded-for"],
+			},
+			backgroundTasks: {
+				handler(promise) {
+					backgroundTasks.push(promise);
+				},
+			},
+		},
+	});
+
+	beforeEach(() => {
+		backgroundTasks.length = 0;
+	});
+
+	it("prunes expired rate-limit rows when a request arrives from a new IP", async () => {
+		const now = Date.now();
+		const staleKey1 = createRateLimitKey("198.51.100.1", "/get-session");
+		const staleKey2 = createRateLimitKey("198.51.100.2", "/get-session");
+
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: staleKey1,
+				count: 1,
+				lastRequest: now - 70_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: staleKey2,
+				count: 1,
+				lastRequest: now - 70_000,
+			},
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { "x-forwarded-for": "198.51.100.3" },
+			}),
+		);
+		expect(response.status).toBe(200);
+		await Promise.all(backgroundTasks);
+
+		const newIpRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [
+				{
+					field: "key",
+					value: createRateLimitKey("198.51.100.3", "/get-session"),
+				},
+			],
+		});
+		expect(newIpRow).not.toBeNull();
+
+		const remainingStale1 = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: staleKey1 }],
+		});
+		expect(remainingStale1).toBeNull();
+
+		const remainingStale2 = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: staleKey2 }],
+		});
+		expect(remainingStale2).toBeNull();
+	});
+
+	it("throttles database rate-limit cleanup across subsequent requests", async () => {
+		const ctx = await auth.$context;
+		const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
+
+		try {
+			await auth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: { "x-forwarded-for": "198.51.100.10" },
+				}),
+			);
+			await Promise.all(backgroundTasks);
+			const callsAfterFirst = deleteManySpy.mock.calls.length;
+
+			const staleKey = createRateLimitKey("198.51.100.99", "/get-session");
+			await db.create({
+				model: "rateLimit",
+				data: {
+					key: staleKey,
+					count: 1,
+					lastRequest: Date.now() - 70_000,
+				},
+			});
+
+			await auth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: { "x-forwarded-for": "198.51.100.11" },
+				}),
+			);
+			await Promise.all(backgroundTasks);
+			expect(deleteManySpy.mock.calls.length).toBe(callsAfterFirst);
+
+			const stillStale = await db.findOne<RateLimit>({
+				model: "rateLimit",
+				where: [{ field: "key", value: staleKey }],
+			});
+			expect(stillStale).not.toBeNull();
+
+			vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 61_000 });
+			try {
+				await auth.handler(
+					new Request("http://localhost:3000/api/auth/get-session", {
+						headers: { "x-forwarded-for": "198.51.100.12" },
+					}),
+				);
+				await Promise.all(backgroundTasks);
+			} finally {
+				vi.useRealTimers();
+			}
+
+			expect(deleteManySpy.mock.calls.length).toBe(callsAfterFirst + 1);
+
+			const prunedStale = await db.findOne<RateLimit>({
+				model: "rateLimit",
+				where: [{ field: "key", value: staleKey }],
+			});
+			expect(prunedStale).toBeNull();
+		} finally {
+			deleteManySpy.mockRestore();
+		}
+	});
+});
+
 describe("database rate-limit pruning with dynamic rules", async () => {
 	const backgroundTasks: Promise<unknown>[] = [];
 	const { client, db, testUser } = await getTestInstance({

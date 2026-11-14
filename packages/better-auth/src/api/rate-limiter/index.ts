@@ -113,12 +113,17 @@ function getRetryAfter(lastRequest: number, window: number) {
 	return Math.ceil((lastRequest + windowInMs - now) / 1000);
 }
 
+const RATE_LIMIT_CLEANUP_INTERVAL_MS = 60_000;
+
+const databaseStorageCache = new WeakMap<object, BetterAuthRateLimitStorage>();
+
 function createDatabaseStorageWrapper(
 	ctx: AuthContext,
 ): BetterAuthRateLimitStorage {
 	const model = "rateLimit";
 	const db = ctx.adapter;
 	let longestObservedWindow = Math.max(...getConfiguredRateLimitWindows(ctx));
+	let nextCleanupAt = 0;
 	const readRow = async (key: string) => {
 		const res = await db.findMany<RateLimit>({
 			model,
@@ -129,6 +134,30 @@ function createDatabaseStorageWrapper(
 			data.lastRequest = Number(data.lastRequest);
 		}
 		return data;
+	};
+
+	// Best-effort sweep of clearly-expired rows to bound table growth. Without a
+	// background handler, the request awaits cleanup so it survives teardown;
+	// failures are logged and do not reject the request.
+	const deleteExpiredRows = async (now: number) => {
+		const cutoff = now - longestObservedWindow * 1000;
+		await ctx.runInBackgroundOrAwait(
+			db
+				.deleteMany({
+					model,
+					where: [{ field: "lastRequest", operator: "lt", value: cutoff }],
+				})
+				.then(() => undefined)
+				.catch((e) => ctx.logger.error("Error pruning rate limit rows", e)),
+		);
+	};
+
+	const maybeDeleteExpiredRows = async (now: number) => {
+		if (now < nextCleanupAt) {
+			return;
+		}
+		nextCleanupAt = now + RATE_LIMIT_CLEANUP_INTERVAL_MS;
+		await deleteExpiredRows(now);
 	};
 
 	const consume = async (
@@ -152,6 +181,7 @@ function createDatabaseStorageWrapper(
 					model,
 					data: { key, count: 1, lastRequest: now },
 				});
+				await maybeDeleteExpiredRows(now);
 				return { allowed: true, retryAfter: null };
 			} catch (error) {
 				// The create either lost a race against a concurrent opener (the row
@@ -185,7 +215,7 @@ function createDatabaseStorageWrapper(
 				set: { count: 1, lastRequest: now },
 			});
 			if (reset) {
-				await deleteExpiredRows(now);
+				await maybeDeleteExpiredRows(now);
 				return { allowed: true, retryAfter: null };
 			}
 			return consume(key, rule);
@@ -224,22 +254,6 @@ function createDatabaseStorageWrapper(
 		};
 	};
 
-	// Best-effort sweep of clearly-expired rows to bound table growth. Without a
-	// background handler, the request awaits cleanup so it survives teardown;
-	// failures are logged and do not reject the request.
-	const deleteExpiredRows = async (now: number) => {
-		const cutoff = now - longestObservedWindow * 1000;
-		await ctx.runInBackgroundOrAwait(
-			db
-				.deleteMany({
-					model,
-					where: [{ field: "lastRequest", operator: "lt", value: cutoff }],
-				})
-				.then(() => undefined)
-				.catch((e) => ctx.logger.error("Error pruning rate limit rows", e)),
-		);
-	};
-
 	return {
 		consume,
 	};
@@ -270,7 +284,7 @@ function getConfiguredRateLimitWindows(ctx: AuthContext) {
 
 function getRateLimitStorage(
 	ctx: AuthContext,
-	rateLimitSettings: {
+	_rateLimitSettings: {
 		window: number;
 	},
 ): BetterAuthRateLimitStorage {
@@ -325,7 +339,12 @@ function getRateLimitStorage(
 			},
 		};
 	}
-	return createDatabaseStorageWrapper(ctx);
+	let databaseStorage = databaseStorageCache.get(ctx.adapter);
+	if (!databaseStorage) {
+		databaseStorage = createDatabaseStorageWrapper(ctx);
+		databaseStorageCache.set(ctx.adapter, databaseStorage);
+	}
+	return databaseStorage;
 }
 
 let ipWarningLogged = false;
