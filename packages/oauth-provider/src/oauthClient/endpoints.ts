@@ -297,7 +297,15 @@ export async function updateClientEndpoint(
 		!clearsBackchannelLogout &&
 		!clearsFrontchannelLogout;
 	if (!ownsClient && !isCrossOwnerServerConfiguration) {
-		throw new APIError("UNAUTHORIZED");
+		throw new APIError(
+			"UNAUTHORIZED",
+			settings?.admin
+				? {
+						error_description:
+							"only the client's owner can update it; on other clients, send only enable_end_session or client_credentials_scopes",
+					}
+				: undefined,
+		);
 	}
 	if (
 		isCrossOwnerServerConfiguration &&

@@ -358,6 +358,11 @@ describe("RP-initiated logout for registered clients", () => {
 					update: { enable_end_session: true, client_name: "Renamed" },
 				},
 			}),
-		).rejects.toMatchObject({ statusCode: 401 });
+		).rejects.toMatchObject({
+			statusCode: 401,
+			body: {
+				error_description: expect.stringContaining("enable_end_session"),
+			},
+		});
 	});
 });
