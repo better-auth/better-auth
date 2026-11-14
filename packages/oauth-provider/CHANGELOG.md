@@ -1,5 +1,19 @@
 # @better-auth/oauth-provider
 
+## 1.7.25
+
+### Patch Changes
+
+- [#12587](https://github.com/better-auth/better-auth/pull/12587) [`75c0821`](https://github.com/better-auth/better-auth/commit/75c0821fa61c8ed0ea20f1027d5ad42d16e0daae) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - DPoP now works on deployments that keep verification values only in secondary storage. Before, every request with a DPoP proof to the OAuth provider, UserInfo, or `requireMcpAuth` failed with a 500 error unless `verification.storeInDatabase: true` was set. Used proofs are now recorded in secondary storage, so a replayed proof is still rejected across instances. `createDpopReplayStore` now also accepts the auth context, as `createDpopReplayStore(await auth.$context)`, and picks the same storage.
+
+- [#12603](https://github.com/better-auth/better-auth/pull/12603) [`ad07edd`](https://github.com/better-auth/better-auth/commit/ad07edda1bcb4b5e40368989aa70801839a5926b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Every 401 challenge from the OAuth provider now lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, including client registration, initial access tokens, and token endpoint client authentication. A browser client on another origin, such as a browser MCP client that registers itself, can now read the challenge. Before, only UserInfo and resource challenges exposed it.
+
+- [#12578](https://github.com/better-auth/better-auth/pull/12578) [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The end-session endpoint now verifies `id_token_hint` with the signing keys of the auth instance instead of requesting its own `/jwks` endpoint, so RP-initiated logout works on runtimes that block requests to their own hostname.
+
+- [#12578](https://github.com/better-auth/better-auth/pull/12578) [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Introspection and revocation no longer report a valid JWT access token as inactive when two auth instances share one `jwt()` plugin object. Each instance now caches its own signing keys.
+
+- [#12578](https://github.com/better-auth/better-auth/pull/12578) [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `oauthProviderResourceClient(auth)` now reads the signing keys from the auth instance instead of requesting its own `/jwks` endpoint, so APIs served from the same app as the auth server can verify tokens on runtimes that block requests to their own hostname. Set `jwksUrl` to keep fetching the keys over HTTP.
+
 ## 1.7.24
 
 ### Patch Changes

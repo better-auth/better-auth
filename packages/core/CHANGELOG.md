@@ -1,5 +1,15 @@
 # @better-auth/core
 
+## 1.7.25
+
+### Patch Changes
+
+- [#12572](https://github.com/better-auth/better-auth/pull/12572) [`69e14d8`](https://github.com/better-auth/better-auth/commit/69e14d89b856c95ea0998869c9cb8742d483a808) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Authorization URLs now keep the authorization endpoint's existing query text unchanged. Before, building the URL re-encoded parameters already on the endpoint, for example `%20` became `+`, which broke providers that expect the exact query they published. A parameter that Better Auth sets still replaces an endpoint parameter with the same name.
+
+- [#12586](https://github.com/better-auth/better-auth/pull/12586) [`2a8750b`](https://github.com/better-auth/better-auth/commit/2a8750b285725a45ff58b0f43487afb796c854e9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The default in-memory DPoP replay store used by `verifyAccessTokenRequest` no longer slows down as traffic grows. Before, each DPoP request scanned every proof recorded in the replay window, so CPU time per request grew with the request rate.
+
+- [#12587](https://github.com/better-auth/better-auth/pull/12587) [`75c0821`](https://github.com/better-auth/better-auth/commit/75c0821fa61c8ed0ea20f1027d5ad42d16e0daae) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - DPoP now works on deployments that keep verification values only in secondary storage. Before, every request with a DPoP proof to the OAuth provider, UserInfo, or `requireMcpAuth` failed with a 500 error unless `verification.storeInDatabase: true` was set. Used proofs are now recorded in secondary storage, so a replayed proof is still rejected across instances. `createDpopReplayStore` now also accepts the auth context, as `createDpopReplayStore(await auth.$context)`, and picks the same storage.
+
 ## 1.7.24
 
 ### Patch Changes

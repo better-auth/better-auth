@@ -1,5 +1,7 @@
 # @better-auth/mongo-adapter
 
+## 1.7.25
+
 ## 1.7.24
 
 ## 1.7.23

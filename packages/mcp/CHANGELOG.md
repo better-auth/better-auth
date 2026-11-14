@@ -1,5 +1,14 @@
 # @better-auth/mcp
 
+## 1.7.25
+
+### Patch Changes
+
+- [#12587](https://github.com/better-auth/better-auth/pull/12587) [`75c0821`](https://github.com/better-auth/better-auth/commit/75c0821fa61c8ed0ea20f1027d5ad42d16e0daae) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - DPoP now works on deployments that keep verification values only in secondary storage. Before, every request with a DPoP proof to the OAuth provider, UserInfo, or `requireMcpAuth` failed with a 500 error unless `verification.storeInDatabase: true` was set. Used proofs are now recorded in secondary storage, so a replayed proof is still rejected across instances. `createDpopReplayStore` now also accepts the auth context, as `createDpopReplayStore(await auth.$context)`, and picks the same storage.
+
+- Updated dependencies [[`75c0821`](https://github.com/better-auth/better-auth/commit/75c0821fa61c8ed0ea20f1027d5ad42d16e0daae), [`ad07edd`](https://github.com/better-auth/better-auth/commit/ad07edda1bcb4b5e40368989aa70801839a5926b), [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697), [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697), [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697)]:
+  - @better-auth/oauth-provider@1.7.25
+
 ## 1.7.24
 
 ### Patch Changes
