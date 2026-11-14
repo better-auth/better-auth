@@ -111,9 +111,8 @@ export interface PrivateKeyJwtClientAssertionGetterOptions {
 	 * - `"token_endpoint"`: the token endpoint URL, as OpenID Connect Core 1.0
 	 *   §9 recommends.
 	 * - `"issuer"`: the authorization server's issuer identifier, as FAPI 2.0
-	 *   and RFC 10070 require. The assertion also carries the
-	 *   `client-authentication+jwt` type that RFC 10070 recommends. Signing
-	 *   fails when the caller does not provide the issuer.
+	 *   and RFC 10070 require. Signing fails when the caller does not provide
+	 *   the issuer.
 	 *
 	 * @default "token_endpoint"
 	 */
@@ -141,13 +140,10 @@ export async function signPrivateKeyJwtClientAssertion({
 	algorithm,
 	expiresIn = 120,
 	audience = tokenEndpoint,
-	typ = "JWT",
 }: {
 	clientId: string;
 	tokenEndpoint: string;
 	audience?: string;
-	/** The JWT `typ` header. @default "JWT" */
-	typ?: string;
 	privateKeyJwk?: JsonWebKey;
 	privateKeyPem?: string;
 	kid?: string;
@@ -171,7 +167,7 @@ export async function signPrivateKeyJwtClientAssertion({
 	const now = Math.floor(Date.now() / 1000);
 	const jti = crypto.randomUUID();
 
-	const header: JWTHeaderParameters = { alg: resolvedAlg, typ };
+	const header: JWTHeaderParameters = { alg: resolvedAlg, typ: "JWT" };
 	if (resolvedKid) {
 		header.kid = resolvedKid;
 	}
@@ -221,10 +217,7 @@ export function createPrivateKeyJwtClientAssertionGetter(
 		return signPrivateKeyJwtClientAssertion({
 			clientId,
 			tokenEndpoint,
-			// RFC 10070 §4: an assertion for the issuer audience is explicitly typed.
-			...(options.audience === "issuer"
-				? { audience: issuer, typ: "client-authentication+jwt" }
-				: {}),
+			audience: options.audience === "issuer" ? issuer : undefined,
 			privateKeyJwk: options.privateKeyJwk,
 			privateKeyPem: options.privateKeyPem,
 			kid: options.kid,

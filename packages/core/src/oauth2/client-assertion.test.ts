@@ -312,35 +312,6 @@ describe("signPrivateKeyJwtClientAssertion", () => {
 			expect(decodeJwt(assertion).aud).toBe(issuer);
 		});
 
-		/**
-		 * @see https://www.rfc-editor.org/rfc/rfc10070#section-4
-		 */
-		it("types an issuer-audience assertion as client-authentication+jwt", async () => {
-			const getClientAssertion = await createGetter("issuer");
-			const assertion = await getClientAssertion({
-				clientId,
-				tokenEndpoint,
-				grantType: "authorization_code",
-				issuer,
-			});
-
-			expect(decodeProtectedHeader(assertion).typ).toBe(
-				"client-authentication+jwt",
-			);
-		});
-
-		it("keeps the JWT type on a token-endpoint-audience assertion", async () => {
-			const getClientAssertion = await createGetter("token_endpoint");
-			const assertion = await getClientAssertion({
-				clientId,
-				tokenEndpoint,
-				grantType: "authorization_code",
-				issuer,
-			});
-
-			expect(decodeProtectedHeader(assertion).typ).toBe("JWT");
-		});
-
 		it("refuses to sign when the issuer audience has no issuer", async () => {
 			const getClientAssertion = await createGetter("issuer");
 

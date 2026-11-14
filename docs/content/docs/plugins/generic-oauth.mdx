@@ -416,8 +416,6 @@ getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
 }),
 ```
 
-These assertions also carry the JWT type `client-authentication+jwt` in their header, as RFC 10070 recommends. Assertions for the token endpoint keep the type `JWT`.
-
 Better Auth takes the issuer from the `issuer` field of the discovery document, so `audience: "issuer"` requires `discoveryUrl`. Without a discovered issuer, each token request and pushed authorization request fails with an error instead of falling back to the token endpoint. Before you enable it, check that the provider accepts the issuer as the assertion audience. Some servers accept only the token endpoint URL and reject the request.
 
 A custom `getClientAssertion` receives the discovered issuer as `issuer`. The field is `undefined` when the provider has no discovery document or the document has no issuer.
