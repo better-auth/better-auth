@@ -21,6 +21,7 @@ const boundGrantPlugin = {
 	id: "test-bound-grant",
 	init(ctx) {
 		extendOAuthProvider(ctx, {
+			id: "test-bound-grant",
 			grants: {
 				[boundGrant]: async ({ ctx, provider }) => {
 					const body = ctx.body as Record<string, string | undefined>;

@@ -590,6 +590,7 @@ export const customOAuthExtension = () =>
     id: "custom-oauth-extension",
     init(ctx) {
       extendOAuthProvider(ctx, {
+        id: "custom-oauth-extension",
         grants: {
           "urn:example:params:oauth:grant-type:custom": async ({ provider }) => {
             const scopes = ["openid"];
@@ -605,6 +606,7 @@ export const customOAuthExtension = () =>
   }) satisfies BetterAuthPlugin;
 ```
 
+* Each extension needs a unique `id`. Use the id of the plugin that registers it. Setup errors and discovery warnings name the extensions involved by this `id`, and two extensions with the same `id` fail at startup. The `id` is not stored, so you can rename it.
 * `grants`, `clientAuthentication`, and `interactionRequests` must not overlap across extensions. A duplicate grant type, auth method, assertion type, or interaction parameter fails at startup. Extension grants and auth methods are advertised in discovery.
 * `metadata` and `claims` only add keys. A key the provider sets is kept, and so is a key a client discovery's `discoveryMetadata` sets. When two client discoveries set the same key, the later one wins. A metadata key two extensions both contribute as lists is combined in registration order, without duplicates. Any other key two extensions contribute resolves to the first one registered.
 * Discovery logs a warning for each contribution it ignores, once per server rather than on every request. To advertise extension claims, set `advertisedMetadata.claims_supported`.
@@ -658,6 +660,7 @@ An extension that defines its own client registration fields, such as CIBA's `ba
 
 ```ts
 extendOAuthProvider(ctx, {
+  id: "example-extension",
   clientMetadata: {
     fields: ["example_mode"],
     validate: ({ metadata }) => {

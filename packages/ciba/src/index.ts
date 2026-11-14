@@ -47,6 +47,7 @@ export const ciba = (options: CibaOptions) => {
 		interval: options.interval ?? 5,
 	};
 	const extension: OAuthProviderExtension = {
+		id: "ciba",
 		grants: {
 			[CIBA_GRANT_TYPE]: createCibaGrantHandler(resolvedOptions),
 		},

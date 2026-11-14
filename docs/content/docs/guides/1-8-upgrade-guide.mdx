@@ -301,9 +301,19 @@ Pairwise clients created after the upgrade with private-use redirect URIs, such 
 This applies if you build on `extendOAuthProvider()` or implement the provider API yourself:
 
 * Custom `OAuthProviderApi` implementations must add `verifyDpopProof()`, `issueDpopNonce()`, `challengeDpopNonce()`, `resolveConfirmation()`, `resolveSubject()`, `verifyResourceRequest()`, and `issueAuthorizationCode()`.
+
+* Every extension passed to `extendOAuthProvider()` or `oauthProvider({ extensions })` needs a unique `id`. Without one, TypeScript reports a missing property and startup fails. Use the id of the plugin that registers the extension:
+
+  ```ts
+  extendOAuthProvider(ctx, { id: "my-plugin", grants: { /* ... */ } });
+  ```
+
 * Extension grants now receive every `audience` value instead of only the last one.
+
 * An `accessTokenClaims` value that a grant passes to `issueTokens` for an opaque access token is now stored on the token. Introspection, `provider.validateAccessToken`, and token exchange subject-token checks such as `may_act` now see it. Keep personal data out of these claims, because they stay in the database until the token row is deleted.
+
 * When two extensions advertise the same list in discovery, such as `authorization_details_types_supported`, discovery publishes both lists combined, in registration order and without duplicates. Before, only the first-registered extension's list appeared. Other colliding keys still resolve to the first extension registered, with a warning.
+
 * `DpopBindingErrorCode` and `DpopProofErrorCode` from `@better-auth/core/oauth2` now include `use_dpop_nonce`. DPoP checks return it only when you pass a `nonce` option, but exhaustive checks over either type must handle it to typecheck:
 
   ```ts
