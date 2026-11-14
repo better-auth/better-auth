@@ -1294,18 +1294,20 @@ describe("oauth-provider extensions", async () => {
 
 	it("consumeClientAssertion rejects an already-expired assertion", async () => {
 		const now = Math.floor(Date.now() / 1000);
-		const audience = `${authServerBaseUrl}/oauth2/token`;
+		const issuer = authServerBaseUrl;
 		// The expiry check runs before any adapter access, so a minimal ctx is enough.
 		await expect(
 			consumeClientAssertion(
 				{
 					context: { baseURL: authServerBaseUrl },
 				} as Parameters<typeof consumeClientAssertion>[0],
-				{} as Parameters<typeof consumeClientAssertion>[1],
+				{ disableJwtPlugin: true } as Parameters<
+					typeof consumeClientAssertion
+				>[1],
 				{
 					namespace: "test:expired",
-					payload: { aud: audience, exp: now - 10, jti: "expired-jti" },
-					expectedAudience: audience,
+					payload: { aud: issuer, exp: now - 10, jti: "expired-jti" },
+					acceptedAudiences: [issuer],
 				},
 			),
 		).rejects.toMatchObject({
