@@ -1076,29 +1076,57 @@ export const unbanUser = (opts: AdminOptions) =>
 		},
 	);
 
-const banUserBodySchema = z.object({
-	userId: z.coerce.string().meta({
-		description: "The user id",
-	}),
-	/**
-	 * Reason for the ban
-	 */
-	banReason: z
-		.string()
-		.meta({
-			description: "The reason for the ban",
-		})
-		.optional(),
-	/**
-	 * Number of seconds until the ban expires
-	 */
-	banExpiresIn: z
-		.number()
-		.meta({
-			description: "The number of seconds until the ban expires",
-		})
-		.optional(),
-});
+const banUserBodySchema = z
+	.object({
+		userId: z.coerce.string().meta({
+			description: "The user id",
+		}),
+		/**
+		 * Reason for the ban
+		 */
+		banReason: z
+			.string()
+			.meta({
+				description: "The reason for the ban",
+			})
+			.optional(),
+		/**
+		 * Number of seconds until the ban expires
+		 */
+		banExpiresIn: z
+			.number()
+			.meta({
+				description: "The number of seconds until the ban expires",
+			})
+			.optional(),
+		/**
+		 * Absolute date and time when the ban expires
+		 */
+		banExpires: z
+			.union([
+				z.date(),
+				z.iso.datetime({ offset: true }).transform((date) => new Date(date)),
+			])
+			.meta({
+				description: "The date and time when the ban expires",
+			})
+			.optional(),
+	})
+	.refine(
+		({ banExpires, banExpiresIn }) =>
+			banExpires === undefined || banExpiresIn === undefined,
+		{
+			message: "banExpires and banExpiresIn cannot be provided together",
+			path: ["banExpires"],
+		},
+	)
+	.refine(
+		({ banExpires }) => banExpires === undefined || banExpires > new Date(),
+		{
+			message: "banExpires must be in the future",
+			path: ["banExpires"],
+		},
+	);
 
 /**
  * ### Endpoint
@@ -1186,11 +1214,13 @@ export const banUser = (opts: AdminOptions) =>
 						ctx.body.banReason || opts?.defaultBanReason || "No reason",
 					// null (not undefined) so a permanent ban clears any expiration
 					// left over from a previous temporary ban.
-					banExpires: ctx.body.banExpiresIn
-						? getDate(ctx.body.banExpiresIn, "sec")
-						: opts?.defaultBanExpiresIn
-							? getDate(opts.defaultBanExpiresIn, "sec")
-							: null,
+					banExpires:
+						ctx.body.banExpires ??
+						(ctx.body.banExpiresIn
+							? getDate(ctx.body.banExpiresIn, "sec")
+							: opts?.defaultBanExpiresIn
+								? getDate(opts.defaultBanExpiresIn, "sec")
+								: null),
 					updatedAt: new Date(),
 				},
 			);

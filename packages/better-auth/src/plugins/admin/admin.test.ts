@@ -592,6 +592,91 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user?.banExpires).toBeDefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12344
+	 */
+	it("should allow Date and offset ISO expiry values for user bans", async () => {
+		const created = await client.admin.createUser(
+			{
+				name: "Absolute Expiry User",
+				email: "absolute-ban-expiry@email.com",
+				password: "test",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		const banExpires = new Date(
+			Math.ceil((Date.now() + 60_000) / 1_000) * 1_000,
+		);
+		const res = await client.admin.banUser(
+			{
+				userId: created.data?.user.id || "",
+				banExpires,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+
+		expect(res.error).toBeNull();
+		expect(new Date(String(res.data?.user?.banExpires)).getTime()).toBe(
+			banExpires.getTime(),
+		);
+		expect(res.data?.user.banned).toBe(true);
+
+		const offsetDate = "2030-01-01T12:00:00+02:00";
+		const offsetUser = await client.admin.createUser(
+			{
+				name: "Offset Expiry User",
+				email: "offset-ban-expiry@email.com",
+				password: "test",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		const offsetRes = await client.admin.banUser(
+			{
+				userId: offsetUser.data?.user.id || "",
+				banExpires: offsetDate,
+			},
+			{ headers: adminHeaders },
+		);
+
+		expect(offsetRes.error).toBeNull();
+		expect(new Date(String(offsetRes.data?.user?.banExpires)).getTime()).toBe(
+			new Date(offsetDate).getTime(),
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12344
+	 */
+	it("should reject invalid absolute ban expirations", async () => {
+		const pastDate = new Date(Date.now() - 60_000);
+		const bothOptions = await client.admin.banUser(
+			{
+				userId: testNonAdminUser.id,
+				banExpires: new Date(Date.now() + 60_000),
+				banExpiresIn: 60,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const pastExpiry = await client.admin.banUser(
+			{
+				userId: testNonAdminUser.id,
+				banExpires: pastDate,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+
+		expect(bothOptions.error?.status).toBe(400);
+		expect(pastExpiry.error?.status).toBe(400);
+	});
+
 	it("should not allow banned user to sign in", async () => {
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
