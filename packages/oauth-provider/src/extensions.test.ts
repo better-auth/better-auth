@@ -2275,6 +2275,36 @@ describe("authenticateClient with an expected client", async () => {
 		});
 	});
 
+	it("rejects an assertion that names another client before consuming its jti", async () => {
+		const context = await auth.$context;
+		const countAssertions = async () =>
+			(await context.adapter.findMany({ model: "oauthClientAssertion" }))
+				.length;
+		const before = await countAssertions();
+
+		const assertion = await new SignJWT({})
+			.setProtectedHeader({ alg: "ES256", kid: "follow-up" })
+			.setIssuer(otherJwtClient.client_id)
+			.setSubject(otherJwtClient.client_id)
+			.setAudience(`${baseURL}/api/auth/test/follow-up`)
+			.setIssuedAt()
+			.setExpirationTime("2m")
+			.setJti(crypto.randomUUID())
+			.sign(keyPair.privateKey);
+		const response = await followUp({
+			handle: "jwt",
+			client_id: otherJwtClient.client_id,
+			client_assertion_type: CLIENT_ASSERTION_TYPE,
+			client_assertion: assertion,
+		});
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "invalid_client",
+			error_description: "client_id does not match the expected client",
+		});
+		expect(await countAssertions()).toBe(before);
+	});
+
 	it("requires client_id when no client is expected", async () => {
 		const response = await followUp({});
 		expect(response.status).toBe(400);

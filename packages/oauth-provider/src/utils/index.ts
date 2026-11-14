@@ -1056,8 +1056,18 @@ export async function extractClientCredentials(
 	if (expectedClientId === undefined) {
 		return readClientCredentials(ctx, opts, body, expectedAudience);
 	}
-	const requestedClientId = body.client_id;
-	body.client_id ??= expectedClientId;
+	// Rejected before the credentials are read, so a request for another
+	// client fetches no JWKS and consumes no assertion `jti`.
+	if (body.client_id !== undefined && body.client_id !== expectedClientId) {
+		const authorization = ctx.request?.headers.get("authorization");
+		throwInvalidClient("client_id does not match the expected client", {
+			method:
+				authorization && BASIC_SCHEME_PREFIX.test(authorization)
+					? "client_secret_basic"
+					: undefined,
+		});
+	}
+	body.client_id = expectedClientId;
 	const credentials = await readClientCredentials(
 		ctx,
 		opts,
@@ -1066,11 +1076,7 @@ export async function extractClientCredentials(
 	);
 	// Basic credentials name their client apart from `client_id`, and an
 	// extension strategy returns the client its assertion proved.
-	if (
-		(requestedClientId !== undefined &&
-			requestedClientId !== expectedClientId) ||
-		credentials?.clientId !== expectedClientId
-	) {
+	if (credentials?.clientId !== expectedClientId) {
 		throwInvalidClient("client_id does not match the expected client", {
 			method: credentials?.method,
 		});
