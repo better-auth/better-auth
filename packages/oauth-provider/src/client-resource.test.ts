@@ -93,7 +93,7 @@ describe("resource client defaults with an origin-only baseURL", async () => {
 			),
 		).toMatch(
 			new RegExp(
-				`^DPoP error="invalid_token", error_description="[^"]+", algs="${DPOP_SIGNING_ALGORITHMS.join(" ")}"$`,
+				`^DPoP error="invalid_token", error_description="[^"]+", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", algs="${DPOP_SIGNING_ALGORITHMS.join(" ")}"$`,
 			),
 		);
 	});

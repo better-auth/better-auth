@@ -184,6 +184,29 @@ describe("resource server challenge", () => {
 		).toThrow("invalid challenge scope");
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9728#section-5.1
+	 */
+	it("points each DPoP challenge at its resource's metadata", () => {
+		const challenge = createResourceServerChallenge(
+			new APIError("UNAUTHORIZED", {
+				message: "DPoP proof header is required",
+				error: "invalid_dpop_proof",
+			}),
+			["https://api.example.com/calendar", "urn:example:files"],
+			{
+				dpopSigningAlgorithms: ["ES256"],
+				resourceMetadataMappings: {
+					"urn:example:files":
+						"https://files.example.com/.well-known/oauth-protected-resource",
+				},
+			},
+		) as APIError;
+		expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+			'DPoP error="invalid_dpop_proof", error_description="DPoP proof header is required", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/calendar", algs="ES256", DPoP error="invalid_dpop_proof", error_description="DPoP proof header is required", resource_metadata="https://files.example.com/.well-known/oauth-protected-resource", algs="ES256"',
+		);
+	});
+
 	it("emits RFC 9449 DPoP challenges for invalid DPoP proofs", () => {
 		const challenge = createResourceServerChallenge(
 			new APIError("UNAUTHORIZED", {
@@ -196,7 +219,7 @@ describe("resource server challenge", () => {
 		) as APIError;
 		const headers = new Headers(challenge.headers);
 		expect(headers.get("WWW-Authenticate")).toBe(
-			'DPoP error="invalid_dpop_proof", error_description="DPoP proof header is required", algs="ES256"',
+			'DPoP error="invalid_dpop_proof", error_description="DPoP proof header is required", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp/tools", algs="ES256"',
 		);
 	});
 
@@ -220,7 +243,7 @@ describe("resource server challenge", () => {
 		const headers = new Headers(challenge.headers);
 		expect(challenge.statusCode).toBe(401);
 		expect(headers.get("WWW-Authenticate")).toBe(
-			'DPoP error="use_dpop_nonce", error_description="DPoP proof must include a server-provided nonce", algs="ES256"',
+			'DPoP error="use_dpop_nonce", error_description="DPoP proof must include a server-provided nonce", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp/tools", algs="ES256"',
 		);
 		expect(headers.get("DPoP-Nonce")).toBe("fresh-nonce");
 		expect(headers.get("Cache-Control")).toBe("no-store");
@@ -283,7 +306,7 @@ describe("resource server challenge", () => {
 		) as APIError;
 		expect(challenge.statusCode).toBe(401);
 		expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
-			`DPoP error="invalid_dpop_proof", error_description="DPoP proof typ must be 'dpop+jwt'", algs="ES256"`,
+			`DPoP error="invalid_dpop_proof", error_description="DPoP proof typ must be 'dpop+jwt'", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", algs="ES256"`,
 		);
 		expect(challenge.body).toMatchObject({
 			error: "invalid_dpop_proof",
@@ -307,7 +330,7 @@ describe("resource server challenge", () => {
 			{ dpopSigningAlgorithms: ["ES256"] },
 		) as APIError;
 		expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
-			`DPoP error="invalid_dpop_proof", error_description="${cleaned}", algs="ES256"`,
+			`DPoP error="invalid_dpop_proof", error_description="${cleaned}", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", algs="ES256"`,
 		);
 	});
 
@@ -322,7 +345,7 @@ describe("resource server challenge", () => {
 			{ dpopSigningAlgorithms: ["ES256"] },
 		) as APIError;
 		expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
-			'DPoP error="invalid_dpop_proof", algs="ES256"',
+			'DPoP error="invalid_dpop_proof", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", algs="ES256"',
 		);
 	});
 
@@ -358,7 +381,7 @@ describe("resource server challenge", () => {
 				) as APIError;
 				expect(challenge.statusCode).toBe(401);
 				expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
-					'DPoP error="invalid_token", error_description="token expired", algs="ES256"',
+					'DPoP error="invalid_token", error_description="token expired", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", algs="ES256"',
 				);
 			},
 		);
@@ -373,7 +396,7 @@ describe("resource server challenge", () => {
 				},
 			) as APIError;
 			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
-				'DPoP error="invalid_token", error_description="invalid access token", algs="ES256"',
+				'DPoP error="invalid_token", error_description="invalid access token", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", algs="ES256"',
 			);
 		});
 
@@ -387,7 +410,7 @@ describe("resource server challenge", () => {
 				},
 			) as APIError;
 			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
-				'DPoP error="invalid_token", algs="ES256"',
+				'DPoP error="invalid_token", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", algs="ES256"',
 			);
 			expect(challenge.body).toMatchObject({ error: "invalid_token" });
 		});
@@ -404,7 +427,7 @@ describe("resource server challenge", () => {
 			) as APIError;
 			expect(challenge.statusCode).toBe(403);
 			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
-				'DPoP error="insufficient_scope", scope="files:write", error_description="access token is missing required scope: files:write", algs="ES256"',
+				'DPoP error="insufficient_scope", scope="files:write", error_description="access token is missing required scope: files:write", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", algs="ES256"',
 			);
 			expect(challenge.body).toMatchObject({ error: "insufficient_scope" });
 		});

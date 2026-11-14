@@ -255,7 +255,7 @@ describe("provider.verifyResourceRequest", async () => {
 			const response = await callResource({}, { audience: apiResource });
 			expect(response.status).toBe(401);
 			expect(response.headers.get("WWW-Authenticate")).toBe(
-				`Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", DPoP algs="${algs}"`,
+				`Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", DPoP resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", algs="${algs}"`,
 			);
 			expect(response.headers.get("Access-Control-Expose-Headers")).toContain(
 				"WWW-Authenticate",
