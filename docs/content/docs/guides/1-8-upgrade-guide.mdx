@@ -216,7 +216,7 @@ A value for any of these claims set by `customAccessTokenClaims`, an extension `
 oauthProvider({
   customAccessTokenClaims: ({ user }) => ({
     // was: reference_id
-    tenant_id: user.tenantId,
+    tenant_id: user?.tenantId,
   }),
 });
 ```
@@ -325,7 +325,7 @@ These provider features are new or opt-in, and need no action when you upgrade:
 
 * [Pushed authorization requests](/docs/plugins/oauth-provider/sign-in-flow#pushed-authorization-requests) at `/oauth2/par`, with `pushedAuthorizationRequests: { enabled: true }`.
 * Token exchange with `oauthTokenExchange()`, including DPoP-bound public clients with `publicClients: "dpop-bound"`.
-* A pairwise `sub` in JWT access tokens, with `accessTokenSubject: "pairwise"`. Resource servers that key on `sub` then see a different value for the same user in each sector.
+* A pairwise `sub` in JWT access tokens, with `accessTokenSubject: "pairwise"` and `pairwiseSecret`. Resource servers that key on `sub` then see a different value for the same user in each sector.
 * JWT access token revocation, with `revocableJwtAccessTokens: true`. Resource servers that verify tokens locally against the JWKS don't see it, so they must introspect.
 * RP-initiated logout for registered clients, with `clientRegistrationEnableEndSession`.
 * `verifyResourceRequest()` and `issueAuthorizationCode()` on the provider API, for plugin endpoints served by the auth server.
