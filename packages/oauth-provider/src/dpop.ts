@@ -159,7 +159,10 @@ export async function verifyRequestDpopProof(
 		method: string;
 		url: string;
 		expectedJkt?: string;
-		/** Defaults to the database-backed store. */
+		/**
+		 * Defaults to the auth instance's store: secondary storage when it is
+		 * configured and `verification.storeInDatabase` is off, else the database.
+		 */
 		replayStore?: DpopReplayStore;
 	},
 ): Promise<VerifiedDpopProof> {
