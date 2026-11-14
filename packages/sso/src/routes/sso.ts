@@ -1441,12 +1441,14 @@ async function handleOIDCCallback(
 			privateKeyPem: resolved.privateKeyPem,
 			kid: config.privateKeyId ?? resolved.kid,
 			algorithm,
-			audience: config.clientAssertionAudience,
+			// Enterprise identity providers commonly accept only their token
+			// endpoint URL, so signing for the issuer is opt-in.
+			audience: config.clientAssertionAudience ?? "token_endpoint",
 		});
 		tokenEndpointAuth = {
 			method: "private_key_jwt",
-			// Discovery is checked against this issuer, so the assertion can name
-			// it as its only audience (RFC 10070 §4).
+			// Discovery is checked against this issuer, so an assertion signed for
+			// it can name it as its only audience (RFC 10070 §4).
 			getClientAssertion: (context) =>
 				getClientAssertion({ ...context, issuer: config.issuer }),
 		};

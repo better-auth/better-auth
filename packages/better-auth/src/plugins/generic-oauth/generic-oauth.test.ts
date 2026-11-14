@@ -3110,6 +3110,36 @@ describe("oauth2", async () => {
 			expect(oktaConfig.getUserInfo).toBeUndefined();
 		});
 
+		it("signs private_key_jwt assertions for the token endpoint, not the discovered issuer", async () => {
+			const { privateKey } = await generateKeyPair("RS256", {
+				extractable: true,
+			});
+			const issuer = "https://dev-12345.okta.com/oauth2/default";
+			const tokenEndpoint = `${issuer}/v1/token`;
+			const oktaConfig = okta({
+				clientId: "okta-client-id",
+				issuer,
+				tokenEndpointAuth: {
+					method: "private_key_jwt",
+					getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+						privateKeyJwk: await exportJWK(privateKey),
+					}),
+				},
+			});
+			if (oktaConfig.tokenEndpointAuth?.method !== "private_key_jwt") {
+				throw new Error("expected private_key_jwt");
+			}
+
+			const assertion = await oktaConfig.tokenEndpointAuth.getClientAssertion({
+				clientId: "okta-client-id",
+				tokenEndpoint,
+				grantType: "authorization_code",
+				issuer,
+			});
+
+			expect(decodeJwt(assertion).aud).toBe(tokenEndpoint);
+		});
+
 		it("should handle issuer with trailing slash", () => {
 			const oktaConfig = okta({
 				clientId: "okta-client-id",

@@ -139,17 +139,19 @@ tokenEndpointAuth: {
 
 Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refreshAccessToken`, or `refreshAccessTokenRequest` from `@better-auth/core/oauth2` that pass `authorization` in `headers` now throw.
 
-### Generic OAuth and SSO sign assertions for the issuer
+### Generic OAuth signs assertions for the issuer
 
-This applies if a generic OAuth provider uses `private_key_jwt` with `createPrivateKeyJwtClientAssertionGetter`, or an OIDC SSO provider uses `tokenEndpointAuthentication: "private_key_jwt"`. Each assertion is now signed for the authorization server's issuer instead of the token endpoint URL. This follows [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4).
+This applies if a generic OAuth provider uses `private_key_jwt` with `createPrivateKeyJwtClientAssertionGetter`. Each assertion is now signed for the authorization server's issuer, which generic OAuth takes from the provider's discovery document. Before, it was signed for the token endpoint URL. This follows [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4).
 
-* Generic OAuth takes the issuer from the provider's discovery document. A provider configured without `discoveryUrl` has no issuer, so it still signs for the token endpoint URL.
-* The `microsoftEntraId` helper still signs for the token endpoint URL, the only audience Microsoft Entra ID documents.
-* SSO uses the provider's registered `issuer`, which discovery must match.
+These providers still sign for the token endpoint URL:
 
-Every assertion that `createPrivateKeyJwtClientAssertionGetter` or `signPrivateKeyJwtClientAssertion` signs now carries the JOSE header `typ: "client-authentication+jwt"`. Before, it carried `typ: "JWT"`.
+* A generic OAuth provider configured without `discoveryUrl`, because it has no discovered issuer.
+* The `okta` and `microsoftEntraId` helpers. Okta and Microsoft Entra ID document only their token endpoint URL as the assertion audience.
+* OIDC SSO providers that use `tokenEndpointAuthentication: "private_key_jwt"`. To sign for the provider's registered `issuer` instead, set `clientAssertionAudience: "issuer"` in its `oidcConfig`, through `registerSSOProvider` or `updateSSOProvider`. A Better Auth 1.8 authorization server requires this by default, because it accepts only its issuer.
 
-**What to do:** if the provider accepts only its token endpoint URL as the audience, set `audience: "token_endpoint"`:
+Every assertion that `createPrivateKeyJwtClientAssertionGetter` or `signPrivateKeyJwtClientAssertion` signs, including those of SSO providers, now carries the JOSE header `typ: "client-authentication+jwt"`. Before, it carried `typ: "JWT"`.
+
+**What to do:** if a generic OAuth provider accepts only its token endpoint URL as the audience, set `audience: "token_endpoint"`:
 
 ```ts title="auth.ts"
 getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
@@ -157,8 +159,6 @@ getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
   audience: "token_endpoint",
 }),
 ```
-
-For an SSO provider that accepts only its token endpoint URL, set `clientAssertionAudience: "token_endpoint"` in its `oidcConfig`, through `registerSSOProvider` or `updateSSOProvider`.
 
 ### Social provider profile types match the provider
 
@@ -293,7 +293,7 @@ This applies if any client authenticates with `private_key_jwt`, or you write a 
 
 A client that signs for the token endpoint URL, the PAR endpoint URL, or the URL of another endpoint now gets `invalid_client`. So does a client whose `aud` list names the issuer and another value. The error description names the issuer to sign for, as in `client assertion aud must be the issuer https://example.com/api/auth`. Before, any one of these values was accepted.
 
-**What to do:** update your clients to sign their assertions for the issuer. RFC 10070 §6 asks you to update clients before or together with the server. Better Auth's generic OAuth providers with a discovered issuer, and its OIDC SSO providers, sign for it by default from 1.8, as [Generic OAuth and SSO sign assertions for the issuer](#generic-oauth-and-sso-sign-assertions-for-the-issuer) describes.
+**What to do:** update your clients to sign their assertions for the issuer. RFC 10070 §6 asks you to update clients before or together with the server. Better Auth's generic OAuth providers with a discovered issuer sign for it by default from 1.8, as [Generic OAuth signs assertions for the issuer](#generic-oauth-signs-assertions-for-the-issuer) describes. Its OIDC SSO providers sign for it when you set `clientAssertionAudience: "issuer"`.
 
 If you cannot update every client before you upgrade, set `assertionAudience: "issuer-or-endpoint"`. The provider then accepts the URL of the endpoint called, the issuer, or, at `/oauth2/par`, the token endpoint URL, as in 1.7. This setting keeps clients open to audience injection. Remove it once your clients sign for the issuer.
 
