@@ -144,7 +144,7 @@ async function validateJwtAccessToken(
 	try {
 		// Do NOT pass `audience` to jose's verifier. Verify signature + issuer
 		// here, then validate `aud` manually against the resource model below.
-		const jwks = await getJwks(token, getJwksSource(ctx.context));
+		const jwks = await getJwks(token, getJwksSource(ctx));
 		const verified = await jwtVerify<JWTPayload & { azp?: string }>(
 			token,
 			createLocalJWKSet(jwks),
