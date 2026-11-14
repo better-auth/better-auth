@@ -1567,6 +1567,7 @@ describe("Access-Control-Expose-Headers on APIError", async () => {
 
 	it("keeps the names the endpoint exposed before it threw", async () => {
 		const response = await authEndpoints.exposeThenThrow({ asResponse: true });
+		expect(response.headers.get("WWW-Authenticate")).toBe("Bearer");
 		expect(response.headers.get("access-control-expose-headers")).toBe(
 			"X-Request-Id, WWW-Authenticate",
 		);
@@ -1574,6 +1575,7 @@ describe("Access-Control-Expose-Headers on APIError", async () => {
 
 	it("keeps the names a before hook exposed", async () => {
 		const response = await authEndpoints.throwAfterHook({ asResponse: true });
+		expect(response.headers.get("WWW-Authenticate")).toBe("Bearer");
 		expect(response.headers.get("access-control-expose-headers")).toBe(
 			"X-Request-Id, WWW-Authenticate",
 		);

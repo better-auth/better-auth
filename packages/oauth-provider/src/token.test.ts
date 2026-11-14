@@ -6192,7 +6192,7 @@ describe("DPoP with secondary storage and no database-backed verification", asyn
 
 	it("issues a DPoP-bound token and rejects a replayed proof", async () => {
 		const { headers } = await signInWithTestUser();
-		const client = await auth.api.adminCreateOAuthClient({
+		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				token_endpoint_auth_method: "client_secret_post",
@@ -6224,8 +6224,8 @@ describe("DPoP with secondary storage and no database-backed verification", asyn
 				},
 				body: new URLSearchParams({
 					grant_type: "client_credentials",
-					client_id: client.client_id,
-					client_secret: client.client_secret!,
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret!,
 					scope: "read",
 				}).toString(),
 			});
