@@ -82,6 +82,7 @@ import {
 	getJwtPlugin,
 	isConfirmation,
 	isPKCERequired,
+	isPublicClient,
 	normalizeTimestampValue,
 	parseClientMetadata,
 	resolveAccessTokenSubject,
@@ -2224,7 +2225,7 @@ async function handleClientCredentialsGrant(
 		"client_credentials",
 		authMethod,
 	);
-	if (client.tokenEndpointAuthMethod === "none") {
+	if (isPublicClient(client)) {
 		throw new APIError("BAD_REQUEST", {
 			error_description:
 				"public clients cannot use the client_credentials grant",

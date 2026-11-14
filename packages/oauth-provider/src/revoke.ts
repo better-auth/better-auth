@@ -18,6 +18,7 @@ import type { OAuthOptions, OAuthRefreshToken, Scope } from "./types";
 import {
 	destructureCredentials,
 	extractClientCredentials,
+	isPublicClient,
 	validateClientCredentials,
 } from "./utils";
 
@@ -212,7 +213,7 @@ export async function revokeEndpoint(
 		const ownerClientId =
 			found.type === "jwt" ? found.payload.azp : found.record.clientId;
 		if (ownerClientId !== client.clientId) {
-			if (client.tokenEndpointAuthMethod === "none") return null;
+			if (isPublicClient(client)) return null;
 			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"client is not authorized to revoke the presented token",

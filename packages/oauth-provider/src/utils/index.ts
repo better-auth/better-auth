@@ -112,6 +112,19 @@ export const getJwtPlugin = (ctx: AuthContext) => {
 	return plugin;
 };
 
+/**
+ * Whether the client is public: registered with `token_endpoint_auth_method`
+ * `"none"`, so it has no credentials to authenticate with.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-2.1
+ * @internal
+ */
+export function isPublicClient(
+	client: Pick<SchemaClient<Scope[]>, "tokenEndpointAuthMethod">,
+): boolean {
+	return client.tokenEndpointAuthMethod === "none";
+}
+
 /** A plain JSON object: not `null` and not an array. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -899,8 +912,7 @@ export async function validateClientCredentials(
 
 	// Skip secret checks for pre-verified clients (already authenticated via assertion)
 	if (!preVerified) {
-		// Only token_endpoint_auth_method=none identifies a public client.
-		if (client.tokenEndpointAuthMethod !== "none" && !clientSecret) {
+		if (!isPublicClient(client) && !clientSecret) {
 			throwInvalidClient("client secret must be provided", {
 				method: authMethod,
 			});
@@ -1501,11 +1513,8 @@ export function isPKCERequired(
 	client: SchemaClient<Scope[]>,
 	request?: AuthorizationPKCEContext,
 ): false | PKCERequirementErrors {
-	// Determine if client is public
-	const isPublicClient = client.tokenEndpointAuthMethod === "none";
-
 	// PKCE always required for public clients
-	if (isPublicClient) {
+	if (isPublicClient(client)) {
 		return PKCERequirementErrors.PUBLIC_CLIENT;
 	}
 
