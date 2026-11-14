@@ -1261,20 +1261,39 @@ export async function registerClientMetadataDocument(
 	}
 }
 
-function isUniqueConstraintError(error: unknown): boolean {
-	if (!error || typeof error !== "object") return false;
+function isUniqueConstraintError(
+	error: unknown,
+	depth = 0,
+	seen = new Set<unknown>(),
+): boolean {
+	if (!error || typeof error !== "object" || depth > 4 || seen.has(error)) {
+		return false;
+	}
+	seen.add(error);
 	const candidate = error as {
 		code?: unknown;
+		errcode?: unknown;
 		errno?: unknown;
+		number?: unknown;
 		name?: unknown;
 		message?: unknown;
+		cause?: unknown;
 	};
-	const code = String(candidate.code ?? candidate.errno ?? "");
+	const code = String(
+		candidate.code ??
+			candidate.errcode ??
+			candidate.errno ??
+			candidate.number ??
+			"",
+	);
 	if (
 		[
 			"1062",
 			"11000",
+			"2067",
 			"23505",
+			"2601",
+			"2627",
 			"ER_DUP_ENTRY",
 			"P2002",
 			"SQLITE_CONSTRAINT_UNIQUE",
@@ -1282,13 +1301,22 @@ function isUniqueConstraintError(error: unknown): boolean {
 	) {
 		return true;
 	}
-	if (candidate.name === "MongoServerError" && candidate.code === 11000) {
+	if (
+		candidate.name === "MongoServerError" &&
+		(candidate.code === 11000 || candidate.code === "11000")
+	) {
 		return true;
 	}
-	return (
+	if (
 		typeof candidate.message === "string" &&
 		/(?:duplicate|unique constraint|unique key)/i.test(candidate.message)
-	);
+	) {
+		return true;
+	}
+	if ("cause" in candidate && candidate.cause) {
+		return isUniqueConstraintError(candidate.cause, depth + 1, seen);
+	}
+	return false;
 }
 
 export function createOAuthClientEndpoint(
