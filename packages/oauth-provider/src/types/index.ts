@@ -970,31 +970,6 @@ export interface OAuthUserInfoExtensionInput {
 }
 
 /**
- * What a companion plugin contributes to the OAuth Provider, registered through
- * `extendOAuthProvider(ctx, extension)` (or the `oauthProvider({ extensions })`
- * option).
- *
- * All seven kinds live on one object so a single protocol plugin (for example
- * RFC 8693 token exchange, which adds a grant, advertises metadata, and emits
- * claims) registers atomically and the host validates the combined surface in
- * one place. Every field is independently optional, so a single-concern plugin
- * (such as `@better-auth/cimd`, which contributes only `clientDiscovery`) sets
- * just the one it needs. This is the shape every future OAuth RFC plugin copies.
- *
- * Two contribution disciplines:
- * - Dispatched kinds (`grants`, `clientAuthentication`, `interactionRequests`)
- *   must be disjoint across extensions: registering a grant type, auth method,
- *   assertion type, or interaction parameter that another extension already
- *   registered is rejected at setup, since the second would otherwise be
- *   silently unreachable.
- * - Additive kinds (`metadata`, `claims`) never override authorization-server
- *   core; a metadata key the provider or a client discovery sets is kept, with
- *   a logged warning. When two extensions contribute the same metadata key as
- *   lists, the lists combine in registration order without duplicates; any
- *   other collision resolves to the first-registered extension, with a logged
- *   warning. Each metadata warning is logged once per provider.
- */
-/**
  * Input of `beforeAuthorization`.
  */
 export interface OAuthBeforeAuthorizationInput {
@@ -1036,6 +1011,31 @@ export type OAuthBeforeAuthorizationResult = {
 	prompt: "login";
 };
 
+/**
+ * What a companion plugin contributes to the OAuth Provider, registered through
+ * `extendOAuthProvider(ctx, extension)` (or the `oauthProvider({ extensions })`
+ * option).
+ *
+ * All seven kinds live on one object so a single protocol plugin (for example
+ * RFC 8693 token exchange, which adds a grant, advertises metadata, and emits
+ * claims) registers atomically and the host validates the combined surface in
+ * one place. Every field is independently optional, so a single-concern plugin
+ * (such as `@better-auth/cimd`, which contributes only `clientDiscovery`) sets
+ * just the one it needs. This is the shape every future OAuth RFC plugin copies.
+ *
+ * Two contribution disciplines:
+ * - Dispatched kinds (`grants`, `clientAuthentication`, `interactionRequests`)
+ *   must be disjoint across extensions: registering a grant type, auth method,
+ *   assertion type, or interaction parameter that another extension already
+ *   registered is rejected at setup, since the second would otherwise be
+ *   silently unreachable.
+ * - Additive kinds (`metadata`, `claims`) never override authorization-server
+ *   core; a metadata key the provider or a client discovery sets is kept, with
+ *   a logged warning. When two extensions contribute the same metadata key as
+ *   lists, the lists combine in registration order without duplicates; any
+ *   other collision resolves to the first-registered extension, with a logged
+ *   warning. Each metadata warning is logged once per provider.
+ */
 export interface OAuthProviderExtension {
 	/**
 	 * Name shown in setup errors and warnings when this extension conflicts
