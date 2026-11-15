@@ -406,7 +406,7 @@ authorizationUrl.searchParams.set("dpop_jkt", await deriveDpopKeyJkt(keyPair));
 
 To send requests your own way, use the building blocks `createDpopFetch` uses:
 
-* `await createDpopProof({ keyPair, method, url, accessToken, nonce })` returns a proof for the `DPoP` header.
+* `await createDpopProof({ keyPair, method, url, accessToken, nonce })` returns a proof for the `DPoP` header. Its `htu` claim is `url` without the query and fragment, as [RFC 9449 §4.2](https://datatracker.ietf.org/doc/html/rfc9449#section-4.2) defines it. A fragment never reaches the server. A URL that has one, such as `location.href`, still gets a valid proof.
 * `await isDpopNonceChallenge(response)` tells whether a response asks for a retry with the nonce in its `DPoP-Nonce` header.
 * `createDpopNonceCache()` keeps the latest nonce for each origin. Pass your own `{ get, set }` object as `nonceCache` to keep nonces somewhere else, such as IndexedDB.
 
