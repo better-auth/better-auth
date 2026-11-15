@@ -1224,6 +1224,158 @@ describe("verifyBearerToken", () => {
 				}),
 			).rejects.toMatchObject({ message: "JWKS fetch failed" });
 
+			// A subsequent unknown-kid request within cooldown should not trigger another fetch
+			const secondUnknownKey = await createTestJWKS();
+			const secondUnknownToken = await createSignedToken(
+				secondUnknownKey.privateKey,
+				secondUnknownKey.kid,
+			);
+			vi.advanceTimersByTime(5_000);
+
+			await expectUnauthorized(
+				verify(secondUnknownToken, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+				"invalid access token",
+			);
+			expect(mockedFetch).toHaveBeenCalledTimes(2);
+
+			vi.useRealTimers();
+			mockedFetch.mockReset();
+			vi.resetModules();
+		});
+
+		it("should recover from a malformed cached JWKS when refetching after TTL", async () => {
+			vi.resetModules();
+			const { verifyBearerToken: verify } = await import("./verify");
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+
+			// Upstream initially returned a malformed response where keys is not an array
+			mockedFetch.mockImplementationOnce(() =>
+				Promise.resolve(
+					new Response(JSON.stringify({ keys: {} }), {
+						status: 200,
+						headers: { "content-type": "application/json" },
+					}),
+				),
+			);
+
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).rejects.toThrow();
+
+			// Advance time past the 5-minute TTL
+			vi.useFakeTimers({ now: Date.now() + 5 * 60 * 1000 + 1 });
+
+			// Upstream is now fixed and returns a valid JWKS
+			mockedFetch.mockImplementationOnce(() =>
+				Promise.resolve(jwksResponse(publicJWK)),
+			);
+
+			// Verification must not throw TypeError: stale.keys.some is not a function,
+			// and must successfully refetch and verify the token.
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			vi.useRealTimers();
+			mockedFetch.mockReset();
+			vi.resetModules();
+		});
+
+		it("should preserve JWT verification error when kid-less token fails against stale set and refresh fails", async () => {
+			vi.resetModules();
+			const { verifyBearerToken: verify } = await import("./verify");
+			const validKey = await createTestJWKS();
+			const invalidKey = await createTestJWKS();
+
+			// Token without kid signed by an invalid key
+			const kidlessInvalidToken = await createSignedToken(
+				invalidKey.privateKey,
+				undefined,
+			);
+
+			mockedFetch.mockImplementationOnce(() =>
+				Promise.resolve(jwksResponse(validKey.publicJWK)),
+			);
+
+			// Populate cache
+			const validKidlessToken = await createSignedToken(
+				validKey.privateKey,
+				undefined,
+			);
+			await expect(
+				verify(validKidlessToken, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			// Advance time past TTL
+			vi.useFakeTimers({ now: Date.now() + 5 * 60 * 1000 + 1 });
+
+			// Post-TTL refetch fails with network error
+			mockedFetch.mockRejectedValue(new TypeError("fetch failed"));
+
+			// Invalid kid-less token should be rejected as unauthorized (invalid access token),
+			// NOT as an uncaught fetch failure
+			await expectUnauthorized(
+				verify(kidlessInvalidToken, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+				"invalid access token",
+			);
+
+			vi.useRealTimers();
+			mockedFetch.mockReset();
+			vi.resetModules();
+		});
+
+		it("should not use stale cache when a slow failing fetch crosses the max-stale window", async () => {
+			vi.resetModules();
+			const { verifyBearerToken: verify, JWKS_MAX_STALE_MS } = await import(
+				"./verify"
+			);
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+
+			mockedFetch.mockImplementationOnce(() =>
+				Promise.resolve(jwksResponse(publicJWK)),
+			);
+
+			// Initial fetch populates the cache
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			// Advance time to 2 seconds before max-stale expires
+			const initialNow = Date.now();
+			vi.useFakeTimers({ now: initialNow + JWKS_MAX_STALE_MS - 2_000 });
+
+			// Fetch hangs and times out after 5 seconds (which pushes total age past JWKS_MAX_STALE_MS)
+			mockedFetch.mockReturnValueOnce(new Promise(() => {}));
+
+			const verification = verify(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+			});
+			const assertion = expect(verification).rejects.toThrow();
+
+			await vi.advanceTimersByTimeAsync(5_000);
+			await assertion;
+
 			vi.useRealTimers();
 			mockedFetch.mockReset();
 			vi.resetModules();
