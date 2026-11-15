@@ -144,7 +144,7 @@ export interface CibaRequest {
 	scope: string;
 	bindingMessage?: string | null;
 	acrValues?: string[] | null;
-	/** A JSON array of {@link CibaAuthorizationDetail}. */
+	/** A JSON array of {@link OAuthAuthorizationDetail}. */
 	authorizationDetails?: string | null;
 	resources?: string[] | null;
 	status: "pending" | "approved" | "denied";

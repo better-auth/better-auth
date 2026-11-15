@@ -1,4 +1,16 @@
+import type { OAuthOptions, Scope } from "./types";
+
 export const signedQueryIssuedAtParam = "ba_iat";
+
+/** Default `codeExpiresIn`, in seconds. */
+export const DEFAULT_CODE_EXPIRES_IN = 600;
+
+/** Seconds a signed authorization query stays valid. */
+export function getSignedQueryExpiresIn(
+	opts: Pick<OAuthOptions<Scope[]>, "codeExpiresIn">,
+): number {
+	return opts.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN;
+}
 export const postLoginClearedParam = "ba_pl";
 const signedQueryParameterNameParam = "ba_param";
 

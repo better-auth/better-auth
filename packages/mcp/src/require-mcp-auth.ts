@@ -167,6 +167,7 @@ export const requireMcpAuth = <
 				? undefined
 				: getLocalJwksSource(
 						authContext as Parameters<typeof getLocalJwksSource>[0],
+						req,
 					);
 		// The JWT plugin disables its `/jwks` endpoint when keys are published at
 		// `jwks.remoteUrl`.

@@ -6,17 +6,16 @@ import {
 	createAuthorizationURL,
 	DPOP_SIGNING_ALGORITHMS,
 	deriveDpopAth,
-	deriveDpopJkt,
 	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { APIError } from "better-call";
-import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { SignJWT } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import { createDpopKey, createDpopProof } from "./test-utils/dpop";
 import type { OAuthClient } from "./types/oauth";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
@@ -135,40 +134,6 @@ describe("oauth userinfo", async () => {
 		return tokens;
 	}
 
-	async function createDpopKey() {
-		const { privateKey, publicKey } = await generateKeyPair("ES256", {
-			extractable: true,
-		});
-		const publicJwk = await exportJWK(publicKey);
-		const jkt = await deriveDpopJkt(publicJwk);
-		return { privateKey, publicJwk, jkt };
-	}
-
-	async function createDpopProof(params: {
-		privateKey: CryptoKey;
-		publicJwk: JWK;
-		method: string;
-		url: string;
-		jti: string;
-		accessToken?: string;
-	}) {
-		return new SignJWT({
-			jti: params.jti,
-			htm: params.method,
-			htu: params.url,
-			iat: Math.floor(Date.now() / 1000),
-			...(params.accessToken
-				? { ath: await deriveDpopAth(params.accessToken) }
-				: {}),
-		})
-			.setProtectedHeader({
-				typ: "dpop+jwt",
-				alg: "ES256",
-				jwk: params.publicJwk,
-			})
-			.sign(params.privateKey);
-	}
-
 	async function getTokens(
 		overrides?: Partial<Parameters<typeof createAuthUrl>[0]>,
 		resource?: string,
@@ -274,20 +239,53 @@ describe("oauth userinfo", async () => {
 		},
 	);
 
-	it("should fail without the openid scope", async () => {
+	/**
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#UserInfoError
+	 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
+	 */
+	it("answers a token without the openid scope with insufficient_scope", async () => {
 		const tokens = await getTokens({
 			scopes: ["profile"],
 		});
 		expect(tokens.data?.access_token).toBeDefined();
+		let challenge: string | null = null;
 		const userinfo = await client.$fetch<Record<string, string>>(
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
+				},
+				onError(context) {
+					challenge = context.response.headers.get("WWW-Authenticate");
 				},
 			},
 		);
-		expect(userinfo.error?.status).toBe(400);
+		expect(userinfo.error?.status).toBe(403);
+		expect(userinfo.error).toMatchObject({ error: "insufficient_scope" });
+		expect(challenge).toBe(
+			'Bearer error="insufficient_scope", scope="openid", error_description="access token is missing required scope: openid"',
+		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
+	 */
+	it("answers a token sent without a scheme as a request without credentials", async () => {
+		const tokens = await getTokens();
+		let challenge: string | null = null;
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: { authorization: tokens.data?.access_token ?? "" },
+				onError(context) {
+					challenge = context.response.headers.get("WWW-Authenticate");
+				},
+			},
+		);
+		expect(userinfo.error?.status).toBe(401);
+		expect(challenge).toMatch(
+			/^Bearer scope="openid", DPoP scope="openid", algs=/,
+		);
 	});
 
 	it("rejects a revoked access token with invalid_token (401), not invalid_scope", async () => {
@@ -327,7 +325,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -446,7 +444,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -472,9 +470,7 @@ describe("oauth userinfo", async () => {
 			},
 		});
 		const callbackUrl = new URL(callbackRedirectUrl);
-		const tokenDpopProof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const tokenDpopProof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: `${authServerBaseUrl}/api/auth/oauth2/token`,
 			jti: "token-proof",
@@ -530,9 +526,7 @@ describe("oauth userinfo", async () => {
 			)?.error_description,
 		).toBe("DPoP-bound access token requires the DPoP authorization scheme");
 
-		const userinfoDpopProof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const userinfoDpopProof = await createDpopProof(dpopKey, {
 			method: "GET",
 			url: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
 			jti: "userinfo-proof",
@@ -578,9 +572,7 @@ describe("oauth userinfo", async () => {
 				resource: validResource,
 			},
 			{
-				DPoP: await createDpopProof({
-					privateKey: dpopKey.privateKey,
-					publicJwk: dpopKey.publicJwk,
+				DPoP: await createDpopProof(dpopKey, {
 					method: "POST",
 					url: `${authServerBaseUrl}/api/auth/oauth2/token`,
 					jti: "trailing-slash-token-proof",
@@ -592,9 +584,7 @@ describe("oauth userinfo", async () => {
 		const response = await customFetchImpl(userinfoUrl, {
 			headers: {
 				authorization: `DPoP ${accessToken}`,
-				DPoP: await createDpopProof({
-					privateKey: dpopKey.privateKey,
-					publicJwk: dpopKey.publicJwk,
+				DPoP: await createDpopProof(dpopKey, {
 					method: "GET",
 					url: userinfoUrl,
 					jti: "trailing-slash-userinfo-proof",
@@ -639,9 +629,7 @@ describe("oauth userinfo", async () => {
 					resource: validResource,
 				},
 				{
-					DPoP: await createDpopProof({
-						privateKey: dpopKey.privateKey,
-						publicJwk: dpopKey.publicJwk,
+					DPoP: await createDpopProof(dpopKey, {
 						method: "POST",
 						url: `${authServerBaseUrl}/api/auth/oauth2/token`,
 						jti: crypto.randomUUID(),
@@ -665,7 +653,9 @@ describe("oauth userinfo", async () => {
 			const result = await requestUserinfo({});
 
 			expect(result.status).toBe(401);
-			expect(result.challenge).toBe(`Bearer, DPoP algs="${algs}"`);
+			expect(result.challenge).toBe(
+				`Bearer scope="openid", DPoP scope="openid", algs="${algs}"`,
+			);
 			expect(result.exposed).toBe("WWW-Authenticate");
 		});
 
@@ -677,7 +667,7 @@ describe("oauth userinfo", async () => {
 			expect((error as APIError).statusCode).toBe(401);
 			expect(
 				new Headers((error as APIError).headers).get("WWW-Authenticate"),
-			).toBe(`Bearer, DPoP algs="${algs}"`);
+			).toBe(`Bearer scope="openid", DPoP scope="openid", algs="${algs}"`);
 		});
 
 		it("keeps the Bearer challenge for an invalid token sent with the Bearer scheme", async () => {
@@ -779,9 +769,7 @@ describe("oauth userinfo", async () => {
 			const result = await requestUserinfo({
 				headers: {
 					authorization: `DPoP ${accessToken}`,
-					DPoP: await createDpopProof({
-						privateKey: dpopKey.privateKey,
-						publicJwk: dpopKey.publicJwk,
+					DPoP: await createDpopProof(dpopKey, {
 						method: "GET",
 						url: `${authServerBaseUrl}/api/auth/oauth2/introspect`,
 						jti: crypto.randomUUID(),
@@ -804,9 +792,7 @@ describe("oauth userinfo", async () => {
 			const result = await requestUserinfo({
 				headers: {
 					authorization: `DPoP ${accessToken}`,
-					DPoP: await createDpopProof({
-						privateKey: dpopKey.privateKey,
-						publicJwk: dpopKey.publicJwk,
+					DPoP: await createDpopProof(dpopKey, {
 						method: "POST",
 						url: userinfoUrl,
 						jti: crypto.randomUUID(),
@@ -830,9 +816,7 @@ describe("oauth userinfo", async () => {
 			const result = await requestUserinfo({
 				headers: {
 					authorization: `DPoP ${accessToken}`,
-					DPoP: await createDpopProof({
-						privateKey: otherKey.privateKey,
-						publicJwk: otherKey.publicJwk,
+					DPoP: await createDpopProof(otherKey, {
 						method: "GET",
 						url: userinfoUrl,
 						jti: crypto.randomUUID(),
@@ -924,7 +908,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -956,7 +940,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: accessToken ?? "",
+					authorization: `Bearer ${accessToken ?? ""}`,
 				},
 			},
 		);
@@ -1015,7 +999,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: refreshedTokens.data?.access_token ?? "",
+					authorization: `Bearer ${refreshedTokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -1047,7 +1031,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -1069,7 +1053,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -1092,7 +1076,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -1155,8 +1139,8 @@ describe("oauth userinfo - unresolved baseURL", async () => {
 				}),
 			}),
 		).rejects.toMatchObject({
-			statusCode: 400,
-			body: { error: "invalid_scope" },
+			statusCode: 403,
+			body: { error: "insufficient_scope" },
 		});
 	});
 });
