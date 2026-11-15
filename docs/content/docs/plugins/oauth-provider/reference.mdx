@@ -624,7 +624,11 @@ A grant handler receives `provider` (`getClient`, `authenticateClient`, `issueAu
 
 When a companion endpoint accepts `application/x-www-form-urlencoded`, set `cloneRequest: true` in its endpoint options before calling `authenticateClient()`. Client authentication re-reads the raw form body to check that client credentials are not repeated or combined across authentication methods. The endpoint must therefore keep a readable request after parsing the form.
 
-To issue a delegated token, pass the actor chain as `act` to `issueTokens`. Set `sub_profile: "service"` on each entry whose `sub` is a client ID. A pairwise client sees every other entry's `sub` as a user's pairwise value.
+To issue a delegated token, pass the actor chain as `act` to `issueTokens`:
+
+* Validate each actor before you pass it. `issueTokens` writes `act` as given, like `sub`.
+* Set `sub_profile: "service"` on each entry whose `sub` is a client ID. A pairwise client sees every other entry's `sub` as a user's pairwise value.
+* A delegated issuance includes no refresh token, even with `offline_access`, because refreshed tokens do not carry `act`. Passing `act` with `refreshToken` throws.
 
 To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html/rfc7800#section-3)), pass `confirmation` to `issueTokens`. A `clientAuthentication` strategy can also return the sender constraint it proved as `confirmation`, such as a DPoP key thumbprint (`jkt`) or a certificate thumbprint (`x5t#S256`):
 
