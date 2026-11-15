@@ -826,7 +826,21 @@ async function isReuseByIssuingClient(
 	if (!consumed.success || consumed.data.clientId !== clientId) return false;
 	const { codeChallenge, codeChallengeMethod } = consumed.data;
 	if (!codeChallenge) return true;
-	if (!codeVerifier || codeChallengeMethod !== "S256") return false;
+	return matchesCodeChallenge(codeVerifier, codeChallenge, codeChallengeMethod);
+}
+
+/**
+ * Whether `codeVerifier` matches the code's PKCE challenge (RFC 7636 §4.6).
+ * Only `S256` is accepted, so a stored `plain` challenge never matches.
+ */
+async function matchesCodeChallenge(
+	codeVerifier: string | undefined,
+	codeChallenge: string | undefined,
+	codeChallengeMethod: string | undefined,
+) {
+	if (!codeVerifier || !codeChallenge || codeChallengeMethod !== "S256") {
+		return false;
+	}
 	return (await generateCodeChallenge(codeVerifier)) === codeChallenge;
 }
 
@@ -1176,9 +1190,10 @@ export async function checkDpopProofBeforeConsume(
 		confirmation,
 		recordReplay: async () => {
 			if (!reservation) return;
-			const reserved = await createDpopReplayStore(
-				ctx.context.internalAdapter,
-			).reserve({ ...reservation, now: new Date() });
+			const reserved = await createDpopReplayStore(ctx.context).reserve({
+				...reservation,
+				now: new Date(),
+			});
 			if (!reserved) {
 				throwInvalidDpopProof("DPoP proof jti has already been used");
 			}
@@ -1460,6 +1475,29 @@ async function createUserTokens(
 			error_description: "issueTokens does not accept act with refreshToken",
 		});
 	}
+	if (params.authorizationDetails?.length && existingRefreshToken) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description:
+				"issueTokens does not accept authorizationDetails with refreshToken",
+		});
+	}
+	// RFC 9396 §9.1: a detail that names `locations` goes only to a token for
+	// one of them, so a token for another resource does not reveal it.
+	const issuedDetails = params.authorizationDetails?.filter(
+		(detail) =>
+			!detail.locations ||
+			detail.locations.some((location) => params.resources?.includes(location)),
+	);
+	// An empty list still goes to claim resolution, so no claim hook can add
+	// details the grant did not approve for this token.
+	const grantedClaims = issuedDetails
+		? { authorization_details: issuedDetails }
+		: undefined;
+	const perRequestClaims =
+		grantedClaims || params.accessTokenClaims
+			? { ...params.accessTokenClaims, ...grantedClaims }
+			: undefined;
 
 	const iat = Math.floor(Date.now() / 1000);
 	const baseExpiry = user
@@ -1509,9 +1547,11 @@ async function createUserTokens(
 	// pure machine-to-machine client that was never authorized for one.
 	// A delegated issuance gets no refresh token: refreshed tokens do not carry
 	// `act`, so a refresh would turn delegated access into impersonation.
+	// Refreshed tokens carry neither `act` nor authorization details.
 	const isRefreshToken =
 		user &&
 		!params.act &&
+		!params.authorizationDetails?.length &&
 		clientAllowsGrant(client, "refresh_token") &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
@@ -1626,7 +1666,7 @@ async function createUserTokens(
 				resources: params.resources,
 				referenceId,
 				metadata,
-				perRequestClaims: params.accessTokenClaims,
+				perRequestClaims,
 				resourcePolicyClaims: grantIssuance.resourceCustomClaims,
 			})
 		: undefined;
@@ -1678,7 +1718,7 @@ async function createUserTokens(
 						// is what revokes them by grant.
 						grantId: isRefreshToken ? grantId : undefined,
 						accessTokenClaims: toStoredAccessTokenClaims(
-							params.accessTokenClaims,
+							perRequestClaims,
 							opts,
 						),
 					},
@@ -1730,6 +1770,7 @@ async function createUserTokens(
 	const responseBody: OAuthTokenResponse = {
 		...customFields,
 		...(params.tokenResponse ?? {}),
+		...(issuedDetails?.length ? grantedClaims : {}),
 		access_token: accessToken,
 		expires_in: exp - iat,
 		expires_at: exp,
@@ -2062,12 +2103,12 @@ async function handleAuthorizationCodeGrant(
 		}
 
 		// Both sides used PKCE - verify the challenge
-		const challenge =
-			verificationValue.query?.code_challenge_method === "S256"
-				? await generateCodeChallenge(code_verifier!)
-				: undefined;
-
-		if (challenge !== verificationValue.query?.code_challenge) {
+		const matched = await matchesCodeChallenge(
+			code_verifier,
+			verificationValue.query.code_challenge,
+			verificationValue.query.code_challenge_method,
+		);
+		if (!matched) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "code verification failed",
 				error: "invalid_grant",

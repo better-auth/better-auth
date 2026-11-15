@@ -16,8 +16,7 @@ import { parseJSON } from "../../client/parser";
 import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import type { EncryptionPurpose } from "../../crypto/purpose";
-import { derivePurposeKey } from "../../crypto/purpose";
+import { deriveEncryptionKey } from "../../crypto/purpose";
 import { exchangeOAuthCallback } from "../../oauth2/callback";
 import { redirectOnError } from "../../oauth2/errors";
 import {
@@ -166,9 +165,12 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
 	const getEncryptionKey = (
 		ctx: GenericEndpointContext,
-		purpose: EncryptionPurpose,
+		purpose:
+			| "oauth-proxy-state"
+			| "oauth-proxy-package"
+			| "oauth-proxy-profile",
 	): string | SecretConfig =>
-		derivePurposeKey(opts?.secret ?? ctx.context.secretConfig, purpose);
+		deriveEncryptionKey(opts?.secret ?? ctx.context.secretConfig, purpose);
 
 	const oauthProxyCompletion = createAuthEndpoint(
 		"/callback/:id/oauth-proxy",
@@ -631,7 +633,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 									).get(oauthStateCookie.name)?.value;
 									if (encryptedCookieValue) {
 										plaintextState = await symmetricDecrypt({
-											key: derivePurposeKey(
+											key: deriveEncryptionKey(
 												ctx.context.secretConfig,
 												"oauth-state-cookie",
 											),

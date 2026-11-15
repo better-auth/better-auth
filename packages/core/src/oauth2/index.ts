@@ -34,6 +34,7 @@ export type {
 	DpopNonceOptions,
 	DpopProofError,
 	DpopProofErrorCode,
+	DpopReplayAuthContext,
 	DpopReplayReservation,
 	DpopReplayReservations,
 	DpopReplayStore,

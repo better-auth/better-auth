@@ -67,7 +67,7 @@ describe("createMcpProtectedRequestHandler", () => {
 
 		expect(response.status).toBe(401);
 		expect(response.headers.get("WWW-Authenticate")).toBe(
-			'Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/mcp"',
+			'Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/mcp", DPoP resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/mcp", algs="EdDSA ES256 ES512 PS256 RS256"',
 		);
 	});
 
@@ -144,7 +144,7 @@ describe("createMcpProtectedRequestHandler", () => {
 
 		expect(response.status).toBe(401);
 		expect(response.headers.get("WWW-Authenticate")).toBe(
-			'DPoP error="invalid_token", error_description="token expired", algs="ES256"',
+			'DPoP error="invalid_token", error_description="token expired", resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/mcp", algs="ES256"',
 		);
 	});
 
@@ -236,7 +236,7 @@ describe("createMcpProtectedRequestHandler", () => {
 
 		expect(response.status).toBe(403);
 		expect(response.headers.get("WWW-Authenticate")).toBe(
-			'DPoP error="insufficient_scope", scope="mcp:admin", error_description="access token is missing required scope: mcp:admin", algs="ES256"',
+			'DPoP error="insufficient_scope", scope="mcp:admin", error_description="access token is missing required scope: mcp:admin", resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/mcp", algs="ES256"',
 		);
 	});
 

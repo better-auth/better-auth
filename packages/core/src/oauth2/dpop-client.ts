@@ -306,7 +306,9 @@ function hasDpopNonceChallenge(wwwAuthenticate: string | null): boolean {
  * is in the response's `DPoP-Nonce` header. {@link createDpopFetch} already
  * retries these responses; use this when you run your own request loop.
  */
-export async function isDpopNonceError(response: Response): Promise<boolean> {
+export async function isDpopNonceChallenge(
+	response: Response,
+): Promise<boolean> {
 	if (response.status === 401) {
 		return hasDpopNonceChallenge(response.headers.get("WWW-Authenticate"));
 	}
@@ -445,7 +447,7 @@ export function createDpopFetch(options: CreateDpopFetchOptions): DpopFetch {
 			!replayable ||
 			!first.nextNonce ||
 			first.nextNonce === sentNonce ||
-			!(await isDpopNonceError(first.response))
+			!(await isDpopNonceChallenge(first.response))
 		) {
 			return first.response;
 		}

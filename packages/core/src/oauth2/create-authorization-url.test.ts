@@ -63,6 +63,77 @@ describe("createAuthorizationURL", () => {
 		expect(url.searchParams.get("identity_provider")).toBe("OktaSSO");
 	});
 
+	it("keeps the authorization endpoint's existing query text unchanged", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			authorizationEndpoint:
+				"https://idp.example/authorize?tenant=acme%20inc&value=~",
+		});
+
+		expect(url.search).toMatch(/^\?tenant=acme%20inc&value=~&/);
+		expect(url.searchParams.get("client_id")).toBe("client-123");
+	});
+
+	/**
+	 * The query is opaque text, so empty `&`-separated segments are part of it.
+	 * @see https://www.rfc-editor.org/rfc/rfc3986#section-3.4
+	 */
+	it("keeps empty segments in the authorization endpoint's query", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			authorizationEndpoint:
+				"https://idp.example/authorize?tenant=acme&&value=~&&prompt=login",
+			prompt: "consent",
+		});
+
+		expect(url.search).toMatch(/^\?tenant=acme&&value=~&&[^&]/);
+		expect(url.searchParams.getAll("prompt")).toEqual(["consent"]);
+	});
+
+	it("keeps an empty segment left after replacing the only other pair", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			authorizationEndpoint: "https://idp.example/authorize?prompt=login&",
+			prompt: "consent",
+		});
+
+		expect(url.search).toMatch(/^\?&[^&]/);
+		expect(url.searchParams.getAll("prompt")).toEqual(["consent"]);
+	});
+
+	it("replaces an authorization endpoint parameter named `?`", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			authorizationEndpoint: "https://idp.example/authorize?tenant=acme&?",
+			additionalParams: { "?": "new" },
+		});
+
+		expect(url.searchParams.getAll("?")).toEqual(["new"]);
+		expect(url.search).toMatch(/^\?tenant=acme&[^&]/);
+	});
+
+	it("keeps a leading `?` in the authorization endpoint's first parameter name", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			authorizationEndpoint: "https://idp.example/authorize??state=stale",
+		});
+
+		expect(url.search).toMatch(/^\?\?state=stale&/);
+		expect(url.searchParams.getAll("state")).toEqual(["state-xyz"]);
+	});
+
+	it("replaces an authorization endpoint query parameter it also sets", async () => {
+		const url = await createAuthorizationURL({
+			...baseInput,
+			authorizationEndpoint:
+				"https://idp.example/authorize?prompt=login&tenant=acme%20inc",
+			prompt: "consent",
+		});
+
+		expect(url.searchParams.getAll("prompt")).toEqual(["consent"]);
+		expect(url.search).toMatch(/^\?tenant=acme%20inc&/);
+	});
+
 	it("exposes the reserved param list for downstream consumers", () => {
 		expect(RESERVED_AUTHORIZATION_PARAMS).toEqual([
 			"state",

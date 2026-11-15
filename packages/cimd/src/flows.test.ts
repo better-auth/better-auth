@@ -49,11 +49,12 @@ function buildAuthorizeUrl(
 function stubMetadataFetch(
 	url: string,
 	document: Record<string, unknown>,
+	beforeResponse?: () => Promise<void>,
 ): void {
 	const originalFetch = globalThis.fetch.bind(globalThis);
 	vi.stubGlobal(
 		"fetch",
-		vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+		vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 			const requested =
 				typeof input === "string"
 					? input
@@ -61,12 +62,11 @@ function stubMetadataFetch(
 						? input.href
 						: input.url;
 			if (requested === url) {
-				return Promise.resolve(
-					new Response(JSON.stringify(document), {
-						status: 200,
-						headers: { "content-type": "application/json" },
-					}),
-				);
+				await beforeResponse?.();
+				return new Response(JSON.stringify(document), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				});
 			}
 			return originalFetch(input, init);
 		}),
@@ -1422,6 +1422,9 @@ describe("CIMD - extension client metadata", async () => {
 	});
 });
 
+/**
+ * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout
+ */
 describe("CIMD - RP-initiated logout for metadata document clients", async () => {
 	const authServerBaseUrl = "http://localhost:3109";
 	const redirectUri = "http://127.0.0.1:5109/callback";
@@ -1537,5 +1540,93 @@ describe("CIMD - RP-initiated logout for metadata document clients", async () =>
 		expect((await storedClient(clientId))?.postLogoutRedirectUris).toEqual([
 			"https://mcp-logout-moved.example.com/logged-out",
 		]);
+	});
+
+	it("checks post-logout URIs when an administrator grants logout during a refresh", async () => {
+		const clientId = "https://mcp-logout-race.example.com/client.json";
+		stubMetadataFetch(clientId, documentFor(clientId));
+		allowEndSession = false;
+		await authorize(clientId);
+		expect((await storedClient(clientId))?.enableEndSession).toBeFalsy();
+
+		vi.unstubAllGlobals();
+		stubMetadataFetch(
+			clientId,
+			{
+				...documentFor(clientId),
+				post_logout_redirect_uris: ["https://attacker.example/landing"],
+			},
+			// Another instance grants logout after this refresh read the client.
+			async () => {
+				const ctx = await authorizationServer.$context;
+				await ctx.adapter.update({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: clientId }],
+					update: { enableEndSession: true },
+				});
+			},
+		);
+		const refresh = await authorize(clientId);
+		expect(refresh.headers.get("location") ?? (await refresh.text())).toContain(
+			"invalid_client_metadata",
+		);
+		const stored = await storedClient(clientId);
+		expect(stored?.enableEndSession).toBe(true);
+		expect(stored?.postLogoutRedirectUris).toEqual([
+			"https://mcp-logout-race.example.com/logged-out",
+		]);
+	});
+
+	it("lets an administrator grant and revoke logout on a document client without changing its metadata", async () => {
+		const clientId = "https://mcp-logout-admin.example.com/client.json";
+		const { application_type: _applicationType, ...document } =
+			documentFor(clientId);
+		stubMetadataFetch(clientId, {
+			...document,
+			redirect_uris: ["http://localhost:5199/callback"],
+		});
+		allowEndSession = false;
+		await authorize(clientId);
+		const readClient = async () => {
+			const stored = await storedClient(clientId);
+			if (!stored) throw new Error(`${clientId} was not stored`);
+			return stored;
+		};
+		const {
+			enableEndSession: _before,
+			updatedAt: _updatedAt,
+			...registered
+		} = await readClient();
+		expect(registered.applicationType).toBeFalsy();
+
+		for (const enable_end_session of [true, false]) {
+			await authorizationServer.api.adminUpdateOAuthClient({
+				headers,
+				body: { client_id: clientId, update: { enable_end_session } },
+			});
+			const { enableEndSession, updatedAt: _, ...rest } = await readClient();
+			expect(enableEndSession).toBe(enable_end_session);
+			expect(rest).toEqual(registered);
+		}
+	});
+
+	it("refuses an administrator's logout grant when a post-logout URI is off the document's origins", async () => {
+		const clientId = "https://mcp-logout-admin-off.example.com/client.json";
+		stubMetadataFetch(clientId, {
+			...documentFor(clientId),
+			post_logout_redirect_uris: ["https://elsewhere.example/landing"],
+		});
+		allowEndSession = false;
+		await authorize(clientId);
+
+		await expect(
+			authorizationServer.api.adminUpdateOAuthClient({
+				headers,
+				body: { client_id: clientId, update: { enable_end_session: true } },
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_client_metadata" },
+		});
+		expect((await storedClient(clientId))?.enableEndSession).toBeFalsy();
 	});
 });

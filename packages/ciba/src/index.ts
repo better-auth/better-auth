@@ -1,8 +1,13 @@
 import type { OAuthProviderExtension } from "@better-auth/oauth-provider";
 import { extendOAuthProvider } from "@better-auth/oauth-provider";
+import { getAuthEndpointUrl } from "@better-auth/oauth-provider/internal";
 import type { BetterAuthPlugin } from "better-auth";
 import { mergeSchema } from "better-auth/db";
 import { cibaApprovalRequest, createCompleteCibaRequest } from "./approval";
+import {
+	DETAILS_TYPES_FIELD,
+	validateRegisteredDetailsTypes,
+} from "./authorization-details";
 import { createBcAuthorize } from "./bc-authorize";
 import {
 	APPROVAL_PARAMETER,
@@ -55,17 +60,26 @@ export const ciba = (options: CibaOptions) => {
 			[APPROVAL_PARAMETER]: cibaApprovalRequest(options.resultPage),
 		},
 		clientMetadata: {
-			// CIBA §4: clients register these through dynamic registration or a
-			// client metadata document too; they are stored in `metadata`.
-			fields: [DELIVERY_MODE_FIELD, NOTIFICATION_ENDPOINT_FIELD],
+			// CIBA §4 and RFC 9396 §10: clients register these through dynamic
+			// registration or a client metadata document too; they are stored in
+			// `metadata`.
+			fields: [
+				DELIVERY_MODE_FIELD,
+				NOTIFICATION_ENDPOINT_FIELD,
+				DETAILS_TYPES_FIELD,
+			],
 			validate: ({ client, metadata }) => {
+				validateRegisteredDetailsTypes(metadata, resolvedOptions);
 				if (client.grant_types?.includes(CIBA_GRANT_TYPE)) {
 					resolveCibaDelivery(metadata, resolvedOptions.deliveryModes);
 				}
 			},
 		},
 		metadata: ({ ctx }) => ({
-			backchannel_authentication_endpoint: `${ctx.context.baseURL}${BC_AUTHORIZE_PATH}`,
+			backchannel_authentication_endpoint: getAuthEndpointUrl(
+				ctx,
+				BC_AUTHORIZE_PATH,
+			),
 			backchannel_token_delivery_modes_supported: resolvedOptions.deliveryModes,
 			backchannel_user_code_parameter_supported: false,
 			...(resolvedOptions.authorizationDetailsTypes
@@ -105,7 +119,6 @@ export const ciba = (options: CibaOptions) => {
 export { CIBA_GRANT_TYPE } from "./constants";
 export { CIBA_ERROR_CODES } from "./error-codes";
 export type {
-	CibaAuthorizationDetail,
 	CibaAuthorizationDetailsType,
 	CibaDeliveryMode,
 	CibaNotification,

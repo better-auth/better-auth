@@ -1524,6 +1524,7 @@ describe("oauth-provider extensions", async () => {
 		const opts = {
 			extensions: [
 				{
+					id: "audience-probe",
 					clientAuthentication: {
 						audience_probe_method: {
 							assertionTypes: ["urn:better-auth:test:audience-probe"],

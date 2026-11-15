@@ -6,13 +6,14 @@ import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import {
 	constantTimeEqual,
+	deriveEncryptionKey,
 	makeSignature,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
-import type { JWTPayload } from "jose";
+import type { JSONWebKeySet, JWTPayload } from "jose";
 import {
 	getClientDiscoveries,
 	getExtensionClientAuthenticationStrategy,
@@ -98,16 +99,77 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
 	> | null;
 };
 
+const findJwtPlugin = (ctx: AuthContext) =>
+	ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+
 /**
  * Gets the JWT Plugin
  * @internal
  */
 export const getJwtPlugin = (ctx: AuthContext) => {
-	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+	const plugin = findJwtPlugin(ctx);
 	if (!plugin) {
 		throw new BetterAuthError("jwt_config");
 	}
 	return plugin;
+};
+
+type JwksReadContext = Pick<GenericEndpointContext, "context"> &
+	Partial<Pick<GenericEndpointContext, "request" | "headers" | "path">>;
+
+function readJwksInProcess(
+	{ context, request, headers, path }: JwksReadContext,
+	jwtPlugin: ReturnType<typeof jwt>,
+) {
+	const jwksFetch = async (): Promise<JSONWebKeySet | undefined> =>
+		jwtPlugin.endpoints.getJwks({ context, request, headers, path });
+	// A custom `adapter.getJwks` receives this request and may return different
+	// keys for each one, such as per tenant, so its keys are read on every
+	// verification instead of being shared across requests.
+	if (jwtPlugin.options?.adapter?.getJwks) {
+		return { jwksFetch };
+	}
+	return {
+		jwksFetch,
+		// Endpoints receive a per-request copy of the context, and one `jwt()`
+		// object can serve several auth instances. The adapter is the instance's
+		// key store, so the cached keys are scoped to it.
+		jwksCacheKey: context.adapter,
+	};
+}
+
+/**
+ * Source of this server's signing keys, for verifying tokens it issued in an
+ * endpoint. Keys published at `jwks.remoteUrl` are fetched from there;
+ * otherwise they are read in-process with the endpoint's request, so no
+ * request goes to this server's own `/jwks`. That read skips the router, so
+ * hooks and the rate limiter on `/jwks` do not run for it.
+ */
+export const getJwksSource = (ctx: GenericEndpointContext) => {
+	const jwtPlugin = getJwtPlugin(ctx.context);
+	const remoteUrl = jwtPlugin.options?.jwks?.remoteUrl;
+	return remoteUrl
+		? { jwksFetch: remoteUrl }
+		: readJwksInProcess(ctx, jwtPlugin);
+};
+
+/**
+ * In-process source of this server's signing keys for a verifier in the same
+ * process, or `undefined` without a JWT plugin or when the keys are published
+ * at `jwks.remoteUrl`. Pass the request being verified when there is one, so
+ * a custom key store can read it. See {@link getJwksSource}.
+ */
+export const getLocalJwksSource = (
+	context: AuthContext,
+	request?: Request | undefined,
+) => {
+	const jwtPlugin = findJwtPlugin(context);
+	return jwtPlugin && !jwtPlugin.options?.jwks?.remoteUrl
+		? readJwksInProcess(
+				{ context, request, headers: request?.headers },
+				jwtPlugin,
+			)
+		: undefined;
 };
 
 /** A plain JSON object: not `null` and not an array. */
@@ -689,6 +751,19 @@ export async function normalizeClientAuthenticationParameters(
 	};
 }
 
+/**
+ * Headers for a response that carries an authentication challenge.
+ * `WWW-Authenticate` is not a CORS-safelisted response header, so browsers
+ * hide it from cross-origin clients, such as a browser MCP client registering
+ * itself, unless the response exposes it.
+ */
+export function challengeHeaders(challenge: string) {
+	return {
+		"WWW-Authenticate": challenge,
+		"Access-Control-Expose-Headers": "WWW-Authenticate",
+	};
+}
+
 function basicToClientCredentials(authorization: string) {
 	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
 		return undefined;
@@ -703,7 +778,7 @@ function basicToClientCredentials(authorization: string) {
 				error_description: "invalid authorization header format",
 				error: "invalid_client",
 			},
-			{ "WWW-Authenticate": "Basic" },
+			challengeHeaders("Basic"),
 		);
 	}
 }
@@ -826,7 +901,7 @@ export function throwInvalidClient(
 			error_description: errorDescription,
 			error: "invalid_client",
 		},
-		challengeScheme ? { "WWW-Authenticate": challengeScheme } : undefined,
+		challengeScheme ? challengeHeaders(challengeScheme) : undefined,
 	);
 }
 
@@ -1233,23 +1308,18 @@ export async function resolveSubjectIdentifier(
 }
 
 /**
- * Claim carrying the encrypted user ID in a JWT access token whose `sub` is
- * pairwise. A pairwise `sub` cannot be reversed, and JWT access tokens are not
- * stored, so UserInfo, introspection, and token exchange read the user from
- * this claim. The ciphertext is randomized per token, so it does not link a
- * user across clients.
+ * Claim carrying the user ID, and the `act` chain with user IDs, encrypted in
+ * a JWT access token whose subjects are pairwise. A pairwise `sub` cannot be
+ * reversed, and JWT access tokens are not stored, so UserInfo, introspection,
+ * and token exchange read the user from this claim. The ciphertext is
+ * randomized per token, so it does not link a user across clients.
  *
  * @internal
  */
-export const ENCRYPTED_USER_ID_CLAIM = "ba_uid";
+export const ENCRYPTED_SUBJECTS_CLAIM = "ba_sub";
 
-/**
- * Claim carrying the encrypted `act` chain, with user IDs, next to
- * {@link ENCRYPTED_USER_ID_CLAIM}.
- *
- * @internal
- */
-export const ENCRYPTED_ACTOR_CHAIN_CLAIM = "ba_act";
+const accessTokenSubjectKey = (ctx: GenericEndpointContext) =>
+	deriveEncryptionKey(ctx.context.secretConfig, "oauth-access-token-subject");
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -1342,28 +1412,25 @@ export async function resolveAccessTokenSubject(
 ): Promise<{
 	sub: string;
 	act?: OAuthActorClaim;
-	[ENCRYPTED_USER_ID_CLAIM]?: string;
-	[ENCRYPTED_ACTOR_CHAIN_CLAIM]?: string;
+	[ENCRYPTED_SUBJECTS_CLAIM]?: string;
 }> {
 	const subjects = { sub: userId, ...(act ? { act } : {}) };
 	if (opts.accessTokenSubject !== "pairwise") return subjects;
 	const presented = await resolvePresentedSubjects(ctx, opts, subjects, client);
 	if (presented.sub === userId) return presented;
-	const encrypt = (data: string) =>
-		symmetricEncrypt({ key: ctx.context.secretConfig, data });
 	return {
 		...presented,
-		[ENCRYPTED_USER_ID_CLAIM]: await encrypt(userId),
-		...(act
-			? { [ENCRYPTED_ACTOR_CHAIN_CLAIM]: await encrypt(JSON.stringify(act)) }
-			: {}),
+		[ENCRYPTED_SUBJECTS_CLAIM]: await symmetricEncrypt({
+			key: accessTokenSubjectKey(ctx),
+			data: JSON.stringify(subjects),
+		}),
 	};
 }
 
 /**
  * Restores the user ID as `sub`, and user IDs in `act`, on a verified JWT
  * access token payload whose subjects are pairwise, and removes the encrypted
- * claims. Returns `false` when a claim does not decrypt.
+ * claim. Returns `false` when the claim does not decrypt.
  *
  * @internal
  */
@@ -1371,25 +1438,25 @@ export async function restoreAccessTokenUserIds(
 	ctx: GenericEndpointContext,
 	payload: JWTPayload,
 ): Promise<boolean> {
-	const encryptedUserId = payload[ENCRYPTED_USER_ID_CLAIM];
-	const encryptedAct = payload[ENCRYPTED_ACTOR_CHAIN_CLAIM];
-	delete payload[ENCRYPTED_USER_ID_CLAIM];
-	delete payload[ENCRYPTED_ACTOR_CHAIN_CLAIM];
-	const decrypt = (data: unknown) => {
-		if (typeof data !== "string") throw new TypeError("not a string");
-		return symmetricDecrypt({ key: ctx.context.secretConfig, data });
-	};
+	const encrypted = payload[ENCRYPTED_SUBJECTS_CLAIM];
+	if (encrypted === undefined) return true;
+	delete payload[ENCRYPTED_SUBJECTS_CLAIM];
+	if (typeof encrypted !== "string") return false;
+	let subjects: { sub?: unknown; act?: OAuthActorClaim };
 	try {
-		if (encryptedUserId !== undefined) {
-			payload.sub = await decrypt(encryptedUserId);
-		}
-		if (encryptedAct !== undefined) {
-			payload.act = JSON.parse(await decrypt(encryptedAct));
-		}
-		return true;
+		subjects = JSON.parse(
+			await symmetricDecrypt({
+				key: accessTokenSubjectKey(ctx),
+				data: encrypted,
+			}),
+		);
 	} catch {
 		return false;
 	}
+	if (typeof subjects?.sub !== "string") return false;
+	payload.sub = subjects.sub;
+	if (subjects.act) payload.act = subjects.act;
+	return true;
 }
 
 /**

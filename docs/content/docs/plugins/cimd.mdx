@@ -216,6 +216,7 @@ Loopback Client Identifier URLs are not supported. Tests can route HTTPS `.test`
 oauthProvider({
   extensions: [
     {
+      id: "cimd",
       clientDiscovery: createCimdClientDiscovery({
         fetchClientMetadataResource,
         metadataRevalidationInterval: "60m",

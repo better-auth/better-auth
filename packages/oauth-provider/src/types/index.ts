@@ -261,7 +261,8 @@ export interface OAuthTokenIssueParams {
 	 *
 	 * Reserved RFC 9068 claim names stay owned by the authorization server and
 	 * are removed. The plugin's `customAccessTokenClaims` and a resource's
-	 * `customClaims` override a claim of the same name.
+	 * `customClaims` override a claim of the same name. Pass RFC 9396 details
+	 * as {@link OAuthTokenIssueParams.authorizationDetails} instead.
 	 */
 	accessTokenClaims?: Record<string, unknown>;
 	/**
@@ -294,6 +295,16 @@ export interface OAuthTokenIssueParams {
 	 */
 	act?: OAuthActorClaim;
 	/**
+	 * RFC 9396 authorization details the user approved for this grant. The
+	 * authorization server returns them as `authorization_details` in the token
+	 * response and in a JWT access token, or at introspection of an opaque one,
+	 * and no claim hook can replace them or add any. A detail with `locations`
+	 * is issued only to a token for one of those resources (RFC 9396 §9.1). An
+	 * issuance with details never includes a refresh token, because refreshed
+	 * tokens do not carry them. Passing details with `refreshToken` throws.
+	 */
+	authorizationDetails?: OAuthAuthorizationDetail[];
+	/**
 	 * Latest time the access token may expire. The authorization server issues
 	 * the earlier of this and its configured lifetime, so a grant derived from
 	 * another token (for example RFC 8693 token exchange) cannot outlive it.
@@ -301,6 +312,22 @@ export interface OAuthTokenIssueParams {
 	 * and ID tokens are not capped, so such a grant should not issue them.
 	 */
 	maxExpiresAt?: Date;
+}
+
+/**
+ * An RFC 9396 authorization detail: a `type`, the common fields, and any
+ * fields the type defines.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc9396.html#section-2
+ */
+export interface OAuthAuthorizationDetail {
+	type: string;
+	locations?: string[];
+	actions?: string[];
+	datatypes?: string[];
+	identifier?: string;
+	privileges?: string[];
+	[field: string]: unknown;
 }
 
 export interface OAuthTokenResponse {
@@ -424,11 +451,14 @@ export interface OAuthProviderApi {
 	 * `redirect_uri` when present, scopes, claims, resources, and PKCE. The code
 	 * is issued only when the client skips consent or the user's stored consent
 	 * covers the request. A step that would show a page fails instead:
-	 * `consent_required` without consent, `login_required` for an expired
-	 * session or an elapsed `max_age`, and `interaction_required` for a
-	 * `prompt` other than `none` or a `signup` or `postLogin` redirect, and
-	 * `access_denied` when the session cannot meet an essential `acr`. Errors
-	 * are HTTP 400 `APIError`s with these OAuth error codes, with
+	 * - `consent_required` without consent.
+	 * - `login_required` for an expired session, or for `prompt=login` or an
+	 *   elapsed `max_age` when the session was not created in this request.
+	 * - `interaction_required` for a `prompt` other than `none` or `login`, or
+	 *   a `signup` or `postLogin` redirect.
+	 * - `access_denied` when the session cannot meet an essential `acr`.
+	 *
+	 * Errors are HTTP 400 `APIError`s with these OAuth error codes, with
 	 * `invalid_client` when client authentication fails, or with the codes
 	 * `/oauth2/authorize` returns for an invalid client or request.
 	 *
@@ -452,7 +482,11 @@ export interface OAuthProviderApi {
 	 *
 	 * Authenticating the user is the caller's responsibility: pass only a
 	 * session the user proved in this request or already holds. The code is
-	 * issued for that session's user; account selection does not run.
+	 * issued for that session's user; account selection does not run. A
+	 * session created in this request counts as the new sign-in that
+	 * `prompt=login` and `max_age` require (OIDC Core §3.1.2.1), so create one
+	 * only after checking the user's credentials. A session created inside a
+	 * database transaction counts only after the transaction commits.
 	 */
 	issueAuthorizationCode: (
 		params: IssueAuthorizationCodeParams,
@@ -553,17 +587,19 @@ export interface OAuthProviderApi {
 	/**
 	 * Validates an access token for introspection-style callers. The returned
 	 * payload can be inactive; protected-resource endpoints should use
-	 * `requireActiveAccessToken`.
+	 * `verifyResourceRequest`.
 	 */
 	validateAccessToken: (
 		token: string,
 		clientId?: string,
 	) => Awaitable<JWTPayload>;
 	/**
-	 * Validates an access token for a protected resource and throws the OAuth
-	 * bearer challenge when the token is inactive or unknown. It checks the
-	 * token only: it does not verify a DPoP proof for a DPoP-bound token. A
-	 * protected endpoint should use `verifyResourceRequest` instead.
+	 * Requires an active bearer access token and throws the OAuth challenge when
+	 * the token is inactive or unknown. A DPoP-bound token fails with
+	 * `invalid_token`, because a token string alone cannot prove the client
+	 * holds its key. A protected endpoint should use `verifyResourceRequest`,
+	 * which accepts both. To read a token's claims whatever its binding, such
+	 * as a token-exchange subject token, use `validateAccessToken`.
 	 */
 	requireActiveAccessToken: (
 		token: string,
@@ -952,9 +988,13 @@ export interface ClientRegistrationEndSessionInput {
 	};
 	/**
 	 * `"dynamic"` for `POST /oauth2/register`, `"clientMetadataDocument"` for a
-	 * client created from its Client ID Metadata Document.
+	 * client created from its Client ID Metadata Document, and
+	 * `"createOAuthClient"` for a signed-in user's `POST /oauth2/create-client`.
 	 */
-	registrationSource: "dynamic" | "clientMetadataDocument";
+	registrationSource:
+		| "dynamic"
+		| "clientMetadataDocument"
+		| "createOAuthClient";
 }
 
 /**
@@ -1400,10 +1440,10 @@ export interface OAuthOptions<
 	 */
 	clientRegistrationRequirePKCE?: boolean;
 	/**
-	 * Whether clients created through dynamic client registration or a Client
-	 * ID Metadata Document may use RP-Initiated Logout at
-	 * `/oauth2/end-session`, the same permission `enable_end_session` gives an
-	 * admin-created client.
+	 * Whether clients created through dynamic client registration, a Client
+	 * ID Metadata Document, or `createOAuthClient` may use RP-Initiated Logout
+	 * at `/oauth2/end-session`, the same permission `enable_end_session` gives
+	 * an admin-created client.
 	 *
 	 * Pass `true` to allow it for every such client, or a function that decides
 	 * per client. The decision is made once, when the client is created, and a
@@ -1415,7 +1455,8 @@ export interface OAuthOptions<
 	 * anywhere authorization could not. Loopback hosts (`localhost`,
 	 * `127.0.0.1`, `[::1]`) match on any port, and private-use URIs match on
 	 * scheme and authority. Otherwise registration fails with
-	 * `invalid_client_metadata`.
+	 * `invalid_client_metadata`. The same rule applies to entries an owner adds
+	 * through `updateOAuthClient` to any client allowed to log out.
 	 *
 	 * @see https://better-auth.com/docs/plugins/oauth-provider/openid-connect#registered-clients
 	 *
@@ -2065,7 +2106,7 @@ export interface OAuthOptions<
 	/**
 	 * The `sub` of JWT access tokens issued to a user. `"pairwise"` gives
 	 * clients with `subject_type: "pairwise"` the same `sub` as their ID tokens,
-	 * and adds the user ID encrypted in a `ba_uid` claim so the provider can
+	 * and adds the user ID encrypted in a `ba_sub` claim so the provider can
 	 * still find the user. Requires `pairwiseSecret`.
 	 *
 	 * @default "user"
@@ -2076,8 +2117,8 @@ export interface OAuthOptions<
 	 * Pushed authorization requests (RFC 9126).
 	 *
 	 * When enabled, clients authenticate to `POST /oauth2/par` with the
-	 * authorization request parameters and receive a single-use `request_uri`
-	 * for `/oauth2/authorize`. A DPoP proof on the pushed request binds the
+	 * authorization request parameters and receive a `request_uri` for
+	 * `/oauth2/authorize` that issues one authorization code. A DPoP proof on the pushed request binds the
 	 * authorization code to its key (RFC 9449 §10.1).
 	 *
 	 * @see https://datatracker.ietf.org/doc/html/rfc9126
@@ -2099,8 +2140,11 @@ export interface OAuthOptions<
 		 */
 		required?: boolean;
 		/**
-		 * Lifetime of a `request_uri` in seconds: a positive whole number below
-		 * 600.
+		 * Seconds the client has to send the user to `/oauth2/authorize` with a
+		 * `request_uri`: a positive whole number below 600. After the first visit,
+		 * the `request_uri` stays valid for `codeExpiresIn`, the lifetime of the
+		 * signed query that carries the request through login and consent. Later
+		 * redirects do not extend this deadline.
 		 *
 		 * @default 60
 		 */
@@ -2116,7 +2160,9 @@ export interface OAuthOptions<
 	 * With `pushedAuthorizationRequests.enabled`, the authorize endpoint first
 	 * looks up `request_uri` values issued by `/oauth2/par`. It calls this
 	 * resolver for any value it does not hold, including one that expired or
-	 * was already used, so return null for values you did not issue.
+	 * already issued its code, so return null for values you did not issue.
+	 * For those values, the resolver runs on each visit to the authorize
+	 * endpoint, including a reload.
 	 */
 	requestUriResolver?: (input: {
 		requestUri: string;

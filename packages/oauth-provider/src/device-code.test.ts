@@ -5,7 +5,7 @@ import { openAPI } from "better-auth/plugins";
 import { deviceAuthorization } from "better-auth/plugins/device-authorization";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
+import { decodeJwt } from "jose";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { oauthDeviceAuthorizationClient, oauthProviderClient } from "./client";
 import {
@@ -13,6 +13,7 @@ import {
 	oauthDeviceAuthorization,
 } from "./device-code";
 import { oauthProvider } from "./oauth";
+import { createDpopKey, createDpopProof } from "./test-utils/dpop";
 import type { OAuthAuthenticationContext } from "./types";
 
 const FORM_HEADERS = { "content-type": "application/x-www-form-urlencoded" };
@@ -382,19 +383,9 @@ describe("oauth-provider device-code grant", async () => {
 
 	/** Polls an approved device code with a DPoP proof. */
 	async function createDpopPoller(clientId: string, deviceCode: string) {
-		const { privateKey, publicKey } = await generateKeyPair("ES256", {
-			extractable: true,
-		});
-		const publicJwk = await exportJWK(publicKey);
+		const key = await createDpopKey();
 		const proofFor = (htu = `${baseURL}/api/auth/oauth2/token`) =>
-			new SignJWT({
-				jti: crypto.randomUUID(),
-				htm: "POST",
-				htu,
-				iat: Math.floor(Date.now() / 1000),
-			})
-				.setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk: publicJwk })
-				.sign(privateKey);
+			createDpopProof(key, { url: htu });
 		const poll = (proof: string) =>
 			client.$fetch<Record<string, unknown>>("/oauth2/token", {
 				method: "POST",
