@@ -1228,6 +1228,22 @@ export interface OAuthOptions<
 	 */
 	resourceSeedMode?: "insertOnly" | "merge" | "overwrite";
 	/**
+	 * How long a finished `resources` seed is remembered, so later requests
+	 * skip its database read.
+	 *
+	 * - `"adapter"` (default): per database adapter object. An instance built
+	 *   once and reused seeds once.
+	 * - `"process"`: for the life of the process, per seeded config. Use it
+	 *   when Better Auth is built per request with a new database client each
+	 *   time (for example on Cloudflare Workers), where `"adapter"` reads the
+	 *   table on every request. Only safe when every instance in the process
+	 *   uses the same database: an instance on another database with the same
+	 *   `resources` skips its seed.
+	 *
+	 * @default "adapter"
+	 */
+	resourceSeedScope?: "adapter" | "process";
+	/**
 	 * Opt-in cache membership for resources by `identifier`. Mirrors the
 	 * {@link OAuthOptions.cachedTrustedClients} pattern.
 	 *
