@@ -540,6 +540,12 @@ describe.each(["sqlite", "postgres"] as const)(
 				// first is issuing (RFC 6749 §4.1.2). Whether the first fails too
 				// depends on which finishes first on a real database.
 				const nonce = challenges[0]!.response.headers.get("DPoP-Nonce");
+				const countRefreshTokens = () =>
+					context.adapter.count({
+						model: "oauthRefreshToken",
+						where: [{ field: "clientId", value: oauthClient.client_id }],
+					});
+				const storedBefore = await countRefreshTokens();
 				const redemptions = await Promise.all([
 					postToken(
 						body,
@@ -563,6 +569,8 @@ describe.each(["sqlite", "postgres"] as const)(
 				expect(failed.map((r) => r.body.error)).toEqual(
 					failed.map(() => "invalid_grant"),
 				);
+				// Either way, the reuse leaves no refresh token of the grant behind.
+				expect(await countRefreshTokens()).toBe(storedBefore);
 			});
 		});
 

@@ -558,6 +558,12 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 		it("issues no JWT to a redemption that a concurrent replay of its code overtakes", async () => {
 			const { redeem } = await authorizeCode(server, { offline: true });
 			const ctx = await server.auth.$context;
+			const countRefreshTokens = () =>
+				ctx.adapter.count({
+					model: "oauthRefreshToken",
+					where: [{ field: "clientId", value: server.oauthClient.client_id }],
+				});
+			const storedBefore = await countRefreshTokens();
 			// Hold the first redemption before it stores its refresh token until
 			// the replay has finished revoking.
 			let releaseFirst!: () => void;
@@ -584,6 +590,7 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 					expect(response.data).toBe(null);
 					expect(response.error?.status).toBe(400);
 				}
+				expect(await countRefreshTokens()).toBe(storedBefore);
 			} finally {
 				spy.mockRestore();
 			}
