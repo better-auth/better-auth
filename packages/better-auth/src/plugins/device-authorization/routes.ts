@@ -607,16 +607,32 @@ export interface DeviceCodeRedemptionResult<
 	user: User;
 }
 
-/**
- * Runs the RFC 8628 polling and one-time claim state machine shared by every
- * token issuer. Issuers supply ownership checks and grant-specific validation,
- * but cannot bypass expiry, polling, denial, or atomic consumption.
- */
-export async function redeemDeviceCode<
+export interface DeviceCodeRedemptionPreparation<
 	DeviceCodeFields extends Record<string, unknown>,
 	AuthorizationContext,
 	RedemptionContext,
->(input: {
+> extends Omit<
+		DeviceCodeRedemptionResult<
+			DeviceCodeFields,
+			AuthorizationContext,
+			RedemptionContext
+		>,
+		"claimedDeviceCode"
+	> {
+	/** The approved device code as read, before it is claimed. */
+	deviceCode: DeviceCode & DeviceCodeFields & { userId: string };
+	/**
+	 * Claims the device code with one atomic consume and returns it. Fails with
+	 * `invalid_grant` when a concurrent request claimed it first.
+	 */
+	claim: () => Promise<DeviceCode & DeviceCodeFields & { userId: string }>;
+}
+
+interface DeviceCodeRedemptionInput<
+	DeviceCodeFields extends Record<string, unknown>,
+	AuthorizationContext,
+	RedemptionContext,
+> {
 	ctx: GenericEndpointContext;
 	deviceCode: string;
 	authorizeRedemption: (
@@ -628,8 +644,57 @@ export async function redeemDeviceCode<
 		deviceCode: DeviceCode & DeviceCodeFields,
 		authorizationContext: AuthorizationContext,
 	) => RedemptionContext | Promise<RedemptionContext>;
-}): Promise<
+}
+
+/**
+ * Runs the RFC 8628 polling and one-time claim state machine shared by every
+ * token issuer. Issuers supply ownership checks and grant-specific validation,
+ * but cannot bypass expiry, polling, denial, or atomic consumption.
+ */
+export async function redeemDeviceCode<
+	DeviceCodeFields extends Record<string, unknown>,
+	AuthorizationContext,
+	RedemptionContext,
+>(
+	input: DeviceCodeRedemptionInput<
+		DeviceCodeFields,
+		AuthorizationContext,
+		RedemptionContext
+	>,
+): Promise<
 	DeviceCodeRedemptionResult<
+		DeviceCodeFields,
+		AuthorizationContext,
+		RedemptionContext
+	>
+> {
+	const redemption = await prepareDeviceCodeRedemption(input);
+	return {
+		claimedDeviceCode: await redemption.claim(),
+		authorizationContext: redemption.authorizationContext,
+		redemptionContext: redemption.redemptionContext,
+		user: redemption.user,
+	};
+}
+
+/**
+ * Runs everything in {@link redeemDeviceCode} that can refuse a poll, and
+ * leaves the claim to the caller. For an issuer whose own last check has to run
+ * before the code is spent: it must call `claim` once, after that check and
+ * before it issues anything.
+ */
+export async function prepareDeviceCodeRedemption<
+	DeviceCodeFields extends Record<string, unknown>,
+	AuthorizationContext,
+	RedemptionContext,
+>(
+	input: DeviceCodeRedemptionInput<
+		DeviceCodeFields,
+		AuthorizationContext,
+		RedemptionContext
+	>,
+): Promise<
+	DeviceCodeRedemptionPreparation<
 		DeviceCodeFields,
 		AuthorizationContext,
 		RedemptionContext
@@ -722,33 +787,36 @@ export async function redeemDeviceCode<
 				DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND.message,
 		});
 	}
-	// Keep every fallible validation and lookup before this destructive claim.
-	// Credential side effects remain after it so concurrent polls cannot both
-	// issue from the same code.
-	const claimedDeviceCode = await input.ctx.context.adapter.consumeOne<
-		DeviceCode & DeviceCodeFields
-	>({
-		model: "deviceCode",
-		where: [
-			{ field: "id", value: deviceCodeRecord.id },
-			authorization.ownershipWhere,
-			{ field: "status", value: "approved" },
-		],
-	});
-	if (!claimedDeviceCode?.userId) {
-		throw new APIError("BAD_REQUEST", {
-			error: "invalid_grant",
-			error_description:
-				DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
-		});
-	}
-
 	return {
-		claimedDeviceCode: claimedDeviceCode as DeviceCode &
+		deviceCode: deviceCodeRecord as DeviceCode &
 			DeviceCodeFields & { userId: string },
 		authorizationContext: authorization.context,
 		redemptionContext,
 		user,
+		// Keep every fallible validation and lookup before this destructive claim.
+		// Credential side effects remain after it so concurrent polls cannot both
+		// issue from the same code.
+		claim: async () => {
+			const claimedDeviceCode = await input.ctx.context.adapter.consumeOne<
+				DeviceCode & DeviceCodeFields
+			>({
+				model: "deviceCode",
+				where: [
+					{ field: "id", value: deviceCodeRecord.id },
+					authorization.ownershipWhere,
+					{ field: "status", value: "approved" },
+				],
+			});
+			if (!claimedDeviceCode?.userId) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_grant",
+					error_description:
+						DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
+				});
+			}
+			return claimedDeviceCode as DeviceCode &
+				DeviceCodeFields & { userId: string };
+		},
 	};
 }
 

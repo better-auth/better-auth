@@ -101,9 +101,13 @@ Adds UserInfo claims. See [UserInfo](/docs/plugins/oauth-provider/openid-connect
 
 Asserts the `acr` and `amr` ID token claims for each authorization request or interaction request, such as a device code or a [CIBA (Client-Initiated Backchannel Authentication)](/docs/plugins/ciba) request, that the user approves on the provider's pages. `acrValuesSupported` lists the `acr` values the provider may issue, advertised as `acr_values_supported`. It must not be empty or contain an empty string, or the plugin fails at startup. `resolve` returns the `acr` and `amr` the current session established. It is not called for requests without the `openid` scope. Without this option, ID tokens from an approval on the provider's pages carry `acr: "0"` and no `amr`. An ID token from `completeCibaRequest`, or from `issueTokens` in a grant extension, carries the `acr` and `amr` you pass. Without an `acr`, it carries `"0"`. See [Authentication context](/docs/plugins/oauth-provider/openid-connect#authentication-context).
 
+`beforeTokenIssuance` <span className="opacity-70">`(input: OAuthBeforeTokenIssuanceInput) => Awaitable<void>`</span>
+
+Runs once for each token issuance, for every grant, after the grant is validated and before any token is stored. A refresh retry that matches the original client, scopes, resources, and DPoP key within `refreshTokenReuseInterval` returns the earlier response without calling it. A differing retry gets `invalid_grant`. Throw an `APIError` with an OAuth error, usually `invalid_grant`, to refuse the issuance. See [Refuse token issuance](/docs/plugins/oauth-provider/tokens#refuse-token-issuance).
+
 `customTokenResponseFields` <span className="opacity-70">`(info) => Awaitable<Record<string, unknown>>`</span>
 
-Adds fields to the token response body. Standard fields cannot be overridden. See [Custom token response fields](/docs/plugins/oauth-provider/tokens#custom-token-response-fields).
+Adds fields to the token response body. Standard fields cannot be overridden. Runs after `beforeTokenIssuance`. See [Custom token response fields](/docs/plugins/oauth-provider/tokens#custom-token-response-fields).
 
 `pairwiseSecret` <span className="opacity-70">`string`</span>
 
@@ -667,6 +671,7 @@ export const customOAuthExtension = () =>
 
 * Give the extension a `name`, usually your plugin's id. Setup errors and warnings use it to say which extensions conflict. Without a `name`, they describe the extension by its position in registration order and, when it registers a client discovery, grant type, auth method, or interaction request, one of those, such as `unnamed extension #2 (grant type "urn:example:grant")`. An extension that registers none of these shows only its position, such as `unnamed extension #2`. Extensions from `oauthProvider({ extensions })` come first, followed by each plugin's extension in `plugins` order. The `name` is optional, is not stored, and does not have to be unique.
 * `grants`, `clientAuthentication`, and `interactionRequests` must not overlap across extensions. A duplicate grant type, auth method, assertion type, or interaction parameter fails at startup. Extension grants and auth methods are advertised in discovery.
+* `beforeTokenIssuance` refuses an issuance by throwing, like the [option of the same name](/docs/plugins/oauth-provider/tokens#refuse-token-issuance). Every extension's callback runs, in registration order, before the option's. A grant that redeems a stored request, such as a device code, can pass it to `issueTokens` as `grantRequest`, and every `beforeTokenIssuance` receives it.
 * `metadata` and `claims` only add keys. A key the provider owns is kept, even one it leaves unset because a feature is off, and so is a key a client discovery's `discoveryMetadata` sets. When two client discoveries set the same key, the later one wins. A metadata key two extensions both contribute as lists is combined in registration order, without duplicates. Any other key two extensions contribute resolves to the first one registered.
 * Discovery logs a warning for each contribution it ignores, once per server rather than on every request. To advertise extension claims, set `advertisedMetadata.claims_supported`.
 * A `clientDiscovery` entry has a stable `id` stored as client provenance. Changing it requires migrating the owned clients, and removing it makes them fail closed.
@@ -722,6 +727,25 @@ Claim contributors cannot set `cnf`.
 A `clientAuthentication` strategy must return the same `confirmation` whenever the client proves the same key. [Token exchange](/docs/plugins/oauth-provider/tokens#exchange-dpop-bound-tokens) compares it with the `cnf` of the client's own subject token.
 
 A grant that consumes a one-time credential, such as a device code, should resolve the binding before it claims the credential. `provider.resolveConfirmation({ client, scopes, resources, confirmation })` returns the confirmation the client proved at authentication. Without one, it verifies the request's DPoP proof by the same rules `issueTokens` applies. Pass the result to `issueTokens` as `confirmation`. A rejected proof then fails before the credential is consumed, so the client can retry with a valid one.
+
+Let `issueTokens` consume the credential too, so that [`beforeTokenIssuance`](/docs/plugins/oauth-provider/tokens#refuse-token-issuance) can still refuse the request. Pass a `consumeCredential` function that claims the credential, and the credential's stored request as `grantRequest`. The provider calls `consumeCredential` once, after `beforeTokenIssuance` accepts and before it resolves `customTokenResponseFields`, extension ID token claims, and access token claims or stores a token. A `beforeTokenIssuance` refusal leaves the credential for another attempt, but an error thrown from those later callbacks spends it. Throw from it when a concurrent request consumed the credential first. Without `consumeCredential`, consume the credential before you call `issueTokens`, and a refusal spends it.
+
+```ts
+const request = await findApprovedRequest(authReqId);
+
+return provider.issueTokens({
+  client,
+  scopes,
+  user,
+  confirmation,
+  grantRequest: request,
+  consumeCredential: async () => {
+    if (!(await claimRequest(request.id))) {
+      throw new APIError("BAD_REQUEST", { error: "invalid_grant" });
+    }
+  },
+});
+```
 
 To stop a stolen DPoP-bound token from being reissued under another key, a grant that reissues an existing token can require that token's key. Verify the existing token first. When the caller is the client the token was issued to, pass the token's key thumbprint as `expectedJkt`, as the built-in refresh and token exchange grants do. Another party, such as a resource server, cannot hold that key.
 

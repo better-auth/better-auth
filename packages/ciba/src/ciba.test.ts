@@ -1,6 +1,7 @@
 import type {
 	OAuthActorClaim,
 	OAuthAuthenticationContext,
+	OAuthBeforeTokenIssuanceInput,
 	OAuthClient,
 } from "@better-auth/oauth-provider";
 import { oauthProvider } from "@better-auth/oauth-provider";
@@ -38,6 +39,8 @@ const PUSH_ACR = "urn:example:acr:push";
 const mfaAcr = "urn:example:acr:mfa";
 const resolveAuthenticationContext =
 	vi.fn<() => OAuthAuthenticationContext | undefined>();
+const beforeTokenIssuance =
+	vi.fn<(input: OAuthBeforeTokenIssuanceInput) => void | Promise<void>>();
 
 const PAYMENT = "payment_initiation";
 const ACCOUNTS = "account_access";
@@ -97,6 +100,7 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 					acrValuesSupported: ["0", mfaAcr, PUSH_ACR],
 					resolve: resolveAuthenticationContext,
 				},
+				beforeTokenIssuance: (input) => beforeTokenIssuance(input),
 			}),
 			ciba({
 				resultPage: "/ciba",
@@ -573,6 +577,64 @@ describe("ciba poll mode", () => {
 		});
 		expect(issued.status).toBe(200);
 		expect(issued.body.token_type).toBe("DPoP");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10407
+	 */
+	it("keeps an approved request when beforeTokenIssuance refuses", async () => {
+		const { authReqId, url } = await start();
+		await approve(url);
+		const requestId = lastNotification!.requestId;
+		const ctx = await auth.$context;
+		const where = [{ field: "id", value: requestId }];
+		let statusDuringHook: string | undefined;
+		beforeTokenIssuance.mockImplementationOnce(async () => {
+			statusDuringHook = (
+				await ctx.adapter.findOne<{ status: string }>({
+					model: "cibaRequest",
+					where,
+				})
+			)?.status;
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_grant",
+				error_description: "device not attested",
+			});
+		});
+
+		await waitInterval();
+		const refused = await poll(authReqId);
+
+		expect(refused.status).toBe(400);
+		expect(refused.body).toMatchObject({
+			error: "invalid_grant",
+			error_description: "device not attested",
+		});
+		expect(statusDuringHook).toBe("approved");
+		expect(beforeTokenIssuance.mock.calls[0]![0]).toMatchObject({
+			grantType: CIBA_GRANT_TYPE,
+			user: { id: lastNotification!.user.id },
+			scopes: ["openid", "profile"],
+			grantRequest: { id: requestId, status: "approved" },
+		});
+		expect(
+			(
+				await ctx.adapter.findOne<{ status: string }>({
+					model: "cibaRequest",
+					where,
+				})
+			)?.status,
+		).toBe("approved");
+
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		expect(decodeJwt(issued.body.id_token as string).sub).toBe(
+			lastNotification!.user.id,
+		);
+		expect(beforeTokenIssuance).toHaveBeenCalledTimes(2);
+		expect(
+			await ctx.adapter.findOne({ model: "cibaRequest", where }),
+		).toBeNull();
 	});
 
 	it("binds the token to every repeated resource (RFC 8707)", async () => {

@@ -14,7 +14,10 @@ import {
 } from "./device-code";
 import { oauthProvider } from "./oauth";
 import { createDpopKey, createDpopProof } from "./test-utils/dpop";
-import type { OAuthAuthenticationContext } from "./types";
+import type {
+	OAuthAuthenticationContext,
+	OAuthBeforeTokenIssuanceInput,
+} from "./types";
 
 const FORM_HEADERS = { "content-type": "application/x-www-form-urlencoded" };
 
@@ -289,6 +292,8 @@ describe("oauth-provider device-code grant", async () => {
 	const resource = "https://api.example.com";
 	const secondResource = "https://files.example.com";
 	const onDeviceAuthRequest = vi.fn();
+	const beforeTokenIssuance =
+		vi.fn<(input: OAuthBeforeTokenIssuanceInput) => void | Promise<void>>();
 
 	const { auth, client, db, signInWithTestUser } = await getTestInstance(
 		{
@@ -302,6 +307,7 @@ describe("oauth-provider device-code grant", async () => {
 					enforcePerClientResources: false,
 					allowDynamicClientRegistration: true,
 					scopes: ["openid", "profile", "email", "offline_access"],
+					beforeTokenIssuance: (input) => beforeTokenIssuance(input),
 				}),
 				oauthDeviceAuthorization({
 					expiresIn: "5min",
@@ -418,6 +424,59 @@ describe("oauth-provider device-code grant", async () => {
 		const issued = await poll(await proofFor());
 		expect(issued.error).toBeNull();
 		expect(issued.data?.token_type).toBe("DPoP");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10407
+	 */
+	it("keeps an approved device code when beforeTokenIssuance refuses", async () => {
+		const clientId = await createDeviceClient();
+		const deviceCode = await approvedDeviceCode(clientId);
+		const where = [{ field: "deviceCode", value: deviceCode }];
+		let storedDuringHook: { status?: string } | null = null;
+		beforeTokenIssuance.mockImplementationOnce(async () => {
+			storedDuringHook = await db.findOne({ model: "deviceCode", where });
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_grant",
+				error_description: "device not attested",
+			});
+		});
+		const poll = () =>
+			pollToken({
+				grant_type: DEVICE_CODE_GRANT_TYPE,
+				device_code: deviceCode,
+				client_id: clientId,
+			});
+
+		const refused = await poll();
+
+		expect(refused.error).toMatchObject({
+			status: 400,
+			error: "invalid_grant",
+			error_description: "device not attested",
+		});
+		expect(storedDuringHook).toMatchObject({ status: "approved" });
+		expect(beforeTokenIssuance).toHaveBeenCalledTimes(1);
+		expect(beforeTokenIssuance.mock.calls[0]![0]).toMatchObject({
+			grantType: DEVICE_CODE_GRANT_TYPE,
+			user: { id: user.id },
+			grantRequest: { deviceCode, status: "approved" },
+		});
+		expect(await db.findOne({ model: "deviceCode", where })).toMatchObject({
+			status: "approved",
+		});
+
+		// The refused poll counted toward the polling interval.
+		await db.update({
+			model: "deviceCode",
+			where,
+			update: { lastPolledAt: new Date(0) },
+		});
+		const issued = await poll();
+		expect(issued.error).toBeNull();
+		expect(issued.data?.token_type).toBe("Bearer");
+		expect(beforeTokenIssuance).toHaveBeenCalledTimes(2);
+		expect(await db.findOne({ model: "deviceCode", where })).toBeNull();
 	});
 
 	it("issues once when two polls with one DPoP proof arrive together", async () => {

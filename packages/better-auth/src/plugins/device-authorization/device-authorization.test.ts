@@ -1,4 +1,7 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { APIError } from "@better-auth/core/error";
@@ -8,7 +11,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as z from "zod";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { DeviceAuthorizationGrant } from ".";
-import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
+import {
+	deviceAuthorization,
+	deviceAuthorizationOptionsSchema,
+	prepareDeviceCodeRedemption,
+} from ".";
 import { deviceAuthorizationClient } from "./client";
 import type { DeviceCode } from "./schema";
 
@@ -1187,6 +1194,49 @@ describe("device authorization flow", async () => {
 					},
 				}),
 			).rejects.toMatchObject({
+				body: { error: "invalid_grant" },
+			});
+		});
+
+		it("should leave a prepared device code approved until the issuer claims it", async () => {
+			const { headers } = await signInWithTestUser();
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await auth.api.deviceVerify({ query: { user_code }, headers });
+			await auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+			const where = [{ field: "deviceCode", value: device_code }];
+
+			const prepared = await prepareDeviceCodeRedemption({
+				ctx: {
+					context: await auth.$context,
+				} as unknown as GenericEndpointContext,
+				deviceCode: device_code,
+				authorizeRedemption: () => ({
+					ownershipWhere: { field: "clientId", value: "test-client" },
+					context: undefined,
+				}),
+				prepareRedemption: () => undefined,
+			});
+
+			expect(prepared.deviceCode).toMatchObject({
+				deviceCode: device_code,
+				status: "approved",
+			});
+			expect(
+				await db.findOne<DeviceCode>({ model: "deviceCode", where }),
+			).not.toBeNull();
+
+			await expect(prepared.claim()).resolves.toMatchObject({
+				deviceCode: device_code,
+			});
+			expect(
+				await db.findOne<DeviceCode>({ model: "deviceCode", where }),
+			).toBeNull();
+			await expect(prepared.claim()).rejects.toMatchObject({
 				body: { error: "invalid_grant" },
 			});
 		});

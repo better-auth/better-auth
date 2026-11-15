@@ -511,9 +511,55 @@ With `expectedJkt`, the request must carry a proof signed with that key, even wi
 
 On the request that issues the code with [`issueAuthorizationCode`](/docs/plugins/oauth-provider/sign-in-flow#issue-codes-from-your-own-endpoint), set `dpop_jkt` in `query` to the stored key. The method checks a proof on the request against that key. If your endpoint already called `verifyDpopProof` on this request, the method reuses that result instead of verifying the proof again. The verified key binds the code, and a `dpop_jkt` in `query` must match it. A request without a proof still gets a code bound to the stored key, so only a token request with a proof from that key can redeem it.
 
+## Refuse token issuance
+
+Some deployments must refuse tokens for a grant that is otherwise valid, for example when the user's sign-in does not meet a required assurance level or a device check fails. To refuse issuance, set `beforeTokenIssuance`. The provider calls it once for each token request, for every grant: authorization code, refresh token, client credentials, and every extension grant that calls `issueTokens`, such as the device code, CIBA, and token exchange grants. A refresh request replayed within `refreshTokenReuseInterval` gets the earlier response again, without a new call.
+
+To let the request continue, return. To refuse it, throw an `APIError` with an OAuth error. The token endpoint returns that error unchanged and stores no token:
+
+```ts title="auth.ts"
+import { APIError } from "better-auth/api";
+
+oauthProvider({
+  beforeTokenIssuance: ({ user, acr, scopes }) => {
+    if (user && scopes.includes("payments") && acr !== "urn:example:loa:2") {
+      throw new APIError("BAD_REQUEST", {
+        error: "invalid_grant",
+        error_description: "this scope requires a stronger sign-in",
+      });
+    }
+  },
+})
+```
+
+Use `invalid_grant` ([RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2)) unless the grant defines a better error. Authorization code and refresh token clients generally need a new authorization after `invalid_grant`. Other grants have their own recovery behavior. The CIBA grant also defines `access_denied` ([CIBA Core §11](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.11)), which tells the client the user denied the request.
+
+The callback receives the issuance as one object:
+
+* `grantType`, `client`, and `user`. `user` is undefined for client credentials.
+* `scopes` and `resources`: what the tokens will carry, after resource narrowing.
+* `referenceId`, `sessionId`, `authTime`, `acr`, and `amr` from the grant.
+* `act` for a delegated issuance, and the `authorizationDetails` this issuance carries.
+* `confirmation`: the key the tokens will be bound to, such as `{ jkt }` for DPoP. Undefined for bearer tokens.
+* [`grantId`](#per-authorization-grant-id).
+* `verificationValue`: for the authorization code grant, the stored authorization request, including custom parameters in `query`.
+* `grantRequest`: the stored request an extension grant redeems, such as the approved device code. Its shape belongs to the grant.
+* `ctx`: the token request's endpoint context. `ctx.request` is undefined when your server calls the token endpoint through `auth.api`.
+
+Each callback gets its own copy of every value except `ctx`, `client`, and `user`. Changing a copy changes neither the tokens nor what a later callback receives. `ctx`, `client`, and `user` are the provider's own objects, so read them and do not change them.
+
+The callback runs after the provider validates the grant and resolves the DPoP binding, and before any issuance-time claim callback, [`customTokenResponseFields`](#custom-token-response-fields), or token write. A refusal therefore has these effects:
+
+* An authorization code is already used up, so the client must start a new authorization.
+* A device code or CIBA request is used up only after the callback accepts the request, so it stays approved and the client can poll again. A client that follows the specifications stops polling after an error other than `authorization_pending` or `slow_down`, and then the request expires unused.
+* A refused refresh does not rotate the refresh token, so the client can present it again.
+* A verified DPoP proof sent with the request is already used, so a retry needs a new proof. When client authentication supplies a `confirmation`, it replaces the request's proof, and that proof is not used.
+
+A provider extension can add the same check with its own `beforeTokenIssuance`. Each extension's callback runs in registration order, then the option's. The first one that throws refuses the issuance. [Token exchange](#add-your-own-policy) runs `allowExchange` first.
+
 ## Custom claims
 
-To add claims to access tokens, set `customAccessTokenClaims`. It receives `user`, `scopes`, `referenceId`, `resources`, the client's `metadata`, and the [`grantId`](#per-authorization-grant-id) when the issuance has one. It returns an object of claims to add. Use namespaced claim names, and see [RFC 9068 §2.2](https://datatracker.ietf.org/doc/html/rfc9068#section-2.2) for the claims the provider already sets. To stop a token from being issued, for example when the user has left the organization, throw from the callback.
+To add claims to access tokens, set `customAccessTokenClaims`. It receives `user`, `scopes`, `referenceId`, `resources`, the client's `metadata`, and the [`grantId`](#per-authorization-grant-id) when the issuance has one. It returns an object of claims to add. Use namespaced claim names, and see [RFC 9068 §2.2](https://datatracker.ietf.org/doc/html/rfc9068#section-2.2) for the claims the provider already sets. To stop a token from being issued, for example when the user has left the organization, use [`beforeTokenIssuance`](#refuse-token-issuance) instead of throwing here. For an opaque access token, this callback runs at introspection, not at issuance.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -575,7 +621,7 @@ Introspection of an opaque access token passes the same `grantId` that issuance 
 
 ### Custom token response fields
 
-To add fields to the token endpoint's JSON response, set `customTokenResponseFields`. It receives `grantType`, `user`, `scopes`, the client's `metadata`, and the [`grantId`](#per-authorization-grant-id) when the issuance has one. For the `authorization_code` grant, it also receives `verificationValue`, which holds the original authorization request (`query`), the consent `referenceId`, and the `sessionId`. For a code that a plugin endpoint issued, `verificationValue` also holds the endpoint's [`serverContext`](/docs/plugins/oauth-provider/sign-in-flow#carry-your-own-state-to-the-token-request). It returns an object of fields to add. The fields go in the response, not in the token itself. The callback cannot override standard fields such as `access_token` or `scope`. It runs before any token is created.
+To add fields to the token endpoint's JSON response, set `customTokenResponseFields`. It receives `grantType`, `user`, `scopes`, the client's `metadata`, and the [`grantId`](#per-authorization-grant-id) when the issuance has one. For the `authorization_code` grant, it also receives `verificationValue`, which holds the original authorization request (`query`), the consent `referenceId`, and the `sessionId`. For a code that a plugin endpoint issued, `verificationValue` also holds the endpoint's [`serverContext`](/docs/plugins/oauth-provider/sign-in-flow#carry-your-own-state-to-the-token-request). It returns an object of fields to add. The fields go in the response, not in the token itself. The callback cannot override standard fields such as `access_token` or `scope`. It runs after [`beforeTokenIssuance`](#refuse-token-issuance), and before any token is created.
 
 ```ts title="auth.ts"
 oauthProvider({

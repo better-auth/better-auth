@@ -361,6 +361,28 @@ export interface OAuthTokenIssueParams {
 	 * and ID tokens are not capped, so such a grant should not issue them.
 	 */
 	maxExpiresAt?: Date;
+	/**
+	 * The stored request this grant redeems, such as an approved device code.
+	 * Each `beforeTokenIssuance` receives a copy as `grantRequest`, so a policy
+	 * can read the request the grant is about to consume. It must be cloneable
+	 * with `structuredClone`, and it is not stored or issued.
+	 */
+	grantRequest?: object;
+	/**
+	 * Consumes the one-time credential this grant redeems, such as a device
+	 * code. The provider calls it once, after `beforeTokenIssuance` accepts and
+	 * before it resolves `customTokenResponseFields`, extension ID token claims,
+	 * and access token claims or stores a token. A `beforeTokenIssuance` refusal
+	 * therefore leaves the credential for another attempt, while an error thrown
+	 * from those later callbacks spends it. Throw to stop the issuance, for
+	 * example when a concurrent request consumed the credential first.
+	 *
+	 * Without it, the grant must consume the credential before it calls
+	 * `issueTokens`, and a refusal then spends it. Resolve the DPoP binding
+	 * before the claim with `resolveConfirmation`, as for any one-time
+	 * credential.
+	 */
+	consumeCredential?: () => Awaitable<void>;
 }
 
 /**
@@ -933,6 +955,58 @@ export interface OAuthMetadataExtensionInput {
 	document: AuthServerMetadata | OIDCMetadata;
 }
 
+/**
+ * The issuance `beforeTokenIssuance` decides on: the grant is validated, and no
+ * token has been stored yet. Each call gets its own copy of every value except
+ * `ctx`, `client`, and `user`, which are the provider's live objects: read
+ * them, and do not change them.
+ */
+export interface OAuthBeforeTokenIssuanceInput {
+	/**
+	 * The token request's endpoint context. `ctx.request` is undefined when the
+	 * token endpoint is called through `auth.api`.
+	 */
+	ctx: GenericEndpointContext;
+	grantType: GrantType;
+	client: SchemaClient<Scope[]>;
+	/** Undefined for client credentials. */
+	user?: User;
+	/** The scopes the tokens will carry, after resource narrowing. */
+	scopes: string[];
+	/** The resources the access token will be issued for. */
+	resources?: string[];
+	referenceId?: string;
+	sessionId?: string;
+	/** When the user authenticated for this grant. */
+	authTime?: Date;
+	/** The `acr` the grant recorded. */
+	acr?: string;
+	/** The `amr` the grant recorded. */
+	amr?: string[];
+	/** The RFC 8693 actor of a delegated issuance. */
+	act?: OAuthActorClaim;
+	/** The RFC 9396 authorization details this issuance carries. */
+	authorizationDetails?: OAuthAuthorizationDetail[];
+	/**
+	 * The sender constraint the tokens will be bound to, such as a DPoP key
+	 * thumbprint (`jkt`). Undefined for bearer tokens.
+	 */
+	confirmation?: Confirmation;
+	/** See {@link OAuthClaimExtensionInput.grantId}. */
+	grantId?: string;
+	/**
+	 * The redeemed authorization code's stored authorization request. Only
+	 * for the `authorization_code` grant.
+	 */
+	verificationValue?: VerificationValue;
+	/**
+	 * The stored request an extension grant passed to `issueTokens` as
+	 * `grantRequest`, such as the approved device code for the device
+	 * authorization grant. Its shape belongs to the grant.
+	 */
+	grantRequest?: object;
+}
+
 export interface OAuthClaimExtensionInput {
 	ctx: GenericEndpointContext;
 	opts: OAuthOptions<Scope[]>;
@@ -1040,6 +1114,13 @@ export interface OAuthProviderExtension {
 	 * provider owns `claims_supported` and does not infer it from contributors.
 	 */
 	metadata?: (input: OAuthMetadataExtensionInput) => Record<string, unknown>;
+	/**
+	 * Refuses an issuance by throwing, like the `beforeTokenIssuance` option.
+	 * Every extension's hook runs in registration order, before the option's.
+	 */
+	beforeTokenIssuance?: (
+		input: OAuthBeforeTokenIssuanceInput,
+	) => Awaitable<void>;
 	/**
 	 * Additional claims for access tokens, ID tokens, and the UserInfo response.
 	 * Strictly additive: a contributor can add new claims but never replace an
@@ -2292,13 +2373,36 @@ export interface OAuthOptions<
 		grantId?: string;
 	}) => Awaitable<Record<string, any>>;
 	/**
+	 * Decides whether tokens may be issued, for every grant: the built-in
+	 * grants and every extension grant that calls `issueTokens`. A refresh
+	 * replayed within `refreshTokenReuseInterval` returns the earlier response
+	 * without calling it. It runs after the grant is validated and the DPoP
+	 * binding is resolved, and before any claim callback,
+	 * `customTokenResponseFields`, or token write. See
+	 * {@link OAuthBeforeTokenIssuanceInput} for which input values are live.
+	 *
+	 * Return to continue. Throw an `APIError` carrying an OAuth error to
+	 * refuse; the token endpoint returns it unchanged and stores no token. Use
+	 * `invalid_grant` (RFC 6749 §5.2) unless the grant defines a better code.
+	 *
+	 * An authorization code is already consumed when it runs, so a refusal is
+	 * final for that code. A device code or CIBA request is consumed only after
+	 * it, so a refusal leaves the request approved for another poll. A refused
+	 * refresh leaves the presented refresh token usable. A DPoP proof on the
+	 * request has already been used, so a retry needs a new proof.
+	 */
+	beforeTokenIssuance?: (
+		input: OAuthBeforeTokenIssuanceInput,
+	) => Awaitable<void>;
+	/**
 	 * Custom fields to include in the token response body.
 	 *
 	 * Unlike `customAccessTokenClaims` (which adds claims inside the JWT payload),
 	 * this adds fields to the JSON response envelope alongside `access_token`,
 	 * `token_type`, etc. Standard OAuth fields (`access_token`, `token_type`,
 	 * `expires_in`, `expires_at`, `refresh_token`, `scope`, `id_token`) cannot
-	 * be overridden.
+	 * be overridden. It runs after `beforeTokenIssuance`, and before any token
+	 * is stored.
 	 *
 	 * @param info - context that may be useful when creating custom fields
 	 */

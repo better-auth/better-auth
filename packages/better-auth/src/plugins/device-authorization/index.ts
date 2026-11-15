@@ -272,9 +272,11 @@ export {
 	assertDeviceCodePending,
 	buildVerificationUris,
 	type DeviceCodeRedemptionAuthorization,
+	type DeviceCodeRedemptionPreparation,
 	type DeviceCodeRedemptionResult,
 	decideDeviceCode,
 	findDeviceCodeByUserCode,
+	prepareDeviceCodeRedemption,
 	redeemDeviceCode,
 } from "./routes";
 export type { DeviceCode } from "./schema";

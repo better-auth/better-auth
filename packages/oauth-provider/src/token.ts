@@ -36,6 +36,7 @@ import {
 	collectExtensionIdTokenClaims,
 	getExtensionGrantHandler,
 	getSupportedGrantTypes,
+	runBeforeTokenIssuance,
 } from "./extensions";
 import { isUserDelegatedScope } from "./oauthClient/client-credentials";
 import {
@@ -59,6 +60,7 @@ import type {
 	OAuthActorClaim,
 	OAuthAuthenticatedClient,
 	OAuthAuthenticationContext,
+	OAuthBeforeTokenIssuanceInput,
 	OAuthClientAuthenticationRequest,
 	OAuthOptions,
 	OAuthProviderApi,
@@ -2082,38 +2084,6 @@ async function createUserTokens(
 				: undefined);
 	const isIdToken = user && effectiveScopes.includes("openid");
 	const metadata = parseClientMetadata(client.metadata);
-	const additionalIdTokenClaims =
-		isIdToken && user
-			? {
-					...(await collectExtensionIdTokenClaims(opts, {
-						ctx,
-						opts,
-						user,
-						client,
-						scopes: effectiveScopes,
-						grantType,
-						referenceId,
-						sessionId,
-						resources: params.resources,
-						metadata,
-						grantId,
-					})),
-					...(params.idTokenClaims ?? {}),
-				}
-			: undefined;
-
-	// Resolve custom fields before any token side effects (refresh rotation, DB writes)
-	const customFields = opts.customTokenResponseFields
-		? await opts.customTokenResponseFields({
-				grantType,
-				user,
-				scopes: effectiveScopes,
-				metadata,
-				verificationValue,
-				grantId,
-			})
-		: undefined;
-
 	const refreshResources = grantIssuance.refreshResources;
 	// A confirmation supplied by the caller (an extension client-authentication
 	// strategy, for example mTLS `x5t#S256`, or a binding captured out-of-grant
@@ -2138,6 +2108,69 @@ async function createUserTokens(
 		params.requestedUserInfoClaims ??
 		existingRefreshToken?.requestedUserInfoClaims ??
 		[];
+
+	// Every input is final here, the DPoP binding included, and nothing is
+	// stored yet, so a refusal leaves no token and rotates no refresh token.
+	// Each callback gets its own copy of the issuance's values, so it can
+	// change neither what is issued nor what a later callback sees.
+	const createIssuanceInput = (): OAuthBeforeTokenIssuanceInput => ({
+		ctx,
+		grantType,
+		client,
+		user,
+		referenceId,
+		sessionId,
+		acr,
+		grantId,
+		...structuredClone({
+			authTime,
+			scopes: effectiveScopes,
+			resources: params.resources,
+			amr,
+			act: params.act,
+			authorizationDetails: issuedDetails,
+			confirmation,
+			verificationValue,
+			grantRequest: params.grantRequest,
+		}),
+	});
+	await runBeforeTokenIssuance(opts, createIssuanceInput);
+	// A grant with a one-time credential consumes it only now, so a refusal
+	// above leaves it redeemable.
+	await params.consumeCredential?.();
+
+	const additionalIdTokenClaims =
+		isIdToken && user
+			? {
+					...(await collectExtensionIdTokenClaims(opts, {
+						ctx,
+						opts,
+						user,
+						client,
+						scopes: effectiveScopes,
+						grantType,
+						referenceId,
+						sessionId,
+						resources: params.resources,
+						metadata,
+						grantId,
+					})),
+					...(params.idTokenClaims ?? {}),
+				}
+			: undefined;
+
+	// Resolved after the policy hook and before any token side effect (refresh
+	// rotation, DB writes), so a refusal reaches no response callback.
+	const customFields = opts.customTokenResponseFields
+		? await opts.customTokenResponseFields({
+				grantType,
+				user,
+				scopes: effectiveScopes,
+				metadata,
+				verificationValue,
+				grantId,
+			})
+		: undefined;
 
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
