@@ -49,8 +49,9 @@ export interface TokenEndpointRequestContext {
 	tokenEndpoint: string;
 	grantType: ClientAssertionGrantType;
 	/**
-	 * Which endpoint this request goes to. `tokenEndpoint` still holds the
-	 * token endpoint URL for a pushed authorization request.
+	 * Which endpoint this request goes to. For a pushed authorization request,
+	 * `tokenEndpoint` holds the token endpoint URL, or the pushed authorization
+	 * request endpoint URL when the caller passes no token endpoint.
 	 */
 	endpointType: TokenEndpointType;
 	/**
