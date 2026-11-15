@@ -228,13 +228,20 @@ describe("client assertion audience", () => {
 			},
 		);
 
-		it("challenges a private_key_jwt client whose audience is refused", async () => {
-			const token = await requestToken(
-				await methods.private_key_jwt(tokenEndpoint),
-			);
-			expect(token.status).toBe(401);
-			expect(token.challenge).toBe("Basic");
-		});
+		it.each([
+			["the token endpoint", tokenEndpoint],
+			["the issuer and another audience", [issuer, "x"]],
+		] as const)(
+			"challenges a private_key_jwt client whose audience names %s",
+			async (_, aud) => {
+				const audience = typeof aud === "string" ? aud : [...aud];
+				const token = await requestToken(
+					await methods.private_key_jwt(audience),
+				);
+				expect(token.status).toBe(401);
+				expect(token.challenge).toBe("Basic");
+			},
+		);
 
 		it.each([
 			["private_key_jwt", tokenEndpoint],

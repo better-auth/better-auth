@@ -448,6 +448,27 @@ function audienceErrorDescription(
 		: "client assertion aud is not an accepted audience";
 }
 
+/**
+ * Whether an assertion's `aud` is accepted. With `soleAudience`, every value
+ * must be accepted (RFC 10070 §4); otherwise one accepted value is enough.
+ */
+function isAudienceAccepted(
+	aud: unknown,
+	acceptedAudiences: string[],
+	soleAudience: boolean,
+): boolean {
+	const audiences: unknown[] = Array.isArray(aud)
+		? aud
+		: aud != null
+			? [aud]
+			: [];
+	const isAccepted = (value: unknown) =>
+		typeof value === "string" && acceptedAudiences.includes(value);
+	return soleAudience
+		? audiences.length > 0 && audiences.every(isAccepted)
+		: audiences.some(isAccepted);
+}
+
 async function consumeAssertion(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -459,17 +480,9 @@ async function consumeAssertion(
 	},
 ): Promise<void> {
 	const { namespace, payload, acceptedAudiences } = params;
-	const audiences: unknown[] = Array.isArray(payload.aud)
-		? payload.aud
-		: payload.aud != null
-			? [payload.aud]
-			: [];
-	const isAccepted = (value: unknown) =>
-		typeof value === "string" && acceptedAudiences.includes(value);
-	const audienceMatches = params.soleAudience
-		? audiences.length > 0 && audiences.every(isAccepted)
-		: audiences.some(isAccepted);
-	if (!audienceMatches) {
+	if (
+		!isAudienceAccepted(payload.aud, acceptedAudiences, params.soleAudience)
+	) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: audienceErrorDescription(ctx, opts, acceptedAudiences),
 			error: "invalid_client",
@@ -750,15 +763,33 @@ export async function verifyClientAssertion(
 		}
 	}
 
-	// Audience, lifetime, and jti single-use replay protection, shared with
-	// extension client-auth methods through `consumeClientAssertion` so both
-	// paths enforce RFC 7523 §3 identically. jose only requires one `aud` value
-	// to match; this also applies the sole-audience rule of RFC 10070 §4.
+	// jose only requires one `aud` value to match. The sole-audience rule of
+	// RFC 10070 §4 is checked here so its failure carries the same challenge.
+	const soleAudience =
+		!options?.endpointAudienceOnly && requiresSoleAudience(opts);
+	if (!isAudienceAccepted(payload.aud, acceptedAudiences, soleAudience)) {
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				error_description: audienceErrorDescription(
+					ctx,
+					opts,
+					acceptedAudiences,
+				),
+				error: "invalid_client",
+			},
+			challengeHeaders("Basic"),
+		);
+	}
+
+	// Lifetime and jti single-use replay protection, shared with extension
+	// client-auth methods through `consumeClientAssertion` so both paths
+	// enforce RFC 7523 §3 identically.
 	await consumeAssertion(ctx, opts, {
 		namespace: `private_key_jwt:${clientId}`,
 		payload,
 		acceptedAudiences,
-		soleAudience: !options?.endpointAudienceOnly && requiresSoleAudience(opts),
+		soleAudience,
 	});
 
 	return { clientId, client };
