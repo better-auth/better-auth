@@ -357,6 +357,23 @@ The `expectedAudience` strategy input and the `expectedAudience` parameter of `c
 
 **What to do:** a client that calls UserInfo must request the `openid` scope when it authorizes. A client whose access token lacks `openid` must authorize again with that scope. Send the access token as `Authorization: Bearer <token>`, or `DPoP <token>` with a DPoP proof in the `DPoP` header for a DPoP-bound token. Update clients and tests that match on `invalid_scope` from UserInfo.
 
+### Access token claims set to `undefined` are left out
+
+This applies if `customAccessTokenClaims`, a resource's `customClaims`, an extension `claims.accessToken` contributor, or a grant's `accessTokenClaims` sets a claim to `undefined`. That claim is now left out, and a lower-priority claim with the same name keeps its value. Before, the `undefined` removed that claim from the access token.
+
+ID token and UserInfo claims already worked this way. The change also makes both token formats agree: a grant's `accessTokenClaims: { tenant: undefined }` removed an extension's `tenant` from a JWT access token, but opaque-token introspection still returned it, because stored claims cannot hold `undefined`.
+
+**What to do:** if you set a claim to `undefined` to override a lower-priority claim, set the value you want instead, such as `null`.
+
+```ts title="auth.ts"
+oauthProvider({
+  customAccessTokenClaims: ({ user }) => ({
+    // was: tenant: user?.tenantId, to remove an extension's tenant
+    tenant: user?.tenantId ?? null,
+  }),
+});
+```
+
 ### Extension and API authors
 
 This applies if you build on `extendOAuthProvider()`, call the provider API from your own endpoints, or implement it yourself:
