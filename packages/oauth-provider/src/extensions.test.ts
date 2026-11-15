@@ -2119,3 +2119,62 @@ describe.each(["postgres", "mysql"] as const)(
 		});
 	},
 );
+
+describe("extension access-token claims set to undefined", async () => {
+	const issuer = "http://localhost:3000";
+	const resource = "https://api.example.com";
+	const contributor = (id: string, value: string | undefined) =>
+		({
+			id,
+			init(ctx) {
+				extendOAuthProvider(ctx, {
+					claims: { accessToken: () => ({ tenant: value }) },
+				});
+			},
+		}) satisfies BetterAuthPlugin;
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL: issuer,
+		plugins: [
+			jwt({ jwt: { issuer } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				resources: [resource],
+				enforcePerClientResources: false,
+				clientPrivileges: () => true,
+			}),
+			contributor("undefined-tenant", undefined),
+			contributor("defined-tenant", "acme"),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	it("lets a later extension supply the claim", async () => {
+		const machine = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				scope: "read",
+				client_credentials_scopes: ["read"],
+			},
+		});
+		const { data, error } = await client.$fetch<{ access_token: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: machine.client_id,
+					client_secret: machine.client_secret!,
+					scope: "read",
+					resource,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
+		expect(error).toBeNull();
+		expect(decodeJwt(data!.access_token).tenant).toBe("acme");
+	});
+});
