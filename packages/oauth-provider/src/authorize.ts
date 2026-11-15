@@ -27,6 +27,7 @@ import {
 	consumePushedAuthorizationRequest,
 	isPushedAuthorizationRequestEnabled,
 	loadPushedAuthorizationRequest,
+	withoutClientAuthentication,
 } from "./par";
 import { resolveResourcePolicy } from "./resources";
 import {
@@ -43,12 +44,15 @@ import type {
 	IssuedAuthorizationCode,
 	OAuthAuthenticationContext,
 	OAuthAuthorizationQuery,
+	OAuthAuthorizationRequestClient,
 	OAuthInteractionQuery,
 	OAuthInteractionRequest,
 	OAuthOptions,
 	SchemaClient,
 	Scope,
 	StoredAuthorizationQuery,
+	ValidateAuthorizationRequestParams,
+	ValidatedAuthorizationRequest,
 	VerificationValue,
 } from "./types";
 import { authorizationQuerySchema, RedirectUriSyntaxSchema } from "./types/zod";
@@ -1028,6 +1032,77 @@ export async function parseAuthorizationRequest(
 }
 
 /**
+ * Validates an authorization request for a plugin endpoint before any
+ * session exists, through the same checks `issueAuthorizationCode` runs.
+ * Authenticates no client and writes nothing.
+ */
+export async function validateAuthorizationRequestParams(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: ValidateAuthorizationRequestParams,
+): Promise<ValidatedAuthorizationRequest> {
+	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
+		tokenError(
+			"BAD_REQUEST",
+			"unsupported_response_type",
+			"the authorization_code grant is disabled",
+		);
+	}
+	const requestQuery = withoutClientAuthentication(params.query ?? {});
+	// Without client authentication, nothing else names the client.
+	if (typeof requestQuery.client_id !== "string" || !requestQuery.client_id) {
+		tokenError("BAD_REQUEST", "invalid_request", "client_id is required");
+	}
+	if (requestQuery.request_uri !== undefined) {
+		tokenError(
+			"BAD_REQUEST",
+			"invalid_request",
+			"pass the authorization request parameters, not a request_uri",
+		);
+	}
+	if (requestQuery.request !== undefined) {
+		tokenError(
+			"BAD_REQUEST",
+			"request_not_supported",
+			"request object not supported",
+		);
+	}
+	const { query, client } = await parseAuthorizationRequest(
+		ctx,
+		opts,
+		requestQuery,
+		{ redirectUriOptional: true },
+	);
+	return {
+		query: query as ValidatedAuthorizationRequest["query"],
+		client: toAuthorizationRequestClient(client),
+	};
+}
+
+function toAuthorizationRequestClient(
+	client: SchemaClient<Scope[]>,
+): OAuthAuthorizationRequestClient {
+	const view: OAuthAuthorizationRequestClient = { clientId: client.clientId };
+	for (const field of AUTHORIZATION_REQUEST_CLIENT_FIELDS) {
+		const value = client[field];
+		// Database rows hold null for unset fields.
+		if (value != null) Object.assign(view, { [field]: value });
+	}
+	return view;
+}
+
+const AUTHORIZATION_REQUEST_CLIENT_FIELDS = [
+	"name",
+	"uri",
+	"icon",
+	"contacts",
+	"tos",
+	"policy",
+	"tokenEndpointAuthMethod",
+	"applicationType",
+] as const satisfies readonly (keyof OAuthAuthorizationRequestClient)[];
+
+/**
  * Sends the user to the next required interaction page, or approves the
  * request once none remain.
  */
@@ -1400,6 +1475,7 @@ export async function issueAuthorizationCode(
 		scopes,
 		headers,
 		query,
+		authentication: params.authentication,
 	});
 	// OIDC Core §5.5.1.1: an unmet essential acr is a failed authentication.
 	if (

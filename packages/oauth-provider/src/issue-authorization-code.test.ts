@@ -1182,3 +1182,157 @@ describe("provider.issueAuthorizationCode after a sign-in in the same request", 
 		}
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10414
+ */
+describe("provider.issueAuthorizationCode with caller-supplied amr", async () => {
+	const redirectUri = "https://client.example.com/callback";
+
+	const issuer = {
+		id: "test-amr-code-issuer",
+		endpoints: {
+			testIssueCode: createAuthEndpoint(
+				"/test/issue-code",
+				{ method: "POST", use: [sessionMiddleware] },
+				async (ctx) => {
+					const { authentication, ...query } = ctx.body as {
+						authentication?: { amr?: string[] };
+					} & StoredAuthorizationQuery;
+					const issued = await getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+					).issueAuthorizationCode({
+						query,
+						session: ctx.context.session,
+						authentication,
+					});
+					return ctx.json({ code: issued.code });
+				},
+			),
+		},
+	} satisfies BetterAuthPlugin;
+
+	async function setup(
+		authenticationContext?: Parameters<
+			typeof oauthProvider
+		>[0]["authenticationContext"],
+	) {
+		const instance = await getTestInstance({
+			baseURL: "http://localhost:3000/api/auth/",
+			advanced: { skipTrailingSlashes: true },
+			plugins: [
+				issuer,
+				jwt({ jwt: { issuer: "http://localhost:3000" } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					authenticationContext,
+				}),
+			],
+		});
+		const { headers } = await instance.signInWithTestUser();
+		const oauthClient = await instance.auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "none",
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+		const context = await instance.auth.$context;
+		return {
+			async issue(scope: string, authentication?: unknown) {
+				const issued = await instance.client.$fetch<{ code: string }>(
+					"/test/issue-code",
+					{
+						method: "POST",
+						headers,
+						body: {
+							response_type: "code",
+							client_id: oauthClient.client_id,
+							scope,
+							code_challenge: await generateCodeChallenge(
+								generateRandomString(43),
+							),
+							code_challenge_method: "S256",
+							authentication,
+						},
+					},
+				);
+				return issued;
+			},
+			async stored(code: string) {
+				const row = await context.internalAdapter.findVerificationValue(
+					await storeToken("hashed", code, "authorization_code"),
+				);
+				return JSON.parse(row!.value) as {
+					authTime: number;
+					acr?: string;
+					amr?: string[];
+				};
+			},
+		};
+	}
+
+	it("passes the methods to authenticationContext.resolve", async () => {
+		const seen: unknown[] = [];
+		const { issue, stored } = await setup({
+			acrValuesSupported: ["0", "urn:example:mfa"],
+			resolve: ({ authentication }) => {
+				seen.push(authentication);
+				return authentication?.amr?.includes("otp")
+					? { acr: "urn:example:mfa", amr: authentication.amr }
+					: undefined;
+			},
+		});
+		const issued = await issue("openid", { amr: ["pwd", "otp"] });
+		expect(issued.error).toBeNull();
+		expect(seen).toEqual([{ amr: ["pwd", "otp"] }]);
+		const row = await stored(issued.data!.code);
+		expect(row.acr).toBe("urn:example:mfa");
+		expect(row.amr).toEqual(["pwd", "otp"]);
+	});
+
+	it("keeps what the resolver returns over the caller's methods", async () => {
+		const { issue, stored } = await setup({
+			acrValuesSupported: ["0"],
+			resolve: () => ({ amr: ["hwk"] }),
+		});
+		const issued = await issue("openid", { amr: ["pwd"] });
+		expect((await stored(issued.data!.code)).amr).toEqual(["hwk"]);
+	});
+
+	it("stores the caller's methods when no resolver is configured", async () => {
+		const { issue, stored } = await setup();
+		const issued = await issue("openid", { amr: ["pwd", "otp"] });
+		expect(issued.error).toBeNull();
+		const row = await stored(issued.data!.code);
+		expect(row.amr).toEqual(["pwd", "otp"]);
+		expect(row.acr).toBeUndefined();
+	});
+
+	it("stores no methods for a request without openid", async () => {
+		const { issue, stored } = await setup();
+		const issued = await issue("profile", { amr: ["pwd"] });
+		expect(issued.error).toBeNull();
+		expect((await stored(issued.data!.code)).amr).toBeUndefined();
+	});
+
+	it("rejects methods that are not a string array", async () => {
+		const { issue } = await setup();
+		const issued = await issue("openid", { amr: ["pwd", 1] });
+		expect(issued.error?.status).toBe(500);
+	});
+
+	it("keeps auth_time from the session", async () => {
+		const { issue, stored } = await setup();
+		const issued = await issue("openid", {
+			amr: ["pwd"],
+			authTime: 0,
+		});
+		expect((await stored(issued.data!.code)).authTime).toBeGreaterThan(0);
+	});
+});

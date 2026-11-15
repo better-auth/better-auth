@@ -93,6 +93,13 @@ export interface OAuthAuthenticationContextOptions<
 		 * `acr_values`, in order of preference.
 		 */
 		requestedAcrValues: string[];
+		/**
+		 * How a plugin endpoint reports it authenticated the user, passed to
+		 * `issueAuthorizationCode` as `authentication`. Absent for approvals on
+		 * the provider's own pages. Treat it as input: return the `amr` the
+		 * code should carry, which may differ from `authentication.amr`.
+		 */
+		authentication?: { amr?: string[] } | undefined;
 	}) => Awaitable<OAuthAuthenticationContext | undefined>;
 }
 
@@ -408,6 +415,67 @@ export interface IssueAuthorizationCodeParams {
 		session: Session & Record<string, unknown>;
 		user: User & Record<string, unknown>;
 	};
+	/**
+	 * How your endpoint authenticated the user in this flow.
+	 *
+	 * `amr` lists the Authentication Methods References it verified, such as
+	 * `["pwd", "otp"]` (RFC 8176). With `authenticationContext.resolve`
+	 * configured, the resolver receives it as `authentication` and its result
+	 * decides the code's `acr` and `amr`. Without a resolver, the code carries
+	 * this `amr` as given. Either way, `amr` reaches only the ID token, so it
+	 * is ignored without the `openid` scope.
+	 *
+	 * `auth_time` always comes from the session's creation time, so a caller
+	 * cannot report an earlier sign-in than the session proves.
+	 */
+	authentication?: {
+		amr?: string[];
+	};
+}
+
+/**
+ * Parameters of {@link OAuthProviderApi.validateAuthorizationRequest}.
+ */
+export interface ValidateAuthorizationRequestParams {
+	/**
+	 * The authorization request parameters, as `/oauth2/authorize` accepts
+	 * them, usually your endpoint's request body. `client_id` is required.
+	 * `redirect_uri` is optional, as for `issueAuthorizationCode`. A
+	 * `request_uri` or `request` object is not accepted.
+	 */
+	query: Record<string, unknown>;
+}
+
+/**
+ * The client of a validated authorization request: the fields a sign-in page
+ * may show, plus how the client authenticates. Call `getClient` for the full
+ * registration.
+ */
+export type OAuthAuthorizationRequestClient = Pick<
+	SchemaClient<Scope[]>,
+	| "clientId"
+	| "name"
+	| "uri"
+	| "icon"
+	| "contacts"
+	| "tos"
+	| "policy"
+	| "tokenEndpointAuthMethod"
+	| "applicationType"
+>;
+
+/**
+ * An authorization request checked by
+ * {@link OAuthProviderApi.validateAuthorizationRequest}.
+ */
+export interface ValidatedAuthorizationRequest {
+	/**
+	 * The request after validation, without client credentials, with the
+	 * client's default scopes filled in when it named none. Pass it to
+	 * `issueAuthorizationCode` unchanged.
+	 */
+	query: StoredAuthorizationQuery & { client_id: string };
+	client: OAuthAuthorizationRequestClient;
 }
 
 /**
@@ -515,6 +583,27 @@ export interface OAuthProviderApi {
 	issueAuthorizationCode: (
 		params: IssueAuthorizationCodeParams,
 	) => Promise<IssuedAuthorizationCode>;
+	/**
+	 * Checks an authorization request as `/oauth2/authorize` checks it, without
+	 * a session and without issuing anything, for an endpoint that signs the
+	 * user in over several requests before it calls `issueAuthorizationCode`.
+	 * Call it on the first request, so the client learns about an invalid
+	 * request before the user enters credentials.
+	 *
+	 * It checks the client, the `redirect_uri` when present, `response_type`,
+	 * scopes, claims, resources, and PKCE. It fails with an HTTP 400
+	 * `APIError` carrying the OAuth error `/oauth2/authorize` reports for the
+	 * same request, and it never redirects. It writes nothing: no code, no
+	 * pushed request, and no DPoP `jti`.
+	 *
+	 * The result is advisory. It does not authenticate the client, so your
+	 * endpoint must still authenticate a confidential client, and
+	 * `issueAuthorizationCode` checks the request again, along with the
+	 * session, consent, `prompt`, and `max_age`.
+	 */
+	validateAuthorizationRequest: (
+		params: ValidateAuthorizationRequestParams,
+	) => Promise<ValidatedAuthorizationRequest>;
 	/**
 	 * Resolves the sender-constraint the tokens for this request will carry: the
 	 * `confirmation` the client proved at authentication, or else the DPoP proof

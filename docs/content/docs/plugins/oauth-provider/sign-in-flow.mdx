@@ -172,6 +172,45 @@ A client sends `prompt=login` or `max_age=0` to require a new sign-in, even when
 
 Creating a session is what the provider treats as the new sign-in. Create one only after your endpoint has verified the user's credentials in that request.
 
+### Validate the request before the user signs in
+
+An endpoint that signs the user in over several requests should check the authorization request on the first one. Otherwise, a request error such as an unknown scope appears only after the user has entered their credentials. Call `validateAuthorizationRequest` with the client's request parameters:
+
+```ts
+const { query, client } = await provider.validateAuthorizationRequest({
+  query: ctx.body,
+});
+// Store `query` with the handle you return, then pass it to
+// issueAuthorizationCode on the last request.
+```
+
+The method runs the checks that `/oauth2/authorize` and `issueAuthorizationCode` run on the request: the client, `response_type`, the `redirect_uri` when present, scopes, claims, resources, and PKCE. An invalid request fails with a 400 error carrying the code `/oauth2/authorize` reports for the same request, such as `invalid_scope` or `invalid_target`. The method never redirects and writes nothing to the database. It needs no session.
+
+The request must name its client with `client_id`. A `request_uri` fails with `invalid_request`, and a `request` object fails with `request_not_supported`, as with `issueAuthorizationCode`.
+
+The result holds two values:
+
+* `query`: the request after validation, with the client's default scopes filled in when the request named none. Client credentials such as `client_secret` are left out. Pass it to `issueAuthorizationCode` unchanged.
+* `client`: the fields a sign-in page may show, such as `name` and `icon`, plus `tokenEndpointAuthMethod` and `applicationType`. Call `getClient` for the full registration.
+
+The result is advisory. `validateAuthorizationRequest` does not authenticate the client, so your endpoint must still authenticate a confidential client, for example with [`authenticateClient`](/docs/plugins/oauth-provider/reference#provider-extensions). `issueAuthorizationCode` checks the request again on the last request, together with the session, consent, `prompt`, and `max_age`.
+
+### Report how the user signed in
+
+Your endpoint knows which methods it checked, such as a password and a one-time code. Pass them as `authentication.amr`, using the values from [RFC 8176](https://datatracker.ietf.org/doc/html/rfc8176), so the ID token's `amr` claim lists them:
+
+```ts
+const { code } = await provider.issueAuthorizationCode({
+  query,
+  session,
+  authentication: { amr: ["pwd", "otp"] },
+});
+```
+
+When you configure [`authenticationContext.resolve`](/docs/plugins/oauth-provider/openid-connect#authentication-context), the resolver receives these values as `authentication`, and its result decides the code's `acr` and `amr`. Return `authentication.amr` from the resolver to keep them. Without a resolver, the code carries the methods you pass, and no `acr` beyond the default `"0"`.
+
+The methods reach only the ID token, so they are ignored for a request without the `openid` scope. The code's `auth_time` always comes from the session's creation time, so your endpoint cannot report an earlier sign-in than the session proves.
+
 ## Login page
 
 To send users to your sign-in page, set `loginPage`. When the sign-in request carries `oauth_query` and creates a session, the plugin continues the authorization flow. With `oauthProviderClient`, your page needs no OAuth code.

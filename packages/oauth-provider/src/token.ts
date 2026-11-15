@@ -229,6 +229,12 @@ export function getOAuthProviderApi(
 			const { issueAuthorizationCode } = await import("./authorize");
 			return issueAuthorizationCode(ctx, opts, params);
 		},
+		validateAuthorizationRequest: async (params) => {
+			const { validateAuthorizationRequestParams } = await import(
+				"./authorize"
+			);
+			return validateAuthorizationRequestParams(ctx, opts, params);
+		},
 		issueTokens: (params: OAuthTokenIssueParams) => {
 			if (!grantType) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
