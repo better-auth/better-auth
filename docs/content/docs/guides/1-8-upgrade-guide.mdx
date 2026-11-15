@@ -174,7 +174,7 @@ A common case is an issuer with a path, such as `https://auth.example.com/api/au
 These are new and need no action:
 
 * Generic OAuth providers sign in through pushed authorization requests when the provider's discovery document sets `require_pushed_authorization_requests`. The `pushedAuthorizationRequest` option defaults to `"auto"`. Set it to `true` to always push, or to `false` to never push.
-* Client apps can send DPoP-bound requests with `createDpopFetch` from `better-auth/oauth2/dpop-client`.
+* Client apps can send DPoP-bound requests with `createDpopFetch` from `better-auth/oauth2/dpop-client`, and load a stored key with `importDpopKeyPair`.
 
 ### Social provider profile types match the provider
 

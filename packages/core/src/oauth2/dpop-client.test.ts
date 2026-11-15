@@ -7,6 +7,7 @@ import {
 	createDpopProof,
 	deriveDpopKeyJkt,
 	generateDpopKeyPair,
+	importDpopKeyPair,
 	isDpopNonceChallenge,
 } from "./dpop-client";
 
@@ -290,6 +291,87 @@ describe("createDpopProof", () => {
 				url: "https://api.example.com/",
 			}),
 		).rejects.toThrow(TypeError);
+	});
+});
+
+describe("importDpopKeyPair", () => {
+	const rsa = (name: string): RsaHashedKeyGenParams => ({
+		name,
+		modulusLength: 2048,
+		publicExponent: new Uint8Array([1, 0, 1]),
+		hash: "SHA-256",
+	});
+
+	async function storedPrivateJwk(
+		params: Algorithm | EcKeyGenParams | RsaHashedKeyGenParams,
+	) {
+		const keyPair = (await crypto.subtle.generateKey(params, true, [
+			"sign",
+			"verify",
+		])) as CryptoKeyPair;
+		return {
+			keyPair,
+			privateJwk: await crypto.subtle.exportKey("jwk", keyPair.privateKey),
+		};
+	}
+
+	it.each([
+		["ES256", { name: "ECDSA", namedCurve: "P-256" }],
+		["ES512", { name: "ECDSA", namedCurve: "P-521" }],
+		["EdDSA", { name: "Ed25519" }],
+		["RS256", rsa("RSASSA-PKCS1-v1_5")],
+		["PS256", rsa("RSA-PSS")],
+	])("signs %s proofs with the stored key", async (alg, params) => {
+		const stored = await storedPrivateJwk(params);
+		const keyPair = await importDpopKeyPair(stored.privateJwk);
+		expect(keyPair.privateKey.extractable).toBe(false);
+
+		const proof = await createDpopProof({
+			keyPair,
+			method: "GET",
+			url: "https://api.example.com/",
+		});
+		expect(decodeProtectedHeader(proof).alg).toBe(alg);
+		const verified = await verifyDpopProof({
+			proofJwt: proof,
+			method: "GET",
+			url: "https://api.example.com/",
+		});
+		expect(verified.jkt).toBe(await deriveDpopKeyJkt(stored.keyPair));
+	});
+
+	it("rejects a public JWK", async () => {
+		const { keyPair } = await storedPrivateJwk({
+			name: "ECDSA",
+			namedCurve: "P-256",
+		} as EcKeyGenParams);
+		const publicJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+		await expect(importDpopKeyPair(publicJwk)).rejects.toThrow(TypeError);
+	});
+
+	it("rejects an RSA JWK that does not name its padding in alg", async () => {
+		const { privateJwk } = await storedPrivateJwk(rsa("RSA-PSS"));
+		await expect(
+			importDpopKeyPair({ ...privateJwk, alg: undefined }),
+		).rejects.toThrow(TypeError);
+	});
+
+	it("rejects a key type the server does not accept", async () => {
+		const { privateJwk } = await storedPrivateJwk({
+			name: "ECDSA",
+			namedCurve: "P-384",
+		} as EcKeyGenParams);
+		await expect(importDpopKeyPair(privateJwk)).rejects.toThrow(TypeError);
+	});
+
+	it("rejects a JWK whose alg names a different algorithm", async () => {
+		const { privateJwk } = await storedPrivateJwk({
+			name: "ECDSA",
+			namedCurve: "P-256",
+		} as EcKeyGenParams);
+		await expect(
+			importDpopKeyPair({ ...privateJwk, alg: "ES512" }),
+		).rejects.toThrow();
 	});
 });
 

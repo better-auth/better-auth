@@ -105,9 +105,8 @@ const REQUIRED_JWK_MEMBERS: Record<string, readonly (keyof JsonWebKey)[]> = {
 	RSA: ["e", "kty", "n"],
 };
 
-async function exportDpopPublicJwk(publicKey: CryptoKey): Promise<JsonWebKey> {
-	const exported = await crypto.subtle.exportKey("jwk", publicKey);
-	const members = exported.kty ? REQUIRED_JWK_MEMBERS[exported.kty] : undefined;
+function toDpopPublicJwk(source: JsonWebKey): JsonWebKey {
+	const members = source.kty ? REQUIRED_JWK_MEMBERS[source.kty] : undefined;
 	if (!members) {
 		throw new TypeError("DPoP public key must be an EC, OKP, or RSA key");
 	}
@@ -115,13 +114,17 @@ async function exportDpopPublicJwk(publicKey: CryptoKey): Promise<JsonWebKey> {
 	// or anything private, and the thumbprint is computed over these alone.
 	const jwk: JsonWebKey = {};
 	for (const member of members) {
-		const value = exported[member];
+		const value = source[member];
 		if (typeof value !== "string") {
 			throw new TypeError(`DPoP public key JWK is missing "${member}"`);
 		}
 		Object.assign(jwk, { [member]: value });
 	}
 	return jwk;
+}
+
+async function exportDpopPublicJwk(publicKey: CryptoKey): Promise<JsonWebKey> {
+	return toDpopPublicJwk(await crypto.subtle.exportKey("jwk", publicKey));
 }
 
 function getDpopPublicJwk(publicKey: CryptoKey): Promise<JsonWebKey> {
@@ -135,6 +138,71 @@ function getDpopPublicJwk(publicKey: CryptoKey): Promise<JsonWebKey> {
 		jwk.catch(() => publicJwkCache.delete(publicKey));
 	}
 	return jwk;
+}
+
+// The key types `resolveDpopSigner` accepts, as Web Crypto import parameters.
+function resolveDpopJwkImportAlgorithm(
+	jwk: JsonWebKey,
+): AlgorithmIdentifier | EcKeyImportParams | RsaHashedImportParams {
+	if (jwk.kty === "EC" && (jwk.crv === "P-256" || jwk.crv === "P-521")) {
+		return { name: "ECDSA", namedCurve: jwk.crv };
+	}
+	if (jwk.kty === "OKP" && jwk.crv === "Ed25519") {
+		return { name: "Ed25519" };
+	}
+	if (jwk.kty === "RSA") {
+		// An RSA key can sign with either padding, so only `alg` says which.
+		if (jwk.alg === "RS256") {
+			return { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" };
+		}
+		if (jwk.alg === "PS256") {
+			return { name: "RSA-PSS", hash: "SHA-256" };
+		}
+		throw new TypeError('DPoP RSA key JWK must set "alg" to RS256 or PS256');
+	}
+	throw new TypeError(
+		"DPoP key JWK must be an EC P-256 or P-521, OKP Ed25519, or RSA key",
+	);
+}
+
+/**
+ * Loads a key pair for signing DPoP proofs from a stored private JWK, so that
+ * every restart and every server instance signs with the same key.
+ *
+ * The JWK must be a key type {@link createDpopProof} signs with: EC P-256 or
+ * P-521, Ed25519, or RSA. An RSA JWK must set `alg` to `RS256` or `PS256`,
+ * because the key alone does not say which padding to sign with. Web Crypto
+ * rejects a JWK whose `alg`, `use`, or `key_ops` does not allow signing with
+ * that key.
+ *
+ * Like {@link generateDpopKeyPair}, the private key is non-extractable.
+ *
+ * @example
+ * ```ts
+ * const keyPair = await importDpopKeyPair(
+ * 	JSON.parse(process.env.DPOP_PRIVATE_JWK!),
+ * );
+ * const dpopFetch = createDpopFetch({ keyPair });
+ * ```
+ */
+export async function importDpopKeyPair(
+	privateJwk: JsonWebKey,
+): Promise<DpopKeyPair> {
+	if (typeof privateJwk.d !== "string") {
+		throw new TypeError("DPoP key JWK must be a private key");
+	}
+	const algorithm = resolveDpopJwkImportAlgorithm(privateJwk);
+	const [privateKey, publicKey] = await Promise.all([
+		crypto.subtle.importKey("jwk", privateJwk, algorithm, false, ["sign"]),
+		crypto.subtle.importKey(
+			"jwk",
+			toDpopPublicJwk(privateJwk),
+			algorithm,
+			true,
+			["verify"],
+		),
+	]);
+	return { privateKey, publicKey };
 }
 
 function encodeJson(value: unknown): string {
