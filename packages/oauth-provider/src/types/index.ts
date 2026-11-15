@@ -587,7 +587,7 @@ export interface OAuthProviderApi {
 	/**
 	 * Validates an access token for introspection-style callers. The returned
 	 * payload can be inactive; protected-resource endpoints should use
-	 * `requireActiveAccessToken`.
+	 * `verifyResourceRequest`.
 	 */
 	validateAccessToken: (
 		token: string,
