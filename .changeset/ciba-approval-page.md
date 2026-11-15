@@ -8,4 +8,4 @@ Set `approvalPage` to a path or URL to send users there with the request as `cib
 
 `CibaOptions` is now a type alias instead of an interface, so code that extends it with `interface` must use an intersection type instead.
 
-`CibaNotification.url` is now typed as optional, because it is absent with `approvalPage: false`. Code that passes `url` where a string is required needs a check for `undefined`, even though the default configuration always sets it.
+`CibaNotification.url` is now optional: it is absent when `approvalPage: false`. A `sendNotification` that uses `url` as a string must check for `undefined` to typecheck, even though the default configuration always sets it.
