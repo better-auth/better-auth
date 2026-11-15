@@ -159,6 +159,7 @@ async function setup(
 		const text = await response.text();
 		return {
 			status: response.status,
+			challenge: response.headers.get("WWW-Authenticate"),
 			body: (text ? JSON.parse(text) : {}) as Record<string, unknown>,
 		};
 	}
@@ -226,6 +227,14 @@ describe("client assertion audience", () => {
 				expect(pushed).toMatchObject(invalidClient);
 			},
 		);
+
+		it("challenges a private_key_jwt client whose audience is refused", async () => {
+			const token = await requestToken(
+				await methods.private_key_jwt(tokenEndpoint),
+			);
+			expect(token.status).toBe(401);
+			expect(token.challenge).toBe("Basic");
+		});
 
 		it.each([
 			["private_key_jwt", tokenEndpoint],

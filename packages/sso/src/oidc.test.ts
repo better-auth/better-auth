@@ -1974,6 +1974,61 @@ describe("OIDC SSO with private_key_jwt", async () => {
 		expect(decodeJwt(assertion).aud).toBe(server.issuer.url);
 	});
 
+	it("signs for the provider's issuer when the stored OIDC config names another", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			headers,
+			body: {
+				issuer: server.issuer.url!,
+				domain: "stale-issuer.com",
+				providerId: "stale-issuer-provider",
+				oidcConfig: {
+					clientId: "stale-issuer-client",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					tokenEndpointAuthentication: "private_key_jwt",
+					clientAssertionAudience: "issuer",
+					privateKeyId: "private-key-jwt-key",
+					privateKeyAlgorithm: "RS256",
+				},
+			},
+		});
+		// An update that changes only the top-level issuer leaves this value as
+		// it was.
+		const { adapter } = await auth.$context;
+		const stored = await adapter.findOne<{ oidcConfig: string }>({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: "stale-issuer-provider" }],
+		});
+		await adapter.update({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: "stale-issuer-provider" }],
+			update: {
+				oidcConfig: JSON.stringify({
+					...JSON.parse(stored!.oidcConfig),
+					issuer: "https://stale.example.com",
+				}),
+			},
+		});
+		capturedTokenRequest = undefined;
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "stale-issuer-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: { throw: true, onSuccess: cookieSetter(signInHeaders) },
+		});
+		await simulateOAuthFlow(res.url, signInHeaders);
+
+		const tokenRequest = capturedTokenRequest as unknown as Record<
+			string,
+			unknown
+		>;
+		const assertion = tokenRequest.client_assertion as string;
+		expect(decodeJwt(assertion).aud).toBe(server.issuer.url);
+	});
+
 	it("should redirect with no_private_key_available when resolvePrivateKey returns no key material", async () => {
 		resolvePrivateKey.mockResolvedValueOnce(
 			{} as Awaited<ReturnType<typeof resolvePrivateKey>>,

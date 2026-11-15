@@ -529,6 +529,7 @@ function sanitizeProvider(
 					jwksEndpoint: oidcConfig.jwksEndpoint,
 					scopes: oidcConfig.scopes,
 					tokenEndpointAuthentication: oidcConfig.tokenEndpointAuthentication,
+					clientAssertionAudience: oidcConfig.clientAssertionAudience,
 				}
 			: undefined,
 		samlConfig: samlConfig

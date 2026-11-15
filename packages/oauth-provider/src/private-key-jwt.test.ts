@@ -1034,7 +1034,7 @@ describe("private_key_jwt authentication", async () => {
 			.setProtectedHeader({ alg: "RS256", kid: "test-key-1" })
 			.setIssuer(assertionClient.client_id)
 			.setSubject(assertionClient.client_id)
-			.setAudience(tokenEndpoint)
+			.setAudience(customIssuer)
 			.setIssuedAt(now - 600)
 			.setExpirationTime(now + 60)
 			.setJti(crypto.randomUUID())
@@ -1055,8 +1055,12 @@ describe("private_key_jwt authentication", async () => {
 			headers: { "content-type": "application/x-www-form-urlencoded" },
 		});
 
-		expect(result.error?.status).toBeGreaterThanOrEqual(400);
-		expect(result.error?.status).toBeLessThan(500);
+		expect(result.error).toMatchObject({
+			error: "invalid_client",
+			error_description: expect.stringContaining(
+				"client assertion iat is too far in the past",
+			),
+		});
 	});
 
 	it("should enforce auth method — secret client cannot use assertion", async () => {

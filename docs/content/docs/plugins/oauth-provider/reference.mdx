@@ -185,14 +185,14 @@ Maximum lifetime in seconds of a `private_key_jwt` assertion. Defaults to `300`.
 
 `assertionAudience` <span className="opacity-70">`"issuer" | "issuer-or-endpoint"`</span>
 
-The `aud` values accepted in client assertions, such as `private_key_jwt` assertions, at every endpoint that authenticates a client. Defaults to `"issuer"`.
+The `aud` values accepted in client assertions, such as `private_key_jwt` assertions, at every endpoint that authenticates a client except `POST /oauth2/client/rotate-keys`. Defaults to `"issuer"`.
 
 * `"issuer"`: the assertion's `aud` must be the provider's issuer and nothing else, as [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) and [§5](https://www.rfc-editor.org/rfc/rfc10070#section-5) require. An `aud` list that also names another value is rejected.
 * `"issuer-or-endpoint"`: the behavior before 1.8. The assertion's `aud` must include the URL of the endpoint called, the issuer, or, at `/oauth2/par`, the token endpoint URL.
 
 `"issuer-or-endpoint"` is a transitional setting for clients that still sign for an endpoint URL. It is weaker: a client that signs for an endpoint URL can be tricked into signing an assertion that a malicious server replays here. Move your clients to the issuer, then remove the setting.
 
-`POST /oauth2/client/rotate-keys` accepts only its own URL in either mode.
+`POST /oauth2/client/rotate-keys` is the exception. In either mode, the assertion's `aud` must include that endpoint's own URL, and may also name other values.
 
 `allowClientKeyRotation` <span className="opacity-70">`boolean`</span>
 
@@ -720,7 +720,7 @@ authenticate: async ({ ctx, opts, assertion, acceptedAudiences }) => {
 * `"issuer"` (default): only the issuer. `consumeClientAssertion` then requires every `aud` value to be the issuer.
 * `"issuer-or-endpoint"`: the URL of the endpoint called, the issuer, and at `/oauth2/par` also the token endpoint URL. `consumeClientAssertion` then requires one `aud` value to be in the list.
 
-The strategy input also has `expectedAudience`, the URL of the endpoint called. It is deprecated. A strategy that checks `aud` against it accepts different audiences than the built-in `private_key_jwt` method does. Pass `acceptedAudiences` to `consumeClientAssertion` instead. `consumeClientAssertion` still accepts `expectedAudience`, and treats it as a list with that one value.
+The strategy input also has `expectedAudience`, the URL of the endpoint called. It is deprecated. A strategy that checks `aud` against it accepts different audiences than the built-in `private_key_jwt` method does. Pass `acceptedAudiences` to `consumeClientAssertion` instead. `consumeClientAssertion` still accepts `expectedAudience`. It maps that endpoint URL to the audiences `assertionAudience` accepts there, so by default an assertion signed for the endpoint URL is rejected and only the issuer is accepted.
 
 ### Claim precedence
 

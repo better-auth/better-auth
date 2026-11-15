@@ -1447,10 +1447,11 @@ async function handleOIDCCallback(
 		});
 		tokenEndpointAuth = {
 			method: "private_key_jwt",
-			// Discovery is checked against this issuer, so an assertion signed for
-			// it can name it as its only audience (RFC 10070 §4).
+			// Discovery and ID tokens are checked against the provider's issuer, so
+			// an assertion signed for it can name it as its only audience
+			// (RFC 10070 §4).
 			getClientAssertion: (context) =>
-				getClientAssertion({ ...context, issuer: config.issuer }),
+				getClientAssertion({ ...context, issuer: provider.issuer }),
 		};
 	}
 

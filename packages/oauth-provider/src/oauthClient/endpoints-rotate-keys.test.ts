@@ -64,9 +64,9 @@ async function setup(
 		{ testWith },
 	);
 	const { headers } = await signInWithTestUser();
-	// The provider uses its base URL as the issuer, the audience every other
-	// client-authentication endpoint accepts.
-	const issuer = (await auth.$context).baseURL;
+	// The issuer is the audience every other client-authentication endpoint
+	// accepts.
+	const { issuer } = await auth.api.getOAuthServerConfig();
 
 	async function createClient(keys: TestKey[]) {
 		const client = await auth.api.adminCreateOAuthClient({

@@ -399,8 +399,10 @@ type ClientAssertionAudienceParams =
  * @param params.namespace Scopes the replay tombstone to the method and client,
  *   e.g. `` `${method}:${clientId}` ``, so the same `jti` can recur across
  *   distinct methods or clients but never within one.
- * @param params.expectedAudience Deprecated. It is treated as
- *   `acceptedAudiences: [expectedAudience]`.
+ * @param params.expectedAudience Deprecated. The endpoint URL it names is
+ *   mapped to the audiences `assertionAudience` accepts at that endpoint: the
+ *   issuer alone by default, or, with `"issuer-or-endpoint"`, that URL, the
+ *   issuer, and at `/oauth2/par` the token endpoint URL.
  */
 export async function consumeClientAssertion(
 	ctx: GenericEndpointContext,
@@ -724,14 +726,18 @@ export async function verifyClientAssertion(
 			verifyErr instanceof joseErrors.JWTClaimValidationFailed &&
 			verifyErr.claim === "aud"
 		) {
-			throw new APIError("UNAUTHORIZED", {
-				error_description: audienceErrorDescription(
-					ctx,
-					opts,
-					acceptedAudiences,
-				),
-				error: "invalid_client",
-			});
+			throw new APIError(
+				"UNAUTHORIZED",
+				{
+					error_description: audienceErrorDescription(
+						ctx,
+						opts,
+						acceptedAudiences,
+					),
+					error: "invalid_client",
+				},
+				challengeHeaders("Basic"),
+			);
 		} else {
 			throw new APIError(
 				"UNAUTHORIZED",
