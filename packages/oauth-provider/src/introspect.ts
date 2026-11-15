@@ -613,7 +613,9 @@ async function resolveIntrospectionSub(
 	const issuerClientId = (payload.client_id ?? payload.azp) as
 		| string
 		| undefined;
-	if (!issuerClientId) return payload;
+	// A `client_credentials` token names its client as the subject. A client
+	// has no pairwise identifier, so only a user subject is re-derived.
+	if (!issuerClientId || payload.sub === issuerClientId) return payload;
 	const issuingClient =
 		issuerClientId === introspectingClient.clientId
 			? introspectingClient

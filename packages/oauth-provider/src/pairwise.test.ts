@@ -621,3 +621,63 @@ describe("pairwise metadata", async () => {
 		expect(metadata.subject_types_supported).toEqual(["public"]);
 	});
 });
+
+/**
+ * A `client_credentials` token's subject is the client itself, which has no
+ * pairwise sector to hide it in.
+ */
+describe("pairwise client credentials introspection", async () => {
+	const resource = "https://api.example.com";
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL: "http://localhost:4127",
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				pairwiseSecret: "test-pairwise-secret-key-32chars!!",
+				resources: [resource],
+				enforcePerClientResources: false,
+				scopes: ["read:posts"],
+				clientPrivileges: () => true,
+			}),
+		],
+	});
+
+	it("keeps the client ID as the sub of a pairwise client's own token", async () => {
+		const { headers } = await signInWithTestUser();
+		const machine = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: ["https://machine.example.com/callback"],
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:posts"],
+				subject_type: "pairwise",
+			},
+		});
+		const { access_token } = await auth.api.oauth2Token({
+			body: {
+				grant_type: "client_credentials",
+				client_id: machine.client_id,
+				client_secret: machine.client_secret,
+				scope: "read:posts",
+				resource,
+			},
+		});
+		expect(decodeJwt(access_token).sub).toBe(machine.client_id);
+
+		const introspection = await auth.api.oauth2Introspect({
+			body: {
+				token: access_token,
+				client_id: machine.client_id,
+				client_secret: machine.client_secret,
+			},
+		});
+
+		expect(introspection).toMatchObject({
+			active: true,
+			sub: machine.client_id,
+		});
+	});
+});
