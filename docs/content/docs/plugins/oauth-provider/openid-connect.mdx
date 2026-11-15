@@ -121,6 +121,8 @@ How a request for a class is handled depends on whether it is essential:
 * An essential request (`claims={"id_token":{"acr":{"essential":true,"value":"…"}}}`) that the session does not satisfy fails with `access_denied` at the client's redirect URI. If no value in `acrValuesSupported` could satisfy it, the request fails before sign-in.
 * A voluntary request (`acr_values`, or an `acr` claim without `essential`) never fails. The ID token reports the session's current `acr`.
 
+To require a class that a client asks for with `acr_values`, check it in [`beforeAuthorization`](/docs/plugins/oauth-provider/sign-in-flow#authorization-policy). The hook can send the user to sign in again before consent, or refuse the request.
+
 `resolve` must return an `acr` from `acrValuesSupported`, or omit it to use `"0"`. `amr` must be an array of strings. Any other result fails the authorization with `server_error`.
 
 To refuse an authorization yourself, throw an `APIError` with an OAuth `error` such as `access_denied`. The client receives that error and its `error_description`. For a device code, the user sees the error on your verification page instead, and the code stays pending so the user can retry.

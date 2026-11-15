@@ -547,6 +547,8 @@ export interface OAuthProviderApi {
 	 *   elapsed `max_age` when the session was not created in this request.
 	 * - `interaction_required` for a `prompt` other than `none` or `login`, or
 	 *   a `signup` or `postLogin` redirect.
+	 * - The error `beforeAuthorization` throws, or `login_required` when it
+	 *   asks for a sign-in this request did not perform.
 	 * - `access_denied` when the session cannot meet an essential `acr`.
 	 *
 	 * Errors are HTTP 400 `APIError`s with these OAuth error codes, with
@@ -930,6 +932,39 @@ export interface OAuthUserInfoExtensionInput {
  *   other collision resolves to the first-registered extension, with a logged
  *   warning. Each metadata warning is logged once per provider.
  */
+/**
+ * Input of `beforeAuthorization`.
+ */
+export interface OAuthBeforeAuthorizationInput {
+	/**
+	 * A copy of the validated authorization request, after a `request_uri`
+	 * is resolved, including parameters the client added. It never holds
+	 * client credentials or the `request_uri` itself. The client's default
+	 * scopes fill `scope` when the request named none.
+	 */
+	request: Omit<OAuthAuthorizationQuery, "request" | "request_uri">;
+	/** Whether the client pushed the request to `/oauth2/par`. */
+	pushed: boolean;
+	/** The requesting client's registration. */
+	client: SchemaClient<Scope[]>;
+	/** The user's session on this visit, or `null` before sign-in. */
+	session: {
+		session: Session & Record<string, unknown>;
+		user: User & Record<string, unknown>;
+	} | null;
+	/** Headers of the request to `/oauth2/authorize`. */
+	headers: Headers;
+	ctx: GenericEndpointContext;
+}
+
+/**
+ * What `beforeAuthorization` can ask for besides continuing or refusing.
+ */
+export type OAuthBeforeAuthorizationResult = {
+	/** Send the user to sign in, as if the client had sent `prompt=login`. */
+	prompt: "login";
+};
+
 export interface OAuthProviderExtension {
 	/**
 	 * Name shown in setup errors and warnings when this extension conflicts
@@ -939,6 +974,12 @@ export interface OAuthProviderExtension {
 	 * It is not stored and does not have to be unique.
 	 */
 	name?: string;
+	/**
+	 * Policy on authorization requests, as the provider's
+	 * `beforeAuthorization` option. Extension hooks run in registration
+	 * order, before the provider's own.
+	 */
+	beforeAuthorization?: OAuthOptions<Scope[]>["beforeAuthorization"];
 	/**
 	 * Token grants keyed by absolute-URI `grant_type`. The token endpoint
 	 * dispatches a matching `grant_type` to the handler, which authenticates the
@@ -2335,6 +2376,38 @@ export interface OAuthOptions<
 		clientId: string;
 		ctx: GenericEndpointContext;
 	}) => Promise<Record<string, string> | null>;
+	/**
+	 * Runs your policy on each authorization request at `/oauth2/authorize`,
+	 * after the request is validated and before the provider sends the user
+	 * to sign in, select an account, sign up, finish post-login steps, or
+	 * consent. It also runs on each later visit of the same request, such as
+	 * the one after sign-in, with the session of that visit. Extension hooks
+	 * run first, in registration order.
+	 *
+	 * - Return nothing to continue.
+	 * - Return `{ prompt: "login" }` to send the user to sign in, even with a
+	 *   live session. With `prompt=none`, the client gets `login_required`
+	 *   instead. The hook runs again after sign-in, so return it only while
+	 *   the session fails your requirement.
+	 * - Throw an `APIError` whose body has an OAuth `error`, such as
+	 *   `login_required`, `interaction_required`, `consent_required`,
+	 *   `access_denied`, or `unmet_authentication_requirements`, to refuse
+	 *   the request. The client gets it at its `redirect_uri` with
+	 *   `error_description`, `state`, and `iss`, and nothing is consumed:
+	 *   no code is issued and a `request_uri` stays usable. Any other error,
+	 *   including a redirect from `ctx.redirect`, passes through unchanged.
+	 *
+	 * `issueAuthorizationCode` runs it too, with `pushed: false`. There, a
+	 * thrown OAuth error fails the call with that error, and
+	 * `{ prompt: "login" }` fails with `login_required` unless the session
+	 * was created in that request.
+	 *
+	 * Interaction requests from extensions, such as device codes and CIBA
+	 * requests, do not run it.
+	 */
+	beforeAuthorization?: (
+		input: OAuthBeforeAuthorizationInput,
+	) => Awaitable<OAuthBeforeAuthorizationResult | undefined | void>;
 	/**
 	 * DPoP proof validation settings.
 	 *

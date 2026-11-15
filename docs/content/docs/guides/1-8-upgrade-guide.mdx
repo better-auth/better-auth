@@ -429,6 +429,7 @@ These provider features are new or opt-in, and need no action when you upgrade:
 * JWT access token revocation, with `revocableJwtAccessTokens: true`. Resource servers that verify tokens locally against the JWKS don't see it, so they must introspect.
 * RP-initiated logout for registered clients, with `clientRegistrationEnableEndSession`.
 * `verifyResourceRequest()`, `issueAuthorizationCode()`, and `validateAuthorizationRequest()` on the provider API, for plugin endpoints served by the auth server.
+* An [authorization policy](/docs/plugins/oauth-provider/sign-in-flow#authorization-policy), with `beforeAuthorization`, that can force a new sign-in or refuse a request, including a pushed one, before sign-in and consent.
 
 ***
 

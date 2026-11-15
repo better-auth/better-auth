@@ -245,6 +245,19 @@ function getOAuthProviderExtensions(
 }
 
 /**
+ * The `beforeAuthorization` hooks in the order they run: extensions in
+ * registration order, then the provider's own option.
+ */
+export function getBeforeAuthorizationHooks(opts: OAuthOptions<Scope[]>) {
+	return [
+		...getOAuthProviderExtensions(opts).map(
+			(extension) => extension.beforeAuthorization,
+		),
+		opts.beforeAuthorization,
+	].filter((hook) => hook !== undefined);
+}
+
+/**
  * Flattens the client-id discovery sources contributed by every registered
  * extension into a single ordered list. `getClient()` consults them in order;
  * the metadata endpoints merge their `discoveryMetadata`.
