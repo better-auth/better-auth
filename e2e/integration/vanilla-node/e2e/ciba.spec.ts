@@ -204,7 +204,12 @@ async function startProvider() {
 		userId: signUp.user.id,
 		agent: { id: agent.client_id, secret: agent.client_secret! },
 		/** The link the person received for the latest request. */
-		latestLink: () => inbox.at(-1)!.url,
+		latestLink: () => {
+			// The default approval page always sends a link.
+			const url = inbox.at(-1)?.url;
+			if (!url) throw new Error("No CIBA link was sent");
+			return url;
+		},
 		stop: http.stop,
 	};
 }
