@@ -323,6 +323,27 @@ describe("provider.issueAuthorizationCode", async () => {
 		expect(errorCode(issued)).toBe("invalid_client");
 	});
 
+	it("reads an empty client_id as omitted", async () => {
+		const basicClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_basic",
+				skip_consent: true,
+			},
+		});
+		const basic = btoa(`${basicClient.client_id}:${basicClient.client_secret}`);
+		const { query } = await codeRequest(basicClient);
+		const issued = await issueCode(
+			{ ...query, client_id: "" },
+			{ authorization: `Basic ${basic}` },
+		);
+		expect(issued.error).toBeNull();
+		const row = await findCodeRow(issued.data!.code);
+		expect(JSON.parse(row!.value).query.client_id).toBe(basicClient.client_id);
+	});
+
 	it("returns a redirect URL whose code redeems with its redirect_uri", async () => {
 		const { query, verifier } = await codeRequest(confidentialClient, {
 			redirect_uri: redirectUri,

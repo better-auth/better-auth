@@ -89,7 +89,8 @@ export async function authenticateAuthorizationRequest(
 		tokenError("BAD_REQUEST", "invalid_request", "client_id must be a string");
 	}
 	const { clientId } = await provider.authenticateClient({
-		clientId: body.client_id,
+		// An empty `client_id` is omitted, as client authentication reads it.
+		clientId: body.client_id || undefined,
 		requireCredentials: false,
 	});
 
