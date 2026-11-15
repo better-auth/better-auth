@@ -204,7 +204,7 @@ async function start(
 	expect(res.status).toBe(200);
 	return {
 		authReqId: res.body.auth_req_id as string,
-		url: lastNotification!.url,
+		url: lastNotification!.url!,
 	};
 }
 
@@ -320,7 +320,7 @@ describe("ciba poll mode", () => {
 		const authReqId = res.body.auth_req_id as string;
 		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
 
-		const consent = await openLink(lastNotification!.url);
+		const consent = await openLink(lastNotification!.url!);
 		expect(consent.pathname).toBe("/consent");
 		expect(consent.searchParams.get("client_id")).toBe(pollClient.client_id);
 		expect(consent.searchParams.get("scope")).toBe("openid profile");
@@ -580,7 +580,7 @@ describe("ciba poll mode", () => {
 			login_hint: testUser.email,
 			resource: [resource, secondResource],
 		});
-		await approve(lastNotification!.url);
+		await approve(lastNotification!.url!);
 		const issued = await poll(res.body.auth_req_id as string);
 		expect(decodeJwt(issued.body.access_token as string).aud).toEqual(
 			expect.arrayContaining([resource, secondResource]),
@@ -2134,5 +2134,82 @@ describe("ciba delegated tokens", () => {
 		await waitInterval();
 		const issued = await poll(authReqId);
 		expect(issued.status).toBe(200);
+	});
+});
+
+describe.each([
+	["your own approval page", "/approve" as const],
+	["no approval page", false as const],
+])("ciba with %s", async (_, approvalPage) => {
+	const instance = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			ciba({ approvalPage, sendNotification }),
+		],
+	});
+	const { headers: userHeaders, user } = await instance.signInWithTestUser();
+	const client = await instance.auth.api.adminCreateOAuthClient({
+		headers: userHeaders,
+		body: { grant_types: [CIBA_GRANT_TYPE], metadata: POLL },
+	});
+
+	async function startOwn() {
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: user.email },
+			client,
+			instance.customFetchImpl,
+		);
+		expect(res.status).toBe(200);
+		return {
+			authReqId: res.body.auth_req_id as string,
+			requestId: lastNotification!.requestId,
+		};
+	}
+
+	it("links the notification to the configured page, or to none", async () => {
+		const { requestId } = await startOwn();
+		expect(lastNotification!.url).toBe(
+			approvalPage
+				? `${baseURL}${approvalPage}?ciba_request_id=${requestId}`
+				: undefined,
+		);
+	});
+
+	it("does not approve through the provider's consent page", async () => {
+		const { requestId } = await startOwn();
+		const requestHeaders = new Headers(userHeaders);
+		requestHeaders.set("accept", "application/json");
+		const res = await instance.customFetchImpl(
+			`${baseURL}/api/auth/oauth2/authorize?ciba_request_id=${requestId}`,
+			{ headers: requestHeaders },
+		);
+		const body = (await res.json()) as { url: string };
+		// An ordinary authorization request without a client, not a CIBA one.
+		const target = new URL(body.url, baseURL);
+		expect(target.pathname).toBe("/api/auth/error");
+		expect(target.searchParams.get("error")).toBe("invalid_request");
+	});
+
+	it("approves through completeCibaRequest", async () => {
+		const { authReqId, requestId } = await startOwn();
+		await instance.auth.api.completeCibaRequest({
+			body: { requestId, userId: user.id, decision: "approved" },
+		});
+		const issued = await poll(
+			authReqId,
+			client,
+			{},
+			[],
+			instance.customFetchImpl,
+		);
+		expect(issued.status).toBe(200);
+		expect(decodeJwt(issued.body.id_token as string).sub).toBe(user.id);
+	});
+
+	it("takes no resultPage", () => {
+		// @ts-expect-error resultPage applies only to the provider's approval page.
+		ciba({ approvalPage, resultPage: "/ciba", sendNotification });
 	});
 });

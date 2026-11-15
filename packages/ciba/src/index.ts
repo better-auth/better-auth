@@ -65,12 +65,18 @@ export const ciba = (options: CibaOptions) => {
 		grants: {
 			[CIBA_GRANT_TYPE]: createCibaGrantHandler(resolvedOptions),
 		},
-		interactionRequests: {
-			[APPROVAL_PARAMETER]: cibaApprovalRequest(
-				options.resultPage,
-				isConfiguredOrigin,
-			),
-		},
+		// Another approval path turns off the provider's, so its consent page
+		// cannot approve a request and skip that path's checks.
+		...(options.approvalPage === undefined
+			? {
+					interactionRequests: {
+						[APPROVAL_PARAMETER]: cibaApprovalRequest(
+							options.resultPage,
+							isConfiguredOrigin,
+						),
+					},
+				}
+			: {}),
 		clientMetadata: {
 			// CIBA §4 and RFC 9396 §10: clients register these through dynamic
 			// registration or a client metadata document too; they are stored in
