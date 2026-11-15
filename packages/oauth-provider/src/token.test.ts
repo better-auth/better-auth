@@ -2275,6 +2275,18 @@ describe("oauth token - refresh_token", async () => {
 					model: "verification",
 					where: [{ field: "expiresAt", operator: "lt", value: new Date() }],
 				});
+				expect(
+					await context.adapter.count({
+						model: "verification",
+						where: [
+							{
+								field: "identifier",
+								operator: "starts_with",
+								value: "oauth-revoked-grant:",
+							},
+						],
+					}),
+				).toBe(0);
 				insert.release();
 				const rotated = await rotating;
 

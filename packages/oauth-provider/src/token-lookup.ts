@@ -208,6 +208,11 @@ export function authorizationCodeGrantId(authorizationCodeId: string) {
 	);
 }
 
+/** How long a grant's revocation mark lasts, before its one-second margin. */
+export function grantRevocationWindowMs(opts: OAuthOptions<Scope[]>) {
+	return (opts.accessTokenExpiresIn ?? 3600) * 1000;
+}
+
 /**
  * Marks a grant revoked, keyed on its grant ID. Token issuance on the grant
  * checks the mark after storing its tokens, so a revocation that writes it
@@ -223,10 +228,6 @@ export function authorizationCodeGrantId(authorizationCodeId: string) {
  * that reaches its check that long after consuming its grant fails anyway
  * (see `createUserTokens`).
  */
-export function grantRevocationWindowMs(opts: OAuthOptions<Scope[]>) {
-	return (opts.accessTokenExpiresIn ?? 3600) * 1000;
-}
-
 export async function markGrantRevoked(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
