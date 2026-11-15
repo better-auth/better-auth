@@ -97,7 +97,9 @@ function getProviderNonceExpiresIn(
  * Protects an MCP server route handler. Checks the bearer access token against
  * the OAuth provider's records in-process (JWT or opaque; revoked tokens,
  * ended sessions, and disabled clients fail), verifies issuer, audience, and
- * expiry, and forwards the token's claims to the handler.
+ * expiry, and forwards the token's claims to the handler. Their `sub` is the
+ * subject the token carries; a pairwise client's opaque token gets its
+ * pairwise subject.
  * Unauthenticated requests receive a JSON-RPC 401 with the RFC 9728
  * `WWW-Authenticate` header so MCP clients can start the authorization flow.
  * Tokens missing a required scope receive a 403 with an RFC 6750
@@ -163,6 +165,9 @@ export const requireMcpAuth = <
 			: getLocalIntrospection(
 					authContext as Parameters<typeof getLocalIntrospection>[0],
 					req,
+					// The subjects the token carries, so a pairwise client's tokens
+					// never reveal the user ID.
+					{ subject: "token" },
 				);
 		const jwtPlugin = authContext.getPlugin("jwt");
 		const localJwks =

@@ -452,6 +452,12 @@ This section applies if you verify access tokens with `verifyAccessTokenRequest`
 
 **What to do:** if you call `createResourceServerChallenge`, add a `resourceMetadataMappings` entry for each resource identifier that is not a URL. Clients and tests that compare the whole header value must expect the `DPoP` challenge too.
 
+### `requireMcpAuth` checks tokens against the provider's records
+
+When the OAuth provider runs in the same process, `requireMcpAuth` now checks each access token against its records instead of verifying JWT signatures alone. It accepts opaque access tokens, and a token that was revoked, whose session ended, or whose client is disabled fails on the next request. The handler's claims carry the `sub` the token carries: for a client with `subject_type: "pairwise"`, an opaque token's pairwise subject, and a JWT's pairwise subject when you set `accessTokenSubject: "pairwise"`.
+
+**What to do:** expect a database read per request. Set `jwksUrl` to keep verifying JWT signatures alone. If a handler looks users up by `sub`, keep its clients on `subject_type: "public"`, or map pairwise subjects yourself.
+
 ### `authorization_details_types_supported` is a list
 
 In protected resource metadata, `authorization_details_types_supported` is now typed as `string[]`, as RFC 9728 requires. Before, it accepted a single string, which produced metadata that was not a valid JSON array.
