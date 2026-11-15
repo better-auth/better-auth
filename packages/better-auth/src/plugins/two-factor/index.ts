@@ -129,8 +129,8 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 		...options?.backupCodeOptions,
 	} satisfies BackupCodeOptions;
 	const totp = totp2fa({
-		issuer: options?.issuer,
 		...options?.totpOptions,
+		issuer: options?.issuer,
 		allowPasswordless:
 			options?.totpOptions?.allowPasswordless ?? allowPasswordless,
 	});
