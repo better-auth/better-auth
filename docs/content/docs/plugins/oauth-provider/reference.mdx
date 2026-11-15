@@ -107,7 +107,7 @@ Enables pairwise `sub` values for clients with `subject_type: "pairwise"`. Must 
 
 `accessTokenSubject` <span className="opacity-70">`"user" | "pairwise"`</span>
 
-The `sub` of JWT access tokens issued to a user. It has no effect on opaque access tokens, which the provider issues when the client requests no `resource` or the JWT plugin is disabled. `"user"` uses the user ID for every client. `"pairwise"` uses a pairwise client's ID token `sub` and names users in a delegated token's `act` the same way. So the provider can still find the users, the token carries a `ba_sub` claim that encrypts the user ID and, for a delegated token, its real actor chain. `"pairwise"` requires `pairwiseSecret`, or the plugin fails at startup. Defaults to `"user"`. See [Pairwise `sub` in JWT access tokens](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens).
+The `sub` of JWT access tokens issued to a user. It has no effect on opaque access tokens, which the provider issues when the client requests no `resource` or the JWT plugin is disabled. `"user"` uses the user ID for every client. `"pairwise"` uses a pairwise client's ID token `sub` and names users in `act` and `may_act` the same way. So the provider can still find the users, the token carries a `ba_sub` claim that encrypts the user ID and its real `act` and `may_act`. `"pairwise"` requires `pairwiseSecret`, or the plugin fails at startup. Defaults to `"user"`. See [Pairwise `sub` in JWT access tokens](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens).
 
 ### Clients and registration
 
@@ -634,6 +634,12 @@ A grant handler receives `provider` (`getClient`, `authenticateClient`, `issueAu
 </Callout>
 
 When a companion endpoint accepts `application/x-www-form-urlencoded`, set `cloneRequest: true` in its endpoint options before calling `authenticateClient()`. Client authentication re-reads the raw form body to check that client credentials are not repeated or combined across authentication methods. The endpoint must therefore keep a readable request after parsing the form.
+
+To issue a delegated token, pass the actor chain as `act` to `issueTokens`:
+
+* Validate each actor before you pass it. `issueTokens` writes `act` as given, like `sub`.
+* Set `sub_profile: "service"` on each entry whose `sub` is a client ID. A pairwise client sees every other entry's `sub` as a user's pairwise value.
+* A delegated issuance includes no refresh token, even with `offline_access`, because refreshed tokens do not carry `act`. Passing `act` with `refreshToken` throws.
 
 To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html/rfc7800#section-3)), pass `confirmation` to `issueTokens`. A `clientAuthentication` strategy can also return the sender constraint it proved as `confirmation`, such as a DPoP key thumbprint (`jkt`) or a certificate thumbprint (`x5t#S256`):
 
