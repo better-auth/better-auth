@@ -2,7 +2,7 @@ import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
 import { resetSeedStateForTests } from "./resources";
 import type { OAuthOptions, OAuthResourceInput, Scope } from "./types";
@@ -42,11 +42,13 @@ async function bootWithResourceFault(
 		resources = [resource],
 		resourceSeedMode,
 		resourceSeedScope,
+		identifierValidator,
 		shared,
 	}: {
 		resources?: Array<string | OAuthResourceInput>;
 		resourceSeedMode?: OAuthOptions<Scope[]>["resourceSeedMode"];
 		resourceSeedScope?: OAuthOptions<Scope[]>["resourceSeedScope"];
+		identifierValidator?: OAuthOptions<Scope[]>["identifierValidator"];
 		shared?: {
 			database: ReturnType<typeof createDatabase>;
 			adapter?: DBAdapter;
@@ -92,6 +94,7 @@ async function bootWithResourceFault(
 				resources,
 				resourceSeedMode,
 				resourceSeedScope,
+				identifierValidator,
 				clientRegistrationDefaultResources: [
 					typeof firstResource === "string"
 						? firstResource
@@ -112,37 +115,43 @@ async function bootWithResourceFault(
  * @see https://github.com/better-auth/better-auth/issues/11538
  */
 describe("resource seeding at startup", () => {
+	// `"process"` marks live in module state.
+	beforeEach(resetSeedStateForTests);
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10887
 	 */
-	it("keeps the instance usable when storage fails during startup and seeds once it recovers", async () => {
-		const fault = {
-			current: (() => {
-				throw new TypeError("fetch failed");
-			}) as ResourceFault | null,
-		};
-		const { auth, signInWithTestUser, register, database, errorLogs } =
-			await bootWithResourceFault(fault);
+	it.each(["adapter", "process"] as const)(
+		"keeps the instance usable when storage fails during startup and seeds once it recovers (%s scope)",
+		async (resourceSeedScope) => {
+			const fault = {
+				current: (() => {
+					throw new TypeError("fetch failed");
+				}) as ResourceFault | null,
+			};
+			const { auth, signInWithTestUser, register, database, errorLogs } =
+				await bootWithResourceFault(fault, { resourceSeedScope });
 
-		const { headers } = await signInWithTestUser();
-		await expect(auth.api.getSession({ headers })).resolves.toMatchObject({
-			user: { email: "test@test.com" },
-		});
-		expect(errorLogs()).toEqual([
-			[
-				"error",
-				expect.stringContaining("could not seed `resources` at startup"),
-				expect.objectContaining({ message: "fetch failed" }),
-			],
-		]);
-		await expect(register()).rejects.toThrow("fetch failed");
+			const { headers } = await signInWithTestUser();
+			await expect(auth.api.getSession({ headers })).resolves.toMatchObject({
+				user: { email: "test@test.com" },
+			});
+			expect(errorLogs()).toEqual([
+				[
+					"error",
+					expect.stringContaining("could not seed `resources` at startup"),
+					expect.objectContaining({ message: "fetch failed" }),
+				],
+			]);
+			await expect(register()).rejects.toThrow("fetch failed");
 
-		fault.current = null;
-		await expect(register()).resolves.toMatchObject({
-			resources: [resource],
-		});
-		expect(database.oauthResource).toHaveLength(1);
-	});
+			fault.current = null;
+			await expect(register()).resolves.toMatchObject({
+				resources: [resource],
+			});
+			expect(database.oauthResource).toHaveLength(1);
+		},
+	);
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11034
@@ -178,61 +187,72 @@ describe("resource seeding at startup", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10315
 	 */
-	it("a resource lookup does not wait on another request's pending seed", async () => {
-		const fault = {
-			current: (() => {
-				throw new TypeError("fetch failed");
-			}) as ResourceFault | null,
-		};
-		const { register, database } = await bootWithResourceFault(fault);
+	it.each(["adapter", "process"] as const)(
+		"a resource lookup does not wait on another request's pending seed (%s scope)",
+		async (resourceSeedScope) => {
+			const fault = {
+				current: (() => {
+					throw new TypeError("fetch failed");
+				}) as ResourceFault | null,
+			};
+			const { register, database } = await bootWithResourceFault(fault, {
+				resourceSeedScope,
+			});
 
-		// On Cloudflare Workers, I/O started by a request that has ended never
-		// settles; the gate stands in for that request's stuck seed.
-		const { promise: gate, resolve: release } = Promise.withResolvers<void>();
-		fault.current = (operation) => {
-			if (operation !== "findOne") return;
-			fault.current = null;
-			return gate;
-		};
-		const first = register();
-		// Start the second request only once the first one holds the gate.
-		await vi.waitFor(() => expect(fault.current).toBeNull());
+			// On Cloudflare Workers, I/O started by a request that has ended never
+			// settles; the gate stands in for that request's stuck seed.
+			const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+			fault.current = (operation) => {
+				if (operation !== "findOne") return;
+				fault.current = null;
+				return gate;
+			};
+			const first = register();
+			// Start the second request only once the first one holds the gate.
+			await vi.waitFor(() => expect(fault.current).toBeNull());
 
-		await expect(register()).resolves.toMatchObject({
-			resources: [resource],
-		});
-		release();
-		await expect(first).resolves.toMatchObject({ resources: [resource] });
-		expect(database.oauthResource).toHaveLength(1);
-	});
+			await expect(register()).resolves.toMatchObject({
+				resources: [resource],
+			});
+			release();
+			await expect(first).resolves.toMatchObject({ resources: [resource] });
+			expect(database.oauthResource).toHaveLength(1);
+		},
+	);
 
-	it("a seed that finishes after another does not undo a later edit", async () => {
-		const fault = {
-			current: (() => {
-				throw new TypeError("fetch failed");
-			}) as ResourceFault | null,
-		};
-		const { register, database } = await bootWithResourceFault(fault, {
-			resources: [{ identifier: resource, name: "From config" }],
-			resourceSeedMode: "merge",
-		});
+	it.each(["adapter", "process"] as const)(
+		"a seed that finishes after another does not undo a later edit (%s scope)",
+		async (resourceSeedScope) => {
+			const fault = {
+				current: (() => {
+					throw new TypeError("fetch failed");
+				}) as ResourceFault | null,
+			};
+			const { register, database } = await bootWithResourceFault(fault, {
+				resources: [{ identifier: resource, name: "From config" }],
+				resourceSeedMode: "merge",
+				resourceSeedScope,
+			});
 
-		const { promise: gate, resolve: release } = Promise.withResolvers<void>();
-		fault.current = (operation) => {
-			if (operation !== "findOne") return;
-			fault.current = null;
-			return gate;
-		};
-		const first = register();
-		// Start the second request only once the first one holds the gate.
-		await vi.waitFor(() => expect(fault.current).toBeNull());
-		await register();
-		database.oauthResource[0]!.name = "Edited by admin";
+			const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+			fault.current = (operation) => {
+				if (operation !== "findOne") return;
+				fault.current = null;
+				return gate;
+			};
+			const first = register();
+			// Start the second request only once the first one holds the gate.
+			await vi.waitFor(() => expect(fault.current).toBeNull());
+			await register();
+			database.oauthResource[0]!.name = "Edited by admin";
 
-		release();
-		await first;
-		expect(database.oauthResource).toMatchObject([{ name: "Edited by admin" }]);
-	});
+			release();
+			await first;
+			expect(database.oauthResource).toMatchObject([
+				{ name: "Edited by admin" },
+			]);
+		},
+	);
 
 	it("applies merge mode to a row a concurrent instance inserted", async () => {
 		const fault = {
@@ -303,7 +323,6 @@ describe("resource seeding at startup", () => {
 	});
 
 	it("with resourceSeedScope process, instances built per request seed once per config", async () => {
-		resetSeedStateForTests();
 		const database = createDatabase();
 		const reads: string[] = [];
 		const fault = {
@@ -344,6 +363,28 @@ describe("resource seeding at startup", () => {
 		});
 		// Only the lookup itself, not a seed.
 		expect(reads).toHaveLength(1);
+	});
+
+	it("with resourceSeedScope process, an entry one instance skipped is still seeded by another", async () => {
+		const database = createDatabase();
+		const fault = { current: null };
+		const boot = (identifierValidator?: (identifier: string) => boolean) => {
+			for (const model of ["user", "account", "session"] as const) {
+				database[model].length = 0;
+			}
+			return bootWithResourceFault(fault, {
+				resourceSeedScope: "process",
+				identifierValidator,
+				shared: { database },
+			});
+		};
+
+		await boot(() => false);
+		expect(database.oauthResource).toEqual([]);
+		await boot();
+		expect(database.oauthResource.map((row) => row.identifier)).toEqual([
+			resource,
+		]);
 	});
 
 	/**
