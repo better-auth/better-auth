@@ -658,7 +658,7 @@ When `clientId` is `undefined`, the call behaves as if you had not passed it, an
 
 A public client sends no credentials, so for a public client the handle is the only thing that ties a request to the flow. Anyone who holds the handle can continue the flow as that client. To prevent this, bind the handle to the client's DPoP key with [`expectedJkt`](/docs/plugins/oauth-provider/tokens#bind-later-requests-to-a-dpop-key).
 
-On the request that issues the code, do not call `authenticateClient()`. Set `client_id` in the [`issueAuthorizationCode`](/docs/plugins/oauth-provider/sign-in-flow#issue-codes-from-your-own-endpoint) query to the stored client instead. The method authenticates the request as that client by the same rules.
+On the request that issues the code, you can call `authenticateClient()` before you check the user's credentials. [`issueAuthorizationCode`](/docs/plugins/oauth-provider/sign-in-flow#check-the-client-before-the-users-credentials) then reuses its result instead of authenticating again. Without that call, set `client_id` in the `issueAuthorizationCode` query to the stored client, and the method authenticates the request as that client by the same rules.
 
 To issue a delegated token, pass the actor chain as `act` to `issueTokens`:
 

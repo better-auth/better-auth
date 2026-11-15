@@ -430,7 +430,7 @@ await provider.verifyDpopProof({ expectedJkt: pending.dpopJkt });
 
 With `expectedJkt`, the request must carry a proof signed with that key, even without `required: true`. A missing proof, or a proof signed with another key, fails with `invalid_dpop_proof`. With `dpop.nonce.required`, a proof from the expected key without a current nonce gets `use_dpop_nonce`, so the client can retry. When `expectedJkt` is `undefined`, the call behaves as if you had not passed it.
 
-On the request that issues the code with [`issueAuthorizationCode`](/docs/plugins/oauth-provider/sign-in-flow#issue-codes-from-your-own-endpoint), do not call `verifyDpopProof`. Set `dpop_jkt` in `query` to the stored key instead. The method checks a proof on the request against that key, and a second verification would reject the proof as replayed. A request without a proof still gets a code bound to the stored key, so only a token request with a proof from that key can redeem it.
+On the request that issues the code with [`issueAuthorizationCode`](/docs/plugins/oauth-provider/sign-in-flow#issue-codes-from-your-own-endpoint), set `dpop_jkt` in `query` to the stored key. The method checks a proof on the request against that key. If your endpoint already called `verifyDpopProof` on this request, the method reuses that result and requires its key to match `dpop_jkt`, instead of verifying the proof again. A request without a proof still gets a code bound to the stored key, so only a token request with a proof from that key can redeem it.
 
 ## Custom claims
 

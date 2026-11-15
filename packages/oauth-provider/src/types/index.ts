@@ -397,9 +397,8 @@ export interface IssueAuthorizationCodeParams {
 	 * out is authenticated as that client, and one that names another client
 	 * fails with `invalid_client`. On a later request of a flow your endpoint
 	 * started, set it from the state you stored, and set `dpop_jkt` to the key
-	 * the flow started with instead of calling `verifyDpopProof`. Without a
-	 * proof on the request, the code is still bound to that key, so the token
-	 * request must prove it. Client
+	 * the flow started with. Without a proof on the request, the code is still
+	 * bound to that key, so the token request must prove it. Client
 	 * credentials in the query, such as the `client_secret` of a forwarded
 	 * body, are not stored. A `request_uri` or
 	 * `request` object is not accepted; pass the parameters themselves.
@@ -568,6 +567,16 @@ export interface OAuthProviderApi {
 	 * endpoint that accepts form-encoded bodies must set `cloneRequest: true`,
 	 * as for `authenticateClient`.
 	 *
+	 * When your endpoint already called `authenticateClient` or
+	 * `verifyDpopProof` on this request, for example to check the client and
+	 * key before the user's credentials, the method reuses those results
+	 * instead of checking again, which would reject a one-time assertion or
+	 * proof `jti` as replayed. A `client_id` in `query` must then name the
+	 * client `authenticateClient` returned, and a `dpop_jkt` must match the
+	 * verified proof's key; otherwise the call fails with `invalid_client` or
+	 * `invalid_dpop_proof`. Only results the provider produced on this
+	 * request are reused, so a caller cannot supply its own.
+	 *
 	 * A required PAR policy, from `pushedAuthorizationRequests.required` or the
 	 * client's `require_pushed_authorization_requests`, does not apply. It keeps
 	 * parameters out of the browser URL at `/oauth2/authorize`, and this method
@@ -657,9 +666,10 @@ export interface OAuthProviderApi {
 	 *
 	 * Call it before consuming a one-time credential, so the client's retry
 	 * with the nonce can still redeem it. Do not also call it on a request that
-	 * reaches `issueTokens`, `resolveConfirmation`, or `issueAuthorizationCode`:
-	 * they verify the proof themselves, and a second verification rejects its
-	 * `jti` as replayed.
+	 * reaches `issueTokens` or `resolveConfirmation`: they verify the proof
+	 * themselves, and a second verification rejects its `jti` as replayed.
+	 * `issueAuthorizationCode` reuses a proof this method verified on the same
+	 * request instead of verifying it again.
 	 */
 	verifyDpopProof: {
 		(params: {

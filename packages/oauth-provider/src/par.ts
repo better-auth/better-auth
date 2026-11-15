@@ -2,11 +2,19 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { generateRandomString } from "better-auth/crypto";
 import { APIError } from "better-call";
 import { parseAuthorizationRequest } from "./authorize";
-import { getDpopProofJwt, verifyEndpointDpopProof } from "./dpop";
+import {
+	getDpopProofJwt,
+	throwInvalidDpopProof,
+	verifyEndpointDpopProof,
+} from "./dpop";
+import {
+	getRecordedAuthenticatedClient,
+	getRecordedDpopProof,
+} from "./request-authentication";
 import { getSignedQueryExpiresIn } from "./signed-query";
 import { getOAuthProviderApi } from "./token";
 import type { OAuthOptions, Scope } from "./types";
-import { isRecord, storeToken, tokenError } from "./utils";
+import { isRecord, storeToken, throwInvalidClient, tokenError } from "./utils";
 
 export const PUSHED_AUTHORIZATION_REQUEST_PATH = "/oauth2/par";
 
@@ -80,19 +88,32 @@ export async function authenticateAuthorizationRequest(
 	requestUriErrorDescription: string,
 ) {
 	const provider = getOAuthProviderApi(ctx, opts, "authorization_code");
-	await provider.challengeDpopNonce();
-	// Public clients identify themselves with client_id alone; confidential
-	// clients must authenticate. A `client_id` the caller set from stored
-	// state stands in for one the request left out, and any client the request
-	// names must be that client.
 	if (body.client_id !== undefined && typeof body.client_id !== "string") {
 		tokenError("BAD_REQUEST", "invalid_request", "client_id must be a string");
 	}
-	const { clientId } = await provider.authenticateClient({
-		// An empty `client_id` is omitted, as client authentication reads it.
-		clientId: body.client_id || undefined,
-		requireCredentials: false,
-	});
+	// A client that `authenticateClient` already proved on this request is not
+	// authenticated again: its one-time assertion `jti` is already used up.
+	const authenticated = await getRecordedAuthenticatedClient();
+	let clientId: string;
+	if (authenticated) {
+		if (body.client_id && body.client_id !== authenticated.clientId) {
+			throwInvalidClient("client_id does not match the authenticated client", {
+				method: authenticated.method,
+			});
+		}
+		clientId = authenticated.clientId;
+	} else {
+		await provider.challengeDpopNonce();
+		// Public clients identify themselves with client_id alone; confidential
+		// clients must authenticate. A `client_id` the caller set from stored
+		// state stands in for one the request left out, and any client the
+		// request names must be that client.
+		({ clientId } = await provider.authenticateClient({
+			// An empty `client_id` is omitted, as client authentication reads it.
+			clientId: body.client_id || undefined,
+			requireCredentials: false,
+		}));
+	}
 
 	const params = withoutClientAuthentication(body);
 	if (params.request_uri !== undefined) {
@@ -108,6 +129,16 @@ export async function authenticateAuthorizationRequest(
 	params.client_id = clientId;
 
 	const bindDpopProof = async (query: { dpop_jkt?: string }) => {
+		// A proof `verifyDpopProof` already checked on this request is not
+		// verified again, which would reject its `jti` as replayed.
+		const verified = await getRecordedDpopProof();
+		if (verified) {
+			if (query.dpop_jkt !== undefined && query.dpop_jkt !== verified.jkt) {
+				throwInvalidDpopProof("DPoP proof key does not match dpop_jkt");
+			}
+			query.dpop_jkt = verified.jkt;
+			return;
+		}
 		// A `dpop_jkt` without a proof still binds the code (RFC 9449 §10).
 		if (!getDpopProofJwt(ctx)) return;
 		// Checked as the token endpoint checks a code's key: before the nonce
