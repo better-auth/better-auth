@@ -105,12 +105,6 @@ interface ExtensionKeys {
 function collectExtensionKeys(
 	extension: OAuthProviderExtension,
 ): ExtensionKeys {
-	const id: unknown = extension.id;
-	if (typeof id !== "string" || id.trim().length === 0) {
-		throw new BetterAuthError(
-			"OAuth Provider extensions need a non-empty string id, such as the id of the plugin that registers them.",
-		);
-	}
 	const grantTypes = Object.keys(extension.grants ?? {});
 	for (const grantType of grantTypes) {
 		assertExtensionGrantType(grantType);
@@ -158,30 +152,74 @@ function collectExtensionKeys(
 	};
 }
 
+/**
+ * Names an extension in a setup error or warning. An extension without a
+ * `name` is described by its position in registration order and one thing it
+ * registers, skipping `conflictingValue` so both sides of a duplicate stay
+ * distinct.
+ */
+function describeExtension(
+	extensions: OAuthProviderExtension[],
+	extension: OAuthProviderExtension,
+	conflictingValue?: string,
+): string {
+	const name: unknown = extension.name;
+	if (typeof name === "string" && name.trim().length > 0) {
+		return `extension "${name}"`;
+	}
+	const position = `unnamed extension #${extensions.indexOf(extension) + 1}`;
+	const registered: [label: string, values: string[]][] = [
+		[
+			"client discovery",
+			toArray(extension.clientDiscovery).map((discovery) => discovery.id),
+		],
+		["grant type", Object.keys(extension.grants ?? {})],
+		[
+			"token_endpoint_auth_method",
+			Object.keys(extension.clientAuthentication ?? {}),
+		],
+		[
+			"interaction request parameter",
+			Object.keys(extension.interactionRequests ?? {}),
+		],
+	];
+	for (const [label, values] of registered) {
+		const value = values.find((candidate) => candidate !== conflictingValue);
+		if (value !== undefined) return `${position} (${label} "${value}")`;
+	}
+	return position;
+}
+
 function assertNoDuplicateAcrossExtensions(
 	label: string,
 	extensions: OAuthProviderExtension[],
 	values: (keys: ExtensionKeys) => string[],
 	keys: ExtensionKeys[],
 ) {
-	const owners = new Map<string, string>();
+	const owners = new Map<string, OAuthProviderExtension>();
 	keys.forEach((extensionKeys, index) => {
-		const extensionId = extensions[index]!.id;
+		const extension = extensions[index]!;
 		for (const value of values(extensionKeys)) {
 			const owner = owners.get(value);
-			if (owner !== undefined) {
+			if (owner === extension) {
 				throw new BetterAuthError(
-					`OAuth Provider extensions "${owner}" and "${extensionId}" both register ${label} "${value}". Extension contributions must be disjoint.`,
+					`OAuth Provider ${describeExtension(extensions, extension, value)} registers ${label} "${value}" more than once.`,
 				);
 			}
-			owners.set(value, extensionId);
+			if (owner !== undefined) {
+				throw new BetterAuthError(
+					`OAuth Provider ${describeExtension(extensions, owner, value)} and ${describeExtension(extensions, extension, value)} both register ${label} "${value}". Extension contributions must be disjoint.`,
+				);
+			}
+			owners.set(value, extension);
 		}
 	});
 }
 
 /**
- * Validates every extension and rejects two extensions registering the same
- * grant type, auth method, assertion type, or client discovery identifier:
+ * Validates every extension and rejects a grant type, auth method, assertion
+ * type, client discovery identifier, or interaction request parameter that two
+ * extensions, or one extension twice, register:
  * otherwise the first would win and the second be silently unreachable. Runs at
  * setup over the whole list; extensions number in the single digits, so a full
  * re-scan per registration is cheaper than the bookkeeping to cache it.
@@ -191,15 +229,6 @@ export function validateOAuthProviderExtensions(
 ) {
 	const list = extensions ?? [];
 	const keys = list.map(collectExtensionKeys);
-	const ids = new Set<string>();
-	for (const { id } of list) {
-		if (ids.has(id)) {
-			throw new BetterAuthError(
-				`OAuth Provider extensions register the id "${id}" more than once. Each extension needs a unique id.`,
-			);
-		}
-		ids.add(id);
-	}
 	const check = (label: string, values: (k: ExtensionKeys) => string[]) =>
 		assertNoDuplicateAcrossExtensions(label, list, values, keys);
 	check("grant type", (k) => k.grantTypes);
@@ -245,8 +274,7 @@ function toArray<T>(value: T | T[] | undefined): T[] {
  * result is shared across two `betterAuth()` instances) does not register it
  * twice. It throws if the oauth-provider plugin is not installed, if a grant
  * type or assertion type is not an absolute URI, if a client authentication
- * method reuses a built-in name, if another extension already uses its `id`,
- * or if the extension registers a grant type,
+ * method reuses a built-in name, or if the extension registers a grant type,
  * auth method, assertion type, or client discovery identifier that another
  * extension already registered (contributions must be disjoint).
  *
@@ -254,7 +282,7 @@ function toArray<T>(value: T | T[] | undefined): T[] {
  * ```ts
  * init(ctx) {
  *   extendOAuthProvider(ctx, {
- *     id: "my-plugin",
+ *     name: "my-plugin",
  *     grants: { "urn:example:grant": async ({ provider }) => provider.issueTokens(...) },
  *   });
  * }
@@ -431,9 +459,11 @@ export function applyOAuthProviderMetadataExtensions<
 	const extensions = getOAuthProviderExtensions(opts);
 	const warn = (message: string) =>
 		warnMetadataCollisionOnce(ctx, opts, message);
+	const describe = (extension: OAuthProviderExtension) =>
+		describeExtension(extensions, extension);
 	// Null-prototype targets keep own keys such as `__proto__` as plain data.
 	const discoveryMetadata: Record<string, unknown> = Object.create(null);
-	const discoveryOwners = new Map<string, string>();
+	const discoveryOwners = new Map<string, OAuthProviderExtension>();
 	for (const extension of extensions) {
 		for (const discovery of toArray(extension.clientDiscovery)) {
 			for (const [key, value] of Object.entries(
@@ -441,42 +471,42 @@ export function applyOAuthProviderMetadataExtensions<
 			)) {
 				if (Object.hasOwn(core, key)) {
 					warn(
-						`oauth-provider: extension "${extension.id}" contributed the client discovery metadata key "${key}" to ${type}, which the provider owns; ignoring it.`,
+						`oauth-provider: ${describe(extension)} contributed the client discovery metadata key "${key}" to ${type}, which the provider owns; ignoring it.`,
 					);
 				}
 				discoveryMetadata[key] = value;
-				discoveryOwners.set(key, extension.id);
+				discoveryOwners.set(key, extension);
 			}
 		}
 	}
 	const document = { ...discoveryMetadata, ...core };
-	const owners = new Map<string, string>();
+	const owners = new Map<string, OAuthProviderExtension>();
 	const next: Record<string, unknown> = Object.assign(
 		Object.create(null),
 		document,
 	);
 	for (const extension of extensions) {
-		const fields = extension.metadata?.({ ctx, opts, type, document });
-		for (const [key, value] of Object.entries(fields ?? {})) {
+		const contribution = extension.metadata?.({ ctx, opts, type, document });
+		for (const [key, value] of Object.entries(contribution ?? {})) {
 			const existing = next[key];
 			const owner = owners.get(key);
 			const discoveryOwner = discoveryOwners.get(key);
 			if (Object.hasOwn(core, key)) {
 				warn(
-					`oauth-provider: extension "${extension.id}" contributed the discovery metadata key "${key}" to ${type}, which the provider owns; ignoring it.`,
+					`oauth-provider: ${describe(extension)} contributed the discovery metadata key "${key}" to ${type}, which the provider owns; ignoring it.`,
 				);
 			} else if (discoveryOwner !== undefined) {
 				warn(
-					`oauth-provider: extension "${extension.id}" contributed the discovery metadata key "${key}" to ${type}, which the client discovery of "${discoveryOwner}" sets; keeping the client discovery's value.`,
+					`oauth-provider: ${describe(extension)} contributed the discovery metadata key "${key}" to ${type}, which the client discovery of ${describe(discoveryOwner)} sets; keeping the client discovery's value.`,
 				);
 			} else if (owner === undefined) {
 				next[key] = value;
-				owners.set(key, extension.id);
+				owners.set(key, extension);
 			} else if (Array.isArray(existing) && Array.isArray(value)) {
 				next[key] = [...new Set([...existing, ...value])];
 			} else {
 				warn(
-					`oauth-provider: extensions "${owner}" and "${extension.id}" both contributed the discovery metadata key "${key}" to ${type}; keeping the value from "${owner}".`,
+					`oauth-provider: ${describe(owner)} and ${describe(extension)} both contributed the discovery metadata key "${key}" to ${type}; keeping the value from ${describe(owner)}.`,
 				);
 			}
 		}
@@ -491,25 +521,26 @@ async function collectClaims(
 		extension: OAuthProviderExtension,
 	) => Awaitable<Record<string, unknown> | undefined>,
 ) {
+	const extensions = getOAuthProviderExtensions(opts);
 	const claims: Record<string, unknown> = {};
-	const owners = new Map<string, string>();
+	const owners = new Map<string, OAuthProviderExtension>();
 	// First contributor wins a key, matching metadata extensions. Extensions are
 	// expected to contribute disjoint claims, so a collision is a
 	// misconfiguration: keep the first value and warn rather than silently
 	// shadow the later contributor. An `undefined` value is not a contribution.
-	for (const extension of getOAuthProviderExtensions(opts)) {
+	for (const extension of extensions) {
 		const contribution = (await run(extension)) ?? {};
 		for (const [key, value] of Object.entries(contribution)) {
 			if (value === undefined) continue;
 			const owner = owners.get(key);
 			if (owner !== undefined) {
 				logger.warn(
-					`oauth-provider: extensions "${owner}" and "${extension.id}" both contributed the claim "${key}"; keeping the value from "${owner}".`,
+					`oauth-provider: ${describeExtension(extensions, owner)} and ${describeExtension(extensions, extension)} both contributed the claim "${key}"; keeping the value from ${describeExtension(extensions, owner)}.`,
 				);
 				continue;
 			}
 			claims[key] = value;
-			owners.set(key, extension.id);
+			owners.set(key, extension);
 		}
 	}
 	return claims;

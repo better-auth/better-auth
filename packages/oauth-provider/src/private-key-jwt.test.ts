@@ -51,7 +51,6 @@ describe("private_key_jwt authentication", async () => {
 				assertionMaxLifetime: 300,
 				extensions: [
 					{
-						id: "test-discovery",
 						clientDiscovery: {
 							id: "test-discovery",
 							matches: () => false,
@@ -238,7 +237,6 @@ describe("private_key_jwt authentication", async () => {
 			consentPage: "/consent",
 			extensions: [
 				{
-					id: input.clientDiscoveryId,
 					clientDiscovery: {
 						id: input.clientDiscoveryId,
 						matches: (candidateClientId: string) =>

@@ -485,7 +485,7 @@ describe("trusted client cache provenance", () => {
 		};
 		const instance = await boot({
 			cachedTrustedClients: new Set([clientId]),
-			extensions: [{ id: "test-discovery", clientDiscovery: discovery }],
+			extensions: [{ clientDiscovery: discovery }],
 		});
 		const endpointContext = {
 			context: instance.ctx,
@@ -524,7 +524,7 @@ describe("trusted client cache provenance", () => {
 		};
 		const providerOne = await boot({
 			cachedTrustedClients: new Set([clientId]),
-			extensions: [{ id: "test-discovery", clientDiscovery: discovery }],
+			extensions: [{ clientDiscovery: discovery }],
 		});
 		const providerOneContext = {
 			context: providerOne.ctx,

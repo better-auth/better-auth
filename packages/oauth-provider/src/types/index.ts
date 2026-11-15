@@ -843,11 +843,13 @@ export interface OAuthUserInfoExtensionInput {
  */
 export interface OAuthProviderExtension {
 	/**
-	 * Unique name for this extension, shown in setup errors and warnings when
-	 * two extensions conflict. Use the registering plugin's id, such as
-	 * `"ciba"`. It is not persisted, so renaming it is safe.
+	 * Name shown in setup errors and warnings when this extension conflicts
+	 * with another one. Plugins usually pass their own id, such as `"ciba"`.
+	 * Without it, messages describe the extension by its position in
+	 * registration order and, when it registers one, a grant type or similar.
+	 * It is not stored and does not have to be unique.
 	 */
-	id: string;
+	name?: string;
 	/**
 	 * Token grants keyed by absolute-URI `grant_type`. The token endpoint
 	 * dispatches a matching `grant_type` to the handler, which authenticates the

@@ -49,7 +49,6 @@ async function setup(
 				...(assertionAudience && { assertionAudience }),
 				extensions: [
 					{
-						id: "test-attestation",
 						clientAuthentication: {
 							[attestationMethod]: {
 								assertionTypes: [attestationType],

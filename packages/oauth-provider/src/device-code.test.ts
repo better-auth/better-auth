@@ -567,7 +567,6 @@ describe("oauth-provider device-code grant", async () => {
 						consentPage: "/consent",
 						extensions: [
 							{
-								id: "test-device-client-auth",
 								clientAuthentication: {
 									[assertionMethod]: {
 										assertionTypes: [assertionMethod],
@@ -1915,7 +1914,6 @@ describe("oauth-provider device-code grant reuse", async () => {
 				scopes: ["openid"],
 				extensions: [
 					{
-						id: "device-code-reuse-test",
 						clientDiscovery: {
 							id: "device-code-reuse-test",
 							matches: (clientId) => clientId === discoveredClientId,

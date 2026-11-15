@@ -22,7 +22,7 @@ declare module "@better-auth/core" {
  * Build a {@link ClientDiscovery} for Client ID Metadata Documents.
  *
  * Users who prefer explicit composition can contribute the result through
- * `oauthProvider({ extensions: [{ id: "cimd", clientDiscovery }] })`; most users should
+ * `oauthProvider({ extensions: [{ clientDiscovery }] })`; most users should
  * install the {@link cimd} plugin instead, which contributes this discovery
  * alongside whatever else is configured.
  */
@@ -53,7 +53,7 @@ export function createCimdClientDiscovery(
  */
 export const cimd = (options: CimdOptions) => {
 	const extension = {
-		id: "cimd",
+		name: "cimd",
 		clientDiscovery: createCimdClientDiscovery(options),
 	} satisfies OAuthProviderExtension;
 
