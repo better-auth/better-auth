@@ -8,7 +8,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "./crypto";
-import { derivePurposeKey } from "./crypto/purpose";
+import { deriveEncryptionKey } from "./crypto/purpose";
 
 const stateDataSchema = z.looseObject({
 	callbackURL: z.string(),
@@ -103,7 +103,7 @@ export async function generateGenericState(
 	if (storeStateStrategy === "cookie") {
 		const payload: StateData = { ...stateData, oauthState: state };
 		const encryptedData = await symmetricEncrypt({
-			key: derivePurposeKey(c.context.secretConfig, "oauth-state-cookie"),
+			key: deriveEncryptionKey(c.context.secretConfig, "oauth-state-cookie"),
 			data: JSON.stringify(payload),
 		});
 
@@ -199,7 +199,7 @@ export async function parseGenericState(
 
 		try {
 			const decryptedData = await symmetricDecrypt({
-				key: derivePurposeKey(c.context.secretConfig, "oauth-state-cookie"),
+				key: deriveEncryptionKey(c.context.secretConfig, "oauth-state-cookie"),
 				data: encryptedData,
 			});
 
