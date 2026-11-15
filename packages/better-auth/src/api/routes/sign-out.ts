@@ -1,6 +1,9 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { deleteSessionCookie, getSignedCookieWithFallback } from "../../cookies";
+import {
+	deleteSessionCookie,
+	getSignedCookieWithFallback,
+} from "../../cookies";
 
 const signOutBodySchema = z
 	.object({

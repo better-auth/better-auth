@@ -280,6 +280,8 @@ describe("cookie signature secret rotation (#12636)", () => {
 			const parsed = parseSetCookieHeader(setCookie);
 			const sessionToken = parsed.get("better-auth.session_token");
 			const sessionData = parsed.get("better-auth.session_data");
+			expect(sessionToken).toBeDefined();
+			expect(sessionData).toBeDefined();
 
 			const headers = new Headers();
 			headers.set(
@@ -304,9 +306,19 @@ describe("cookie signature secret rotation (#12636)", () => {
 				},
 			});
 
-			const session = await auth2.api.getSession({ headers });
-			expect(session).not.toBeNull();
-			expect(session?.user.email).toBe("cache-compact@example.com");
+			const res = await auth2.api.getSession({
+				headers,
+				asResponse: true,
+			});
+			const resCookies = parseSetCookieHeader(
+				(res as Response).headers.get("set-cookie") || "",
+			);
+			// Assert that session_data was successfully decoded and re-signed rather than expired
+			expect(resCookies.get("better-auth.session_data")?.["max-age"]).not.toBe(0);
+
+			const body = await (res as Response).json();
+			expect(body).not.toBeNull();
+			expect(body.user.email).toBe("cache-compact@example.com");
 		});
 
 		it("decodes jwt cookie cache signed with previous secret", async () => {
@@ -339,6 +351,8 @@ describe("cookie signature secret rotation (#12636)", () => {
 			const parsed = parseSetCookieHeader(setCookie);
 			const sessionToken = parsed.get("better-auth.session_token");
 			const sessionData = parsed.get("better-auth.session_data");
+			expect(sessionToken).toBeDefined();
+			expect(sessionData).toBeDefined();
 
 			const headers = new Headers();
 			headers.set(
@@ -363,9 +377,19 @@ describe("cookie signature secret rotation (#12636)", () => {
 				},
 			});
 
-			const session = await auth2.api.getSession({ headers });
-			expect(session).not.toBeNull();
-			expect(session?.user.email).toBe("cache-jwt@example.com");
+			const res = await auth2.api.getSession({
+				headers,
+				asResponse: true,
+			});
+			const resCookies = parseSetCookieHeader(
+				(res as Response).headers.get("set-cookie") || "",
+			);
+			// Assert that session_data was successfully decoded and re-signed rather than expired
+			expect(resCookies.get("better-auth.session_data")?.["max-age"]).not.toBe(0);
+
+			const body = await (res as Response).json();
+			expect(body).not.toBeNull();
+			expect(body.user.email).toBe("cache-jwt@example.com");
 		});
 	});
 });

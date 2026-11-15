@@ -279,7 +279,11 @@ export async function setCookieCache(
 export async function decodeCookieCache(
 	ctx: GenericEndpointContext,
 	value: string,
-): Promise<{ session: CookieCachePayload; expiresAt: number } | null> {
+): Promise<{
+	session: CookieCachePayload;
+	expiresAt: number;
+	isOldSecret?: boolean;
+} | null> {
 	const strategy =
 		ctx.context.options.session?.cookieCache?.strategy || "compact";
 
@@ -317,9 +321,11 @@ export async function decodeCookieCache(
 			ctx.context.secret,
 		);
 		let decoded: JWTPayload | null = null;
-		for (const secret of candidateSecrets) {
-			decoded = await verifySecretJWT<JWTPayload>(value, secret);
+		let isOldSecret = false;
+		for (let i = 0; i < candidateSecrets.length; i++) {
+			decoded = await verifySecretJWT<JWTPayload>(value, candidateSecrets[i]!);
 			if (decoded) {
+				isOldSecret = i > 0;
 				break;
 			}
 		}
@@ -330,6 +336,7 @@ export async function decodeCookieCache(
 		return {
 			session: payload,
 			expiresAt: decoded?.exp ? decoded.exp * 1000 : Date.now(),
+			isOldSecret,
 		};
 	}
 
@@ -349,13 +356,15 @@ export async function decodeCookieCache(
 		expiresAt: parsed.expiresAt,
 	});
 	let valid = false;
-	for (const secret of candidateSecrets) {
+	let isOldSecret = false;
+	for (let i = 0; i < candidateSecrets.length; i++) {
 		valid = await createHMAC("SHA-256", "base64urlnopad").verify(
-			secret,
+			candidateSecrets[i]!,
 			data,
 			parsed.signature,
 		);
 		if (valid) {
+			isOldSecret = i > 0;
 			break;
 		}
 	}
@@ -368,6 +377,7 @@ export async function decodeCookieCache(
 		? {
 				session: payload,
 				expiresAt: parsed.expiresAt,
+				isOldSecret,
 			}
 		: null;
 }
@@ -409,6 +419,57 @@ export async function getSignedCookieWithFallback(
 	return null;
 }
 
+/**
+ * Re-signs session cookies and cookie cache with the current secret
+ * without invoking `setNewSession` (which is reserved for fresh logins).
+ */
+export async function reSignSessionCookies(
+	ctx: GenericEndpointContext,
+	session: {
+		session: Session & Record<string, unknown>;
+		user: User;
+	},
+	dontRememberMe?: boolean | undefined,
+	overrides?: Partial<CookieOptions> | undefined,
+) {
+	const dontRememberMeCookie = await getSignedCookieWithFallback(
+		ctx,
+		ctx.context.authCookies.dontRememberToken.name,
+	);
+	dontRememberMe =
+		dontRememberMe !== undefined
+			? dontRememberMe
+			: !!dontRememberMeCookie?.value;
+
+	const options = ctx.context.authCookies.sessionToken.attributes;
+	const maxAge = dontRememberMe
+		? undefined
+		: ctx.context.sessionConfig.expiresIn;
+
+	await ctx.setSignedCookie(
+		ctx.context.authCookies.sessionToken.name,
+		session.session.token,
+		ctx.context.secret,
+		{
+			...options,
+			maxAge,
+			...overrides,
+		},
+	);
+
+	if (dontRememberMe) {
+		await ctx.setSignedCookie(
+			ctx.context.authCookies.dontRememberToken.name,
+			"true",
+			ctx.context.secret,
+			ctx.context.authCookies.dontRememberToken.attributes,
+		);
+	} else if (dontRememberMeCookie) {
+		expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
+	}
+	await setCookieCache(ctx, session, dontRememberMe);
+}
+
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
 	session: {
@@ -424,7 +485,9 @@ export async function setSessionCookie(
 	);
 	// if dontRememberMe is not set, use the cookie value
 	dontRememberMe =
-		dontRememberMe !== undefined ? dontRememberMe : !!dontRememberMeCookie?.value;
+		dontRememberMe !== undefined
+			? dontRememberMe
+			: !!dontRememberMeCookie?.value;
 
 	const options = ctx.context.authCookies.sessionToken.attributes;
 	const maxAge = dontRememberMe

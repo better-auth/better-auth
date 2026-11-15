@@ -358,11 +358,18 @@ Most of the features of Better Auth will not work correctly.`,
 				this.secretConfig !== null &&
 				"keys" in this.secretConfig
 			) {
-				return (
-					this.secretConfig.keys.get(this.secretConfig.currentVersion) ?? secret
-				);
+				const val = this.secretConfig.keys.get(this.secretConfig.currentVersion);
+				if (!val) {
+					throw new Error(
+						`Secret version ${this.secretConfig.currentVersion} not found in keys`,
+					);
+				}
+				return val;
 			}
 			return secret;
+		},
+		set secret(val: string) {
+			secret = val;
 		},
 		secretConfig,
 		rateLimit: {

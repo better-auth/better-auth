@@ -17,6 +17,7 @@ import {
 	expireCookie,
 	getChunkedCookie,
 	getSignedCookieWithFallback,
+	reSignSessionCookies,
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
@@ -181,9 +182,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						if (cookieRefreshCache === false) {
 							if (
 								sessionCookieResult?.isOldSecret ||
-								dontRememberMeResult?.isOldSecret
+								dontRememberMeResult?.isOldSecret ||
+								sessionDataPayload.isOldSecret
 							) {
-								await setSessionCookie(ctx, session, !!dontRememberMe);
+								await reSignSessionCookies(ctx, session, !!dontRememberMe);
 							}
 							// If refreshCache is disabled, return the session from cookie as-is
 							ctx.context.session = session;
@@ -273,9 +275,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 						if (
 							sessionCookieResult?.isOldSecret ||
-							dontRememberMeResult?.isOldSecret
+							dontRememberMeResult?.isOldSecret ||
+							sessionDataPayload.isOldSecret
 						) {
-							await setSessionCookie(ctx, session, !!dontRememberMe);
+							await reSignSessionCookies(ctx, session, !!dontRememberMe);
 						}
 
 						// Parse session and user to ensure additionalFields are included
@@ -331,7 +334,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						sessionCookieResult?.isOldSecret ||
 						dontRememberMeResult?.isOldSecret
 					) {
-						await setSessionCookie(ctx, session, !!dontRememberMe);
+						await reSignSessionCookies(ctx, session, !!dontRememberMe);
 					}
 					// Parse session and user to ensure additionalFields are included
 					const parsedSession = parseSessionOutput(
@@ -378,7 +381,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						sessionCookieResult?.isOldSecret ||
 						dontRememberMeResult?.isOldSecret
 					) {
-						await setSessionCookie(ctx, session, !!dontRememberMe);
+						await reSignSessionCookies(ctx, session, !!dontRememberMe);
 					} else {
 						await setCookieCache(ctx, session, !!dontRememberMe);
 					}
@@ -447,7 +450,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					sessionCookieResult?.isOldSecret ||
 					dontRememberMeResult?.isOldSecret
 				) {
-					await setSessionCookie(ctx, session, !!dontRememberMe);
+					await reSignSessionCookies(ctx, session, !!dontRememberMe);
 				} else {
 					await setCookieCache(ctx, session, !!dontRememberMe);
 				}
