@@ -691,20 +691,37 @@ export async function invalidateRefreshFamily(
 		ctx,
 		opts,
 		{ grantId: refreshToken.grantId, clientId },
-		async () => {
-			await deleteLinkedAccessTokens();
-			await ctx.context.adapter.deleteMany({
-				model: "oauthRefreshToken",
-				where: [
-					{ field: "clientId", value: clientId },
-					{ field: "userId", value: userId },
-				],
-			});
-			// Without a foreign key, an in-flight issuance can store an access
-			// token between the two deletes above. See `createOpaqueAccessToken`.
-			await deleteLinkedAccessTokens();
-		},
+		// On MySQL, the refresh-row delete can lose a deadlock to a concurrent
+		// access-token insert of the same pair, which holds a foreign-key lock
+		// on its refresh row. Every delete here is idempotent, so retry them
+		// rather than leave the family usable once the grant mark expires.
+		() =>
+			retryIdempotent(async () => {
+				await deleteLinkedAccessTokens();
+				await ctx.context.adapter.deleteMany({
+					model: "oauthRefreshToken",
+					where: [
+						{ field: "clientId", value: clientId },
+						{ field: "userId", value: userId },
+					],
+				});
+				// Without a foreign key, an in-flight issuance can store an access
+				// token between the two deletes above. See `createOpaqueAccessToken`.
+				await deleteLinkedAccessTokens();
+			}),
 	);
+}
+
+const IDEMPOTENT_RETRY_ATTEMPTS = 3;
+
+async function retryIdempotent(operation: () => Promise<void>) {
+	for (let attempt = 1; ; attempt++) {
+		try {
+			return await operation();
+		} catch (error) {
+			if (attempt >= IDEMPOTENT_RETRY_ATTEMPTS) throw error;
+		}
+	}
 }
 
 /**
