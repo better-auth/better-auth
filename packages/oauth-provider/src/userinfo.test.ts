@@ -239,20 +239,53 @@ describe("oauth userinfo", async () => {
 		},
 	);
 
-	it("should fail without the openid scope", async () => {
+	/**
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#UserInfoError
+	 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
+	 */
+	it("answers a token without the openid scope with insufficient_scope", async () => {
 		const tokens = await getTokens({
 			scopes: ["profile"],
 		});
 		expect(tokens.data?.access_token).toBeDefined();
+		let challenge: string | null = null;
 		const userinfo = await client.$fetch<Record<string, string>>(
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
+				},
+				onError(context) {
+					challenge = context.response.headers.get("WWW-Authenticate");
 				},
 			},
 		);
-		expect(userinfo.error?.status).toBe(400);
+		expect(userinfo.error?.status).toBe(403);
+		expect(userinfo.error).toMatchObject({ error: "insufficient_scope" });
+		expect(challenge).toBe(
+			'Bearer error="insufficient_scope", scope="openid", error_description="access token is missing required scope: openid"',
+		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
+	 */
+	it("answers a token sent without a scheme as a request without credentials", async () => {
+		const tokens = await getTokens();
+		let challenge: string | null = null;
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: { authorization: tokens.data?.access_token ?? "" },
+				onError(context) {
+					challenge = context.response.headers.get("WWW-Authenticate");
+				},
+			},
+		);
+		expect(userinfo.error?.status).toBe(401);
+		expect(challenge).toMatch(
+			/^Bearer scope="openid", DPoP scope="openid", algs=/,
+		);
 	});
 
 	it("rejects a revoked access token with invalid_token (401), not invalid_scope", async () => {
@@ -292,7 +325,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -411,7 +444,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -620,7 +653,9 @@ describe("oauth userinfo", async () => {
 			const result = await requestUserinfo({});
 
 			expect(result.status).toBe(401);
-			expect(result.challenge).toBe(`Bearer, DPoP algs="${algs}"`);
+			expect(result.challenge).toBe(
+				`Bearer scope="openid", DPoP scope="openid", algs="${algs}"`,
+			);
 			expect(result.exposed).toBe("WWW-Authenticate");
 		});
 
@@ -632,7 +667,7 @@ describe("oauth userinfo", async () => {
 			expect((error as APIError).statusCode).toBe(401);
 			expect(
 				new Headers((error as APIError).headers).get("WWW-Authenticate"),
-			).toBe(`Bearer, DPoP algs="${algs}"`);
+			).toBe(`Bearer scope="openid", DPoP scope="openid", algs="${algs}"`);
 		});
 
 		it("keeps the Bearer challenge for an invalid token sent with the Bearer scheme", async () => {
@@ -873,7 +908,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -905,7 +940,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: accessToken ?? "",
+					authorization: `Bearer ${accessToken ?? ""}`,
 				},
 			},
 		);
@@ -964,7 +999,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: refreshedTokens.data?.access_token ?? "",
+					authorization: `Bearer ${refreshedTokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -996,7 +1031,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -1018,7 +1053,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -1041,7 +1076,7 @@ describe("oauth userinfo", async () => {
 			"/oauth2/userinfo",
 			{
 				headers: {
-					authorization: tokens.data?.access_token ?? "",
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
 				},
 			},
 		);
@@ -1104,8 +1139,8 @@ describe("oauth userinfo - unresolved baseURL", async () => {
 				}),
 			}),
 		).rejects.toMatchObject({
-			statusCode: 400,
-			body: { error: "invalid_scope" },
+			statusCode: 403,
+			body: { error: "insufficient_scope" },
 		});
 	});
 });
