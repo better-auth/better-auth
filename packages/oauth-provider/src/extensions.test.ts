@@ -1036,6 +1036,37 @@ describe("oauth-provider extensions", async () => {
 		);
 	});
 
+	it("rejects a client discovery identifier registered twice by one extension", async () => {
+		const discovery = {
+			id: "repeated-client-discovery",
+			matches: () => false,
+			resolve: () => null,
+		};
+		await expect(
+			getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({ jwt: { issuer: authServerBaseUrl } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+					}),
+					{
+						id: "repeated-discovery",
+						init(ctx) {
+							extendOAuthProvider(ctx, {
+								name: "repeated-discovery",
+								clientDiscovery: [discovery, { ...discovery }],
+							});
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			}),
+		).rejects.toThrow(
+			'OAuth Provider extension "repeated-discovery" registers client discovery id "repeated-client-discovery" more than once.',
+		);
+	});
+
 	it("describes an unnamed extension by its position and what it registers", () => {
 		const sharedGrant = "urn:better-auth:test:shared-grant";
 		const otherGrant = "urn:better-auth:test:other-grant";

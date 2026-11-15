@@ -201,6 +201,11 @@ function assertNoDuplicateAcrossExtensions(
 		const extension = extensions[index]!;
 		for (const value of values(extensionKeys)) {
 			const owner = owners.get(value);
+			if (owner === extension) {
+				throw new BetterAuthError(
+					`OAuth Provider ${describeExtension(extensions, extension, value)} registers ${label} "${value}" more than once.`,
+				);
+			}
 			if (owner !== undefined) {
 				throw new BetterAuthError(
 					`OAuth Provider ${describeExtension(extensions, owner, value)} and ${describeExtension(extensions, extension, value)} both register ${label} "${value}". Extension contributions must be disjoint.`,
