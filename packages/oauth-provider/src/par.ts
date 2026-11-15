@@ -190,8 +190,8 @@ async function getRequestUriIdentifier(
  * reload the authorization URL (RFC 9126 §4). The first load moves the request
  * to a value that lasts as long as the signed query that carries it through
  * login and consent, so a sign-in that outlasts `expires_in` can still finish.
- * That deadline is fixed at the first load. A storage failure during the first
- * load can use up the request, and the client then pushes again.
+ * That deadline is fixed at the first load. A failure to store the moved
+ * request can use it up, and the client then pushes again.
  * {@link consumePushedAuthorizationRequest} uses the request up when the code
  * is issued.
  */

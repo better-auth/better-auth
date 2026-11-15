@@ -60,7 +60,7 @@ Each `request_uri` has these limits ([RFC 9126 §4](https://datatracker.ietf.org
 * The client must send the user to the authorize endpoint within `expiresIn` seconds, `60` by default. The value must be below `600`, the limit FAPI 2.0 sets.
 * It issues one authorization code. Until then, the user can reload the authorize URL. The login, consent, and other screens resume from the [signed query](#how-the-redirect-works).
 * After the first visit to the authorize endpoint, it stays valid for `codeExpiresIn`, the lifetime of the signed query. A sign-in that takes longer than `expiresIn` still completes. Later redirects during login and consent do not extend this deadline.
-* If storage fails during the first visit, the `request_uri` can be used up. The client then pushes the request again.
+* If saving the request fails on the first visit, the `request_uri` can be used up. The client then pushes the request again. A failure to save the authorization code leaves the `request_uri` usable.
 * Once the code is issued, the `request_uri` fails with `invalid_request_uri`. Continuing the same request again, such as by submitting the login form twice, sends `invalid_request_uri` to the client's redirect URI.
 * It works only with the `client_id` that pushed it. The authorize endpoint discards it when another client presents it.
 
