@@ -28,6 +28,7 @@ import type {
 import type { Confirmation } from "./types/oauth";
 import { ResourceUriSchema } from "./types/zod";
 import {
+	getAuthEndpointUrl,
 	getClient,
 	getOAuthProviderPlugin,
 	normalizeClientAuthenticationParameters,
@@ -387,7 +388,10 @@ function buildOAuthDeviceGrant(verificationUri: string | undefined) {
 			[DEVICE_CODE_GRANT_TYPE]: exchangeOAuthDeviceCode,
 		},
 		metadata: (metadataInput) => ({
-			device_authorization_endpoint: `${metadataInput.ctx.context.baseURL}${DEVICE_AUTHORIZATION_PATH}`,
+			device_authorization_endpoint: getAuthEndpointUrl(
+				metadataInput.ctx,
+				DEVICE_AUTHORIZATION_PATH,
+			),
 		}),
 		authorizeRequest: async ({ ctx, request }) => {
 			const { detected: hasClientAuthentication } =

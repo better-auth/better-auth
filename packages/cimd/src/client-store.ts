@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type {
 	OAuthClientMetadata,
 	OAuthOptions,
@@ -230,7 +231,7 @@ export async function fetchClientMetadataDocument(
 					`Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`,
 				);
 			}
-			if (error instanceof APIError) throw error;
+			if (isAPIError(error)) throw error;
 			throw invalidClient(FETCH_FAILURE_DESCRIPTION);
 		}
 		let rawMetadata: unknown;

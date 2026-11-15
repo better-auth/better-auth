@@ -8,26 +8,16 @@ import type { ProviderOptions } from "better-auth/oauth2";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
-	deriveDpopAth,
-	deriveDpopJkt,
 	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin } from "better-auth/types";
-import type { JWK } from "jose";
-import {
-	base64url,
-	createLocalJWKSet,
-	decodeJwt,
-	exportJWK,
-	generateKeyPair,
-	jwtVerify,
-	SignJWT,
-} from "jose";
+import { base64url, createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import { createDpopKey, createDpopProof } from "./test-utils/dpop";
 import { confirmationTokenType, getOAuthProviderApi } from "./token";
 import type {
 	Confirmation,
@@ -5516,40 +5506,6 @@ describe("oauth token - DPoP", async () => {
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
-	async function createDpopKey() {
-		const { privateKey, publicKey } = await generateKeyPair("ES256", {
-			extractable: true,
-		});
-		const publicJwk = await exportJWK(publicKey);
-		const jkt = await deriveDpopJkt(publicJwk);
-		return { privateKey, publicJwk, jkt };
-	}
-
-	async function createDpopProof(params: {
-		privateKey: CryptoKey;
-		publicJwk: JWK;
-		method: string;
-		url: string;
-		jti: string;
-		accessToken?: string;
-	}) {
-		return new SignJWT({
-			jti: params.jti,
-			htm: params.method,
-			htu: params.url,
-			iat: Math.floor(Date.now() / 1000),
-			...(params.accessToken
-				? { ath: await deriveDpopAth(params.accessToken) }
-				: {}),
-		})
-			.setProtectedHeader({
-				typ: "dpop+jwt",
-				alg: "ES256",
-				jwk: params.publicJwk,
-			})
-			.sign(params.privateKey);
-	}
-
 	async function createAuthUrl(
 		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
 	) {
@@ -5638,9 +5594,7 @@ describe("oauth token - DPoP", async () => {
 			dpopKey.jkt,
 			jwtResource,
 		);
-		const proof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const proof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: tokenEndpoint,
 			jti: "issue-proof",
@@ -5662,9 +5616,7 @@ describe("oauth token - DPoP", async () => {
 			},
 		});
 		const dpopKey = await createDpopKey();
-		const proof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const proof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: pluginIssueEndpoint,
 			jti: "plugin-endpoint-proof",
@@ -5696,9 +5648,7 @@ describe("oauth token - DPoP", async () => {
 				},
 			});
 			const dpopKey = await createDpopKey();
-			const proof = await createDpopProof({
-				privateKey: dpopKey.privateKey,
-				publicJwk: dpopKey.publicJwk,
+			const proof = await createDpopProof(dpopKey, {
 				method: "POST",
 				url: pluginTenantIssueEndpoint,
 				jti: "plugin-tenant-proof",
@@ -5738,9 +5688,7 @@ describe("oauth token - DPoP", async () => {
 			const tokenHeaders = new Headers(requestHeaders);
 			tokenHeaders.set(
 				"DPoP",
-				await createDpopProof({
-					privateKey: dpopKey.privateKey,
-					publicJwk: dpopKey.publicJwk,
+				await createDpopProof(dpopKey, {
 					method: "POST",
 					url: trailingSlashTokenEndpoint,
 					jti: "trailing-slash-proof",
@@ -5766,9 +5714,7 @@ describe("oauth token - DPoP", async () => {
 				dpopKey.jkt,
 				jwtResource,
 			);
-			const proof = await createDpopProof({
-				privateKey: dpopKey.privateKey,
-				publicJwk: dpopKey.publicJwk,
+			const proof = await createDpopProof(dpopKey, {
 				method: "POST",
 				url: proofUrl,
 				jti,
@@ -5835,9 +5781,7 @@ describe("oauth token - DPoP", async () => {
 			jwtResource,
 		);
 
-		const wrongKeyProof = await createDpopProof({
-			privateKey: otherKey.privateKey,
-			publicJwk: otherKey.publicJwk,
+		const wrongKeyProof = await createDpopProof(otherKey, {
 			method: "POST",
 			url: tokenEndpoint,
 			jti: "retry-wrong-key-proof",
@@ -5852,9 +5796,7 @@ describe("oauth token - DPoP", async () => {
 			"invalid_dpop_proof",
 		);
 
-		const proof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const proof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: tokenEndpoint,
 			jti: "retry-valid-proof",
@@ -5886,9 +5828,7 @@ describe("oauth token - DPoP", async () => {
 			"invalid_dpop_proof",
 		);
 
-		const proof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const proof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: tokenEndpoint,
 			jti: "retry-required-proof",
@@ -5917,9 +5857,7 @@ describe("oauth token - DPoP", async () => {
 			dpopKey.jkt,
 			jwtResource,
 		);
-		const proof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const proof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: tokenEndpoint,
 			jti: "concurrent-shared-proof",
@@ -5941,9 +5879,7 @@ describe("oauth token - DPoP", async () => {
 			dpopKey.jkt,
 			jwtResource,
 		);
-		const issueProof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const issueProof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: tokenEndpoint,
 			jti: "rotate-issue-proof",
@@ -5983,9 +5919,7 @@ describe("oauth token - DPoP", async () => {
 			"invalid_dpop_proof",
 		);
 
-		const refreshProof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const refreshProof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: tokenEndpoint,
 			jti: "rotate-refresh-proof",
@@ -6003,9 +5937,7 @@ describe("oauth token - DPoP", async () => {
 			dpopKey.jkt,
 			jwtResource,
 		);
-		const issueProof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const issueProof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: tokenEndpoint,
 			jti: "reuse-issue-proof",
@@ -6036,9 +5968,7 @@ describe("oauth token - DPoP", async () => {
 			});
 		}
 
-		const firstProof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const firstProof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: tokenEndpoint,
 			jti: "reuse-refresh-proof-1",
@@ -6053,9 +5983,7 @@ describe("oauth token - DPoP", async () => {
 			"invalid_dpop_proof",
 		);
 
-		const replayProof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const replayProof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: tokenEndpoint,
 			jti: "reuse-refresh-proof-2",
@@ -6079,9 +6007,7 @@ describe("oauth token - DPoP", async () => {
 		const dpopKey = await createDpopKey();
 		// One proof (a single jti) reused across two authorization codes. The
 		// database-backed replay store must reject the second presentation.
-		const proof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const proof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: tokenEndpoint,
 			jti: "replayed-proof",
@@ -6558,5 +6484,78 @@ describe("oauth token - refresh family revocation with serial ids", async () => 
 		expect(reused.error).toMatchObject({ error: "invalid_grant" });
 		expect(database.oauthAccessToken).toHaveLength(1);
 		expect(database.oauthAccessToken?.[0]?.refreshId).toBeUndefined();
+	});
+});
+
+describe("DPoP with secondary storage and no database-backed verification", async () => {
+	const store = new Map<string, string>();
+	const baseURL = "http://localhost:3000";
+	const tokenEndpoint = `${baseURL}/api/auth/oauth2/token`;
+	const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		secondaryStorage: {
+			get: (key) => store.get(key) ?? null,
+			set: (key, value) => void store.set(key, value),
+			delete: (key) => void store.delete(key),
+			getAndDelete: (key) => {
+				const value = store.get(key) ?? null;
+				store.delete(key);
+				return value;
+			},
+			increment: (key) => {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
+		},
+		session: { storeSessionInDatabase: true },
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				clientPrivileges: () => true,
+			}),
+		],
+	});
+
+	it("issues a DPoP-bound token and rejects a replayed proof", async () => {
+		const { headers } = await signInWithTestUser();
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read"],
+			},
+		});
+		const proof = await createDpopProof(await createDpopKey(), {
+			url: tokenEndpoint,
+		});
+		const requestToken = () =>
+			customFetchImpl(tokenEndpoint, {
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					DPoP: proof,
+				},
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret!,
+					scope: "read",
+				}).toString(),
+			});
+
+		const issued = await requestToken();
+		expect(issued.status).toBe(200);
+		expect(await issued.json()).toMatchObject({ token_type: "DPoP" });
+
+		const replayed = await requestToken();
+		expect(replayed.status).toBe(400);
+		expect(await replayed.json()).toMatchObject({
+			error: "invalid_dpop_proof",
+		});
 	});
 });

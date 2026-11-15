@@ -9,6 +9,7 @@ import {
 	utf8ToBytes,
 } from "@noble/ciphers/utils.js";
 
+export { deriveEncryptionKey } from "./purpose";
 export type { SecretConfig };
 
 const algorithm = { name: "HMAC", hash: "SHA-256" };

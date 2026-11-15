@@ -13,6 +13,7 @@ import {
 	UnsecuredJWT,
 } from "jose";
 import { logger } from "../env";
+import { isAPIError } from "../utils/is-api-error";
 import type { DpopNonceOptions, DpopReplayStore } from "./dpop";
 import {
 	createDpopNonce,
@@ -684,7 +685,7 @@ export function createInsufficientScopeError(
  */
 export function isInsufficientScopeError(error: unknown): error is APIError {
 	if (
-		!(error instanceof APIError) ||
+		!isAPIError(error) ||
 		!insufficientScopeErrors.has(error) ||
 		error.status !== "FORBIDDEN"
 	)

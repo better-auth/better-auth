@@ -1,3 +1,4 @@
+import type { BetterFetchOption } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
 import type { AwaitableFunction } from "../types";
 import { appendQueryParams } from "../utils/url";
@@ -39,6 +40,13 @@ export interface PushAuthorizationRequestInput {
 	 * authentication sets it.
 	 */
 	headers?: Record<string, string> | undefined;
+	/**
+	 * The fetch implementation for the request, such as one from
+	 * `createDpopFetch` to send DPoP proofs (RFC 9449).
+	 *
+	 * @default globalThis.fetch
+	 */
+	fetch?: BetterFetchOption["customFetchImpl"];
 }
 
 /**
@@ -58,6 +66,7 @@ export async function pushAuthorizationRequest({
 	tokenEndpointAuth,
 	authentication,
 	headers,
+	fetch,
 }: PushAuthorizationRequestInput): Promise<URL> {
 	options = typeof options === "function" ? await options() : options;
 	const body = new URLSearchParams(authorizationURL.searchParams);
@@ -89,6 +98,7 @@ export async function pushAuthorizationRequest({
 		method: "POST",
 		body,
 		headers: requestHeaders,
+		customFetchImpl: fetch,
 	});
 	if (error) {
 		const code = "error" in error ? ` (${String(error.error)})` : "";
