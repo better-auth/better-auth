@@ -474,7 +474,11 @@ async function getJwksForVerification(
 				? entry.jwks
 				: undefined;
 		const canUseStale =
-			stale && (!kid || stale.keys.some((jwk) => jwk.kid === kid));
+			stale &&
+			(!kid ||
+				stale.keys.some(
+					(jwk) => jwk && typeof jwk === "object" && jwk.kid === kid,
+				));
 
 		if (stale && now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) {
 			const refresh = (failed: JSONWebKeySet) =>
@@ -505,7 +509,10 @@ async function getJwksForVerification(
 	// the header parameter optional.
 	if (
 		!kid ||
-		(Array.isArray(cached.keys) && cached.keys.some((jwk) => jwk.kid === kid))
+		(Array.isArray(cached.keys) &&
+			cached.keys.some(
+				(jwk) => jwk && typeof jwk === "object" && jwk.kid === kid,
+			))
 	) {
 		return { jwks: cached, kid, refresh };
 	}

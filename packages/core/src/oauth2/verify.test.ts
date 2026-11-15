@@ -1406,6 +1406,21 @@ describe("verifyBearerToken", () => {
 		}
 	});
 
+	it("should safely handle JWKS keys array containing null or non-object elements without throwing", async () => {
+		const { errors: isolatedJoseErrors } = await import("jose");
+		const { verifyBearerToken: verify } = await import("./verify");
+		const { privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		mockJSONResponse({ keys: [null, undefined] });
+
+		await expect(
+			verify(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).rejects.toBeInstanceOf(isolatedJoseErrors.JWKSInvalid);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11611
 	 */
