@@ -190,8 +190,10 @@ async function getRequestUriIdentifier(
  * reload the authorization URL (RFC 9126 §4). The first load moves the request
  * to a value that lasts as long as the signed query that carries it through
  * login and consent, so a sign-in that outlasts `expires_in` can still finish.
- * That deadline is fixed at the first load. {@link consumePushedAuthorizationRequest}
- * uses the request up when the code is issued.
+ * That deadline is fixed at the first load. A storage failure during the first
+ * load can use up the request, and the client then pushes again.
+ * {@link consumePushedAuthorizationRequest} uses the request up when the code
+ * is issued.
  */
 export async function loadPushedAuthorizationRequest(
 	ctx: GenericEndpointContext,
@@ -231,26 +233,13 @@ export async function loadPushedAuthorizationRequest(
 	const stored: StoredPushedAuthorizationRequest = JSON.parse(pushed.value);
 	if (stored.clientId !== clientId) return { status: "invalid" };
 	const now = Date.now();
-	try {
-		await internalAdapter.createVerificationValue({
-			identifier: loadedIdentifier,
-			value: pushed.value,
-			createdAt: new Date(now),
-			updatedAt: new Date(now),
-			expiresAt: new Date(now + getSignedQueryExpiresIn(opts) * 1000),
-		});
-	} catch (error) {
-		// The loaded value does not exist, so restoring the pushed value cannot
-		// let the request issue a second code.
-		await internalAdapter.createVerificationValue({
-			identifier,
-			value: pushed.value,
-			createdAt: new Date(pushed.createdAt),
-			updatedAt: new Date(now),
-			expiresAt: new Date(pushed.expiresAt),
-		});
-		throw error;
-	}
+	await internalAdapter.createVerificationValue({
+		identifier: loadedIdentifier,
+		value: pushed.value,
+		createdAt: new Date(now),
+		updatedAt: new Date(now),
+		expiresAt: new Date(now + getSignedQueryExpiresIn(opts) * 1000),
+	});
 	return { status: "found", query: stored.query };
 }
 

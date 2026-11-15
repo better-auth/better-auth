@@ -47,7 +47,10 @@ async function setup(
 	providerOptions: Partial<OAuthOptions<Scope[]>> = {
 		pushedAuthorizationRequests: { enabled: true },
 	},
-	authOptions: Pick<BetterAuthOptions, "secondaryStorage" | "session"> = {},
+	authOptions: Pick<
+		BetterAuthOptions,
+		"secondaryStorage" | "session" | "verification"
+	> = {},
 ) {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
 		{
@@ -322,7 +325,7 @@ describe("pushed authorization requests in secondary storage", async () => {
 		}
 	});
 
-	it("keeps the request_uri when its first visit fails to store it", async () => {
+	it("uses up the request_uri when its first visit fails to store it", async () => {
 		const { params } = await authorizationParams(client.client_id);
 		const pushed = await pushRequest({
 			...params,
@@ -339,7 +342,8 @@ describe("pushed authorization requests in secondary storage", async () => {
 		const failed = await visit();
 		expect(failed.searchParams.get("code")).toBeNull();
 		const retried = await visit();
-		expect(retried.searchParams.get("code")).toEqual(expect.any(String));
+		expect(retried.searchParams.get("code")).toBeNull();
+		expect(retried.searchParams.get("error")).toBe("invalid_request_uri");
 	});
 
 	it("keeps the request_uri when storing the code fails", async () => {
@@ -360,6 +364,67 @@ describe("pushed authorization requests in secondary storage", async () => {
 		expect(failed.searchParams.get("code")).toBeNull();
 		const retried = await visit();
 		expect(retried.searchParams.get("code")).toEqual(expect.any(String));
+	});
+});
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc9126#section-4
+ */
+describe("pushed authorization requests in the database and secondary storage", async () => {
+	const store = new Map<string, string>();
+	let failNextLoadedWrite = false;
+	const { createClient, authorizationParams, pushRequest, authorize } =
+		await setup(
+			{ pushedAuthorizationRequests: { enabled: true } },
+			{
+				session: { storeSessionInDatabase: true },
+				verification: { storeInDatabase: true },
+				secondaryStorage: {
+					get: (key) => store.get(key) ?? null,
+					set(key, value) {
+						if (failNextLoadedWrite && key.endsWith(":loaded")) {
+							failNextLoadedWrite = false;
+							throw new Error("storage unavailable");
+						}
+						store.set(key, value);
+					},
+					delete: (key) => {
+						store.delete(key);
+					},
+					getAndDelete(key) {
+						const value = store.get(key) ?? null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const next = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(next));
+						return next;
+					},
+				},
+			},
+		);
+	const client = await createClient();
+
+	it("issues one code after a first visit whose cache write fails", async () => {
+		const { params } = await authorizationParams(client.client_id);
+		const pushed = await pushRequest({
+			...params,
+			client_id: client.client_id,
+			client_secret: client.client_secret!,
+		});
+		const visit = () =>
+			authorize({
+				client_id: client.client_id,
+				request_uri: pushed.body.request_uri as string,
+			});
+
+		failNextLoadedWrite = true;
+		const failed = await visit();
+		expect(failed.searchParams.get("code")).toBeNull();
+		const retries = [await visit(), await visit(), await visit()];
+		const codes = retries.filter((url) => url.searchParams.get("code"));
+		expect(codes).toHaveLength(1);
 	});
 });
 
