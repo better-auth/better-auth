@@ -73,6 +73,35 @@ function stripReservedClaims(
 }
 
 /**
+ * Returns the defined-valued entries of `claims`, dropping any key already
+ * present in `base` when given.
+ *
+ * An `undefined` value means the source did not supply the claim, so it never
+ * removes a claim from a lower-precedence source. The two-tier authority for
+ * the /userinfo response and the ID token:
+ * - Called WITH `base` (the provider's own claims): the additive rule for
+ *   third-party extension claims. A contributor may add new keys but never
+ *   replace a claim the provider already owns.
+ * - Called WITHOUT `base`: the deliberate first-party override path for the
+ *   operator's own `customUserInfoClaims` / `customIdTokenClaims`, which is
+ *   trusted to override identity claims (for example a formatted `name`). The
+ *   caller re-pins `sub` afterwards, so subject integrity holds either way
+ *   (OIDC Core §5.3.2: UserInfo `sub` MUST match the ID Token `sub`).
+ */
+export function pickClaims(
+	claims?: Record<string, unknown>,
+	base?: Record<string, unknown>,
+) {
+	const next: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(claims ?? {})) {
+		if (value === undefined) continue;
+		if (base && key in base) continue;
+		next[key] = value;
+	}
+	return next;
+}
+
+/**
  * Per-issuance claims as stored on an opaque-token row: reserved names removed
  * and values in the JSON form a signed JWT would carry, on every adapter.
  */
@@ -131,8 +160,9 @@ export interface AccessTokenClaimsInput {
  *
  * Precedence, lowest to highest: extension contributors < per-issuance
  * `accessTokenClaims` < plugin `customAccessTokenClaims` < per-resource
- * `customClaims`. Reserved names are removed from the merged result. The
- * per-issuance `authorization_details` claim, which `issueTokens` sets from
+ * `customClaims`. An `undefined` value is not supplied (see {@link pickClaims}),
+ * and reserved names are removed from the merged result. The per-issuance
+ * `authorization_details` claim, which `issueTokens` sets from
  * `authorizationDetails` and an opaque token stores, outranks every source,
  * and an empty list removes the claim.
  *
@@ -180,10 +210,10 @@ export async function resolveAccessTokenClaims(
 		: {};
 	const claims = stripReservedClaims(
 		{
-			...extensionClaims,
-			...(perRequestClaims ?? {}),
-			...pluginClaims,
-			...resourcePolicyClaims,
+			...pickClaims(extensionClaims),
+			...pickClaims(perRequestClaims),
+			...pickClaims(pluginClaims),
+			...pickClaims(resourcePolicyClaims),
 		},
 		input.opts,
 	);

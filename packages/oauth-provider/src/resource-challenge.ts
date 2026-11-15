@@ -8,6 +8,7 @@ import {
 } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import { withExposedHeaders } from "./dpop";
+import { challengeHeaders } from "./utils";
 
 const DPOP_CHALLENGE_ERRORS = new Set(["invalid_dpop_proof", "use_dpop_nonce"]);
 const OAUTH_SCOPE_TOKEN_PATTERN = /^[\x21\x23-\x5b\x5d-\x7e]+$/;
@@ -133,22 +134,11 @@ function algsParam(algorithms: readonly string[] = DPOP_SIGNING_ALGORITHMS) {
 	return `algs="${quoteAuthParam(algorithms.join(" "))}"`;
 }
 
-/**
- * `WWW-Authenticate` is not a CORS-safelisted response header, so browsers
- * hide it from cross-origin clients unless the response exposes it.
- */
-function challengeHeaders(challenge: string): Record<string, string> {
-	return {
-		"WWW-Authenticate": challenge,
-		"Access-Control-Expose-Headers": "WWW-Authenticate",
-	};
-}
-
 function buildDpopChallengeHeaders(
 	error: APIError,
 	challenge: string,
 ): Record<string, string> {
-	const headers = challengeHeaders(challenge);
+	const headers: Record<string, string> = challengeHeaders(challenge);
 	// RFC 9449 §9: a `use_dpop_nonce` challenge carries the nonce to retry with
 	// in its own `DPoP-Nonce` header. The response must not be cached (§8.2),
 	// and a browser client can act on it only when it can read both headers.

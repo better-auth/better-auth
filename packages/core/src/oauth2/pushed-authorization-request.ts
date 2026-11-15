@@ -33,6 +33,11 @@ export interface PushAuthorizationRequestInput {
 	 * authentication. Defaults to the pushed authorization request endpoint.
 	 */
 	tokenEndpoint?: string | undefined;
+	/**
+	 * The authorization server's issuer identifier, passed to client assertion
+	 * getters and custom authentication hooks.
+	 */
+	issuer?: string | undefined;
 	tokenEndpointAuth?: TokenEndpointAuth | undefined;
 	authentication?: TokenEndpointSecretAuthentication | undefined;
 	/**
@@ -63,6 +68,7 @@ export async function pushAuthorizationRequest({
 	pushedAuthorizationRequestEndpoint,
 	options,
 	tokenEndpoint,
+	issuer,
 	tokenEndpointAuth,
 	authentication,
 	headers,
@@ -88,6 +94,8 @@ export async function pushAuthorizationRequest({
 		options,
 		tokenEndpoint: tokenEndpoint || pushedAuthorizationRequestEndpoint,
 		grantType: "authorization_code",
+		endpointType: "pushed_authorization_request",
+		issuer,
 		tokenEndpointAuth,
 		authentication,
 	});

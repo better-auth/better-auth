@@ -23,6 +23,11 @@ interface AuthorizationCodeRequestInput {
 	authentication?: TokenEndpointSecretAuthentication | undefined;
 	tokenEndpointAuth?: TokenEndpointAuth | undefined;
 	tokenEndpoint?: string | undefined;
+	/**
+	 * The authorization server's issuer identifier, passed to client assertion
+	 * getters and custom authentication hooks.
+	 */
+	issuer?: string | undefined;
 	headers?: Record<string, string> | undefined;
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
@@ -58,6 +63,7 @@ export async function authorizationCodeRequest({
 	authentication,
 	tokenEndpointAuth,
 	tokenEndpoint,
+	issuer,
 	deviceId,
 	headers,
 	additionalParams = {},
@@ -81,6 +87,7 @@ export async function authorizationCodeRequest({
 		options,
 		tokenEndpoint: tokenEndpoint ?? "",
 		grantType: "authorization_code",
+		issuer,
 		tokenEndpointAuth,
 		authentication,
 	});
@@ -138,6 +145,7 @@ export async function validateAuthorizationCode({
 	tokenEndpoint,
 	authentication,
 	tokenEndpointAuth,
+	issuer,
 	deviceId,
 	headers,
 	additionalParams = {},
@@ -152,6 +160,7 @@ export async function validateAuthorizationCode({
 		authentication,
 		tokenEndpointAuth,
 		tokenEndpoint,
+		issuer,
 		deviceId,
 		headers,
 		additionalParams,
