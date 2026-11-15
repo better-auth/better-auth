@@ -375,7 +375,7 @@ The client sends `client_assertion_type=urn:ietf:params:oauth:client-assertion-t
 | `jti` | Required. A unique value for each assertion                             |
 | `iat` | Optional. When present, not older than `assertionMaxLifetime`           |
 
-The same assertion audience applies at the token, introspection, revocation, and PAR endpoints. The issuer is the only accepted audience because [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) requires it. A client that signs for an endpoint URL can be tricked into signing an assertion that a malicious server replays here. Clients should also set the JOSE header `typ` to `client-authentication+jwt`. The provider accepts an assertion without it.
+The same assertion audience applies at the token, introspection, revocation, and PAR endpoints. The issuer is the only accepted audience because [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) requires it. A client that signs for an endpoint URL can be tricked into signing an assertion that a malicious server replays here. Clients should also set the JOSE header `typ` to `client-authentication+jwt`. The provider also accepts an assertion without it or with `typ: "JWT"`.
 
 To keep accepting clients that sign for the URL of the endpoint they call while you move them to the issuer, set `assertionAudience: "issuer-or-endpoint"`. See [`assertionAudience`](/docs/plugins/oauth-provider/reference) for what it accepts and the protection it removes.
 

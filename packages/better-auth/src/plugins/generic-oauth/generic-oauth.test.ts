@@ -10,7 +10,13 @@ import { createPrivateKeyJwtClientAssertionGetter } from "@better-auth/core/oaut
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterFetch } from "@better-fetch/fetch";
 import type { JWK } from "jose";
-import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
+import {
+	decodeJwt,
+	decodeProtectedHeader,
+	exportJWK,
+	generateKeyPair,
+	SignJWT,
+} from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import type {
@@ -3138,6 +3144,7 @@ describe("oauth2", async () => {
 			});
 
 			expect(decodeJwt(assertion).aud).toBe(tokenEndpoint);
+			expect(decodeProtectedHeader(assertion).typ).toBe("JWT");
 		});
 
 		it("should handle issuer with trailing slash", () => {
@@ -3294,6 +3301,7 @@ describe("oauth2", async () => {
 			});
 
 			expect(decodeJwt(assertion).aud).toBe(tokenEndpoint);
+			expect(decodeProtectedHeader(assertion).typ).toBe("JWT");
 		});
 
 		it("should handle tenant ID as GUID", () => {
@@ -4845,6 +4853,68 @@ describe("oauth2", async () => {
 			expect(typeof capturedAssertion).toBe("string");
 			expect(decodeJwt(capturedAssertion as string).aud).toBe(
 				`http://localhost:${port}`,
+			);
+			expect(decodeProtectedHeader(capturedAssertion as string).typ).toBe(
+				"client-authentication+jwt",
+			);
+		});
+
+		it("should sign private_key_jwt assertions as JWT for the token endpoint when no issuer is discovered", async () => {
+			issueIdTokenFor("oauth2");
+			const { privateKey } = await generateKeyPair("ES256", {
+				extractable: true,
+			});
+			let capturedAssertion: unknown;
+			server.service.once("beforeTokenSigning", (_token, req) => {
+				if (
+					"body" in req &&
+					typeof req.body === "object" &&
+					req.body !== null &&
+					"client_assertion" in req.body
+				) {
+					capturedAssertion = req.body.client_assertion;
+				}
+			});
+
+			const { client, customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-assertion-token-endpoint",
+								authorizationUrl: `http://localhost:${port}/authorize`,
+								tokenUrl: `http://localhost:${port}/token`,
+								clientId,
+								tokenEndpointAuth: {
+									method: "private_key_jwt",
+									getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+										privateKeyJwk: await exportJWK(privateKey),
+										algorithm: "ES256",
+									}),
+								},
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "test-assertion-token-endpoint",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+			await simulateOAuthFlow(res.data?.url || "", headers, customFetchImpl);
+
+			expect(typeof capturedAssertion).toBe("string");
+			expect(decodeJwt(capturedAssertion as string).aud).toBe(
+				`http://localhost:${port}/token`,
+			);
+			expect(decodeProtectedHeader(capturedAssertion as string).typ).toBe(
+				"JWT",
 			);
 		});
 
