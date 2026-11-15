@@ -491,7 +491,7 @@ When `postLogin.consentReferenceId` returns a consent reference, `customAccessTo
 
 ### Custom token response fields
 
-To add fields to the token endpoint's JSON response, set `customTokenResponseFields`. It receives `grantType`, `user`, `scopes`, and the client's `metadata`. For the `authorization_code` grant, it also receives `verificationValue`, which holds the original authorization request (`query`), the consent `referenceId`, and the `sessionId`. It returns an object of fields to add. The fields go in the response, not in the token itself. The callback cannot override standard fields such as `access_token` or `scope`. It runs before any token is created.
+To add fields to the token endpoint's JSON response, set `customTokenResponseFields`. It receives `grantType`, `user`, `scopes`, and the client's `metadata`. For the `authorization_code` grant, it also receives `verificationValue`, which holds the original authorization request (`query`), the consent `referenceId`, and the `sessionId`. For a code that a plugin endpoint issued, `verificationValue` also holds the endpoint's [`serverContext`](/docs/plugins/oauth-provider/sign-in-flow#carry-your-own-state-to-the-token-request). It returns an object of fields to add. The fields go in the response, not in the token itself. The callback cannot override standard fields such as `access_token` or `scope`. It runs before any token is created.
 
 ```ts title="auth.ts"
 oauthProvider({
