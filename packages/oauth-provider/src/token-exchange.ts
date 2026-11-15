@@ -90,8 +90,9 @@ export interface OAuthTokenExchangeDelegationOptions {
 	/**
 	 * Fields to add to the current actor's entry in `act`. Runs after every
 	 * built-in check and after `allowExchange`, only for a request with an
-	 * `actor_token`. The names `sub`, `iss`, and `act` are ignored, so the
-	 * result cannot change who acted or the earlier actors.
+	 * `actor_token`. The names `sub`, `sub_profile`, `iss`, and `act` are
+	 * ignored, so the result cannot change who acted, the actor's kind, or the
+	 * earlier actors.
 	 */
 	actorClaims?: (
 		request: OAuthTokenExchangeRequest & { actor: OAuthTokenExchangeActor },

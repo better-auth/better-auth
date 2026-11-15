@@ -813,7 +813,7 @@ When the subject token's client uses pairwise subject identifiers, the provider 
 
 The provider treats every `sub` as a user ID unless `sub_profile` is `"service"`, and shows a `"service"` `sub` to every client unchanged. Use `"service"` only for client IDs. To name a service by `sub` instead of `client_id`, set `sub_profile: "service"`. Otherwise, a pairwise client sees a value that matches no client ID.
 
-Other `may_act` members, such as an email address, reach the client as you wrote them.
+Other `may_act` members, such as an email address, reach the client as you wrote them, even for a pairwise client. Do not put a user ID or another value that identifies a user in them.
 
 #### Add fields to the actor
 

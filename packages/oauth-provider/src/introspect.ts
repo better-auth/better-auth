@@ -538,8 +538,8 @@ export async function requireActiveAccessTokenWithClaims(
 }
 
 /**
- * Resolves pairwise `sub`, and user actors in `act`, on an introspection
- * payload.
+ * Resolves pairwise `sub`, and users in `act` and `may_act`, on an
+ * introspection payload.
  * Applied at the presentation layer so internal validation functions
  * keep real user.id (needed for user lookup in /userinfo).
  */
