@@ -53,7 +53,8 @@ interface JwksCacheEntry {
 	/** Start time of the fetch that produced `jwks`. */
 	fetchedAt: number;
 	/**
-	 * Start time of the last refetch for a key missing from `jwks`, whatever
+	 * Completion timestamp of the last failed expired-cache refetch attempt, or
+	 * start time of the last refetch for a key missing from `jwks`, whatever
 	 * its outcome.
 	 */
 	refetchedAt: number;
@@ -385,10 +386,19 @@ export async function verifyJwsToken<PayloadType = JWTPayload>(
 				opts.verifyOptions,
 			);
 		} catch (error) {
-			const refreshed =
-				refreshes < 2 && shouldRefetchCachedJwksWithoutKid(error, resolved)
-					? await resolved.refresh?.(jwks)
-					: undefined;
+			let refreshed: JSONWebKeySet | undefined;
+			if (
+				refreshes < 2 &&
+				shouldRefetchCachedJwksWithoutKid(error, resolved) &&
+				resolved.refresh
+			) {
+				try {
+					refreshed = await resolved.refresh(jwks);
+				} catch {
+					// A failed refresh during verification of a kid-less token must
+					// not displace the original JWT verification error.
+				}
+			}
 			if (!refreshed) throw error;
 			jwks = refreshed;
 		}
@@ -458,13 +468,15 @@ async function getJwksForVerification(
 		now - entry.fetchedAt < JWKS_CACHE_TTL_MS ? entry.jwks : undefined;
 	if (!cached) {
 		const stale =
-			entry.jwks && now - entry.fetchedAt < JWKS_MAX_STALE_MS
+			entry.jwks &&
+			Array.isArray(entry.jwks.keys) &&
+			now - entry.fetchedAt < JWKS_MAX_STALE_MS
 				? entry.jwks
 				: undefined;
 		const canUseStale =
 			stale && (!kid || stale.keys.some((jwk) => jwk.kid === kid));
 
-		if (canUseStale && now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) {
+		if (stale && now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) {
 			const refresh = (failed: JSONWebKeySet) =>
 				refreshJwks(entry, failed, opts.jwksFetch);
 			return { jwks: stale, kid, refresh };
@@ -473,8 +485,13 @@ async function getJwksForVerification(
 		try {
 			return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
 		} catch (error) {
-			entry.refetchedAt = Date.now();
-			if (canUseStale) {
+			const failedAt = Date.now();
+			entry.refetchedAt = failedAt;
+			if (
+				canUseStale &&
+				entry.fetchedAt !== undefined &&
+				failedAt - entry.fetchedAt < JWKS_MAX_STALE_MS
+			) {
 				const refresh = (failed: JSONWebKeySet) =>
 					refreshJwks(entry, failed, opts.jwksFetch);
 				return { jwks: stale, kid, refresh };
@@ -486,7 +503,10 @@ async function getJwksForVerification(
 		refreshJwks(entry, failed, opts.jwksFetch);
 	// Without `kid`, key selection is deferred to JOSE because RFC 7515 makes
 	// the header parameter optional.
-	if (!kid || cached.keys.some((jwk) => jwk.kid === kid)) {
+	if (
+		!kid ||
+		(Array.isArray(cached.keys) && cached.keys.some((jwk) => jwk.kid === kid))
+	) {
 		return { jwks: cached, kid, refresh };
 	}
 	return { jwks: (await refresh(cached)) ?? cached, kid };
