@@ -1,4 +1,7 @@
-import type { OAuthAuthorizationDetail } from "@better-auth/oauth-provider";
+import type {
+	OAuthActorClaim,
+	OAuthAuthorizationDetail,
+} from "@better-auth/oauth-provider";
 import {
 	getOAuthProviderApi,
 	ResourceUriSchema,
@@ -14,6 +17,7 @@ import {
 import { APIError, isAPIError } from "better-auth/api";
 import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 import * as z from "zod";
+import { parseActor } from "./actor";
 import {
 	getRegisteredDetailsTypes,
 	parseAuthorizationDetails,
@@ -247,6 +251,14 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 			if (!user) {
 				oauthError("unknown_user_id", CIBA_ERROR_CODES.UNKNOWN_USER_ID.message);
 			}
+			let actor: OAuthActorClaim | undefined;
+			if (options.resolveActor) {
+				const resolved = await options.resolveActor(
+					{ client, user, scopes },
+					ctx,
+				);
+				actor = resolved === undefined ? undefined : parseActor(resolved);
+			}
 
 			// CIBA §7.1: requested_expiry may shorten, never extend, the lifetime.
 			const expiresIn = Math.min(
@@ -273,6 +285,7 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 					acrValues: acrValues ?? null,
 					authorizationDetails: storeAuthorizationDetails(authorizationDetails),
 					resources: resources ?? null,
+					actor: actor ?? null,
 					status: "pending",
 					...(ping
 						? {
@@ -308,6 +321,7 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 							bindingMessage,
 							acrValues,
 							authorizationDetails,
+							actor,
 							url: url.toString(),
 							expiresAt,
 						},

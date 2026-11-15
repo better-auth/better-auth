@@ -278,6 +278,36 @@ Discovery metadata lists the types as `authorization_details_types_supported`. O
 
 To limit a client to some of the types, register it with `authorization_details_types` (RFC 9396 §10), such as `["payment_initiation"]`. Registration fails with `invalid_client_metadata` when a type is not in `authorizationDetailsTypes`. A client without the field may request every listed type.
 
+## Issue delegated tokens
+
+Some clients act for the user instead of being the user's own app, such as an AI agent that books a trip after the user approves. Its access token should say both who the user is and who acts for them. RFC 8693 §4.1 calls this a delegated token: `sub` is the user, and the `act` claim names the actor. CIBA itself defines no actor, so the provider follows RFC 8693.
+
+To issue delegated tokens, return the actor from `resolveActor`:
+
+```ts title="auth.ts"
+ciba({
+  resultPage: "/ciba",
+  sendNotification,
+  // The client is an agent that acts for the user it names.
+  resolveActor: ({ client }) => ({ sub: client.clientId, sub_profile: "service" }),
+});
+```
+
+`resolveActor` runs at `/oauth2/bc-authorize`, after the client authenticates and the `login_hint` resolves to a user. It receives `{ client, user, scopes }` and the endpoint context. The provider stores the actor with the request, so it does not change between the request and the poll. Then:
+
+1. `sendNotification` receives the actor as `actor`, and the consent page receives it as JSON in the `actor` query parameter. Show it, so the user knows who will hold the tokens.
+2. The access token carries the actor as `act`. A JWT access token has it in its payload. For an opaque access token, introspection returns it.
+3. The token response has no refresh token, even with `offline_access`, and the returned `scope` leaves out `offline_access`. A refreshed token would not carry `act`.
+
+Return `undefined` to issue a token without `act`. Throw an `APIError` to refuse the request: the client receives that error, and no request is created and no notification is sent.
+
+The actor is your server's assertion, and resource servers trust it as they trust `sub`. Follow these rules:
+
+* Return only an actor your server has verified. The authenticated `client` is verified. To name a different agent, verify its credential from the request, such as a signed assertion in a header that `ctx.request` carries, before you return it. Never copy an identifier the client sends without checking it.
+* Set `sub_profile: "service"` on a client or agent actor. Without it, a pairwise client reads the actor's `sub` as a user's pairwise subject.
+
+The provider checks that the actor has the `act` shape: a non-empty string `sub`, an optional string `sub_profile`, and an optional nested `act` of the same shape. A malformed actor fails the request with `server_error`, and no request is created.
+
 ## Decide from your own app
 
 When your own app can reach the user, such as a mobile app that shows a push notification with Approve and Deny buttons, record the decision from your server with `auth.api.completeCibaRequest` instead of sending the user to the link. `sendNotification` receives the `requestId` to send to the app:
@@ -347,7 +377,7 @@ Starts a request. It accepts only `application/x-www-form-urlencoded` (CIBA §7.
 
 ### `POST /oauth2/token`
 
-The provider's token endpoint. With `grant_type=urn:openid:params:grant-type:ciba` and the `auth_req_id`, it returns the tokens once the user approves, or one of the errors below. Each `auth_req_id` issues tokens once. The poll may send `resource` to narrow the token to some of the approved resources (RFC 8707 §2.2). For a request with authorization details, the response carries the granted `authorization_details`. The poll cannot narrow them: once the user approves, a poll that sends `authorization_details` is rejected with `invalid_authorization_details`.
+The provider's token endpoint. With `grant_type=urn:openid:params:grant-type:ciba` and the `auth_req_id`, it returns the tokens once the user approves, or one of the errors below. Each `auth_req_id` issues tokens once. The poll may send `resource` to narrow the token to some of the approved resources (RFC 8707 §2.2). For a request with authorization details, the response carries the granted `authorization_details`. For a request with an actor, the access token carries `act` and the response has no refresh token. The poll cannot narrow them: once the user approves, a poll that sends `authorization_details` is rejected with `invalid_authorization_details`.
 
 ## Options
 
@@ -355,7 +385,7 @@ export const cibaOptionsType = {
 	sendNotification: {
 		type: "(notification, ctx) => void | Promise<void>",
 		description:
-			"Tell the user about the request: send them the link, or reach them through your own app with `requestId`. Receives `{ requestId, user, clientId, clientName, scopes, bindingMessage, acrValues, authorizationDetails, url, expiresAt }`; pass `requestId` to `completeCibaRequest` when your own app collects the decision. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A failure is logged, and the client still receives its `auth_req_id`.",
+			"Tell the user about the request: send them the link, or reach them through your own app with `requestId`. Receives `{ requestId, user, clientId, clientName, scopes, bindingMessage, acrValues, authorizationDetails, actor, url, expiresAt }`; pass `requestId` to `completeCibaRequest` when your own app collects the decision. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A failure is logged, and the client still receives its `auth_req_id`.",
 	},
 	resultPage: {
 		type: "string",
@@ -373,6 +403,11 @@ export const cibaOptionsType = {
 		default: '["poll"]',
 		description:
 			"Delivery modes clients may register for, advertised as `backchannel_token_delivery_modes_supported`.",
+	},
+	resolveActor: {
+		type: "({ client, user, scopes }, ctx) => OAuthActorClaim | undefined | Promise<OAuthActorClaim | undefined>",
+		description:
+			"Name who acts for the user, issued as the access token's `act` claim (RFC 8693 §4.1). Return only an actor your server has verified, and set `sub_profile: \"service\"` on a client or agent. Delegated tokens get no refresh token. Throw an `APIError` to refuse the request. See [Issue delegated tokens](#issue-delegated-tokens).",
 	},
 	expiresIn: {
 		type: "number",
@@ -413,6 +448,7 @@ The backchannel endpoint returns these [CIBA §13](https://openid.net/specs/open
 | `unknown_user_id`               | No user matches the `login_hint`.                                                                                                                                        |
 | `invalid_target`                | A `resource` is malformed or unknown.                                                                                                                                    |
 | `invalid_authorization_details` | `authorization_details` is malformed, has a type that is not in `authorizationDetailsTypes`, is not among the client's registered types, or fails its type's `validate`. |
+| `server_error`                  | `resolveActor` returned an actor without the `act` shape.                                                                                                                |
 
 The token poll returns:
 
@@ -426,6 +462,7 @@ The token poll returns:
 | `invalid_target`                | The poll's `resource` was not approved for this request. The request stays approved.                                          |
 | `invalid_scope`                 | The client no longer allows an approved scope, or a requested resource no longer allows `openid`. The request stays approved. |
 | `invalid_authorization_details` | The poll sent `authorization_details`. The request stays approved.                                                            |
+| `server_error`                  | The stored actor no longer has the `act` shape. The request stays approved.                                                   |
 
 ## Schema
 
@@ -441,6 +478,7 @@ The plugin adds one model, `cibaRequest`:
 | `acrValues`                        | string\[] | The optional requested ACR values, in order of preference.                                                                                                               |
 | `authorizationDetails`             | string    | The optional RFC 9396 authorization details as JSON text, narrowed to the granted ones on approval.                                                                      |
 | `resources`                        | string\[] | The optional resource indicators.                                                                                                                                        |
+| `actor`                            | json      | The optional actor `resolveActor` returned, issued as the access token's `act` claim.                                                                                    |
 | `status`                           | string    | `pending`, `approved`, or `denied`. A request is deleted when tokens are issued, when the client learns of a denial or expiry, or when a later request finds it expired. |
 | `clientNotificationEndpoint`       | string    | Ping mode only: the client's notification endpoint when the request started.                                                                                             |
 | `encryptedClientNotificationToken` | string    | Ping mode only: the client's `client_notification_token`, encrypted with the server secret.                                                                              |
@@ -459,6 +497,7 @@ The plugin adds one model, `cibaRequest`:
 * **Limit who a client can name.** Each request notifies a person, and `unknown_user_id` tells the client whether a hint matched a user, as CIBA §13 specifies. Each IP address can start 10 requests per minute. When anyone can register a client, resolve `login_hint` only to users the client already knows, as shown in [Register a client](#register-a-client).
 * **The binding message ties the two devices together.** Ask clients to send a short, random `binding_message` and to display it, so the user can tell their request apart from one someone else started at the same moment. Render it as text.
 * **Authorization details come from the client.** The provider checks only their shape and type, and leaves each field to your `validate`. Validate strictly, render them as text, and have your API enforce the granted details itself.
+* **The actor is your assertion.** Resource servers trust `act` as they trust `sub`. Return an actor from `resolveActor` only after your server has verified it, and show it to the user before they approve.
 * **The ping callback only reaches safe endpoints.** Registration and each request check that the notification endpoint is absolute `https` on a public host, with no credentials or fragment, the same rules as `backchannel_logout_uri`. Before each ping, the server also checks the stored endpoint again and resolves its host, and skips the ping if any address is not public. See [Ping mode](#ping-mode) for what this does not cover, and restrict outbound network access where you can.
 * **Tokens are issued once.** An approved request is claimed and deleted in one atomic step, so of two concurrent polls only one receives tokens. The `auth_req_id` is stored hashed.
 * **Only an active session can decide.** The provider's own pages confirm the approving session in the session store before they record an approval, and before they record a denial from the consent page. With `session.cookieCache`, a session you revoked can still be served from the cache until it expires. That session cannot approve or deny a request, and the user is sent to the result page with an error. The request stays pending, and the user can decide again after signing in. `completeCibaRequest` does not use sessions, so your server owns that check.
@@ -468,7 +507,7 @@ The plugin adds one model, `cibaRequest`:
 * Push delivery is not supported.
 * Only `login_hint` is supported; `id_token_hint` and `login_hint_token` are rejected with `invalid_request`.
 * `user_code` and signed authentication requests are not supported.
-* Refresh tokens do not store authorization details, so a request with authorization details gets no refresh token, and its access token cannot be exchanged.
+* Refresh tokens do not store authorization details or an actor, so a request with either gets no refresh token. An access token with authorization details cannot be exchanged.
 * Only `/oauth2/bc-authorize` accepts authorization details.
 * There is no API that lists a user's pending requests. To show them in your app, keep the `requestId`s that `sendNotification` receives.
 * There is no per-user limit on requests; the limit applies per IP address.

@@ -5,6 +5,7 @@ import {
 	toResourceList,
 	validateClientScopes,
 } from "@better-auth/oauth-provider/internal";
+import { parseActor } from "./actor";
 import { readAuthorizationDetails } from "./authorization-details";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
 import type { CibaRequest } from "./schema";
@@ -84,10 +85,12 @@ export const createCibaGrantHandler =
 		const authorizationDetails = readAuthorizationDetails(
 			request.authorizationDetails,
 		);
-		// The provider issues no refresh token with authorization details, so
-		// the returned scope leaves out `offline_access`.
+		const actor = request.actor ? parseActor(request.actor) : undefined;
+		// The provider issues no refresh token with authorization details or an
+		// actor, so the returned scope leaves out `offline_access`.
 		const scopes = parseScopes(request.scope).filter(
-			(scope) => !authorizationDetails || scope !== "offline_access",
+			(scope) =>
+				scope !== "offline_access" || (!authorizationDetails && !actor),
 		);
 		validateClientScopes(client, scopes);
 		// RFC 8707 §2.2: the poll may narrow the approved resources.
@@ -167,5 +170,6 @@ export const createCibaGrantHandler =
 			// authentication, binds the issued token.
 			confirmation: binding,
 			authorizationDetails,
+			act: actor,
 		});
 	};

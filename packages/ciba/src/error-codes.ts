@@ -33,6 +33,7 @@ export const CIBA_ERROR_CODES = defineErrorCodes({
 		"The authorization_details are malformed, of an unsupported type, or invalid for their type",
 	AUTHORIZATION_DETAILS_ON_POLL:
 		"authorization_details is not accepted when polling the token endpoint",
+	INVALID_ACTOR: "The actor for this request is not a valid RFC 8693 act claim",
 	UNSUPPORTED_ACR:
 		'The acr, or "0" when none is stated, is not in the provider\'s acrValuesSupported',
 });

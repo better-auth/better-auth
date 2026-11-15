@@ -100,6 +100,8 @@ export function cibaApprovalRequest(
 				acr_values: request.acrValues?.join(" ") || undefined,
 				// For the consent page to show; approval grants the stored details.
 				authorization_details: request.authorizationDetails ?? undefined,
+				// JSON, for the consent page to show who will act for the user.
+				actor: request.actor ? JSON.stringify(request.actor) : undefined,
 			};
 			return {
 				query,

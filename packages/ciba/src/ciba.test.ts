@@ -1,10 +1,12 @@
 import type {
+	OAuthActorClaim,
 	OAuthAuthenticationContext,
 	OAuthClient,
 } from "@better-auth/oauth-provider";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import { APIError } from "better-auth/api";
 import { deriveDpopJkt } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -57,6 +59,11 @@ const validatePayment = vi.fn((detail: Record<string, unknown>) =>
 	Object.keys(detail).every((key) => PAYMENT_FIELDS.has(key)),
 );
 
+// No actor unless a test returns one, so every other test covers the default.
+const resolveActor = vi.fn<NonNullable<CibaOptions["resolveActor"]>>(
+	() => undefined,
+);
+
 let lastNotification: CibaNotification | undefined;
 const sendNotification = vi.fn((notification: CibaNotification) => {
 	lastNotification = notification;
@@ -95,6 +102,7 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 				interval: INTERVAL,
 				deliveryModes: ["poll", "ping"],
 				sendNotification,
+				resolveActor,
 				authorizationDetailsTypes: {
 					[PAYMENT]: { validate: validatePayment },
 					[ACCOUNTS]: { validate: () => true },
@@ -1926,5 +1934,167 @@ describe("ciba authorization_details claim ownership", async () => {
 			instance.customFetchImpl,
 		);
 		expect(introspection.authorization_details).toEqual([granted]);
+	});
+});
+
+/**
+ * @see https://www.rfc-editor.org/rfc/rfc8693.html#section-4.1
+ */
+describe("ciba delegated tokens", () => {
+	const agent: OAuthActorClaim = { sub: "agent-1", sub_profile: "service" };
+
+	async function cibaRequestRow(authReqId: string) {
+		const ctx = await auth.$context;
+		return ctx.adapter.findOne<{ id: string; actor?: unknown }>({
+			model: "cibaRequest",
+			where: [{ field: "authReqId", value: await hashAuthReqId(authReqId) }],
+		});
+	}
+
+	it("issues an access token for the user with the actor as act", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start({ resource });
+		expect(resolveActor).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				client: expect.objectContaining({ clientId: pollClient.client_id }),
+				user: expect.objectContaining({ email: testUser.email }),
+				scopes: ["openid", "profile"],
+			}),
+			expect.anything(),
+		);
+		expect(lastNotification!.actor).toEqual(agent);
+		const consent = await openLink(url);
+		expect(JSON.parse(consent.searchParams.get("actor")!)).toEqual(agent);
+		await answerConsent(consent, true);
+
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		const claims = decodeJwt(issued.body.access_token as string);
+		expect(claims.sub).toBe(lastNotification!.user.id);
+		expect(claims.act).toEqual(agent);
+	});
+
+	it("returns the actor at introspection of an opaque access token", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start();
+		await approve(url);
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		const introspection = await introspect(issued.body.access_token);
+		expect(introspection.active).toBe(true);
+		expect(introspection.act).toEqual(agent);
+	});
+
+	it("issues the actor for a request decided through completeCibaRequest", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId } = await start({ resource });
+		await auth.api.completeCibaRequest({
+			body: {
+				requestId: lastNotification!.requestId,
+				userId: lastNotification!.user.id,
+				decision: "approved",
+			},
+		});
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		expect(decodeJwt(issued.body.access_token as string).act).toEqual(agent);
+	});
+
+	it("issues no refresh token and leaves offline_access out of the scope", async () => {
+		const client = await createClient(POLL, {
+			grant_types: [CIBA_GRANT_TYPE, "refresh_token"],
+		});
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start(
+			{ scope: "openid offline_access" },
+			client,
+		);
+		await approve(url);
+		const issued = await poll(authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.refresh_token).toBeUndefined();
+		expect(issued.body.scope).toBe("openid");
+	});
+
+	it("issues no act and keeps the refresh token without an actor", async () => {
+		const client = await createClient(POLL, {
+			grant_types: [CIBA_GRANT_TYPE, "refresh_token"],
+		});
+		const { authReqId, url } = await start(
+			{ scope: "openid offline_access", resource },
+			client,
+		);
+		expect(lastNotification!.actor).toBeUndefined();
+		const consent = await openLink(url);
+		expect(consent.searchParams.get("actor")).toBeNull();
+		await answerConsent(consent, true);
+		const issued = await poll(authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.refresh_token).toEqual(expect.any(String));
+		expect(issued.body.scope).toBe("openid offline_access");
+		expect(decodeJwt(issued.body.access_token as string).act).toBeUndefined();
+	});
+
+	it("refuses the request with the error resolveActor throws", async () => {
+		const notified = sendNotification.mock.calls.length;
+		resolveActor.mockRejectedValueOnce(
+			new APIError("BAD_REQUEST", {
+				error: "access_denied",
+				error_description: "agent attestation failed",
+			}),
+		);
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+		});
+		expect(res.status).toBe(400);
+		expect(res.body).toMatchObject({
+			error: "access_denied",
+			error_description: "agent attestation failed",
+		});
+		expect(sendNotification.mock.calls.length).toBe(notified);
+	});
+
+	it.each([
+		["an actor without sub", { sub_profile: "service" }],
+		["an empty sub", { sub: "" }],
+		["a nested actor without sub", { sub: "agent-1", act: { iss: "x" } }],
+		["a sub_profile that is not a string", { sub: "agent-1", sub_profile: 1 }],
+	])("refuses %s without creating the request", async (_, actor) => {
+		const notified = sendNotification.mock.calls.length;
+		resolveActor.mockResolvedValueOnce(actor as unknown as OAuthActorClaim);
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+		});
+		expect(res.status).toBe(500);
+		expect(res.body.error).toBe("server_error");
+		expect(sendNotification.mock.calls.length).toBe(notified);
+	});
+
+	it("keeps the approval when the stored actor is invalid", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start();
+		await approve(url);
+		const row = await cibaRequestRow(authReqId);
+		const ctx = await auth.$context;
+		const where = [{ field: "id", value: row!.id }];
+		await ctx.adapter.update({
+			model: "cibaRequest",
+			where,
+			update: { actor: { sub_profile: "service" } },
+		});
+		const refused = await poll(authReqId);
+		expect(refused.status).toBe(500);
+		expect(refused.body.error).toBe("server_error");
+
+		await ctx.adapter.update({
+			model: "cibaRequest",
+			where,
+			update: { actor: agent },
+		});
+		await waitInterval();
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
 	});
 });
