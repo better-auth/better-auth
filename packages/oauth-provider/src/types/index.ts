@@ -896,7 +896,7 @@ export interface OAuthUserInfoExtensionInput {
  * `extendOAuthProvider(ctx, extension)` (or the `oauthProvider({ extensions })`
  * option).
  *
- * All seven kinds live on one object so a single protocol plugin (for example
+ * Every kind lives on one object so a single protocol plugin (for example
  * RFC 8693 token exchange, which adds a grant, advertises metadata, and emits
  * claims) registers atomically and the host validates the combined surface in
  * one place. Every field is independently optional, so a single-concern plugin
@@ -909,8 +909,8 @@ export interface OAuthUserInfoExtensionInput {
  *   assertion type, or interaction parameter that another extension already
  *   registered is rejected at setup, since the second would otherwise be
  *   silently unreachable.
- * - Additive kinds (`metadata`, `claims`) never override authorization-server
- *   core; a metadata key the provider or a client discovery sets is kept, with
+ * - Additive kinds (`metadata`, `claims`, `tokenResponseFields`) never
+ *   override authorization-server core; a metadata key the provider or a client discovery sets is kept, with
  *   a logged warning. When two extensions contribute the same metadata key as
  *   lists, the lists combine in registration order without duplicates; any
  *   other collision resolves to the first-registered extension, with a logged
@@ -956,6 +956,20 @@ export interface OAuthProviderExtension {
 	beforeTokenIssuance?: (
 		input: OAuthBeforeTokenIssuanceInput,
 	) => Awaitable<void>;
+	/**
+	 * Additional fields for the token endpoint's JSON response, such as a
+	 * session handle the extension's protocol returns with the tokens. Like
+	 * `claims`, strictly additive: the provider's own fields (`access_token`,
+	 * `token_type`, `expires_in`, `expires_at`, `refresh_token`, `scope`,
+	 * `id_token`, `issued_token_type`, `authorization_details`) are left out.
+	 * The first extension to contribute a field keeps it, and the
+	 * `customTokenResponseFields` option overrides both. It runs after every
+	 * `beforeTokenIssuance` and before any token is stored, for every grant,
+	 * so check `grantType` or `verificationValue` to answer only your own.
+	 */
+	tokenResponseFields?: (
+		input: OAuthBeforeTokenIssuanceInput,
+	) => Awaitable<Record<string, unknown>>;
 	/**
 	 * Additional claims for access tokens, ID tokens, and the UserInfo response.
 	 * Strictly additive: a contributor can add new claims but never replace an

@@ -595,7 +595,7 @@ oauthProvider({
 
 ## Provider extensions
 
-Companion plugins call `extendOAuthProvider()` from their `init()` hook to add token grants, assertion-based client authentication, discovery metadata, claims, client registration metadata, client-id discovery, and interaction requests. The [CIMD plugin](/docs/plugins/cimd) uses this to add URL-based client discovery.
+Companion plugins call `extendOAuthProvider()` from their `init()` hook to add token grants, assertion-based client authentication, discovery metadata, claims, token response fields, issuance checks, client registration metadata, client-id discovery, and interaction requests. The [CIMD plugin](/docs/plugins/cimd) uses this to add URL-based client discovery.
 
 An interaction request is a request other than an authorization request that the user approves through the `/oauth2/authorize` sign-in, account selection, post-login, and consent pages. It is approved when the user accepts consent, instead of issuing an authorization code. `oauthDeviceAuthorization()` uses one keyed by `user_code`, and `ciba()` one keyed by `ciba_request_id`.
 
@@ -634,6 +634,7 @@ export const customOAuthExtension = () =>
 * `grants`, `clientAuthentication`, and `interactionRequests` must not overlap across extensions. A duplicate grant type, auth method, assertion type, or interaction parameter fails at startup. Extension grants and auth methods are advertised in discovery.
 * `beforeTokenIssuance` refuses an issuance by throwing, like the [option of the same name](/docs/plugins/oauth-provider/tokens#refuse-token-issuance). Every extension's callback runs, in registration order, before the option's. A grant that consumes a stored request, such as a device code, can pass it to `issueTokens` as `grantRequest`, and every `beforeTokenIssuance` receives it.
 * `metadata` and `claims` only add keys. A key the provider owns is kept, even one it leaves unset because a feature is off, and so is a key a client discovery's `discoveryMetadata` sets. When two client discoveries set the same key, the later one wins. A metadata key two extensions both contribute as lists is combined in registration order, without duplicates. Any other key two extensions contribute resolves to the first one registered.
+* `tokenResponseFields` adds fields to the token endpoint's JSON response, such as a session handle your protocol returns with the tokens. It receives the same input as [`beforeTokenIssuance`](/docs/plugins/oauth-provider/tokens#refuse-token-issuance) and runs for every grant after it, before any token is stored. Check `grantType` or `verificationValue` to add fields only to responses for your own grant or codes. The provider's own fields (`access_token`, `token_type`, `expires_in`, `expires_at`, `refresh_token`, `scope`, `id_token`, `issued_token_type`, `authorization_details`) are left out with a warning. When two extensions add the same field, the first one registered keeps it, and the `customTokenResponseFields` option overrides both.
 * Discovery logs a warning for each contribution it ignores, once per server rather than on every request. To advertise extension claims, set `advertisedMetadata.claims_supported`.
 * A `clientDiscovery` entry has a stable `id` stored as client provenance. Changing it requires migrating the owned clients, and removing it makes them fail closed.
 

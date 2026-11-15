@@ -521,6 +521,7 @@ async function collectClaims(
 	run: (
 		extension: OAuthProviderExtension,
 	) => Awaitable<Record<string, unknown> | undefined>,
+	contributionLabel = "claim",
 ) {
 	const extensions = getOAuthProviderExtensions(opts);
 	const claims: Record<string, unknown> = {};
@@ -536,7 +537,7 @@ async function collectClaims(
 			const owner = owners.get(key);
 			if (owner !== undefined) {
 				logger.warn(
-					`oauth-provider: ${describeExtension(extensions, owner)} and ${describeExtension(extensions, extension)} both contributed the claim "${key}"; keeping the value from ${describeExtension(extensions, owner)}.`,
+					`oauth-provider: ${describeExtension(extensions, owner)} and ${describeExtension(extensions, extension)} both contributed the ${contributionLabel} "${key}"; keeping the value from ${describeExtension(extensions, owner)}.`,
 				);
 				continue;
 			}
@@ -562,6 +563,46 @@ export async function runBeforeTokenIssuance(
 		}
 	}
 	if (opts.beforeTokenIssuance) await opts.beforeTokenIssuance(createInput());
+}
+
+/**
+ * Token response fields the provider sets itself (RFC 6749 §5.1, RFC 8693
+ * §2.2.1, RFC 9396 §7). An extension cannot contribute them.
+ */
+const RESERVED_TOKEN_RESPONSE_FIELDS = new Set([
+	"access_token",
+	"token_type",
+	"expires_in",
+	"expires_at",
+	"refresh_token",
+	"scope",
+	"id_token",
+	"issued_token_type",
+	"authorization_details",
+]);
+
+/**
+ * Collects every extension's `tokenResponseFields`, first contributor winning
+ * a field, without the fields the provider owns.
+ */
+export async function collectExtensionTokenResponseFields(
+	opts: OAuthOptions<Scope[]>,
+	createInput: () => OAuthBeforeTokenIssuanceInput,
+) {
+	const fields = await collectClaims(
+		opts,
+		(extension) => extension.tokenResponseFields?.(createInput()),
+		"token response field",
+	);
+	for (const key of Object.keys(fields)) {
+		if (RESERVED_TOKEN_RESPONSE_FIELDS.has(key)) {
+			logger.warn(
+				`oauth-provider: an extension contributed the token response field "${key}", which the provider sets; leaving it out.`,
+			);
+			delete fields[key];
+		}
+	}
+	return fields;
 }
 
 export function collectExtensionAccessTokenClaims(

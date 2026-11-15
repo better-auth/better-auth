@@ -541,7 +541,7 @@ Introspection of an opaque access token passes the same `grantId` that issuance 
 
 ### Custom token response fields
 
-To add fields to the token endpoint's JSON response, set `customTokenResponseFields`. It receives `grantType`, `user`, `scopes`, the client's `metadata`, and the [`grantId`](#per-authorization-grant-id) when the issuance has one. For the `authorization_code` grant, it also receives `verificationValue`, which holds the original authorization request (`query`), the consent `referenceId`, and the `sessionId`. It returns an object of fields to add. The fields go in the response, not in the token itself. The callback cannot override standard fields such as `access_token` or `scope`. It runs after [`beforeTokenIssuance`](#refuse-token-issuance), and before any token is created.
+To add fields to the token endpoint's JSON response, set `customTokenResponseFields`. It receives `grantType`, `user`, `scopes`, the client's `metadata`, and the [`grantId`](#per-authorization-grant-id) when the issuance has one. For the `authorization_code` grant, it also receives `verificationValue`, which holds the original authorization request (`query`), the consent `referenceId`, and the `sessionId`. It returns an object of fields to add. The fields go in the response, not in the token itself. The callback cannot override standard fields such as `access_token` or `scope`. It runs after [`beforeTokenIssuance`](#refuse-token-issuance), and before any token is created. A provider extension can add fields with its own [`tokenResponseFields`](/docs/plugins/oauth-provider/reference#provider-extensions), and this option overrides a field an extension adds.
 
 ```ts title="auth.ts"
 oauthProvider({
