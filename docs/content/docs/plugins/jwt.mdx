@@ -144,7 +144,9 @@ Since this key is not subject to frequent changes, it can be cached indefinitely
 The key ID (`kid`) that was used to sign a JWT is included in the header of the token.
 In case a JWT with a different `kid` is received, it is recommended to fetch the JWKS again.
 
-Verifiers that run in the same process as the auth server read the keys directly instead of requesting `/jwks`. These include the OAuth provider's introspection, revocation, and end-session endpoints, `oauthProviderResourceClient(auth)`, and `requireMcpAuth`. That read skips the router, so hooks and rate limits on `/jwks` do not apply to it.
+When the OAuth provider signs tokens with the JWT plugin, verifiers in the same process as the auth server read the keys directly instead of requesting `/jwks`, unless `jwks.remoteUrl` is set. These include the provider's introspection, revocation, and end-session endpoints, `oauthProviderResourceClient(auth)`, and `requireMcpAuth`. The read skips the router, so hooks and rate limits on `/jwks` do not apply to it. Passing an explicit `jwksUrl` to `oauthProviderResourceClient(auth)` or `requireMcpAuth` fetches the keys over HTTP instead.
+
+Access tokens are JWTs only when the client requests a `resource` and `disableJwtPlugin` is off. Otherwise they are opaque, and have no signing keys to read. Verify opaque tokens by introspection with `remoteVerify` in `oauthProviderResourceClient` or `createMcpProtectedRequestHandler`; `requireMcpAuth` verifies JWT access tokens only.
 
 ```json
   {
@@ -586,3 +588,7 @@ jwt({
   }
 })
 ```
+
+When a verifier in the same process reads the keys, `getJwks` receives the request being verified in `ctx.request` and `ctx.headers`. That applies to introspection, revocation, end-session, and `requireMcpAuth`. `oauthProviderResourceClient(auth)` does not pass its request to `getJwks`, so there `ctx` carries only the auth context in `ctx.context`.
+
+Because `getJwks` can return different keys for each request, such as per tenant, these verifiers do not cache its result. They call it on every verification, so cache inside your store if reads are expensive. Keep any such cache keyed by whatever your store selects keys by.

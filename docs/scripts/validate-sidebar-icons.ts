@@ -166,7 +166,7 @@ if (pageIcons.length !== 173) {
 }
 if (hash !== expectedHash) {
 	errors.push(
-		`sidebar icon snapshot changed: expected ${expectedHash}, received ${hash}. If you added, moved, or changed a page icon on purpose, update expectedHash and the expected page icon count in docs/scripts/validate-sidebar-icons.ts.`,
+		`sidebar icon snapshot changed: expected ${expectedHash}, received ${hash}. If you added, removed, moved, or changed a section or page icon on purpose, update expectedHash in docs/scripts/validate-sidebar-icons.ts. If the number of section or page icons changed, also update the matching expected count.`,
 	);
 }
 if (errors.length > 0) {
