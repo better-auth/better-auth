@@ -112,6 +112,67 @@ function isClientSecretTokenEndpointAuth(
 	);
 }
 
+const WELL_KNOWN_DOCUMENTS = [
+	"openid-configuration",
+	"oauth-authorization-server",
+] as const;
+
+/**
+ * The issuer identifiers `discoveryUrl` can be built from, or `undefined` when
+ * it is not a well-known URL.
+ *
+ * OpenID Connect Discovery 1.0 §4 appends the well-known path to the issuer,
+ * and RFC 8414 §3.1 inserts it between the host and the issuer's path. Both
+ * remove a terminating `/` from the issuer first.
+ */
+function issuersOfDiscoveryUrl(discoveryUrl: string): string[] | undefined {
+	const { origin, pathname } = new URL(discoveryUrl);
+	const issuers: string[] = [];
+	const add = (path: string) =>
+		issuers.push(`${origin}${path.endsWith("/") ? path.slice(0, -1) : path}`);
+	for (const document of WELL_KNOWN_DOCUMENTS) {
+		const wellKnown = `/.well-known/${document}`;
+		if (pathname.endsWith(wellKnown)) {
+			add(pathname.slice(0, -wellKnown.length));
+		}
+		if (pathname.startsWith(`${wellKnown}/`)) {
+			add(pathname.slice(wellKnown.length));
+		}
+	}
+	return issuers.length > 0 ? issuers : undefined;
+}
+
+/**
+ * Returns why a discovered issuer must not be used, or `undefined` when it can.
+ * RFC 8414 §3.3: a document published for another issuer must not be used.
+ */
+function checkDiscoveredIssuer(
+	config: GenericOAuthConfig,
+	discoveryUrl: string,
+	discoveredIssuer: string | undefined,
+): string | undefined {
+	if (discoveredIssuer === undefined) {
+		return "the discovery document has no issuer, so it cannot be checked. Configure authorizationUrl, tokenUrl, and userInfoUrl instead of discoveryUrl.";
+	}
+	if (config.issuer) {
+		return discoveredIssuer === config.issuer
+			? undefined
+			: `discovery issuer "${discoveredIssuer}" does not match the configured issuer "${config.issuer}".`;
+	}
+	const expected = issuersOfDiscoveryUrl(discoveryUrl);
+	if (!expected) {
+		return `discoveryUrl "${discoveryUrl}" is not a well-known URL, so its issuer cannot be checked. Set issuer to the issuer identifier the provider documents.`;
+	}
+	// Issuer identifiers compare as exact strings, apart from the terminating `/`.
+	const matches = expected.some(
+		(issuer) =>
+			discoveredIssuer === issuer || discoveredIssuer === `${issuer}/`,
+	);
+	return matches
+		? undefined
+		: `discovery issuer "${discoveredIssuer}" is not the issuer of discoveryUrl "${discoveryUrl}". If the provider publishes its document under another name for the same issuer, set issuer to the issuer identifier the provider documents.`;
+}
+
 /** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
 const DISCOVERY_RETRY_TIMEOUT_MS = 10_000;
 const MAX_DISCOVERY_REDIRECTS = 5;
@@ -350,6 +411,15 @@ export const genericOAuth = <const ID extends string>(
 					);
 					return null;
 				});
+				const issuerError =
+					discovered &&
+					checkDiscoveredIssuer(c, c.discoveryUrl, discovered.issuer);
+				if (issuerError) {
+					ctx.logger.error(
+						`Provider "${c.providerId}": ${issuerError} Provider skipped.`,
+					);
+					continue;
+				}
 				if (discovered) {
 					authorizationUrl ??= discovered.authorization_endpoint;
 					tokenUrl ??= discovered.token_endpoint;
