@@ -387,7 +387,9 @@ export interface IssueAuthorizationCodeParams {
 	 * out is authenticated as that client, and one that names another client
 	 * fails with `invalid_client`. On a later request of a flow your endpoint
 	 * started, set it from the state you stored, and set `dpop_jkt` to the key
-	 * the flow started with instead of calling `verifyDpopProof`. Client
+	 * the flow started with instead of calling `verifyDpopProof`. Without a
+	 * proof on the request, the code is still bound to that key, so the token
+	 * request must prove it. Client
 	 * credentials in the query, such as the `client_secret` of a forwarded
 	 * body, are not stored. A `request_uri` or
 	 * `request` object is not accepted; pass the parameters themselves.
@@ -486,7 +488,8 @@ export interface OAuthProviderApi {
 	 * read from the request body or `Authorization` header, a public client is
 	 * identified by `client_id`, and a DPoP proof on the request binds the code
 	 * to its key (RFC 9449 §10). When `query` has a `dpop_jkt`, a proof from
-	 * another key fails with `invalid_dpop_proof` before its `jti` is used up.
+	 * another key fails with `invalid_dpop_proof` before its `jti` is used up,
+	 * and a request without a proof still binds the code to that key.
 	 * With `dpop.nonce.required`, the nonce challenge runs before client
 	 * authentication, so a retry can resend a one-time client assertion. An
 	 * endpoint that accepts form-encoded bodies must set `cloneRequest: true`,
