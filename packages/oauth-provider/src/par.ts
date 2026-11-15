@@ -85,8 +85,11 @@ export async function authenticateAuthorizationRequest(
 	// clients must authenticate. A `client_id` the caller set from stored
 	// state stands in for one the request left out, and any client the request
 	// names must be that client.
+	if (body.client_id !== undefined && typeof body.client_id !== "string") {
+		tokenError("BAD_REQUEST", "invalid_request", "client_id must be a string");
+	}
 	const { clientId } = await provider.authenticateClient({
-		clientId: typeof body.client_id === "string" ? body.client_id : undefined,
+		clientId: body.client_id,
 		requireCredentials: false,
 	});
 

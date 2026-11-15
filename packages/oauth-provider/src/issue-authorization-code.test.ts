@@ -473,6 +473,18 @@ describe("provider.issueAuthorizationCode", async () => {
 			expect(errorCode(issued)).toBe("invalid_client");
 		});
 
+		it("rejects a stored client_id that is not a string", async () => {
+			pendingFlows.set("malformed", {
+				clientId: 42 as unknown as string,
+			});
+			const issued = await followUp("malformed", {
+				...(await followUpRequest()),
+				client_id: confidentialClient.client_id,
+				client_secret: confidentialClient.client_secret,
+			});
+			expect(errorCode(issued)).toBe("invalid_request");
+		});
+
 		it("requires the stored client's credentials", async () => {
 			pendingFlows.set("confidential", {
 				clientId: confidentialClient.client_id,
@@ -504,6 +516,18 @@ describe("provider.issueAuthorizationCode", async () => {
 			const issued = await followUp("bound", await followUpRequest(), {
 				DPoP: await createDpopProof(key, followUpEndpoint),
 			});
+			expect(issued.error).toBeNull();
+			const row = await findCodeRow(issued.data!.code);
+			expect(JSON.parse(row!.value).query.dpop_jkt).toBe(key.jkt);
+		});
+
+		it("binds the code to the stored DPoP key without a proof", async () => {
+			const key = await createDpopKey();
+			pendingFlows.set("unproven", {
+				clientId: publicClient.client_id,
+				dpopJkt: key.jkt,
+			});
+			const issued = await followUp("unproven", await followUpRequest());
 			expect(issued.error).toBeNull();
 			const row = await findCodeRow(issued.data!.code);
 			expect(JSON.parse(row!.value).query.dpop_jkt).toBe(key.jkt);
