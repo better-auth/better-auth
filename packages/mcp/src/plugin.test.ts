@@ -321,7 +321,7 @@ describe("mcp plugin", async () => {
 
 			expect(response.status).toBe(401);
 			expect(response.headers.get("WWW-Authenticate")).toBe(
-				`Bearer resource_metadata="${authServerBaseUrl}/.well-known/oauth-protected-resource/api/auth"`,
+				`Bearer resource_metadata="${authServerBaseUrl}/.well-known/oauth-protected-resource/api/auth", DPoP resource_metadata="${authServerBaseUrl}/.well-known/oauth-protected-resource/api/auth", algs="EdDSA ES256 ES512 PS256 RS256"`,
 			);
 		});
 
