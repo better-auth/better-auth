@@ -208,28 +208,46 @@ export function authorizationCodeGrantId(authorizationCodeId: string) {
 	);
 }
 
+/** How long a grant's revocation mark lasts, before its one-second margin. */
+export function grantRevocationWindowMs(opts: OAuthOptions<Scope[]>) {
+	return (opts.accessTokenExpiresIn ?? 3600) * 1000;
+}
+
 /**
- * Revokes every JWT access token of a grant, keyed on the `grant_id` they
- * carry. A no-op without `revocableJwtAccessTokens` or a grant ID.
+ * Marks a grant revoked, keyed on its grant ID. Token issuance on the grant
+ * checks the mark after storing its tokens, so a revocation that writes it
+ * before deleting the grant's tokens also catches an issuance in flight: the
+ * issuance either sees the mark, or stored its tokens before the delete ran.
+ * With `revocableJwtAccessTokens`, the mark also revokes every JWT access token
+ * carrying the grant's `grant_id`.
  *
  * The entry lasts `accessTokenExpiresIn`: every user access token expires
  * within that of being issued, so the entry outlives every token the grant
  * issued before it was written. One more second covers a token accepted
- * until its `exp` and secondary storage rounding the TTL down.
+ * until its `exp` and secondary storage rounding the TTL down. An issuance
+ * that reaches its check that long after consuming its grant fails anyway
+ * (see `createUserTokens`).
  */
-export async function revokeGrantAccessTokens(
+export async function markGrantRevoked(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	grant: { grantId?: string | null; clientId: string },
 ) {
-	if (!opts.revocableJwtAccessTokens || !grant.grantId) return;
+	if (!grant.grantId) return;
 	await ctx.context.internalAdapter.createVerificationValue({
 		identifier: grantRevocationIdentifier(grant.grantId),
 		value: grant.clientId,
-		expiresAt: new Date(
-			Date.now() + ((opts.accessTokenExpiresIn ?? 3600) + 1) * 1000,
-		),
+		expiresAt: new Date(Date.now() + grantRevocationWindowMs(opts) + 1000),
 	});
+}
+
+export async function isGrantRevoked(
+	ctx: GenericEndpointContext,
+	grantId: string,
+) {
+	return !!(await ctx.context.internalAdapter.findVerificationValue(
+		grantRevocationIdentifier(grantId),
+	));
 }
 
 async function isRevokedJwtAccessToken(
@@ -238,19 +256,16 @@ async function isRevokedJwtAccessToken(
 	payload: JwtAccessTokenPayload,
 ) {
 	if (!opts.revocableJwtAccessTokens) return false;
-	const find = (identifier: string | undefined) =>
-		identifier
-			? ctx.context.internalAdapter.findVerificationValue(identifier)
-			: null;
-	const [tokenEntry, grantEntry] = await Promise.all([
-		find(jwtRevocationMarker(opts, payload)?.identifier),
-		find(
-			typeof payload.grant_id === "string"
-				? grantRevocationIdentifier(payload.grant_id)
-				: undefined,
-		),
+	const tokenIdentifier = jwtRevocationMarker(opts, payload)?.identifier;
+	const [tokenRevoked, grantRevoked] = await Promise.all([
+		tokenIdentifier
+			? ctx.context.internalAdapter.findVerificationValue(tokenIdentifier)
+			: null,
+		typeof payload.grant_id === "string"
+			? isGrantRevoked(ctx, payload.grant_id)
+			: false,
 	]);
-	return Boolean(tokenEntry || grantEntry);
+	return Boolean(tokenRevoked || grantRevoked);
 }
 
 async function identifyAccessToken(

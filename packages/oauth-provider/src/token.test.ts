@@ -43,6 +43,40 @@ type OAuthTokenResponse = {
 	[key: string]: unknown;
 };
 
+/** Pauses the next insert into `model` until `release` is called. */
+async function holdNextInsert(
+	auth: {
+		$context: Promise<{
+			adapter: { create(data: { model: string }): Promise<unknown> };
+		}>;
+	},
+	model: "oauthAccessToken" | "oauthRefreshToken",
+) {
+	const { adapter } = await auth.$context;
+	const create = adapter.create.bind(adapter);
+	const reached = Promise.withResolvers<void>();
+	const released = Promise.withResolvers<void>();
+	const spy = vi.spyOn(adapter, "create");
+	spy.mockImplementation(async (...args) => {
+		if (args[0].model === model) {
+			spy.mockRestore();
+			reached.resolve();
+			await released.promise;
+		}
+		return create(...args);
+	});
+	return {
+		reached: reached.promise,
+		release: released.resolve,
+		// Release too, so a test that fails early does not leave the held
+		// request pending.
+		restore: () => {
+			released.resolve();
+			spy.mockRestore();
+		},
+	};
+}
+
 describe("oauth token - authorization_code", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
@@ -419,10 +453,12 @@ describe("oauth token - authorization_code", async () => {
 	});
 
 	/**
-	 * Concurrent redemption of the same authorization code must mint
-	 * tokens for exactly one caller. Before the atomic-consume primitive,
-	 * two requests could both pass the find step before either delete
-	 * completed and both proceeded to issue token pairs.
+	 * Concurrent redemption of the same authorization code must not mint
+	 * tokens for two callers. Before the atomic-consume primitive, two
+	 * requests could both pass the find step before either delete completed
+	 * and both proceeded to issue token pairs. The request that loses the
+	 * consume is a reuse by the issuing client, so it revokes the grant the
+	 * winner is still issuing (RFC 6749 §4.1.2), and both fail.
 	 *
 	 * The interleaving relies on the in-memory adapter yielding control at
 	 * each `await` boundary; reverting `consumeVerificationValue` to the old
@@ -431,7 +467,7 @@ describe("oauth token - authorization_code", async () => {
 	 *
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-7w99-5wm4-3g79
 	 */
-	it("rejects concurrent redemption of the same authorization code", async () => {
+	it("issues no tokens for concurrent redemption of the same authorization code", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -454,15 +490,8 @@ describe("oauth token - authorization_code", async () => {
 			validateAuthCode({ code: code!, codeVerifier }),
 		]);
 
-		const successes = [first, second].filter((r) => r.error === null);
-		const failures = [first, second].filter((r) => r.error !== null);
-		expect(successes).toHaveLength(1);
-		expect(failures).toHaveLength(1);
-		expect(successes[0]?.data?.access_token).toBeDefined();
-		expect(successes[0]?.data?.id_token).toBeDefined();
-		expect((failures[0]?.error as { error?: string } | undefined)?.error).toBe(
-			"invalid_grant",
-		);
+		expect(first.error).toMatchObject({ error: "invalid_grant" });
+		expect(second.error).toMatchObject({ error: "invalid_grant" });
 	});
 
 	/**
@@ -804,6 +833,58 @@ describe("oauth token - authorization_code", async () => {
 			});
 			return registered.client_id;
 		}
+
+		async function countTokens(clientId: string) {
+			const { adapter } = await auth.$context;
+			const where = [{ field: "clientId", value: clientId }];
+			return {
+				access: await adapter.count({ model: "oauthAccessToken", where }),
+				refresh: await adapter.count({ model: "oauthRefreshToken", where }),
+			};
+		}
+
+		/**
+		 * The replay can run after the first redemption consumed the code but
+		 * before it stored any token, so the replay's delete finds nothing.
+		 *
+		 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+		 */
+		it.each([
+			{ scopes: ["openid", "offline_access"], held: "oauthRefreshToken" },
+			{ scopes: ["openid"], held: "oauthAccessToken" },
+		] as const)(
+			"revokes the tokens a racing redemption stores after the replay ($held)",
+			async ({ scopes, held }) => {
+				const clientId = await createPublicClient();
+				const codeVerifier = generateRandomString(43);
+				const code = await issueCode(clientId, codeVerifier, [...scopes]);
+				const insert = await holdNextInsert(auth, held);
+				try {
+					const redeeming = redeem({
+						client_id: clientId,
+						code,
+						code_verifier: codeVerifier,
+					});
+					await insert.reached;
+					const replay = await redeem({
+						client_id: clientId,
+						code,
+						code_verifier: codeVerifier,
+					});
+					insert.release();
+					const redeemed = await redeeming;
+
+					expect(replay.error).toMatchObject({ error: "invalid_grant" });
+					expect(redeemed.error).toMatchObject({ error: "invalid_grant" });
+					expect(await countTokens(clientId)).toEqual({
+						access: 0,
+						refresh: 0,
+					});
+				} finally {
+					insert.restore();
+				}
+			},
+		);
 
 		it("keeps a public client's tokens when the reused code carries a wrong code_verifier", async () => {
 			const clientId = await createPublicClient();
@@ -2071,31 +2152,6 @@ describe("oauth token - refresh_token", async () => {
 			};
 		}
 
-		/** Pauses the next access-token insert until `release` is called. */
-		async function holdNextAccessTokenInsert() {
-			const context = await authorizationServer.$context;
-			const create = context.adapter.create.bind(context.adapter);
-			const reached = Promise.withResolvers<void>();
-			const released = Promise.withResolvers<void>();
-			const spy = vi.spyOn(context.adapter, "create");
-			spy.mockImplementation(async (...args) => {
-				if (args[0].model === "oauthAccessToken") {
-					spy.mockRestore();
-					reached.resolve();
-					await released.promise;
-				}
-				return create(...args);
-			});
-			return {
-				reached: reached.promise,
-				release: released.resolve,
-				restore: () => {
-					released.resolve();
-					spy.mockRestore();
-				},
-			};
-		}
-
 		async function issueParentRefreshToken() {
 			const tokens = await authorizeForRefreshToken([
 				"openid",
@@ -2141,7 +2197,10 @@ describe("oauth token - refresh_token", async () => {
 		 */
 		it("fails an in-flight rotation with invalid_grant when reuse revokes its family", async () => {
 			const parentToken = await issueParentRefreshToken();
-			const insert = await holdNextAccessTokenInsert();
+			const insert = await holdNextInsert(
+				authorizationServer,
+				"oauthAccessToken",
+			);
 			try {
 				const rotating = refresh(parentToken);
 				await insert.reached;
@@ -2156,7 +2215,95 @@ describe("oauth token - refresh_token", async () => {
 			}
 		});
 
-		it("fails the revoke closed when the rotation wins", async () => {
+		/**
+		 * The teardown can run after the rotation's swap but before the rotation
+		 * stores its new refresh token, so the delete misses that row.
+		 *
+		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+		 */
+		it("revokes the refresh token a rotation stores after reuse tore down its family", async () => {
+			const parentToken = await issueParentRefreshToken();
+			const insert = await holdNextInsert(
+				authorizationServer,
+				"oauthRefreshToken",
+			);
+			try {
+				const rotating = refresh(parentToken);
+				await insert.reached;
+				const reused = await refresh(parentToken);
+				insert.release();
+				const rotated = await rotating;
+
+				expect(reused.error).toMatchObject({ error: "invalid_grant" });
+				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
+				// The teardown covers every refresh token of this client and user.
+				const context = await authorizationServer.$context;
+				expect(
+					await context.adapter.count({
+						model: "oauthRefreshToken",
+						where: [{ field: "clientId", value: oauthClient!.client_id }],
+					}),
+				).toBe(0);
+			} finally {
+				insert.restore();
+			}
+		});
+
+		/**
+		 * The mark expires after `accessTokenExpiresIn`, so a rotation stalled
+		 * past that cannot rely on finding it.
+		 *
+		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+		 */
+		it("fails a rotation that stores its refresh token after the grant's revocation mark expired", async () => {
+			const parentToken = await issueParentRefreshToken();
+			const insert = await holdNextInsert(
+				authorizationServer,
+				"oauthRefreshToken",
+			);
+			try {
+				const rotating = refresh(parentToken);
+				await insert.reached;
+				const reused = await refresh(parentToken);
+				expect(reused.error).toMatchObject({ error: "invalid_grant" });
+
+				// The mark lasts `accessTokenExpiresIn` (3600 s) plus one second.
+				// Secondary storage drops it then, and so does verification cleanup.
+				vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 3602_000 });
+				const context = await authorizationServer.$context;
+				await context.adapter.deleteMany({
+					model: "verification",
+					where: [{ field: "expiresAt", operator: "lt", value: new Date() }],
+				});
+				expect(
+					await context.adapter.count({
+						model: "verification",
+						where: [
+							{
+								field: "identifier",
+								operator: "starts_with",
+								value: "oauth-revoked-grant:",
+							},
+						],
+					}),
+				).toBe(0);
+				insert.release();
+				const rotated = await rotating;
+
+				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
+				expect(
+					await context.adapter.count({
+						model: "oauthRefreshToken",
+						where: [{ field: "clientId", value: oauthClient!.client_id }],
+					}),
+				).toBe(0);
+			} finally {
+				vi.useRealTimers();
+				insert.restore();
+			}
+		});
+
+		it("fails the rotation and the revoke closed when the rotation wins the swap", async () => {
 			const parentToken = await issueParentRefreshToken();
 			const cas = await holdNextRefreshTokenCas();
 			try {
@@ -2166,14 +2313,18 @@ describe("oauth token - refresh_token", async () => {
 				cas.release();
 				const revoked = await revoking;
 
-				expect(rotated.error).toBeNull();
-				expect(rotated.data?.refresh_token).toBeDefined();
-				// RFC 7009 §2.2: the losing revoke still returns 200 and tears down
-				// the family, including the new token.
+				// The revoke marked the grant before its swap, so the rotation that
+				// won the swap still fails. RFC 7009 §2.2: the losing revoke returns
+				// 200 and tears down the family.
+				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
 				expect(revoked.error).toBeNull();
+				const context = await authorizationServer.$context;
 				expect(
-					(await refresh(rotated.data!.refresh_token!)).error,
-				).toMatchObject({ error: "invalid_grant" });
+					await context.adapter.count({
+						model: "oauthRefreshToken",
+						where: [{ field: "clientId", value: oauthClient!.client_id }],
+					}),
+				).toBe(0);
 				expect((await refresh(parentToken)).error).toMatchObject({
 					error: "invalid_grant",
 				});
@@ -3492,6 +3643,52 @@ describe("oauth token - config", async () => {
 			).toBe(result); // 5m lowest
 		},
 	);
+
+	// A zero lifetime would also trip the issuance deadline for revoked
+	// grants on every redemption, so the born-expired check must stop it first.
+	it("rejects a code redemption as born expired when accessTokenExpiresIn is 0", async () => {
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: { accessTokenExpiresIn: 0 },
+		});
+		const { url: authUrl, codeVerifier } = await createAuthUrl(
+			{
+				clientId: oauthClient?.client_id!,
+				clientSecret: oauthClient?.client_secret,
+			},
+			{ scopes: ["profile", "offline_access"] },
+		);
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const tokens = await client.oauth2.token(
+			{
+				code: code!,
+				code_verifier: codeVerifier,
+				grant_type: "authorization_code",
+				resource: validResource,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(tokens.data).toBeNull();
+		expect(tokens.error).toMatchObject({
+			error: "invalid_request",
+			error_description: "the token this grant derives from has expired",
+		});
+	});
 
 	it("opaqueAccessTokenPrefix - client_credentials", async () => {
 		const prefix = "hello_";
@@ -5749,11 +5946,12 @@ describe("oauth token - DPoP", async () => {
 	/**
 	 * The proof's `jti` is recorded only after the code is consumed, so the
 	 * request that loses the race is told the code is gone, not that the proof
-	 * was replayed.
+	 * was replayed. That reuse revokes the grant, so neither request gets
+	 * tokens.
 	 *
 	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
 	 */
-	it("issues once when two exchanges with one DPoP proof arrive together", async () => {
+	it("issues nothing when two exchanges with one DPoP proof arrive together", async () => {
 		const dpopKey = await createDpopKey();
 		const { code, codeVerifier } = await authorizeForCode(
 			dpopKey.jkt,
@@ -5769,14 +5967,10 @@ describe("oauth token - DPoP", async () => {
 			exchangeCode(code, codeVerifier, jwtResource, proof),
 			exchangeCode(code, codeVerifier, jwtResource, proof),
 		]);
-		const successes = results.filter((result) => result.error === null);
-		const failures = results.filter((result) => result.error !== null);
-		expect(successes).toHaveLength(1);
-		expect(successes[0]?.data?.token_type).toBe("DPoP");
-		expect(failures).toHaveLength(1);
-		expect((failures[0]?.error as { error?: string } | null)?.error).toBe(
-			"invalid_grant",
-		);
+		expect(results.map((result) => result.error)).toMatchObject([
+			{ error: "invalid_grant" },
+			{ error: "invalid_grant" },
+		]);
 	});
 
 	it("preserves the key binding across refresh and rejects a proofless refresh", async () => {
@@ -6275,7 +6469,7 @@ describe("oauth token - in-flight issuance without foreign keys", async () => {
 			familyDelete.release();
 			const reused = await reusing;
 
-			expect(rotated.error).toBeNull();
+			expect(rotated.error).toMatchObject({ error: "invalid_grant" });
 			expect(reused.error).toMatchObject({ error: "invalid_grant" });
 			expect(database.oauthAccessToken).toHaveLength(0);
 			expect(database.oauthRefreshToken).toHaveLength(0);
