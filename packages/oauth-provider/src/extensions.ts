@@ -472,10 +472,11 @@ async function collectClaims(
 	// First contributor wins a key, matching metadata extensions. Extensions are
 	// expected to contribute disjoint claims, so a collision is a
 	// misconfiguration: keep the first value and warn rather than silently
-	// shadow the later contributor.
+	// shadow the later contributor. An `undefined` value is not a contribution.
 	for (const extension of getOAuthProviderExtensions(opts)) {
 		const contribution = (await run(extension)) ?? {};
 		for (const [key, value] of Object.entries(contribution)) {
+			if (value === undefined) continue;
 			if (key in claims) {
 				logger.warn(
 					`oauth-provider: two extensions contributed the claim "${key}"; keeping the first-registered value.`,

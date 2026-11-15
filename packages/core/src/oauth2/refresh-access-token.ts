@@ -18,6 +18,11 @@ interface RefreshAccessTokenRequestInput {
 	authentication?: TokenEndpointSecretAuthentication | undefined;
 	tokenEndpointAuth?: TokenEndpointAuth | undefined;
 	tokenEndpoint?: string | undefined;
+	/**
+	 * The authorization server's issuer identifier, passed to client assertion
+	 * getters and custom authentication hooks.
+	 */
+	issuer?: string | undefined;
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 	/**
@@ -68,6 +73,7 @@ export async function refreshAccessTokenRequest({
 	authentication,
 	tokenEndpointAuth,
 	tokenEndpoint,
+	issuer,
 	extraParams,
 	resource,
 	headers,
@@ -87,6 +93,7 @@ export async function refreshAccessTokenRequest({
 		options,
 		tokenEndpoint: tokenEndpoint ?? "",
 		grantType: "refresh_token",
+		issuer,
 		tokenEndpointAuth,
 		authentication,
 	});
@@ -146,6 +153,7 @@ export async function refreshAccessToken({
 	tokenEndpoint,
 	authentication,
 	tokenEndpointAuth,
+	issuer,
 	extraParams,
 	resource,
 	headers: extraHeaders,
@@ -157,6 +165,7 @@ export async function refreshAccessToken({
 		authentication,
 		tokenEndpointAuth,
 		tokenEndpoint,
+		issuer,
 		extraParams,
 		resource,
 		headers: extraHeaders,
