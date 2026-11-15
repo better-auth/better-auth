@@ -210,7 +210,7 @@ How seeding treats existing rows: skip them, update only the configured fields, 
 
 `resourceSeedScope` <span className="opacity-70">`"adapter" | "process"`</span>
 
-How long a finished seed is remembered. `"adapter"` (default) remembers it per database adapter. `"process"` remembers it for the life of the process, for apps that build Better Auth per request, such as on Cloudflare Workers. Use `"process"` only when every instance in the process uses the same database.
+How long a finished seed is remembered. `"adapter"` (default) remembers it per database adapter. `"process"` remembers each seeded entry for the life of the process, for apps that build Better Auth per request, such as on Cloudflare Workers. Use `"process"` only when every instance in the process uses the same database.
 
 `enforcePerClientResources` <span className="opacity-70">`boolean`</span>
 

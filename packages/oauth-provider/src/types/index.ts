@@ -1233,7 +1233,7 @@ export interface OAuthOptions<
 	 *
 	 * - `"adapter"` (default): per database adapter object. An instance built
 	 *   once and reused seeds once.
-	 * - `"process"`: for the life of the process, per seeded config. Use it
+	 * - `"process"`: for the life of the process, per seeded entry. Use it
 	 *   when Better Auth is built per request with a new database client each
 	 *   time (for example on Cloudflare Workers), where `"adapter"` reads the
 	 *   table on every request. Only safe when every instance in the process
