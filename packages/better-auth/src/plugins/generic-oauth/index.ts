@@ -17,6 +17,14 @@ import {
 	validateAuthorizationCode,
 	verifyProviderIdToken,
 } from "@better-auth/core/oauth2";
+import type {
+	DpopFetch,
+	DpopKeyPair,
+} from "@better-auth/core/oauth2/dpop-client";
+import {
+	createDpopFetch,
+	deriveDpopKeyJkt,
+} from "@better-auth/core/oauth2/dpop-client";
 import { betterFetch } from "@better-fetch/fetch";
 import type { JWTPayload } from "jose";
 import { createRemoteJWKSet, decodeJwt } from "jose";
@@ -195,6 +203,7 @@ async function fetchUserInfo(
 	tokens: OAuth2Tokens,
 	userInfoUrl: string | undefined,
 	idTokenClaims?: JWTPayload,
+	dpopFetch?: DpopFetch,
 ): Promise<GenericOAuthUserInfo | null> {
 	// When the provider declares an `idToken` config (OIDC discovery published
 	// a jwks_uri), the caller has already verified this token through
@@ -223,20 +232,28 @@ async function fetchUserInfo(
 	if (!userInfoUrl || !tokens.accessToken) {
 		return null;
 	}
-
-	const userInfo = await betterFetch<{
-		id?: string | number | null | undefined;
-		email: string;
-		sub?: string | number | null | undefined;
-		name: string;
-		email_verified: boolean;
-		picture: string;
-	}>(userInfoUrl, {
-		method: "GET",
-		headers: {
-			Authorization: `Bearer ${tokens.accessToken}`,
-		},
-	});
+	const requestUserInfo = (scheme: "DPoP" | "Bearer") =>
+		betterFetch<{
+			id?: string | number | null | undefined;
+			email: string;
+			sub?: string | number | null | undefined;
+			name: string;
+			email_verified: boolean;
+			picture: string;
+		}>(userInfoUrl, {
+			method: "GET",
+			headers: { Authorization: `${scheme} ${tokens.accessToken}` },
+			customFetchImpl: scheme === "DPoP" ? dpopFetch : undefined,
+		});
+	// A provider may still issue a Bearer token to a DPoP client (RFC 9449 §5).
+	// Stored tokens carry no type, so a provider's 401 to DPoP marks a Bearer
+	// token. Nonce challenges never reach here; the DPoP fetch retries them.
+	const tokenType = tokens.tokenType?.toLowerCase();
+	const tryDpop = !!dpopFetch && (!tokenType || tokenType === "dpop");
+	let userInfo = await requestUserInfo(tryDpop ? "DPoP" : "Bearer");
+	if (tryDpop && !tokenType && userInfo.error?.status === 401) {
+		userInfo = await requestUserInfo("Bearer");
+	}
 	if (userInfo.error || !userInfo.data) {
 		return null;
 	}
@@ -275,6 +292,24 @@ export const genericOAuth = <const ID extends string>(
 			`Duplicate provider IDs found: ${Array.from(nonUniqueIds).join(", ")}`,
 		);
 	}
+
+	// One client per key, so nonces survive discovery retries and are shared
+	// by providers that use the same key.
+	const dpopClients = new WeakMap<
+		DpopKeyPair,
+		Promise<{ fetch: DpopFetch; jkt: string }>
+	>();
+	const getDpopClient = (keyPair: DpopKeyPair) => {
+		let client = dpopClients.get(keyPair);
+		if (!client) {
+			client = deriveDpopKeyJkt(keyPair).then((jkt) => ({
+				fetch: createDpopFetch({ keyPair }),
+				jkt,
+			}));
+			dpopClients.set(keyPair, client);
+		}
+		return client;
+	};
 
 	const buildProviders = async (
 		configs: GenericOAuthConfig[],
@@ -405,6 +440,9 @@ export const genericOAuth = <const ID extends string>(
 				c.tokenEndpointAuth?.method === "private_key_jwt" && issuer
 					? withAssertionIssuer(c.tokenEndpointAuth, issuer)
 					: c.tokenEndpointAuth;
+			const { fetch: dpopFetch, jkt: dpopJkt } = c.dpop
+				? await getDpopClient(c.dpop.keyPair)
+				: {};
 			if (c.clientSecret && isSecretlessTokenEndpointAuth(tokenEndpointAuth)) {
 				throw new Error(
 					`Provider "${c.providerId}": tokenEndpointAuth.method "${tokenEndpointAuth?.method}" cannot be combined with clientSecret`,
@@ -436,7 +474,7 @@ export const genericOAuth = <const ID extends string>(
 			) => {
 				const raw = c.getUserInfo
 					? await c.getUserInfo(tokens)
-					: await fetchUserInfo(tokens, userInfoUrl, idTokenClaims);
+					: await fetchUserInfo(tokens, userInfoUrl, idTokenClaims, dpopFetch);
 				if (!raw) return null;
 
 				// Custom profiles may use a different identifier and omit `sub`.
@@ -561,6 +599,8 @@ export const genericOAuth = <const ID extends string>(
 						additionalParams: {
 							...(c.authorizationUrlParams ?? {}),
 							...(data.additionalParams ?? {}),
+							// RFC 9449 §10: bind the authorization code to the DPoP key.
+							...(dpopJkt && { dpop_jkt: dpopJkt }),
 						},
 						loginHint: data.loginHint,
 					});
@@ -580,6 +620,7 @@ export const genericOAuth = <const ID extends string>(
 							authentication: c.authentication,
 							tokenEndpointAuth,
 							headers: c.authorizationHeaders,
+							fetch: dpopFetch,
 						});
 					} catch (error) {
 						ctx.logger.error(
@@ -618,6 +659,7 @@ export const genericOAuth = <const ID extends string>(
 						authentication: c.authentication,
 						tokenEndpointAuth,
 						additionalParams: c.tokenUrlParams,
+						fetch: dpopFetch,
 					});
 					return applyDefaultAccessTokenExpiry(tokens, c.accessTokenExpiresIn);
 				},
@@ -673,6 +715,7 @@ export const genericOAuth = <const ID extends string>(
 						tokenEndpoint: tokenUrl,
 						extraParams: resolvedRefreshParams,
 						headers: c.authorizationHeaders,
+						fetch: dpopFetch,
 					});
 					return applyDefaultAccessTokenExpiry(tokens, c.accessTokenExpiresIn);
 				},
