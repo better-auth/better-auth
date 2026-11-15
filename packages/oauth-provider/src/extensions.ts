@@ -378,14 +378,33 @@ export function getExtensionClientAuthenticationStrategy(
 	return undefined;
 }
 
+const warnedMetadataCollisions = new WeakMap<object, Set<string>>();
+
+// Discovery documents are rebuilt per request; log each warning once per provider.
+function warnMetadataCollisionOnce(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	message: string,
+) {
+	let warned = warnedMetadataCollisions.get(opts);
+	if (!warned) {
+		warned = new Set();
+		warnedMetadataCollisions.set(opts, warned);
+	}
+	if (warned.has(message)) return;
+	warned.add(message);
+	ctx.context.logger.warn(message);
+}
+
 /**
- * Merges each registered extension's `metadata()` contribution into `document`,
- * first-wins: the provider owns every key it already wrote, so an extension can
- * add fields but never override core. When two extensions contribute the same
- * key, two lists combine in registration order without duplicates; any other
- * pair keeps the first-registered value and logs a warning. Each contributor
- * sees the base `document`, not the running accumulation, so contributions
- * stay order-independent.
+ * Builds the discovery document from the provider's `core` fields, each client
+ * discovery's `discoveryMetadata` (later discoveries override earlier ones),
+ * and each extension's `metadata()` result. Keys the provider owns are kept,
+ * and extensions only add keys no client discovery set. Two extension lists
+ * under one key combine without duplicates; any other shared extension key
+ * keeps the first value. Every ignored contribution logs a warning.
+ * `metadata()` sees the provider and client-discovery fields only, so
+ * contributions stay order-independent.
  */
 export function applyOAuthProviderMetadataExtensions<
 	T extends AuthServerMetadata | OIDCMetadata,
@@ -393,27 +412,54 @@ export function applyOAuthProviderMetadataExtensions<
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	type: OAuthMetadataExtensionInput["type"],
-	document: T,
+	core: T,
 ): T {
-	const next: Record<string, unknown> = { ...document };
+	const warn = (message: string) =>
+		warnMetadataCollisionOnce(ctx, opts, message);
+	// Null-prototype targets keep own keys such as `__proto__` as plain data.
+	const discoveryMetadata: Record<string, unknown> = Object.assign(
+		Object.create(null),
+		...getClientDiscoveries(opts).map(
+			(discovery) => discovery.discoveryMetadata,
+		),
+	);
+	for (const key of Object.keys(discoveryMetadata)) {
+		if (Object.hasOwn(core, key)) {
+			warn(
+				`oauth-provider: a client discovery contributed the discovery metadata key "${key}" to ${type}, which the provider owns; ignoring it.`,
+			);
+		}
+	}
+	const document = { ...discoveryMetadata, ...core };
+	const next: Record<string, unknown> = Object.assign(
+		Object.create(null),
+		document,
+	);
 	for (const extension of getOAuthProviderExtensions(opts)) {
 		const contribution = extension.metadata?.({ ctx, opts, type, document });
 		for (const [key, value] of Object.entries(contribution ?? {})) {
-			if (!(key in next)) {
+			const existing = next[key];
+			if (Object.hasOwn(core, key)) {
+				warn(
+					`oauth-provider: an extension contributed the discovery metadata key "${key}" to ${type}, which the provider owns; ignoring it.`,
+				);
+			} else if (Object.hasOwn(discoveryMetadata, key)) {
+				warn(
+					`oauth-provider: an extension contributed the discovery metadata key "${key}" to ${type}, which a client discovery sets; keeping the client discovery's value.`,
+				);
+			} else if (!Object.hasOwn(next, key)) {
 				next[key] = value;
-			} else if (!(key in document)) {
-				const existing = next[key];
-				if (Array.isArray(existing) && Array.isArray(value)) {
-					next[key] = [...new Set([...existing, ...value])];
-				} else {
-					ctx.context.logger.warn(
-						`oauth-provider: two extensions contributed the discovery metadata key "${key}" to ${type}; keeping the first-registered value.`,
-					);
-				}
+			} else if (Array.isArray(existing) && Array.isArray(value)) {
+				next[key] = [...new Set([...existing, ...value])];
+			} else {
+				warn(
+					`oauth-provider: more than one extension contributed the discovery metadata key "${key}" to ${type}; keeping the first-registered value.`,
+				);
 			}
 		}
 	}
-	return next as T;
+	const published: Record<string, unknown> = { ...next };
+	return published as T;
 }
 
 async function collectClaims(

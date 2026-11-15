@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { defineRequestState, hasRequestState } from "@better-auth/core/context";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
 import { INSECURE_REDIRECT_URI_MESSAGE } from "@better-auth/core/utils/redirect-uri";
@@ -17,6 +18,7 @@ import {
 	isValidOidcClaimsRequest,
 } from "./claims-request";
 import { getExtensionInteractionRequest } from "./extensions";
+import { oauthAuthorizationServerMetadata } from "./metadata";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { mapIssuesToOAuthError } from "./oauth-endpoint";
@@ -24,10 +26,13 @@ import {
 	authenticateAuthorizationRequest,
 	consumePushedAuthorizationRequest,
 	isPushedAuthorizationRequestEnabled,
+	loadPushedAuthorizationRequest,
 } from "./par";
 import { resolveResourcePolicy } from "./resources";
 import {
 	canonicalizeOAuthQueryParams,
+	DEFAULT_CODE_EXPIRES_IN,
+	getSignedQueryExpiresIn,
 	postLoginClearedParam,
 	setSignedOAuthQueryParameterNames,
 	signedQueryIssuedAtParam,
@@ -83,6 +88,23 @@ export type OAuthRedirectResult = {
 	redirect: true;
 	url: string;
 };
+
+const sessionsCreatedInRequest = defineRequestState(() => new Set<string>());
+
+/**
+ * Records a session created during the current request. Such a session is a
+ * sign-in that happened after the authorization request arrived, which is what
+ * `prompt=login` and `max_age` ask for (OIDC Core §3.1.2.1).
+ */
+export async function recordSessionCreatedInRequest(sessionId: string) {
+	if (!(await hasRequestState())) return;
+	(await sessionsCreatedInRequest.get()).add(sessionId);
+}
+
+async function wasSessionCreatedInRequest(sessionId: string) {
+	if (!(await hasRequestState())) return false;
+	return (await sessionsCreatedInRequest.get()).has(sessionId);
+}
 
 function removeMaxAgeFromAuthorizationQuery<
 	Query extends { max_age?: number | undefined },
@@ -567,8 +589,9 @@ export async function authorizeEndpoint(
 		});
 	}
 
-	// Resolve request_uri (PAR) before processing
-	if (requestUri !== undefined) {
+	// Resolve request_uri (PAR) before processing. A resumed request carries
+	// the parameters this server signed after resolving it.
+	if (requestUri !== undefined && settings?.isAuthorize === true) {
 		const clientId = getStringParameter(query.client_id);
 		if (!clientId) {
 			return authorizeRedirectOnError(opts)({
@@ -588,7 +611,7 @@ export async function authorizeEndpoint(
 		// Values issued by /oauth2/par are resolved here; any other value goes
 		// to the app's resolver.
 		const pushed = builtInPar
-			? await consumePushedAuthorizationRequest(ctx, opts, requestUri, clientId)
+			? await loadPushedAuthorizationRequest(ctx, opts, requestUri, clientId)
 			: ({ status: "not_found" } as const);
 		const resolvedParams =
 			pushed.status === "found"
@@ -604,11 +627,15 @@ export async function authorizeEndpoint(
 			});
 		}
 		// RFC 9126 §4: all params come from the stored request, not the URL.
-		// Only client_id is carried from the authorization URL.
+		// Only client_id is carried from the authorization URL. A request_uri
+		// from /oauth2/par stays in the query, so code issuance can use it up.
 		const urlClientId = query.client_id;
 		query = { ...resolvedParams } as unknown as OAuthAuthorizationQuery;
 		if (urlClientId) {
 			query.client_id = urlClientId;
+		}
+		if (pushed.status === "found") {
+			query.request_uri = requestUri;
 		}
 	}
 	ctx.query = query;
@@ -660,8 +687,7 @@ export async function authorizeEndpoint(
 	query = validation.query;
 
 	// Required PAR applies to requests that reach this endpoint directly.
-	// Resumed requests carry the parameters this server signed after resolving
-	// the pushed request, so they never hold a request_uri.
+	// Resumed requests carry the parameters this server signed.
 	if (
 		settings?.isAuthorize === true &&
 		requestUri === undefined &&
@@ -839,6 +865,20 @@ async function validateAuthorizationRequest(
 			"invalid_redirect",
 			"invalid redirect uri",
 			"server",
+		);
+	}
+	// RFC 9396 §5: once discovery advertises types, the parameter is recognized
+	// and must not be ignored, but only extension grants such as CIBA issue
+	// authorization details. Otherwise RFC 6749 §3.1 has it ignored.
+	if (
+		"authorization_details" in query &&
+		oauthAuthorizationServerMetadata(ctx, opts)
+			.authorization_details_types_supported?.length
+	) {
+		return invalidAuthorizationRequest(
+			"invalid_authorization_details",
+			"authorization_details is not supported at the authorization endpoint",
+			"client",
 		);
 	}
 	// Check for invalid scopes if requested from query
@@ -1268,7 +1308,10 @@ export async function issueAuthorizationCode(
 	await bindDpopProof(query);
 
 	const promptSet = query.prompt ? parsePrompt(query.prompt) : undefined;
-	if (promptSet && [...promptSet].some((prompt) => prompt !== "none")) {
+	if (
+		promptSet &&
+		[...promptSet].some((prompt) => prompt !== "none" && prompt !== "login")
+	) {
 		tokenError(
 			"BAD_REQUEST",
 			"interaction_required",
@@ -1276,13 +1319,25 @@ export async function issueAuthorizationCode(
 		);
 	}
 	const now = new Date();
-	if (
-		session.userId !== user.id ||
-		new Date(session.expiresAt) <= now ||
+	const requiresNewSignIn =
+		promptSet?.has("login") ||
 		(query.max_age !== undefined &&
-			!isWithinMaxAge(new Date(session.createdAt), query.max_age, now))
-	) {
+			!isWithinMaxAge(new Date(session.createdAt), query.max_age, now));
+	if (session.userId !== user.id || new Date(session.expiresAt) <= now) {
 		tokenError("BAD_REQUEST", "login_required", "authentication required");
+	}
+	if (requiresNewSignIn && !(await wasSessionCreatedInRequest(session.id))) {
+		tokenError(
+			"BAD_REQUEST",
+			"login_required",
+			"the request requires a new sign-in",
+		);
+	}
+	if (promptSet?.has("login")) {
+		// `login` cannot be combined with another accepted prompt, so the
+		// satisfied request has none left.
+		const { prompt: _prompt, ...queryWithoutPrompt } = query;
+		query = queryWithoutPrompt;
 	}
 	if (query.max_age !== undefined) {
 		query = removeMaxAgeFromAuthorizationQuery(query);
@@ -1420,7 +1475,7 @@ async function storeAuthorizationCode(
 ) {
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const iat = Math.floor(Date.now() / 1000);
-	const exp = iat + (opts.codeExpiresIn ?? 600);
+	const exp = iat + (opts.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN);
 	const expiresAt = new Date(exp * 1000);
 
 	await ctx.context.internalAdapter.createVerificationValue({
@@ -1467,6 +1522,25 @@ async function createAuthorizationCodeURL(
 	approval: AuthorizationCodeApproval & { query: OAuthAuthorizationQuery },
 ) {
 	const { code } = await storeAuthorizationCode(ctx, opts, approval);
+	// The code is stored before the request_uri is used up, so a storage
+	// failure leaves the pushed request usable. The code is never delivered
+	// when the request_uri was already used, and is deleted.
+	const requestUri = approval.query.request_uri;
+	if (
+		requestUri !== undefined &&
+		!(await consumePushedAuthorizationRequest(ctx, opts, requestUri))
+	) {
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			await storeToken(opts.storeTokens, code, "authorization_code"),
+		);
+		return formatErrorURL(
+			approval.query.redirect_uri,
+			"invalid_request_uri",
+			"request_uri is invalid or expired",
+			approval.query.state,
+			getIssuer(ctx, opts),
+		);
+	}
 	return getAuthorizationCodeURL(
 		ctx,
 		opts,
@@ -1516,7 +1590,7 @@ async function signParams(
 	// Add expiration to query parameters
 	const issuedAt = Date.now();
 	const iat = Math.floor(issuedAt / 1000);
-	const exp = iat + (opts.codeExpiresIn ?? 600);
+	const exp = iat + getSignedQueryExpiresIn(opts);
 	const params = serializeAuthorizationQuery(
 		ctx.query as OAuthAuthorizationQuery,
 	);

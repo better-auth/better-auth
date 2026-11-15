@@ -1,3 +1,4 @@
+import type { BetterFetchOption } from "@better-fetch/fetch";
 import type { JWTPayload } from "jose";
 import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
@@ -40,6 +41,13 @@ interface AuthorizationCodeRequestBaseInput {
 
 interface ValidateAuthorizationCodeInput extends AuthorizationCodeRequestInput {
 	tokenEndpoint: string;
+	/**
+	 * The fetch implementation for the request, such as one from
+	 * `createDpopFetch` to send DPoP proofs (RFC 9449).
+	 *
+	 * @default globalThis.fetch
+	 */
+	fetch?: BetterFetchOption["customFetchImpl"];
 }
 
 export async function authorizationCodeRequest({
@@ -134,6 +142,7 @@ export async function validateAuthorizationCode({
 	headers,
 	additionalParams = {},
 	resource,
+	fetch,
 }: ValidateAuthorizationCodeInput) {
 	const { body, headers: requestHeaders } = await authorizationCodeRequest({
 		code,
@@ -153,6 +162,7 @@ export async function validateAuthorizationCode({
 		method: "POST",
 		body: body,
 		headers: requestHeaders,
+		customFetchImpl: fetch,
 	});
 	if (error) {
 		throw error;

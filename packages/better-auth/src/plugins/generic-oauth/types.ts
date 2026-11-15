@@ -7,6 +7,7 @@ import type {
 	OAuthRefreshContext,
 	TokenEndpointAuth,
 } from "@better-auth/core/oauth2";
+import type { DpopKeyPair } from "@better-auth/core/oauth2/dpop-client";
 
 /** Raw profile returned by a Generic OAuth provider. */
 export type GenericOAuthUserInfo = Omit<OAuth2UserInfo, "id"> & {
@@ -53,6 +54,18 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
 	 */
 	discoveryUrl?: string | undefined;
+	/**
+	 * The provider's issuer identifier. The discovery document's `issuer` must
+	 * equal it exactly, or the provider is skipped.
+	 *
+	 * Without it, `discoveryUrl` must be a well-known URL, and the discovered
+	 * issuer must be the one it is built from (RFC 8414 §3.3). Set it when
+	 * `discoveryUrl` is not a well-known URL, or when the provider publishes
+	 * discovery under a different name for the same issuer, such as a tenant
+	 * domain instead of the tenant ID. Used only with
+	 * `discoveryUrl`.
+	 */
+	issuer?: string | undefined;
 	/**
 	 * Require discovery to provide the issuer and JWKS metadata needed to verify
 	 * ID tokens before this provider is registered.
@@ -120,6 +133,24 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * When set, sign out only clears the Better Auth session.
 	 */
 	disableProviderLogout?: boolean | undefined;
+	/**
+	 * Request sender-constrained tokens with DPoP (RFC 9449).
+	 *
+	 * Better Auth signs a DPoP proof with `keyPair` for the code exchange, token
+	 * refresh, pushed authorization requests, and the userinfo request, and
+	 * sends `dpop_jkt` with the authorization request to bind the code to the
+	 * key. It retries once when the provider asks for a DPoP nonce.
+	 *
+	 * A protected resource accepts a token the provider binds to the key only
+	 * with a proof from the same key, so keep the pair for as long as stored
+	 * tokens live. A custom `getToken` or `getUserInfo` must send its own proofs.
+	 */
+	dpop?:
+		| {
+				/** The key pair that signs DPoP proofs. See `generateDpopKeyPair`. */
+				keyPair: DpopKeyPair;
+		  }
+		| undefined;
 	/** OAuth client ID */
 	clientId: string;
 	/** OAuth client secret */

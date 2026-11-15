@@ -1,8 +1,12 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type { SchemaClient, Scope } from "@better-auth/oauth-provider";
+import type {
+	OAuthAuthorizationDetail,
+	SchemaClient,
+	Scope,
+} from "@better-auth/oauth-provider";
 import * as z from "zod";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
-import type { CibaAuthorizationDetail, ResolvedCibaOptions } from "./types";
+import type { ResolvedCibaOptions } from "./types";
 
 // RFC 9396 §2 and §2.2: a `type` and, when present, well-typed common fields.
 const detailsSchema = z.array(
@@ -15,6 +19,42 @@ const detailsSchema = z.array(
 		privileges: z.array(z.string()).optional(),
 	}),
 );
+
+/** RFC 9396 §10 client metadata: the types a client will request. */
+export const DETAILS_TYPES_FIELD = "authorization_details_types";
+
+const typesSchema = z.array(z.string());
+
+/** The types a client registered, or `undefined` when it may request any. */
+export function getRegisteredDetailsTypes(
+	metadata: Record<string, unknown> | undefined,
+): string[] | undefined {
+	const parsed = typesSchema.safeParse(metadata?.[DETAILS_TYPES_FIELD]);
+	return parsed.success ? parsed.data : undefined;
+}
+
+/**
+ * Throws `invalid_client_metadata` when a client registers types that are not
+ * a list of types this server supports.
+ */
+export function validateRegisteredDetailsTypes(
+	metadata: Record<string, unknown> | undefined,
+	options: ResolvedCibaOptions,
+) {
+	const value = metadata?.[DETAILS_TYPES_FIELD];
+	if (value === undefined) return;
+	const types = typesSchema.safeParse(value);
+	const supported = options.authorizationDetailsTypes ?? {};
+	if (
+		!types.success ||
+		!types.data.every((type) => Object.hasOwn(supported, type))
+	) {
+		oauthError(
+			"invalid_client_metadata",
+			`${DETAILS_TYPES_FIELD} must list types from authorization_details_types_supported`,
+		);
+	}
+}
 
 const invalid = (): never =>
 	oauthError(
@@ -36,7 +76,7 @@ export async function validateAuthorizationDetails(
 		/** When set, each detail's type must be among these. */
 		allowedTypes?: string[];
 	},
-): Promise<CibaAuthorizationDetail[]> {
+): Promise<OAuthAuthorizationDetail[]> {
 	const parsed = detailsSchema.safeParse(details);
 	if (!parsed.success) return invalid();
 	const types = input.options.authorizationDetailsTypes ?? {};
@@ -59,7 +99,7 @@ export async function validateAuthorizationDetails(
 
 /** Serializes details for the `cibaRequest.authorizationDetails` column. */
 export function storeAuthorizationDetails(
-	details: CibaAuthorizationDetail[] | undefined,
+	details: OAuthAuthorizationDetail[] | undefined,
 ): string | null {
 	return details?.length ? JSON.stringify(details) : null;
 }
@@ -67,8 +107,10 @@ export function storeAuthorizationDetails(
 /** Reads the stored details; `undefined` when the request has none. */
 export function readAuthorizationDetails(
 	stored: string | null | undefined,
-): CibaAuthorizationDetail[] | undefined {
-	return stored ? (JSON.parse(stored) as CibaAuthorizationDetail[]) : undefined;
+): OAuthAuthorizationDetail[] | undefined {
+	return stored
+		? (JSON.parse(stored) as OAuthAuthorizationDetail[])
+		: undefined;
 }
 
 /**
