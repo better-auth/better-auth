@@ -84,12 +84,12 @@ The defaults come from your auth server's resolved base URL. That URL includes `
 * `issuer` defaults to `jwt.issuer` when the JWT plugin sets it. Otherwise, it defaults to the base URL, which matches the issuer the provider signs.
 * `audience` defaults to the base URL. See the warning below.
 
-When you set neither `jwksUrl` nor `remoteVerify`, the resource client checks each token the way the provider's introspection endpoint does, without a request to its own endpoints:
+When you set neither `jwksUrl` nor `remoteVerify`, and `baseURL` is static, the resource client checks each token against the provider's records, without a request to its own endpoints:
 
 * JWT and opaque access tokens both verify, so an API in the same process needs no client credentials for opaque tokens.
 * A token fails with a 401 `invalid_token` once it is revoked, its session ends, its client is disabled, or its resource is deleted. Each check reads your database on every request.
 * The result is the token's [introspection response](https://datatracker.ietf.org/doc/html/rfc7662#section-2.2), with `active: true`, `client_id`, `scope`, and `token_type` next to the token's claims.
-* `sub` is the subject the access token carries. That is the user ID, or the pairwise subject when you set [`accessTokenSubject: "pairwise"`](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens). It never reveals a user ID that the token hides.
+* `sub` is the subject the access token carries: the user ID, the pairwise subject when you set [`accessTokenSubject: "pairwise"`](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens), or the client ID for a `client_credentials` JWT. An opaque token issued to a user gets the `sub` a JWT access token would carry. It never reveals a user ID that the token hides. `/oauth2/introspect` differs: it returns the pairwise subject for a pairwise client even under the default `accessTokenSubject`.
 * DPoP proofs are recorded in the same store the provider uses, so a proof replayed at another instance on the same database is rejected. Pass `dpop.replayStore` to use a different shared store.
 * DPoP nonces follow the provider's [`dpop.nonce`](/docs/plugins/oauth-provider/tokens#server-provided-nonces). With `required: true` there, a DPoP request without a current nonce gets a 401 `use_dpop_nonce` with a fresh `DPoP-Nonce`. Pass `dpop.nonce` to override it for this API.
 

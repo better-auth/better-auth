@@ -74,8 +74,8 @@ export const oauthProviderResourceClient = <
 	};
 	/**
 	 * Whether tokens are checked against the records of the OAuth provider in
-	 * this process: the default, unless the caller chose `jwksUrl` or
-	 * `remoteVerify`.
+	 * this process: the default with a static base URL, unless the caller chose
+	 * `jwksUrl` or `remoteVerify`.
 	 */
 	const usesLocalRecords = async (
 		opts: { jwksUrl?: string; remoteVerify?: unknown } | undefined,
@@ -83,6 +83,9 @@ export const oauthProviderResourceClient = <
 		!!auth &&
 		!opts?.jwksUrl &&
 		!opts?.remoteVerify &&
+		// A dynamic `baseURL` resolves only per request, so records checked
+		// without one would carry an empty issuer and UserInfo audience.
+		!!(await getAuthServerBaseUrl()) &&
 		!!(await getOauthProviderPlugin());
 	/**
 	 * Fills a missing nonce secret and lifetime from the auth instance: the
@@ -90,7 +93,7 @@ export const oauthProviderResourceClient = <
 	 * `dpop.nonce.expiresIn`. A resource on the provider's origin then accepts
 	 * the nonce the client already holds for exactly as long as the provider
 	 * does. With `localRecords`, the provider's `dpop.nonce.required` and the
-	 * database-backed replay store also apply unless `dpop` overrides them.
+	 * provider's shared replay store also apply unless `dpop` overrides them.
 	 */
 	const resolveDpopOptions = async (
 		requested: ResourceDpopAuthOptions | undefined,
@@ -102,8 +105,8 @@ export const oauthProviderResourceClient = <
 		const dpop: ResourceDpopAuthOptions | undefined = localRecords
 			? {
 					...requested,
-					// Shared with the provider, so a proof replayed at another
-					// instance on the same database is rejected.
+					// The provider's store (secondary storage or the database), so a
+					// proof replayed at another instance sharing it is rejected.
 					replayStore:
 						requested?.replayStore ??
 						createDpopReplayStore(
@@ -288,9 +291,9 @@ export const oauthProviderResourceClient = <
 				 * provider's records: opaque tokens verify, and revoked tokens, ended
 				 * sessions, and disabled clients fail. The result is the token's RFC
 				 * 7662 introspection response, whose `sub` is the subject the access
-				 * token carries. DPoP proofs then use the database-backed replay store,
-				 * and nonces follow the provider's `dpop.nonce` unless `dpop` overrides
-				 * them.
+				 * token carries. DPoP proofs then use the provider's shared replay
+				 * store, and nonces follow the provider's `dpop.nonce` unless `dpop`
+				 * overrides them. A dynamic `baseURL` keeps signature verification.
 				 */
 				verifyAccessTokenRequest: (async (
 					request: Request | ResourceRequestInput,

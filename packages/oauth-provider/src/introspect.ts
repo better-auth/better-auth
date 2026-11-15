@@ -8,6 +8,7 @@ import {
 import type { User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
+import { decodeJwt } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
 import { exposeChallengeHeader } from "./dpop";
 import { buildResourceServerChallenge } from "./resource-challenge";
@@ -520,10 +521,23 @@ export function getLocalIntrospection(
 	} as GenericEndpointContext;
 	return async (token: string): Promise<JWTPayload> => {
 		const payload = await validateAccessToken(ctx, opts, token);
+		if (options?.subject !== "token" || !payload.active) return payload;
+		// An active three-segment token passed the JWT path, so its signed
+		// subjects are the ones it carries, whether they name a user, a pairwise
+		// subject, or a client.
+		if (token.split(".").length === 3) {
+			const carried: Record<string, unknown> = decodeJwt(token);
+			const subjects: Record<string, unknown> = { ...payload };
+			for (const claim of ["sub", "act", "may_act"]) {
+				if (claim in carried) subjects[claim] = carried[claim];
+				else delete subjects[claim];
+			}
+			return subjects as JWTPayload;
+		}
+		// An opaque token stores the user ID; a JWT for the grant would carry the
+		// subject `accessTokenSubject` selects.
 		if (
-			options?.subject !== "token" ||
 			opts.accessTokenSubject !== "pairwise" ||
-			!payload.active ||
 			typeof payload.sub !== "string"
 		) {
 			return payload;

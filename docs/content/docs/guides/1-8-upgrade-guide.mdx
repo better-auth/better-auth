@@ -474,12 +474,12 @@ This section applies if you verify access tokens with `verifyAccessTokenRequest`
 
 ### The resource client checks tokens against the provider's records
 
-`oauthProviderResourceClient(auth)` now checks each token against the provider's records when `auth` runs the OAuth provider and you set neither `jwksUrl` nor `remoteVerify`. This applies to `verifyAccessTokenRequest` and `verifyBearerToken`. Before, it verified JWT access tokens by signature alone, so these requests change:
+`oauthProviderResourceClient(auth)` now checks each token against the provider's records when `auth` runs the OAuth provider with a static `baseURL` and you set neither `jwksUrl` nor `remoteVerify`. This applies to `verifyAccessTokenRequest` and `verifyBearerToken`. Before, it verified JWT access tokens by signature alone, so these requests change:
 
 * A JWT access token that was revoked, whose session ended, whose client is disabled, or whose resource was deleted now fails with `401 invalid_token`. Each verification reads your database.
 * An opaque access token from the same provider now verifies without `remoteVerify`.
-* The result is the token's introspection response. It adds `active: true`, `client_id`, and `token_type` to the token's claims. `sub` is still the subject the token carries.
-* DPoP proofs are recorded in the database-backed replay store, so a replayed proof fails at every instance that shares the database.
+* The result is the token's introspection response. It adds `active: true`, `client_id`, and `token_type` to the token's claims. `sub` is still the subject the token carries. For an opaque token, that is the subject a JWT access token would carry under `accessTokenSubject`, so with the default `"user"` it is the user ID even for a pairwise client, while `/oauth2/introspect` returns the pairwise subject.
+* DPoP proofs are recorded where your auth instance keeps verification values, in secondary storage or the database, so a replayed proof fails at every instance that shares that store.
 * When the provider sets `dpop.nonce.required: true`, a DPoP request without a current nonce now fails with `401 use_dpop_nonce` and a fresh `DPoP-Nonce`.
 
 **What to do:** expect the extra database reads. If a route must keep signature-only checks, pass `jwksUrl`. To keep a route without nonces while the provider requires them, pass `dpop: { nonce: { required: false } }`. Code that compares the whole result must expect the introspection fields.
