@@ -1911,6 +1911,22 @@ async function bounceIfIdpInitiated(
 	const provider = await resolveOIDCProvider(ctx, options, providerId);
 	if (!provider?.oidcConfig?.allowIdpInitiated) return;
 
+	// An IdP-initiated error response has no state to echo back
+	// (RFC 6749 section 4.1.2.1), so forward the provider's error.
+	const { error, error_description } = ctx.query;
+	if (error) {
+		ctx.context.logger.error("IdP-initiated SSO callback failed", {
+			providerId: provider.providerId,
+			error,
+		});
+		const errorURL =
+			ctx.context.options.onAPIError?.errorURL ||
+			`${ctx.context.baseURL}/error`;
+		const params = new URLSearchParams({ error });
+		if (error_description) params.set("error_description", error_description);
+		throw ctx.redirect(appendQueryParams(errorURL, params));
+	}
+
 	let config = provider.oidcConfig;
 	try {
 		config = await ensureRuntimeDiscovery(config, provider.issuer, (url) =>
@@ -1961,7 +1977,10 @@ export const callbackSSO = (options?: SSOOptions) => {
 		callbackSSOEndpointConfig,
 		async (ctx) => {
 			const providerId = ctx.params.providerId;
-			if (ctx.query.state === undefined && ctx.query.code) {
+			if (
+				ctx.query.state === undefined &&
+				(ctx.query.code || ctx.query.error)
+			) {
 				await bounceIfIdpInitiated(ctx, options, providerId);
 			}
 			return handleOIDCCallback(ctx, options, providerId);

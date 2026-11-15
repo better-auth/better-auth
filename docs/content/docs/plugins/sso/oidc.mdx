@@ -160,6 +160,8 @@ If users register their own providers, keep per-provider callbacks. They limit m
 
 To accept callbacks that arrive at `/sso/callback/{providerId}` without `state`, set `oidcConfig.allowIdpInitiated: true`. Better Auth discards the IdP's code and starts a new authorization request with a fresh `state` and PKCE verifier.
 
+If the IdP rejects the sign-in, it redirects with `error` and no `state`. Better Auth forwards that `error` and `error_description` to your error URL instead of reporting `state_not_found`.
+
 Set it on a provider in [`defaultSSO`](/docs/plugins/sso#configure-providers-in-code), because `/sso/register` and `/sso/update-provider` silently drop it.
 
 <Callout type="warn">

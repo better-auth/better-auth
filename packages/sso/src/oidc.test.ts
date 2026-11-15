@@ -2651,4 +2651,33 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 		expect(res.status).toBe(302);
 		expect(res.headers.get("location")).toContain("state_not_found");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12644
+	 */
+	it("should forward a stateless provider error when allowIdpInitiated is true", async () => {
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated?error=access_denied&error_description=User+is+not+registered",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const url = new URL(res.headers.get("location") || "");
+		expect(url.origin).not.toBe("http://localhost:8080");
+		expect(url.searchParams.get("error")).toBe("access_denied");
+		expect(url.searchParams.get("error_description")).toBe(
+			"User is not registered",
+		);
+	});
+
+	it("should keep state_not_found for a stateless provider error without the flag", async () => {
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/sso/callback/strict-oidc?error=access_denied",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const url = new URL(res.headers.get("location") || "");
+		expect(url.searchParams.get("error")).toBe("state_not_found");
+	});
 });

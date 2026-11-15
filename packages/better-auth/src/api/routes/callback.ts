@@ -97,11 +97,21 @@ export const callbackOAuth = createAuthEndpoint(
 			iss,
 		} = queryOrBody;
 
-		if (state === undefined && code) {
+		if (state === undefined && (code || error)) {
 			const provider = await getAwaitableValue(c.context.socialProviders, {
 				value: c.params.id,
 			});
 			if (provider?.allowIdpInitiated) {
+				// An IdP-initiated error response has no state to echo back
+				// (RFC 6749 section 4.1.2.1), so forward the provider's error.
+				if (error) {
+					c.context.logger.error("IdP-initiated callback failed", error);
+					const params = new URLSearchParams({ error });
+					if (error_description) {
+						params.set("error_description", error_description);
+					}
+					throw c.redirect(appendQueryParams(defaultErrorURL, params));
+				}
 				const idTokenNonce = generateIdTokenNonce(provider);
 				const { state: freshState, codeVerifier } = await generateState(c, {
 					idTokenNonce,
