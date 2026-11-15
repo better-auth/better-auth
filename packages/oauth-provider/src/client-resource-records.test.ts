@@ -570,6 +570,23 @@ describe("resource client with opaque access tokens in this process", async () =
 		expect(selfFetch).not.toHaveBeenCalled();
 	});
 
+	/**
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+	 */
+	it("returns the pairwise sub of a pairwise client's opaque token", async () => {
+		const { tokens, session } = await server.userToken("pairwise");
+		expect(tokens.access_token.split(".")).toHaveLength(1);
+		const pairwiseSub = decodeJwt(tokens.id_token).sub;
+		expect(pairwiseSub).not.toBe(session.user.id);
+
+		const payload = await server.resourceClient.verifyAccessTokenRequest(
+			await routeRequest(tokens.access_token),
+			{ verifyOptions },
+		);
+
+		expect(payload.sub).toBe(pairwiseSub);
+	});
+
 	it("rejects a revoked opaque token", async () => {
 		const { body } = await server.clientCredentialsToken();
 		await server.auth.api.oauth2Revoke({

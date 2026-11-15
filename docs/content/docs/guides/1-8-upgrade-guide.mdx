@@ -478,7 +478,7 @@ This section applies if you verify access tokens with `verifyAccessTokenRequest`
 
 * A JWT access token that was revoked, whose session ended, whose client is disabled, or whose resource was deleted now fails with `401 invalid_token`. Each verification reads your database.
 * An opaque access token from the same provider now verifies without `remoteVerify`.
-* The result is the token's introspection response. It adds `active: true`, `client_id`, and `token_type` to the token's claims. `sub` is still the subject the token carries. For an opaque token, that is the subject a JWT access token would carry under `accessTokenSubject`, so with the default `"user"` it is the user ID even for a pairwise client, while `/oauth2/introspect` returns the pairwise subject.
+* The result is the token's introspection response. It adds `active: true`, `client_id`, and `token_type` to the token's claims. A JWT's `sub` is still the subject the token carries. An opaque token's `sub` is the one `/oauth2/introspect` returns, which is the pairwise subject for a pairwise client.
 * DPoP proofs are recorded where your auth instance keeps verification values, in secondary storage or the database, so a replayed proof fails at every instance that shares that store.
 * When the provider sets `dpop.nonce.required: true`, a DPoP request without a current nonce now fails with `401 use_dpop_nonce` and a fresh `DPoP-Nonce`.
 

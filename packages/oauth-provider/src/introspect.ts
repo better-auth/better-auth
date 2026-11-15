@@ -501,8 +501,9 @@ export async function requireActiveAccessToken(
  *
  * With `subject: "user"`, the default, `sub`, `act`, and `may_act` name users
  * by user ID even when the token's own subjects are pairwise. With
- * `subject: "token"`, they are the subjects a JWT access token for the grant
- * carries, as `accessTokenSubject` selects, for JWT and opaque tokens alike.
+ * `subject: "token"`, a JWT returns the subjects it carries, and an opaque
+ * token, which stores user IDs, returns the subjects its client sees, as
+ * `/oauth2/introspect` does.
  *
  * @internal
  */
@@ -534,14 +535,9 @@ export function getLocalIntrospection(
 			}
 			return subjects as JWTPayload;
 		}
-		// An opaque token stores the user ID; a JWT for the grant would carry the
-		// subject `accessTokenSubject` selects.
-		if (
-			opts.accessTokenSubject !== "pairwise" ||
-			typeof payload.sub !== "string"
-		) {
-			return payload;
-		}
+		// An opaque token stores the user ID, which a pairwise client must not
+		// see.
+		if (typeof payload.sub !== "string") return payload;
 		const client = await getClient(ctx, opts, payload.client_id as string);
 		// Validation already requires the client; never fall back to user IDs.
 		if (!client) return { active: false };
