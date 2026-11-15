@@ -6436,21 +6436,9 @@ describe("DPoP with secondary storage and no database-backed verification", asyn
 				client_credentials_scopes: ["read"],
 			},
 		});
-		const { privateKey, publicKey } = await generateKeyPair("ES256", {
-			extractable: true,
+		const proof = await createDpopProof(await createDpopKey(), {
+			url: tokenEndpoint,
 		});
-		const proof = await new SignJWT({
-			jti: generateRandomString(16),
-			htm: "POST",
-			htu: tokenEndpoint,
-			iat: Math.floor(Date.now() / 1000),
-		})
-			.setProtectedHeader({
-				typ: "dpop+jwt",
-				alg: "ES256",
-				jwk: (await exportJWK(publicKey)) as JWK,
-			})
-			.sign(privateKey);
 		const requestToken = () =>
 			customFetchImpl(tokenEndpoint, {
 				method: "POST",
