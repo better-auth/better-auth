@@ -443,6 +443,10 @@ export interface IssueAuthorizationCodeParams {
 	 * fields the provider stores, so a key such as `userId` or `query` changes
 	 * nothing about the code or its tokens.
 	 *
+	 * The token request sees them whichever endpoint issued the code. When
+	 * more than one endpoint sets them, nest each endpoint's values under its
+	 * own key, such as its plugin ID.
+	 *
 	 * The value must be a JSON object, and it is read back in its JSON form. It
 	 * is stored as plain JSON with the code, so store a reference rather than a
 	 * secret or personal data.
