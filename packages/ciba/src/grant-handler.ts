@@ -8,6 +8,7 @@ import {
 import { parseActor } from "./actor";
 import { readAuthorizationDetails } from "./authorization-details";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
+import { toCibaGrantRequest } from "./grant-request";
 import type { CibaRequest } from "./schema";
 import type { ResolvedCibaOptions } from "./types";
 
@@ -173,5 +174,7 @@ export const createCibaGrantHandler =
 			confirmation: binding,
 			authorizationDetails,
 			act: actor,
+			// The row is deleted by now, so `beforeTokenIssuance` reads it here.
+			grantRequest: toCibaGrantRequest(claimed),
 		});
 	};

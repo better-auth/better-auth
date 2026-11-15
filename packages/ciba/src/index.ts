@@ -131,6 +131,8 @@ export const ciba = (options: CibaOptions) => {
 
 export { CIBA_GRANT_TYPE } from "./constants";
 export { CIBA_ERROR_CODES } from "./error-codes";
+export type { CibaGrantRequest } from "./grant-request";
+export { cibaGrantRequestFrom } from "./grant-request";
 export type {
 	CibaAuthorizationDetailsType,
 	CibaDeliveryMode,

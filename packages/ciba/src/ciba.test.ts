@@ -1,6 +1,7 @@
 import type {
 	OAuthActorClaim,
 	OAuthAuthenticationContext,
+	OAuthBeforeTokenIssuanceInput,
 	OAuthClient,
 } from "@better-auth/oauth-provider";
 import { oauthProvider } from "@better-auth/oauth-provider";
@@ -14,7 +15,7 @@ import type { JWK } from "jose";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { CibaNotification, CibaOptions } from "./index";
-import { CIBA_GRANT_TYPE, ciba } from "./index";
+import { CIBA_GRANT_TYPE, ciba, cibaGrantRequestFrom } from "./index";
 
 const baseURL = "http://localhost:3000";
 const resource = "https://api.example.com";
@@ -61,6 +62,11 @@ const resolveActor = vi.fn<NonNullable<CibaOptions["resolveActor"]>>(
 	() => undefined,
 );
 
+// Allows every issuance unless a test refuses one.
+const beforeTokenIssuance = vi.fn(
+	async (_input: OAuthBeforeTokenIssuanceInput) => {},
+);
+
 let lastNotification: CibaNotification | undefined;
 const sendNotification = vi.fn((notification: CibaNotification) => {
 	lastNotification = notification;
@@ -80,6 +86,7 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 					{ identifier: reportsResource, allowedScopes: ["profile"] },
 				],
 				enforcePerClientResources: false,
+				beforeTokenIssuance,
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
 				authenticationContext: {
@@ -1944,5 +1951,60 @@ describe("ciba getCibaRequest", () => {
 			expiresAt: lastNotification!.expiresAt,
 		});
 		expect(lastNotification!.resources).toEqual([resource]);
+	});
+});
+
+describe("ciba beforeTokenIssuance", () => {
+	it("passes the claimed request to the hook", async () => {
+		resolveActor.mockResolvedValueOnce({
+			sub: "agent-1",
+			sub_profile: "service",
+		});
+		const { authReqId, url } = await start({
+			binding_message: "Code 31",
+			acr_values: `${mfaAcr} 0`,
+			resource: [resource, secondResource],
+		});
+		const { requestId } = lastNotification!;
+		await approve(url);
+		const issued = await poll(authReqId, pollClient, {}, [resource]);
+		expect(issued.status).toBe(200);
+
+		const input = beforeTokenIssuance.mock.lastCall![0];
+		expect(input.grantType).toBe(CIBA_GRANT_TYPE);
+		expect(input.act).toEqual({ sub: "agent-1", sub_profile: "service" });
+		expect(input.resources).toEqual([resource]);
+		expect(cibaGrantRequestFrom(input)).toEqual({
+			requestId,
+			bindingMessage: "Code 31",
+			acrValues: [mfaAcr, "0"],
+			approvedScopes: ["openid", "profile"],
+			approvedResources: [resource, secondResource],
+			createdAt: expect.any(Date),
+		});
+	});
+
+	it("ends the request when the hook refuses it", async () => {
+		const { authReqId, url } = await start();
+		await approve(url);
+		beforeTokenIssuance.mockRejectedValueOnce(
+			new APIError("BAD_REQUEST", {
+				error: "access_denied",
+				error_description: "step-up required",
+			}),
+		);
+		const refused = await poll(authReqId);
+		expect(refused.status).toBe(400);
+		expect(refused.body.error).toBe("access_denied");
+		await waitInterval();
+		expect((await poll(authReqId)).body.error).toBe("invalid_grant");
+	});
+
+	it("reads no CIBA request from another grant's issuance", () => {
+		const input = {
+			grantType: "authorization_code",
+			grantRequest: { requestId: "x" },
+		} as unknown as OAuthBeforeTokenIssuanceInput;
+		expect(cibaGrantRequestFrom(input)).toBeUndefined();
 	});
 });

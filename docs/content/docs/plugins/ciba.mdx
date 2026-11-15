@@ -394,6 +394,31 @@ Your page must still do everything `completeCibaRequest` leaves to your app:
 * Show the client, the scopes, the binding message, and any actor or authorization details before the user decides.
 * Treat `ciba_request_id` as untrusted input. `getCibaRequest` returns `null` for an ID that is not the signed-in user's pending request.
 
+## Refuse issuance after approval
+
+Some checks can only run at the token poll, such as requiring that the user's sign-in met the `acr_values` the client asked for. The provider's [`beforeTokenIssuance`](/docs/plugins/oauth-provider/tokens#refuse-token-issuance) hook runs for every grant, after the grant is validated and before any token is stored. For a CIBA poll, `cibaGrantRequestFrom` reads the request the poll redeemed:
+
+```ts title="auth.ts"
+import { APIError } from "better-auth/api";
+import { cibaGrantRequestFrom } from "@better-auth/ciba";
+
+oauthProvider({
+  beforeTokenIssuance: (input) => {
+    const request = cibaGrantRequestFrom(input); // undefined for other grants
+    if (request?.acrValues?.length && !request.acrValues.includes(input.acr ?? "0")) {
+      throw new APIError("BAD_REQUEST", {
+        error: "access_denied",
+        error_description: "The sign-in did not meet the requested acr_values",
+      });
+    }
+  },
+});
+```
+
+`cibaGrantRequestFrom` returns `requestId`, `bindingMessage`, `acrValues`, `approvedScopes`, `approvedResources`, and `createdAt`. The hook's input already carries the user, the client, the `acr`, `amr`, and `act`, and the authorization details.
+
+The poll has already claimed the request when the hook runs. So a refusal is final: the client receives the error, and a later poll returns `invalid_grant`. `access_denied` tells a CIBA client that the request was denied (CIBA §11), so use it for a policy refusal the user cannot fix by polling again.
+
 ## Endpoints
 
 ### `POST /oauth2/bc-authorize`
