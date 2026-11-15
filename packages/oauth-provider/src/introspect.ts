@@ -538,8 +538,8 @@ export async function requireActiveAccessTokenWithClaims(
 }
 
 /**
- * Resolves pairwise `sub`, and user actors in `act`, on an introspection
- * payload.
+ * Resolves pairwise `sub`, and users in `act` and `may_act`, on an
+ * introspection payload.
  * Applied at the presentation layer so internal validation functions
  * keep real user.id (needed for user lookup in /userinfo).
  */
@@ -566,11 +566,11 @@ async function resolveIntrospectionSubjects(
 			: await getClient(ctx, opts, issuerClientId);
 	if (!issuingClient) return payload;
 	const subjects = await resolvePresentedSubjects(
-		ctx,
 		opts,
 		{
 			sub: payload.sub as string,
 			...(payload.act ? { act: payload.act as OAuthActorClaim } : {}),
+			...(payload.may_act !== undefined ? { may_act: payload.may_act } : {}),
 		},
 		issuingClient,
 	);

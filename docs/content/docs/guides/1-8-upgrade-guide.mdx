@@ -140,6 +140,27 @@ tokenEndpointAuth: {
 
 Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refreshAccessToken`, or `refreshAccessTokenRequest` from `@better-auth/core/oauth2` that pass `authorization` in `headers` now throw.
 
+### Generic OAuth signs assertions for the issuer
+
+This applies if a generic OAuth provider uses `private_key_jwt` with `createPrivateKeyJwtClientAssertionGetter`. Each assertion is now signed for the authorization server's issuer, which generic OAuth takes from the provider's discovery document. Before, it was signed for the token endpoint URL. This follows [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4).
+
+These providers still sign for the token endpoint URL:
+
+* A generic OAuth provider configured without `discoveryUrl`, because it has no discovered issuer.
+* The `okta` and `microsoftEntraId` helpers. Okta and Microsoft Entra ID document only their token endpoint URL as the assertion audience.
+* OIDC SSO providers, as [SSO client assertions carry a new type header](#sso-client-assertions-carry-a-new-type-header) describes.
+
+Every assertion that `createPrivateKeyJwtClientAssertionGetter` or `signPrivateKeyJwtClientAssertion` signs now carries the JOSE header `typ: "client-authentication+jwt"`. Before, it carried `typ: "JWT"`.
+
+**What to do:** if a generic OAuth provider accepts only its token endpoint URL as the audience, set `audience: "token_endpoint"`:
+
+```ts title="auth.ts"
+getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+  privateKeyJwk: { /* your JWK */ },
+  audience: "token_endpoint",
+}),
+```
+
 ### Generic OAuth checks the discovered issuer
 
 Unless `issuer` is set, `discoveryUrl` must now be a well-known URL, and the discovery document's `issuer` must be the issuer the URL is built from. Otherwise Better Auth logs an error that names the provider and both values, and skips the provider. Before, the document was used whatever issuer it named.
@@ -153,7 +174,6 @@ A common case is an issuer with a path, such as `https://auth.example.com/api/au
 These are new and need no action:
 
 * Generic OAuth providers sign in through pushed authorization requests when the provider's discovery document sets `require_pushed_authorization_requests`. The `pushedAuthorizationRequest` option defaults to `"auto"`. Set it to `true` to always push, or to `false` to never push.
-* `createPrivateKeyJwtClientAssertionGetter` accepts `audience: "issuer"` for providers that require the issuer as the assertion audience, as FAPI 2.0 does. Generic OAuth passes the issuer from the provider's discovery document. Other callers must pass `issuer` themselves, or every token request fails. The default stays the token endpoint URL.
 * Client apps can send DPoP-bound requests with `createDpopFetch` from `better-auth/oauth2/dpop-client`.
 
 ### Social provider profile types match the provider
@@ -213,7 +233,7 @@ The provider now sets these access token claims itself:
 
 * `reference_id` holds the consent reference that `postLogin.consentReferenceId` returns, such as an organization. JWT access tokens include it, and introspection returns it.
 * `act` names the actor of a delegated token from token exchange.
-* `ba_sub` holds encrypted user IDs in JWT access tokens with a pairwise `sub`. See [Pairwise `sub` in JWT access tokens](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens).
+* `ba_sub` holds the user ID, and the token's `act` and `may_act` with their user IDs, encrypted in JWT access tokens with a pairwise `sub`. See [Pairwise `sub` in JWT access tokens](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens).
 * `grant_id` names the grant of a JWT access token. It is reserved only when you set `revocableJwtAccessTokens: true`.
 
 A value for any of these claims set by `customAccessTokenClaims`, an extension `claims.accessToken` contributor, or a resource's `customClaims` is now dropped with a warning. A JWT access token issued before you upgrade that carries your own `ba_sub` claim is inactive at UserInfo, introspection, and token exchange, because the provider cannot decrypt it. The client gets a working token at its next refresh.
@@ -305,6 +325,29 @@ This applies if you bind tokens with DPoP or mTLS, or write a `clientAuthenticat
 
 Pairwise clients created after the upgrade with private-use redirect URIs, such as `com.example.app:/callback`, or loopback ones, such as `http://localhost:8787/callback`, each get their own `sub`. Before, unrelated clients of either kind could share one. Existing clients keep their current `sub`.
 
+### Client assertions must name the issuer as their audience
+
+This applies if any client authenticates with `private_key_jwt`, or you write a `clientAuthentication` strategy. A client assertion's `aud` must now be the provider's issuer and nothing else, at every endpoint that authenticates a client except `POST /oauth2/client/rotate-keys`: token, introspection, revocation, PAR, and plugin endpoints. [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) and [§5](https://www.rfc-editor.org/rfc/rfc10070#section-5) require this to stop audience injection, where a malicious server replays an assertion that a client signed for an endpoint URL.
+
+A client that signs for the token endpoint URL, the PAR endpoint URL, or the URL of another endpoint now gets `invalid_client`. So does a client whose `aud` list names the issuer and another value. The error description names the issuer to sign for, as in `client assertion aud must be the issuer https://example.com/api/auth`. Before, any one of these values was accepted.
+
+**What to do:** update your clients to sign their assertions for the issuer. RFC 10070 §6 asks you to update clients before or together with the server. Better Auth's generic OAuth providers with a discovered issuer sign for it by default from 1.8, as [Generic OAuth signs assertions for the issuer](#generic-oauth-signs-assertions-for-the-issuer) describes. Its OIDC SSO providers sign for it when you set `clientAssertionAudience: "issuer"`, as [SSO client assertions carry a new type header](#sso-client-assertions-carry-a-new-type-header) describes.
+
+If you cannot update every client before you upgrade, set `assertionAudience: "issuer-or-endpoint"`. The provider then accepts the URL of the endpoint called, the issuer, or, at `/oauth2/par`, the token endpoint URL, as in 1.7. This setting keeps clients open to audience injection. Remove it once your clients sign for the issuer.
+
+```ts title="auth.ts"
+oauthProvider({
+  // Transitional: remove once every client signs for the issuer.
+  assertionAudience: "issuer-or-endpoint",
+});
+```
+
+`POST /oauth2/client/rotate-keys` is unchanged. Its assertion must still name the rotation endpoint URL.
+
+A `clientAuthentication` strategy now receives `acceptedAudiences`, the audiences the provider accepts under `assertionAudience`. Pass it to `consumeClientAssertion` in place of `expectedAudience`, as [Client authentication obligations](/docs/plugins/oauth-provider/reference#client-authentication-obligations) shows.
+
+The `expectedAudience` strategy input and the `expectedAudience` parameter of `consumeClientAssertion` are deprecated. A strategy that checks `aud` against `expectedAudience` accepts different audiences than the built-in `private_key_jwt` method does.
+
 ### UserInfo errors follow RFC 6750
 
 `/oauth2/userinfo` now reports its errors the way [RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1) describes, as OpenID Connect requires:
@@ -313,6 +356,23 @@ Pairwise clients created after the upgrade with private-use redirect URIs, such 
 * An `Authorization` header without the `Bearer` or `DPoP` scheme, such as a bare token, is treated as no credentials and gets a `401` challenge. Before, UserInfo read the whole header value as the token.
 
 **What to do:** a client that calls UserInfo must request the `openid` scope when it authorizes. A client whose access token lacks `openid` must authorize again with that scope. Send the access token as `Authorization: Bearer <token>`, or `DPoP <token>` with a DPoP proof in the `DPoP` header for a DPoP-bound token. Update clients and tests that match on `invalid_scope` from UserInfo.
+
+### Access token claims set to `undefined` are left out
+
+This applies if `customAccessTokenClaims`, a resource's `customClaims`, an extension `claims.accessToken` contributor, or a grant's `accessTokenClaims` sets a claim to `undefined`. That claim is now left out, and a lower-priority claim with the same name keeps its value. Before, the `undefined` removed that claim from the access token.
+
+ID token and UserInfo claims already worked this way. The change also makes both token formats agree: a grant's `accessTokenClaims: { tenant: undefined }` removed an extension's `tenant` from a JWT access token, but opaque-token introspection still returned it, because stored claims cannot hold `undefined`.
+
+**What to do:** if you set a claim to `undefined` to override a lower-priority claim, set the value you want instead, such as `null`.
+
+```ts title="auth.ts"
+oauthProvider({
+  customAccessTokenClaims: ({ user }) => ({
+    // was: tenant: user?.tenantId, to remove an extension's tenant
+    tenant: user?.tenantId ?? null,
+  }),
+});
+```
 
 ### Extension and API authors
 
@@ -445,6 +505,12 @@ A provider that sends no email attribute, and a NameID in another format or with
 ### SAML users without a name get their email as their name
 
 Before, a SAML user without a `displayName`, `givenName`, or `surname` attribute got the NameID as their name, which can be an opaque ID. In `mapProfileToUser`, `providerUser.name` is now `undefined` in that case. If `mapProfileToUser` returns a `name`, the user gets that name instead of the email. Existing users keep their stored name, unless `resolveUser` links them with `profile: "update"`, or `account.accountLinking.updateUserInfoOnLink` is on when their SSO account is first linked by email.
+
+### SSO client assertions carry a new type header
+
+This applies if an OIDC SSO provider uses `tokenEndpointAuthentication: "private_key_jwt"`. Its client assertions now carry the JOSE header `typ: "client-authentication+jwt"`. Before, they carried `typ: "JWT"`. They are still signed for the provider's token endpoint URL.
+
+A Better Auth 1.8 authorization server accepts only its issuer as the audience by default. To sign in to one, set `clientAssertionAudience: "issuer"` in the provider's `oidcConfig`, through `registerSSOProvider` or `updateSSOProvider`. The assertions are then signed for the provider's registered `issuer`, as [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) asks.
 
 ***
 

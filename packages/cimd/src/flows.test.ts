@@ -273,6 +273,8 @@ describe("CIMD - token exchange flow", async () => {
 		const assertion = await signPrivateKeyJwtClientAssertion({
 			clientId: clientMetadataUrl,
 			tokenEndpoint,
+			// The jwt plugin has no configured issuer, so the base URL is the issuer.
+			audience: `${authServerBaseUrl}/api/auth`,
 			privateKeyJwk,
 			kid: keyId,
 			algorithm: "RS256",
@@ -422,6 +424,8 @@ describe("CIMD - token exchange flow", async () => {
 		const assertion = await signPrivateKeyJwtClientAssertion({
 			clientId: privateClientMetadataUrl,
 			tokenEndpoint,
+			// The jwt plugin has no configured issuer, so the base URL is the issuer.
+			audience: `${authServerBaseUrl}/api/auth`,
 			privateKeyJwk,
 			kid: keyId,
 			algorithm: "RS256",
@@ -549,6 +553,8 @@ describe("CIMD - token exchange flow", async () => {
 		const assertion = await signPrivateKeyJwtClientAssertion({
 			clientId: uppercaseClientMetadataUrl,
 			tokenEndpoint,
+			// The jwt plugin has no configured issuer, so the base URL is the issuer.
+			audience: `${authServerBaseUrl}/api/auth`,
 			privateKeyJwk,
 			kid: keyId,
 			algorithm: "RS256",

@@ -24,6 +24,7 @@ import {
 	assertNotTrustedClient,
 	deriveSectorIdentifier,
 	getClient,
+	isPublicClient,
 	parseClientMetadata,
 	storeClientSecret,
 } from "../utils";
@@ -539,7 +540,7 @@ export async function rotateClientSecretEndpoint(
 		throw new APIError("UNAUTHORIZED");
 	}
 
-	if (client.tokenEndpointAuthMethod === "none" || !client.clientSecret) {
+	if (isPublicClient(client) || !client.clientSecret) {
 		throw new APIError("BAD_REQUEST", {
 			error_description:
 				"secret rotation is only available for clients using client_secret authentication",
