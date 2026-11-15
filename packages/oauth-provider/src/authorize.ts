@@ -1604,11 +1604,14 @@ export async function issueAuthorizationCode(
 			policy.refused.error_description,
 		);
 	}
-	if (policy.requiresLogin && !(await wasSessionCreatedInRequest(session.id))) {
+	// Unlike `prompt=login`, a session created in this request does not
+	// satisfy the policy: at `/oauth2/authorize` the hook runs again after
+	// sign-in and decides on the new session, which cannot happen here.
+	if (policy.requiresLogin) {
 		tokenError(
 			"BAD_REQUEST",
 			"login_required",
-			"the request requires a new sign-in",
+			"beforeAuthorization requires a new sign-in",
 		);
 	}
 	const scopes = parseScopes(query.scope);

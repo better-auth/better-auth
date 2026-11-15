@@ -278,6 +278,25 @@ describe("beforeAuthorization with issueAuthorizationCode", async () => {
 	const issuer = {
 		id: "test-policy-code-issuer",
 		endpoints: {
+			testSignInAndIssueCode: createAuthEndpoint(
+				"/test/sign-in-and-issue-code",
+				{ method: "POST", use: [sessionMiddleware] },
+				async (ctx) => {
+					// Stands in for an endpoint that checks a password and signs the
+					// user in within the request that issues the code.
+					const session = await ctx.context.internalAdapter.createSession(
+						ctx.context.session.user.id,
+					);
+					const issued = await getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+					).issueAuthorizationCode({
+						query: ctx.body as Record<string, string>,
+						session: { session, user: ctx.context.session.user },
+					});
+					return ctx.json({ code: issued.code });
+				},
+			),
 			testIssueCode: createAuthEndpoint(
 				"/test/issue-code",
 				{ method: "POST", use: [sessionMiddleware] },
@@ -321,8 +340,8 @@ describe("beforeAuthorization with issueAuthorizationCode", async () => {
 		});
 	});
 
-	async function issue() {
-		return client.$fetch<{ code: string }>("/test/issue-code", {
+	async function issue(path = "/test/issue-code") {
+		return client.$fetch<{ code: string }>(path, {
 			method: "POST",
 			headers,
 			body: {
@@ -360,6 +379,13 @@ describe("beforeAuthorization with issueAuthorizationCode", async () => {
 	it("answers a forced sign-in with login_required for an earlier session", async () => {
 		policy = () => ({ prompt: "login" });
 		const issued = await issue();
+		expect(issued.error?.status).toBe(400);
+		expect((issued.error as { error?: string }).error).toBe("login_required");
+	});
+
+	it("answers a forced sign-in with login_required for a session created in the same request", async () => {
+		policy = () => ({ prompt: "login" });
+		const issued = await issue("/test/sign-in-and-issue-code");
 		expect(issued.error?.status).toBe(400);
 		expect((issued.error as { error?: string }).error).toBe("login_required");
 	});
