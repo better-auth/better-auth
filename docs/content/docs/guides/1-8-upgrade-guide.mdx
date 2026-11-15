@@ -98,6 +98,12 @@ A session created from an API key with `enableSessionForAPIKeys` is refused on t
 
 Expired verification rows are now also deleted when a single-use value, such as a magic link, an OTP, or an issued nonce, is used. Before, cleanup ran only when a value was looked up. A lookup that finds an expired row deletes the expired rows for that identifier. Deleting every expired row runs at most once a minute per server instance, after a lookup or a consumed single-use value. `verification.disableCleanup` turns off every one of these deletes.
 
+### `@better-auth/core` peer dependencies are optional
+
+This applies if you depend on `@better-auth/core` without `better-auth`. Its peer dependencies `@better-auth/utils`, `@better-fetch/fetch`, `better-call`, `jose`, `kysely`, and `nanostores` are now optional. Package managers no longer install them with it. An app or SDK can then install `@better-auth/core` for the DPoP client alone. Projects that install `better-auth` are not affected, because `better-auth` depends on these packages directly.
+
+**What to do:** if you import an entry that uses these packages, such as `@better-auth/core/oauth2`, add them to your dependencies. Otherwise the import fails with `ERR_MODULE_NOT_FOUND` and names the missing package.
+
 ***
 
 ## Social and generic OAuth sign-in
