@@ -217,8 +217,9 @@ function assertNoDuplicateAcrossExtensions(
 }
 
 /**
- * Validates every extension and rejects two extensions registering the same
- * grant type, auth method, assertion type, or client discovery identifier:
+ * Validates every extension and rejects a grant type, auth method, assertion
+ * type, client discovery identifier, or interaction request parameter that two
+ * extensions, or one extension twice, register:
  * otherwise the first would win and the second be silently unreachable. Runs at
  * setup over the whole list; extensions number in the single digits, so a full
  * re-scan per registration is cheaper than the bookkeeping to cache it.

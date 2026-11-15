@@ -846,7 +846,7 @@ export interface OAuthProviderExtension {
 	 * Name shown in setup errors and warnings when this extension conflicts
 	 * with another one. Plugins usually pass their own id, such as `"ciba"`.
 	 * Without it, messages describe the extension by its position in
-	 * registration order and one thing it registers, such as a grant type.
+	 * registration order and, when it registers one, a grant type or similar.
 	 * It is not stored and does not have to be unique.
 	 */
 	name?: string;
