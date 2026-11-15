@@ -303,7 +303,7 @@ Pairwise clients created after the upgrade with private-use redirect URIs, such 
 * An access token without the `openid` scope gets `403 insufficient_scope` with a `WWW-Authenticate` challenge naming `openid`. Before, it got `400 invalid_scope`.
 * An `Authorization` header without the `Bearer` or `DPoP` scheme, such as a bare token, is treated as no credentials and gets a `401` challenge. Before, UserInfo read the whole header value as the token.
 
-**What to do:** a client that calls UserInfo must request the `openid` scope when it authorizes. A client whose access token lacks `openid` must authorize again with that scope. Send the access token as `Authorization: Bearer <token>`, or `DPoP <token>` for a DPoP-bound token. Update clients and tests that match on `invalid_scope` from UserInfo.
+**What to do:** a client that calls UserInfo must request the `openid` scope when it authorizes. A client whose access token lacks `openid` must authorize again with that scope. Send the access token as `Authorization: Bearer <token>`, or `DPoP <token>` with a DPoP proof in the `DPoP` header for a DPoP-bound token. Update clients and tests that match on `invalid_scope` from UserInfo.
 
 ### Extension and API authors
 
