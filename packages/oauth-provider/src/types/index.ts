@@ -418,8 +418,9 @@ export interface IssueAuthorizationCodeParams {
 	/**
 	 * How your endpoint authenticated the user in this flow.
 	 *
-	 * `amr` lists the Authentication Methods References it verified, such as
-	 * `["pwd", "otp"]` (RFC 8176). With `authenticationContext.resolve`
+	 * `amr` lists the Authentication Methods References your server verified
+	 * itself, such as `["pwd", "otp"]` (RFC 8176). Never copy values from the
+	 * client's request: the ID token asserts them to the relying party. With `authenticationContext.resolve`
 	 * configured, the resolver receives it as `authentication` and its result
 	 * decides the code's `acr` and `amr`. Without a resolver, the code carries
 	 * this `amr` as given. Either way, `amr` reaches only the ID token, so it
