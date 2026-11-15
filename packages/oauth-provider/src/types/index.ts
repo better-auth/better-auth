@@ -93,6 +93,13 @@ export interface OAuthAuthenticationContextOptions<
 		 * `acr_values`, in order of preference.
 		 */
 		requestedAcrValues: string[];
+		/**
+		 * The Authentication Methods References a plugin endpoint reported to
+		 * `issueAuthorizationCode` as `amr`. Absent for approvals on the
+		 * provider's own pages. Treat it as input: return the `amr` the code
+		 * should carry, which may differ from this value.
+		 */
+		amr?: string[] | undefined;
 	}) => Awaitable<OAuthAuthenticationContext | undefined>;
 }
 
@@ -426,6 +433,67 @@ export interface IssueAuthorizationCodeParams {
 		session: Session & Record<string, unknown>;
 		user: User & Record<string, unknown>;
 	};
+	/**
+	 * The Authentication Methods References your server verified itself in
+	 * this flow, such as `["pwd", "otp"]` (RFC 8176). Never copy values from
+	 * the client's request: the ID token asserts them to the relying party.
+	 *
+	 * With `authenticationContext.resolve` configured, the resolver receives
+	 * them as `amr` and its result decides the code's `acr` and `amr`.
+	 * Without a resolver, the code carries this `amr` as given, as
+	 * `issueTokens` and `completeCibaRequest` record theirs. Either way,
+	 * `amr` reaches only the ID token, so it is ignored without the `openid`
+	 * scope.
+	 *
+	 * `auth_time` always comes from the session's creation time, so a caller
+	 * cannot report an earlier sign-in than the session proves.
+	 */
+	amr?: string[];
+}
+
+/**
+ * Parameters of {@link OAuthProviderApi.validateAuthorizationRequest}.
+ */
+export interface ValidateAuthorizationRequestParams {
+	/**
+	 * The authorization request parameters, as `/oauth2/authorize` accepts
+	 * them, usually your endpoint's request body. `client_id` is required.
+	 * `redirect_uri` is optional, as for `issueAuthorizationCode`. A
+	 * `request_uri` or `request` object is not accepted.
+	 */
+	query: Record<string, unknown>;
+}
+
+/**
+ * The client of a validated authorization request: the fields a sign-in page
+ * may show, plus how the client authenticates. Call `getClient` for the full
+ * registration.
+ */
+export type OAuthAuthorizationRequestClient = Pick<
+	SchemaClient<Scope[]>,
+	| "clientId"
+	| "name"
+	| "uri"
+	| "icon"
+	| "contacts"
+	| "tos"
+	| "policy"
+	| "tokenEndpointAuthMethod"
+	| "applicationType"
+>;
+
+/**
+ * An authorization request checked by
+ * {@link OAuthProviderApi.validateAuthorizationRequest}.
+ */
+export interface ValidatedAuthorizationRequest {
+	/**
+	 * The request after validation, without client credentials, with the
+	 * client's default scopes filled in when it named none. Pass it to
+	 * `issueAuthorizationCode` unchanged.
+	 */
+	query: StoredAuthorizationQuery & { client_id: string };
+	client: OAuthAuthorizationRequestClient;
 }
 
 /**
@@ -497,6 +565,8 @@ export interface OAuthProviderApi {
 	 *   elapsed `max_age` when the session was not created in this request.
 	 * - `interaction_required` for a `prompt` other than `none` or `login`, or
 	 *   a `signup` or `postLogin` redirect.
+	 * - The error `beforeAuthorization` throws, or `login_required` when it
+	 *   asks for a sign-in this request did not perform.
 	 * - `access_denied` when the session cannot meet an essential `acr`.
 	 *
 	 * Errors are HTTP 400 `APIError`s with these OAuth error codes, with
@@ -533,6 +603,27 @@ export interface OAuthProviderApi {
 	issueAuthorizationCode: (
 		params: IssueAuthorizationCodeParams,
 	) => Promise<IssuedAuthorizationCode>;
+	/**
+	 * Checks an authorization request as `/oauth2/authorize` checks it, without
+	 * a session and without issuing anything, for an endpoint that signs the
+	 * user in over several requests before it calls `issueAuthorizationCode`.
+	 * Call it on the first request, so the client learns about an invalid
+	 * request before the user enters credentials.
+	 *
+	 * It checks the client, the `redirect_uri` when present, `response_type`,
+	 * scopes, claims, resources, and PKCE. It fails with an HTTP 400
+	 * `APIError` carrying the OAuth error `/oauth2/authorize` reports for the
+	 * same request, and it never redirects. It writes nothing: no code, no
+	 * pushed request, and no DPoP `jti`.
+	 *
+	 * The result is advisory. It does not authenticate the client, so your
+	 * endpoint must still authenticate a confidential client, and
+	 * `issueAuthorizationCode` checks the request again, along with the
+	 * session, consent, `prompt`, and `max_age`.
+	 */
+	validateAuthorizationRequest: (
+		params: ValidateAuthorizationRequestParams,
+	) => Promise<ValidatedAuthorizationRequest>;
 	/**
 	 * Resolves the sender-constraint the tokens for this request will carry: the
 	 * `confirmation` the client proved at authentication, or else the DPoP proof
@@ -927,6 +1018,48 @@ export interface OAuthUserInfoExtensionInput {
  *   other collision resolves to the first-registered extension, with a logged
  *   warning. Each metadata warning is logged once per provider.
  */
+/**
+ * Input of `beforeAuthorization`.
+ */
+export interface OAuthBeforeAuthorizationInput {
+	/**
+	 * A copy of the validated authorization request, after a `request_uri`
+	 * is resolved, including parameters the client added. It never holds
+	 * client credentials or the `request_uri` itself. The client's default
+	 * scopes fill `scope` when the request named none.
+	 */
+	request: Omit<OAuthAuthorizationQuery, "request" | "request_uri">;
+	/**
+	 * Whether the client pushed the request to this server's `/oauth2/par`.
+	 * A request resolved by `requestUriResolver` reports `false`, as does
+	 * every `issueAuthorizationCode` call.
+	 */
+	pushed: boolean;
+	/** The requesting client's registration. */
+	client: SchemaClient<Scope[]>;
+	/** The user's session on this visit, or `null` before sign-in. */
+	session: {
+		session: Session & Record<string, unknown>;
+		user: User & Record<string, unknown>;
+	} | null;
+	/**
+	 * Headers of the request being handled: the visit to
+	 * `/oauth2/authorize`, or the plugin endpoint that calls
+	 * `issueAuthorizationCode`.
+	 */
+	headers: Headers;
+	/** Context of the same request as `headers`. */
+	ctx: GenericEndpointContext;
+}
+
+/**
+ * What `beforeAuthorization` can ask for besides continuing or refusing.
+ */
+export type OAuthBeforeAuthorizationResult = {
+	/** Send the user to sign in, as if the client had sent `prompt=login`. */
+	prompt: "login";
+};
+
 export interface OAuthProviderExtension {
 	/**
 	 * Name shown in setup errors and warnings when this extension conflicts
@@ -936,6 +1069,12 @@ export interface OAuthProviderExtension {
 	 * It is not stored and does not have to be unique.
 	 */
 	name?: string;
+	/**
+	 * Policy on authorization requests, as the provider's
+	 * `beforeAuthorization` option. Extension hooks run in registration
+	 * order, before the provider's own.
+	 */
+	beforeAuthorization?: OAuthOptions<Scope[]>["beforeAuthorization"];
 	/**
 	 * Token grants keyed by absolute-URI `grant_type`. The token endpoint
 	 * dispatches a matching `grant_type` to the handler, which authenticates the
@@ -2398,6 +2537,39 @@ export interface OAuthOptions<
 		clientId: string;
 		ctx: GenericEndpointContext;
 	}) => Promise<Record<string, string> | null>;
+	/**
+	 * Runs your policy on each authorization request at `/oauth2/authorize`,
+	 * after the request is validated and before the provider sends the user
+	 * to sign in, select an account, sign up, finish post-login steps, or
+	 * consent. It also runs on each later visit of the same request, such as
+	 * the one after sign-in, with the session of that visit. Extension hooks
+	 * run first, in registration order.
+	 *
+	 * - Return nothing to continue.
+	 * - Return `{ prompt: "login" }` to send the user to sign in, even with a
+	 *   live session. With `prompt=none`, the client gets `login_required`
+	 *   instead. The hook runs again after sign-in, so return it only while
+	 *   the session fails your requirement.
+	 * - Throw an `APIError` whose body has an OAuth `error`, such as
+	 *   `login_required`, `interaction_required`, `consent_required`,
+	 *   `access_denied`, or `unmet_authentication_requirements`, to refuse
+	 *   the request. The client gets it at its `redirect_uri` with
+	 *   `error_description`, `state`, and `iss`, and nothing is consumed:
+	 *   no code is issued and a `request_uri` stays usable. Any other error,
+	 *   including a redirect from `ctx.redirect`, passes through unchanged.
+	 *
+	 * `issueAuthorizationCode` runs it too, with `pushed: false`. There, a
+	 * thrown OAuth error fails the call with that error, and
+	 * `{ prompt: "login" }` always fails with `login_required`, even for a
+	 * session created in that request, because the hook cannot run again on
+	 * the new session.
+	 *
+	 * Interaction requests from extensions, such as device codes and CIBA
+	 * requests, do not run it.
+	 */
+	beforeAuthorization?: (
+		input: OAuthBeforeAuthorizationInput,
+	) => Awaitable<OAuthBeforeAuthorizationResult | undefined | void>;
 	/**
 	 * DPoP proof validation settings.
 	 *

@@ -17,7 +17,10 @@ import {
 	getRequestedUserInfoClaims,
 	isValidOidcClaimsRequest,
 } from "./claims-request";
-import { getExtensionInteractionRequest } from "./extensions";
+import {
+	getBeforeAuthorizationHooks,
+	getExtensionInteractionRequest,
+} from "./extensions";
 import { oauthAuthorizationServerMetadata } from "./metadata";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
@@ -27,6 +30,7 @@ import {
 	consumePushedAuthorizationRequest,
 	isPushedAuthorizationRequestEnabled,
 	loadPushedAuthorizationRequest,
+	withoutClientAuthentication,
 } from "./par";
 import { resolveResourcePolicy } from "./resources";
 import {
@@ -43,12 +47,16 @@ import type {
 	IssuedAuthorizationCode,
 	OAuthAuthenticationContext,
 	OAuthAuthorizationQuery,
+	OAuthAuthorizationRequestClient,
+	OAuthBeforeAuthorizationInput,
 	OAuthInteractionQuery,
 	OAuthInteractionRequest,
 	OAuthOptions,
 	SchemaClient,
 	Scope,
 	StoredAuthorizationQuery,
+	ValidateAuthorizationRequestParams,
+	ValidatedAuthorizationRequest,
 	VerificationValue,
 } from "./types";
 import { authorizationQuerySchema, RedirectUriSyntaxSchema } from "./types/zod";
@@ -705,6 +713,12 @@ export async function authorizeEndpoint(
 			),
 		);
 	}
+	const policy = await runBeforeAuthorization(ctx, opts, headers, {
+		query,
+		client,
+	});
+	if ("redirect" in policy) return policy.redirect;
+	query = policy.query;
 	return runAuthorizationInteraction(ctx, opts, headers, settings, {
 		query,
 		client,
@@ -716,6 +730,116 @@ export async function authorizeEndpoint(
 				resource: toResourceList(approval.query.resource) ?? [],
 			}),
 	});
+}
+
+/**
+ * Runs the `beforeAuthorization` hooks on a validated authorization request.
+ * Returns the OAuth error a hook refused it with, or whether a hook asked
+ * for a new sign-in. Errors without an OAuth `error` are rethrown.
+ */
+async function evaluateBeforeAuthorization(
+	opts: OAuthOptions<Scope[]>,
+	input: Omit<OAuthBeforeAuthorizationInput, "request" | "pushed"> & {
+		query: StoredAuthorizationQuery;
+	},
+): Promise<
+	| { refused: { error: OAuthErrorCode; error_description: string } }
+	| { requiresLogin: boolean }
+> {
+	const { query, ...context } = input;
+	const {
+		request_uri: requestUri,
+		request: _requestObject,
+		...requestParameters
+	} = withoutClientAuthentication(
+		query as unknown as Record<string, unknown>,
+	) as unknown as StoredAuthorizationQuery;
+	let requiresLogin = false;
+	for (const hook of getBeforeAuthorizationHooks(opts)) {
+		try {
+			const result = await hook({
+				...context,
+				// Each hook gets its own copy, so one cannot change what the next sees.
+				request: structuredClone(
+					requestParameters,
+				) as OAuthBeforeAuthorizationInput["request"],
+				pushed: requestUri !== undefined,
+			});
+			if (result?.prompt === "login") requiresLogin = true;
+		} catch (error) {
+			const body = isAPIError(error)
+				? (error.body as
+						| { error?: unknown; error_description?: unknown }
+						| undefined)
+				: undefined;
+			if (typeof body?.error !== "string") throw error;
+			return {
+				refused: {
+					error: body.error,
+					error_description:
+						typeof body.error_description === "string"
+							? body.error_description
+							: "the authorization request was refused",
+				},
+			};
+		}
+	}
+	return { requiresLogin };
+}
+
+/**
+ * Applies `beforeAuthorization` at `/oauth2/authorize`. A refusal is
+ * delivered to the client like a validation failure, before anything is
+ * consumed. A request the policy sends to sign in gets the `login` prompt,
+ * which the sign-in clears as it does for a client's own.
+ */
+async function runBeforeAuthorization(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	headers: Headers,
+	request: { query: OAuthAuthorizationQuery; client: SchemaClient<Scope[]> },
+): Promise<
+	{ query: OAuthAuthorizationQuery } | { redirect: OAuthRedirectResult }
+> {
+	const { query, client } = request;
+	if (!getBeforeAuthorizationHooks(opts).length) return { query };
+	const session = await getSessionFromCtx(ctx);
+	const outcome = await evaluateBeforeAuthorization(opts, {
+		query,
+		client,
+		session: session ? { session: session.session, user: session.user } : null,
+		headers,
+		ctx,
+	});
+	const promptSet = query.prompt ? parsePrompt(query.prompt) : undefined;
+	const toClient = (error: OAuthErrorCode, description: string) => ({
+		redirect: handleRedirect(
+			ctx,
+			formatErrorURL(
+				query.redirect_uri,
+				error,
+				description,
+				query.state,
+				getIssuer(ctx, opts),
+				deriveResponseMode(query as unknown as Record<string, unknown>),
+			),
+		),
+	});
+	if ("refused" in outcome) {
+		return toClient(outcome.refused.error, outcome.refused.error_description);
+	}
+	if (!outcome.requiresLogin) return { query };
+	if (promptSet?.has("none")) {
+		return toClient("login_required", "authentication required");
+	}
+	const prompts = new Set(promptSet ?? []);
+	prompts.delete("login");
+	const forced = {
+		...query,
+		prompt: ["login", ...prompts].join(" "),
+	} as OAuthAuthorizationQuery;
+	ctx.query = forced;
+	return { query: forced };
 }
 
 /**
@@ -1026,6 +1150,77 @@ export async function parseAuthorizationRequest(
 	}
 	return validation;
 }
+
+/**
+ * Validates an authorization request for a plugin endpoint before any
+ * session exists, through the same checks `issueAuthorizationCode` runs.
+ * Authenticates no client and writes nothing.
+ */
+export async function validateAuthorizationRequestParams(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: ValidateAuthorizationRequestParams,
+): Promise<ValidatedAuthorizationRequest> {
+	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
+		tokenError(
+			"BAD_REQUEST",
+			"unsupported_response_type",
+			"the authorization_code grant is disabled",
+		);
+	}
+	const requestQuery = withoutClientAuthentication(params.query ?? {});
+	// Without client authentication, nothing else names the client.
+	if (typeof requestQuery.client_id !== "string" || !requestQuery.client_id) {
+		tokenError("BAD_REQUEST", "invalid_request", "client_id is required");
+	}
+	if (requestQuery.request_uri !== undefined) {
+		tokenError(
+			"BAD_REQUEST",
+			"invalid_request",
+			"pass the authorization request parameters, not a request_uri",
+		);
+	}
+	if (requestQuery.request !== undefined) {
+		tokenError(
+			"BAD_REQUEST",
+			"request_not_supported",
+			"request object not supported",
+		);
+	}
+	const { query, client } = await parseAuthorizationRequest(
+		ctx,
+		opts,
+		requestQuery,
+		{ redirectUriOptional: true },
+	);
+	return {
+		query: query as ValidatedAuthorizationRequest["query"],
+		client: toAuthorizationRequestClient(client),
+	};
+}
+
+function toAuthorizationRequestClient(
+	client: SchemaClient<Scope[]>,
+): OAuthAuthorizationRequestClient {
+	const view: OAuthAuthorizationRequestClient = { clientId: client.clientId };
+	for (const field of AUTHORIZATION_REQUEST_CLIENT_FIELDS) {
+		const value = client[field];
+		// Database rows hold null for unset fields.
+		if (value != null) Object.assign(view, { [field]: value });
+	}
+	return view;
+}
+
+const AUTHORIZATION_REQUEST_CLIENT_FIELDS = [
+	"name",
+	"uri",
+	"icon",
+	"contacts",
+	"tos",
+	"policy",
+	"tokenEndpointAuthMethod",
+	"applicationType",
+] as const satisfies readonly (keyof OAuthAuthorizationRequestClient)[];
 
 /**
  * Sends the user to the next required interaction page, or approves the
@@ -1344,6 +1539,30 @@ export async function issueAuthorizationCode(
 	}
 
 	const headers = ctx.request?.headers ?? ctx.headers ?? new Headers();
+	const policy = await evaluateBeforeAuthorization(opts, {
+		query,
+		client,
+		session: params.session,
+		headers,
+		ctx,
+	});
+	if ("refused" in policy) {
+		tokenError(
+			"BAD_REQUEST",
+			policy.refused.error,
+			policy.refused.error_description,
+		);
+	}
+	// Unlike `prompt=login`, a session created in this request does not
+	// satisfy the policy: at `/oauth2/authorize` the hook runs again after
+	// sign-in and decides on the new session, which cannot happen here.
+	if (policy.requiresLogin) {
+		tokenError(
+			"BAD_REQUEST",
+			"login_required",
+			"beforeAuthorization requires a new sign-in",
+		);
+	}
 	const scopes = parseScopes(query.scope);
 	const resources = toResourceList(query.resource) ?? [];
 	// Each hook gets its own copy of the query.
@@ -1400,6 +1619,7 @@ export async function issueAuthorizationCode(
 		scopes,
 		headers,
 		query,
+		amr: params.amr,
 	});
 	// OIDC Core §5.5.1.1: an unmet essential acr is a failed authentication.
 	if (
