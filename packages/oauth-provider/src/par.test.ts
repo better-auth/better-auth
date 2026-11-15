@@ -664,6 +664,60 @@ describe("pushed authorization requests", async () => {
 			expect(second.searchParams.get("state")).toBe("par-state");
 			expect(second.searchParams.get("code")).toBeNull();
 		});
+
+		it("keeps a reloaded request_uri bound to its client and DPoP key", async () => {
+			const key = await createDpopKey();
+			const { params, codeVerifier } = await authorizationParams(
+				client.client_id,
+			);
+			const pushed = await pushRequest(
+				{ ...params, ...credentials },
+				{ DPoP: await createDpopProof(key, { url: parEndpoint }) },
+			);
+			const visit = (clientId: string, sessionHeaders?: Headers) =>
+				authorize(
+					{
+						client_id: clientId,
+						request_uri: pushed.body.request_uri as string,
+					},
+					sessionHeaders,
+				);
+			// The first visit moves the request to the value later visits read.
+			expect((await visit(client.client_id, new Headers())).pathname).toBe(
+				"/login",
+			);
+
+			const code = (await visit(client.client_id)).searchParams.get("code")!;
+			const otherKey = await createDpopKey();
+			const wrongKey = await redeem(
+				credentials,
+				code,
+				codeVerifier,
+				await createDpopProof(otherKey, { url: tokenEndpoint }),
+			);
+			expect(wrongKey.body).toMatchObject({ error: "invalid_dpop_proof" });
+		});
+
+		it("rejects a reloaded request_uri for another client", async () => {
+			const otherClient = await createClient();
+			const { params } = await authorizationParams(client.client_id);
+			const pushed = await pushRequest({ ...params, ...credentials });
+			const visit = (clientId: string, sessionHeaders?: Headers) =>
+				authorize(
+					{
+						client_id: clientId,
+						request_uri: pushed.body.request_uri as string,
+					},
+					sessionHeaders,
+				);
+			expect((await visit(client.client_id, new Headers())).pathname).toBe(
+				"/login",
+			);
+
+			const other = await visit(otherClient.client_id);
+			expect(other.searchParams.get("error")).toBe("invalid_request_uri");
+			expect(other.searchParams.get("code")).toBeNull();
+		});
 	});
 
 	it("binds the request_uri to the client that pushed it", async () => {

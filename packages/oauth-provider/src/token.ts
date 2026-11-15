@@ -195,6 +195,7 @@ export function getOAuthProviderApi(
 				// audience would let an assertion be replayed across endpoints, or
 				// reject a valid assertion minted for the real endpoint.
 				getAuthEndpointUrl(ctx, ctx.path ?? "/oauth2/token"),
+				request?.clientId,
 			);
 			const { clientId, clientSecret, preVerified, authMethod, confirmation } =
 				destructureCredentials(credentials);
@@ -263,9 +264,9 @@ export function getOAuthProviderApi(
 				expectedJkt: params.expectedJkt,
 			});
 		},
-		// One implementation serves both overloads: with `required: true` it
-		// throws instead of returning `undefined`.
-		verifyDpopProof: ((params?: { required?: boolean }) =>
+		// One implementation serves every overload: with `required: true` or an
+		// `expectedJkt`, it throws instead of returning `undefined`.
+		verifyDpopProof: ((params?: { required?: boolean; expectedJkt?: string }) =>
 			verifyEndpointDpopProof(
 				ctx,
 				opts,

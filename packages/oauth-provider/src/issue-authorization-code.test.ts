@@ -19,6 +19,8 @@ import type { OAuthClient } from "./types/oauth";
 import { storeToken } from "./utils";
 
 const issueCodeEndpoint = "http://localhost:3000/api/auth/test/issue-code";
+const followUpEndpoint =
+	"http://localhost:3000/api/auth/test/issue-code-follow-up";
 
 async function createDpopKey() {
 	const { privateKey, publicKey } = await generateKeyPair("ES256", {
@@ -57,6 +59,13 @@ describe("provider.issueAuthorizationCode", async () => {
 	const resource = "https://api.example.com";
 	const codeExpiresIn = 120;
 
+	// Stands in for the state a multi-request flow stores with the handle it
+	// returns on its first request.
+	const pendingFlows = new Map<
+		string,
+		{ clientId: string; dpopJkt?: string }
+	>();
+
 	// Stands in for a companion plugin that completes authorization outside
 	// `/oauth2/authorize`, such as a first-party authorization challenge.
 	const issuer = {
@@ -79,6 +88,30 @@ describe("provider.issueAuthorizationCode", async () => {
 						expiresAt: issued.expiresAt.toISOString(),
 						redirectURL: issued.redirectURL ?? null,
 					});
+				},
+			),
+			testIssueCodeFollowUp: createAuthEndpoint(
+				"/test/issue-code-follow-up",
+				{ method: "POST", use: [sessionMiddleware] },
+				async (ctx) => {
+					const { handle, ...request } = ctx.body as Record<string, string>;
+					const pending = pendingFlows.get(handle ?? "");
+					if (!pending) {
+						throw new APIError("BAD_REQUEST", { error: "invalid_session" });
+					}
+					const provider = getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+					);
+					const issued = await provider.issueAuthorizationCode({
+						query: {
+							...request,
+							client_id: pending.clientId,
+							dpop_jkt: pending.dpopJkt,
+						} as StoredAuthorizationQuery,
+						session: ctx.context.session,
+					});
+					return ctx.json({ code: issued.code });
 				},
 			),
 		},
@@ -290,6 +323,27 @@ describe("provider.issueAuthorizationCode", async () => {
 		expect(errorCode(issued)).toBe("invalid_client");
 	});
 
+	it("reads an empty client_id as omitted", async () => {
+		const basicClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_basic",
+				skip_consent: true,
+			},
+		});
+		const basic = btoa(`${basicClient.client_id}:${basicClient.client_secret}`);
+		const { query } = await codeRequest(basicClient);
+		const issued = await issueCode(
+			{ ...query, client_id: "" },
+			{ authorization: `Basic ${basic}` },
+		);
+		expect(issued.error).toBeNull();
+		const row = await findCodeRow(issued.data!.code);
+		expect(JSON.parse(row!.value).query.client_id).toBe(basicClient.client_id);
+	});
+
 	it("returns a redirect URL whose code redeems with its redirect_uri", async () => {
 		const { query, verifier } = await codeRequest(confidentialClient, {
 			redirect_uri: redirectUri,
@@ -395,6 +449,110 @@ describe("provider.issueAuthorizationCode", async () => {
 		expect(issued.error).toBeNull();
 		const row = await findCodeRow(issued.data!.code);
 		expect(JSON.parse(row!.value).query.dpop_jkt).toBe(key.jkt);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-first-party-apps-04#section-5.1
+	 */
+	describe("on a follow-up request", () => {
+		function followUp(
+			handle: string,
+			request: Record<string, unknown>,
+			extraHeaders: Record<string, string> = {},
+		) {
+			return client.$fetch<{ code: string }>("/test/issue-code-follow-up", {
+				method: "POST",
+				headers: { ...Object.fromEntries(headers), ...extraHeaders },
+				body: { handle, ...request },
+			});
+		}
+
+		/** A code request that leaves `client_id` to the stored flow. */
+		async function followUpRequest() {
+			const { query } = await codeRequest(publicClient);
+			const { client_id: _, ...request } = query;
+			return request;
+		}
+
+		it("issues a code for the stored client when the request omits client_id", async () => {
+			pendingFlows.set("public", { clientId: publicClient.client_id });
+			const issued = await followUp("public", await followUpRequest());
+			expect(issued.error).toBeNull();
+			const row = await findCodeRow(issued.data!.code);
+			expect(JSON.parse(row!.value).query.client_id).toBe(
+				publicClient.client_id,
+			);
+		});
+
+		it("rejects a request that names another client", async () => {
+			pendingFlows.set("public", { clientId: publicClient.client_id });
+			const issued = await followUp("public", {
+				...(await followUpRequest()),
+				client_id: confidentialClient.client_id,
+				client_secret: confidentialClient.client_secret,
+			});
+			expect(errorCode(issued)).toBe("invalid_client");
+		});
+
+		it("rejects a stored client_id that is not a string", async () => {
+			pendingFlows.set("malformed", {
+				clientId: 42 as unknown as string,
+			});
+			const issued = await followUp("malformed", {
+				...(await followUpRequest()),
+				client_id: confidentialClient.client_id,
+				client_secret: confidentialClient.client_secret,
+			});
+			expect(errorCode(issued)).toBe("invalid_request");
+		});
+
+		it("requires the stored client's credentials", async () => {
+			pendingFlows.set("confidential", {
+				clientId: confidentialClient.client_id,
+			});
+			const { query } = await codeRequest(confidentialClient);
+			const { client_id: _, ...request } = query;
+			const missing = await followUp("confidential", request);
+			expect(errorCode(missing)).toBe("invalid_client");
+
+			const issued = await followUp("confidential", {
+				...request,
+				client_secret: confidentialClient.client_secret,
+			});
+			expect(issued.error).toBeNull();
+		});
+
+		it("binds the code to the stored DPoP key and rejects another key", async () => {
+			const key = await createDpopKey();
+			const otherKey = await createDpopKey();
+			pendingFlows.set("bound", {
+				clientId: publicClient.client_id,
+				dpopJkt: key.jkt,
+			});
+			const rejected = await followUp("bound", await followUpRequest(), {
+				DPoP: await createDpopProof(otherKey, followUpEndpoint),
+			});
+			expect(errorCode(rejected)).toBe("invalid_dpop_proof");
+
+			const issued = await followUp("bound", await followUpRequest(), {
+				DPoP: await createDpopProof(key, followUpEndpoint),
+			});
+			expect(issued.error).toBeNull();
+			const row = await findCodeRow(issued.data!.code);
+			expect(JSON.parse(row!.value).query.dpop_jkt).toBe(key.jkt);
+		});
+
+		it("binds the code to the stored DPoP key without a proof", async () => {
+			const key = await createDpopKey();
+			pendingFlows.set("unproven", {
+				clientId: publicClient.client_id,
+				dpopJkt: key.jkt,
+			});
+			const issued = await followUp("unproven", await followUpRequest());
+			expect(issued.error).toBeNull();
+			const row = await findCodeRow(issued.data!.code);
+			expect(JSON.parse(row!.value).query.dpop_jkt).toBe(key.jkt);
+		});
 	});
 
 	// Each check `/oauth2/authorize` applies also applies here, and fails with
