@@ -317,8 +317,13 @@ export interface OAuthTokenIssueParams {
 	 */
 	idTokenClaims?: Record<string, unknown>;
 	/**
-	 * Additional fields for the token response envelope. Standard OAuth token
-	 * response fields stay owned by the authorization server.
+	 * Additional fields for the token response envelope. The grant owns them,
+	 * so a grant may set `issued_token_type` (RFC 8693 §2.2.1). The standard
+	 * token response fields stay owned by the authorization server and replace a
+	 * value given here, and so do the `authorization_details` of an issuance
+	 * that has details.
+	 *
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/reference#token-response-fields
 	 */
 	tokenResponse?: Record<string, unknown>;
 	/**
@@ -1061,7 +1066,7 @@ export interface OAuthUserInfoExtensionInput {
  * `extendOAuthProvider(ctx, extension)` (or the `oauthProvider({ extensions })`
  * option).
  *
- * All seven kinds live on one object so a single protocol plugin (for example
+ * Every kind lives on one object so a single protocol plugin (for example
  * RFC 8693 token exchange, which adds a grant, advertises metadata, and emits
  * claims) registers atomically and the host validates the combined surface in
  * one place. Every field is independently optional, so a single-concern plugin
@@ -1074,8 +1079,8 @@ export interface OAuthUserInfoExtensionInput {
  *   assertion type, or interaction parameter that another extension already
  *   registered is rejected at setup, since the second would otherwise be
  *   silently unreachable.
- * - Additive kinds (`metadata`, `claims`) never override authorization-server
- *   core; a metadata key the provider or a client discovery sets is kept, with
+ * - Additive kinds (`metadata`, `claims`, `tokenResponseFields`) never
+ *   override authorization-server core; a metadata key the provider or a client discovery sets is kept, with
  *   a logged warning. When two extensions contribute the same metadata key as
  *   lists, the lists combine in registration order without duplicates; any
  *   other collision resolves to the first-registered extension, with a logged
@@ -1121,6 +1126,21 @@ export interface OAuthProviderExtension {
 	beforeTokenIssuance?: (
 		input: OAuthBeforeTokenIssuanceInput,
 	) => Awaitable<void>;
+	/**
+	 * Additional fields for the token endpoint's JSON response, such as a
+	 * session handle the extension's protocol returns with the tokens. Like
+	 * `claims`, strictly additive: the nine fields the provider owns are left
+	 * out with a warning. The first extension to contribute a field keeps it,
+	 * and the `customTokenResponseFields` option overrides both. It runs after
+	 * every `beforeTokenIssuance` and before any token is stored, for every
+	 * grant, so check `grantType` or `verificationValue` to answer only your
+	 * own.
+	 *
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/reference#token-response-fields
+	 */
+	tokenResponseFields?: (
+		input: OAuthBeforeTokenIssuanceInput,
+	) => Awaitable<Record<string, unknown>>;
 	/**
 	 * Additional claims for access tokens, ID tokens, and the UserInfo response.
 	 * Strictly additive: a contributor can add new claims but never replace an
@@ -2473,10 +2493,14 @@ export interface OAuthOptions<
 	 *
 	 * Unlike `customAccessTokenClaims` (which adds claims inside the JWT payload),
 	 * this adds fields to the JSON response envelope alongside `access_token`,
-	 * `token_type`, etc. Standard OAuth fields (`access_token`, `token_type`,
-	 * `expires_in`, `expires_at`, `refresh_token`, `scope`, `id_token`) cannot
-	 * be overridden. It runs after `beforeTokenIssuance`, and before any token
-	 * is stored.
+	 * `token_type`, etc. The provider overwrites the standard fields
+	 * (`access_token`, `token_type`, `expires_in`, `expires_at`,
+	 * `refresh_token`, `scope`, `id_token`) with its own values.
+	 * `issued_token_type` and `authorization_details` are reserved too, but this
+	 * option does not remove them, so do not return them. It runs after
+	 * `beforeTokenIssuance`, and before any token is stored.
+	 *
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/reference#token-response-fields
 	 *
 	 * @param info - context that may be useful when creating custom fields
 	 */
