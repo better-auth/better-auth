@@ -948,6 +948,29 @@ export function assertPostLogoutRedirectOrigins(
 	}
 }
 
+/**
+ * Holds the post-logout URIs of a client allowed to log out to the origins of
+ * its redirect URIs. A metadata document's own URL is also an origin its
+ * owner controls.
+ */
+export function assertEndSessionClientOrigins(client: {
+	clientId: string;
+	redirectUris: string[] | undefined;
+	postLogoutRedirectUris: string[] | undefined;
+	isMetadataDocument: boolean;
+}) {
+	const redirectUris = client.redirectUris ?? [];
+	assertPostLogoutRedirectOrigins(
+		client.postLogoutRedirectUris,
+		client.isMetadataDocument
+			? [...redirectUris, client.clientId]
+			: redirectUris,
+		client.isMetadataDocument
+			? "its redirect_uris or client_id"
+			: "its redirect_uris",
+	);
+}
+
 interface CreateOAuthClientRegistrationBaseInput {
 	/** Validated endpoint metadata or trusted internal metadata. */
 	metadata: OAuthClientRegistrationMetadata;
@@ -1169,16 +1192,13 @@ async function persistOAuthClientRegistration(
 			: input.selfService
 				? "createOAuthClient"
 				: undefined;
-	// A metadata document's own URL is also an origin its owner controls.
-	const isDocument = endSessionPolicySource === "clientMetadataDocument";
 	const assertEndSessionOrigins = () =>
-		assertPostLogoutRedirectOrigins(
-			body.post_logout_redirect_uris,
-			isDocument
-				? [...(body.redirect_uris ?? []), clientId]
-				: (body.redirect_uris ?? []),
-			isDocument ? "its redirect_uris or client_id" : "its redirect_uris",
-		);
+		assertEndSessionClientOrigins({
+			clientId,
+			redirectUris: body.redirect_uris,
+			postLogoutRedirectUris: body.post_logout_redirect_uris,
+			isMetadataDocument: endSessionPolicySource === "clientMetadataDocument",
+		});
 	// A refresh checks the stored decision inside its transaction below.
 	if (endSessionPolicySource && !existingClient) {
 		const policy = opts.clientRegistrationEnableEndSession;

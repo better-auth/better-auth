@@ -6,6 +6,7 @@ import { assertValidClientJwks } from "../client-jwks";
 import { getEndpointUrl } from "../dpop";
 import type { OAuthClientRegistrationMetadata } from "../register";
 import {
+	assertEndSessionClientOrigins,
 	assertPostLogoutRedirectOrigins,
 	checkOAuthClient,
 	oauthToSchema,
@@ -389,13 +390,12 @@ export async function updateClientEndpoint(
 	} else if (enableEndSession && !client.enableEndSession) {
 		// Granting logout to a client the caller does not own holds its stored
 		// post-logout URIs to the origin rule registration applies on a grant.
-		const isDocument = !!client.clientDiscoveryId;
-		const redirectUris = client.redirectUris ?? [];
-		assertPostLogoutRedirectOrigins(
-			client.postLogoutRedirectUris ?? undefined,
-			isDocument ? [...redirectUris, client.clientId] : redirectUris,
-			isDocument ? "its redirect_uris or client_id" : "its redirect_uris",
-		);
+		assertEndSessionClientOrigins({
+			clientId: client.clientId,
+			redirectUris: client.redirectUris ?? undefined,
+			postLogoutRedirectUris: client.postLogoutRedirectUris ?? undefined,
+			isMetadataDocument: !!client.clientDiscoveryId,
+		});
 	}
 	// An owner cannot add a logout target that authorization would not
 	// redirect to; entries already stored, such as an admin's, are kept.
