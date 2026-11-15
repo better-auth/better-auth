@@ -1,6 +1,7 @@
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { createRateLimitKey, normalizeIP } from "@better-auth/core/utils/ip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { betterAuth } from "../../auth/full";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { RateLimit } from "../../types";
 
@@ -477,6 +478,58 @@ describe("database rate-limit pruning with dynamic rules", async () => {
 		backgroundTasks.length = 0;
 	});
 
+	it("preserves unobserved dynamic rules on post-restart requests using safe window bound", async () => {
+		const localTasks: Promise<unknown>[] = [];
+		const { auth: localAuth, db: localDb } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				storage: "database",
+				customRules: {
+					"/long-window-api": () => ({ window: 3600, max: 5 }),
+				},
+			},
+			advanced: {
+				ipAddress: {
+					ipAddressHeaders: ["x-forwarded-for"],
+				},
+				backgroundTasks: {
+					handler(promise) {
+						localTasks.push(promise);
+					},
+				},
+			},
+		});
+		const now = Date.now();
+		const unobservedKey = createRateLimitKey("127.0.0.1", "/long-window-api");
+
+		// Persisted counter for a 1-hour window dynamic rule created 10 minutes ago
+		await localDb.create({
+			model: "rateLimit",
+			data: {
+				key: unobservedKey,
+				count: 5,
+				lastRequest: now - 600_000,
+			},
+		});
+
+		// A request arrives on a route with a short static window from a new IP
+		const response = await localAuth.handler(
+			new Request("http://localhost:3000/api/auth/ok", {
+				headers: { "x-forwarded-for": "198.51.100.99" },
+			}),
+		);
+		expect(response.status).toBe(200);
+		await Promise.all(localTasks);
+
+		// The unobserved dynamic counter must NOT have been pruned!
+		const unobservedRow = await localDb.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: unobservedKey }],
+		});
+		expect(unobservedRow).not.toBeNull();
+		expect(unobservedRow?.count).toBe(5);
+	});
+
 	it("prunes stale rows using the longest observed dynamic window", async () => {
 		const now = Date.now();
 		const activeDynamicKey = createRateLimitKey("127.0.0.1", "/dynamic-active");
@@ -580,6 +633,54 @@ describe("database rate-limit cleanup scheduling", async () => {
 
 		await request;
 		expect(settledBeforeCleanup).toBe(false);
+	});
+
+	it("routes cleanup tasks to the current auth instance background handler when sharing an adapter", async () => {
+		const backgroundTasksA: Promise<unknown>[] = [];
+		const backgroundTasksB: Promise<unknown>[] = [];
+
+		const { auth: authA } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				storage: "database",
+				window: 10,
+				max: 10,
+			},
+			advanced: {
+				ipAddress: {
+					ipAddressHeaders: ["x-forwarded-for"],
+				},
+				backgroundTasks: {
+					handler(promise) {
+						backgroundTasksA.push(promise);
+					},
+				},
+			},
+		});
+
+		const ctxA = await authA.$context;
+		const authB = betterAuth({
+			...ctxA.options,
+			advanced: {
+				...ctxA.options.advanced,
+				backgroundTasks: {
+					handler(promise) {
+						backgroundTasksB.push(promise);
+					},
+				},
+			},
+		});
+
+		await authB.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { "x-forwarded-for": "198.51.100.55" },
+			}),
+		);
+
+		// The cleanup task should be delivered to instance B's background handler, not instance A
+		expect(backgroundTasksA.length).toBe(0);
+		expect(backgroundTasksB.length).toBeGreaterThan(0);
+		await Promise.all(backgroundTasksB);
 	});
 });
 
