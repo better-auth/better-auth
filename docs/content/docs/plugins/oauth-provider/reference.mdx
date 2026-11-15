@@ -715,6 +715,14 @@ To issue a delegated token, pass the actor chain as `act` to `issueTokens`:
 * Set `sub_profile: "service"` on each entry whose `sub` is a client ID. A pairwise client sees every other entry's `sub` as a user's pairwise value.
 * A delegated issuance includes no refresh token, even with `offline_access`, because refreshed tokens do not carry `act`. Passing `act` with `refreshToken` throws.
 
+`issueTokens` issues an ID token when `scopes` include `openid` and you pass a `user`. A grant that keeps `openid` so the client can call UserInfo, but has no sign-in for an ID token to describe, can pass `idToken: false`:
+
+* The response has no `id_token`, and no ID token claim callback runs.
+* Passing `idTokenClaims` or `refreshToken` with `idToken: false` throws.
+* The response has no refresh token either, even with `offline_access`. A refresh issues an ID token for `openid`, so a refresh token would bring back the ID token you left out. The client requests new tokens through the grant again.
+
+The built-in authorization code and refresh token grants always issue an ID token for `openid`, and so does the CIBA grant, as [OIDC Core §3.1.3.3](https://openid.net/specs/openid-connect-core-1_0.html#TokenResponse) and [CIBA Core §10.1.1](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1.1) require.
+
 To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html/rfc7800#section-3)), pass `confirmation` to `issueTokens`. A `clientAuthentication` strategy can also return the sender constraint it proved as `confirmation`, such as a DPoP key thumbprint (`jkt`) or a certificate thumbprint (`x5t#S256`):
 
 * The built-in `client_credentials` grant binds its token to that confirmation.
