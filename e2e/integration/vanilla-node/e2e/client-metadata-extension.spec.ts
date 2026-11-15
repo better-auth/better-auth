@@ -26,7 +26,6 @@ const exampleExtension = {
 	id: "example-extension",
 	init(ctx) {
 		extendOAuthProvider(ctx, {
-			id: "example-extension",
 			clientMetadata: {
 				fields: [FIELD],
 				validate: ({ metadata }) => {
