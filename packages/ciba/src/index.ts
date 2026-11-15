@@ -37,9 +37,11 @@ declare module "@better-auth/core" {
 /**
  * OpenID Connect Client-Initiated Backchannel Authentication (CIBA) for
  * `oauthProvider()`. A client names a user with `login_hint` at
- * `/oauth2/bc-authorize`, the user approves on their own device through the
- * provider's sign-in and consent pages, and the client collects tokens at the
- * token endpoint, by polling or after a ping callback (`deliveryModes`).
+ * `/oauth2/bc-authorize`, the user approves on their own device, and the
+ * client collects tokens at the token endpoint, by polling or after a ping
+ * callback (`deliveryModes`). The user approves through the provider's
+ * sign-in and consent pages, or only through your own path with
+ * `approvalPage` and `completeCibaRequest`.
  *
  * Requires the `oauth-provider` and `jwt` plugins.
  *
