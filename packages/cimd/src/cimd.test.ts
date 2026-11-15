@@ -673,3 +673,24 @@ describe("Client ID Metadata Document - integration", async () => {
 		});
 	});
 });
+
+describe("cimd plugin registration", () => {
+	it("registers its extension once when init runs again", () => {
+		const provider = oauthProvider({
+			loginPage: "/login",
+			consentPage: "/consent",
+		});
+		const ctx = {
+			getPlugin: (id: string) => (id === "oauth-provider" ? provider : null),
+		} as unknown as Parameters<ReturnType<typeof cimd>["init"]>[0];
+		const plugin = cimd({
+			fetchClientMetadataResource: (input, init) =>
+				globalThis.fetch(input, init),
+		});
+		plugin.init(ctx);
+		plugin.init(ctx);
+		expect(
+			(provider.options as { extensions?: unknown[] }).extensions,
+		).toHaveLength(1);
+	});
+});

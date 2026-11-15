@@ -1,4 +1,7 @@
-import type { ClientDiscovery } from "@better-auth/oauth-provider";
+import type {
+	ClientDiscovery,
+	OAuthProviderExtension,
+} from "@better-auth/oauth-provider";
 import { extendOAuthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin } from "better-auth";
 import { CIMD_CLIENT_DISCOVERY_ID } from "./client-store";
@@ -19,7 +22,7 @@ declare module "@better-auth/core" {
  * Build a {@link ClientDiscovery} for Client ID Metadata Documents.
  *
  * Users who prefer explicit composition can contribute the result through
- * `oauthProvider({ extensions: [{ clientDiscovery }] })`; most users should
+ * `oauthProvider({ extensions: [{ id: "cimd", clientDiscovery }] })`; most users should
  * install the {@link cimd} plugin instead, which contributes this discovery
  * alongside whatever else is configured.
  */
@@ -49,13 +52,16 @@ export function createCimdClientDiscovery(
  * and {@link https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents | the MCP authorization spec}.
  */
 export const cimd = (options: CimdOptions) => {
-	const discovery = createCimdClientDiscovery(options);
+	const extension = {
+		id: "cimd",
+		clientDiscovery: createCimdClientDiscovery(options),
+	} satisfies OAuthProviderExtension;
 
 	return {
 		id: "cimd",
 		version: PACKAGE_VERSION,
 		init(ctx) {
-			extendOAuthProvider(ctx, { clientDiscovery: discovery });
+			extendOAuthProvider(ctx, extension);
 		},
 	} satisfies BetterAuthPlugin;
 };

@@ -434,6 +434,7 @@ For ID token and UserInfo claims, see [OpenID Connect](/docs/plugins/oauth-provi
 ```ts title="auth.ts"
 oauthProvider({
   extensions: [{
+    id: "org-claims",
     claims: {
       accessToken: ({ client }) =>
         client.referenceId ? { "https://example.com/org": client.referenceId } : {},

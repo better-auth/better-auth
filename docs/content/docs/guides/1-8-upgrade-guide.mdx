@@ -392,6 +392,12 @@ This applies if you build on `extendOAuthProvider()`, call the provider API from
 
 * Custom `OAuthProviderApi` implementations must add `verifyDpopProof()`, `issueDpopNonce()`, `challengeDpopNonce()`, `resolveConfirmation()`, `resolveSubject()`, `verifyResourceRequest()`, and `issueAuthorizationCode()`.
 
+* Every extension passed to `extendOAuthProvider()` or `oauthProvider({ extensions })` needs a unique `id`. Without one, TypeScript reports a missing property and startup fails. Use the id of the plugin that registers the extension:
+
+  ```ts
+  extendOAuthProvider(ctx, { id: "my-plugin", grants: { /* ... */ } });
+  ```
+
 * Extension grants now receive every `audience` value instead of only the last one.
 
 * An `accessTokenClaims` value that a grant passes to `issueTokens` for an opaque access token is now stored on the token. Introspection, `provider.validateAccessToken`, and token exchange subject-token checks such as `may_act` now see it. Keep personal data out of these claims, because they stay in the database until the token row is deleted.

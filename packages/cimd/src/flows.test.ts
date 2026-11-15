@@ -1183,6 +1183,7 @@ describe("CIMD - extension client metadata", async () => {
 				id: "client-metadata-extension",
 				init(ctx) {
 					extendOAuthProvider(ctx, {
+						id: "client-metadata-extension",
 						clientMetadata: {
 							fields: ["example_mode"],
 							validate: ({ metadata }) => {

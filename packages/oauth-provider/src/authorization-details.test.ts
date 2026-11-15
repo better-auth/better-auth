@@ -17,6 +17,7 @@ const advertiseTypes = {
 	id: "advertise-types",
 	init(ctx) {
 		extendOAuthProvider(ctx, {
+			id: "advertise-types",
 			metadata: () => ({
 				authorization_details_types_supported: ["payment_initiation"],
 			}),
@@ -128,6 +129,7 @@ const issueDetails = {
 	id: "issue-details",
 	init(ctx) {
 		extendOAuthProvider(ctx, {
+			id: "issue-details",
 			grants: {
 				[grantType]: async ({ ctx, provider }) => {
 					const { client } = await provider.authenticateClient({});

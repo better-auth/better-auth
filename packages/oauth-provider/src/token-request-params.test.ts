@@ -37,6 +37,7 @@ describe("token endpoint request parameters", async () => {
 					action === "configure-client-credentials-scopes",
 				extensions: [
 					{
+						id: "echo-grant",
 						grants: {
 							[echoGrant]: async ({ ctx }) => {
 								observedAudience = (ctx.body as { audience?: unknown })
