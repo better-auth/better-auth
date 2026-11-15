@@ -1,20 +1,15 @@
 import { createAuthEndpoint } from "better-auth/api";
-import { generateRandomString } from "better-auth/crypto";
-import {
-	DPOP_SIGNING_ALGORITHMS,
-	deriveDpopAth,
-	deriveDpopJkt,
-} from "better-auth/oauth2";
+import { DPOP_SIGNING_ALGORITHMS } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin } from "better-auth/types";
 import type { APIError } from "better-call";
-import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import * as z from "zod";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import type { DpopKey } from "./test-utils/dpop";
+import { createDpopKey, createDpopProof } from "./test-utils/dpop";
 import { getOAuthProviderApi } from "./token";
 import type { ActiveAccessTokenPayload, OAuthProviderApi } from "./types";
 
@@ -72,38 +67,6 @@ const resourcePlugin = {
 		),
 	},
 } satisfies BetterAuthPlugin;
-
-async function createDpopKey() {
-	const { privateKey, publicKey } = await generateKeyPair("ES256", {
-		extractable: true,
-	});
-	const publicJwk = await exportJWK(publicKey);
-	return { privateKey, publicJwk, jkt: await deriveDpopJkt(publicJwk) };
-}
-
-type DpopKey = Awaited<ReturnType<typeof createDpopKey>>;
-
-async function createProof(
-	key: DpopKey,
-	params: { method: string; url: string; accessToken?: string; nonce?: string },
-) {
-	return new SignJWT({
-		jti: generateRandomString(16),
-		htm: params.method,
-		htu: params.url,
-		iat: Math.floor(Date.now() / 1000),
-		...(params.nonce ? { nonce: params.nonce } : {}),
-		...(params.accessToken
-			? { ath: await deriveDpopAth(params.accessToken) }
-			: {}),
-	})
-		.setProtectedHeader({
-			typ: "dpop+jwt",
-			alg: "ES256",
-			jwk: key.publicJwk as JWK,
-		})
-		.sign(key.privateKey);
-}
 
 async function setup(params: { nonceRequired?: boolean } = {}) {
 	const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
@@ -171,7 +134,7 @@ async function setup(params: { nonceRequired?: boolean } = {}) {
 		if (!options.dpopKey) return (await postToken(body)).body.access_token!;
 		let issued = await postToken(
 			body,
-			await createProof(options.dpopKey, {
+			await createDpopProof(options.dpopKey, {
 				method: "POST",
 				url: tokenEndpoint,
 			}),
@@ -180,7 +143,7 @@ async function setup(params: { nonceRequired?: boolean } = {}) {
 		if (issued.response.status === 400 && nonce) {
 			issued = await postToken(
 				body,
-				await createProof(options.dpopKey, {
+				await createDpopProof(options.dpopKey, {
 					method: "POST",
 					url: tokenEndpoint,
 					nonce,
@@ -390,7 +353,7 @@ describe("provider.verifyResourceRequest", async () => {
 			const token = await issueToken({ scope: "read", resource, dpopKey: key });
 			const response = await callResource({
 				authorization: `DPoP ${token}`,
-				dpop: await createProof(key, {
+				dpop: await createDpopProof(key, {
 					method: "GET",
 					url: resourceEndpoint,
 					accessToken: token,
@@ -413,7 +376,7 @@ describe("provider.verifyResourceRequest", async () => {
 		it("rejects a replayed proof", async () => {
 			const key = await createDpopKey();
 			const token = await issueToken({ scope: "read", dpopKey: key });
-			const proof = await createProof(key, {
+			const proof = await createDpopProof(key, {
 				method: "GET",
 				url: resourceEndpoint,
 				accessToken: token,
@@ -494,7 +457,7 @@ describe("provider.verifyResourceRequest", async () => {
 				.testResource({
 					headers: new Headers({
 						authorization: `DPoP ${token}`,
-						DPoP: await createProof(key, {
+						DPoP: await createDpopProof(key, {
 							method: "GET",
 							url: resourceEndpoint,
 							accessToken: token,
@@ -545,7 +508,7 @@ describe("provider.verifyResourceRequest with required DPoP nonces", async () =>
 		const token = await issueToken({ scope: "read", dpopKey: key });
 		const challenge = await callResource({
 			authorization: `DPoP ${token}`,
-			dpop: await createProof(key, {
+			dpop: await createDpopProof(key, {
 				method: "GET",
 				url: resourceEndpoint,
 				accessToken: token,
@@ -565,7 +528,7 @@ describe("provider.verifyResourceRequest with required DPoP nonces", async () =>
 
 		const retry = await callResource({
 			authorization: `DPoP ${token}`,
-			dpop: await createProof(key, {
+			dpop: await createDpopProof(key, {
 				method: "GET",
 				url: resourceEndpoint,
 				accessToken: token,
@@ -582,7 +545,7 @@ describe("provider.verifyResourceRequest with required DPoP nonces", async () =>
 		const token = await issueToken({ scope: "read", dpopKey: key });
 		const first = await callResource({
 			authorization: `DPoP ${token}`,
-			dpop: await createProof(key, {
+			dpop: await createDpopProof(key, {
 				method: "GET",
 				url: resourceEndpoint,
 				accessToken: token,
@@ -591,7 +554,7 @@ describe("provider.verifyResourceRequest with required DPoP nonces", async () =>
 		const response = await callResource(
 			{
 				authorization: `DPoP ${token}`,
-				dpop: await createProof(key, {
+				dpop: await createDpopProof(key, {
 					method: "GET",
 					url: resourceEndpoint,
 					accessToken: token,
