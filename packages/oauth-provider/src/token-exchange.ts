@@ -578,6 +578,7 @@ export function oauthTokenExchange(options: OAuthTokenExchangeOptions = {}) {
 		);
 	}
 	const extension = {
+		name: "oauth-token-exchange",
 		grants: {
 			[TOKEN_EXCHANGE_GRANT_TYPE]: (input: OAuthExtensionGrantHandlerInput) =>
 				exchangeToken(input, options, maxDepth),

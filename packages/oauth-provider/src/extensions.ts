@@ -127,12 +127,9 @@ function collectExtensionKeys(
 			assertionTypes.push(assertionType);
 		}
 	}
-	const clientDiscoveries = extension.clientDiscovery
-		? Array.isArray(extension.clientDiscovery)
-			? extension.clientDiscovery
-			: [extension.clientDiscovery]
-		: [];
-	const clientDiscoveryIds = clientDiscoveries.map((discovery) => discovery.id);
+	const clientDiscoveryIds = toArray(extension.clientDiscovery).map(
+		(discovery) => discovery.id,
+	);
 	for (const clientDiscoveryId of clientDiscoveryIds) {
 		assertNonEmptyExtensionValue("client discovery id", clientDiscoveryId);
 	}
@@ -155,16 +152,63 @@ function collectExtensionKeys(
 	};
 }
 
-function assertNoDuplicateAcrossExtensions(label: string, values: string[]) {
-	const seen = new Set<string>();
-	for (const value of values) {
-		if (seen.has(value)) {
-			throw new BetterAuthError(
-				`OAuth Provider extensions register ${label} "${value}" more than once. Extension contributions must be disjoint.`,
-			);
-		}
-		seen.add(value);
+/**
+ * Names an extension in a setup error or warning. An extension without a
+ * `name` is described by its position in registration order and one thing it
+ * registers, skipping `conflictingValue` so both sides of a duplicate stay
+ * distinct.
+ */
+function describeExtension(
+	extensions: OAuthProviderExtension[],
+	extension: OAuthProviderExtension,
+	conflictingValue?: string,
+): string {
+	const name: unknown = extension.name;
+	if (typeof name === "string" && name.trim().length > 0) {
+		return `extension "${name}"`;
 	}
+	const position = `unnamed extension #${extensions.indexOf(extension) + 1}`;
+	const registered: [label: string, values: string[]][] = [
+		[
+			"client discovery",
+			toArray(extension.clientDiscovery).map((discovery) => discovery.id),
+		],
+		["grant type", Object.keys(extension.grants ?? {})],
+		[
+			"token_endpoint_auth_method",
+			Object.keys(extension.clientAuthentication ?? {}),
+		],
+		[
+			"interaction request parameter",
+			Object.keys(extension.interactionRequests ?? {}),
+		],
+	];
+	for (const [label, values] of registered) {
+		const value = values.find((candidate) => candidate !== conflictingValue);
+		if (value !== undefined) return `${position} (${label} "${value}")`;
+	}
+	return position;
+}
+
+function assertNoDuplicateAcrossExtensions(
+	label: string,
+	extensions: OAuthProviderExtension[],
+	values: (keys: ExtensionKeys) => string[],
+	keys: ExtensionKeys[],
+) {
+	const owners = new Map<string, OAuthProviderExtension>();
+	keys.forEach((extensionKeys, index) => {
+		const extension = extensions[index]!;
+		for (const value of values(extensionKeys)) {
+			const owner = owners.get(value);
+			if (owner !== undefined) {
+				throw new BetterAuthError(
+					`OAuth Provider ${describeExtension(extensions, owner, value)} and ${describeExtension(extensions, extension, value)} both register ${label} "${value}". Extension contributions must be disjoint.`,
+				);
+			}
+			owners.set(value, extension);
+		}
+	});
 }
 
 /**
@@ -177,27 +221,15 @@ function assertNoDuplicateAcrossExtensions(label: string, values: string[]) {
 export function validateOAuthProviderExtensions(
 	extensions: OAuthProviderExtension[] | undefined,
 ) {
-	const keys = (extensions ?? []).map(collectExtensionKeys);
-	assertNoDuplicateAcrossExtensions(
-		"grant type",
-		keys.flatMap((k) => k.grantTypes),
-	);
-	assertNoDuplicateAcrossExtensions(
-		"token_endpoint_auth_method",
-		keys.flatMap((k) => k.authMethods),
-	);
-	assertNoDuplicateAcrossExtensions(
-		"client_assertion_type",
-		keys.flatMap((k) => k.assertionTypes),
-	);
-	assertNoDuplicateAcrossExtensions(
-		"client discovery id",
-		keys.flatMap((k) => k.clientDiscoveryIds),
-	);
-	assertNoDuplicateAcrossExtensions(
-		"interaction request parameter",
-		keys.flatMap((k) => k.interactionRequestParameters),
-	);
+	const list = extensions ?? [];
+	const keys = list.map(collectExtensionKeys);
+	const check = (label: string, values: (k: ExtensionKeys) => string[]) =>
+		assertNoDuplicateAcrossExtensions(label, list, values, keys);
+	check("grant type", (k) => k.grantTypes);
+	check("token_endpoint_auth_method", (k) => k.authMethods);
+	check("client_assertion_type", (k) => k.assertionTypes);
+	check("client discovery id", (k) => k.clientDiscoveryIds);
+	check("interaction request parameter", (k) => k.interactionRequestParameters);
 }
 
 function getOAuthProviderExtensions(
@@ -214,11 +246,14 @@ function getOAuthProviderExtensions(
 export function getClientDiscoveries(
 	opts: OAuthOptions<Scope[]>,
 ): ClientDiscovery[] {
-	return getOAuthProviderExtensions(opts).flatMap((extension) => {
-		const discovery = extension.clientDiscovery;
-		if (!discovery) return [];
-		return Array.isArray(discovery) ? discovery : [discovery];
-	});
+	return getOAuthProviderExtensions(opts).flatMap((extension) =>
+		toArray(extension.clientDiscovery),
+	);
+}
+
+function toArray<T>(value: T | T[] | undefined): T[] {
+	if (value === undefined) return [];
+	return Array.isArray(value) ? value : [value];
 }
 
 /**
@@ -241,6 +276,7 @@ export function getClientDiscoveries(
  * ```ts
  * init(ctx) {
  *   extendOAuthProvider(ctx, {
+ *     name: "my-plugin",
  *     grants: { "urn:example:grant": async ({ provider }) => provider.issueTokens(...) },
  *   });
  * }
@@ -414,46 +450,57 @@ export function applyOAuthProviderMetadataExtensions<
 	type: OAuthMetadataExtensionInput["type"],
 	core: T,
 ): T {
+	const extensions = getOAuthProviderExtensions(opts);
 	const warn = (message: string) =>
 		warnMetadataCollisionOnce(ctx, opts, message);
+	const describe = (extension: OAuthProviderExtension) =>
+		describeExtension(extensions, extension);
 	// Null-prototype targets keep own keys such as `__proto__` as plain data.
-	const discoveryMetadata: Record<string, unknown> = Object.assign(
-		Object.create(null),
-		...getClientDiscoveries(opts).map(
-			(discovery) => discovery.discoveryMetadata,
-		),
-	);
-	for (const key of Object.keys(discoveryMetadata)) {
-		if (Object.hasOwn(core, key)) {
-			warn(
-				`oauth-provider: a client discovery contributed the discovery metadata key "${key}" to ${type}, which the provider owns; ignoring it.`,
-			);
+	const discoveryMetadata: Record<string, unknown> = Object.create(null);
+	const discoveryOwners = new Map<string, OAuthProviderExtension>();
+	for (const extension of extensions) {
+		for (const discovery of toArray(extension.clientDiscovery)) {
+			for (const [key, value] of Object.entries(
+				discovery.discoveryMetadata ?? {},
+			)) {
+				if (Object.hasOwn(core, key)) {
+					warn(
+						`oauth-provider: ${describe(extension)} contributed the client discovery metadata key "${key}" to ${type}, which the provider owns; ignoring it.`,
+					);
+				}
+				discoveryMetadata[key] = value;
+				discoveryOwners.set(key, extension);
+			}
 		}
 	}
 	const document = { ...discoveryMetadata, ...core };
+	const owners = new Map<string, OAuthProviderExtension>();
 	const next: Record<string, unknown> = Object.assign(
 		Object.create(null),
 		document,
 	);
-	for (const extension of getOAuthProviderExtensions(opts)) {
+	for (const extension of extensions) {
 		const contribution = extension.metadata?.({ ctx, opts, type, document });
 		for (const [key, value] of Object.entries(contribution ?? {})) {
 			const existing = next[key];
+			const owner = owners.get(key);
+			const discoveryOwner = discoveryOwners.get(key);
 			if (Object.hasOwn(core, key)) {
 				warn(
-					`oauth-provider: an extension contributed the discovery metadata key "${key}" to ${type}, which the provider owns; ignoring it.`,
+					`oauth-provider: ${describe(extension)} contributed the discovery metadata key "${key}" to ${type}, which the provider owns; ignoring it.`,
 				);
-			} else if (Object.hasOwn(discoveryMetadata, key)) {
+			} else if (discoveryOwner !== undefined) {
 				warn(
-					`oauth-provider: an extension contributed the discovery metadata key "${key}" to ${type}, which a client discovery sets; keeping the client discovery's value.`,
+					`oauth-provider: ${describe(extension)} contributed the discovery metadata key "${key}" to ${type}, which the client discovery of ${describe(discoveryOwner)} sets; keeping the client discovery's value.`,
 				);
-			} else if (!Object.hasOwn(next, key)) {
+			} else if (owner === undefined) {
 				next[key] = value;
+				owners.set(key, extension);
 			} else if (Array.isArray(existing) && Array.isArray(value)) {
 				next[key] = [...new Set([...existing, ...value])];
 			} else {
 				warn(
-					`oauth-provider: more than one extension contributed the discovery metadata key "${key}" to ${type}; keeping the first-registered value.`,
+					`oauth-provider: ${describe(owner)} and ${describe(extension)} both contributed the discovery metadata key "${key}" to ${type}; keeping the value from ${describe(owner)}.`,
 				);
 			}
 		}
@@ -468,22 +515,26 @@ async function collectClaims(
 		extension: OAuthProviderExtension,
 	) => Awaitable<Record<string, unknown> | undefined>,
 ) {
+	const extensions = getOAuthProviderExtensions(opts);
 	const claims: Record<string, unknown> = {};
+	const owners = new Map<string, OAuthProviderExtension>();
 	// First contributor wins a key, matching metadata extensions. Extensions are
 	// expected to contribute disjoint claims, so a collision is a
 	// misconfiguration: keep the first value and warn rather than silently
 	// shadow the later contributor. An `undefined` value is not a contribution.
-	for (const extension of getOAuthProviderExtensions(opts)) {
+	for (const extension of extensions) {
 		const contribution = (await run(extension)) ?? {};
 		for (const [key, value] of Object.entries(contribution)) {
 			if (value === undefined) continue;
-			if (key in claims) {
+			const owner = owners.get(key);
+			if (owner !== undefined) {
 				logger.warn(
-					`oauth-provider: two extensions contributed the claim "${key}"; keeping the first-registered value.`,
+					`oauth-provider: ${describeExtension(extensions, owner)} and ${describeExtension(extensions, extension)} both contributed the claim "${key}"; keeping the value from ${describeExtension(extensions, owner)}.`,
 				);
 				continue;
 			}
 			claims[key] = value;
+			owners.set(key, extension);
 		}
 	}
 	return claims;
