@@ -472,6 +472,18 @@ This section applies if you verify access tokens with `verifyAccessTokenRequest`
 
 **What to do:** if you call `createResourceServerChallenge`, add a `resourceMetadataMappings` entry for each resource identifier that is not a URL. Clients and tests that compare the whole header value must expect the `DPoP` challenge too.
 
+### The resource client checks tokens against the provider's records
+
+`oauthProviderResourceClient(auth)` now checks each token against the provider's records when `auth` runs the OAuth provider and you set neither `jwksUrl` nor `remoteVerify`. This applies to `verifyAccessTokenRequest` and `verifyBearerToken`. Before, it verified JWT access tokens by signature alone, so these requests change:
+
+* A JWT access token that was revoked, whose session ended, whose client is disabled, or whose resource was deleted now fails with `401 invalid_token`. Each verification reads your database.
+* An opaque access token from the same provider now verifies without `remoteVerify`.
+* The result is the token's introspection response. It adds `active: true`, `client_id`, and `token_type` to the token's claims. `sub` is still the subject the token carries.
+* DPoP proofs are recorded in the database-backed replay store, so a replayed proof fails at every instance that shares the database.
+* When the provider sets `dpop.nonce.required: true`, a DPoP request without a current nonce now fails with `401 use_dpop_nonce` and a fresh `DPoP-Nonce`.
+
+**What to do:** expect the extra database reads. If a route must keep signature-only checks, pass `jwksUrl`. To keep a route without nonces while the provider requires them, pass `dpop: { nonce: { required: false } }`. Code that compares the whole result must expect the introspection fields.
+
 ### `authorization_details_types_supported` is a list
 
 In protected resource metadata, `authorization_details_types_supported` is now typed as `string[]`, as RFC 9728 requires. Before, it accepted a single string, which produced metadata that was not a valid JSON array.

@@ -496,20 +496,52 @@ export async function requireActiveAccessToken(
  * Introspects access tokens against this server's records, for a verifier in
  * the same process such as `requireMcpAuth`. Accepts JWT and opaque access
  * tokens, and reports a revoked token, one whose session ended, and one whose
- * client is disabled as inactive. `sub` is the user ID even when the token's
- * own `sub` is pairwise. `undefined` without an OAuth provider.
+ * client is disabled as inactive. `undefined` without an OAuth provider.
+ *
+ * With `subject: "user"`, the default, `sub`, `act`, and `may_act` name users
+ * by user ID even when the token's own subjects are pairwise. With
+ * `subject: "token"`, they are the subjects a JWT access token for the grant
+ * carries, as `accessTokenSubject` selects, for JWT and opaque tokens alike.
  *
  * @internal
  */
-export function getLocalIntrospection(context: AuthContext, request?: Request) {
+export function getLocalIntrospection(
+	context: AuthContext,
+	request?: Request,
+	options?: { subject?: "user" | "token" },
+) {
 	const provider = getOAuthProviderPlugin(context);
 	if (!provider) return undefined;
+	const opts = provider.options;
 	const ctx = {
 		context,
 		request,
 		headers: request?.headers,
 	} as GenericEndpointContext;
-	return (token: string) => validateAccessToken(ctx, provider.options, token);
+	return async (token: string): Promise<JWTPayload> => {
+		const payload = await validateAccessToken(ctx, opts, token);
+		if (
+			options?.subject !== "token" ||
+			opts.accessTokenSubject !== "pairwise" ||
+			!payload.active ||
+			typeof payload.sub !== "string"
+		) {
+			return payload;
+		}
+		const client = await getClient(ctx, opts, payload.client_id as string);
+		// Validation already requires the client; never fall back to user IDs.
+		if (!client) return { active: false };
+		const subjects = await resolvePresentedSubjects(
+			opts,
+			{
+				sub: payload.sub,
+				...(payload.act ? { act: payload.act as OAuthActorClaim } : {}),
+				...(payload.may_act !== undefined ? { may_act: payload.may_act } : {}),
+			},
+			client,
+		);
+		return { ...payload, ...subjects };
+	};
 }
 
 /**
