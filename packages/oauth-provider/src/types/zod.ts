@@ -188,6 +188,7 @@ export const verificationValueSchema = z
 		acr: z.string().optional(),
 		amr: z.array(z.string()).optional(),
 		resource: z.array(z.string()).optional(),
+		serverContext: z.record(z.string(), z.unknown()).optional(),
 	})
 	.passthrough();
 
