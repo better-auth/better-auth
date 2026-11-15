@@ -1608,4 +1608,24 @@ describe("CIMD - RP-initiated logout for metadata document clients", async () =>
 			expect(rest).toEqual(registered);
 		}
 	});
+
+	it("refuses an administrator's logout grant when a post-logout URI is off the document's origins", async () => {
+		const clientId = "https://mcp-logout-admin-off.example.com/client.json";
+		stubMetadataFetch(clientId, {
+			...documentFor(clientId),
+			post_logout_redirect_uris: ["https://elsewhere.example/landing"],
+		});
+		allowEndSession = false;
+		await authorize(clientId);
+
+		await expect(
+			authorizationServer.api.adminUpdateOAuthClient({
+				headers,
+				body: { client_id: clientId, update: { enable_end_session: true } },
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_client_metadata" },
+		});
+		expect((await storedClient(clientId))?.enableEndSession).toBeFalsy();
+	});
 });

@@ -386,6 +386,16 @@ export async function updateClientEndpoint(
 		await checkOAuthClient(updatedMetadata, opts, {
 			ctx,
 		});
+	} else if (enableEndSession && !client.enableEndSession) {
+		// Granting logout to a client the caller does not own holds its stored
+		// post-logout URIs to the origin rule registration applies on a grant.
+		const isDocument = !!client.clientDiscoveryId;
+		const redirectUris = client.redirectUris ?? [];
+		assertPostLogoutRedirectOrigins(
+			client.postLogoutRedirectUris ?? undefined,
+			isDocument ? [...redirectUris, client.clientId] : redirectUris,
+			isDocument ? "its redirect_uris or client_id" : "its redirect_uris",
+		);
 	}
 	// An owner cannot add a logout target that authorization would not
 	// redirect to; entries already stored, such as an admin's, are kept.

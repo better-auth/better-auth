@@ -332,6 +332,65 @@ describe("RP-initiated logout for registered clients", () => {
 		expect(updated.enable_end_session).toBe(true);
 	});
 
+	it("checks the origin rule when an administrator grants logout to a client without an owner", async () => {
+		const provider = await createProvider();
+		const offOrigin = await (
+			await provider.registerOpenClient({
+				post_logout_redirect_uris: ["https://elsewhere.example/landing"],
+			})
+		).json();
+		expect(offOrigin.enable_end_session).toBeUndefined();
+		await expect(
+			provider.auth.api.adminUpdateOAuthClient({
+				headers: provider.headers,
+				body: {
+					client_id: offOrigin.client_id,
+					update: { enable_end_session: true },
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_client_metadata" },
+		});
+		const refused = await provider.endSession({
+			client_id: offOrigin.client_id,
+			post_logout_redirect_uri: "https://elsewhere.example/landing",
+		});
+		expect(refused.status).toBe(401);
+
+		const sameOrigin = await (
+			await provider.registerOpenClient({
+				post_logout_redirect_uris: [logoutRedirectUri],
+			})
+		).json();
+		const granted = await provider.auth.api.adminUpdateOAuthClient({
+			headers: provider.headers,
+			body: {
+				client_id: sameOrigin.client_id,
+				update: { enable_end_session: true },
+			},
+		});
+		expect(granted.enable_end_session).toBe(true);
+	});
+
+	it("leaves the post-logout URIs of an administrator's own client to the administrator", async () => {
+		const provider = await createProvider();
+		const client = await provider.auth.api.adminCreateOAuthClient({
+			headers: provider.headers,
+			body: {
+				redirect_uris: [redirectUri],
+				post_logout_redirect_uris: ["https://elsewhere.example/landing"],
+			},
+		});
+		const granted = await provider.auth.api.adminUpdateOAuthClient({
+			headers: provider.headers,
+			body: {
+				client_id: client.client_id,
+				update: { enable_end_session: true },
+			},
+		});
+		expect(granted.enable_end_session).toBe(true);
+	});
+
 	it("lets an administrator take back logout from a client without an owner", async () => {
 		const provider = await createProvider({
 			clientRegistrationEnableEndSession: true,
