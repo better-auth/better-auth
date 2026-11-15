@@ -427,6 +427,7 @@ These provider features are new or opt-in, and need no action when you upgrade:
 * Token exchange with `oauthTokenExchange()`, including DPoP-bound public clients with `publicClients: "dpop-bound"`.
 * A pairwise `sub` in JWT access tokens, with `accessTokenSubject: "pairwise"` and `pairwiseSecret`. Resource servers that key on `sub` then see a different value for the same user in each sector.
 * JWT access token revocation, with `revocableJwtAccessTokens: true`. Resource servers that verify tokens locally against the JWKS don't see it, so they must introspect.
+* A callback for each revocation, with `onTokenRevoked`. Use it to pass revocations to other services instead of matching verification identifiers in `databaseHooks.verification`.
 * RP-initiated logout for registered clients, with `clientRegistrationEnableEndSession`.
 * `verifyResourceRequest()` and `issueAuthorizationCode()` on the provider API, for plugin endpoints served by the auth server.
 

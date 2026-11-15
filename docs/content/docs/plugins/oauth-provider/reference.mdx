@@ -282,6 +282,10 @@ Issues opaque access tokens and HS256 ID tokens. Defaults to `false`. See [Witho
 
 Lets `/oauth2/revoke` revoke JWT access tokens by `jti`, and makes revoking a refresh token also revoke the JWT access tokens of its grant. The same happens when a rotated refresh token or an authorization code is replayed. Introspection, UserInfo, and `validateAccessToken` then look up each JWT access token in the verification store. Defaults to `false`. See [Revoke JWT access tokens](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
 
+`onTokenRevoked` <span className="opacity-70">`(event) => void | Promise<void>`</span>
+
+Called after the provider revokes tokens: when a client revokes a token at `/oauth2/revoke`, and when a client presents a used authorization code or refresh token again. The event has `type`, `reason`, `clientId`, `expiresAt`, and `ctx`, and `jti`, `grantId`, or `userId` depending on the token. The response waits for the callback. An error it throws is logged and does not change the response. See [Observe revocations](/docs/plugins/oauth-provider/tokens#observe-revocations).
+
 `dpop` <span className="opacity-70">`{ proofMaxAgeSeconds?, signingAlgorithms?, nonce? }`</span>
 
 DPoP proof validation. `proofMaxAgeSeconds` defaults to `300`, and `signingAlgorithms` to `["EdDSA", "ES256", "ES512", "PS256", "RS256"]`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
