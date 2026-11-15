@@ -1,5 +1,21 @@
 # @better-auth/cimd
 
+## 1.8.0-beta.10
+
+### Patch Changes
+
+- [#12646](https://github.com/better-auth/better-auth/pull/12646) [`e1aa7a4`](https://github.com/better-auth/better-auth/commit/e1aa7a40c36e09f4188b9b1bdfa4f8347474bb56) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `cimd()` no longer fails when its `init()` runs more than once for the same `oauthProvider()` instance, such as when two `betterAuth()` instances share the same plugin objects. Before, the second run stopped startup with a duplicate client discovery error.
+
+- [#12646](https://github.com/better-auth/better-auth/pull/12646) [`e1aa7a4`](https://github.com/better-auth/better-auth/commit/e1aa7a40c36e09f4188b9b1bdfa4f8347474bb56) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Setup errors and warnings about conflicting OAuth provider extensions now say which extensions are involved. For example, a duplicate grant type fails with `OAuth Provider extension "ext-a" and extension "ext-b" both register grant type "…"`. Before, the message named only the grant type.
+
+  Extensions accept an optional `name` for these messages. Plugin authors can pass their plugin's id to `extendOAuthProvider()`:
+
+  ```ts
+  extendOAuthProvider(ctx, { name: "my-plugin", grants: {/* ... */} });
+  ```
+
+  An extension without a `name` is described by its position in registration order and, when it registers one, a grant type or similar, such as `unnamed extension [#2](https://github.com/better-auth/better-auth/issues/2) (grant type "…")`. The CIBA, CIMD, device authorization, and token exchange extensions are named after their plugins.
+
 ## 1.8.0-beta.9
 
 ## 1.8.0-beta.8

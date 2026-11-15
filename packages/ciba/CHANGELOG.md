@@ -1,5 +1,33 @@
 # @better-auth/ciba
 
+## 1.8.0-beta.10
+
+### Minor Changes
+
+- [#12509](https://github.com/better-auth/better-auth/pull/12509) [`dd55cd5`](https://github.com/better-auth/better-auth/commit/dd55cd57f48e6cebaa750bc6b7ae562daeded1e3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - CIBA requests now accept `acr_values` and RFC 9396 `authorization_details`, which `/oauth2/bc-authorize` used to ignore.
+
+  Requested ACR values reach `authenticationContext.resolve` as `requestedAcrValues` when the user approves from the link, and `sendNotification` receives them as `acrValues`. To accept authorization details, list each type in the new `authorizationDetailsTypes` option with a `validate` function. The user sees the details in `sendNotification` and on the consent page, `completeCibaRequest` can narrow them with `authorizationDetails`, and the granted details are returned in the token response, in a JWT access token, and at introspection of an opaque access token. A detail with `locations` goes only to a token for one of those resources, and a detail without `locations` goes to every token. When the user approves authorization details, the request is issued no refresh token. Without `authorizationDetailsTypes`, a request that carries `authorization_details` now fails with `invalid_authorization_details` instead of being approved without them.
+
+  The `cibaRequest` model has two new columns, `acrValues` and `authorizationDetails`. Run `npx auth@latest migrate`, or `npx auth@latest generate` and apply the schema with your ORM, before you upgrade.
+
+- [#12591](https://github.com/better-auth/better-auth/pull/12591) [`9cb5cd0`](https://github.com/better-auth/better-auth/commit/9cb5cd0e38ace8c1652bc91f0b3c6e01c21787ec) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A client can now register the authorization details types it will request with `authorization_details_types` (RFC 9396 §10), and CIBA rejects a request for any other type with `invalid_authorization_details`.
+
+  Registration fails with `invalid_client_metadata` when a listed type is not in `authorizationDetailsTypes`. A client without the field may still request every configured type.
+
+### Patch Changes
+
+- [#12638](https://github.com/better-auth/better-auth/pull/12638) [`a614478`](https://github.com/better-auth/better-auth/commit/a61447845ed2f75518de8fedd16461a728dd2e50) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - When `baseURL` ends in `/`, the approval link sent to the user and the advertised `backchannel_authentication_endpoint` no longer contain a double slash.
+
+- [#12646](https://github.com/better-auth/better-auth/pull/12646) [`e1aa7a4`](https://github.com/better-auth/better-auth/commit/e1aa7a40c36e09f4188b9b1bdfa4f8347474bb56) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Setup errors and warnings about conflicting OAuth provider extensions now say which extensions are involved. For example, a duplicate grant type fails with `OAuth Provider extension "ext-a" and extension "ext-b" both register grant type "…"`. Before, the message named only the grant type.
+
+  Extensions accept an optional `name` for these messages. Plugin authors can pass their plugin's id to `extendOAuthProvider()`:
+
+  ```ts
+  extendOAuthProvider(ctx, { name: "my-plugin", grants: {/* ... */} });
+  ```
+
+  An extension without a `name` is described by its position in registration order and, when it registers one, a grant type or similar, such as `unnamed extension [#2](https://github.com/better-auth/better-auth/issues/2) (grant type "…")`. The CIBA, CIMD, device authorization, and token exchange extensions are named after their plugins.
+
 ## 1.8.0-beta.9
 
 ## 1.8.0-beta.8
