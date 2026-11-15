@@ -28,21 +28,24 @@ export interface CibaAuthorizationDetailsType {
 }
 
 /**
- * What {@link CibaOptions.sendNotification} receives to reach the user on a
- * separate device.
+ * A request still waiting for the user's decision: what to show the user
+ * before they approve or deny it. {@link CibaNotification} carries it, and
+ * `auth.api.getCibaRequest` reads it on your own approval page.
  */
-export interface CibaNotification {
+export interface CibaPendingRequest {
 	/**
-	 * Identifies the request to `auth.api.completeCibaRequest`, for a deployment
-	 * that lets the user decide in its own app instead of following `url`.
+	 * Identifies the request to `auth.api.getCibaRequest` and
+	 * `auth.api.completeCibaRequest`, for a deployment that lets the user
+	 * decide in its own page or app.
 	 */
 	requestId: string;
-	/** The user the client's `login_hint` identified. */
-	user: User;
 	clientId: string;
 	/** Registered display name of the client, when it has one. */
 	clientName?: string | undefined;
+	/** The scopes the client requested. */
 	scopes: string[];
+	/** The RFC 8707 resources the client requested the token for. */
+	resources?: string[] | undefined;
 	/**
 	 * Text the client also shows (CIBA §7.1). Display it so the user can
 	 * confirm the request is the one they expect.
@@ -66,6 +69,16 @@ export interface CibaNotification {
 	 * the tokens go to that actor and not to them.
 	 */
 	actor?: OAuthActorClaim | undefined;
+	expiresAt: Date;
+}
+
+/**
+ * What {@link CibaOptions.sendNotification} receives to reach the user on a
+ * separate device.
+ */
+export interface CibaNotification extends CibaPendingRequest {
+	/** The user the client's `login_hint` identified. */
+	user: User;
 	/**
 	 * Absolute link for the user to approve or deny the request. By default it
 	 * opens the provider's sign-in and consent pages; with
@@ -73,7 +86,6 @@ export interface CibaNotification {
 	 * `ciba_request_id`. Absent when `approvalPage` is `false`.
 	 */
 	url?: string | undefined;
-	expiresAt: Date;
 }
 
 /**
@@ -94,8 +106,8 @@ export type CibaApprovalOptions =
 	| {
 			/**
 			 * Approve requests on your own path instead of the provider's sign-in
-			 * and consent pages, and record each decision with
-			 * `auth.api.completeCibaRequest`. A path or URL becomes the
+			 * and consent pages: read each request with `auth.api.getCibaRequest`,
+			 * and record the decision with `auth.api.completeCibaRequest`. A path or URL becomes the
 			 * notification's `url`, with the request as `ciba_request_id`; `false`
 			 * sends no `url`, such as when your own app shows the request. Either
 			 * way, `/oauth2/authorize` no longer approves CIBA requests, so the

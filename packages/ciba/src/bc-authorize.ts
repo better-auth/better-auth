@@ -20,6 +20,7 @@ import { APIError, isAPIError } from "better-auth/api";
 import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 import * as z from "zod";
 import { parseActor } from "./actor";
+import { toPendingRequest } from "./approval";
 import {
 	getRegisteredDetailsTypes,
 	parseAuthorizationDetails,
@@ -329,19 +330,8 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 			await ctx.context.runInBackgroundOrAwait(
 				(async () =>
 					options.sendNotification(
-						{
-							requestId: request.id,
-							user,
-							clientId,
-							clientName: client.name ?? undefined,
-							scopes,
-							bindingMessage,
-							acrValues,
-							authorizationDetails,
-							actor,
-							url,
-							expiresAt,
-						},
+						// The same view getCibaRequest returns, plus the user and link.
+						{ ...toPendingRequest(request, client), user, url },
 						ctx,
 					))(),
 			);

@@ -2208,6 +2208,48 @@ describe.each([
 		expect(decodeJwt(issued.body.id_token as string).sub).toBe(user.id);
 	});
 
+	it("reads a pending request for the user it names", async () => {
+		const { requestId } = await startOwn();
+		const {
+			requestId: _,
+			user: notified,
+			url: __,
+			...shown
+		} = lastNotification!;
+		expect(notified.id).toBe(user.id);
+		const pending = await instance.auth.api.getCibaRequest({
+			body: { requestId, userId: user.id },
+		});
+		expect(pending).toEqual({ requestId, ...shown, resources: undefined });
+		expect(pending).toMatchObject({
+			clientId: client.client_id,
+			scopes: ["openid"],
+			expiresAt: expect.any(Date),
+		});
+	});
+
+	it("reads nothing for another user, an unknown id, or a decided or expired request", async () => {
+		const { requestId } = await startOwn();
+		const read = (id: string, userId = user.id) =>
+			instance.auth.api.getCibaRequest({ body: { requestId: id, userId } });
+		expect(await read(requestId, "someone-else")).toBeNull();
+		expect(await read("unknown")).toBeNull();
+
+		await instance.auth.api.completeCibaRequest({
+			body: { requestId, userId: user.id, decision: "denied" },
+		});
+		expect(await read(requestId)).toBeNull();
+
+		const expiring = await startOwn();
+		const ctx = await instance.auth.$context;
+		await ctx.adapter.update({
+			model: "cibaRequest",
+			where: [{ field: "id", value: expiring.requestId }],
+			update: { expiresAt: new Date(Date.now() - 1000) },
+		});
+		expect(await read(expiring.requestId)).toBeNull();
+	});
+
 	it("requires resultPage without approvalPage", () => {
 		// @ts-expect-error the provider's approval page needs a resultPage.
 		ciba({ sendNotification });
@@ -2216,5 +2258,35 @@ describe.each([
 	it("takes no resultPage", () => {
 		// @ts-expect-error resultPage applies only to the provider's approval page.
 		ciba({ approvalPage, resultPage: "/ciba", sendNotification });
+	});
+});
+
+describe("ciba getCibaRequest", () => {
+	it("shows the actor, details, and resources the page must display", async () => {
+		const agent = { sub: "agent-1", sub_profile: "service" };
+		resolveActor.mockResolvedValueOnce(agent);
+		await start({
+			binding_message: "Code 52",
+			acr_values: mfaAcr,
+			resource,
+			authorization_details: JSON.stringify([payment]),
+		});
+		const { requestId, user } = lastNotification!;
+		const pending = await auth.api.getCibaRequest({
+			body: { requestId, userId: user.id },
+		});
+		expect(pending).toEqual({
+			requestId,
+			clientId: pollClient.client_id,
+			clientName: "Support Agent",
+			scopes: ["openid", "profile"],
+			resources: [resource],
+			bindingMessage: "Code 52",
+			acrValues: [mfaAcr],
+			authorizationDetails: [payment],
+			actor: agent,
+			expiresAt: lastNotification!.expiresAt,
+		});
+		expect(lastNotification!.resources).toEqual([resource]);
 	});
 });

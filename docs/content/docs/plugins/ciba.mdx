@@ -373,15 +373,11 @@ The provider's link still works while your app collects decisions. A user who op
 ```ts title="auth.ts"
 ciba({
   approvalPage: "/approve",
-  sendNotification: async ({ url, ...request }) => {
-    // Your page shows this record, looked up by ciba_request_id.
-    await pendingApprovals.save(request.requestId, request);
-    await email.send(request.user.email, { link: url });
+  sendNotification: async ({ user, url }) => {
+    await email.send(user.email, { link: url });
   },
 });
 ```
-
-The provider has no API that reads a request by its ID, so keep what `sendNotification` receives, keyed by `requestId`, for your page to show.
 
 `approvalPage` takes one of these values:
 
@@ -390,13 +386,32 @@ The provider has no API that reads a request by its ID, so keep what `sendNotifi
 
 With either value, `/oauth2/authorize` no longer handles `ciba_request_id`. A request is approved only when your server calls `completeCibaRequest`, and it expires if your server never does. `resultPage` applies only to the provider's pages, so you do not set it.
 
-Your approval page must do everything `completeCibaRequest` leaves to your app:
+Your approval page reads the request with `auth.api.getCibaRequest`, then records the decision with `completeCibaRequest`:
 
-* Authenticate the user, and check that they are the stored request's `user`.
-* Show the client, the scopes, the binding message, and any actor or authorization details from the stored request before they decide.
-* Treat `ciba_request_id` as untrusted input, and look it up only in what your server stored.
+```ts title="approve.ts"
+const session = await auth.api.getSession({ headers });
+if (!session) return redirectToSignIn();
 
-Delete the stored record once the request is decided or expires. `completeCibaRequest` refuses a request that is unknown, already decided, expired, or for another user.
+const request = await auth.api.getCibaRequest({
+  body: { requestId: cibaRequestId, userId: session.user.id },
+});
+// Unknown, decided, expired, or for another user.
+if (!request) return showExpired();
+
+// Show request.clientName ?? request.clientId, scopes, resources,
+// bindingMessage, actor, and authorizationDetails, then on the user's answer:
+await auth.api.completeCibaRequest({
+  body: { requestId: request.requestId, userId: session.user.id, decision },
+});
+```
+
+`getCibaRequest` is server-only. It returns the same fields `sendNotification` receives, without `user` and `url`, and with the requested `resources`. It returns `null` in each case where `completeCibaRequest` would refuse: the request is unknown, already decided, or expired, or `userId` is not the user the `login_hint` named.
+
+Your page must still do everything `completeCibaRequest` leaves to your app:
+
+* Authenticate the user before you read the request, and pass that user's ID as `userId`. Never take `userId` from the link.
+* Show the client, the scopes, the binding message, and any actor or authorization details before the user decides.
+* Treat `ciba_request_id` as untrusted input. `getCibaRequest` returns `null` for an ID that is not the signed-in user's pending request.
 
 ## Endpoints
 
