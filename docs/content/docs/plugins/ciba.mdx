@@ -60,6 +60,7 @@ The plugin extends [`@better-auth/oauth-provider`](./oauth-provider) and require
         ciba({ // [!code highlight]
           resultPage: "/ciba", // [!code highlight]
           sendNotification: async ({ user, clientName, bindingMessage, url }) => { // [!code highlight]
+            if (!url) return; // absent only with approvalPage: false // [!code highlight]
             await sendEmail({ // [!code highlight]
               to: user.email, // [!code highlight]
               subject: `${clientName ?? "An application"} wants to act for you`, // [!code highlight]
@@ -374,6 +375,7 @@ The provider's link still works while your app collects decisions. A user who op
 ciba({
   approvalPage: "/approve",
   sendNotification: async ({ user, url }) => {
+    if (!url) return; // absent only with approvalPage: false
     await email.send(user.email, { link: url });
   },
 });
