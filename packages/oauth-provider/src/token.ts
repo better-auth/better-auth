@@ -51,7 +51,9 @@ import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
 import {
 	authorizationCodeGrantId,
 	findRefreshToken,
-	revokeGrantAccessTokens,
+	grantRevocationWindowMs,
+	isGrantRevoked,
+	markGrantRevoked,
 } from "./token-lookup";
 import type {
 	Confirmation,
@@ -616,18 +618,10 @@ async function createOpaqueAccessToken(
 		}
 		throw error;
 	}
-	// Adapters that do not enforce the `refreshId` foreign key, such as the
-	// memory and MongoDB adapters, accept the insert after that revocation.
-	// Revocation deletes linked access tokens again after the refresh rows, so
-	// an insert it misses always sees the refresh token gone here.
-	if (refreshId && !(await refreshTokenExists(ctx, refreshId))) {
-		await ctx.context.adapter.delete({
-			model: "oauthAccessToken",
-			where: [{ field: "id", value: accessTokenId }],
-		});
-		throw grantRevokedDuringIssuance();
-	}
-	return (opts.prefix?.opaqueAccessToken ?? "") + token;
+	return {
+		id: accessTokenId,
+		token: (opts.prefix?.opaqueAccessToken ?? "") + token,
+	};
 }
 
 async function refreshTokenExists(
@@ -648,19 +642,36 @@ function grantRevokedDuringIssuance() {
 }
 
 /**
+ * Marks the grant revoked, then runs `deleteTokens`. A failed mark does not
+ * stop the delete, and is rethrown after it, so the request fails rather than
+ * leave the grant's JWT access tokens active unnoticed.
+ */
+async function revokeGrantTokens(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	grant: { grantId?: string | null; clientId: string },
+	deleteTokens: () => Promise<void>,
+) {
+	let markFailure: { error: unknown } | undefined;
+	try {
+		await markGrantRevoked(ctx, opts, grant);
+	} catch (error) {
+		markFailure = { error };
+	}
+	await deleteTokens();
+	if (markFailure) throw markFailure.error;
+}
+
+/**
  * Tear down the entire refresh-token family for a (client, user) pair, plus
  * any access tokens that reference those refresh rows, per RFC 9700 §4.14.
  * Access tokens are deleted first so the parent rows' foreign-key children
  * do not block the refresh-row delete.
  *
- * TODO(invalidate-family-race): the two `deleteMany` calls are not atomic
- * with respect to each other. Between them, a concurrent rotation in a
- * different worker can `create` a fresh refresh row (and, immediately after,
- * an access-token row referencing it) for the same (client, user) pair,
- * leaving the family partially rebuilt and the new refresh row orphaned of
- * any deletion. Closing this window requires the same transactional adapter
- * contract tracked under FIXME(strict-family-invalidation) in
- * `createRefreshToken`.
+ * A rotation of the presented token's grant that is still storing its tokens
+ * fails on the grant's revocation mark (see `markGrantRevoked`). A rotation
+ * of another grant of the pair, or of a grant stored without a grant ID, can
+ * still store a refresh token after the delete.
  *
  * @internal
  */
@@ -683,27 +694,31 @@ export async function invalidateRefreshFamily(
 				{ field: "refreshId", operator: "ne", value: null },
 			],
 		});
-	await deleteLinkedAccessTokens();
-	await ctx.context.adapter.deleteMany({
-		model: "oauthRefreshToken",
-		where: [
-			{ field: "clientId", value: clientId },
-			{ field: "userId", value: userId },
-		],
-	});
-	// Without a foreign key, an in-flight issuance can store an access token
-	// between the two deletes above. See `createOpaqueAccessToken`.
-	await deleteLinkedAccessTokens();
-	// Last, so a failed write cannot stop the teardown above. JWT access tokens
-	// are never stored, so only the presented token's grant can be revoked.
-	// JWTs from the user's other grants with this client stay valid until they
-	// expire.
-	await revokeGrantAccessTokens(ctx, opts, {
-		grantId: refreshToken.grantId,
-		clientId,
-	});
+	await revokeGrantTokens(
+		ctx,
+		opts,
+		{ grantId: refreshToken.grantId, clientId },
+		async () => {
+			await deleteLinkedAccessTokens();
+			await ctx.context.adapter.deleteMany({
+				model: "oauthRefreshToken",
+				where: [
+					{ field: "clientId", value: clientId },
+					{ field: "userId", value: userId },
+				],
+			});
+			// Without a foreign key, an in-flight issuance can store an access
+			// token between the two deletes above. See `createOpaqueAccessToken`.
+			await deleteLinkedAccessTokens();
+		},
+	);
 }
 
+/**
+ * Revokes the grant an authorization code started. Its grant ID derives from
+ * the code, so the mark also fails the redemption this replay raced, even
+ * before that redemption stored any token.
+ */
 async function revokeTokensIssuedForAuthorizationCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -726,19 +741,21 @@ async function revokeTokensIssuedForAuthorizationCode(
 		}
 	};
 
-	await deleteIssuedTokens("oauthAccessToken");
-	await deleteIssuedTokens("oauthRefreshToken");
-	// Without a foreign key, an in-flight redemption can store an access token
-	// between the two deletes above. See `createOpaqueAccessToken`.
-	await deleteIssuedTokens("oauthAccessToken");
-	// Last, so a failure cannot stop the cleanup above. It still fails the
-	// request rather than leave the grant's JWT access tokens active unnoticed.
-	if (opts.revocableJwtAccessTokens) {
-		await revokeGrantAccessTokens(ctx, opts, {
+	await revokeGrantTokens(
+		ctx,
+		opts,
+		{
 			grantId: await authorizationCodeGrantId(authorizationCodeId),
 			clientId,
-		});
-	}
+		},
+		async () => {
+			await deleteIssuedTokens("oauthAccessToken");
+			await deleteIssuedTokens("oauthRefreshToken");
+			// Without a foreign key, an in-flight redemption can store an access
+			// token between the two deletes above. See `createOpaqueAccessToken`.
+			await deleteIssuedTokens("oauthAccessToken");
+		},
+	);
 }
 
 function consumedAuthorizationCodeIdentifier(authorizationCodeId: string) {
@@ -924,14 +941,11 @@ async function createRefreshToken(
 	// revoked, so any subsequent reuse of the original refresh token is handled
 	// by the replay/invalid-grant path in `handleRefreshTokenGrant`.
 	//
-	// FIXME(strict-family-invalidation): RFC 9700 §4.14 prescribes
-	// immediate family invalidation on detected concurrent redemption.
-	// Doing that here requires wrapping the entire mint chain
-	// (CAS + create-refresh + create-access) in a real database
-	// transaction so the race-loser's family delete cannot interleave
-	// with the winner's still-in-flight inserts. Tracked for a follow-up
-	// minor once the adapter contract exposes opt-in transactional
-	// rotation.
+	// FIXME(strict-family-invalidation): RFC 9700 §4.14 prescribes family
+	// invalidation on detected concurrent redemption. The loser does not tear
+	// the family down here, so the winner's tokens stay valid until a later
+	// reuse of the parent revokes them. That reuse's grant mark also fails this
+	// rotation if it is still issuing (see `createUserTokens`).
 	const rotatedAt = new Date(iat * 1000);
 	const rotationUpdate: Record<string, unknown> = {
 		revoked: rotatedAt,
@@ -984,6 +998,8 @@ async function createRefreshToken(
 type CreateUserTokensParams = OAuthTokenIssueParams & {
 	grantType: GrantType;
 	authorizationCodeId?: string;
+	/** Epoch milliseconds, taken before the grant's code or token was consumed. */
+	issuanceStartedAt?: number;
 };
 
 interface ResourceGrantIssuance {
@@ -1477,6 +1493,7 @@ async function createUserTokens(
 		verificationValue,
 	} = params;
 	const authenticationContext = { acr, amr };
+	const issuanceStartedAt = params.issuanceStartedAt ?? Date.now();
 	// A delegated issuance gets no refresh token (see `isRefreshToken`), so it
 	// cannot rotate one either: the parent would stay usable.
 	if (params.act && existingRefreshToken) {
@@ -1704,7 +1721,7 @@ async function createUserTokens(
 						// Only read back by the JWT revocation check.
 						grantId: opts.revocableJwtAccessTokens ? grantId : undefined,
 					},
-				)
+				).then((token) => ({ token, id: undefined }))
 			: createOpaqueAccessToken(
 					ctx,
 					opts,
@@ -1760,6 +1777,50 @@ async function createUserTokens(
 				: undefined,
 	]);
 
+	// A revocation of this grant marks it before deleting its tokens, so one
+	// that raced this issuance either deleted the tokens stored above or left
+	// the mark for this check. A grant ID generated by this issuance is not
+	// known to any revocation yet. A revocation without a mark, such as a
+	// logout, deletes the refresh token: adapters that do not enforce the
+	// `refreshId` foreign key, such as the memory and MongoDB adapters, accept
+	// the access token insert after it, and revocation deletes linked access
+	// tokens again after the refresh rows, so an insert it misses sees the
+	// refresh token gone here.
+	const checksGrantMark = !!(
+		(existingRefreshToken || params.authorizationCodeId) &&
+		grantId
+	);
+	const [grantRevoked, refreshTokenGone] = await Promise.all([
+		checksGrantMark && grantId ? isGrantRevoked(ctx, grantId) : false,
+		refreshToken?.id
+			? refreshTokenExists(ctx, refreshToken.id).then((exists) => !exists)
+			: false,
+	]);
+	// A mark written after this issuance consumed its code or token outlives
+	// that consume by `grantRevocationWindowMs`, so a check that finishes later
+	// could miss it and fails instead. A mark written earlier, by
+	// `/oauth2/revoke` or a replay of an older rotated token, can still expire
+	// first: that takes the revocation stalling between its mark and its
+	// delete, and this issuance stalling too.
+	const markMayHaveExpired =
+		checksGrantMark &&
+		Date.now() - issuanceStartedAt >= grantRevocationWindowMs(opts);
+	if (grantRevoked || refreshTokenGone || markMayHaveExpired) {
+		if (accessToken.id) {
+			await ctx.context.adapter.delete({
+				model: "oauthAccessToken",
+				where: [{ field: "id", value: accessToken.id }],
+			});
+		}
+		if (refreshToken?.id) {
+			await ctx.context.adapter.delete({
+				model: "oauthRefreshToken",
+				where: [{ field: "id", value: refreshToken.id }],
+			});
+		}
+		throw grantRevokedDuringIssuance();
+	}
+
 	// ID token created after access token so at_hash can be computed
 	const idToken = isIdToken
 		? await createIdToken(
@@ -1771,7 +1832,7 @@ async function createUserTokens(
 				nonce,
 				sessionId,
 				authTime,
-				accessToken,
+				accessToken.token,
 				additionalIdTokenClaims,
 				authenticationContext,
 			)
@@ -1781,7 +1842,7 @@ async function createUserTokens(
 		...customFields,
 		...(params.tokenResponse ?? {}),
 		...(issuedDetails?.length ? grantedClaims : {}),
-		access_token: accessToken,
+		access_token: accessToken.token,
 		expires_in: exp - iat,
 		expires_at: exp,
 		token_type: confirmationTokenType(confirmation),
@@ -2190,6 +2251,7 @@ async function handleAuthorizationCodeGrant(
 		authorizationCodeId,
 		verificationValue.query,
 	);
+	const issuanceStartedAt = Date.now();
 	const consumed =
 		await ctx.context.internalAdapter.consumeVerificationValue(
 			authorizationCodeId,
@@ -2220,6 +2282,7 @@ async function handleAuthorizationCodeGrant(
 		amr: verificationValue.amr,
 		verificationValue,
 		authorizationCodeId,
+		issuanceStartedAt,
 		requestedUserInfoClaims,
 		resources: effectiveResources,
 		originalResources: authorizedResources,

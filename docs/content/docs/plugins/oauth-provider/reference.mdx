@@ -554,7 +554,7 @@ Token exchange has its own conditions for these errors. See [Token exchange erro
 
 Authorization codes and device codes are single-use, and the token endpoint consumes one only after the request passes validation. A request rejected for its `code_verifier`, `redirect_uri`, `resource`, client, or an invalid DPoP proof or nonce leaves the code redeemable until it expires, so the client can retry with a corrected request. The one exception is a DPoP proof whose `jti` was already used: the server records proof `jti` values after it consumes the code, so that request uses up the code and returns `invalid_dpop_proof`.
 
-Presenting an authorization code that was already redeemed returns `invalid_grant` and revokes the tokens issued from it. Two requests that redeem the same authorization code at once are handled the same way: one receives tokens, the other gets `invalid_grant`, and the losing request can revoke the tokens the first one just received.
+Presenting an authorization code that was already redeemed returns `invalid_grant`. When the client the code was issued to presents it, the provider also revokes the code's grant, as described in [Authorization code reuse](/docs/plugins/oauth-provider/tokens#authorization-code-reuse). When that client sends two requests that redeem the same code at once, the second is a reuse: it fails and revokes the grant. The first request also fails with `invalid_grant`, unless it finished issuing its tokens before the revocation started. In that case, the revocation revokes the tokens it returned, as for any reuse.
 
 When `adminCreateOAuthClient` links resources, an invalid identifier fails validation with `VALIDATION_ERROR`, an unknown or disabled resource returns `invalid_target`, and a `resourcePrivileges` denial returns `401`. The call creates nothing in each case.
 
@@ -607,6 +607,7 @@ export const customOAuthExtension = () =>
     id: "custom-oauth-extension",
     init(ctx) {
       extendOAuthProvider(ctx, {
+        id: "custom-oauth-extension",
         grants: {
           "urn:example:params:oauth:grant-type:custom": async ({ provider }) => {
             const scopes = ["openid"];
@@ -622,6 +623,7 @@ export const customOAuthExtension = () =>
   }) satisfies BetterAuthPlugin;
 ```
 
+* Each extension needs a unique `id`. Use the id of the plugin that registers it. Setup errors and discovery warnings name the extensions involved by this `id`, and two extensions with the same `id` fail at startup. The `id` is not stored, so you can rename it.
 * `grants`, `clientAuthentication`, and `interactionRequests` must not overlap across extensions. A duplicate grant type, auth method, assertion type, or interaction parameter fails at startup. Extension grants and auth methods are advertised in discovery.
 * `metadata` and `claims` only add keys. A key the provider owns is kept, even one it leaves unset because a feature is off, and so is a key a client discovery's `discoveryMetadata` sets. When two client discoveries set the same key, the later one wins. A metadata key two extensions both contribute as lists is combined in registration order, without duplicates. Any other key two extensions contribute resolves to the first one registered.
 * Discovery logs a warning for each contribution it ignores, once per server rather than on every request. To advertise extension claims, set `advertisedMetadata.claims_supported`.
@@ -701,6 +703,7 @@ An extension that defines its own client registration fields, such as CIBA's `ba
 
 ```ts
 extendOAuthProvider(ctx, {
+  id: "example-extension",
   clientMetadata: {
     fields: ["example_mode"],
     validate: ({ metadata }) => {

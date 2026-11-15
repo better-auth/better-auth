@@ -114,6 +114,7 @@ describe("resolveAccessTokenClaims", () => {
 			opts: {
 				extensions: [
 					{
+						id: "session-claims",
 						claims: {
 							accessToken: (input: OAuthClaimExtensionInput) => {
 								received = input;

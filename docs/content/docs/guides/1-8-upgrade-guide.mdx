@@ -269,6 +269,8 @@ Revoking a refresh token at `/oauth2/revoke` now deletes every opaque access tok
 * Opaque access tokens issued before you upgrade are still deleted only with the refresh token that issued them.
 * Replaying a revoked refresh token works as before. It deletes every refresh token the client holds for that user, and the opaque access tokens linked to them.
 * JWT access tokens stay valid until they expire. With `revocableJwtAccessTokens: true`, they are revoked too, but only where the auth server checks the token, such as introspection, UserInfo, or `verifyResourceRequest`, and only for tokens issued after you turned the option on. With secondary storage alone, an evicted entry makes a revoked token valid again. See [JWT revocation](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
+* A refresh of the grant that is still issuing tokens when you revoke it now fails with `invalid_grant`, and the tokens it stored are deleted. This needs a refresh token issued or refreshed since you upgraded.
+* Each grant revocation now writes one row to the verification store, with or without `revocableJwtAccessTokens`. This includes revoking a refresh token, replaying one, and reusing an authorization code. Your `databaseHooks.verification` hooks see these rows. See [Grant revocation entries](/docs/plugins/oauth-provider/tokens#grant-revocation-entries).
 
 ### Authorization code reuse revokes tokens only for the issuing client
 
@@ -280,6 +282,8 @@ The provider still rejects every reuse of an authorization code. To stop someone
 A confidential client that reuses a PKCE code with its secret but without the `code_verifier` no longer revokes its tokens. JWT access tokens issued from the code stay valid until they expire, with the same exception for `revocableJwtAccessTokens: true`.
 
 The provider remembers a redeemed code for the longer of `accessTokenExpiresIn` and `refreshTokenExpiresIn`, 30 days by default, and each refresh-token rotation extends that record. A reuse during that time revokes the tokens, even after the code itself has expired. Codes redeemed before you upgrade have no record, so reusing one revokes nothing. With secondary storage alone, an evicted record has the same effect.
+
+When the issuing client sends two token requests that pass these checks with one code at the same time, the second is a reuse and revokes the grant. The first request now also fails with `invalid_grant`, unless it finished issuing before the revocation started. In that case, the revocation revokes its tokens, as for any reuse. A client that retries a code exchange it thinks timed out must start a new authorization request.
 
 ### Repeated request parameters are rejected
 
@@ -391,6 +395,12 @@ This applies if you build on `extendOAuthProvider()`, call the provider API from
   ```
 
 * Custom `OAuthProviderApi` implementations must add `verifyDpopProof()`, `issueDpopNonce()`, `challengeDpopNonce()`, `resolveConfirmation()`, `resolveSubject()`, `verifyResourceRequest()`, and `issueAuthorizationCode()`.
+
+* Every extension passed to `extendOAuthProvider()` or `oauthProvider({ extensions })` needs a unique `id`. Without one, TypeScript reports a missing property and startup fails. Use the id of the plugin that registers the extension:
+
+  ```ts
+  extendOAuthProvider(ctx, { id: "my-plugin", grants: { /* ... */ } });
+  ```
 
 * Extension grants now receive every `audience` value instead of only the last one.
 
