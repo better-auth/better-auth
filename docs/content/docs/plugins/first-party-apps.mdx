@@ -1,0 +1,281 @@
+---
+icon: pluginsFirstPartyApps
+sidebarTitle: "First-Party Apps"
+title: First-Party Apps (Authorization Challenge)
+description: Let your own native and CLI apps sign users in without a browser redirect, and still receive standard OAuth tokens.
+---
+
+`OAuth2` `Draft`
+
+Your own mobile, desktop, and CLI apps can show a native sign-in form instead of opening a browser. The app sends what the user typed to your server, gets an authorization code back, and redeems it at the token endpoint like any other OAuth client. This plugin implements the Authorization Challenge Endpoint of [OAuth 2.0 for First-Party Applications](https://datatracker.ietf.org/doc/draft-ietf-oauth-first-party-apps/) (draft 04).
+
+Use it only for apps that you build and ship yourself. The app sees the user's password, so a third-party app must never be allowed to use this endpoint. Third-party clients keep using the browser-based [authorization code flow](./oauth-provider).
+
+The plugin extends [`@better-auth/oauth-provider`](./oauth-provider) and requires `oauthProvider()` and `jwt()`.
+
+<Callout type="warn">
+  The specification is an IETF draft, and its wire format can still change.
+</Callout>
+
+## How the flow works
+
+1. The **app** sends `POST /oauth2/authorize-challenge`, form-encoded, with its `client_id`, the authorization request (`response_type=code`, `scope`, PKCE), and the user's credentials.
+2. Your **server** checks that the client is a first-party app, authenticates it, and checks the credentials with a **strategy**, such as the shipped password strategy.
+3. When the credentials are enough, the server answers `200` with an `authorization_code`. When it needs more, such as a second factor, it answers with an error and an `auth_session` handle the app sends with its next request.
+4. The **app** redeems the code at `POST /oauth2/token` with its PKCE verifier and without `redirect_uri`. The token response carries a fresh `auth_session` too.
+
+When the server decides the user must continue in a browser, for example to verify their email, it answers `redirect_to_web`. The app then starts a normal authorization code flow in the system browser.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the plugin
+
+    ```package-install
+    @better-auth/first-party-apps
+    ```
+  </Step>
+
+  <Step>
+    ### Add the plugin to the server
+
+    Add `firstPartyApps()` after `oauthProvider()` and `jwt()`, with the strategies your apps use. The password strategy needs `emailAndPassword.enabled`. Disable the JWT plugin's `/token` route and its `set-auth-jwt` header, as [OAuth Provider Mode](/docs/plugins/jwt#oauth-provider-mode) describes.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { jwt, twoFactor } from "better-auth/plugins";
+    import { oauthProvider } from "@better-auth/oauth-provider";
+    import { firstPartyApps, passwordStrategy } from "@better-auth/first-party-apps"; // [!code highlight]
+
+    export const auth = betterAuth({
+      disabledPaths: ["/token"],
+      emailAndPassword: { enabled: true },
+      plugins: [
+        jwt({ disableSettingJwtHeader: true }),
+        twoFactor(),
+        oauthProvider({
+          loginPage: "/login",
+          consentPage: "/consent",
+          scopes: ["openid", "profile", "email", "offline_access"],
+        }),
+        firstPartyApps({ // [!code highlight]
+          strategies: [passwordStrategy()], // [!code highlight]
+        }), // [!code highlight]
+      ],
+    });
+    ```
+
+    Discovery now advertises `authorization_challenge_endpoint`.
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    The plugin adds a `firstPartyAuthSession` model and a `firstPartyAuthFailure` model. Run `npx auth@latest migrate` with the built-in Kysely adapter, or run `npx auth@latest generate` and apply the schema with your ORM.
+  </Step>
+</Steps>
+
+## Register your app
+
+No client can use the endpoint by default. To make a client a first-party app, create it with the admin endpoint and set both of these:
+
+* `metadata: { first_party_app: true }`, which opts the client in.
+* `skip_consent: true`, because the app has no consent page to show. Without it, the endpoint answers `unauthorized_client`.
+
+```ts title="register-app.ts"
+const app = await auth.api.adminCreateOAuthClient({
+  headers, // an authenticated admin session
+  body: {
+    client_name: "Example for iOS",
+    token_endpoint_auth_method: "none",
+    grant_types: ["authorization_code", "refresh_token"],
+    redirect_uris: ["https://app.example.com/callback"], // for redirect_to_web
+    skip_consent: true,
+    metadata: { first_party_app: true },
+  },
+});
+```
+
+`first_party_app` is not a registration field. Dynamic client registration and client metadata documents drop it, so a client that registers itself can never opt in. Only code with admin access to your server can set it.
+
+Native apps cannot keep a secret, so they are usually public clients (`token_endpoint_auth_method: "none"`). A confidential client must send the same credentials it uses at the token endpoint with every request. Clients that authenticate with `private_key_jwt` or another assertion are not supported yet and get `unauthorized_client`.
+
+## Sign in from the app
+
+The first request must be form-encoded. Later requests that carry an `auth_session` may be form-encoded or JSON. Every response has `Cache-Control: no-store`.
+
+```bash title="Sign in"
+curl -X POST https://auth.example.com/api/auth/oauth2/authorize-challenge \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d client_id=APP_CLIENT_ID \
+  -d response_type=code \
+  -d "scope=openid profile offline_access" \
+  -d code_challenge=PKCE_CHALLENGE \
+  -d code_challenge_method=S256 \
+  -d login_hint=alice@example.com \
+  -d password=USER_PASSWORD
+```
+
+```json title="200 OK"
+{ "authorization_code": "AUTHORIZATION_CODE" }
+```
+
+Redeem the code without `redirect_uri`, because the request had none:
+
+```bash title="Redeem the code"
+curl -X POST https://auth.example.com/api/auth/oauth2/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d grant_type=authorization_code \
+  -d code=AUTHORIZATION_CODE \
+  -d code_verifier=PKCE_VERIFIER \
+  -d client_id=APP_CLIENT_ID
+```
+
+The token response adds `auth_session`. Store it with the tokens, and replace it whenever a response carries a new one. Discard it when the user signs out of the app.
+
+### Responses
+
+The endpoint answers with one of these:
+
+* `200` with `authorization_code`: the user signed in.
+* `403 insufficient_authorization` with `auth_session` and `challenge_type`: send the next credential with that `auth_session`. The password strategy uses `challenge_type: "totp"` for a second factor.
+* `400 authentication_failed` with `auth_session`: the credentials were wrong. The app can let the user try again with the same `auth_session`.
+* `403 redirect_to_web`: start a browser-based authorization code flow with PKCE. The `auth_session`, if any, no longer works.
+* `400 invalid_session`: the `auth_session` is unknown, expired, revoked, or its sign-in session ended. Start again without it.
+* `400` with another OAuth error, such as `invalid_request`, `invalid_client`, `unauthorized_client`, `invalid_scope`, or `invalid_dpop_proof`, for a request the server cannot accept.
+
+An `auth_session` names its client. A request that sends it with another `client_id`, or with another client's credentials, fails with `invalid_client`.
+
+### Two-factor authentication
+
+When the user has [two-factor authentication](/docs/plugins/2fa) with TOTP, the password alone does not sign them in. The first request answers `403 insufficient_authorization` with `challenge_type: "totp"`. The app asks for the code and sends it:
+
+```bash title="Second factor"
+curl -X POST https://auth.example.com/api/auth/oauth2/authorize-challenge \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d auth_session=AUTH_SESSION \
+  -d totp=123456
+```
+
+A user whose only second factor is a code the app cannot collect, such as an emailed OTP, gets `redirect_to_web`. So does a user who has not verified their email while `emailAndPassword.requireEmailVerification` is on, so the browser flow can send the verification email.
+
+### Bind the sign-in to a DPoP key
+
+To stop a stolen `auth_session` or code from working on another device, send a [DPoP](/docs/plugins/oauth-provider/tokens#dpop) proof with every request. The first proof binds the `auth_session` to its key. Every later request with that `auth_session` must carry a proof from the same key, or it fails with `invalid_dpop_proof`. The code is bound to the key too, so the token request must also prove it.
+
+## Credential guessing
+
+The endpoint accepts passwords directly, so it limits guessing in three ways, in addition to a per-IP rate limit of 30 requests per minute:
+
+* **Per `auth_session`:** after 3 failed rounds (`authSession.maxFailures`), the endpoint answers `redirect_to_web` and revokes the handle.
+* **Per account and method:** after 10 failures in 15 minutes (`budget.account`), the account answers `authentication_failed` for that method even when the credentials are correct, until the window ends. The response looks the same as for a wrong password, so an attacker cannot tell that the account is locked. Failures for an email that matches no account are counted under that email.
+* **Per client:** after 100 failures across all accounts in one minute (`budget.client`), every credential round of that client answers `redirect_to_web`. Users can still sign in through the browser while the client is under attack.
+
+Only failures count, so a user who signs in successfully does not use up the budget.
+
+<Callout type="warn">
+  Anyone who knows a user's email can spend that account's budget and stop the user from signing in through the app for the rest of the window. The browser flow is not affected. Lower `budget.account.window` if this matters more to you than slower guessing.
+</Callout>
+
+TOTP failures count against the plugin's own budget. They do not count toward the two-factor plugin's account lockout, but an account that the two-factor plugin has locked also fails here.
+
+## Step-up at the token endpoint
+
+Some grants need stronger authentication before they get new tokens, for example a refresh after a sensitive scope was added. Return a requirement from `requireStepUp` to refuse the token request of a first-party app:
+
+```ts title="auth.ts"
+firstPartyApps({
+  strategies: [passwordStrategy()],
+  requireStepUp: ({ grantType, acr }) =>
+    grantType === "refresh_token" && acr !== "urn:example:mfa"
+      ? { acrValues: "urn:example:mfa" }
+      : undefined,
+});
+```
+
+The token endpoint then answers `403 insufficient_authorization` with an `auth_session` and no `challenge_type`. The app sends that `auth_session` to the authorization challenge endpoint. When no strategy can step up in the app, the answer is `403 redirect_to_web` with `acr_values` and `max_age: 0`, which the app passes to its browser authorization request.
+
+The step-up `auth_session` reuses the session of the grant and never ends it. Repeated refusals for the same client, user, session, and DPoP key reuse one stored handle, and each refusal returns a new value for it.
+
+## Write a strategy
+
+A strategy checks one kind of credential. The plugin does everything else: it authenticates the client, checks the DPoP key, counts failures, creates the session, and issues the code.
+
+```ts title="pin-strategy.ts"
+import type { FirstPartyAuthStrategy } from "@better-auth/first-party-apps";
+
+export const pinStrategy: FirstPartyAuthStrategy = {
+  id: "pin",
+  params: ["pin"], // never stored with the authorization request
+  async authenticate({ ctx, authSession, params }) {
+    const user = await findUserForDevice(ctx, authSession.query.login_hint);
+    if (!user) {
+      return { error: "authentication_failed", identifier: String(authSession.query.login_hint) };
+    }
+    if (!(await verifyPin(user.id, String(params.pin)))) {
+      return { error: "authentication_failed", userId: user.id };
+    }
+    return { user, amr: ["pin"] };
+  },
+};
+```
+
+`authenticate` returns one of these:
+
+* `{ user, amr }` when the user proved who they are. `amr` lists the methods you verified (RFC 8176). It reaches the ID token, so never copy it from the request.
+* `{ error: "insufficient_authorization", challengeType, state?, user?, amr?, fields? }` when another round is needed. The next request with the same `auth_session` comes back to this strategy, with `state` in `authSession.challenge`. `fields` are added to the response, and `state` stays on the server.
+* `{ error: "authentication_failed", userId?, identifier? }` when the credentials are wrong. Set `userId` when an account matched, or `identifier` with the normalized value the user typed when none did.
+* `{ error: "redirect_to_web" }` when the user must finish in a browser.
+
+Throw an `APIError` with an OAuth error, such as `invalid_request`, for a malformed request.
+
+A strategy must still do these itself:
+
+* Take the same time for an unknown account as for a wrong credential, as the password strategy does by hashing anyway.
+* Return the same answer for an unknown account as for a wrong credential.
+* Consume single-use challenges, such as a nonce it issued, so they cannot be replayed.
+
+An optional `stepUp` method handles a step-up the token endpoint asked for, from `authSession.acrValues`. Without one, the app is sent to the browser.
+
+## Limits
+
+* `redirect_to_web` never carries a `request_uri`. The app starts its browser flow with its own authorization request.
+* Clients that authenticate with `private_key_jwt` or another assertion cannot use the endpoint yet.
+* The password strategy supports TOTP as its second factor, not backup codes.
+
+## Options
+
+<TypeTable
+  type={{
+  strategies: {
+    description: "How users sign in. The first strategy whose `params` the request carries handles it.",
+    type: "FirstPartyAuthStrategy[]",
+    required: true,
+  },
+  "authSession.expiresIn": {
+    description: "Seconds a pending or step-up `auth_session` stays usable. One that signed in lives as long as its session.",
+    type: "number",
+    default: "600",
+  },
+  "authSession.maxFailures": {
+    description: "Failed rounds one `auth_session` allows before `redirect_to_web`.",
+    type: "number",
+    default: "3",
+  },
+  "budget.account": {
+    description: "Failures per account and method before the account answers `authentication_failed` for the rest of the window.",
+    type: "{ window?: number; max?: number }",
+    default: "{ window: 900, max: 10 }",
+  },
+  "budget.client": {
+    description: "Failures per client before its credential rounds answer `redirect_to_web`. `false` turns it off.",
+    type: "{ window?: number; max?: number } | false",
+    default: "{ window: 60, max: 100 }",
+  },
+  requireStepUp: {
+    description: "Decides at the token endpoint whether a first-party app's grant needs stronger authentication.",
+    type: "(input: OAuthBeforeTokenIssuanceInput) => Awaitable<{ acrValues?: string } | null | undefined>",
+  },
+}}
+/>

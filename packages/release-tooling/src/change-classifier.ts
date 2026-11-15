@@ -44,6 +44,7 @@ const SCOPE_TO_DOMAIN = new Map(
 		"device-authorization": "identity",
 		ciba: "identity",
 		cimd: "identity",
+		"first-party-apps": "identity",
 
 		// organization
 		organization: "organization",
@@ -97,6 +98,7 @@ const PATH_TO_DOMAIN = [
 	["packages/better-auth/src/plugins/device-authorization/", "identity"],
 	["packages/ciba/", "identity"],
 	["packages/cimd/", "identity"],
+	["packages/first-party-apps/", "identity"],
 	["packages/better-auth/src/plugins/magic-link/", "credentials"],
 	["packages/better-auth/src/plugins/email-otp/", "credentials"],
 	["packages/better-auth/src/plugins/phone-number/", "credentials"],
@@ -231,6 +233,7 @@ const SCOPE_TO_PACKAGE = new Map(
 	Object.entries({
 		ciba: "@better-auth/ciba",
 		cimd: "@better-auth/cimd",
+		"first-party-apps": "@better-auth/first-party-apps",
 		sso: "@better-auth/sso",
 		scim: "@better-auth/scim",
 		passkey: "@better-auth/passkey",
@@ -258,6 +261,7 @@ const SCOPE_TO_PACKAGE = new Map(
 const PATH_TO_PACKAGE = [
 	["packages/ciba/", "@better-auth/ciba"],
 	["packages/cimd/", "@better-auth/cimd"],
+	["packages/first-party-apps/", "@better-auth/first-party-apps"],
 	["packages/sso/", "@better-auth/sso"],
 	["packages/scim/", "@better-auth/scim"],
 	["packages/passkey/", "@better-auth/passkey"],

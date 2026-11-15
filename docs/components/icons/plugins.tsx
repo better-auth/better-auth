@@ -16,6 +16,7 @@ import {
 	ScanFace,
 	ShieldAlert,
 	ShieldCheck,
+	Smartphone,
 	Ticket,
 	UserCircle,
 	UserSquare2,
@@ -174,6 +175,7 @@ export const pluginIcons = {
 		</svg>
 	),
 	pluginsCIMD: () => <FileBoxIcon className="size-4" />,
+	pluginsFirstPartyApps: () => <Smartphone className="size-4" />,
 	pluginsOrganization: () => <Users2 className="w-4 h-4" />,
 	pluginsOIDCProvider: () => (
 		<svg

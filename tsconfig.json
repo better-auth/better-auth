@@ -22,6 +22,9 @@
       "path": "./packages/ciba/tsconfig.json"
     },
     {
+      "path": "./packages/first-party-apps/tsconfig.json"
+    },
+    {
       "path": "./packages/cimd/tsconfig.json"
     },
     {

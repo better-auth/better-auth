@@ -15,6 +15,7 @@
       "@better-auth/cimd",
       "@better-auth/drizzle-adapter",
       "@better-auth/electron",
+      "@better-auth/first-party-apps",
       "@better-auth/expo",
       "@better-auth/i18n",
       "@better-auth/kysely-adapter",

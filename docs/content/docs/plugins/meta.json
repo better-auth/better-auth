@@ -24,6 +24,7 @@
     "device-authorization",
     "ciba",
     "cimd",
+    "first-party-apps",
     "---Enterprise---",
     "sso",
     "scim",

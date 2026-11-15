@@ -1,0 +1,76 @@
+{
+  "name": "@better-auth/first-party-apps",
+  "version": "1.8.0-beta.10",
+  "description": "OAuth 2.0 for First-Party Applications (Authorization Challenge Endpoint) plugin for Better Auth",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/plugins/first-party-apps",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/first-party-apps"
+  },
+  "keywords": [
+    "auth",
+    "oauth",
+    "oauth2",
+    "first-party-apps",
+    "authorization-challenge",
+    "native",
+    "cli",
+    "dpop",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict --pack false",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ]
+    }
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/oauth-provider": "workspace:*",
+    "@better-auth/utils": "catalog:",
+    "better-auth": "workspace:*",
+    "jose": "^6.2.3",
+    "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:^",
+    "@better-auth/oauth-provider": "workspace:^",
+    "@better-auth/utils": "catalog:peer",
+    "better-auth": "workspace:^",
+    "better-call": "catalog:peer"
+  }
+}
