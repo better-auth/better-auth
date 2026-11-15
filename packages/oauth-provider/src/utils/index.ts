@@ -91,13 +91,13 @@ function createTTLCache<K, V extends { expiresAt?: Date | null }>(): TTLCache<
 	};
 }
 
+/** RFC 9068 §2.1 media type of a JWT access token, set as its `typ` header. */
+export const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
+
 /**
  * Gets the oAuth Provider Plugin
  * @internal
  */
-/** RFC 9068 §2.1 media type of a JWT access token, set as its `typ` header. */
-export const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
-
 export const getOAuthProviderPlugin = (ctx: AuthContext) => {
 	return ctx.getPlugin("oauth-provider") satisfies ReturnType<
 		typeof oauthProvider
