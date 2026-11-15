@@ -12,8 +12,10 @@ import type {
 } from "./token-lookup";
 import {
 	findToken,
+	grantRevocationExpiresAt,
 	jwtRevocationMarker,
 	markGrantRevoked,
+	notifyTokenRevoked,
 } from "./token-lookup";
 import type { OAuthOptions, OAuthRefreshToken, Scope } from "./types";
 import {
@@ -63,6 +65,14 @@ async function revokeJwtAccessToken(
 			...marker,
 			value: payload.azp,
 		});
+		await notifyTokenRevoked(opts, {
+			type: "access_token",
+			reason: "revocation_request",
+			clientId: payload.azp,
+			jti: payload.jti,
+			expiresAt: marker.expiresAt,
+			ctx,
+		});
 		return null;
 	}
 	throw new APIError("BAD_REQUEST", {
@@ -74,6 +84,7 @@ async function revokeJwtAccessToken(
 
 async function revokeOpaqueAccessToken(
 	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
 	accessToken: OpaqueAccessTokenRecord,
 ) {
 	await ctx.context.adapter.delete({
@@ -81,6 +92,17 @@ async function revokeOpaqueAccessToken(
 		where: accessToken.id
 			? [{ field: "id", value: accessToken.id }]
 			: [{ field: "token", value: accessToken.token }],
+	});
+	// Deleting a row that had already expired, or that session end had
+	// revoked, revokes nothing.
+	const expiresAt = new Date(accessToken.expiresAt);
+	if (accessToken.revoked || expiresAt.getTime() <= Date.now()) return;
+	await notifyTokenRevoked(opts, {
+		type: "access_token",
+		reason: "revocation_request",
+		clientId: accessToken.clientId,
+		expiresAt,
+		ctx,
 	});
 }
 
@@ -93,7 +115,13 @@ async function revokeRefreshToken(
 	// Presenting an already revoked refresh token is treated as replay: tear
 	// down the whole family, and still answer 200 since the token is unusable.
 	if (refreshToken.revoked) {
-		await invalidateRefreshFamily(ctx, opts, clientId, refreshToken);
+		await invalidateRefreshFamily(
+			ctx,
+			opts,
+			clientId,
+			refreshToken,
+			"reuse_detected",
+		);
 		return;
 	}
 	// The grant's mark fails a refresh of this grant that is still issuing
@@ -139,10 +167,13 @@ async function revokeRefreshToken(
 					model: "oauthRefreshToken",
 					where: [{ field: "id", value: refreshToken.id }],
 				});
-		await invalidateRefreshFamily(ctx, opts, clientId, {
-			userId: refreshToken.userId,
-			grantId: current?.grantId,
-		});
+		await invalidateRefreshFamily(
+			ctx,
+			opts,
+			clientId,
+			{ userId: refreshToken.userId, grantId: current?.grantId },
+			"revocation_request",
+		);
 		return;
 	}
 	// RFC 7009 §2.1: every opaque access token of the grant, including those
@@ -153,6 +184,15 @@ async function revokeRefreshToken(
 		where: refreshToken.grantId
 			? [{ field: "grantId", value: refreshToken.grantId }]
 			: [{ field: "refreshId", value: refreshToken.id }],
+	});
+	await notifyTokenRevoked(opts, {
+		type: "refresh_token",
+		reason: "revocation_request",
+		clientId,
+		userId: refreshToken.userId,
+		grantId: refreshToken.grantId ?? undefined,
+		expiresAt: grantRevocationExpiresAt(opts),
+		ctx,
 	});
 }
 
@@ -233,7 +273,7 @@ export async function revokeEndpoint(
 			return await revokeJwtAccessToken(ctx, opts, found.payload);
 		}
 		if (found.type === "opaque") {
-			await revokeOpaqueAccessToken(ctx, found.record);
+			await revokeOpaqueAccessToken(ctx, opts, found.record);
 		} else {
 			await revokeRefreshToken(ctx, opts, found.record, client.clientId);
 		}

@@ -1108,6 +1108,68 @@ export interface InitialAccessTokenAuthorization {
 	clientCredentialsScopes?: string[];
 }
 
+/**
+ * A revocation reported to {@link OAuthOptions.onTokenRevoked}. `type` names
+ * the token the request presented, and with `reason` it decides which tokens
+ * were revoked.
+ */
+export type OAuthTokenRevokedEvent = {
+	/** The client the revoked tokens were issued to. */
+	clientId: string;
+	/**
+	 * No access token this revocation covers is accepted after this time, so a
+	 * record kept to reject them can be dropped then.
+	 */
+	expiresAt: Date;
+	ctx: GenericEndpointContext;
+} & (
+	| {
+			/** One access token, revoked by its client at `/oauth2/revoke`. */
+			type: "access_token";
+			reason: "revocation_request";
+			/** The token's `jti`. Absent for an opaque access token. */
+			jti?: string;
+	  }
+	| {
+			/**
+			 * A refresh token. Its grant's access tokens are revoked with it:
+			 * opaque ones always, JWT ones with `revocableJwtAccessTokens`.
+			 *
+			 * `"revocation_request"`: the client revoked the refresh token at
+			 * `/oauth2/revoke`. `"reuse_detected"`: the token had already been
+			 * rotated or revoked when a client presented it again. The provider
+			 * then also revokes every other refresh token the client holds for
+			 * the user, as it does when a revocation races a rotation of the
+			 * same token.
+			 */
+			type: "refresh_token";
+			reason: "revocation_request" | "reuse_detected";
+			/** The user the refresh token was issued to. */
+			userId: string;
+			/**
+			 * The grant whose access tokens were revoked. With
+			 * `revocableJwtAccessTokens`, its JWT access tokens carry it as
+			 * `grant_id`. Absent for a refresh token stored before 1.8 and not
+			 * rotated since.
+			 */
+			grantId?: string;
+	  }
+	| {
+			/**
+			 * An authorization code redeemed again by the client it was issued to.
+			 * The tokens issued for the code are revoked: refresh and opaque access
+			 * tokens always, JWT access tokens with `revocableJwtAccessTokens`.
+			 */
+			type: "authorization_code";
+			reason: "reuse_detected";
+			/**
+			 * The code's grant. With `revocableJwtAccessTokens`, its JWT access
+			 * tokens carry it as `grant_id`.
+			 */
+			grantId: string;
+	  }
+);
+
 export interface OAuthOptions<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
@@ -2232,6 +2294,23 @@ export interface OAuthOptions<
 	 * @default false
 	 */
 	revocableJwtAccessTokens?: boolean;
+	/**
+	 * Called after the provider revokes tokens: when a client revokes a token
+	 * at `/oauth2/revoke`, and when a client presents an authorization code or
+	 * refresh token again. Use it to tell resource servers that verify JWT
+	 * access tokens locally, or to keep an audit log.
+	 *
+	 * It is not called when nothing is revoked, such as for an unknown,
+	 * expired, or already revoked access token, a token issued to another
+	 * client, or an authorization code reused by another client or without its
+	 * `code_verifier`. Tokens revoked because their session ended are not
+	 * reported; `databaseHooks.session.delete.after` sees the session end.
+	 *
+	 * The response waits for the callback. The tokens are already revoked
+	 * when it runs, so an error it throws is logged and the response stays the
+	 * same. Concurrent requests that revoke the same token can each report it.
+	 */
+	onTokenRevoked?: (event: OAuthTokenRevokedEvent) => Awaitable<void>;
 	/**
 	 * Rate limit configuration for OAuth endpoints.
 	 *

@@ -7,6 +7,7 @@ import type {
 	OAuthClientAdministrativeResponse,
 	OAuthClientRegistrationResponse,
 	OAuthOptions,
+	OAuthTokenRevokedEvent,
 	ResourceServerMetadata,
 	SchemaClient,
 	Scope,
@@ -109,6 +110,45 @@ describe("public oauth-provider types", () => {
 		expectTypeOf<ClientPrivilegeContext["clientId"]>().toEqualTypeOf<
 			string | undefined
 		>();
+	});
+
+	it("narrows onTokenRevoked events by the presented token type", () => {
+		expectTypeOf<
+			Parameters<NonNullable<OAuthOptions["onTokenRevoked"]>>[0]
+		>().toEqualTypeOf<OAuthTokenRevokedEvent>();
+		type Revoked<Type extends OAuthTokenRevokedEvent["type"]> = Extract<
+			OAuthTokenRevokedEvent,
+			{ type: Type }
+		>;
+		expectTypeOf<
+			Revoked<"access_token">["reason"]
+		>().toEqualTypeOf<"revocation_request">();
+		expectTypeOf<Revoked<"access_token">["jti"]>().toEqualTypeOf<
+			string | undefined
+		>();
+		expectTypeOf<Revoked<"access_token">>().not.toHaveProperty("grantId");
+		expectTypeOf<Revoked<"refresh_token">["reason"]>().toEqualTypeOf<
+			"revocation_request" | "reuse_detected"
+		>();
+		expectTypeOf<Revoked<"refresh_token">["userId"]>().toEqualTypeOf<string>();
+		expectTypeOf<Revoked<"refresh_token">["grantId"]>().toEqualTypeOf<
+			string | undefined
+		>();
+		expectTypeOf<
+			Revoked<"authorization_code">["grantId"]
+		>().toEqualTypeOf<string>();
+		expectTypeOf<OAuthTokenRevokedEvent["expiresAt"]>().toEqualTypeOf<Date>();
+
+		// The documented feed: JWTs by `jti`, every other revocation by grant.
+		const revoked: string[] = [];
+		const onTokenRevoked: OAuthOptions["onTokenRevoked"] = (event) => {
+			if (event.type === "access_token") {
+				if (event.jti) revoked.push(event.jti);
+			} else if (event.grantId) {
+				revoked.push(event.grantId);
+			}
+		};
+		expectTypeOf(onTokenRevoked).not.toBeUndefined();
 	});
 
 	/**
