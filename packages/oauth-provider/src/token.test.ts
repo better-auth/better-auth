@@ -3632,6 +3632,52 @@ describe("oauth token - config", async () => {
 		},
 	);
 
+	// A zero lifetime would also trip the issuance deadline for revoked
+	// grants on every redemption, so the born-expired check must stop it first.
+	it("rejects a code redemption as born expired when accessTokenExpiresIn is 0", async () => {
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: { accessTokenExpiresIn: 0 },
+		});
+		const { url: authUrl, codeVerifier } = await createAuthUrl(
+			{
+				clientId: oauthClient?.client_id!,
+				clientSecret: oauthClient?.client_secret,
+			},
+			{ scopes: ["profile", "offline_access"] },
+		);
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const tokens = await client.oauth2.token(
+			{
+				code: code!,
+				code_verifier: codeVerifier,
+				grant_type: "authorization_code",
+				resource: validResource,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(tokens.data).toBeNull();
+		expect(tokens.error).toMatchObject({
+			error: "invalid_request",
+			error_description: "the token this grant derives from has expired",
+		});
+	});
+
 	it("opaqueAccessTokenPrefix - client_credentials", async () => {
 		const prefix = "hello_";
 		const testScopes = ["read:profile"];

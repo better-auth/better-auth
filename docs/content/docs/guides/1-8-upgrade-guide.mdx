@@ -263,7 +263,7 @@ A confidential client that reuses a PKCE code with its secret but without the `c
 
 The provider remembers a redeemed code for the longer of `accessTokenExpiresIn` and `refreshTokenExpiresIn`, 30 days by default, and each refresh-token rotation extends that record. A reuse during that time revokes the tokens, even after the code itself has expired. Codes redeemed before you upgrade have no record, so reusing one revokes nothing. With secondary storage alone, an evicted record has the same effect.
 
-When the issuing client sends two token requests that pass these checks with one code at the same time, the second is a reuse and revokes the grant. The first request now also fails with `invalid_grant`, unless it finished issuing before the revocation started. In that case, the revocation revokes its tokens. A client that retries a code exchange it thinks timed out must start a new authorization request.
+When the issuing client sends two token requests that pass these checks with one code at the same time, the second is a reuse and revokes the grant. The first request now also fails with `invalid_grant`, unless it finished issuing before the revocation started. In that case, the revocation revokes its tokens, as for any reuse. A client that retries a code exchange it thinks timed out must start a new authorization request.
 
 ### Repeated request parameters are rejected
 

@@ -220,8 +220,8 @@ export function authorizationCodeGrantId(authorizationCodeId: string) {
  * within that of being issued, so the entry outlives every token the grant
  * issued before it was written. One more second covers a token accepted
  * until its `exp` and secondary storage rounding the TTL down. An issuance
- * that reaches its check later than that fails anyway (see `createUserTokens`),
- * so an expired entry cannot let it through.
+ * that reaches its check that long after consuming its grant fails anyway
+ * (see `createUserTokens`).
  */
 export function grantRevocationWindowMs(opts: OAuthOptions<Scope[]>) {
 	return (opts.accessTokenExpiresIn ?? 3600) * 1000;

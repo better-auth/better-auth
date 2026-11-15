@@ -1786,9 +1786,12 @@ async function createUserTokens(
 			? refreshTokenExists(ctx, refreshToken.id).then((exists) => !exists)
 			: false,
 	]);
-	// A revocation that raced this issuance wrote its mark after the grant was
-	// consumed, and the mark outlives that by `grantRevocationWindowMs`. A check
-	// that finished later may have missed an expired mark, so it fails.
+	// A mark written after this issuance consumed its code or token outlives
+	// that consume by `grantRevocationWindowMs`, so a check that finishes later
+	// could miss it and fails instead. A mark written earlier, by
+	// `/oauth2/revoke` or a replay of an older rotated token, can still expire
+	// first: that takes the revocation stalling between its mark and its
+	// delete, and this issuance stalling too.
 	const markMayHaveExpired =
 		checksGrantMark &&
 		Date.now() - issuanceStartedAt >= grantRevocationWindowMs(opts);
