@@ -29,7 +29,8 @@ export interface RequireMcpAuthOptions {
 	 * revocation or an ended session, and opaque tokens are rejected. When
 	 * unset and the OAuth provider runs in this process, tokens are checked
 	 * against its records. Without that provider, JWT access tokens are verified
-	 * by signature against the in-process keys.
+	 * by signature against the JWT plugin's keys, read in-process, or fetched from
+	 * `jwks.remoteUrl` when the plugin publishes them there.
 	 */
 	jwksUrl?: string;
 	/**
