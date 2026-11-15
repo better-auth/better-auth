@@ -189,10 +189,37 @@ The client sends this request directly, so the provider handles it as `/oauth2/p
 
 * A confidential client must send the credentials it uses at the token endpoint, in the request body or the `Authorization` header. The provider reads them from the request your endpoint received, not from `query`. Without this check, anyone who copies the client's requests could start authorization in its name. The provider leaves the credentials out of the stored request. A `client_id` that names another client fails with `invalid_client`.
 * A public client, such as most native apps, is identified by its `client_id` alone. It has no credentials, so its `client_id` does not prove which app sent the request.
-* A `DPoP` proof on the request binds the code to its key ([RFC 9449 §10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)). The client must then prove the same key at the token endpoint. A `dpop_jkt` that names a different key fails with `invalid_dpop_proof`, and the proof stays usable for a corrected request. Do not also call `verifyDpopProof` on this request, because a second verification rejects the proof as replayed.
+* A `DPoP` proof on the request binds the code to its key ([RFC 9449 §10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)). The client must then prove the same key at the token endpoint. A `dpop_jkt` that names a different key fails with `invalid_dpop_proof`, and the proof stays usable for a corrected request. If your endpoint already called `verifyDpopProof` on this request, the provider reuses that result instead of verifying the proof again.
 * With `dpop.nonce.required` on, a proof without a current nonce fails with `use_dpop_nonce` before client authentication. The client's retry can then reuse a one-time client assertion.
 
 If your endpoint accepts `application/x-www-form-urlencoded` bodies, set `cloneRequest: true` in its endpoint options. Client authentication re-reads the raw form body.
+
+### Check the client before the user's credentials
+
+An endpoint that checks a password or another credential should first confirm which client is asking. Otherwise, a request in another client's name, or from another DPoP key, could still learn whether the password is right. Call `authenticateClient` and `verifyDpopProof` first, then check the user's credentials, then call `issueAuthorizationCode` on the same request:
+
+```ts
+const { clientId } = await provider.authenticateClient({
+  clientId: pending.clientId,
+  // A public client sends no credentials. A confidential client still must.
+  requireCredentials: false,
+});
+await provider.verifyDpopProof({ expectedJkt: pending.dpopJkt });
+
+const user = await verifyPassword(ctx.body); // your own check, throws on failure
+const session = await ctx.context.internalAdapter.createSession(user.id);
+const { code } = await provider.issueAuthorizationCode({
+  query: { ...pending.query, client_id: clientId },
+  session: { session, user },
+});
+```
+
+`issueAuthorizationCode` reuses what those calls proved on this request, instead of checking again. A second check would reject a `private_key_jwt` assertion or a DPoP proof as replayed. The method still requires a match:
+
+* A `client_id` in `query` must name the client that `authenticateClient` returned. Otherwise, the call fails with `invalid_client`.
+* A `dpop_jkt` in `query` must name the key of the proof that `verifyDpopProof` verified. Otherwise, the call fails with `invalid_dpop_proof`. Without a `dpop_jkt`, the code is bound to that proof's key.
+
+Only results the provider produced on the same request count, so your code cannot pass in a client or a proof that was never checked.
 
 Some endpoints take several requests to finish, such as a sign-in that returns a handle the client sends back on its next request. The handle already names the client, so the request that issues the code can leave out `client_id`. Set `client_id` and `dpop_jkt` in `query` from the state you stored with the handle:
 
