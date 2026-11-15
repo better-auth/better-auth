@@ -3,7 +3,11 @@ import { extendOAuthProvider } from "@better-auth/oauth-provider";
 import { getAuthEndpointUrl } from "@better-auth/oauth-provider/internal";
 import type { BetterAuthPlugin } from "better-auth";
 import { mergeSchema } from "better-auth/db";
-import { cibaApprovalRequest, createCompleteCibaRequest } from "./approval";
+import {
+	cibaApprovalRequest,
+	createCompleteCibaRequest,
+	createGetCibaRequest,
+} from "./approval";
 import {
 	DETAILS_TYPES_FIELD,
 	validateRegisteredDetailsTypes,
@@ -109,6 +113,7 @@ export const ciba = (options: CibaOptions) => {
 		},
 		endpoints: {
 			bcAuthorize: createBcAuthorize(resolvedOptions),
+			getCibaRequest: createGetCibaRequest(),
 			completeCibaRequest: createCompleteCibaRequest(resolvedOptions),
 		},
 		// Each request notifies a user, so it gets a tighter limit than the
@@ -131,4 +136,5 @@ export type {
 	CibaDeliveryMode,
 	CibaNotification,
 	CibaOptions,
+	CibaPendingRequest,
 } from "./types";
