@@ -79,6 +79,10 @@ async function startAuthorizationServer() {
 			});
 		}
 		if (path === "/userinfo") {
+			const scheme = req.headers.authorization?.split(" ")[0];
+			if (scheme !== settings.tokenType || (scheme === "DPoP" && !proof)) {
+				return json(401, { error: "invalid_token" });
+			}
 			return json(200, {
 				id: "dpop-user",
 				email: "dpop-user@example.com",
@@ -224,6 +228,71 @@ describe("generic-oauth DPoP", async () => {
 		expect(callback.headers.get("location")).toBe("/dashboard");
 		const [userinfo] = authorizationServer.at("/userinfo");
 		expect(userinfo?.headers.authorization).toBe("Bearer dpop-access-token");
+	});
+
+	async function accountInfo(
+		instance: Awaited<ReturnType<typeof createInstance>>,
+	) {
+		const context = await instance.auth.$context;
+		const [account] = await context.adapter.findMany<{
+			id: string;
+			userId: string;
+		}>({ model: "account" });
+		authorizationServer.requests.length = 0;
+		return instance.auth.api.accountInfo({
+			query: { accountId: account!.id, userId: account!.userId },
+		});
+	}
+
+	/**
+	 * Stored accounts keep no token type, so the userinfo request learns the
+	 * scheme from the provider's answer.
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-7.1
+	 */
+	describe("account info for a stored token", () => {
+		it("calls userinfo with the DPoP scheme and a proof", async () => {
+			const instance = await createInstance();
+			await signIn(instance);
+
+			const info = await accountInfo(instance);
+
+			expect(info?.data).toMatchObject({ email: "dpop-user@example.com" });
+			const userinfo = authorizationServer.at("/userinfo");
+			expect(userinfo).toHaveLength(1);
+			expect(userinfo[0]?.headers.authorization).toBe("DPoP dpop-access-token");
+			expectProof(userinfo[0], "GET", "/userinfo");
+		});
+
+		it("retries userinfo once as Bearer when the provider rejects DPoP", async () => {
+			authorizationServer.settings.tokenType = "Bearer";
+			const instance = await createInstance();
+			await signIn(instance);
+
+			const info = await accountInfo(instance);
+
+			expect(info?.data).toMatchObject({ email: "dpop-user@example.com" });
+			const [first, retry, ...rest] = authorizationServer.at("/userinfo");
+			expect(first?.headers.authorization).toBe("DPoP dpop-access-token");
+			expect(retry?.headers.authorization).toBe("Bearer dpop-access-token");
+			expect(retry?.headers.dpop).toBeUndefined();
+			expect(rest).toHaveLength(0);
+		});
+
+		it("does not use DPoP without the dpop option", async () => {
+			authorizationServer.settings.tokenType = "Bearer";
+			authorizationServer.settings.requireDpop = false;
+			const instance = await createInstance({ dpop: undefined });
+			await signIn(instance);
+
+			const info = await accountInfo(instance);
+
+			expect(info?.data).toMatchObject({ email: "dpop-user@example.com" });
+			const userinfo = authorizationServer.at("/userinfo");
+			expect(userinfo).toHaveLength(1);
+			expect(userinfo[0]?.headers.authorization).toBe(
+				"Bearer dpop-access-token",
+			);
+		});
 	});
 
 	it("sends a DPoP proof with the refresh token request", async () => {

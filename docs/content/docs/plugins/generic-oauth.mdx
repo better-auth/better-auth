@@ -621,6 +621,7 @@ With `dpop` set, Better Auth:
 * Sends `dpop_jkt`, the key's thumbprint, with the authorization request, so the provider binds the authorization code to your key.
 * Sends a DPoP proof with the code exchange, token refresh, and [pushed authorization request](#pushed-authorization-requests).
 * Calls the userinfo endpoint with `Authorization: DPoP` and a proof when the provider returns a DPoP token.
+* Calls the userinfo endpoint for a stored token, such as from `/account-info`, with `Authorization: DPoP` and a proof, because Better Auth does not store the token type. If the provider answers `401`, Better Auth retries once with `Bearer`.
 * Retries a request once when the provider asks for a DPoP nonce.
 
 A provider can still return a `Bearer` token, for example when it does not support DPoP. Better Auth then uses it as a `Bearer` token. A custom `getToken` or `getUserInfo` replaces the request Better Auth would send, so it must send its own proofs.

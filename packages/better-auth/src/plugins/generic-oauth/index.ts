@@ -232,23 +232,28 @@ async function fetchUserInfo(
 	if (!userInfoUrl || !tokens.accessToken) {
 		return null;
 	}
+	const requestUserInfo = (scheme: "DPoP" | "Bearer") =>
+		betterFetch<{
+			id?: string | number | null | undefined;
+			email: string;
+			sub?: string | number | null | undefined;
+			name: string;
+			email_verified: boolean;
+			picture: string;
+		}>(userInfoUrl, {
+			method: "GET",
+			headers: { Authorization: `${scheme} ${tokens.accessToken}` },
+			customFetchImpl: scheme === "DPoP" ? dpopFetch : undefined,
+		});
 	// A provider may still issue a Bearer token to a DPoP client (RFC 9449 §5).
-	const dpop = dpopFetch && tokens.tokenType?.toLowerCase() === "dpop";
-
-	const userInfo = await betterFetch<{
-		id?: string | number | null | undefined;
-		email: string;
-		sub?: string | number | null | undefined;
-		name: string;
-		email_verified: boolean;
-		picture: string;
-	}>(userInfoUrl, {
-		method: "GET",
-		headers: {
-			Authorization: `${dpop ? "DPoP" : "Bearer"} ${tokens.accessToken}`,
-		},
-		customFetchImpl: dpop ? dpopFetch : undefined,
-	});
+	// Stored tokens carry no type, so a provider's 401 to DPoP marks a Bearer
+	// token. Nonce challenges never reach here; the DPoP fetch retries them.
+	const tokenType = tokens.tokenType?.toLowerCase();
+	const tryDpop = !!dpopFetch && (!tokenType || tokenType === "dpop");
+	let userInfo = await requestUserInfo(tryDpop ? "DPoP" : "Bearer");
+	if (tryDpop && !tokenType && userInfo.error?.status === 401) {
+		userInfo = await requestUserInfo("Bearer");
+	}
 	if (userInfo.error || !userInfo.data) {
 		return null;
 	}
