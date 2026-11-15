@@ -5,6 +5,7 @@ import {
 } from "@better-auth/oauth-provider";
 import {
 	createOAuthEndpoint,
+	getAuthEndpointUrl,
 	parseClientMetadata,
 	parseScopes,
 	resolveResourcePolicy,
@@ -249,7 +250,7 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 				},
 			});
 
-			const url = new URL(`${ctx.context.baseURL}/oauth2/authorize`);
+			const url = new URL(getAuthEndpointUrl(ctx, "/oauth2/authorize"));
 			url.searchParams.set(APPROVAL_PARAMETER, request.id);
 			// The async wrapper turns a synchronous throw into a logged failure too,
 			// so the client always receives its auth_req_id.
