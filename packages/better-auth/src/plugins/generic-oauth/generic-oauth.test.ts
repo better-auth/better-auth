@@ -4618,6 +4618,23 @@ describe("oauth2", async () => {
 			expect(await registeredIssuer({ discoveryUrl })).toBeUndefined();
 		});
 
+		it("skips a provider whose well-known discovery document has no issuer", async () => {
+			const discoveryUrl = "https://idp.test/.well-known/openid-configuration";
+			serveDiscovery(discoveryUrl);
+
+			expect(await registeredIssuer({ discoveryUrl })).toBeUndefined();
+		});
+
+		it("accepts an RFC 8414 well-known URL with a trailing slash", async () => {
+			const discoveryUrl =
+				"https://idp.test/.well-known/oauth-authorization-server/tenant-a/";
+			serveDiscovery(discoveryUrl, "https://idp.test/tenant-a");
+
+			expect(await registeredIssuer({ discoveryUrl })).toBe(
+				"https://idp.test/tenant-a",
+			);
+		});
+
 		it("skips a provider whose discovered issuer differs from the discovery URL outside its origin", async () => {
 			const discoveryUrl = "https://idp.test/.well-known/openid-configuration";
 			serveDiscovery(discoveryUrl, "https://attacker@idp.test");

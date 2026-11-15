@@ -120,13 +120,15 @@ const WELL_KNOWN_DOCUMENTS = [
 function issuersOfDiscoveryUrl(discoveryUrl: string): string[] | undefined {
 	const { origin, pathname } = new URL(discoveryUrl);
 	const issuers: string[] = [];
+	const add = (path: string) =>
+		issuers.push(`${origin}${path.endsWith("/") ? path.slice(0, -1) : path}`);
 	for (const document of WELL_KNOWN_DOCUMENTS) {
 		const wellKnown = `/.well-known/${document}`;
 		if (pathname.endsWith(wellKnown)) {
-			issuers.push(`${origin}${pathname.slice(0, -wellKnown.length)}`);
+			add(pathname.slice(0, -wellKnown.length));
 		}
 		if (pathname.startsWith(`${wellKnown}/`)) {
-			issuers.push(`${origin}${pathname.slice(wellKnown.length)}`);
+			add(pathname.slice(wellKnown.length));
 		}
 	}
 	return issuers.length > 0 ? issuers : undefined;
@@ -141,6 +143,9 @@ function checkDiscoveredIssuer(
 	discoveryUrl: string,
 	discoveredIssuer: string | undefined,
 ): string | undefined {
+	if (discoveredIssuer === undefined) {
+		return "the discovery document has no issuer, so it cannot be checked. Configure authorizationUrl, tokenUrl, and userInfoUrl instead of discoveryUrl.";
+	}
 	if (config.issuer) {
 		return discoveredIssuer === config.issuer
 			? undefined
@@ -150,7 +155,6 @@ function checkDiscoveredIssuer(
 	if (!expected) {
 		return `discoveryUrl "${discoveryUrl}" is not a well-known URL, so its issuer cannot be checked. Set issuer to the issuer identifier the provider documents.`;
 	}
-	if (discoveredIssuer === undefined) return undefined;
 	// Issuer identifiers compare as exact strings, apart from the terminating `/`.
 	const matches = expected.some(
 		(issuer) =>
