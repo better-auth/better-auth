@@ -951,6 +951,14 @@ export interface OAuthClaimExtensionInput {
 	resources?: string[];
 	/** Parsed client metadata, as returned by `parseClientMetadata`. */
 	metadata?: Record<string, unknown>;
+	/**
+	 * Identifies one authorization: the redemption of one authorization code,
+	 * or a grant that issues a refresh token. It stays the same across refresh
+	 * token rotation, so it can key per-authorization state that two sign-ins
+	 * under the same consent (and `referenceId`) must not share. Undefined for
+	 * an issuance with neither, such as client credentials.
+	 */
+	grantId?: string;
 }
 
 export interface OAuthUserInfoExtensionInput {
@@ -965,6 +973,13 @@ export interface OAuthUserInfoExtensionInput {
 	 * authorization request parameter.
 	 */
 	requestedClaims: string[];
+	/**
+	 * The grant ID of the access token presented to UserInfo, as in
+	 * {@link OAuthClaimExtensionInput.grantId}. Undefined for a JWT access
+	 * token unless `revocableJwtAccessTokens` is on, because only then does the
+	 * token carry its grant.
+	 */
+	grantId?: string;
 }
 
 /**
@@ -2201,6 +2216,11 @@ export interface OAuthOptions<
 		 * authorization request parameter.
 		 */
 		requestedClaims: string[];
+		/**
+		 * The grant ID of the presented access token. Undefined for a JWT
+		 * access token unless `revocableJwtAccessTokens` is on.
+		 */
+		grantId?: string;
 	}) => Awaitable<Record<string, any>>;
 	/**
 	 * Asserts the `acr` and `amr` ID token claims for each authorization
@@ -2233,6 +2253,12 @@ export interface OAuthOptions<
 		scopes: Scopes;
 		/** oAuthClient metadata */
 		metadata?: Record<string, any>;
+		/**
+		 * Identifies this authorization, and stays the same across refresh
+		 * token rotation. Undefined for an issuance with no authorization code
+		 * and no refresh token, such as client credentials.
+		 */
+		grantId?: string;
 	}) => Awaitable<Record<string, any>>;
 	/**
 	 * Custom claims attached to access tokens.
@@ -2258,6 +2284,12 @@ export interface OAuthOptions<
 		resources?: string[];
 		/** oAuthClient metadata */
 		metadata?: Record<string, any>;
+		/**
+		 * Identifies this authorization, and stays the same across refresh
+		 * token rotation. Undefined for an issuance with no authorization code
+		 * and no refresh token, such as client credentials.
+		 */
+		grantId?: string;
 	}) => Awaitable<Record<string, any>>;
 	/**
 	 * Custom fields to include in the token response body.
@@ -2291,6 +2323,12 @@ export interface OAuthOptions<
 		 * `issueAuthorizationCode`.
 		 */
 		verificationValue?: VerificationValue;
+		/**
+		 * Identifies this authorization, and stays the same across refresh
+		 * token rotation. Undefined for an issuance with no authorization code
+		 * and no refresh token, such as client credentials.
+		 */
+		grantId?: string;
 	}) => Awaitable<Record<string, unknown>>;
 	/**
 	 * Overrides values in the /.well-known/openid-configuration and

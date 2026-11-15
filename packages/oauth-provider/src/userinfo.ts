@@ -86,13 +86,16 @@ export async function userInfoEndpoint(
 	const { authorization } = getUserInfoAccessToken(ctx);
 	// OIDC Core §5.3.3 reports UserInfo errors as RFC 6750 §3.1 does: a token
 	// without `openid` gets 403 `insufficient_scope`.
-	const { payload: jwt, requestedUserInfoClaims: requestedClaims } =
-		await verifyResourceRequest(
-			ctx,
-			opts,
-			{ scopes: ["openid"] },
-			authorization ?? null,
-		);
+	const {
+		payload: jwt,
+		requestedUserInfoClaims: requestedClaims,
+		grantId,
+	} = await verifyResourceRequest(
+		ctx,
+		opts,
+		{ scopes: ["openid"] },
+		authorization ?? null,
+	);
 
 	const scopes = (jwt.scope as string | undefined)?.split(" ");
 
@@ -134,6 +137,7 @@ export async function userInfoEndpoint(
 				jwt,
 				client: client ?? undefined,
 				requestedClaims,
+				grantId,
 			})
 		: {};
 	const additionalInfoUserClaims =
@@ -143,6 +147,7 @@ export async function userInfoEndpoint(
 					scopes,
 					jwt,
 					requestedClaims,
+					grantId,
 				})
 			: {};
 	return {

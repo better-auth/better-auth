@@ -513,7 +513,7 @@ On the request that issues the code with [`issueAuthorizationCode`](/docs/plugin
 
 ## Custom claims
 
-To add claims to access tokens, set `customAccessTokenClaims`. It receives `user`, `scopes`, `referenceId`, `resources`, and the client's `metadata`. It returns an object of claims to add. Use namespaced claim names, and see [RFC 9068 §2.2](https://datatracker.ietf.org/doc/html/rfc9068#section-2.2) for the claims the provider already sets. To stop a token from being issued, for example when the user has left the organization, throw from the callback.
+To add claims to access tokens, set `customAccessTokenClaims`. It receives `user`, `scopes`, `referenceId`, `resources`, the client's `metadata`, and the [`grantId`](#per-authorization-grant-id) when the issuance has one. It returns an object of claims to add. Use namespaced claim names, and see [RFC 9068 §2.2](https://datatracker.ietf.org/doc/html/rfc9068#section-2.2) for the claims the provider already sets. To stop a token from being issued, for example when the user has left the organization, throw from the callback.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -528,7 +528,7 @@ For ID token and UserInfo claims, see [OpenID Connect](/docs/plugins/oauth-provi
 
 ### Client-specific access token claims
 
-`customAccessTokenClaims` receives only the client's `metadata`. To base a claim on the full client record, add an `extensions[].claims.accessToken` contributor. It receives the full `client` record, `user`, `scopes`, `referenceId`, `resources`, and the client's `metadata`. When a JWT access token is minted, it also receives `grantType`, and `sessionId` for a session-backed grant. It returns an object of claims to add:
+`customAccessTokenClaims` receives only the client's `metadata`. To base a claim on the full client record, add an `extensions[].claims.accessToken` contributor. It receives the full `client` record, `user`, `scopes`, `referenceId`, `resources`, `grantId`, and the client's `metadata`. When a JWT access token is minted, it also receives `grantType`, and `sessionId` for a session-backed grant. It returns an object of claims to add:
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -551,9 +551,31 @@ When `postLogin.consentReferenceId` returns a consent reference, `customAccessTo
 
 [Token exchange](#keep-the-organization-the-user-approved) uses the claim to keep the reference on exchanged tokens. Resource servers can read it too, but a claim you derive in `customAccessTokenClaims` keeps your own name and shape.
 
+### Per-authorization grant ID
+
+A user who signs in to the same client twice under one stored consent gets the same `referenceId` both times. To keep state for one authorization, such as data you release only once, key it on `grantId` instead. Every claim callback and `customTokenResponseFields` receives it.
+
+`grantId` identifies one authorization:
+
+* Each authorization code gets its own `grantId`, so two sign-ins under one consent get different values.
+* A refresh keeps the `grantId` of the authorization it came from, through every rotation.
+* Any other grant that issues a refresh token, such as a device code with `offline_access`, starts a new `grantId`.
+* An issuance with no authorization code and no refresh token has none, such as client credentials. The callbacks then receive `undefined`.
+
+```ts title="auth.ts"
+oauthProvider({
+  customAccessTokenClaims: async ({ grantId }) => {
+    const release = grantId ? await findIdentityRelease(grantId) : null; // your own lookup
+    return release ? { "https://example.com/verified": release.level } : {};
+  },
+})
+```
+
+Introspection of an opaque access token passes the same `grantId` that issuance did, so the claims it re-derives match. A JWT access token carries the value as the `grant_id` claim only when `revocableJwtAccessTokens` is on. Without that option, UserInfo cannot tell which grant a JWT access token came from, and `customUserInfoClaims` receives no `grantId` for it.
+
 ### Custom token response fields
 
-To add fields to the token endpoint's JSON response, set `customTokenResponseFields`. It receives `grantType`, `user`, `scopes`, and the client's `metadata`. For the `authorization_code` grant, it also receives `verificationValue`, which holds the original authorization request (`query`), the consent `referenceId`, and the `sessionId`. For a code that a plugin endpoint issued, `verificationValue` also holds the endpoint's [`serverContext`](/docs/plugins/oauth-provider/sign-in-flow#carry-your-own-state-to-the-token-request). It returns an object of fields to add. The fields go in the response, not in the token itself. The callback cannot override standard fields such as `access_token` or `scope`. It runs before any token is created.
+To add fields to the token endpoint's JSON response, set `customTokenResponseFields`. It receives `grantType`, `user`, `scopes`, the client's `metadata`, and the [`grantId`](#per-authorization-grant-id) when the issuance has one. For the `authorization_code` grant, it also receives `verificationValue`, which holds the original authorization request (`query`), the consent `referenceId`, and the `sessionId`. For a code that a plugin endpoint issued, `verificationValue` also holds the endpoint's [`serverContext`](/docs/plugins/oauth-provider/sign-in-flow#carry-your-own-state-to-the-token-request). It returns an object of fields to add. The fields go in the response, not in the token itself. The callback cannot override standard fields such as `access_token` or `scope`. It runs before any token is created.
 
 ```ts title="auth.ts"
 oauthProvider({
