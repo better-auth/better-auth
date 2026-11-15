@@ -8,7 +8,6 @@ import {
 import type { User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
-import { decodeJwt } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
 import { exposeChallengeHeader } from "./dpop";
 import { buildResourceServerChallenge } from "./resource-challenge";
@@ -521,13 +520,18 @@ export function getLocalIntrospection(
 		headers: request?.headers,
 	} as GenericEndpointContext;
 	return async (token: string): Promise<JWTPayload> => {
-		const payload = await validateAccessToken(ctx, opts, token);
+		const found = await findAccessToken(ctx, opts, token);
+		if (!found) return inactiveAccessToken().payload;
+		// Validation restores user IDs in the payload it is given, so keep the
+		// subjects the JWT carries first.
+		const carried: Record<string, unknown> | undefined =
+			found.type === "jwt" ? structuredClone(found.payload) : undefined;
+		const { payload } = await validateFoundAccessToken(ctx, opts, found);
 		if (options?.subject !== "token" || !payload.active) return payload;
-		// An active three-segment token passed the JWT path, so its signed
-		// subjects are the ones it carries, whether they name a user, a pairwise
-		// subject, or a client.
-		if (token.split(".").length === 3) {
-			const carried: Record<string, unknown> = decodeJwt(token);
+		// A verified JWT's subjects are the ones it carries, whether they name a
+		// user, a pairwise subject, or a client. A custom opaque token can also
+		// have three segments, so branch on the lookup, not on the token's shape.
+		if (carried) {
 			const subjects: Record<string, unknown> = { ...payload };
 			for (const claim of ["sub", "act", "may_act"]) {
 				if (claim in carried) subjects[claim] = carried[claim];
