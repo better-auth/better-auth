@@ -203,30 +203,54 @@ export async function loadPushedAuthorizationRequest(
 	if (!identifier) return { status: "not_found" };
 	const { internalAdapter } = ctx.context;
 	const loadedIdentifier = getLoadedIdentifier(identifier);
-	const loaded = await internalAdapter.findVerificationValue(loadedIdentifier);
-	if (loaded && new Date(loaded.expiresAt).getTime() > Date.now()) {
+	const findLoaded = async (): Promise<
+		PushedAuthorizationRequestLookup | undefined
+	> => {
+		const loaded =
+			await internalAdapter.findVerificationValue(loadedIdentifier);
+		if (!loaded || new Date(loaded.expiresAt).getTime() <= Date.now()) {
+			return undefined;
+		}
 		const stored: StoredPushedAuthorizationRequest = JSON.parse(loaded.value);
 		if (stored.clientId !== clientId) {
 			await internalAdapter.deleteVerificationByIdentifier(loadedIdentifier);
 			return { status: "invalid" };
 		}
 		return { status: "found", query: stored.query };
-	}
+	};
+	const earlier = await findLoaded();
+	if (earlier) return earlier;
 	// Consuming the pushed value makes exactly one first load create the
 	// loaded value. Updating the value in place could write it back after code
 	// issuance consumed it, letting it issue a second code.
 	const pushed = await internalAdapter.consumeVerificationValue(identifier);
-	if (!pushed) return { status: "not_found" };
+	if (!pushed) {
+		// A concurrent first load may have moved the request in the meantime.
+		return (await findLoaded()) ?? { status: "not_found" };
+	}
 	const stored: StoredPushedAuthorizationRequest = JSON.parse(pushed.value);
 	if (stored.clientId !== clientId) return { status: "invalid" };
 	const now = Date.now();
-	await internalAdapter.createVerificationValue({
-		identifier: loadedIdentifier,
-		value: pushed.value,
-		createdAt: new Date(now),
-		updatedAt: new Date(now),
-		expiresAt: new Date(now + getSignedQueryExpiresIn(opts) * 1000),
-	});
+	try {
+		await internalAdapter.createVerificationValue({
+			identifier: loadedIdentifier,
+			value: pushed.value,
+			createdAt: new Date(now),
+			updatedAt: new Date(now),
+			expiresAt: new Date(now + getSignedQueryExpiresIn(opts) * 1000),
+		});
+	} catch (error) {
+		// The loaded value does not exist, so restoring the pushed value cannot
+		// let the request issue a second code.
+		await internalAdapter.createVerificationValue({
+			identifier,
+			value: pushed.value,
+			createdAt: new Date(pushed.createdAt),
+			updatedAt: new Date(now),
+			expiresAt: new Date(pushed.expiresAt),
+		});
+		throw error;
+	}
 	return { status: "found", query: stored.query };
 }
 

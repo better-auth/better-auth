@@ -185,8 +185,13 @@ describe("pushed authorization requests in secondary storage", async () => {
 	const store = new Map<string, string>();
 	// Holds the next write of a pushed request until `release` runs, so a
 	// second visit can finish in between.
-	let held: { reached: () => void; release: Promise<void> } | undefined;
+	let held:
+		| { reached: () => void; release: Promise<void>; written?: () => void }
+		| undefined;
+	// Holds a consume that finds no pushed request until the held write lands.
+	let lostConsume: { reached: () => void; wait: Promise<void> } | undefined;
 	let failNextCodeWrite = false;
+	let failNextLoadedWrite = false;
 	const { createClient, authorizationParams, pushRequest, authorize } =
 		await setup(
 			{ pushedAuthorizationRequests: { enabled: true } },
@@ -199,6 +204,10 @@ describe("pushed authorization requests in secondary storage", async () => {
 							failNextCodeWrite = false;
 							throw new Error("storage unavailable");
 						}
+						if (failNextLoadedWrite && key.endsWith(":loaded")) {
+							failNextLoadedWrite = false;
+							throw new Error("storage unavailable");
+						}
 						const hold = key.includes("pushed_authorization_request")
 							? held
 							: undefined;
@@ -208,13 +217,23 @@ describe("pushed authorization requests in secondary storage", async () => {
 							await hold.release;
 						}
 						store.set(key, value);
+						hold?.written?.();
 					},
 					delete: (key) => {
 						store.delete(key);
 					},
-					getAndDelete(key) {
+					async getAndDelete(key) {
 						const value = store.get(key) ?? null;
 						store.delete(key);
+						const waiting =
+							value === null && key.includes("pushed_authorization_request")
+								? lostConsume
+								: undefined;
+						if (waiting) {
+							lostConsume = undefined;
+							waiting.reached();
+							await waiting.wait;
+						}
 						return value;
 					},
 					increment(key) {
@@ -257,6 +276,70 @@ describe("pushed authorization requests in secondary storage", async () => {
 
 		const codes = results.filter((url) => url.searchParams.get("code"));
 		expect(codes).toHaveLength(1);
+	});
+
+	it("loads the request for a first visit that overlaps another", async () => {
+		const { params } = await authorizationParams(client.client_id);
+		const pushed = await pushRequest({
+			...params,
+			client_id: client.client_id,
+			client_secret: client.client_secret!,
+		});
+		const visit = () =>
+			authorize(
+				{
+					client_id: client.client_id,
+					request_uri: pushed.body.request_uri as string,
+				},
+				new Headers(),
+			);
+
+		let release!: () => void;
+		let written!: () => void;
+		const firstWrote = new Promise<void>((resolve) => {
+			written = resolve;
+		});
+		const firstHeld = new Promise<void>((resolve) => {
+			held = {
+				reached: resolve,
+				release: new Promise((done) => {
+					release = done;
+				}),
+				written,
+			};
+		});
+		const secondLost = new Promise<void>((resolve) => {
+			lostConsume = { reached: resolve, wait: firstWrote };
+		});
+		const first = visit();
+		await firstHeld;
+		const second = visit();
+		await secondLost;
+		release();
+
+		for (const location of await Promise.all([first, second])) {
+			expect(location.pathname).toBe("/login");
+		}
+	});
+
+	it("keeps the request_uri when its first visit fails to store it", async () => {
+		const { params } = await authorizationParams(client.client_id);
+		const pushed = await pushRequest({
+			...params,
+			client_id: client.client_id,
+			client_secret: client.client_secret!,
+		});
+		const visit = () =>
+			authorize({
+				client_id: client.client_id,
+				request_uri: pushed.body.request_uri as string,
+			});
+
+		failNextLoadedWrite = true;
+		const failed = await visit();
+		expect(failed.searchParams.get("code")).toBeNull();
+		const retried = await visit();
+		expect(retried.searchParams.get("code")).toEqual(expect.any(String));
 	});
 
 	it("keeps the request_uri when storing the code fails", async () => {
