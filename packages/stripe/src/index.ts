@@ -1,4 +1,5 @@
 import { APIError } from "@better-auth/core/error";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type { BetterAuthPlugin, User } from "better-auth";
 import type { Organization } from "better-auth/plugins/organization";
 import { defu } from "defu";
@@ -159,7 +160,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							}
 						}
 					} catch (error: any) {
-						if (error instanceof APIError) {
+						if (isAPIError(error)) {
 							throw error;
 						}
 						ctx.logger.error(

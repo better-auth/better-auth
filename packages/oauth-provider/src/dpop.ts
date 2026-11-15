@@ -15,6 +15,7 @@ import {
 	verifyDpopProof,
 } from "better-auth/oauth2";
 import type { OAuthOptions, Scope } from "./types";
+import { getAuthEndpointUrl } from "./utils";
 
 export function getDpopProofJwt(
 	ctx: Pick<GenericEndpointContext, "headers">,
@@ -33,11 +34,7 @@ export function getEndpointUrl(
 	ctx: Pick<GenericEndpointContext, "context" | "request">,
 	path: string,
 ): string {
-	const { baseURL } = ctx.context;
-	let end = baseURL.length;
-	// A loop, not `/\/+$/`, which backtracks quadratically on runs of slashes.
-	while (end > 0 && baseURL[end - 1] === "/") end--;
-	const base = baseURL.slice(0, end);
+	const base = getAuthEndpointUrl(ctx, "");
 	// `baseURL` stays empty when nothing configures it and no request set it.
 	if (!ctx.request || !base) return `${base}${path}`;
 	const basePath = new URL(base).pathname.replace(/\/$/, "");
@@ -96,6 +93,31 @@ export function withExposedHeaders(
 		}
 	}
 	return names.join(", ");
+}
+
+/**
+ * The exposed-header list with `WWW-Authenticate` added. Before hooks write to
+ * the dispatch's `ctx.context.responseHeaders`, which the endpoint's own
+ * `ctx.responseHeaders` does not include, and an error's header replaces the
+ * value they accumulated, so both lists are kept here.
+ */
+export function exposeChallengeHeader(
+	ctx: GenericEndpointContext,
+	challengeExposed?: string | null,
+) {
+	const scoped = ctx as GenericEndpointContext & {
+		context: GenericEndpointContext["context"] & { responseHeaders?: Headers };
+	};
+	const names = [
+		scoped.context.responseHeaders?.get("access-control-expose-headers"),
+		ctx.responseHeaders?.get("access-control-expose-headers"),
+		challengeExposed,
+	].flatMap((value) => value?.split(",") ?? []);
+	return withExposedHeaders(
+		undefined,
+		...names.map((name) => name.trim()).filter(Boolean),
+		"WWW-Authenticate",
+	);
 }
 
 /**
@@ -162,7 +184,10 @@ export async function verifyRequestDpopProof(
 		method: string;
 		url: string;
 		expectedJkt?: string;
-		/** Defaults to the database-backed store. */
+		/**
+		 * Defaults to the auth instance's store: secondary storage when it is
+		 * configured and `verification.storeInDatabase` is off, else the database.
+		 */
 		replayStore?: DpopReplayStore;
 	},
 ): Promise<VerifiedDpopProof> {
@@ -174,8 +199,7 @@ export async function verifyRequestDpopProof(
 			...proofParams,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore:
-				replayStore ?? createDpopReplayStore(ctx.context.internalAdapter),
+			replayStore: replayStore ?? createDpopReplayStore(ctx.context),
 			nonce,
 			// The time the request arrived, which the token endpoint's nonce check
 			// also used, not the time a grant reaches issuance.
@@ -201,7 +225,7 @@ export async function verifyRequestDpopProof(
 export async function verifyEndpointDpopProof(
 	ctx: GenericEndpointContext,
 	opts: Pick<OAuthOptions<Scope[]>, "dpop">,
-	params?: { required?: boolean },
+	params?: { required?: boolean; expectedJkt?: string },
 ): Promise<VerifiedDpopProof | undefined> {
 	const proofJwt = getDpopProofJwt(ctx);
 	if (!proofJwt) {
@@ -219,6 +243,7 @@ export async function verifyEndpointDpopProof(
 		proofJwt,
 		method: ctx.request.method,
 		url: getEndpointUrl(ctx, ctx.path),
+		expectedJkt: params?.expectedJkt,
 	});
 }
 

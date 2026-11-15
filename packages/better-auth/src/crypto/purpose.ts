@@ -3,16 +3,10 @@ import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 
-export type EncryptionPurpose =
-	| "oauth-state-cookie"
-	| "oauth-proxy-state"
-	| "oauth-proxy-package"
-	| "oauth-proxy-profile"
-	| "oauth-link-session-token";
-
+// Keys for released purposes depend on this exact salt, whatever the purpose.
 const salt = utf8ToBytes("better-auth:oauth-encryption:v1");
 
-function deriveSecret(secret: string, purpose: EncryptionPurpose): string {
+function deriveSecret(secret: string, purpose: string): string {
 	return bytesToHex(
 		hkdf(
 			sha256,
@@ -24,10 +18,19 @@ function deriveSecret(secret: string, purpose: EncryptionPurpose): string {
 	);
 }
 
-/** Derive an isolated key for one OAuth ciphertext purpose, retaining rotation versions. */
-export function derivePurposeKey(
+/**
+ * Derives an encryption key for one purpose from the Better Auth secret, so a
+ * ciphertext made for one purpose does not decrypt as another. Pass the result
+ * as `key` to `symmetricEncrypt` and `symmetricDecrypt`. A versioned secret
+ * keeps each version, so ciphertexts made before a rotation still decrypt.
+ *
+ * @param secret - The Better Auth secret, usually `ctx.context.secretConfig`.
+ * @param purpose - A label unique to what the key encrypts, such as
+ * `"my-plugin:session-hint"`.
+ */
+export function deriveEncryptionKey(
 	secret: string | SecretConfig,
-	purpose: EncryptionPurpose,
+	purpose: string,
 ): string | SecretConfig {
 	if (typeof secret === "string") {
 		return deriveSecret(secret, purpose);

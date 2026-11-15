@@ -1,9 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { defineRequestState, hasRequestState } from "@better-auth/core/context";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
 import { INSECURE_REDIRECT_URI_MESSAGE } from "@better-auth/core/utils/redirect-uri";
 import { appendQueryParams } from "@better-auth/core/utils/url";
-import { getSessionFromCtx } from "better-auth/api";
+import { getSessionFromCtx, isAPIError } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import { APIError } from "better-call";
 import {
@@ -17,10 +18,12 @@ import {
 	isValidOidcClaimsRequest,
 } from "./claims-request";
 import { getExtensionInteractionRequest } from "./extensions";
+import { oauthAuthorizationServerMetadata } from "./metadata";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { mapIssuesToOAuthError } from "./oauth-endpoint";
 import {
+	authenticateAuthorizationRequest,
 	consumePushedAuthorizationRequest,
 	isPushedAuthorizationRequestEnabled,
 } from "./par";
@@ -82,6 +85,23 @@ export type OAuthRedirectResult = {
 	redirect: true;
 	url: string;
 };
+
+const sessionsCreatedInRequest = defineRequestState(() => new Set<string>());
+
+/**
+ * Records a session created during the current request. Such a session is a
+ * sign-in that happened after the authorization request arrived, which is what
+ * `prompt=login` and `max_age` ask for (OIDC Core §3.1.2.1).
+ */
+export async function recordSessionCreatedInRequest(sessionId: string) {
+	if (!(await hasRequestState())) return;
+	(await sessionsCreatedInRequest.get()).add(sessionId);
+}
+
+async function wasSessionCreatedInRequest(sessionId: string) {
+	if (!(await hasRequestState())) return false;
+	return (await sessionsCreatedInRequest.get()).has(sessionId);
+}
 
 function removeMaxAgeFromAuthorizationQuery<
 	Query extends { max_age?: number | undefined },
@@ -207,7 +227,7 @@ export function getAPIErrorURL(
 	error: unknown,
 	errorPage?: string,
 ) {
-	if (!(error instanceof APIError)) throw error;
+	if (!isAPIError(error)) throw error;
 	const body = error.body as
 		| { error?: OAuthErrorCode; error_description?: string }
 		| undefined;
@@ -840,6 +860,20 @@ async function validateAuthorizationRequest(
 			"server",
 		);
 	}
+	// RFC 9396 §5: once discovery advertises types, the parameter is recognized
+	// and must not be ignored, but only extension grants such as CIBA issue
+	// authorization details. Otherwise RFC 6749 §3.1 has it ignored.
+	if (
+		"authorization_details" in query &&
+		oauthAuthorizationServerMetadata(ctx, opts)
+			.authorization_details_types_supported?.length
+	) {
+		return invalidAuthorizationRequest(
+			"invalid_authorization_details",
+			"authorization_details is not supported at the authorization endpoint",
+			"client",
+		);
+	}
 	// Check for invalid scopes if requested from query
 	let requestedScopes = query.scope?.split(" ").filter((s) => s);
 	if (requestedScopes) {
@@ -902,7 +936,7 @@ async function validateAuthorizationRequest(
 				requestedScopes,
 			});
 		} catch (err) {
-			if (err instanceof APIError) {
+			if (isAPIError(err)) {
 				const error =
 					(err.body as { error?: string })?.error ?? "invalid_target";
 				const description =
@@ -1159,7 +1193,7 @@ async function runAuthorizationInteraction(
 				query,
 			});
 		} catch (error) {
-			if (!(error instanceof APIError)) throw error;
+			if (!isAPIError(error)) throw error;
 			if (request.errorURL) return handleRedirect(ctx, request.errorURL(error));
 			const body = error.body as
 				| { error?: OAuthErrorCode; error_description?: string }
@@ -1250,30 +1284,27 @@ export async function issueAuthorizationCode(
 		);
 	}
 	const { session, user } = params.session;
-	// Untyped callers can still send these, so they are rejected at runtime too.
-	const requestQuery: StoredAuthorizationQuery = params.query;
-	if (requestQuery.request_uri !== undefined) {
-		tokenError(
-			"BAD_REQUEST",
-			"invalid_request",
+	// The client sends this request directly, as it would to /oauth2/par, so
+	// it authenticates the same way.
+	const { params: requestQuery, bindDpopProof } =
+		await authenticateAuthorizationRequest(
+			ctx,
+			opts,
+			{ ...params.query },
 			"pass the authorization request parameters, not a request_uri",
 		);
-	}
-	if (requestQuery.request !== undefined) {
-		tokenError(
-			"BAD_REQUEST",
-			"request_not_supported",
-			"request object not supported",
-		);
-	}
 	const validation = await parseAuthorizationRequest(ctx, opts, requestQuery, {
 		redirectUriOptional: true,
 	});
 	const { client } = validation;
 	let query: StoredAuthorizationQuery = validation.query;
+	await bindDpopProof(query);
 
 	const promptSet = query.prompt ? parsePrompt(query.prompt) : undefined;
-	if (promptSet && [...promptSet].some((prompt) => prompt !== "none")) {
+	if (
+		promptSet &&
+		[...promptSet].some((prompt) => prompt !== "none" && prompt !== "login")
+	) {
 		tokenError(
 			"BAD_REQUEST",
 			"interaction_required",
@@ -1281,13 +1312,25 @@ export async function issueAuthorizationCode(
 		);
 	}
 	const now = new Date();
-	if (
-		session.userId !== user.id ||
-		new Date(session.expiresAt) <= now ||
+	const requiresNewSignIn =
+		promptSet?.has("login") ||
 		(query.max_age !== undefined &&
-			!isWithinMaxAge(new Date(session.createdAt), query.max_age, now))
-	) {
+			!isWithinMaxAge(new Date(session.createdAt), query.max_age, now));
+	if (session.userId !== user.id || new Date(session.expiresAt) <= now) {
 		tokenError("BAD_REQUEST", "login_required", "authentication required");
+	}
+	if (requiresNewSignIn && !(await wasSessionCreatedInRequest(session.id))) {
+		tokenError(
+			"BAD_REQUEST",
+			"login_required",
+			"the request requires a new sign-in",
+		);
+	}
+	if (promptSet?.has("login")) {
+		// `login` cannot be combined with another accepted prompt, so the
+		// satisfied request has none left.
+		const { prompt: _prompt, ...queryWithoutPrompt } = query;
+		query = queryWithoutPrompt;
 	}
 	if (query.max_age !== undefined) {
 		query = removeMaxAgeFromAuthorizationQuery(query);

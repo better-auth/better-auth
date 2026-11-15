@@ -78,6 +78,24 @@
   - @better-auth/oauth-provider@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.25
+
+### Patch Changes
+
+- [#12587](https://github.com/better-auth/better-auth/pull/12587) [`75c0821`](https://github.com/better-auth/better-auth/commit/75c0821fa61c8ed0ea20f1027d5ad42d16e0daae) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - DPoP now works on deployments that keep verification values only in secondary storage. Before, every request with a DPoP proof to the OAuth provider, UserInfo, or `requireMcpAuth` failed with a 500 error unless `verification.storeInDatabase: true` was set. Used proofs are now recorded in secondary storage, so a replayed proof is still rejected across instances. `createDpopReplayStore` now also accepts the auth context, as `createDpopReplayStore(await auth.$context)`, and picks the same storage.
+
+- Updated dependencies [[`75c0821`](https://github.com/better-auth/better-auth/commit/75c0821fa61c8ed0ea20f1027d5ad42d16e0daae), [`ad07edd`](https://github.com/better-auth/better-auth/commit/ad07edda1bcb4b5e40368989aa70801839a5926b), [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697), [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697), [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697)]:
+  - @better-auth/oauth-provider@1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+- Updated dependencies [[`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f), [`d7f831c`](https://github.com/better-auth/better-auth/commit/d7f831cdd4ae3a5ebf591641d34a0b2561316aa8), [`87ede79`](https://github.com/better-auth/better-auth/commit/87ede7984d4df152ae3c0f5a58a2d08299b24281), [`3dcbc10`](https://github.com/better-auth/better-auth/commit/3dcbc1044cf8bf2d51bd73273581a980c5400591)]:
+  - @better-auth/oauth-provider@1.7.24
+
 ## 1.7.23
 
 ### Patch Changes

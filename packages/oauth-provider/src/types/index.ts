@@ -189,7 +189,9 @@ export interface ClientDiscovery {
 	 * Fields merged into `/.well-known/oauth-authorization-server` and
 	 * `/.well-known/openid-configuration` responses. Useful for advertising
 	 * RFC-registered discovery flags like
-	 * `client_id_metadata_document_supported`.
+	 * `client_id_metadata_document_supported`. When two client discoveries set
+	 * the same key, the later one wins. Extension `metadata()` cannot override
+	 * these fields, and the provider's own fields take precedence over them.
 	 */
 	discoveryMetadata?: Record<string, unknown>;
 }
@@ -259,7 +261,8 @@ export interface OAuthTokenIssueParams {
 	 *
 	 * Reserved RFC 9068 claim names stay owned by the authorization server and
 	 * are removed. The plugin's `customAccessTokenClaims` and a resource's
-	 * `customClaims` override a claim of the same name.
+	 * `customClaims` override a claim of the same name. Pass RFC 9396 details
+	 * as {@link OAuthTokenIssueParams.authorizationDetails} instead.
 	 */
 	accessTokenClaims?: Record<string, unknown>;
 	/**
@@ -292,6 +295,16 @@ export interface OAuthTokenIssueParams {
 	 */
 	act?: OAuthActorClaim;
 	/**
+	 * RFC 9396 authorization details the user approved for this grant. The
+	 * authorization server returns them as `authorization_details` in the token
+	 * response and in a JWT access token, or at introspection of an opaque one,
+	 * and no claim hook can replace them or add any. A detail with `locations`
+	 * is issued only to a token for one of those resources (RFC 9396 §9.1). An
+	 * issuance with details never includes a refresh token, because refreshed
+	 * tokens do not carry them. Passing details with `refreshToken` throws.
+	 */
+	authorizationDetails?: OAuthAuthorizationDetail[];
+	/**
 	 * Latest time the access token may expire. The authorization server issues
 	 * the earlier of this and its configured lifetime, so a grant derived from
 	 * another token (for example RFC 8693 token exchange) cannot outlive it.
@@ -299,6 +312,22 @@ export interface OAuthTokenIssueParams {
 	 * and ID tokens are not capped, so such a grant should not issue them.
 	 */
 	maxExpiresAt?: Date;
+}
+
+/**
+ * An RFC 9396 authorization detail: a `type`, the common fields, and any
+ * fields the type defines.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc9396.html#section-2
+ */
+export interface OAuthAuthorizationDetail {
+	type: string;
+	locations?: string[];
+	actions?: string[];
+	datatypes?: string[];
+	identifier?: string;
+	privileges?: string[];
+	[field: string]: unknown;
 }
 
 export interface OAuthTokenResponse {
@@ -336,13 +365,21 @@ export interface VerifyResourceRequestParams {
 export interface IssueAuthorizationCodeParams {
 	/**
 	 * The authorization request parameters, as `/oauth2/authorize` accepts
-	 * them. `redirect_uri` is optional: without it the code is only returned,
-	 * and the token request must omit `redirect_uri` too (RFC 6749 §4.1.3).
-	 * To bind the code to a DPoP key (RFC 9449 §10), set `dpop_jkt`, for
-	 * example from the `jkt` that `verifyDpopProof` returns. A `request_uri`
-	 * or `request` object is not accepted; pass the parameters themselves.
+	 * them, usually the request body. `redirect_uri` is optional: without it
+	 * the code is only returned, and the token request must omit
+	 * `redirect_uri` too (RFC 6749 §4.1.3). The client authenticates with the
+	 * HTTP request itself, its body or `Authorization` header, not with this
+	 * query. `client_id` may be left out; when present, it must match the
+	 * authenticated client, or the call fails with `invalid_client`. Client credentials in the query, such as the
+	 * `client_secret` of a forwarded body, are not stored. A `request_uri` or
+	 * `request` object is not accepted; pass the parameters themselves.
 	 */
-	query: Omit<StoredAuthorizationQuery, "request_uri" | "request">;
+	query: Omit<
+		StoredAuthorizationQuery,
+		"request_uri" | "request" | "client_id"
+	> & {
+		client_id?: string;
+	};
 	/** The signed-in user's session the code is issued for. */
 	session: {
 		session: Session & Record<string, unknown>;
@@ -414,15 +451,42 @@ export interface OAuthProviderApi {
 	 * `redirect_uri` when present, scopes, claims, resources, and PKCE. The code
 	 * is issued only when the client skips consent or the user's stored consent
 	 * covers the request. A step that would show a page fails instead:
-	 * `consent_required` without consent, `login_required` for an expired
-	 * session or an elapsed `max_age`, and `interaction_required` for a
-	 * `prompt` other than `none` or a `signup` or `postLogin` redirect, and
-	 * `access_denied` when the session cannot meet an essential `acr`. Errors
-	 * are HTTP 400 `APIError`s with these OAuth error codes, or with the codes
+	 * - `consent_required` without consent.
+	 * - `login_required` for an expired session, or for `prompt=login` or an
+	 *   elapsed `max_age` when the session was not created in this request.
+	 * - `interaction_required` for a `prompt` other than `none` or `login`, or
+	 *   a `signup` or `postLogin` redirect.
+	 * - `access_denied` when the session cannot meet an essential `acr`.
+	 *
+	 * Errors are HTTP 400 `APIError`s with these OAuth error codes, with
+	 * `invalid_client` when client authentication fails, or with the codes
 	 * `/oauth2/authorize` returns for an invalid client or request.
 	 *
+	 * The client sends this request directly, so it is handled as
+	 * `/oauth2/par` handles a push: a confidential client must authenticate on
+	 * the HTTP request with the credentials it uses at the token endpoint,
+	 * read from the request body or `Authorization` header, a public client is
+	 * identified by `client_id`, and a DPoP proof on the request binds the code
+	 * to its key (RFC 9449 §10). When `query` has a `dpop_jkt`, a proof from
+	 * another key fails with `invalid_dpop_proof` before its `jti` is used up.
+	 * With `dpop.nonce.required`, the nonce challenge runs before client
+	 * authentication, so a retry can resend a one-time client assertion. An
+	 * endpoint that accepts form-encoded bodies must set `cloneRequest: true`,
+	 * as for `authenticateClient`.
+	 *
+	 * A required PAR policy, from `pushedAuthorizationRequests.required` or the
+	 * client's `require_pushed_authorization_requests`, does not apply. It keeps
+	 * parameters out of the browser URL at `/oauth2/authorize`, and this method
+	 * receives them from the client directly. A `request_uri`, including one
+	 * from `/oauth2/par`, is rejected.
+	 *
 	 * Authenticating the user is the caller's responsibility: pass only a
-	 * session the user proved in this request or already holds.
+	 * session the user proved in this request or already holds. The code is
+	 * issued for that session's user; account selection does not run. A
+	 * session created in this request counts as the new sign-in that
+	 * `prompt=login` and `max_age` require (OIDC Core §3.1.2.1), so create one
+	 * only after checking the user's credentials. A session created inside a
+	 * database transaction counts only after the transaction commits.
 	 */
 	issueAuthorizationCode: (
 		params: IssueAuthorizationCodeParams,
@@ -478,8 +542,9 @@ export interface OAuthProviderApi {
 	 *
 	 * Call it before consuming a one-time credential, so the client's retry
 	 * with the nonce can still redeem it. Do not also call it on a request that
-	 * reaches `issueTokens` or `resolveConfirmation`: they verify the proof
-	 * themselves, and a second verification rejects its `jti` as replayed.
+	 * reaches `issueTokens`, `resolveConfirmation`, or `issueAuthorizationCode`:
+	 * they verify the proof themselves, and a second verification rejects its
+	 * `jti` as replayed.
 	 */
 	verifyDpopProof: {
 		(params: { required: true }): Promise<VerifiedDpopProof>;
@@ -529,10 +594,12 @@ export interface OAuthProviderApi {
 		clientId?: string,
 	) => Awaitable<JWTPayload>;
 	/**
-	 * Validates an access token for a protected resource and throws the OAuth
-	 * bearer challenge when the token is inactive or unknown. It checks the
-	 * token only: it does not verify a DPoP proof for a DPoP-bound token. A
-	 * protected endpoint should use `verifyResourceRequest` instead.
+	 * Requires an active bearer access token and throws the OAuth challenge when
+	 * the token is inactive or unknown. A DPoP-bound token fails with
+	 * `invalid_token`, because a token string alone cannot prove the client
+	 * holds its key. A protected endpoint should use `verifyResourceRequest`,
+	 * which accepts both. To read a token's claims whatever its binding, such
+	 * as a token-exchange subject token, use `validateAccessToken`.
 	 */
 	requireActiveAccessToken: (
 		token: string,
@@ -712,10 +779,11 @@ export interface OAuthUserInfoExtensionInput {
  *   registered is rejected at setup, since the second would otherwise be
  *   silently unreachable.
  * - Additive kinds (`metadata`, `claims`) never override authorization-server
- *   core; a key already owned by the provider is kept. When two extensions
- *   contribute the same metadata key as lists, the lists combine in
- *   registration order without duplicates; any other collision resolves to
- *   the first-registered extension, with a logged warning.
+ *   core; a metadata key the provider or a client discovery sets is kept, with
+ *   a logged warning. When two extensions contribute the same metadata key as
+ *   lists, the lists combine in registration order without duplicates; any
+ *   other collision resolves to the first-registered extension, with a logged
+ *   warning. Each metadata warning is logged once per provider.
  */
 export interface OAuthProviderExtension {
 	/**
@@ -735,7 +803,9 @@ export interface OAuthProviderExtension {
 	/**
 	 * Additional discovery metadata fields. Core fields (`issuer`,
 	 * `token_endpoint`, advertised grants and auth methods, ...) stay owned by
-	 * the provider; only absent keys are added. To advertise the claim names a
+	 * the provider, and so do keys a client discovery sets; only absent keys
+	 * are added. A contribution to a taken key logs a warning, except that two
+	 * extensions' lists under one key combine. To advertise the claim names a
 	 * claims contributor emits, set `advertisedMetadata.claims_supported`: the
 	 * provider owns `claims_supported` and does not infer it from contributors.
 	 */
@@ -2025,7 +2095,7 @@ export interface OAuthOptions<
 	/**
 	 * The `sub` of JWT access tokens issued to a user. `"pairwise"` gives
 	 * clients with `subject_type: "pairwise"` the same `sub` as their ID tokens,
-	 * and adds the user ID encrypted in a `ba_uid` claim so the provider can
+	 * and adds the user ID encrypted in a `ba_sub` claim so the provider can
 	 * still find the user. Requires `pairwiseSecret`.
 	 *
 	 * @default "user"

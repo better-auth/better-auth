@@ -51,6 +51,8 @@ type ActiveSessionReference = {
 	readonly expiresAt: number;
 };
 
+const VERIFICATION_CLEANUP_INTERVAL_MS = 60_000;
+
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -64,6 +66,7 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
+	let nextVerificationCleanupAt = 0;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	// With secondary storage, the database is the authoritative session store
 	// only when sessions are written to it and revoked rows are deleted.
@@ -292,16 +295,32 @@ export const createInternalAdapter = (
 
 	// Best-effort maintenance: a failed sweep must not fail the request it rides on.
 	// Deferred past the caller's transaction so its rows' after-delete hooks run
-	// here, inside the catch, not after the caller's commit.
-	async function deleteExpiredVerifications() {
+	// here, inside the catch, not after the caller's commit. Readers either
+	// check `expiresAt` or, like revocation markers, treat any row they find as
+	// revoked, which fails closed. So the sweep only bounds table growth.
+	async function deleteExpiredVerifications(found?: Verification | null) {
 		if (options.verification?.disableCleanup) return;
+		const now = Date.now();
+		let where: Where[];
+		if (now >= nextVerificationCleanupAt) {
+			nextVerificationCleanupAt = now + VERIFICATION_CLEANUP_INTERVAL_MS;
+			where = [{ field: "expiresAt", value: new Date(now), operator: "lt" }];
+		} else if (found && new Date(found.expiresAt).getTime() < now) {
+			// Not every reader checks `expiresAt`, so a lookup that finds an
+			// expired row deletes every expired row of that identifier. The
+			// delete runs after the caller's transaction commits, so only a
+			// lookup inside that transaction can still see the row. The
+			// throttled sweep only bounds table growth.
+			where = [
+				{ field: "identifier", value: found.identifier },
+				{ field: "expiresAt", value: new Date(now), operator: "lt" },
+			];
+		} else {
+			return;
+		}
 		await queueAfterTransactionHook(async () => {
 			try {
-				await deleteManyWithHooks(
-					[{ field: "expiresAt", value: new Date(), operator: "lt" }],
-					"verification",
-					undefined,
-				);
+				await deleteManyWithHooks(where, "verification", undefined);
 			} catch (error) {
 				logger.error("Failed to delete expired verification values", error);
 			}
@@ -1448,9 +1467,10 @@ export const createInternalAdapter = (
 				verification = await findByIdentifier(identifier);
 			}
 
-			await deleteExpiredVerifications();
+			const found = (verification[0] as Verification | undefined) ?? null;
+			await deleteExpiredVerifications(found);
 
-			return (verification[0] as Verification) || null;
+			return found;
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
 			const storageOption = getStorageOption(
