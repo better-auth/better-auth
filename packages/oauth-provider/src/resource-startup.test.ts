@@ -322,69 +322,74 @@ describe("resource seeding at startup", () => {
 		]);
 	});
 
-	it("with resourceSeedScope process, instances built per request seed once per config", async () => {
-		const database = createDatabase();
-		const reads: string[] = [];
-		const fault = {
-			current: ((operation) => {
-				if (operation === "findOne") reads.push(operation);
-			}) as ResourceFault | null,
-		};
-		// A new adapter object per boot, over one database, the way a runtime
-		// that builds Better Auth per request sees it.
-		const boot = (resources: string[]) => {
-			// The test harness signs up the same user on every boot.
-			for (const model of ["user", "account", "session"] as const) {
-				database[model].length = 0;
-			}
-			return bootWithResourceFault(fault, {
-				resources,
-				resourceSeedScope: "process",
-				shared: { database },
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12651
+	 */
+	describe("with resourceSeedScope process", () => {
+		it("instances built per request seed once per config", async () => {
+			const database = createDatabase();
+			const reads: string[] = [];
+			const fault = {
+				current: ((operation) => {
+					if (operation === "findOne") reads.push(operation);
+				}) as ResourceFault | null,
+			};
+			// A new adapter object per boot, over one database, the way a runtime
+			// that builds Better Auth per request sees it.
+			const boot = (resources: string[]) => {
+				// The test harness signs up the same user on every boot.
+				for (const model of ["user", "account", "session"] as const) {
+					database[model].length = 0;
+				}
+				return bootWithResourceFault(fault, {
+					resources,
+					resourceSeedScope: "process",
+					shared: { database },
+				});
+			};
+
+			await boot([resource]);
+			expect(reads).toHaveLength(1);
+			const { register } = await boot([resource]);
+			expect(reads).toHaveLength(1);
+
+			// Another config, like the same app on another origin, still seeds.
+			await boot(["https://other.example.com/mcp"]);
+			expect(reads).toHaveLength(2);
+			expect(database.oauthResource.map((row) => row.identifier)).toEqual([
+				resource,
+				"https://other.example.com/mcp",
+			]);
+
+			reads.length = 0;
+			await expect(register()).resolves.toMatchObject({
+				resources: [resource],
 			});
-		};
-
-		await boot([resource]);
-		expect(reads).toHaveLength(1);
-		const { register } = await boot([resource]);
-		expect(reads).toHaveLength(1);
-
-		// Another config, like the same app on another origin, still seeds.
-		await boot(["https://other.example.com/mcp"]);
-		expect(reads).toHaveLength(2);
-		expect(database.oauthResource.map((row) => row.identifier)).toEqual([
-			resource,
-			"https://other.example.com/mcp",
-		]);
-
-		reads.length = 0;
-		await expect(register()).resolves.toMatchObject({
-			resources: [resource],
+			// Only the lookup itself, not a seed.
+			expect(reads).toHaveLength(1);
 		});
-		// Only the lookup itself, not a seed.
-		expect(reads).toHaveLength(1);
-	});
 
-	it("with resourceSeedScope process, an entry one instance skipped is still seeded by another", async () => {
-		const database = createDatabase();
-		const fault = { current: null };
-		const boot = (identifierValidator?: (identifier: string) => boolean) => {
-			for (const model of ["user", "account", "session"] as const) {
-				database[model].length = 0;
-			}
-			return bootWithResourceFault(fault, {
-				resourceSeedScope: "process",
-				identifierValidator,
-				shared: { database },
-			});
-		};
+		it("an entry one instance skipped is still seeded by another", async () => {
+			const database = createDatabase();
+			const fault = { current: null };
+			const boot = (identifierValidator?: (identifier: string) => boolean) => {
+				for (const model of ["user", "account", "session"] as const) {
+					database[model].length = 0;
+				}
+				return bootWithResourceFault(fault, {
+					resourceSeedScope: "process",
+					identifierValidator,
+					shared: { database },
+				});
+			};
 
-		await boot(() => false);
-		expect(database.oauthResource).toEqual([]);
-		await boot();
-		expect(database.oauthResource.map((row) => row.identifier)).toEqual([
-			resource,
-		]);
+			await boot(() => false);
+			expect(database.oauthResource).toEqual([]);
+			await boot();
+			expect(database.oauthResource.map((row) => row.identifier)).toEqual([
+				resource,
+			]);
+		});
 	});
 
 	/**

@@ -867,6 +867,7 @@ function getSeededOptions(ctx: AuthContext): WeakSet<object> {
  * its seed writes, so instances built per request (each with its own adapter)
  * share the mark, an entry one instance's `identifierValidator` skipped is
  * still seeded by another, and a failed seed retries only what didn't finish.
+ * An entry the validator rejects is never marked, so each call checks it again.
  */
 let seededEntries = new Set<string>();
 
