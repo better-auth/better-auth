@@ -151,7 +151,13 @@ function createDatabaseStorageWrapper(
 		if (data) {
 			data.lastRequest = Number(data.lastRequest);
 		}
-		if (typeof data?.windowExpiresAt === "bigint") {
+		// node-postgres returns int8 columns as strings by default, the same
+		// reason "lastRequest" is normalized above: a string deadline would
+		// never satisfy the number comparisons in the guards below.
+		if (
+			typeof data?.windowExpiresAt === "bigint" ||
+			typeof data?.windowExpiresAt === "string"
+		) {
 			data.windowExpiresAt = Number(data.windowExpiresAt);
 		}
 		return data;

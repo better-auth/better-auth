@@ -644,6 +644,137 @@ describe("database rate-limit pruning with active long windows", async () => {
 			incrementOne.mockRestore();
 		}
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11519
+	 */
+	it("does not let a shorter window shorten an extended deadline when the columns arrive as strings", async () => {
+		const { auth: strAuth, db: strDb } = await getTestInstance(
+			{
+				rateLimit: {
+					enabled: true,
+					storage: "database",
+					window: 10,
+					max: 10,
+					customRules: {
+						"/get-session": (req) =>
+							req.headers.get("x-long") === "1"
+								? { window: 120, max: 10 }
+								: { window: 10, max: 10 },
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const strCtx = await strAuth.$context;
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(40_000_000);
+
+		// A row whose own window is open with budget left. The findMany mock
+		// below returns both timestamps as strings, the way node-postgres
+		// returns int8 columns by default.
+		const rowKey = createRateLimitKey("127.0.0.8", "/get-session");
+		const windowStart = Date.now() - 2_000;
+		await strDb.create({
+			model: "rateLimit",
+			data: {
+				key: rowKey,
+				count: 1,
+				lastRequest: windowStart,
+				windowExpiresAt: windowStart + 10_000,
+			},
+		});
+		const findMany = strCtx.adapter.findMany.bind(strCtx.adapter);
+		const findManySpy = vi
+			.spyOn(strCtx.adapter, "findMany")
+			.mockImplementation(async (args) => {
+				const rows = await findMany(args);
+				if (args.model !== "rateLimit") return rows;
+				return rows.map((row) => ({
+					...(row as RateLimit),
+					lastRequest: String((row as RateLimit).lastRequest),
+					windowExpiresAt:
+						(row as RateLimit).windowExpiresAt == null
+							? null
+							: String((row as RateLimit).windowExpiresAt),
+				})) as typeof rows;
+			});
+
+		// Same gated race as above, so both requests decide against the same
+		// string-shaped snapshot and the long window's write lands first.
+		const originalIncrementOne = strCtx.adapter.incrementOne.bind(
+			strCtx.adapter,
+		);
+		let incrementCalls = 0;
+		let strLongEntered!: () => void;
+		const strLongEnteredPromise = new Promise<void>((resolve) => {
+			strLongEntered = resolve;
+		});
+		let strShortEntered!: () => void;
+		const strShortEnteredPromise = new Promise<void>((resolve) => {
+			strShortEntered = resolve;
+		});
+		let releaseStrLong!: () => void;
+		const strLongGate = new Promise<void>((resolve) => {
+			releaseStrLong = resolve;
+		});
+		let releaseStrShort!: () => void;
+		const strShortGate = new Promise<void>((resolve) => {
+			releaseStrShort = resolve;
+		});
+		const incrementOne = vi
+			.spyOn(strCtx.adapter, "incrementOne")
+			.mockImplementation(async (args) => {
+				incrementCalls += 1;
+				if (incrementCalls === 1) {
+					strLongEntered();
+					await strLongGate;
+				} else if (incrementCalls === 2) {
+					strShortEntered();
+					await strShortGate;
+				}
+				return originalIncrementOne(args);
+			});
+
+		const getSession = (long?: boolean) =>
+			strAuth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: {
+						"x-forwarded-for": "127.0.0.8",
+						...(long ? { "x-long": "1" } : {}),
+					},
+				}),
+			);
+
+		try {
+			const longRequest = getSession(true);
+			await strLongEnteredPromise;
+			const shortRequest = getSession();
+			await strShortEnteredPromise;
+
+			releaseStrLong();
+			const long = await longRequest;
+			expect(long.status).toBe(200);
+
+			// The short request's decision saw the stored 10s deadline as a
+			// string; without converting it back to a number the write cannot
+			// compare-and-swap on it and falls through to the start-only guard,
+			// clobbering the extension.
+			releaseStrShort();
+			const short = await shortRequest;
+			expect(short.status).toBe(200);
+
+			const row = await strDb.findMany<RateLimit>({
+				model: "rateLimit",
+				where: [{ field: "key", value: rowKey }],
+			});
+			expect(Number(row[0]?.count)).toBe(3);
+			expect(Number(row[0]?.windowExpiresAt)).toBe(windowStart + 120_000);
+		} finally {
+			incrementOne.mockRestore();
+			findManySpy.mockRestore();
+		}
+	});
 });
 
 describe("database rate-limit rows without a stored deadline", async () => {
