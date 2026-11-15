@@ -148,9 +148,9 @@ These providers still sign for the token endpoint URL:
 
 * A generic OAuth provider configured without `discoveryUrl`, because it has no discovered issuer.
 * The `okta` and `microsoftEntraId` helpers. Okta and Microsoft Entra ID document only their token endpoint URL as the assertion audience.
-* OIDC SSO providers, unless you opt in as [SSO can sign client assertions for the issuer](#sso-can-sign-client-assertions-for-the-issuer) describes.
+* OIDC SSO providers, unless you opt in; see [SSO can sign client assertions for the issuer](#sso-can-sign-client-assertions-for-the-issuer).
 
-An assertion signed for the issuer now carries the JOSE header `typ: "client-authentication+jwt"`. Before, it carried `typ: "JWT"`. An assertion signed for the token endpoint URL still carries `typ: "JWT"`.
+An assertion signed for the issuer now carries the JOSE header `typ: "client-authentication+jwt"`. Before, it carried `typ: "JWT"`. An assertion signed for a token endpoint URL that differs from the issuer still carries `typ: "JWT"`.
 
 **What to do:** if a generic OAuth provider accepts only its token endpoint URL as the audience, set `audience: "token_endpoint"`:
 
@@ -508,7 +508,7 @@ Before, a SAML user without a `displayName`, `givenName`, or `surname` attribute
 
 ### SSO can sign client assertions for the issuer
 
-This applies if an OIDC SSO provider uses `tokenEndpointAuthentication: "private_key_jwt"` and signs in to a Better Auth 1.8 authorization server. By default, its client assertions are still signed for the provider's token endpoint URL with the JOSE header `typ: "JWT"`, as in 1.7.
+This applies if an OIDC SSO provider uses `tokenEndpointAuthentication: "private_key_jwt"` and signs in to a Better Auth 1.8 authorization server. By default, its client assertions are still signed for the provider's token endpoint URL. When that URL differs from the provider's `issuer`, they carry the JOSE header `typ: "JWT"`, as in 1.7.
 
 A Better Auth 1.8 authorization server accepts only its issuer as the audience by default. To sign in to one, set `clientAssertionAudience: "issuer"` in the provider's `oidcConfig`, through `registerSSOProvider` or `updateSSOProvider`. The assertions are then signed for the provider's registered `issuer`, as [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) asks, and carry `typ: "client-authentication+jwt"`.
 
