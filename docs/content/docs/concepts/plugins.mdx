@@ -647,8 +647,13 @@ const myPlugin = () => {
                     return ctx.json({ hint: null });
                 }
                 const key = deriveEncryptionKey(ctx.context.secretConfig, PURPOSE);
-                const hint = await symmetricDecrypt({ key, data: encrypted });
-                return ctx.json({ hint });
+                try {
+                    const hint = await symmetricDecrypt({ key, data: encrypted });
+                    return ctx.json({ hint });
+                } catch {
+                    // A tampered value, or one encrypted under a retired secret
+                    return ctx.json({ hint: null });
+                }
             }),
         }
     } satisfies BetterAuthPlugin
