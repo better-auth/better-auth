@@ -340,6 +340,63 @@ describe("first-party apps", async () => {
 			expect(response.json.error).toBe("invalid_client");
 		});
 
+		it("signs in a private_key_jwt client over two rounds", async () => {
+			const keys = await generateKeyPair("RS256", { extractable: true });
+			const keyClient = await createClient({
+				token_endpoint_auth_method: "private_key_jwt",
+				jwks: {
+					keys: [
+						{
+							...(await exportJWK(keys.publicKey)),
+							kid: "fpa-key",
+							alg: "RS256",
+							use: "sig",
+						},
+					],
+				},
+			});
+			const assertion = async () => {
+				const now = Math.floor(Date.now() / 1000);
+				return {
+					client_assertion_type:
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+					client_assertion: await new SignJWT({})
+						.setProtectedHeader({ alg: "RS256", kid: "fpa-key" })
+						.setIssuer(keyClient)
+						.setSubject(keyClient)
+						.setAudience(baseURL)
+						.setIssuedAt(now)
+						.setExpirationTime(now + 60)
+						.setJti(generateRandomString(16))
+						.sign(keys.privateKey),
+				};
+			};
+			const { totpSecret } = await createUser("assertion@example.com", {
+				totp: true,
+			});
+			const { body, verifier } = await startRequest(keyClient, {
+				login_hint: "assertion@example.com",
+				password,
+				...(await assertion()),
+			});
+			const first = await post(challengeURL, body);
+			expect(first.json.error).toBe("insufficient_authorization");
+			const signedIn = await post(challengeURL, {
+				auth_session: first.json.auth_session as string,
+				totp: await createOTP(totpSecret!).totp(),
+				...(await assertion()),
+			});
+			expect(signedIn.status).toBe(200);
+			const tokens = await post(tokenURL, {
+				grant_type: "authorization_code",
+				code: signedIn.json.authorization_code as string,
+				code_verifier: verifier,
+				...(await assertion()),
+			});
+			expect(tokens.status).toBe(200);
+			expect(tokens.json.auth_session).toBeTypeOf("string");
+		});
+
 		it("rejects an auth_session presented with another client_id", async () => {
 			const other = await createClient();
 			await createUser("swap@example.com", { totp: true });
@@ -391,6 +448,40 @@ describe("first-party apps", async () => {
 				totp: "000000",
 			});
 			expect(later.json.error).toBe("invalid_session");
+		});
+
+		it("binds the code to the DPoP key when the first request signs in", async () => {
+			await createUser("dpop-once@example.com");
+			const key = await createDpopKey();
+			const { body, verifier } = await startRequest(clientId, {
+				login_hint: "dpop-once@example.com",
+				password,
+			});
+			const signedIn = await post(challengeURL, body, { dpop: key });
+			expect(signedIn.status).toBe(200);
+			const code = signedIn.json.authorization_code as string;
+			const otherKey = await createDpopKey();
+			const wrongKey = await redeem(clientId, code, verifier, otherKey);
+			expect(wrongKey.json.error).toBe("invalid_dpop_proof");
+			const tokens = await redeem(clientId, code, verifier, key);
+			expect(tokens.status).toBe(200);
+			expect(tokens.json.token_type).toBe("DPoP");
+			expect(tokens.json.auth_session).toBeTypeOf("string");
+		});
+
+		it("rejects a DPoP proof on a handle that is not bound to a key", async () => {
+			await createUser("unbound@example.com", { totp: true });
+			const { body } = await startRequest(clientId, {
+				login_hint: "unbound@example.com",
+				password,
+			});
+			const first = await post(challengeURL, body);
+			const later = await post(
+				challengeURL,
+				{ auth_session: first.json.auth_session as string, totp: "000000" },
+				{ dpop: await createDpopKey() },
+			);
+			expect(later.json.error).toBe("invalid_dpop_proof");
 		});
 
 		it("binds the handle to the DPoP key of the first request", async () => {

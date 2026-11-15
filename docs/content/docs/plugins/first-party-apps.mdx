@@ -97,9 +97,9 @@ const app = await auth.api.adminCreateOAuthClient({
 });
 ```
 
-`first_party_app` is not a registration field. Dynamic client registration and client metadata documents drop it, so a client that registers itself can never opt in. Only code with admin access to your server can set it.
+`first_party_app` is not a registration field. Dynamic client registration and client metadata documents drop it, so a client that registers itself can never opt in. Only code with admin access to your server can set it. This matters because a first-party app receives the user's password: if a registrant could assert the field, any app on the internet could collect credentials through your server.
 
-Native apps cannot keep a secret, so they are usually public clients (`token_endpoint_auth_method: "none"`). A confidential client must send the same credentials it uses at the token endpoint with every request. Clients that authenticate with `private_key_jwt` or another assertion are not supported yet and get `unauthorized_client`.
+Native apps cannot keep a secret, so they are usually public clients (`token_endpoint_auth_method: "none"`). A confidential client must send the same credentials it uses at the token endpoint with every request, including a new `private_key_jwt` assertion each time. The server authenticates the client before it looks at the user's credentials.
 
 ## Sign in from the app
 
@@ -162,7 +162,7 @@ A user whose only second factor is a code the app cannot collect, such as an ema
 
 ### Bind the sign-in to a DPoP key
 
-To stop a stolen `auth_session` or code from working on another device, send a [DPoP](/docs/plugins/oauth-provider/tokens#dpop) proof with every request. The first proof binds the `auth_session` to its key. Every later request with that `auth_session` must carry a proof from the same key, or it fails with `invalid_dpop_proof`. The code is bound to the key too, so the token request must also prove it.
+To stop a stolen `auth_session` or code from working on another device, send a [DPoP](/docs/plugins/oauth-provider/tokens#dpop) proof with every request, starting with the first. The first proof binds the `auth_session` to its key. Every later request with that `auth_session` must carry a proof from the same key, or it fails with `invalid_dpop_proof` before the credentials are checked. The code is bound to the key too, so the token request must also prove it. An `auth_session` that started without a proof cannot be bound later, and a proof on it fails with `invalid_dpop_proof`.
 
 ## Credential guessing
 
@@ -241,41 +241,40 @@ An optional `stepUp` method handles a step-up the token endpoint asked for, from
 ## Limits
 
 * `redirect_to_web` never carries a `request_uri`. The app starts its browser flow with its own authorization request.
-* Clients that authenticate with `private_key_jwt` or another assertion cannot use the endpoint yet.
 * The password strategy supports TOTP as its second factor, not backup codes.
 
 ## Options
 
 <TypeTable
   type={{
-  strategies: {
-    description: "How users sign in. The first strategy whose `params` the request carries handles it.",
-    type: "FirstPartyAuthStrategy[]",
-    required: true,
-  },
-  "authSession.expiresIn": {
-    description: "Seconds a pending or step-up `auth_session` stays usable. One that signed in lives as long as its session.",
-    type: "number",
-    default: "600",
-  },
-  "authSession.maxFailures": {
-    description: "Failed rounds one `auth_session` allows before `redirect_to_web`.",
-    type: "number",
-    default: "3",
-  },
-  "budget.account": {
-    description: "Failures per account and method before the account answers `authentication_failed` for the rest of the window.",
-    type: "{ window?: number; max?: number }",
-    default: "{ window: 900, max: 10 }",
-  },
-  "budget.client": {
-    description: "Failures per client before its credential rounds answer `redirect_to_web`. `false` turns it off.",
-    type: "{ window?: number; max?: number } | false",
-    default: "{ window: 60, max: 100 }",
-  },
-  requireStepUp: {
-    description: "Decides at the token endpoint whether a first-party app's grant needs stronger authentication.",
-    type: "(input: OAuthBeforeTokenIssuanceInput) => Awaitable<{ acrValues?: string } | null | undefined>",
-  },
+strategies: {
+  description: "How users sign in. The first strategy whose `params` the request carries handles it.",
+  type: "FirstPartyAuthStrategy[]",
+  required: true,
+},
+"authSession.expiresIn": {
+  description: "Seconds a pending or step-up `auth_session` stays usable. One that signed in lives as long as its session.",
+  type: "number",
+  default: "600",
+},
+"authSession.maxFailures": {
+  description: "Failed rounds one `auth_session` allows before `redirect_to_web`.",
+  type: "number",
+  default: "3",
+},
+"budget.account": {
+  description: "Failures per account and method before the account answers `authentication_failed` for the rest of the window.",
+  type: "{ window?: number; max?: number }",
+  default: "{ window: 900, max: 10 }",
+},
+"budget.client": {
+  description: "Failures per client before its credential rounds answer `redirect_to_web`. `false` turns it off.",
+  type: "{ window?: number; max?: number } | false",
+  default: "{ window: 60, max: 100 }",
+},
+requireStepUp: {
+  description: "Decides at the token endpoint whether a first-party app's grant needs stronger authentication.",
+  type: "(input: OAuthBeforeTokenIssuanceInput) => Awaitable<{ acrValues?: string } | null | undefined>",
+},
 }}
 />

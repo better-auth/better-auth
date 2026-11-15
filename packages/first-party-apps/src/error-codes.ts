@@ -10,11 +10,9 @@ export const FIRST_PARTY_APPS_ERROR_CODES = defineErrorCodes({
 	NOT_FIRST_PARTY: "The client is not registered as a first-party app",
 	FIRST_PARTY_REQUIRES_SKIP_CONSENT:
 		"A first-party app must be registered with skip_consent",
-	UNSUPPORTED_CLIENT_AUTHENTICATION:
-		"This endpoint does not support assertion-based client authentication yet",
 	INVALID_SESSION: "The auth_session is invalid, expired, or revoked",
-	DPOP_PROOF_REQUIRED:
-		"This auth_session is bound to a DPoP key; send a DPoP proof",
+	DPOP_PROOF_NOT_BOUND:
+		"This auth_session is not bound to a DPoP key; send no DPoP proof",
 	AUTHENTICATION_FAILED: "The credentials are incorrect",
 	CREDENTIALS_REQUIRED: "Send the credentials of a supported sign-in method",
 	REDIRECT_TO_WEB: "Continue the sign-in in a browser",

@@ -10,9 +10,6 @@ import {
 	parseClientMetadata,
 } from "@better-auth/oauth-provider/internal";
 import { isAPIError } from "better-auth/api";
-import { deriveDpopJkt } from "better-auth/oauth2";
-import type { JWK } from "jose";
-import { decodeProtectedHeader } from "jose";
 import * as z from "zod";
 import type { AuthSessionRecord } from "./auth-session";
 import {
@@ -30,13 +27,6 @@ import type {
 	FirstPartyAuthStrategy,
 	ResolvedFirstPartyAppsOptions,
 } from "./types";
-
-/** Client authentication methods whose credentials can be presented twice. */
-const REPEATABLE_AUTH_METHODS = new Set([
-	"none",
-	"client_secret_basic",
-	"client_secret_post",
-]);
 
 /** Parameters of the challenge protocol itself, never part of the request. */
 const PROTOCOL_PARAMS = [
@@ -91,23 +81,7 @@ function assertFirstPartyApp(client: SchemaClient<Scope[]> | null) {
 			FIRST_PARTY_APPS_ERROR_CODES.FIRST_PARTY_REQUIRES_SKIP_CONSENT.message,
 		);
 	}
-	// issueAuthorizationCode authenticates the client again on the final
-	// request, which a single-use assertion cannot survive.
-	if (!REPEATABLE_AUTH_METHODS.has(client.tokenEndpointAuthMethod ?? "none")) {
-		challengeError(
-			"unauthorized_client",
-			FIRST_PARTY_APPS_ERROR_CODES.UNSUPPORTED_CLIENT_AUTHENTICATION.message,
-		);
-	}
 	return client;
-}
-
-/** The jkt of this request's DPoP proof, after a provider call verified it. */
-async function proofJkt(ctx: GenericEndpointContext) {
-	const proof = ctx.headers?.get("dpop");
-	if (!proof) return undefined;
-	const { jwk } = decodeProtectedHeader(proof);
-	return jwk ? deriveDpopJkt(jwk as JWK) : undefined;
 }
 
 export function createAuthorizeChallenge(
@@ -209,6 +183,9 @@ async function startFlow(
 	// is looked at (§5, §4.1).
 	const client = assertFirstPartyApp(await provider.getClient(clientId));
 	await provider.authenticateClient({ clientId, requireCredentials: false });
+	// §9.6.1: the first proof binds the handle and the code to its key.
+	// issueAuthorizationCode reuses this verification on the same request.
+	const proof = await provider.verifyDpopProof();
 	const validated = await provider.validateAuthorizationRequest({
 		query: authorizationParams(options, params),
 	});
@@ -217,6 +194,7 @@ async function startFlow(
 		record: {
 			clientId,
 			ownsSession: false,
+			dpopJkt: proof?.jkt,
 			state: "pending",
 			query: validated.query,
 			amr: [],
@@ -246,6 +224,16 @@ async function resumeFlow(
 		clientId: record.clientId,
 		requireCredentials: false,
 	});
+	// §9.6.1: every request with a bound handle proves the same key, before
+	// any credential is checked. An unbound handle cannot take on a key later.
+	if (record.dpopJkt) {
+		await provider.verifyDpopProof({ expectedJkt: record.dpopJkt });
+	} else if (ctx.headers?.get("dpop")) {
+		challengeError(
+			"invalid_dpop_proof",
+			FIRST_PARTY_APPS_ERROR_CODES.DPOP_PROOF_NOT_BOUND.message,
+		);
+	}
 	// C2: a handle backed by a session is only as alive as that session.
 	if (record.sessionId && !(await findLiveSession(ctx, record.sessionId))) {
 		await revokeAuthSession(ctx, record);
@@ -254,33 +242,7 @@ async function resumeFlow(
 			FIRST_PARTY_APPS_ERROR_CODES.INVALID_SESSION.message,
 		);
 	}
-	// §9.6.1: a bound handle needs a proof on every request. The proof itself
-	// is verified before any response that depends on the credentials.
-	if (record.dpopJkt && !ctx.headers?.get("dpop")) {
-		challengeError(
-			"invalid_dpop_proof",
-			FIRST_PARTY_APPS_ERROR_CODES.DPOP_PROOF_REQUIRED.message,
-		);
-	}
 	return { client, record, handle };
-}
-
-/**
- * Verifies the request's DPoP proof on a request that issues no code, and
- * binds a new record to its key. A request that issues a code leaves this to
- * `issueAuthorizationCode`, which rejects a second verification of the same
- * proof.
- */
-async function verifyProof(
-	provider: OAuthProviderApi,
-	record: AuthSessionRecord,
-) {
-	if (record.dpopJkt) {
-		await provider.verifyDpopProof({ expectedJkt: record.dpopJkt });
-		return;
-	}
-	const proof = await provider.verifyDpopProof();
-	if (proof && !record.id) record.dpopJkt = proof.jkt;
 }
 
 async function runRound(
@@ -306,7 +268,6 @@ async function runRound(
 	if (options.budget.client) {
 		const key = await budgetKey(ctx, { clientId: client.clientId });
 		if (await isBudgetSpent(ctx, key, options.budget.client)) {
-			await verifyProof(provider, record);
 			return redirectToWeb(ctx, record);
 		}
 	}
@@ -314,7 +275,6 @@ async function runRound(
 		// C3: without a strategy that steps up in the app, the browser does.
 		const stepUpStrategy = options.strategies.find((s) => s.stepUp);
 		if (!stepUpStrategy?.stepUp) {
-			await verifyProof(provider, record);
 			return redirectToWeb(ctx, record);
 		}
 		const result = await stepUpStrategy.stepUp({
@@ -324,7 +284,6 @@ async function runRound(
 			params,
 		});
 		if ("error" in result && result.error === "redirect_to_web") {
-			await verifyProof(provider, record);
 			return redirectToWeb(ctx, record);
 		}
 		// The code a native step-up ends with answers this new request.
@@ -338,7 +297,6 @@ async function runRound(
 	}
 	const strategy = selectStrategy(options.strategies, record, params);
 	if (!strategy) {
-		await verifyProof(provider, record);
 		const handle = await saveAuthSession(ctx, record, { rotate: false });
 		return challengeError(
 			"insufficient_authorization",
@@ -435,7 +393,6 @@ async function handleResult(
 	}
 	switch (result.error) {
 		case "insufficient_authorization": {
-			await verifyProof(provider, record);
 			record.challenge = {
 				strategy: strategy.id,
 				type: result.challengeType,
@@ -463,7 +420,6 @@ async function handleResult(
 			return failRound(ctx, provider, options, flow, subject ?? null);
 		}
 		default: {
-			await verifyProof(provider, record);
 			return redirectToWeb(ctx, record);
 		}
 	}
@@ -481,7 +437,6 @@ async function failRound(
 ) {
 	const { record, client } = flow;
 	// A request with a bad proof learns nothing and spends nothing.
-	await verifyProof(provider, record);
 	if (subject) {
 		await recordFailure(
 			ctx,
@@ -604,8 +559,6 @@ async function issueCode(
 		await revokeAuthSession(ctx, record);
 		return ctx.json({ authorization_code: code });
 	}
-	// The proof was verified while issuing, so its key is the code's key.
-	record.dpopJkt ??= await proofJkt(ctx);
 	record.sessionId = session.session.id;
 	record.ownsSession = createdSession || record.ownsSession;
 	record.userId = session.user.id;
