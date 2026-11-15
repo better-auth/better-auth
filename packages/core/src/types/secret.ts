@@ -41,3 +41,53 @@ export function getCandidateSecrets(
 	return result;
 }
 
+/**
+ * Wraps context.getSignedCookie to verify signed cookies against candidate secrets
+ * in rotation order when secret rotation is configured.
+ */
+export function wrapContextWithRotatedSignedCookies<
+	T extends {
+		getSignedCookie?: (
+			key: string,
+			secret?: string,
+			prefix?: string,
+		) => Promise<string | null | false>;
+		context?: {
+			secretConfig?: SecretConfig | null;
+			secret?: string;
+		};
+	},
+>(context: T): void {
+	if (
+		context.getSignedCookie &&
+		context.context?.secretConfig &&
+		!(context as unknown as { __originalGetSignedCookie?: unknown })
+			.__originalGetSignedCookie
+	) {
+		const originalGetSignedCookie = context.getSignedCookie.bind(context);
+		(
+			context as unknown as {
+				__originalGetSignedCookie?: typeof originalGetSignedCookie;
+			}
+		).__originalGetSignedCookie = originalGetSignedCookie;
+
+		const candidateSecrets = getCandidateSecrets(
+			context.context.secretConfig,
+			context.context.secret,
+		);
+		if (candidateSecrets.length > 1) {
+			context.getSignedCookie = async (key, secret, prefix) => {
+				if (!secret || secret === context.context?.secret) {
+					for (const s of candidateSecrets) {
+						const val = await originalGetSignedCookie(key, s, prefix);
+						if (typeof val === "string") return val;
+						if (val === null) return null;
+					}
+					return false;
+				}
+				return originalGetSignedCookie(key, secret, prefix);
+			};
+		}
+	}
+}
+

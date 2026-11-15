@@ -552,6 +552,7 @@ describe("cookie signature secret rotation (#12636)", () => {
 
 			// session_token must have no max-age because of dontRememberMe
 			const reSignedSessionToken = resCookies.get("better-auth.session_token");
+			expect(reSignedSessionToken).toBeDefined();
 			expect(reSignedSessionToken?.["max-age"]).toBeUndefined();
 		});
 	});

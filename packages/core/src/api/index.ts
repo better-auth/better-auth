@@ -11,7 +11,7 @@ import {
 } from "better-call";
 import { runWithEndpointContext } from "../context";
 import type { AuthContext } from "../types";
-import { getCandidateSecrets } from "../types/secret";
+import { wrapContextWithRotatedSignedCookies } from "../types/secret";
 import { isAPIError } from "../utils/is-api-error";
 
 /**
@@ -115,37 +115,7 @@ function wrapEndpointHandler<
 			}
 		}
 
-		if (
-			context.getSignedCookie &&
-			context.context?.secretConfig &&
-			!(context as unknown as { __originalGetSignedCookie?: unknown })
-				.__originalGetSignedCookie
-		) {
-			const originalGetSignedCookie = context.getSignedCookie.bind(context);
-			(
-				context as unknown as {
-					__originalGetSignedCookie?: typeof originalGetSignedCookie;
-				}
-			).__originalGetSignedCookie = originalGetSignedCookie;
-
-			const candidateSecrets = getCandidateSecrets(
-				context.context.secretConfig,
-				context.context.secret,
-			);
-			if (candidateSecrets.length > 1) {
-				context.getSignedCookie = async (key, secret, prefix) => {
-					if (!secret || secret === context.context.secret) {
-						for (const s of candidateSecrets) {
-							const val = await originalGetSignedCookie(key, s, prefix);
-							if (typeof val === "string") return val;
-							if (val === null) return null;
-						}
-						return false;
-					}
-					return originalGetSignedCookie(key, secret, prefix);
-				};
-			}
-		}
+		wrapContextWithRotatedSignedCookies(context);
 
 		try {
 			return await runWithEndpointContext(context, () => handler(context));
