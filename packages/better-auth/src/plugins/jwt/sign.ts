@@ -193,9 +193,19 @@ export async function resolveSigningKey(
 		// provisioned for audience pinning. Falls back to `getLatestKey()`
 		// when no key with the primary alg exists yet (fresh deploy).
 		const primaryAlg = getDefaultKeyAlg(options);
-		key =
-			(await adapter.getLatestKeyByAlg(ctx, primaryAlg)) ??
-			(await adapter.getLatestKey(ctx));
+		key = await adapter.getLatestKeyByAlg(ctx, primaryAlg);
+		if (!key) {
+			const latest = await adapter.getLatestKey(ctx);
+			// A key lazy-minted for a pinned `keyPairConfigs` alg must not
+			// stand in for the primary key, or the first pinned call on an
+			// empty JWKS moves every unpinned token onto that alg. Falling
+			// through mints the primary key below.
+			const mintedForPinning =
+				latest?.alg !== undefined &&
+				latest.alg !== primaryAlg &&
+				options?.jwks?.keyPairConfigs?.some((c) => c.alg === latest.alg);
+			key = mintedForPinning ? undefined : latest;
+		}
 	}
 
 	if (!key || (key.expiresAt && key.expiresAt < new Date())) {

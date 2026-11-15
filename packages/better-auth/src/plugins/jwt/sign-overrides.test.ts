@@ -218,3 +218,54 @@ describe("JWKS adapter helpers", () => {
 		expect(found).toBeUndefined();
 	});
 });
+
+describe("signJWT — unpinned tokens stay on the primary algorithm", () => {
+	const options = {
+		jwks: {
+			disablePrivateKeyEncryption: true,
+			keyPairConfig: { alg: "RS256" },
+			keyPairConfigs: [{ alg: "EdDSA" }],
+		},
+	} as const;
+
+	it("mints the primary key instead of reusing a key minted for a pinned algorithm", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [jwt(options)],
+			logger: { level: "error" },
+		});
+		const ctx = asShim(await auth.$context);
+		const payload = { sub: "u1", iat: Math.floor(Date.now() / 1000) };
+
+		const pinned = await signJWT(makeSignCtx(ctx), {
+			options,
+			payload,
+			signingAlgorithm: "EdDSA",
+		});
+		expect(decodeProtectedHeader(pinned).alg).toBe("EdDSA");
+
+		const unpinned = await signJWT(makeSignCtx(ctx), { options, payload });
+		expect(decodeProtectedHeader(unpinned).alg).toBe("RS256");
+
+		const again = await signJWT(makeSignCtx(ctx), { options, payload });
+		expect(decodeProtectedHeader(again).kid).toBe(
+			decodeProtectedHeader(unpinned).kid,
+		);
+		const keys = await ctx.adapter.findMany<Jwk>({ model: "jwks" });
+		expect(keys.map((k) => k.alg).sort()).toEqual(["EdDSA", "RS256"]);
+	});
+
+	it("keeps signing with an existing key whose algorithm is not configured for pinning", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [jwt(options)],
+			logger: { level: "error" },
+		});
+		const ctx = asShim(await auth.$context);
+		const previous = await provisionKey(ctx, "ES256");
+
+		const token = await signJWT(makeSignCtx(ctx), {
+			options,
+			payload: { sub: "u1", iat: Math.floor(Date.now() / 1000) },
+		});
+		expect(decodeProtectedHeader(token).kid).toBe(previous.id);
+	});
+});
