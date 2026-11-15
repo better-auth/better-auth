@@ -543,7 +543,7 @@ Token exchange has its own conditions for these errors. See [Token exchange erro
 
 Authorization codes and device codes are single-use, and the token endpoint consumes one only after the request passes validation. A request rejected for its `code_verifier`, `redirect_uri`, `resource`, client, or an invalid DPoP proof or nonce leaves the code redeemable until it expires, so the client can retry with a corrected request. The one exception is a DPoP proof whose `jti` was already used: the server records proof `jti` values after it consumes the code, so that request uses up the code and returns `invalid_dpop_proof`.
 
-Presenting an authorization code that was already redeemed returns `invalid_grant` and revokes the tokens issued from it. Two requests that redeem the same authorization code at once are handled the same way: one receives tokens, the other gets `invalid_grant`, and the losing request can revoke the tokens the first one just received.
+Presenting an authorization code that was already redeemed returns `invalid_grant`. When the client the code was issued to presents it, the provider also revokes the code's grant, as described in [Authorization code reuse](/docs/plugins/oauth-provider/tokens#authorization-code-reuse). When that client sends two requests that redeem the same code at once, both fail with `invalid_grant`. The second request is a reuse, so it revokes the grant, and the first request then finds the grant revoked. Neither request receives tokens.
 
 When `adminCreateOAuthClient` links resources, an invalid identifier fails validation with `VALIDATION_ERROR`, an unknown or disabled resource returns `invalid_target`, and a `resourcePrivileges` denial returns `401`. The call creates nothing in each case.
 
