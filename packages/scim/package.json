@@ -67,6 +67,6 @@
     "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:peer",
     "better-auth": "workspace:^",
-    "better-call": "catalog:"
+    "better-call": "catalog:peer"
   }
 }

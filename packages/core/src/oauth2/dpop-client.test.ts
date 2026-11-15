@@ -7,7 +7,7 @@ import {
 	createDpopProof,
 	deriveDpopKeyJkt,
 	generateDpopKeyPair,
-	isDpopNonceError,
+	isDpopNonceChallenge,
 } from "./dpop-client";
 
 const NONCE_SECRET = "dpop-client-test-secret";
@@ -293,22 +293,22 @@ describe("createDpopProof", () => {
 	});
 });
 
-describe("isDpopNonceError", () => {
+describe("isDpopNonceChallenge", () => {
 	it("detects a token endpoint challenge without consuming the body", async () => {
 		const response = tokenEndpointNonceChallenge("n1");
-		expect(await isDpopNonceError(response)).toBe(true);
+		expect(await isDpopNonceChallenge(response)).toBe(true);
 		expect(await response.json()).toMatchObject({ error: "use_dpop_nonce" });
 	});
 
 	it("detects a resource server challenge", async () => {
-		expect(await isDpopNonceError(resourceNonceChallenge("n1"))).toBe(true);
+		expect(await isDpopNonceChallenge(resourceNonceChallenge("n1"))).toBe(true);
 		const lowercase = new Response(null, {
 			status: 401,
 			headers: {
 				"WWW-Authenticate": 'Bearer realm="api", dpop error=use_dpop_nonce',
 			},
 		});
-		expect(await isDpopNonceError(lowercase)).toBe(true);
+		expect(await isDpopNonceChallenge(lowercase)).toBe(true);
 	});
 
 	it("ignores other errors", async () => {
@@ -336,7 +336,7 @@ describe("isDpopNonceError", () => {
 			wrongStatus,
 			notJson,
 		]) {
-			expect(await isDpopNonceError(response)).toBe(false);
+			expect(await isDpopNonceChallenge(response)).toBe(false);
 		}
 	});
 });
@@ -475,6 +475,27 @@ describe("createDpopFetch", () => {
 					duplex: "half",
 				} as RequestInit,
 			],
+		],
+		[
+			"a stream from another realm",
+			(url) => {
+				// A stream from an iframe fails this realm's `instanceof
+				// ReadableStream` but keeps the stream shape.
+				const stream = new Blob(["grant_type=client_credentials"]).stream();
+				const foreignStream = {
+					getReader: () => stream.getReader(),
+					[Symbol.asyncIterator]: () => stream[Symbol.asyncIterator](),
+				};
+				expect(foreignStream).not.toBeInstanceOf(ReadableStream);
+				return [
+					url,
+					{
+						method: "POST",
+						body: foreignStream as unknown as ReadableStream,
+						duplex: "half",
+					} as RequestInit,
+				];
+			},
 		],
 		[
 			"a Request with a body",

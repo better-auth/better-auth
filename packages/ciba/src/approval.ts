@@ -2,7 +2,11 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import type { OAuthInteractionRequestHandler } from "@better-auth/oauth-provider";
 import { getOAuthProviderApi } from "@better-auth/oauth-provider";
-import { getAcrValuesSupported } from "@better-auth/oauth-provider/internal";
+import {
+	getAcrValuesSupported,
+	LEVEL_0_ACR,
+	parseScopes,
+} from "@better-auth/oauth-provider/internal";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import * as z from "zod";
 import {
@@ -102,7 +106,7 @@ export function cibaApprovalRequest(
 					const scope = approval.query.scope ?? request.scope;
 					// CIBA authenticates the user, so the approved scope keeps `openid`;
 					// the request stays pending for another try.
-					if (!scope.split(" ").includes("openid")) {
+					if (!parseScopes(scope).includes("openid")) {
 						oauthError("invalid_scope", CIBA_ERROR_CODES.INVALID_SCOPE.message);
 					}
 					await recordDecision(ctx, request.id, approval.userId, {
@@ -180,7 +184,7 @@ export const createCompleteCibaRequest = (options: ResolvedCibaOptions) =>
 			) {
 				return unknownRequest();
 			}
-			const requested = request.scope.split(" ");
+			const requested = parseScopes(request.scope);
 			const scopes = ctx.body.scopes ?? requested;
 			if (scopes.some((scope) => !requested.includes(scope))) {
 				oauthError(
@@ -193,7 +197,7 @@ export const createCompleteCibaRequest = (options: ResolvedCibaOptions) =>
 			}
 			const oauthOptions = ctx.context.getPlugin("oauth-provider")!.options;
 			// Without an acr the ID token claims "0", which must be supported too.
-			if (!getAcrValuesSupported(oauthOptions).includes(acr ?? "0")) {
+			if (!getAcrValuesSupported(oauthOptions).includes(acr ?? LEVEL_0_ACR)) {
 				oauthError("invalid_request", CIBA_ERROR_CODES.UNSUPPORTED_ACR.message);
 			}
 			let authorizationDetails = request.authorizationDetails ?? null;
