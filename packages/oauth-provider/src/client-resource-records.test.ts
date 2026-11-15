@@ -7,7 +7,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { decodeJwt } from "jose";
+import { decodeJwt, UnsecuredJWT } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-resource";
@@ -606,6 +606,36 @@ describe("resource client with opaque access tokens in this process", async () =
 				),
 			),
 		);
+	});
+});
+
+describe("resource client with JWT-shaped opaque access tokens", async () => {
+	const server = await setup({
+		jwt: false,
+		provider: {
+			generateOpaqueAccessToken: () =>
+				new UnsecuredJWT({
+					sub: "generator-sub",
+					jti: generateRandomString(16),
+				}).encode(),
+		},
+	});
+
+	/**
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+	 */
+	it("returns the pairwise sub, not the sub the generator wrote", async () => {
+		const { tokens, session } = await server.userToken("pairwise");
+		expect(tokens.access_token.split(".")).toHaveLength(3);
+		const pairwiseSub = decodeJwt(tokens.id_token).sub;
+		expect(pairwiseSub).not.toBe(session.user.id);
+
+		const payload = await server.resourceClient.verifyAccessTokenRequest(
+			await routeRequest(tokens.access_token),
+			{ verifyOptions },
+		);
+
+		expect(payload.sub).toBe(pairwiseSub);
 	});
 });
 
