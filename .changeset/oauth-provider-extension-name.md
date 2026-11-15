@@ -12,4 +12,4 @@ Extensions accept an optional `name` for these messages. Plugin authors can pass
 extendOAuthProvider(ctx, { name: "my-plugin", grants: { /* ... */ } });
 ```
 
-An extension without a `name` is described by its position in registration order, such as `unnamed extension #2`. The CIBA, CIMD, device authorization, and token exchange extensions are named after their plugins.
+An extension without a `name` is described by its position in registration order and one thing it registers, such as `unnamed extension #2 (grant type "…")`. The CIBA, CIMD, device authorization, and token exchange extensions are named after their plugins.
