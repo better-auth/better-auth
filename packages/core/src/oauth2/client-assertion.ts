@@ -134,10 +134,11 @@ export interface PrivateKeyJwtClientAssertionGetterOptions {
  * - iat=now
  *
  * The JOSE header sets `typ` to `client-authentication+jwt` (RFC 10070 §4)
- * only when `aud` is the known `issuer`, and to `JWT` otherwise. The explicit
- * type signals RFC 10070 compliance, which requires the issuer as the sole
- * audience, and some authorization servers enforce that audience when they
- * see it.
+ * only when `aud` is the known `issuer`. Every other assertion, such as one
+ * signed for a token endpoint URL that is not the issuer or one signed
+ * without a known `issuer`, gets `typ: "JWT"`. The explicit type signals RFC 10070 compliance, which
+ * requires the issuer as the sole audience, and some authorization servers
+ * enforce that audience when they see it.
  */
 export async function signPrivateKeyJwtClientAssertion({
 	clientId,
