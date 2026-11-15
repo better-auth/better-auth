@@ -862,6 +862,22 @@ function getSeededOptions(ctx: AuthContext): WeakSet<object> {
 }
 
 /**
+ * Seed configs that completed in this process, for
+ * {@link OAuthOptions.resourceSeedScope} `"process"`. Keyed by what the seed
+ * writes, so instances built per request (each with its own adapter) share
+ * the mark, and instances configuring different `resources` do not.
+ */
+let seededConfigs = new Set<string>();
+
+function seedConfigKey(opts: OAuthOptions<Scope[]>): string {
+	return JSON.stringify([
+		opts.schema?.oauthResource?.modelName ?? "oauthResource",
+		opts.resourceSeedMode ?? "insertOnly",
+		collectResourceInputs(opts),
+	]);
+}
+
+/**
  * Resets the lazy-seed state. Used by tests to force re-seeding between
  * cases — should not be called from production code.
  *
@@ -869,6 +885,7 @@ function getSeededOptions(ctx: AuthContext): WeakSet<object> {
  */
 export function resetSeedStateForTests(): void {
 	seededOptions = new WeakMap<object, WeakSet<object>>();
+	seededConfigs = new Set<string>();
 }
 
 /**
@@ -992,6 +1009,13 @@ export async function seedResourcesOnce(
 	ctx: AuthContext,
 	opts: OAuthOptions<Scope[]>,
 ): Promise<void> {
+	if (opts.resourceSeedScope === "process") {
+		const key = seedConfigKey(opts);
+		if (seededConfigs.has(key)) return;
+		await seedResources(ctx, opts, () => seededConfigs.has(key));
+		seededConfigs.add(key);
+		return;
+	}
 	const seeded = getSeededOptions(ctx);
 	if (seeded.has(opts)) return;
 	await seedResources(ctx, opts, () => seeded.has(opts));

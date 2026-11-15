@@ -4,6 +4,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
+import { resetSeedStateForTests } from "./resources";
 import type { OAuthOptions, OAuthResourceInput, Scope } from "./types";
 
 const resource = "https://api.example.com/mcp";
@@ -40,10 +41,12 @@ async function bootWithResourceFault(
 	{
 		resources = [resource],
 		resourceSeedMode,
+		resourceSeedScope,
 		shared,
 	}: {
 		resources?: Array<string | OAuthResourceInput>;
 		resourceSeedMode?: OAuthOptions<Scope[]>["resourceSeedMode"];
+		resourceSeedScope?: OAuthOptions<Scope[]>["resourceSeedScope"];
 		shared?: {
 			database: ReturnType<typeof createDatabase>;
 			adapter?: DBAdapter;
@@ -88,6 +91,7 @@ async function bootWithResourceFault(
 				allowUnauthenticatedClientRegistration: true,
 				resources,
 				resourceSeedMode,
+				resourceSeedScope,
 				clientRegistrationDefaultResources: [
 					typeof firstResource === "string"
 						? firstResource
@@ -296,6 +300,50 @@ describe("resource seeding at startup", () => {
 			"https://api.example.com/first",
 			"https://api.example.com/second",
 		]);
+	});
+
+	it("with resourceSeedScope process, instances built per request seed once per config", async () => {
+		resetSeedStateForTests();
+		const database = createDatabase();
+		const reads: string[] = [];
+		const fault = {
+			current: ((operation) => {
+				if (operation === "findOne") reads.push(operation);
+			}) as ResourceFault | null,
+		};
+		// A new adapter object per boot, over one database, the way a runtime
+		// that builds Better Auth per request sees it.
+		const boot = (resources: string[]) => {
+			// The test harness signs up the same user on every boot.
+			for (const model of ["user", "account", "session"] as const) {
+				database[model].length = 0;
+			}
+			return bootWithResourceFault(fault, {
+				resources,
+				resourceSeedScope: "process",
+				shared: { database },
+			});
+		};
+
+		await boot([resource]);
+		expect(reads).toHaveLength(1);
+		const { register } = await boot([resource]);
+		expect(reads).toHaveLength(1);
+
+		// Another config, like the same app on another origin, still seeds.
+		await boot(["https://other.example.com/mcp"]);
+		expect(reads).toHaveLength(2);
+		expect(database.oauthResource.map((row) => row.identifier)).toEqual([
+			resource,
+			"https://other.example.com/mcp",
+		]);
+
+		reads.length = 0;
+		await expect(register()).resolves.toMatchObject({
+			resources: [resource],
+		});
+		// Only the lookup itself, not a seed.
+		expect(reads).toHaveLength(1);
 	});
 
 	/**
