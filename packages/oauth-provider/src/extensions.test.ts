@@ -2548,3 +2548,72 @@ describe("extension access-token claims set to undefined", async () => {
 		warn.mockRestore();
 	});
 });
+
+describe("extension access-token claims named like Object.prototype members", async () => {
+	const issuer = "http://localhost:3000";
+	const resource = "https://api.example.com";
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL: issuer,
+		plugins: [
+			jwt({ jwt: { issuer } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				resources: [resource],
+				enforcePerClientResources: false,
+				clientPrivileges: () => true,
+			}),
+			{
+				id: "prototype-claims",
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						claims: {
+							accessToken: () => ({
+								constructor: "custom-constructor",
+								toString: "custom-to-string",
+							}),
+						},
+					});
+				},
+			} satisfies BetterAuthPlugin,
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	it("keeps the claims and warns about no collision", async () => {
+		const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		const machine = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				scope: "read",
+				client_credentials_scopes: ["read"],
+			},
+		});
+		const { data, error } = await client.$fetch<{ access_token: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: machine.client_id,
+					client_secret: machine.client_secret!,
+					scope: "read",
+					resource,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
+		expect(error).toBeNull();
+		const payload = decodeJwt(data!.access_token);
+		expect(Object.hasOwn(payload, "constructor")).toBe(true);
+		expect(payload.constructor).toBe("custom-constructor");
+		expect(payload.toString).toBe("custom-to-string");
+		expect(warn).not.toHaveBeenCalledWith(
+			expect.stringContaining("contributed the claim"),
+		);
+		warn.mockRestore();
+	});
+});
