@@ -1065,8 +1065,40 @@ describe("requireMcpAuth checks tokens against the provider's records", async ()
 				}),
 			);
 
-		return { issueAccessToken, revoke, callMcp };
+		/** A JWT that app code signs with the provider's keys. */
+		async function signAppJwt() {
+			const { token } = await instance.auth.api.signJWT({
+				body: {
+					payload: {
+						iss: baseURL,
+						aud: baseURL,
+						azp: client.client_id,
+						scope: "mcp:base",
+					},
+				},
+			});
+			return token;
+		}
+
+		return { issueAccessToken, revoke, callMcp, signAppJwt };
 	}
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9068#section-4
+	 */
+	it("rejects an app-signed JWT that carries azp but not typ at+jwt", async () => {
+		const provider = await createProvider({});
+		expect(
+			(await provider.callMcp(await provider.issueAccessToken())).status,
+		).toBe(200);
+
+		const response = await provider.callMcp(await provider.signAppJwt());
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toContain(
+			'error="invalid_token"',
+		);
+	});
 
 	it("accepts an opaque access token", async () => {
 		const provider = await createProvider({ disableJwtPlugin: true });

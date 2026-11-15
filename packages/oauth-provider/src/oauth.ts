@@ -645,6 +645,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				} catch (error) {
 					if (!isDynamicBaseURLInit || issuer !== "") throw error;
 				}
+				// Access tokens are recognized by `typ: at+jwt`, which a custom
+				// signer receives in `header` and can drop.
+				if (jwtPluginOptions?.jwt?.sign) {
+					ctx.logger.warn(
+						"oauth-provider: the JWT plugin uses a custom `jwt.sign`. It must apply `header.typ` to the signed JWT, or the access tokens it signs are rejected, because JWT access tokens must carry `typ: at+jwt` (RFC 9068).",
+					);
+				}
 			}
 
 			// The hook must register for every configuration path (including

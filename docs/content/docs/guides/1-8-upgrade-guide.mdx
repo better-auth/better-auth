@@ -380,6 +380,26 @@ oauthProvider({
 });
 ```
 
+### Custom JWT signers must apply `header.typ`
+
+The provider now accepts a JWT as an access token only when its header has `typ: at+jwt`, as [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) requires. Introspection, revocation, UserInfo, token exchange, and `verifyResourceRequest` all apply the check. Before, any JWT signed with the provider's keys and carrying `azp` passed, including one that app code signed with `auth.api.signJWT`.
+
+The provider has signed its access tokens with `typ: at+jwt` since 1.7, so tokens it issued keep working. A custom `jwt.sign` in the JWT plugin receives that `typ` in its `header` argument. A signer that ignores the argument issues access tokens that are now inactive everywhere. The provider logs a warning at startup when `jwt.sign` is set.
+
+**What to do:** if you set `jwt.sign`, apply `header` to the signed header, as in [Custom Signing](/docs/plugins/jwt#custom-signing).
+
+```ts title="auth.ts"
+jwt({
+  jwt: {
+    sign: async (payload, header) =>
+      new SignJWT(payload)
+        // was: { alg: "EdDSA", kid, typ: "JWT" }
+        .setProtectedHeader({ typ: "JWT", ...header, alg: "EdDSA", kid })
+        .sign(privateKey),
+  },
+});
+```
+
 ### Extension and API authors
 
 This applies if you build on `extendOAuthProvider()`, call the provider API from your own endpoints, or implement it yourself:

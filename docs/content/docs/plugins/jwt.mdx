@@ -325,7 +325,7 @@ Implementers:
 * `remoteUrl` must be defined if using the `sign` function. This shall store all active keys, not just the current one.
 * If using localized approach, ensure server uses the latest private key when rotated. Depending on deployment, the server may need to be restarted.
 * When using remote approach, verify the payload is unchanged after transit. Use integrity validation like CRC32 or SHA256 checks if available.
-* Apply the optional `header` argument to the signed header. The OAuth provider passes `typ: "at+jwt"` for access tokens, and resource servers that check `typ`, as [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) requires, reject an access token without it.
+* Apply the optional `header` argument to the signed header. It carries the `typ` a token profile requires, such as `at+jwt` for [OAuth provider](/docs/plugins/oauth-provider) access tokens and `logout+jwt` for back-channel logout tokens. The OAuth provider rejects an access token without `typ: at+jwt`, and it logs a warning at startup when `sign` is set as a reminder.
 
 #### Localized Signing
 
@@ -342,10 +342,10 @@ jwt({
       // this is pseudocode
       return await new SignJWT(jwtPayload)
         .setProtectedHeader({
+          typ: "JWT",
+          ...header,
           alg: "EdDSA",
           kid: process.env.currentKid,
-          typ: "JWT",
-          ...header, // carries typ: "at+jwt" for OAuth access tokens
         })
         .sign(process.env.clientPrivateKey);
     },
@@ -368,8 +368,7 @@ jwt({
   jwt: {
     sign: async (jwtPayload: JWTPayload, header) => {
       // this is pseudocode
-      // `header` carries typ: "at+jwt" for OAuth access tokens
-      const headers = JSON.stringify({ kid: '123', alg: 'ES256', typ: 'JWT', ...header })
+      const headers = JSON.stringify({ typ: 'JWT', ...header, kid: '123', alg: 'ES256' })
       const payload = JSON.stringify(jwtPayload)
       const encodedHeaders = Buffer.from(headers).toString('base64url')
       const encodedPayload = Buffer.from(payload).toString('base64url')

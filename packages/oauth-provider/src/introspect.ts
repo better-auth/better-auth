@@ -153,8 +153,8 @@ async function validateJwtAccessToken(
 		return { active: false };
 	}
 
-	// `findToken` only returns JWTs carrying `azp`; require that client to
-	// exist and be enabled before considering the token active.
+	// `findToken` only returns JWTs with `typ: at+jwt` and `azp`; require that
+	// client to exist and be enabled before considering the token active.
 	const client = await getClient(ctx, opts, jwtPayload.azp);
 	if (!client || client?.disabled) {
 		return {
