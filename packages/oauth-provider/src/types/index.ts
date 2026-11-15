@@ -94,12 +94,12 @@ export interface OAuthAuthenticationContextOptions<
 		 */
 		requestedAcrValues: string[];
 		/**
-		 * How a plugin endpoint reports it authenticated the user, passed to
-		 * `issueAuthorizationCode` as `authentication`. Absent for approvals on
-		 * the provider's own pages. Treat it as input: return the `amr` the
-		 * code should carry, which may differ from `authentication.amr`.
+		 * The Authentication Methods References a plugin endpoint reported to
+		 * `issueAuthorizationCode` as `amr`. Absent for approvals on the
+		 * provider's own pages. Treat it as input: return the `amr` the code
+		 * should carry, which may differ from this value.
 		 */
-		authentication?: { amr?: string[] } | undefined;
+		amr?: string[] | undefined;
 	}) => Awaitable<OAuthAuthenticationContext | undefined>;
 }
 
@@ -416,22 +416,21 @@ export interface IssueAuthorizationCodeParams {
 		user: User & Record<string, unknown>;
 	};
 	/**
-	 * How your endpoint authenticated the user in this flow.
+	 * The Authentication Methods References your server verified itself in
+	 * this flow, such as `["pwd", "otp"]` (RFC 8176). Never copy values from
+	 * the client's request: the ID token asserts them to the relying party.
 	 *
-	 * `amr` lists the Authentication Methods References your server verified
-	 * itself, such as `["pwd", "otp"]` (RFC 8176). Never copy values from the
-	 * client's request: the ID token asserts them to the relying party. With `authenticationContext.resolve`
-	 * configured, the resolver receives it as `authentication` and its result
-	 * decides the code's `acr` and `amr`. Without a resolver, the code carries
-	 * this `amr` as given. Either way, `amr` reaches only the ID token, so it
-	 * is ignored without the `openid` scope.
+	 * With `authenticationContext.resolve` configured, the resolver receives
+	 * them as `amr` and its result decides the code's `acr` and `amr`.
+	 * Without a resolver, the code carries this `amr` as given, as
+	 * `issueTokens` and `completeCibaRequest` record theirs. Either way,
+	 * `amr` reaches only the ID token, so it is ignored without the `openid`
+	 * scope.
 	 *
 	 * `auth_time` always comes from the session's creation time, so a caller
 	 * cannot report an earlier sign-in than the session proves.
 	 */
-	authentication?: {
-		amr?: string[];
-	};
+	amr?: string[];
 }
 
 /**

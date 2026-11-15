@@ -1475,7 +1475,7 @@ export async function issueAuthorizationCode(
 		scopes,
 		headers,
 		query,
-		authentication: params.authentication,
+		amr: params.amr,
 	});
 	// OIDC Core §5.5.1.1: an unmet essential acr is a failed authentication.
 	if (
