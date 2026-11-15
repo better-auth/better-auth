@@ -7,6 +7,7 @@ import { getTestInstance } from "better-auth/test";
 import {
 	createLocalJWKSet,
 	decodeJwt,
+	decodeProtectedHeader,
 	exportJWK,
 	generateKeyPair,
 	jwtVerify,
@@ -1926,6 +1927,10 @@ describe("OIDC SSO with private_key_jwt", async () => {
 			{ algorithms: ["RS256"] },
 		);
 		expect(payload.aud).toBe(`${server.issuer.url}/token`);
+		// The explicit RFC 10070 type is reserved for issuer-audience assertions.
+		expect(decodeProtectedHeader(tokenReq.client_assertion as string).typ).toBe(
+			"JWT",
+		);
 		expect(payload.iss).toBe("private-key-jwt-client");
 		expect(payload.sub).toBe("private-key-jwt-client");
 
@@ -1972,6 +1977,9 @@ describe("OIDC SSO with private_key_jwt", async () => {
 		const assertion = tokenRequest.client_assertion as string;
 		// RFC 10070 §4: the issuer is the only audience.
 		expect(decodeJwt(assertion).aud).toBe(server.issuer.url);
+		expect(decodeProtectedHeader(assertion).typ).toBe(
+			"client-authentication+jwt",
+		);
 	});
 
 	it("signs for the provider's issuer when the stored OIDC config names another", async () => {

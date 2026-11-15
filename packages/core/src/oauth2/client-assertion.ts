@@ -133,7 +133,12 @@ export interface PrivateKeyJwtClientAssertionGetterOptions {
  * - jti=unique
  * - iat=now
  *
- * The JOSE header sets `typ` to `client-authentication+jwt` (RFC 10070 §4).
+ * The JOSE header sets `typ` to `client-authentication+jwt` (RFC 10070 §4)
+ * only when `aud` is the known `issuer`. Every other assertion, such as one
+ * signed for a token endpoint URL that is not the issuer or one signed
+ * without a known `issuer`, gets `typ: "JWT"`. The explicit type signals RFC 10070 compliance, which
+ * requires the issuer as the sole audience, and some authorization servers
+ * enforce that audience when they see it.
  */
 export async function signPrivateKeyJwtClientAssertion({
 	clientId,
@@ -144,10 +149,16 @@ export async function signPrivateKeyJwtClientAssertion({
 	algorithm,
 	expiresIn = 120,
 	audience = tokenEndpoint,
+	issuer,
 }: {
 	clientId: string;
 	tokenEndpoint: string;
 	audience?: string;
+	/**
+	 * The authorization server's issuer identifier, when known. It does not set
+	 * the audience; it decides the `typ` header.
+	 */
+	issuer?: string | undefined;
 	privateKeyJwk?: JsonWebKey;
 	privateKeyPem?: string;
 	kid?: string;
@@ -173,7 +184,10 @@ export async function signPrivateKeyJwtClientAssertion({
 
 	const header: JWTHeaderParameters = {
 		alg: resolvedAlg,
-		typ: "client-authentication+jwt",
+		typ:
+			issuer !== undefined && audience === issuer
+				? "client-authentication+jwt"
+				: "JWT",
 	};
 	if (resolvedKid) {
 		header.kid = resolvedKid;
@@ -225,6 +239,7 @@ export function createPrivateKeyJwtClientAssertionGetter(
 			clientId,
 			tokenEndpoint,
 			audience: options.audience === "token_endpoint" ? undefined : issuer,
+			issuer,
 			privateKeyJwk: options.privateKeyJwk,
 			privateKeyPem: options.privateKeyPem,
 			kid: options.kid,

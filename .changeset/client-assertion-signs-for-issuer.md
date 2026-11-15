@@ -7,4 +7,4 @@
 
 Without a known issuer, the getter still signs for the token endpoint URL. For a server that accepts only its token endpoint URL, set `audience: "token_endpoint"`. With `audience: "issuer"`, a request without a known issuer fails instead of falling back to the token endpoint.
 
-Assertions from `createPrivateKeyJwtClientAssertionGetter` and `signPrivateKeyJwtClientAssertion` now carry the JOSE header `typ: "client-authentication+jwt"` instead of `typ: "JWT"`.
+An assertion now carries the JOSE header `typ: "client-authentication+jwt"` only when its audience is the known issuer. Every other assertion, such as one signed for a token endpoint URL that is not the issuer or one signed without a known issuer, keeps `typ: "JWT"`, because the explicit type signals the issuer-only audience and some authorization servers enforce that audience when they see it. `signPrivateKeyJwtClientAssertion` takes a new `issuer` option, the known issuer, for this choice.

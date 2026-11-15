@@ -45,23 +45,59 @@ describe("signPrivateKeyJwtClientAssertion", () => {
 	});
 
 	/**
+	 * The explicit type signals RFC 10070 compliance, which includes the
+	 * issuer-only audience. Some authorization servers switch to issuer-only
+	 * audience validation when they see it, so an assertion signed for the
+	 * token endpoint must not carry it.
+	 *
 	 * @see https://www.rfc-editor.org/rfc/rfc10070#section-4
 	 */
-	it("sets the client authentication JWT type", async () => {
-		const { privateKey } = await generateKeyPair("ES256", {
-			extractable: true,
+	describe("JWT type", () => {
+		const issuer = "https://idp.example.com";
+
+		async function sign(options: { audience?: string; issuer?: string }) {
+			const { privateKey } = await generateKeyPair("ES256", {
+				extractable: true,
+			});
+			return signPrivateKeyJwtClientAssertion({
+				clientId,
+				tokenEndpoint,
+				privateKeyJwk: await exportJWK(privateKey),
+				algorithm: "ES256",
+				...options,
+			});
+		}
+
+		it("sets the client authentication JWT type for the issuer audience", async () => {
+			const assertion = await sign({ audience: issuer, issuer });
+
+			expect(decodeJwt(assertion).aud).toBe(issuer);
+			expect(decodeProtectedHeader(assertion).typ).toBe(
+				"client-authentication+jwt",
+			);
 		});
 
-		const assertion = await signPrivateKeyJwtClientAssertion({
-			clientId,
-			tokenEndpoint,
-			privateKeyJwk: await exportJWK(privateKey),
-			algorithm: "ES256",
+		it("sets JWT for the token endpoint audience when the issuer differs", async () => {
+			const assertion = await sign({ issuer });
+
+			expect(decodeJwt(assertion).aud).toBe(tokenEndpoint);
+			expect(decodeProtectedHeader(assertion).typ).toBe("JWT");
 		});
 
-		expect(decodeProtectedHeader(assertion).typ).toBe(
-			"client-authentication+jwt",
-		);
+		it("sets JWT when the issuer is unknown", async () => {
+			const assertion = await sign({ audience: issuer });
+
+			expect(decodeProtectedHeader(assertion).typ).toBe("JWT");
+		});
+
+		it("sets the client authentication JWT type when the issuer is the token endpoint URL", async () => {
+			const assertion = await sign({ issuer: tokenEndpoint });
+
+			expect(decodeJwt(assertion).aud).toBe(tokenEndpoint);
+			expect(decodeProtectedHeader(assertion).typ).toBe(
+				"client-authentication+jwt",
+			);
+		});
 	});
 
 	it("signs a valid JWT with EdDSA JWK", async () => {
@@ -359,6 +395,7 @@ describe("signPrivateKeyJwtClientAssertion", () => {
 			});
 
 			expect(decodeJwt(assertion).aud).toBe(tokenEndpoint);
+			expect(decodeProtectedHeader(assertion).typ).toBe("JWT");
 		});
 
 		it("signs for the token endpoint when asked, even with a known issuer", async () => {
@@ -371,6 +408,22 @@ describe("signPrivateKeyJwtClientAssertion", () => {
 			});
 
 			expect(decodeJwt(assertion).aud).toBe(tokenEndpoint);
+			expect(decodeProtectedHeader(assertion).typ).toBe("JWT");
+		});
+
+		it("types a token endpoint assertion when the issuer is the same URL", async () => {
+			const getClientAssertion = await createGetter("token_endpoint");
+			const assertion = await getClientAssertion({
+				clientId,
+				tokenEndpoint,
+				grantType: "client_credentials",
+				issuer: tokenEndpoint,
+			});
+
+			expect(decodeJwt(assertion).aud).toBe(tokenEndpoint);
+			expect(decodeProtectedHeader(assertion).typ).toBe(
+				"client-authentication+jwt",
+			);
 		});
 
 		it("refuses to sign when the issuer audience has no issuer", async () => {

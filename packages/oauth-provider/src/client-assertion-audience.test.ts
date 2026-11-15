@@ -114,10 +114,11 @@ async function setup(
 		aud: string | string[],
 		key: CryptoKey,
 		alg: string,
+		typ = "client-authentication+jwt",
 	) {
 		const now = Math.floor(Date.now() / 1000);
 		return new SignJWT({})
-			.setProtectedHeader({ alg, typ: "client-authentication+jwt" })
+			.setProtectedHeader({ alg, typ })
 			.setIssuer(clientId)
 			.setSubject(clientId)
 			.setAudience(aud)
@@ -128,7 +129,7 @@ async function setup(
 	}
 
 	const methods = {
-		private_key_jwt: async (aud: string | string[]) => ({
+		private_key_jwt: async (aud: string | string[], typ?: string) => ({
 			client_id: keyClient!.client_id,
 			client_assertion_type: CLIENT_ASSERTION_TYPE,
 			client_assertion: await sign(
@@ -136,6 +137,7 @@ async function setup(
 				aud,
 				clientKeys.privateKey as CryptoKey,
 				"RS256",
+				typ,
 			),
 		}),
 		strategy: async (aud: string | string[]) => ({
@@ -259,6 +261,13 @@ describe("client assertion audience", () => {
 			},
 		);
 
+		it("accepts an issuer assertion typed as JWT", async () => {
+			const token = await requestToken(
+				await methods.private_key_jwt(issuer, "JWT"),
+			);
+			expect(token.status).toBe(200);
+		});
+
 		it("offers a strategy only the issuer as the accepted audience", async () => {
 			observedAcceptedAudiences.length = 0;
 			await requestToken(await methods.strategy(issuer));
@@ -298,6 +307,13 @@ describe("client assertion audience", () => {
 				expect(pushed.status).toBe(201);
 			},
 		);
+
+		it("accepts a token endpoint assertion typed as JWT", async () => {
+			const token = await requestToken(
+				await methods.private_key_jwt(tokenEndpoint, "JWT"),
+			);
+			expect(token.status).toBe(200);
+		});
 
 		it("rejects an assertion for another endpoint", async () => {
 			const token = await requestToken(
