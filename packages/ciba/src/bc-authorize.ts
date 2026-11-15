@@ -1,3 +1,5 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { appendQueryParams } from "@better-auth/core/utils/url";
 import type {
 	OAuthActorClaim,
 	OAuthAuthorizationDetail,
@@ -37,6 +39,22 @@ import type { ResolvedCibaOptions } from "./types";
 // Control and invisible formatting characters, such as bidirectional
 // overrides: a binding message must be plain text (CIBA §7.1).
 const NON_PLAIN_TEXT = /[\p{Cc}\p{Cf}]/u;
+
+/** The link the user approves from, or none when `approvalPage` is `false`. */
+function approvalURL(
+	ctx: GenericEndpointContext,
+	approvalPage: string | false | undefined,
+	requestId: string,
+): string | undefined {
+	if (approvalPage === false) return undefined;
+	const params = new URLSearchParams({ [APPROVAL_PARAMETER]: requestId });
+	return appendQueryParams(
+		approvalPage === undefined
+			? getAuthEndpointUrl(ctx, "/oauth2/authorize")
+			: new URL(approvalPage, ctx.context.baseURL).toString(),
+		params,
+	);
+}
 
 export function createBcAuthorize(options: ResolvedCibaOptions) {
 	return createOAuthEndpoint(
@@ -263,8 +281,7 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 				},
 			});
 
-			const url = new URL(getAuthEndpointUrl(ctx, "/oauth2/authorize"));
-			url.searchParams.set(APPROVAL_PARAMETER, request.id);
+			const url = approvalURL(ctx, options.approvalPage, request.id);
 			// The async wrapper turns a synchronous throw into a logged failure too,
 			// so the client always receives its auth_req_id.
 			await ctx.context.runInBackgroundOrAwait(
@@ -280,7 +297,7 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 							acrValues,
 							authorizationDetails,
 							actor,
-							url: url.toString(),
+							url,
 							expiresAt,
 						},
 						ctx,

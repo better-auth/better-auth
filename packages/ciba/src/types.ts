@@ -67,14 +67,49 @@ export interface CibaNotification {
 	 */
 	actor?: OAuthActorClaim | undefined;
 	/**
-	 * Absolute link that opens the provider's sign-in and consent pages for
-	 * this request. Send it to the user.
+	 * Absolute link for the user to approve or deny the request. By default it
+	 * opens the provider's sign-in and consent pages; with
+	 * {@link CibaOptions.approvalPage} it opens that page, with the request as
+	 * `ciba_request_id`. Absent when `approvalPage` is `false`.
 	 */
-	url: string;
+	url?: string | undefined;
 	expiresAt: Date;
 }
 
-export interface CibaOptions {
+/**
+ * Where the user approves a request: the provider's pages by default, or your
+ * own approval path.
+ */
+export type CibaApprovalOptions =
+	| {
+			approvalPage?: undefined;
+			/**
+			 * Path or URL of the page the user lands on after deciding through the
+			 * provider's pages, with `status=approved` or `status=denied`, or with
+			 * `error` and `error_description` when the link is invalid, expired,
+			 * or for another account.
+			 */
+			resultPage: string;
+	  }
+	| {
+			/**
+			 * Approve requests on your own path instead of the provider's sign-in
+			 * and consent pages, and record each decision with
+			 * `auth.api.completeCibaRequest`. A path or URL becomes the
+			 * notification's `url`, with the request as `ciba_request_id`; `false`
+			 * sends no `url`, such as when your own app shows the request. Either
+			 * way, `/oauth2/authorize` no longer approves CIBA requests, so the
+			 * provider's consent page cannot bypass your checks.
+			 */
+			approvalPage: string | false;
+			resultPage?: never;
+	  };
+
+/** Options for {@link ciba}. */
+export type CibaOptions = CibaSharedOptions & CibaApprovalOptions;
+
+/** {@link CibaOptions} that do not depend on where the user approves. */
+export interface CibaSharedOptions {
 	/**
 	 * Tell the user about a new request on a channel they trust, such as email
 	 * or a push notification, and include `url`. Runs in the background when
@@ -85,14 +120,6 @@ export interface CibaOptions {
 		notification: CibaNotification,
 		ctx: GenericEndpointContext,
 	) => Awaitable<void>;
-
-	/**
-	 * Path or URL of the page the user lands on after deciding, with
-	 * `status=approved` or `status=denied`, or with `error` and
-	 * `error_description` when the link is invalid, expired, or for another
-	 * account.
-	 */
-	resultPage: string;
 
 	/**
 	 * Find the user a `login_hint` identifies. Defaults to an email lookup.
