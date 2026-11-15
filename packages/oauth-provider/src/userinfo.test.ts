@@ -283,7 +283,9 @@ describe("oauth userinfo", async () => {
 			},
 		);
 		expect(userinfo.error?.status).toBe(401);
-		expect(challenge).toMatch(/^Bearer, DPoP algs=/);
+		expect(challenge).toMatch(
+			/^Bearer scope="openid", DPoP scope="openid", algs=/,
+		);
 	});
 
 	it("rejects a revoked access token with invalid_token (401), not invalid_scope", async () => {
@@ -651,7 +653,9 @@ describe("oauth userinfo", async () => {
 			const result = await requestUserinfo({});
 
 			expect(result.status).toBe(401);
-			expect(result.challenge).toBe(`Bearer, DPoP algs="${algs}"`);
+			expect(result.challenge).toBe(
+				`Bearer scope="openid", DPoP scope="openid", algs="${algs}"`,
+			);
 			expect(result.exposed).toBe("WWW-Authenticate");
 		});
 
@@ -663,7 +667,7 @@ describe("oauth userinfo", async () => {
 			expect((error as APIError).statusCode).toBe(401);
 			expect(
 				new Headers((error as APIError).headers).get("WWW-Authenticate"),
-			).toBe(`Bearer, DPoP algs="${algs}"`);
+			).toBe(`Bearer scope="openid", DPoP scope="openid", algs="${algs}"`);
 		});
 
 		it("keeps the Bearer challenge for an invalid token sent with the Bearer scheme", async () => {

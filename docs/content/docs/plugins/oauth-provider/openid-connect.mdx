@@ -135,7 +135,7 @@ Every 401 and 403 from UserInfo carries a `WWW-Authenticate` challenge that tell
 
 | Request                                                                                     | Challenge                                                                                                                      |
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| No access token                                                                             | `Bearer, DPoP algs="…"`, with no error code                                                                                    |
+| No access token                                                                             | `Bearer scope="openid", DPoP scope="openid", algs="…"`, with no error code                                                     |
 | A token sent with the `Bearer` scheme or in the form body, when the token is not DPoP-bound | `Bearer error="invalid_token", …`                                                                                              |
 | A DPoP-bound token, or any request that uses the `DPoP` scheme                              | `DPoP error="…", error_description="…", algs="…"` ([RFC 9449 §7.1](https://datatracker.ietf.org/doc/html/rfc9449#section-7.1)) |
 
