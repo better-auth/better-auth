@@ -1,4 +1,5 @@
 import { getCurrentAdapter } from "@better-auth/core/context";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { DBAdapter, DBTransactionAdapter } from "better-auth";
 import { APIError, createAuthEndpoint } from "better-auth/api";
@@ -918,7 +919,7 @@ export function createSCIMManagedConnectionEndpoints(
 						},
 					);
 				} catch (error) {
-					if (error instanceof APIError) throw error;
+					if (isAPIError(error)) throw error;
 					if (joinsAmbientTransaction) throw error;
 					const duplicate = await findManagedConnectionByCreationRequestId(
 						ctx.context.adapter,

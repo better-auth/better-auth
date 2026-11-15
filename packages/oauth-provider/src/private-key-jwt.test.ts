@@ -624,6 +624,10 @@ describe("private_key_jwt authentication", async () => {
 		expect(discoveryMetadataFetch).not.toHaveBeenCalled();
 	});
 
+	/**
+	 * A 401 must carry a challenge, and a browser client must be able to read it.
+	 * @see https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2
+	 */
 	it("should reject assertion signed with wrong key", async () => {
 		const wrongKeyPair = await generateKeyPair("RS256", {
 			extractable: true,
@@ -633,6 +637,7 @@ describe("private_key_jwt authentication", async () => {
 		const assertion = await signAssertion({
 			key: wrongKeyPair.privateKey as CryptoKey,
 		});
+		let responseHeaders: Headers | undefined;
 
 		const result = await client.$fetch("/oauth2/token", {
 			method: "POST",
@@ -647,10 +652,17 @@ describe("private_key_jwt authentication", async () => {
 				code_verifier: codeVerifier,
 			}),
 			headers: { "content-type": "application/x-www-form-urlencoded" },
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
 		});
 
-		expect(result.error?.status).toBeGreaterThanOrEqual(400);
-		expect(result.error?.status).toBeLessThan(500);
+		expect(result.error?.status).toBe(401);
+		expect(result.error).toMatchObject({ error: "invalid_client" });
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("Access-Control-Expose-Headers")).toBe(
+			"WWW-Authenticate",
+		);
 	});
 
 	/**

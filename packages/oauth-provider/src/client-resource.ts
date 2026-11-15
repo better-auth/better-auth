@@ -17,7 +17,11 @@ import { APIError } from "better-call";
 import type { JWTPayload, JWTVerifyOptions } from "jose";
 import { createResourceServerChallenge } from "./resource-challenge";
 import type { ResourceServerMetadata } from "./types/oauth";
-import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
+import {
+	getJwtPlugin,
+	getLocalJwksSource,
+	getOAuthProviderPlugin,
+} from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 type ResourceClientAuth = {
@@ -128,6 +132,14 @@ export const oauthProviderResourceClient = <
 			(authServerBaseUrl
 				? `${authServerBaseUrl}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`
 				: undefined);
+		// An auth instance in this process serves its keys without a request to
+		// its own `/jwks`, which some runtimes block.
+		const localJwks =
+			auth && jwtPlugin && !opts?.jwksUrl
+				? getLocalJwksSource(
+						(await auth.$context) as Parameters<typeof getLocalJwksSource>[0],
+					)
+				: undefined;
 		const introspectUrl =
 			opts?.remoteVerify?.introspectUrl ??
 			(authServerBaseUrl
@@ -135,6 +147,7 @@ export const oauthProviderResourceClient = <
 				: undefined);
 		return {
 			...opts,
+			...localJwks,
 			jwksUrl,
 			verifyOptions: {
 				...opts?.verifyOptions,

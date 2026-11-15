@@ -201,7 +201,7 @@
     "@better-auth/utils": "catalog:peer",
     "@better-fetch/fetch": "catalog:",
     "@opentelemetry/api": "^1.9.0",
-    "better-call": "catalog:",
+    "better-call": "catalog:peer",
     "jose": "^6.1.0",
     "kysely": "catalog:peer",
     "nanostores": "catalog:peer"

@@ -1,12 +1,13 @@
+import type { BetterAuthOptions } from "better-auth";
 import { generateRandomString } from "better-auth/crypto";
-import { deriveDpopJkt, generateCodeChallenge } from "better-auth/oauth2";
+import { generateCodeChallenge } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import type { JWK } from "jose";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import { createDpopKey, createDpopProof } from "./test-utils/dpop";
 import type { OAuthOptions, Scope } from "./types";
 
 const baseURL = "http://localhost:3000";
@@ -16,40 +17,19 @@ const tokenEndpoint = `${baseURL}/api/auth/oauth2/token`;
 const redirectUri = "https://rp.example.com/api/auth/callback/test";
 const requestUriPrefix = "urn:ietf:params:oauth:request_uri:";
 
-async function createDpopKey() {
-	const { privateKey, publicKey } = await generateKeyPair("ES256", {
-		extractable: true,
-	});
-	const publicJwk = await exportJWK(publicKey);
-	return { privateKey, publicJwk, jkt: await deriveDpopJkt(publicJwk) };
-}
-
-type DpopKey = Awaited<ReturnType<typeof createDpopKey>>;
-
-function createProof(key: DpopKey, url: string, nonce?: string) {
-	return new SignJWT({
-		jti: generateRandomString(16),
-		htm: "POST",
-		htu: url,
-		iat: Math.floor(Date.now() / 1000),
-		...(nonce ? { nonce } : {}),
-	})
-		.setProtectedHeader({
-			typ: "dpop+jwt",
-			alg: "ES256",
-			jwk: key.publicJwk as JWK,
-		})
-		.sign(key.privateKey);
-}
-
 async function setup(
 	providerOptions: Partial<OAuthOptions<Scope[]>> = {
 		pushedAuthorizationRequests: { enabled: true },
 	},
+	authOptions: Pick<
+		BetterAuthOptions,
+		"secondaryStorage" | "session" | "verification"
+	> = {},
 ) {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
 		{
 			baseURL,
+			...authOptions,
 			plugins: [
 				jwt({ jwt: { issuer: baseURL } }),
 				oauthProvider({
@@ -175,6 +155,253 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc9126#section-4
+ */
+describe("pushed authorization requests in secondary storage", async () => {
+	const store = new Map<string, string>();
+	// Holds the next write of a pushed request until `release` runs, so a
+	// second visit can finish in between.
+	let held:
+		| { reached: () => void; release: Promise<void>; written?: () => void }
+		| undefined;
+	// Holds a consume that finds no pushed request until the held write lands.
+	let lostConsume: { reached: () => void; wait: Promise<void> } | undefined;
+	let failNextCodeWrite = false;
+	let failNextLoadedWrite = false;
+	const { createClient, authorizationParams, pushRequest, authorize } =
+		await setup(
+			{ pushedAuthorizationRequests: { enabled: true } },
+			{
+				session: { storeSessionInDatabase: true },
+				secondaryStorage: {
+					get: (key) => store.get(key) ?? null,
+					async set(key, value) {
+						if (failNextCodeWrite && value.includes("authorization_code")) {
+							failNextCodeWrite = false;
+							throw new Error("storage unavailable");
+						}
+						if (failNextLoadedWrite && key.endsWith(":loaded")) {
+							failNextLoadedWrite = false;
+							throw new Error("storage unavailable");
+						}
+						const hold = key.includes("pushed_authorization_request")
+							? held
+							: undefined;
+						if (hold) {
+							held = undefined;
+							hold.reached();
+							await hold.release;
+						}
+						store.set(key, value);
+						hold?.written?.();
+					},
+					delete: (key) => {
+						store.delete(key);
+					},
+					async getAndDelete(key) {
+						const value = store.get(key) ?? null;
+						store.delete(key);
+						const waiting =
+							value === null && key.includes("pushed_authorization_request")
+								? lostConsume
+								: undefined;
+						if (waiting) {
+							lostConsume = undefined;
+							waiting.reached();
+							await waiting.wait;
+						}
+						return value;
+					},
+					increment(key) {
+						const next = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(next));
+						return next;
+					},
+				},
+			},
+		);
+	const client = await createClient();
+
+	it("issues one code when first visits overlap", async () => {
+		const { params } = await authorizationParams(client.client_id);
+		const pushed = await pushRequest({
+			...params,
+			client_id: client.client_id,
+			client_secret: client.client_secret!,
+		});
+		const visit = () =>
+			authorize({
+				client_id: client.client_id,
+				request_uri: pushed.body.request_uri as string,
+			});
+
+		let release!: () => void;
+		const reached = new Promise<void>((resolve) => {
+			held = {
+				reached: resolve,
+				release: new Promise((done) => {
+					release = done;
+				}),
+			};
+		});
+		const stalled = visit();
+		await reached;
+		const finished = await visit();
+		release();
+		const results = [await stalled, finished];
+
+		const codes = results.filter((url) => url.searchParams.get("code"));
+		expect(codes).toHaveLength(1);
+	});
+
+	it("loads the request for a first visit that overlaps another", async () => {
+		const { params } = await authorizationParams(client.client_id);
+		const pushed = await pushRequest({
+			...params,
+			client_id: client.client_id,
+			client_secret: client.client_secret!,
+		});
+		const visit = () =>
+			authorize(
+				{
+					client_id: client.client_id,
+					request_uri: pushed.body.request_uri as string,
+				},
+				new Headers(),
+			);
+
+		let release!: () => void;
+		let written!: () => void;
+		const firstWrote = new Promise<void>((resolve) => {
+			written = resolve;
+		});
+		const firstHeld = new Promise<void>((resolve) => {
+			held = {
+				reached: resolve,
+				release: new Promise((done) => {
+					release = done;
+				}),
+				written,
+			};
+		});
+		const secondLost = new Promise<void>((resolve) => {
+			lostConsume = { reached: resolve, wait: firstWrote };
+		});
+		const first = visit();
+		await firstHeld;
+		const second = visit();
+		await secondLost;
+		release();
+
+		for (const location of await Promise.all([first, second])) {
+			expect(location.pathname).toBe("/login");
+		}
+	});
+
+	it("uses up the request_uri when its first visit fails to store it", async () => {
+		const { params } = await authorizationParams(client.client_id);
+		const pushed = await pushRequest({
+			...params,
+			client_id: client.client_id,
+			client_secret: client.client_secret!,
+		});
+		const visit = () =>
+			authorize({
+				client_id: client.client_id,
+				request_uri: pushed.body.request_uri as string,
+			});
+
+		failNextLoadedWrite = true;
+		const failed = await visit();
+		expect(failed.searchParams.get("code")).toBeNull();
+		const retried = await visit();
+		expect(retried.searchParams.get("code")).toBeNull();
+		expect(retried.searchParams.get("error")).toBe("invalid_request_uri");
+	});
+
+	it("keeps the request_uri when storing the code fails", async () => {
+		const { params } = await authorizationParams(client.client_id);
+		const pushed = await pushRequest({
+			...params,
+			client_id: client.client_id,
+			client_secret: client.client_secret!,
+		});
+		const visit = () =>
+			authorize({
+				client_id: client.client_id,
+				request_uri: pushed.body.request_uri as string,
+			});
+
+		failNextCodeWrite = true;
+		const failed = await visit();
+		expect(failed.searchParams.get("code")).toBeNull();
+		const retried = await visit();
+		expect(retried.searchParams.get("code")).toEqual(expect.any(String));
+	});
+});
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc9126#section-4
+ */
+describe("pushed authorization requests in the database and secondary storage", async () => {
+	const store = new Map<string, string>();
+	let failNextLoadedWrite = false;
+	const { createClient, authorizationParams, pushRequest, authorize } =
+		await setup(
+			{ pushedAuthorizationRequests: { enabled: true } },
+			{
+				session: { storeSessionInDatabase: true },
+				verification: { storeInDatabase: true },
+				secondaryStorage: {
+					get: (key) => store.get(key) ?? null,
+					set(key, value) {
+						if (failNextLoadedWrite && key.endsWith(":loaded")) {
+							failNextLoadedWrite = false;
+							throw new Error("storage unavailable");
+						}
+						store.set(key, value);
+					},
+					delete: (key) => {
+						store.delete(key);
+					},
+					getAndDelete(key) {
+						const value = store.get(key) ?? null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const next = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(next));
+						return next;
+					},
+				},
+			},
+		);
+	const client = await createClient();
+
+	it("issues one code after a first visit whose cache write fails", async () => {
+		const { params } = await authorizationParams(client.client_id);
+		const pushed = await pushRequest({
+			...params,
+			client_id: client.client_id,
+			client_secret: client.client_secret!,
+		});
+		const visit = () =>
+			authorize({
+				client_id: client.client_id,
+				request_uri: pushed.body.request_uri as string,
+			});
+
+		failNextLoadedWrite = true;
+		const failed = await visit();
+		expect(failed.searchParams.get("code")).toBeNull();
+		const retries = [await visit(), await visit(), await visit()];
+		const codes = retries.filter((url) => url.searchParams.get("code"));
+		expect(codes).toHaveLength(1);
+	});
+});
+
 describe("pushed authorization requests", async () => {
 	const {
 		auth,
@@ -183,6 +410,7 @@ describe("pushed authorization requests", async () => {
 		pushRequest,
 		authorize,
 		redeem,
+		customFetchImpl,
 	} = await setup();
 	const client = await createClient();
 	const credentials = {
@@ -332,6 +560,104 @@ describe("pushed authorization requests", async () => {
 			request_uri: requestUri,
 		});
 		expect(location.searchParams.get("code")).toEqual(expect.any(String));
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9126#section-4
+	 */
+	describe("until the authorization code is issued", () => {
+		it("accepts a reloaded request_uri, then issues one code", async () => {
+			const { params, codeVerifier } = await authorizationParams(
+				client.client_id,
+			);
+			const pushed = await pushRequest({ ...params, ...credentials });
+			const visit = (sessionHeaders?: Headers) =>
+				authorize(
+					{
+						client_id: client.client_id,
+						request_uri: pushed.body.request_uri as string,
+					},
+					sessionHeaders,
+				);
+
+			// A signed-out visit goes to login; reloading it does the same.
+			expect((await visit(new Headers())).pathname).toBe("/login");
+			expect((await visit(new Headers())).pathname).toBe("/login");
+
+			const issued = await visit();
+			const code = issued.searchParams.get("code");
+			expect(code).toEqual(expect.any(String));
+			const tokens = await redeem(credentials, code!, codeVerifier);
+			expect(tokens.response.status).toBe(200);
+
+			const replay = await visit();
+			expect(replay.searchParams.get("error")).toBe("invalid_request_uri");
+		});
+
+		it("completes a sign-in that outlasts expires_in", async () => {
+			const { params } = await authorizationParams(client.client_id);
+			const pushed = await pushRequest({ ...params, ...credentials });
+			const login = await authorize(
+				{
+					client_id: client.client_id,
+					request_uri: pushed.body.request_uri as string,
+				},
+				new Headers(),
+			);
+			expect(login.pathname).toBe("/login");
+
+			vi.useFakeTimers({ toFake: ["Date"] });
+			vi.setSystemTime(Date.now() + 120_000);
+			const signIn = await customFetchImpl(
+				`${baseURL}/api/auth/sign-in/email`,
+				{
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test123456",
+						oauth_query: login.searchParams.toString(),
+					}),
+				},
+			);
+			const continued = (await signIn.json()) as { url: string };
+			expect(new URL(continued.url, baseURL).searchParams.get("code")).toEqual(
+				expect.any(String),
+			);
+		});
+
+		it("issues no second code from a request continued twice", async () => {
+			const { params } = await authorizationParams(client.client_id);
+			const pushed = await pushRequest({ ...params, ...credentials });
+			const login = await authorize(
+				{
+					client_id: client.client_id,
+					request_uri: pushed.body.request_uri as string,
+				},
+				new Headers(),
+			);
+			const signIn = () =>
+				customFetchImpl(`${baseURL}/api/auth/sign-in/email`, {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test123456",
+						oauth_query: login.searchParams.toString(),
+					}),
+				}).then(
+					async (response) =>
+						new URL(((await response.json()) as { url: string }).url, baseURL),
+				);
+
+			const first = await signIn();
+			expect(first.searchParams.get("code")).toEqual(expect.any(String));
+			const second = await signIn();
+			expect(`${second.origin}${second.pathname}`).toBe(redirectUri);
+			expect(second.searchParams.get("error")).toBe("invalid_request_uri");
+			expect(second.searchParams.get("state")).toBe("par-state");
+			expect(second.searchParams.get("code")).toBeNull();
+		});
 	});
 
 	it("binds the request_uri to the client that pushed it", async () => {
@@ -508,7 +834,7 @@ describe("pushed authorization requests", async () => {
 			);
 			const pushed = await pushRequest(
 				{ ...params, ...credentials },
-				{ DPoP: await createProof(key, parEndpoint) },
+				{ DPoP: await createDpopProof(key, { url: parEndpoint }) },
 			);
 			expect(pushed.response.status).toBe(201);
 
@@ -523,7 +849,7 @@ describe("pushed authorization requests", async () => {
 				credentials,
 				code,
 				codeVerifier,
-				await createProof(otherKey, tokenEndpoint),
+				await createDpopProof(otherKey, { url: tokenEndpoint }),
 			);
 			expect(wrongKey.response.status).toBe(400);
 			expect(wrongKey.body).toMatchObject({ error: "invalid_dpop_proof" });
@@ -536,7 +862,7 @@ describe("pushed authorization requests", async () => {
 			);
 			const pushed = await pushRequest(
 				{ ...params, ...credentials },
-				{ DPoP: await createProof(key, parEndpoint) },
+				{ DPoP: await createDpopProof(key, { url: parEndpoint }) },
 			);
 			const location = await authorize({
 				client_id: client.client_id,
@@ -546,7 +872,7 @@ describe("pushed authorization requests", async () => {
 				credentials,
 				location.searchParams.get("code")!,
 				codeVerifier,
-				await createProof(key, tokenEndpoint),
+				await createDpopProof(key, { url: tokenEndpoint }),
 			);
 			expect(tokens.response.status).toBe(200);
 			expect(tokens.body.token_type).toBe("DPoP");
@@ -559,10 +885,10 @@ describe("pushed authorization requests", async () => {
 			const { params } = await authorizationParams(client.client_id);
 			const pushed = await pushRequest(
 				{ ...params, ...credentials, dpop_jkt: otherKey.jkt },
-				{ DPoP: await createProof(key, parEndpoint) },
+				{ DPoP: await createDpopProof(key, { url: parEndpoint }) },
 			);
 			expect(pushed.response.status).toBe(400);
-			expect(pushed.body).toMatchObject({ error: "invalid_request" });
+			expect(pushed.body).toMatchObject({ error: "invalid_dpop_proof" });
 		});
 
 		it("rejects a proof for another endpoint", async () => {
@@ -570,7 +896,7 @@ describe("pushed authorization requests", async () => {
 			const { params } = await authorizationParams(client.client_id);
 			const pushed = await pushRequest(
 				{ ...params, ...credentials },
-				{ DPoP: await createProof(key, tokenEndpoint) },
+				{ DPoP: await createDpopProof(key, { url: tokenEndpoint }) },
 			);
 			expect(pushed.response.status).toBe(400);
 			expect(pushed.body).toMatchObject({ error: "invalid_dpop_proof" });
@@ -626,7 +952,7 @@ describe("pushed authorization requests with required DPoP nonces", async () => 
 		const body = { ...params, client_secret: client.client_secret! };
 
 		const challenged = await pushRequest(body, {
-			DPoP: await createProof(key, parEndpoint),
+			DPoP: await createDpopProof(key, { url: parEndpoint }),
 		});
 		expect(challenged.response.status).toBe(400);
 		expect(challenged.body).toMatchObject({ error: "use_dpop_nonce" });
@@ -635,7 +961,7 @@ describe("pushed authorization requests with required DPoP nonces", async () => 
 		expect(nonce).toBeTruthy();
 
 		const pushed = await pushRequest(body, {
-			DPoP: await createProof(key, parEndpoint, nonce!),
+			DPoP: await createDpopProof(key, { url: parEndpoint, nonce: nonce! }),
 		});
 		expect(pushed.response.status).toBe(201);
 		expect(pushed.response.headers.get("DPoP-Nonce")).toBeTruthy();
@@ -679,16 +1005,15 @@ describe("pushed authorization requests with required DPoP nonces", async () => 
 		const key = await createDpopKey();
 
 		const challenged = await pushRequest(body, {
-			DPoP: await createProof(key, parEndpoint),
+			DPoP: await createDpopProof(key, { url: parEndpoint }),
 		});
 		expect(challenged.body).toMatchObject({ error: "use_dpop_nonce" });
 
 		const pushed = await pushRequest(body, {
-			DPoP: await createProof(
-				key,
-				parEndpoint,
-				challenged.response.headers.get("DPoP-Nonce")!,
-			),
+			DPoP: await createDpopProof(key, {
+				url: parEndpoint,
+				nonce: challenged.response.headers.get("DPoP-Nonce")!,
+			}),
 		});
 		expect(pushed.response.status).toBe(201);
 	});
@@ -775,7 +1100,6 @@ describe("pushed authorization requests required for every client", async () => 
 			new Headers(),
 		);
 		expect(login.pathname).toBe("/login");
-		expect(login.searchParams.get("request_uri")).toBeNull();
 		expect(login.searchParams.get("state")).toBe("par-state");
 
 		const signIn = await customFetchImpl(`${baseURL}/api/auth/sign-in/email`, {

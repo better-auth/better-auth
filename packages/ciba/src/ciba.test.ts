@@ -34,6 +34,7 @@ const resolveAuthenticationContext =
 	vi.fn<() => OAuthAuthenticationContext | undefined>();
 
 const PAYMENT = "payment_initiation";
+const ACCOUNTS = "account_access";
 const payment = {
 	type: PAYMENT,
 	actions: ["initiate"],
@@ -87,6 +88,7 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 				sendNotification,
 				authorizationDetailsTypes: {
 					[PAYMENT]: { validate: validatePayment },
+					[ACCOUNTS]: { validate: () => true },
 				},
 			}),
 		],
@@ -194,6 +196,7 @@ async function poll(
 	client: OAuthClient = pollClient,
 	extraHeaders: Record<string, string> = {},
 	resources: string[] = [],
+	fetchImpl = customFetchImpl,
 ) {
 	const authentication = clientAuthentication(client);
 	const body = new URLSearchParams({
@@ -202,7 +205,7 @@ async function poll(
 		auth_req_id: authReqId,
 	});
 	for (const selected of resources) body.append("resource", selected);
-	const res = await customFetchImpl(`${baseURL}/api/auth/oauth2/token`, {
+	const res = await fetchImpl(`${baseURL}/api/auth/oauth2/token`, {
 		method: "POST",
 		headers: {
 			"content-type": "application/x-www-form-urlencoded",
@@ -212,6 +215,23 @@ async function poll(
 		body: body.toString(),
 	});
 	return { status: res.status, body: await res.json() };
+}
+
+async function introspect(
+	token: string,
+	client: OAuthClient = pollClient,
+	fetchImpl = customFetchImpl,
+) {
+	const authentication = clientAuthentication(client);
+	const res = await fetchImpl(`${baseURL}/api/auth/oauth2/introspect`, {
+		method: "POST",
+		headers: {
+			"content-type": "application/x-www-form-urlencoded",
+			...authentication.headers,
+		},
+		body: new URLSearchParams({ ...authentication.params, token }).toString(),
+	});
+	return res.json();
 }
 
 /** Follows a browser request and returns the URL the provider sends it to. */
@@ -1102,14 +1122,20 @@ describe("ciba authorization_details", () => {
 		expect(res.body.error).toBe("invalid_authorization_details");
 	});
 
-	it("requires a resource, so the access token is a JWT that carries the details", async () => {
-		const res = await bcAuthorize({
-			scope: "openid",
-			login_hint: testUser.email,
-			authorization_details: JSON.stringify([payment]),
-		});
-		expect(res.status).toBe(400);
-		expect(res.body.error).toBe("invalid_authorization_details");
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc9396.html#section-9.2
+	 */
+	it("returns the details at introspection of an opaque access token", async () => {
+		const detail = { type: PAYMENT, actions: ["initiate"], creditorName: "A" };
+		const { authReqId, url } = await startPayment([detail], { resource: [] });
+		await approve(url);
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		expect(issued.body.authorization_details).toEqual([detail]);
+		expect(() => decodeJwt(issued.body.access_token as string)).toThrow();
+		const introspection = await introspect(issued.body.access_token);
+		expect(introspection.active).toBe(true);
+		expect(introspection.authorization_details).toEqual([detail]);
 	});
 
 	it("issues no refresh token, because refreshed tokens would lose the details", async () => {
@@ -1245,12 +1271,51 @@ describe("ciba authorization_details", () => {
 		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
 	});
 
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc9396.html#section-10
+	 */
+	it.each([
+		["a type the server does not support", ["account_information"]],
+		["a value that is not a list of types", PAYMENT],
+	])(
+		"refuses to register authorization_details_types with %s",
+		async (_, types) => {
+			await expect(
+				createClient({ ...POLL, authorization_details_types: types }),
+			).rejects.toMatchObject({ body: { error: "invalid_client_metadata" } });
+		},
+	);
+
+	it("limits a client to the types it registered", async () => {
+		const client = await createClient({
+			...POLL,
+			authorization_details_types: [ACCOUNTS],
+		});
+		const refused = await bcAuthorize(
+			{
+				scope: "openid",
+				login_hint: testUser.email,
+				authorization_details: JSON.stringify([payment]),
+			},
+			client,
+		);
+		expect(refused.status).toBe(400);
+		expect(refused.body.error).toBe("invalid_authorization_details");
+		await start(
+			{ authorization_details: JSON.stringify([{ type: ACCOUNTS }]) },
+			client,
+		);
+	});
+
 	it("advertises the supported types in discovery", async () => {
 		const metadata = (await auth.api.getOpenIdConfig()) as Record<
 			string,
 			unknown
 		>;
-		expect(metadata.authorization_details_types_supported).toEqual([PAYMENT]);
+		expect(metadata.authorization_details_types_supported).toEqual([
+			PAYMENT,
+			ACCOUNTS,
+		]);
 	});
 });
 
@@ -1476,5 +1541,84 @@ describe("ciba defaults", async () => {
 			instance.customFetchImpl,
 		);
 		expect(res.body.error).toBe("invalid_authorization_details");
+	});
+});
+
+describe("ciba authorization_details claim ownership", async () => {
+	const forged = [{ type: PAYMENT, creditorName: "Forged" }];
+	const granted = { type: PAYMENT, actions: ["initiate"], creditorName: "A" };
+	const instance = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [
+					{
+						identifier: resource,
+						customClaims: { authorization_details: forged },
+					},
+				],
+				enforcePerClientResources: false,
+				customAccessTokenClaims: () => ({ authorization_details: forged }),
+			}),
+			ciba({
+				resultPage: "/ciba",
+				interval: INTERVAL,
+				sendNotification,
+				authorizationDetailsTypes: { [PAYMENT]: { validate: () => true } },
+			}),
+		],
+	});
+	const { headers: adminHeaders, user } = await instance.signInWithTestUser();
+	const client = await instance.auth.api.adminCreateOAuthClient({
+		headers: adminHeaders,
+		body: { grant_types: [CIBA_GRANT_TYPE], metadata: POLL },
+	});
+
+	async function issue(resources: string[]) {
+		const res = await bcAuthorize(
+			{
+				scope: "openid",
+				login_hint: user.email,
+				resource: resources,
+				authorization_details: JSON.stringify([granted]),
+			},
+			client,
+			instance.customFetchImpl,
+		);
+		expect(res.status).toBe(200);
+		await instance.auth.api.completeCibaRequest({
+			body: {
+				requestId: lastNotification!.requestId,
+				userId: user.id,
+				decision: "approved",
+			},
+		});
+		const token = await poll(
+			res.body.auth_req_id,
+			client,
+			{},
+			[],
+			instance.customFetchImpl,
+		);
+		expect(token.status).toBe(200);
+		return token.body.access_token as string;
+	}
+
+	it("keeps the granted details in a JWT access token over custom claims", async () => {
+		const accessToken = await issue([resource]);
+		expect(decodeJwt(accessToken).authorization_details).toEqual([granted]);
+	});
+
+	it("keeps the granted details at introspection over custom claims", async () => {
+		const accessToken = await issue([]);
+		const introspection = await introspect(
+			accessToken,
+			client,
+			instance.customFetchImpl,
+		);
+		expect(introspection.authorization_details).toEqual([granted]);
 	});
 });

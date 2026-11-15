@@ -1,10 +1,16 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
-import { stripAccessTokenAuthorizationScheme } from "better-auth/oauth2";
+import { isAPIError } from "better-auth/api";
+import {
+	getDpopJktFromPayload,
+	stripAccessTokenAuthorizationScheme,
+} from "better-auth/oauth2";
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
+import { exposeChallengeHeader } from "./dpop";
+import { buildResourceServerChallenge } from "./resource-challenge";
 import {
 	getResourceCustomClaims,
 	isAudienceClaimAllowed,
@@ -28,8 +34,10 @@ import type {
 	Scope,
 } from "./types";
 import {
+	challengeHeaders,
 	destructureCredentials,
 	extractClientCredentials,
+	getAuthEndpointUrl,
 	getClient,
 	getJwtPlugin,
 	parseClientMetadata,
@@ -419,9 +427,7 @@ function createInvalidAccessTokenError() {
 			error_description: INVALID_ACCESS_TOKEN_ERROR_DESCRIPTION,
 			error: "invalid_token",
 		},
-		{
-			"WWW-Authenticate": INVALID_ACCESS_TOKEN_WWW_AUTHENTICATE,
-		},
+		challengeHeaders(INVALID_ACCESS_TOKEN_WWW_AUTHENTICATE),
 	);
 }
 
@@ -473,6 +479,10 @@ export async function validateAccessToken(
 		.payload;
 }
 
+/**
+ * Requires an active bearer access token. A DPoP-bound token is refused,
+ * because a raw token string carries no proof to check its binding against.
+ */
 export async function requireActiveAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -480,8 +490,25 @@ export async function requireActiveAccessToken(
 	clientId?: string,
 ): Promise<ActiveAccessTokenPayload> {
 	const payload = await validateAccessToken(ctx, opts, token, clientId);
-	if (payload.active) return payload as ActiveAccessTokenPayload;
-	throw createInvalidAccessTokenError();
+	if (!payload.active) throw createInvalidAccessTokenError();
+	if (getDpopJktFromPayload(payload)) {
+		const error = new APIError("UNAUTHORIZED", {
+			error: "invalid_token",
+			error_description:
+				"DPoP-bound access token requires verifyResourceRequest",
+		});
+		const challenge = buildResourceServerChallenge(error, undefined, {
+			dpopSigningAlgorithms: opts.dpop?.signingAlgorithms,
+		});
+		if (!challenge) throw error;
+		const headers = new Headers(challenge.headers);
+		headers.set(
+			"Access-Control-Expose-Headers",
+			exposeChallengeHeader(ctx, headers.get("access-control-expose-headers")),
+		);
+		throw new APIError(challenge.status, challenge.body, headers);
+	}
+	return payload as ActiveAccessTokenPayload;
 }
 
 /**
@@ -562,7 +589,7 @@ export async function introspectEndpoint(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/introspect`,
+		getAuthEndpointUrl(ctx, "/oauth2/introspect"),
 	);
 	const {
 		clientId: client_id,
@@ -572,10 +599,14 @@ export async function introspectEndpoint(
 	} = destructureCredentials(credentials);
 
 	if (!client_id || (!client_secret && !preVerified)) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "missing required credentials",
-			error: "invalid_client",
-		});
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				error_description: "missing required credentials",
+				error: "invalid_client",
+			},
+			challengeHeaders("Basic"),
+		);
 	}
 
 	// Check token
@@ -621,7 +652,7 @@ export async function introspectEndpoint(
 		);
 		return resolveIntrospectionSubjects(ctx, opts, payload, client);
 	} catch (error) {
-		if (error instanceof APIError) throw error;
+		if (isAPIError(error)) throw error;
 		logger.error("Introspection error:", error);
 		throw new APIError("INTERNAL_SERVER_ERROR");
 	}

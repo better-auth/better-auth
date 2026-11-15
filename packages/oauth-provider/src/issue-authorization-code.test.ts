@@ -1,16 +1,52 @@
-import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
+import {
+	APIError,
+	createAuthEndpoint,
+	sessionMiddleware,
+} from "better-auth/api";
+import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { deriveDpopJkt, generateCodeChallenge } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin } from "better-auth/types";
-import { exportJWK, generateKeyPair } from "jose";
+import type { JWK } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProvider } from "./oauth";
 import { getOAuthProviderApi } from "./token";
 import type { StoredAuthorizationQuery } from "./types";
 import type { OAuthClient } from "./types/oauth";
 import { storeToken } from "./utils";
+
+const issueCodeEndpoint = "http://localhost:3000/api/auth/test/issue-code";
+
+async function createDpopKey() {
+	const { privateKey, publicKey } = await generateKeyPair("ES256", {
+		extractable: true,
+	});
+	const publicJwk = await exportJWK(publicKey);
+	return { privateKey, publicJwk, jkt: await deriveDpopJkt(publicJwk) };
+}
+
+async function createDpopProof(
+	key: Awaited<ReturnType<typeof createDpopKey>>,
+	url: string,
+	nonce?: string,
+) {
+	return new SignJWT({
+		jti: generateRandomString(16),
+		htm: "POST",
+		htu: url,
+		iat: Math.floor(Date.now() / 1000),
+		...(nonce ? { nonce } : {}),
+	})
+		.setProtectedHeader({
+			typ: "dpop+jwt",
+			alg: "ES256",
+			jwk: key.publicJwk as JWK,
+		})
+		.sign(key.privateKey);
+}
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/10414
@@ -115,12 +151,26 @@ describe("provider.issueAuthorizationCode", async () => {
 		return { query, verifier };
 	}
 
-	function issueCode(query: Record<string, unknown>) {
+	/**
+	 * Sends `query` to the issuing endpoint as the client would, with the
+	 * client's secret when it has one.
+	 */
+	function issueCode(
+		query: Record<string, unknown>,
+		extraHeaders: Record<string, string> = {},
+	) {
+		const secret = [confidentialClient, publicClient, consentClient].find(
+			(registered) => registered.client_id === query.client_id,
+		)?.client_secret;
 		return client.$fetch<{
 			code: string;
 			expiresAt: string;
 			redirectURL: string | null;
-		}>("/test/issue-code", { method: "POST", headers, body: query });
+		}>("/test/issue-code", {
+			method: "POST",
+			headers: { ...Object.fromEntries(headers), ...extraHeaders },
+			body: { ...(secret ? { client_secret: secret } : {}), ...query },
+		});
 	}
 
 	async function authorizeForCode(query: Record<string, string>) {
@@ -207,6 +257,39 @@ describe("provider.issueAuthorizationCode", async () => {
 		);
 	});
 
+	it("authenticates the client and leaves its secret out of the code", async () => {
+		const query = await authorizationQuery();
+		const issued = await issueCode(query);
+		expect(issued.error).toBeNull();
+		const row = await findCodeRow(issued.data!.code);
+		expect(JSON.parse(row!.value).query).toEqual(query);
+	});
+
+	it("rejects a confidential client without its credentials", async () => {
+		const query = await authorizationQuery();
+		const issued = await issueCode({ ...query, client_secret: undefined });
+		expect(errorCode(issued)).toBe("invalid_client");
+	});
+
+	it("rejects a client_id that differs from the authenticated client", async () => {
+		const basicClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_basic",
+				skip_consent: true,
+			},
+		});
+		const basic = btoa(`${basicClient.client_id}:${basicClient.client_secret}`);
+		const { query } = await codeRequest(publicClient);
+		const issued = await issueCode(query, {
+			authorization: `Basic ${basic}`,
+		});
+		expect(issued.error?.status).toBe(401);
+		expect(errorCode(issued)).toBe("invalid_client");
+	});
+
 	it("returns a redirect URL whose code redeems with its redirect_uri", async () => {
 		const { query, verifier } = await codeRequest(confidentialClient, {
 			redirect_uri: redirectUri,
@@ -267,6 +350,53 @@ describe("provider.issueAuthorizationCode", async () => {
 		expect(errorCode(tokens)).toBe("invalid_dpop_proof");
 	});
 
+	it("binds the code to the key of the request's DPoP proof", async () => {
+		const key = await createDpopKey();
+		const { query, verifier } = await codeRequest(publicClient);
+		const issued = await issueCode(query, {
+			DPoP: await createDpopProof(key, issueCodeEndpoint),
+		});
+		expect(issued.error).toBeNull();
+		const row = await findCodeRow(issued.data!.code);
+		expect(JSON.parse(row!.value).query.dpop_jkt).toBe(key.jkt);
+
+		const tokens = await exchange({
+			code: issued.data!.code,
+			client_id: publicClient.client_id,
+			code_verifier: verifier,
+		});
+		expect(errorCode(tokens)).toBe("invalid_dpop_proof");
+	});
+
+	it("rejects a dpop_jkt that differs from the DPoP proof key", async () => {
+		const key = await createDpopKey();
+		const otherKey = await createDpopKey();
+		const { query } = await codeRequest(publicClient, {
+			dpop_jkt: otherKey.jkt,
+		});
+		const issued = await issueCode(query, {
+			DPoP: await createDpopProof(key, issueCodeEndpoint),
+		});
+		expect(errorCode(issued)).toBe("invalid_dpop_proof");
+	});
+
+	it("does not use up a proof rejected for its key", async () => {
+		const key = await createDpopKey();
+		const otherKey = await createDpopKey();
+		const proof = await createDpopProof(key, issueCodeEndpoint);
+		const { query } = await codeRequest(publicClient);
+		const rejected = await issueCode(
+			{ ...query, dpop_jkt: otherKey.jkt },
+			{ DPoP: proof },
+		);
+		expect(errorCode(rejected)).toBe("invalid_dpop_proof");
+
+		const issued = await issueCode(query, { DPoP: proof });
+		expect(issued.error).toBeNull();
+		const row = await findCodeRow(issued.data!.code);
+		expect(JSON.parse(row!.value).query.dpop_jkt).toBe(key.jkt);
+	});
+
 	// Each check `/oauth2/authorize` applies also applies here, and fails with
 	// an error instead of a redirect.
 	it.each([
@@ -299,6 +429,12 @@ describe("provider.issueAuthorizationCode", async () => {
 			client: () => confidentialClient,
 			extra: { redirect_uri: redirectUri, prompt: "consent" },
 			error: "interaction_required",
+		},
+		{
+			name: "prompt=login for a session from an earlier request",
+			client: () => confidentialClient,
+			extra: { redirect_uri: redirectUri, prompt: "login" },
+			error: "login_required",
 		},
 		{
 			name: "an elapsed max_age",
@@ -410,6 +546,7 @@ describe("provider.issueAuthorizationCode hook isolation", async () => {
 			body: {
 				response_type: "code",
 				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
 				redirect_uri: redirectUri,
 				scope: "openid",
 				code_challenge: challenge,
@@ -417,5 +554,472 @@ describe("provider.issueAuthorizationCode hook isolation", async () => {
 			},
 		});
 		expect(issued.error).toBeNull();
+	});
+});
+
+/**
+ * Required PAR guards authorization requests that reach `/oauth2/authorize`
+ * through the user agent (RFC 9126 §1). A plugin endpoint receives the
+ * parameters from its own caller, so the policy does not apply to it.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc9126#section-5
+ */
+describe.each([
+	{
+		name: "for every client",
+		pushedAuthorizationRequests: { enabled: true, required: true },
+		clientMetadata: {},
+	},
+	{
+		name: "per client",
+		pushedAuthorizationRequests: { enabled: true },
+		clientMetadata: { require_pushed_authorization_requests: true },
+	},
+])(
+	"provider.issueAuthorizationCode with PAR required $name",
+	async ({ pushedAuthorizationRequests, clientMetadata }) => {
+		const redirectUri = "https://client.example.com/callback";
+		const issuer = {
+			id: "test-code-issuer",
+			endpoints: {
+				testIssueCode: createAuthEndpoint(
+					"/test/issue-code",
+					{ method: "POST", use: [sessionMiddleware] },
+					async (ctx) => {
+						const provider = getOAuthProviderApi(
+							ctx,
+							ctx.context.getPlugin("oauth-provider")!.options,
+						);
+						const issued = await provider.issueAuthorizationCode({
+							query: ctx.body,
+							session: ctx.context.session,
+						});
+						return ctx.json({ code: issued.code });
+					},
+				),
+			},
+		} satisfies BetterAuthPlugin;
+
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			baseURL: "http://localhost:3000/api/auth/",
+			advanced: { skipTrailingSlashes: true },
+			plugins: [
+				issuer,
+				jwt({ jwt: { issuer: "http://localhost:3000" } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					pushedAuthorizationRequests,
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		let oauthClient: OAuthClient;
+		beforeAll(async () => {
+			oauthClient = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					grant_types: ["authorization_code"],
+					redirect_uris: [redirectUri],
+					token_endpoint_auth_method: "client_secret_post",
+					skip_consent: true,
+					...clientMetadata,
+				},
+			});
+		});
+
+		async function authorizationParams() {
+			return {
+				response_type: "code",
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				scope: "openid",
+				state: "par-state",
+				code_challenge: await generateCodeChallenge(generateRandomString(43)),
+				code_challenge_method: "S256",
+			};
+		}
+
+		function issueCode(query: Record<string, unknown>) {
+			return client.$fetch<{ code: string }>("/test/issue-code", {
+				method: "POST",
+				headers,
+				body: query,
+			});
+		}
+
+		it("issues a code for the request /oauth2/authorize rejects", async () => {
+			const params = await authorizationParams();
+			let location = "";
+			await client.$fetch(
+				`/oauth2/authorize?${new URLSearchParams(params).toString()}`,
+				{
+					headers,
+					onError(ctx) {
+						location = ctx.response.headers.get("location") ?? "";
+					},
+				},
+			);
+			const authorizeError = new URL(location).searchParams;
+			expect(authorizeError.get("error")).toBe("invalid_request");
+			expect(authorizeError.get("error_description")).toBe(
+				"pushed authorization request is required",
+			);
+
+			const issued = await issueCode({
+				...params,
+				client_secret: oauthClient.client_secret,
+			});
+			expect(issued.error).toBeNull();
+			expect(issued.data?.code).toEqual(expect.any(String));
+		});
+
+		it("rejects the client without its credentials", async () => {
+			const issued = await issueCode(await authorizationParams());
+			expect(issued.error?.status).toBe(400);
+			expect((issued.error as { error?: string } | null)?.error).toBe(
+				"invalid_client",
+			);
+		});
+
+		it("still rejects a request_uri from /oauth2/par", async () => {
+			const pushed = await client.$fetch<{ request_uri: string }>(
+				"/oauth2/par",
+				{
+					method: "POST",
+					headers: { "content-type": "application/x-www-form-urlencoded" },
+					body: new URLSearchParams({
+						...(await authorizationParams()),
+						client_secret: oauthClient.client_secret!,
+					}),
+				},
+			);
+			expect(pushed.data?.request_uri).toEqual(expect.any(String));
+
+			const issued = await issueCode({
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
+				request_uri: pushed.data!.request_uri,
+			});
+			expect(issued.error?.status).toBe(400);
+			expect((issued.error as { error?: string } | null)?.error).toBe(
+				"invalid_request",
+			);
+		});
+	},
+);
+
+/**
+ * @see https://www.rfc-editor.org/rfc/rfc9449#section-8
+ */
+describe("provider.issueAuthorizationCode with required DPoP nonces", async () => {
+	const redirectUri = "https://client.example.com/callback";
+	const issuer = {
+		id: "test-code-issuer",
+		endpoints: {
+			testIssueCode: createAuthEndpoint(
+				"/test/issue-code",
+				{ method: "POST", use: [sessionMiddleware] },
+				async (ctx) => {
+					const provider = getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+					);
+					const issued = await provider.issueAuthorizationCode({
+						query: ctx.body,
+						session: ctx.context.session,
+					});
+					return ctx.json({ code: issued.code });
+				},
+			),
+		},
+	} satisfies BetterAuthPlugin;
+
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL: "http://localhost:3000/api/auth",
+		plugins: [
+			issuer,
+			jwt({ jwt: { issuer: "http://localhost:3000" } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				dpop: { nonce: { required: true } },
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	it("challenges for a nonce before consuming a private_key_jwt assertion", async () => {
+		const { privateKey, publicKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const keyClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "private_key_jwt",
+				skip_consent: true,
+				jwks: {
+					keys: [
+						{
+							...(await exportJWK(publicKey)),
+							kid: "issue-key",
+							alg: "RS256",
+							use: "sig",
+						},
+					],
+				},
+			},
+		});
+		const now = Math.floor(Date.now() / 1000);
+		const assertion = await new SignJWT({})
+			.setProtectedHeader({ alg: "RS256", kid: "issue-key" })
+			.setIssuer(keyClient.client_id)
+			.setSubject(keyClient.client_id)
+			.setAudience(issueCodeEndpoint)
+			.setIssuedAt(now)
+			.setExpirationTime(now + 60)
+			.setJti(generateRandomString(16))
+			.sign(privateKey);
+		const body = {
+			response_type: "code",
+			client_id: keyClient.client_id,
+			scope: "openid",
+			code_challenge: await generateCodeChallenge(generateRandomString(43)),
+			code_challenge_method: "S256",
+			client_assertion_type:
+				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+			client_assertion: assertion,
+		};
+		const key = await createDpopKey();
+		const send = (proof: string) =>
+			client.$fetch<{ code: string }>("/test/issue-code", {
+				method: "POST",
+				headers: { ...Object.fromEntries(headers), DPoP: proof },
+				body,
+			});
+
+		let nonce = "";
+		const challenged = await client.$fetch("/test/issue-code", {
+			method: "POST",
+			headers: {
+				...Object.fromEntries(headers),
+				DPoP: await createDpopProof(key, issueCodeEndpoint),
+			},
+			body,
+			onError(ctx) {
+				nonce = ctx.response.headers.get("DPoP-Nonce") ?? "";
+			},
+		});
+		expect((challenged.error as { error?: string } | null)?.error).toBe(
+			"use_dpop_nonce",
+		);
+		expect(nonce).not.toBe("");
+
+		const issued = await send(
+			await createDpopProof(key, issueCodeEndpoint, nonce),
+		);
+		expect(issued.error).toBeNull();
+		expect(issued.data?.code).toEqual(expect.any(String));
+	});
+});
+
+/**
+ * OIDC Core §3.1.2.1 and §3.1.2.3: `prompt=login` and `max_age=0` require an
+ * authentication that happens after the request, which an endpoint performs
+ * when it signs the user in within the request that issues the code.
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+ */
+describe("provider.issueAuthorizationCode after a sign-in in the same request", async () => {
+	const redirectUri = "https://client.example.com/callback";
+
+	const getProvider = (ctx: Parameters<typeof getOAuthProviderApi>[0]) =>
+		getOAuthProviderApi(ctx, ctx.context.getPlugin("oauth-provider")!.options);
+
+	// Stands in for a native-app endpoint that checks the user's credentials and
+	// issues the code in one request.
+	const issuer = {
+		id: "test-sign-in-code-issuer",
+		endpoints: {
+			testSignInAndIssueCode: createAuthEndpoint(
+				"/test/sign-in-and-issue-code",
+				{ method: "POST" },
+				async (ctx) => {
+					// The client's credentials stay in the body, where client
+					// authentication reads them; the user's do not belong in `query`.
+					const { email, password, ...query } = ctx.body as {
+						email: string;
+						password: string;
+					} & Record<string, unknown>;
+					const found = await ctx.context.internalAdapter.findUserByEmail(
+						email,
+						{ includeAccounts: true },
+					);
+					const hash = found?.accounts.find(
+						(account) => account.providerId === "credential",
+					)?.password;
+					if (
+						!found ||
+						!hash ||
+						!(await ctx.context.password.verify({
+							hash,
+							password,
+						}))
+					) {
+						throw new APIError("UNAUTHORIZED");
+					}
+					const session = await ctx.context.internalAdapter.createSession(
+						found.user.id,
+					);
+					await setSessionCookie(ctx, { session, user: found.user });
+					const issued = await getProvider(ctx).issueAuthorizationCode({
+						query,
+						session: { session, user: found.user },
+					});
+					return ctx.json({
+						code: issued.code,
+						sessionCreatedAt: new Date(session.createdAt).getTime(),
+					});
+				},
+			),
+			testIssueCode: createAuthEndpoint(
+				"/test/issue-code",
+				{ method: "POST", use: [sessionMiddleware] },
+				async (ctx) => {
+					const issued = await getProvider(ctx).issueAuthorizationCode({
+						query: ctx.body as StoredAuthorizationQuery,
+						session: ctx.context.session,
+					});
+					return ctx.json({ code: issued.code });
+				},
+			),
+			testSessionRefreshed: createAuthEndpoint(
+				"/test/session-refreshed",
+				{ method: "GET", use: [sessionMiddleware] },
+				async (ctx) =>
+					ctx.json({
+						refreshed:
+							ctx.context.newSession?.session.id ===
+							ctx.context.session.session.id,
+					}),
+			),
+		},
+	} satisfies BetterAuthPlugin;
+
+	const { auth, client, signInWithTestUser, testUser } = await getTestInstance({
+		baseURL: "http://localhost:3000/api/auth/",
+		advanced: { skipTrailingSlashes: true },
+		// Every request refreshes the cookie session, so the session middleware
+		// sets it as this request's new session.
+		session: { updateAge: 0 },
+		plugins: [
+			issuer,
+			jwt({ jwt: { issuer: "http://localhost:3000" } }),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const context = await auth.$context;
+
+	let oauthClient: OAuthClient;
+	beforeAll(async () => {
+		oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_post",
+				skip_consent: true,
+			},
+		});
+	});
+
+	async function codeQuery(extra: Record<string, unknown>) {
+		return {
+			response_type: "code",
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+			redirect_uri: redirectUri,
+			scope: "openid",
+			code_challenge: await generateCodeChallenge(generateRandomString(43)),
+			code_challenge_method: "S256",
+			...extra,
+		};
+	}
+
+	function signInAndIssueCode(query: Record<string, unknown>) {
+		return client.$fetch<{ code: string; sessionCreatedAt: number }>(
+			"/test/sign-in-and-issue-code",
+			{
+				method: "POST",
+				body: {
+					...query,
+					email: testUser.email,
+					password: testUser.password,
+				},
+			},
+		);
+	}
+
+	async function storedCode(code: string) {
+		const row = await context.internalAdapter.findVerificationValue(
+			await storeToken("hashed", code, "authorization_code"),
+		);
+		return JSON.parse(row!.value) as {
+			query: StoredAuthorizationQuery;
+			authTime: number;
+		};
+	}
+
+	it("accepts prompt=login and records the new sign-in as auth_time", async () => {
+		const issued = await signInAndIssueCode(
+			await codeQuery({ prompt: "login" }),
+		);
+		expect(issued.error).toBeNull();
+		const stored = await storedCode(issued.data!.code);
+		expect(stored.query.prompt).toBeUndefined();
+		expect(stored.authTime).toBe(issued.data!.sessionCreatedAt);
+		expect(stored.query).not.toHaveProperty("password");
+		expect(stored.query).not.toHaveProperty("client_secret");
+	});
+
+	it("accepts max_age=0", async () => {
+		const issued = await signInAndIssueCode(await codeQuery({ max_age: 0 }));
+		expect(issued.error).toBeNull();
+		const stored = await storedCode(issued.data!.code);
+		expect(stored.query.max_age).toBeUndefined();
+	});
+
+	it("still rejects a prompt that needs a page", async () => {
+		const issued = await signInAndIssueCode(
+			await codeQuery({ prompt: "login consent" }),
+		);
+		expect(issued.error?.status).toBe(400);
+		expect((issued.error as { error?: string } | null)?.error).toBe(
+			"interaction_required",
+		);
+	});
+
+	it("rejects prompt=login for a session this request only refreshed", async () => {
+		const refreshed = await client.$fetch<{ refreshed: boolean }>(
+			"/test/session-refreshed",
+			{ headers },
+		);
+		expect(refreshed.data?.refreshed).toBe(true);
+
+		for (const extra of [{ prompt: "login" }, { max_age: 0 }]) {
+			const issued = await client.$fetch("/test/issue-code", {
+				method: "POST",
+				headers,
+				body: await codeQuery(extra),
+			});
+			expect(issued.error?.status).toBe(400);
+			expect(issued.error).toMatchObject({
+				error: "login_required",
+				error_description: "the request requires a new sign-in",
+			});
+		}
 	});
 });

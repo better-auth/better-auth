@@ -1,3 +1,4 @@
+import type { BetterFetchOption } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 import { fetchRefusingRedirects } from "./reject-redirects";
@@ -32,6 +33,13 @@ interface ClientCredentialsTokenInput
 	extends ClientCredentialsTokenRequestInput {
 	tokenEndpoint: string;
 	scope: string;
+	/**
+	 * The fetch implementation for the request, such as one from
+	 * `createDpopFetch` to send DPoP proofs (RFC 9449).
+	 *
+	 * @default globalThis.fetch
+	 */
+	fetch?: BetterFetchOption["customFetchImpl"];
 }
 
 export async function clientCredentialsTokenRequest({
@@ -107,6 +115,7 @@ export async function clientCredentialsToken({
 	tokenEndpointAuth,
 	issuer,
 	resource,
+	fetch,
 }: ClientCredentialsTokenInput): Promise<OAuth2Tokens> {
 	const { body, headers } = await clientCredentialsTokenRequest({
 		options,
@@ -127,6 +136,7 @@ export async function clientCredentialsToken({
 		method: "POST",
 		body,
 		headers,
+		customFetchImpl: fetch,
 	});
 	if (error) {
 		throw error;
