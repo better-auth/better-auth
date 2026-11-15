@@ -2213,6 +2213,7 @@ describe("authenticateClient with an expected client", async () => {
 		id: "test-follow-up",
 		init(ctx) {
 			extendOAuthProvider(ctx, {
+				id: "test-follow-up",
 				clientAuthentication: {
 					[assertionMethod]: {
 						assertionTypes: [assertionType],
