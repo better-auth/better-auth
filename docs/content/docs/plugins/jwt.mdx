@@ -157,8 +157,8 @@ Any service that trusts your JWKS accepts a token signed this way. To stop a ver
 
 The body accepts these fields:
 
-* `payload`: the claims to sign. When a claim is missing, the plugin fills `iss`, `aud`, and `exp` from the plugin options and your `baseURL`.
-* `header`: protected header members to add. Only `typ` and `cty` are accepted. The plugin always sets `alg` and `kid` from the signing key. A request with any other member, such as `jku` or `crit`, fails with a 400 error.
+* `payload`: the claims to sign. When a claim is missing, the plugin fills `iss`, `aud`, and `exp` from the plugin options and your `baseURL`. These defaults match the session JWTs from `/token`, so set your own `aud` on custom tokens.
+* `header`: protected header members to add. Only `typ` and `cty` are accepted. The plugin sets `alg` and `kid` from the signing key, unless you configure a custom `jwt.sign` function. A request with any other member, such as `jku` or `crit`, fails with a 400 error.
 * `signingKeyId`: the `id` of the JWKS key to sign with, which is also the token's `kid`. If no key has that id, the call throws instead of using another key.
 * `signingAlgorithm`: sign with the newest unexpired key of this algorithm.
 
@@ -181,7 +181,11 @@ jwt({
 ```ts title="sign.ts"
 const { token } = await auth.api.signJWT({
   body: {
-    payload: { sub: user.id },
+    payload: {
+      sub: user.id,
+      aud: "https://reports.example.com",
+    },
+    header: { typ: "report+jwt" },
     signingAlgorithm: "RS256",
   },
 })
