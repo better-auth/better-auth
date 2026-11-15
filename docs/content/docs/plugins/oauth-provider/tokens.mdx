@@ -598,22 +598,28 @@ oauthProvider({
 The provider calls `onTokenRevoked` after it revokes tokens, with an event that has these fields:
 
 * `type`: the token the request presented, `"access_token"`, `"refresh_token"`, or `"authorization_code"`.
-* `reason`: `"revocation_request"` when the client revoked the token at `/oauth2/revoke`. `"reuse_detected"` when a client presented a rotated or revoked refresh token, or a redeemed authorization code, again. A reuse can mean the token was stolen.
+* `reason`: why the provider revoked the tokens.
+  * `"revocation_request"`: the client revoked the token at `/oauth2/revoke`. This includes revoking a refresh token again after a revocation or a session end already revoked it.
+  * `"reuse_detected"`: a client refreshed with a rotated or revoked refresh token, asked to revoke a rotated refresh token, or redeemed an authorization code again. A reuse is a sign that a token was stolen, not proof. A client that lost the response to a refresh causes it too, and so does a client that refreshes with a refresh token revoked when its session ended.
 * `clientId`: the client the tokens were issued to.
 * `jti`: the `jti` of a revoked JWT access token. An opaque access token has none.
 * `grantId`: for a refresh token or an authorization code, the grant whose access tokens were revoked. With `revocableJwtAccessTokens`, JWT access tokens carry it as `grant_id`. A refresh token stored before 1.8 has none until its first refresh after the upgrade.
 * `userId`: for a refresh token, the user it was issued to.
 * `expiresAt`: no access token the revocation covers is accepted after this time. Keep your record of the revocation until then.
-* `ctx`: the endpoint context of the request.
+* `ctx`: the endpoint context of the request. Its body and headers hold the presented token and the client's credentials. Record the other fields of the event, not `ctx`.
 
-`type` and `reason` decide which tokens were revoked, as [Revocation](#revocation) and [Revoke the access tokens of a grant](#revoke-the-access-tokens-of-a-grant) describe. A revocation of a refresh token that races a refresh of the same token is reported with `"revocation_request"`. It revokes as much as a reuse does.
+[Revocation](#revocation) and [Revoke the access tokens of a grant](#revoke-the-access-tokens-of-a-grant) describe which tokens each request revokes. A `"revocation_request"` for a refresh token revokes as much as a reuse does in two cases:
+
+* The refresh token was already revoked.
+* A refresh of the same token races the revocation.
 
 Before you rely on it, consider:
 
-* **It reports only what was revoked.** For example, it is not called for an unknown, expired, or already revoked access token, for a token issued to another client, or for an authorization code reused by another client or without its `code_verifier`. A refresh token presented again after it was rotated or revoked is a reuse, so the callback is called for it.
-* **Ending a session is not reported.** Tokens revoked because their session ended don't reach the callback. From then on, introspection and UserInfo also reject a JWT access token that carries the session's `sid`. To learn when a session is deleted, use `databaseHooks.session.delete.after`.
+* **It reports only what was revoked.** For example, it is not called for an unknown, expired, or already revoked access token, for a token issued to another client, or for an authorization code reused by another client or without its `code_verifier`. A refresh token presented again after it was rotated or revoked is different: it revokes the client's other refresh tokens for the user, so the callback is called for it. Inside the [reuse interval](#refresh-tokens), a rotated refresh token presented to the token endpoint revokes nothing.
+* **Ending a session is not reported.** Tokens revoked because their session ended don't reach the callback. From then on, introspection and UserInfo also reject a JWT access token that carries the session's `sid`. To learn when a session is deleted, use `databaseHooks.session.delete.after`. If a client later presents a refresh token that the session end revoked, the provider revokes the client's other refresh tokens and calls the callback. The reason is `"reuse_detected"` at the token endpoint and `"revocation_request"` at `/oauth2/revoke`.
 * **The response waits for it.** The provider awaits the callback before it answers the request, so keep it fast.
 * **A failed callback loses the event.** The tokens are already revoked when the callback runs. An error it throws is logged, and the response stays the same, so the client does not retry. A resource server that relies on your record then accepts the token until it expires. A resource server that must never accept a revoked token should introspect every token instead, with [`remoteVerify`](/docs/plugins/oauth-provider/resource-server#jwt-or-opaque-tokens).
+* **A failed request can go unreported.** If a database write fails partway through a revocation, the request fails with an error. Tokens revoked before the failure stay revoked, and the callback is not called for them.
 * **An event can arrive more than once.** Concurrent requests that revoke the same token can each report it. Key your records by `jti` or `grantId`.
 
 ## Without the JWT plugin

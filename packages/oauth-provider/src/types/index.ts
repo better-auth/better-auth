@@ -1110,8 +1110,8 @@ export interface InitialAccessTokenAuthorization {
 
 /**
  * A revocation reported to {@link OAuthOptions.onTokenRevoked}. `type` names
- * the token the request presented, and with `reason` it decides which tokens
- * were revoked.
+ * the token the request presented, and `reason` says why the provider
+ * revoked it.
  */
 export type OAuthTokenRevokedEvent = {
 	/** The client the revoked tokens were issued to. */
@@ -1121,6 +1121,10 @@ export type OAuthTokenRevokedEvent = {
 	 * record kept to reject them can be dropped then.
 	 */
 	expiresAt: Date;
+	/**
+	 * The endpoint context of the request. Its body and headers hold the
+	 * presented token and the client's credentials, so don't log it.
+	 */
 	ctx: GenericEndpointContext;
 } & (
 	| {
@@ -1136,11 +1140,15 @@ export type OAuthTokenRevokedEvent = {
 			 * opaque ones always, JWT ones with `revocableJwtAccessTokens`.
 			 *
 			 * `"revocation_request"`: the client revoked the refresh token at
-			 * `/oauth2/revoke`. `"reuse_detected"`: the token had already been
-			 * rotated or revoked when a client presented it again. The provider
-			 * then also revokes every other refresh token the client holds for
-			 * the user, as it does when a revocation races a rotation of the
-			 * same token.
+			 * `/oauth2/revoke`. `"reuse_detected"`: a client refreshed with the
+			 * token after it was rotated or revoked, or asked to revoke it after
+			 * it was rotated. Reuse is a sign of theft, not proof: a client that
+			 * lost a refresh response, or that refreshes with a token revoked
+			 * when its session ended, causes it too.
+			 *
+			 * When the token had already been rotated or revoked, or a rotation
+			 * of it raced the revocation, the provider also revokes every other
+			 * refresh token the client holds for the user.
 			 */
 			type: "refresh_token";
 			reason: "revocation_request" | "reuse_detected";
@@ -2308,7 +2316,9 @@ export interface OAuthOptions<
 	 *
 	 * The response waits for the callback. The tokens are already revoked
 	 * when it runs, so an error it throws is logged and the response stays the
-	 * same. Concurrent requests that revoke the same token can each report it.
+	 * same. A request that fails partway can leave tokens revoked without
+	 * calling it. Concurrent requests that revoke the same token can each
+	 * report it.
 	 */
 	onTokenRevoked?: (event: OAuthTokenRevokedEvent) => Awaitable<void>;
 	/**

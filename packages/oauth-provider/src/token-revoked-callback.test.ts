@@ -296,6 +296,27 @@ describe("oauth-provider - onTokenRevoked", async () => {
 		]);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
+	 */
+	it("reports a repeated revocation of a refresh token as requested", async () => {
+		const tokens = await authorize(server);
+		const grantId = decodeJwt(tokens.access_token).grant_id;
+
+		expect((await revoke(server, tokens.refresh_token!)).error).toBeNull();
+		expect((await revoke(server, tokens.refresh_token!)).error).toBeNull();
+
+		const requested = {
+			type: "refresh_token",
+			reason: "revocation_request",
+			clientId: server.oauthClient.client_id,
+			userId: server.user.id,
+			grantId,
+			expiresAt: expect.any(Date),
+		};
+		expect(takeEvents(server)).toEqual([requested, requested]);
+	});
+
 	it("reports a rotated refresh token presented for revocation as reuse", async () => {
 		const first = await authorize(server);
 		const grantId = decodeJwt(first.access_token).grant_id;
@@ -433,6 +454,63 @@ describe("oauth-provider - onTokenRevoked without revocable JWT access tokens", 
 		const res = await revoke(server, access_token);
 		expect(res.error).toMatchObject({ error: "unsupported_token_type" });
 		expect(takeEvents(server)).toEqual([]);
+	});
+});
+
+/**
+ * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#rfc.section.2.7
+ */
+describe("oauth-provider - onTokenRevoked after the session ends", () => {
+	/**
+	 * Signs out after narrowing a refresh token's scopes, so the session end
+	 * revokes it: refresh tokens without offline_access do not outlive it.
+	 */
+	async function signOutWithRevokedRefreshToken() {
+		const server = await setup();
+		const first = await authorize(server);
+		const { body, headers } = await refreshAccessTokenRequest({
+			refreshToken: first.refresh_token!,
+			options: clientOptions(server),
+			extraParams: { scope: "openid profile" },
+		});
+		const narrowed = await server.client.$fetch<TokenResponse>(
+			"/oauth2/token",
+			{ method: "POST", body, headers },
+		);
+		await server.client.signOut({ fetchOptions: { headers: server.headers } });
+		expect(takeEvents(server)).toEqual([]);
+		return {
+			server,
+			refreshToken: narrowed.data!.refresh_token!,
+			event: {
+				type: "refresh_token",
+				clientId: server.oauthClient.client_id,
+				userId: server.user.id,
+				grantId: decodeJwt(narrowed.data!.access_token).grant_id,
+				expiresAt: expect.any(Date),
+			},
+		};
+	}
+
+	it("reports a refresh with the revoked refresh token as reuse", async () => {
+		const { server, refreshToken, event } =
+			await signOutWithRevokedRefreshToken();
+
+		const reuse = await refresh(server, refreshToken);
+		expect(reuse.error).toMatchObject({ error: "invalid_grant" });
+		expect(takeEvents(server)).toEqual([
+			{ ...event, reason: "reuse_detected" },
+		]);
+	});
+
+	it("reports a revocation of the revoked refresh token as requested", async () => {
+		const { server, refreshToken, event } =
+			await signOutWithRevokedRefreshToken();
+
+		expect((await revoke(server, refreshToken)).error).toBeNull();
+		expect(takeEvents(server)).toEqual([
+			{ ...event, reason: "revocation_request" },
+		]);
 	});
 });
 

@@ -114,13 +114,16 @@ async function revokeRefreshToken(
 ) {
 	// Presenting an already revoked refresh token is treated as replay: tear
 	// down the whole family, and still answer 200 since the token is unusable.
+	// Only a rotated token is reported as reuse; revoking a token that a
+	// revocation or a session end already revoked is an ordinary request
+	// (RFC 7009 §2.2).
 	if (refreshToken.revoked) {
 		await invalidateRefreshFamily(
 			ctx,
 			opts,
 			clientId,
 			refreshToken,
-			"reuse_detected",
+			refreshToken.rotatedAt ? "reuse_detected" : "revocation_request",
 		);
 		return;
 	}
