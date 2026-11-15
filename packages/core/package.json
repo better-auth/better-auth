@@ -207,7 +207,25 @@
     "nanostores": "catalog:peer"
   },
   "peerDependenciesMeta": {
+    "@better-auth/utils": {
+      "optional": true
+    },
+    "@better-fetch/fetch": {
+      "optional": true
+    },
     "@opentelemetry/api": {
+      "optional": true
+    },
+    "better-call": {
+      "optional": true
+    },
+    "jose": {
+      "optional": true
+    },
+    "kysely": {
+      "optional": true
+    },
+    "nanostores": {
       "optional": true
     }
   }
