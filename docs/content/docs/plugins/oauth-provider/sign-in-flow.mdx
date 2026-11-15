@@ -149,7 +149,7 @@ const { code } = await provider.issueAuthorizationCode({
 });
 ```
 
-The request is then authenticated as the stored client. A `client_id`, Basic credentials, or a client assertion for another client fails with `invalid_client`, and a DPoP proof from another key fails with `invalid_dpop_proof`. A request without a proof still gets a code bound to the stored key, so only a token request with a proof from that key can redeem it. Reject an unknown or expired handle before the call, because without a stored client the request is authenticated as whichever client it names. Leave the handle out of `query`, because the provider stores the query with the code. Earlier requests of the flow bind to the same client and key with [`authenticateClient`'s `clientId`](/docs/plugins/oauth-provider/reference#provider-extensions) and [`verifyDpopProof`'s `expectedJkt`](/docs/plugins/oauth-provider/tokens#bind-later-requests-to-a-dpop-key).
+The request is then authenticated as the stored client. A `client_id`, Basic credentials, or a client assertion for another client fails with `invalid_client`, and a DPoP proof from another key fails with `invalid_dpop_proof`. A request without a proof still gets a code bound to the stored key, so only a token request with a proof from that key can redeem it. Reject an unknown or expired handle before the call, because without a stored client the request is authenticated as whichever client it names. Leave the handle out of `query`, because the provider stores the query with the code. To find your record again when the client redeems the code, pass its ID as [`serverContext`](#carry-your-own-state-to-the-token-request). Earlier requests of the flow bind to the same client and key with [`authenticateClient`'s `clientId`](/docs/plugins/oauth-provider/reference#provider-extensions) and [`verifyDpopProof`'s `expectedJkt`](/docs/plugins/oauth-provider/tokens#bind-later-requests-to-a-dpop-key).
 
 The provider then checks the request as `/oauth2/authorize` does: the client, scopes, claims, resources, and PKCE. The session you pass is the account the code is for, so account selection does not run. It issues the code only when the client has `skip_consent` or the user already consented to everything requested. Any step that would show a page fails instead, with a 400 error:
 
@@ -210,6 +210,36 @@ const { code } = await provider.issueAuthorizationCode({
 When you configure [`authenticationContext.resolve`](/docs/plugins/oauth-provider/openid-connect#authentication-context), the resolver receives these values as `amr`, and its result decides the code's `acr` and `amr`. Return the `amr` it receives to keep them. Without a resolver, the code carries the methods you pass, and no `acr` beyond the default `"0"`. This matches `issueTokens` and [`completeCibaRequest`](/docs/plugins/ciba#decide-from-your-own-app), which also record the `amr` you pass without calling a resolver.
 
 The methods reach only the ID token, never the access token, so they are ignored for a request without the `openid` scope. The code's `auth_time` always comes from the session's creation time, so your endpoint cannot report an earlier sign-in than the session proves.
+
+### Carry your own state to the token request
+
+An endpoint that keeps its own record for a flow may need that record again when the client redeems the code. For example, an endpoint that gives the client a handle can return a new handle with the tokens. Pass the values you need as `serverContext`:
+
+```ts
+const { code } = await provider.issueAuthorizationCode({
+  query: { ...request, client_id: pending.clientId, dpop_jkt: pending.dpopJkt },
+  session: ctx.context.session,
+  serverContext: { signInId: pending.id },
+});
+```
+
+The provider stores the values with the code. When the client redeems the code, [`customTokenResponseFields`](/docs/plugins/oauth-provider/tokens#custom-token-response-fields) receives them as `verificationValue.serverContext`:
+
+```ts title="auth.ts"
+oauthProvider({
+  customTokenResponseFields: async ({ grantType, verificationValue }) => {
+    const signInId = verificationValue?.serverContext?.signInId;
+    if (grantType !== "authorization_code" || typeof signInId !== "string") {
+      return {};
+    }
+    return { handle: await renewSignInHandle(signInId) }; // your own storage
+  },
+})
+```
+
+Only your server sets `serverContext`. A code from `/oauth2/authorize` has none, and the provider never copies the client's request parameters into it. Set it only from values your server determined, so the callback can trust what it reads. The provider keeps the values apart from the fields it stores with the code. A key such as `userId` or `query` changes nothing about the code or the tokens it issues.
+
+The value must be a JSON object. The callback reads it back in its JSON form. For example, a `Date` inside it arrives as a string. Any other value fails with a 500 `server_error`, and no code is issued. The provider stores the values as plain JSON with the code. Store a reference, such as a record ID, rather than a secret or personal data. Refresh requests do not receive the values.
 
 ## Login page
 
