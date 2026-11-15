@@ -11,11 +11,11 @@ import {
 	parseAccessTokenAuthorization,
 } from "better-auth/oauth2";
 import {
+	exposeChallengeHeader,
 	getDpopNonceOptions,
 	getDpopProofJwt,
 	getEndpointUrl,
 	setDpopNonceHeader,
-	withExposedHeaders,
 } from "./dpop";
 import { requireActiveAccessTokenWithClaims } from "./introspect";
 import {
@@ -29,31 +29,6 @@ import type {
 	Scope,
 	VerifyResourceRequestParams,
 } from "./types";
-
-/**
- * The exposed-header list with `WWW-Authenticate` added. Before hooks write to
- * the dispatch's `ctx.context.responseHeaders`, which the endpoint's own
- * `ctx.responseHeaders` does not include, and an error's header replaces the
- * value they accumulated, so both lists are kept here.
- */
-function exposeChallengeHeader(
-	ctx: GenericEndpointContext,
-	challengeExposed?: string | null,
-) {
-	const scoped = ctx as GenericEndpointContext & {
-		context: GenericEndpointContext["context"] & { responseHeaders?: Headers };
-	};
-	const names = [
-		scoped.context.responseHeaders?.get("access-control-expose-headers"),
-		ctx.responseHeaders?.get("access-control-expose-headers"),
-		challengeExposed,
-	].flatMap((value) => value?.split(",") ?? []);
-	return withExposedHeaders(
-		undefined,
-		...names.map((name) => name.trim()).filter(Boolean),
-		"WWW-Authenticate",
-	);
-}
 
 /**
  * Only an origin-based resource has a derivable RFC 9728 metadata URL. For any
