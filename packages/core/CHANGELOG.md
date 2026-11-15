@@ -1,5 +1,45 @@
 # @better-auth/core
 
+## 1.8.0-beta.10
+
+### Minor Changes
+
+- [#12599](https://github.com/better-auth/better-auth/pull/12599) [`f3e2877`](https://github.com/better-auth/better-auth/commit/f3e28778c84151015e33ecae6695b87a3cf2651e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `createPrivateKeyJwtClientAssertionGetter` now signs client assertions for the authorization server's issuer by default when it knows the issuer, as RFC 10070 §4 requires. Generic OAuth passes the issuer from the provider's discovery document, and also passes it to custom `getClientAssertion` functions as `issuer`. The `okta` and `microsoftEntraId` helpers withhold it, so they keep signing for the token endpoint URL that those providers document.
+
+  Without a known issuer, the getter still signs for the token endpoint URL. For a server that accepts only its token endpoint URL, set `audience: "token_endpoint"`. With `audience: "issuer"`, a request without a known issuer fails instead of falling back to the token endpoint.
+
+  An assertion now carries the JOSE header `typ: "client-authentication+jwt"` only when its audience is the known issuer. Every other assertion, such as one signed for a token endpoint URL that is not the issuer or one signed without a known issuer, keeps `typ: "JWT"`, because the explicit type signals the issuer-only audience and some authorization servers enforce that audience when they see it. `signPrivateKeyJwtClientAssertion` takes a new `issuer` option, the known issuer, for this choice.
+
+- [#12596](https://github.com/better-auth/better-auth/pull/12596) [`78666e1`](https://github.com/better-auth/better-auth/commit/78666e1070db3664e8cf240f369729091bc95cd1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `validateAuthorizationCode`, `refreshAccessToken`, `clientCredentialsToken`, and `pushAuthorizationRequest` accept a `fetch` option, so a request can go through `createDpopFetch` to send DPoP proofs.
+
+- [#12519](https://github.com/better-auth/better-auth/pull/12519) [`fa54cfd`](https://github.com/better-auth/better-auth/commit/fa54cfd50d83c3f16b520c6ba71f7aa9d8d24569) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `@better-auth/core/oauth2` exports `pushAuthorizationRequest`, which sends an authorization request to a pushed authorization request endpoint (RFC 9126) and returns the URL to redirect the browser to.
+
+- [#12580](https://github.com/better-auth/better-auth/pull/12580) [`179f2bf`](https://github.com/better-auth/better-auth/commit/179f2bfc4e639138c2682a99c947a59fe392d35a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `validateAuthorizationCode`, `refreshAccessToken`, `clientCredentialsToken`, and `pushAuthorizationRequest` accept an `issuer` and pass it to client assertion getters, so a getter created with `createPrivateKeyJwtClientAssertionGetter({ audience: "issuer" })` can sign for it.
+
+- [#12506](https://github.com/better-auth/better-auth/pull/12506) [`e2bcd77`](https://github.com/better-auth/better-auth/commit/e2bcd7739c194a70b8bfb3c1dbd1cbe77d3a6bda) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Client apps can now send DPoP-bound requests with `createDpopFetch` from `better-auth/oauth2/dpop-client`. It signs a proof for each request, keeps server nonces per origin, and retries once on `use_dpop_nonce`. The subpath uses only Web Crypto and Fetch, so it adds no server code to a browser or edge bundle.
+
+- [#12511](https://github.com/better-auth/better-auth/pull/12511) [`e69b81b`](https://github.com/better-auth/better-auth/commit/e69b81b9272834091b2683d4873509fdc485f6c4) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `DpopBindingErrorCode` and `DpopProofErrorCode` types exported from `@better-auth/core/oauth2` now include `use_dpop_nonce`, so exhaustive checks over either type must handle it. DPoP checks return this code only when you pass a `nonce` option, so code that does not require nonces needs the new case only to typecheck:
+
+  ```ts
+  function describe(code: DpopBindingErrorCode): string {
+    switch (code) {
+      case "invalid_token":
+        return "Invalid access token";
+      case "invalid_dpop_proof":
+        return "Invalid DPoP proof";
+      case "use_dpop_nonce":
+        return "Retry with the nonce from the DPoP-Nonce header";
+    }
+  }
+  ```
+
+- [#12580](https://github.com/better-auth/better-auth/pull/12580) [`179f2bf`](https://github.com/better-auth/better-auth/commit/179f2bfc4e639138c2682a99c947a59fe392d35a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Custom token endpoint authentication hooks now receive `endpointType`, which is `"token"` for token requests and `"pushed_authorization_request"` for pushed authorization requests, so a hook can authenticate each one the way the provider expects. Hooks and client assertion getters also receive the authorization server's `issuer` when Better Auth knows it.
+
+- [#12512](https://github.com/better-auth/better-auth/pull/12512) [`dd5b072`](https://github.com/better-auth/better-auth/commit/dd5b072bc9f3acc5b270c536d843ef5d011cdf87) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `verifyAccessTokenRequest` now rejects an `Authorization` header that has no scheme, or a scheme other than `Bearer` or `DPoP` such as `Basic`, without an `error` code, the same as a request with no `Authorization` header (RFC 6750 §3.1).
+
+  - **Breaking:** the thrown 401 no longer has `error: "invalid_token"` or `error_description` in its `body`. Code that matched `body.error === "invalid_token"` to catch this case should check for a 401 without `body.error` instead.
+  - `createResourceServerChallenge` and the MCP handler now answer such a request with a `Bearer` challenge that has no `error` or `error_description`, only its `resource_metadata` link.
+
 ## 1.8.0-beta.9
 
 ## 1.8.0-beta.8

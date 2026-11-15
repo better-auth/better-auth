@@ -1,5 +1,11 @@
 # @better-auth/sso
 
+## 1.8.0-beta.10
+
+### Minor Changes
+
+- [#12599](https://github.com/better-auth/better-auth/pull/12599) [`f3e2877`](https://github.com/better-auth/better-auth/commit/f3e28778c84151015e33ecae6695b87a3cf2651e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OIDC SSO providers that use `tokenEndpointAuthentication: "private_key_jwt"` can now sign client assertions for the provider's registered `issuer`, as RFC 10070 §4 asks, by setting the new `oidcConfig.clientAssertionAudience: "issuer"`. Assertions still name the token endpoint URL by default, which most identity providers require. Set `"issuer"` to sign in to a Better Auth 1.8 authorization server, which by default accepts only its issuer. Provider responses return the setting in `oidcConfig.clientAssertionAudience`.
+
 ## 1.8.0-beta.9
 
 ### Minor Changes
