@@ -456,6 +456,23 @@ export interface IssueAuthorizationCodeParams {
 	 * cannot report an earlier sign-in than the session proves.
 	 */
 	amr?: string[];
+	/**
+	 * Values your endpoint stores with the code and reads back on the token
+	 * request that redeems it, such as the ID of a record your endpoint keeps
+	 * for the flow. `customTokenResponseFields` receives them as
+	 * `verificationValue.serverContext`. Refresh requests do not receive them.
+	 *
+	 * Only your server sets them: `/oauth2/authorize` never stores any, and the
+	 * provider never copies the client's request parameters into them. Set them
+	 * only from values your server determined. They are kept apart from the
+	 * fields the provider stores, so a key such as `userId` or `query` changes
+	 * nothing about the code or its tokens.
+	 *
+	 * The value must be a JSON object, and it is read back in its JSON form. It
+	 * is stored as plain JSON with the code, so store a reference rather than a
+	 * secret or personal data.
+	 */
+	serverContext?: Record<string, unknown>;
 }
 
 /**
@@ -2160,7 +2177,9 @@ export interface OAuthOptions<
 		/**
 		 * The authorization code verification value.
 		 * Only present for `authorization_code` grant. Contains the original
-		 * authorization request parameters (`query`), `referenceId`, `sessionId`, etc.
+		 * authorization request parameters (`query`), `referenceId`, `sessionId`,
+		 * and the `serverContext` a plugin endpoint passed to
+		 * `issueAuthorizationCode`.
 		 */
 		verificationValue?: VerificationValue;
 	}) => Awaitable<Record<string, unknown>>;
@@ -2773,6 +2792,11 @@ export interface VerificationValue {
 	authTime?: number;
 	acr?: string;
 	amr?: string[];
+	/**
+	 * The values a plugin endpoint passed to `issueAuthorizationCode` as
+	 * `serverContext`. Absent for codes from `/oauth2/authorize`.
+	 */
+	serverContext?: Record<string, unknown>;
 }
 
 /**

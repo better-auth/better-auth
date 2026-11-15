@@ -1387,6 +1387,7 @@ export async function issueAuthorizationCode(
 			"the authorization_code grant is disabled",
 		);
 	}
+	const serverContext = readServerContext(params.serverContext);
 	const { session, user } = params.session;
 	// The client sends this request directly, as it would to /oauth2/par, so
 	// it authenticates the same way.
@@ -1521,6 +1522,7 @@ export async function issueAuthorizationCode(
 		...authenticationContext,
 		referenceId,
 		resource: resources,
+		serverContext,
 	});
 	return {
 		code,
@@ -1535,6 +1537,31 @@ export async function issueAuthorizationCode(
 				)
 			: undefined,
 	};
+}
+
+/**
+ * Reads `serverContext` back from JSON, as the token endpoint will, so a value
+ * that does not survive JSON as an object fails before the request uses up a
+ * client assertion or DPoP proof.
+ */
+function readServerContext(
+	value: unknown,
+): Record<string, unknown> | undefined {
+	if (value === undefined) return undefined;
+	let stored: unknown;
+	try {
+		stored = JSON.parse(JSON.stringify(value));
+	} catch {
+		stored = undefined;
+	}
+	if (!isRecord(stored)) {
+		tokenError(
+			"INTERNAL_SERVER_ERROR",
+			"server_error",
+			"issueAuthorizationCode serverContext must be a JSON object",
+		);
+	}
+	return stored;
 }
 
 function serializeAuthorizationQuery(query: OAuthInteractionQuery) {
@@ -1563,6 +1590,7 @@ type AuthorizationCodeApproval = {
 	amr?: string[];
 	referenceId?: string;
 	resource?: string[];
+	serverContext?: Record<string, unknown>;
 };
 
 /** Stores a single-use authorization code for an approved request. */
@@ -1591,6 +1619,7 @@ async function storeAuthorizationCode(
 			acr: approval.acr,
 			amr: approval.amr,
 			resource: approval.resource,
+			serverContext: approval.serverContext,
 		} satisfies VerificationValue),
 	});
 	return { code, expiresAt };
