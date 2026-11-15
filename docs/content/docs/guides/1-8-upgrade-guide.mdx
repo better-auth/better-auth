@@ -396,7 +396,7 @@ This applies if you build on `extendOAuthProvider()`, call the provider API from
   });
   ```
 
-* Custom `OAuthProviderApi` implementations must add `verifyDpopProof()`, `issueDpopNonce()`, `challengeDpopNonce()`, `resolveConfirmation()`, `resolveSubject()`, `verifyResourceRequest()`, and `issueAuthorizationCode()`.
+* Custom `OAuthProviderApi` implementations must add `verifyDpopProof()`, `issueDpopNonce()`, `challengeDpopNonce()`, `resolveConfirmation()`, `resolveSubject()`, `verifyResourceRequest()`, `issueAuthorizationCode()`, and `validateAuthorizationRequest()`.
 
 * Extension grants now receive every `audience` value instead of only the last one.
 
@@ -428,7 +428,7 @@ These provider features are new or opt-in, and need no action when you upgrade:
 * A pairwise `sub` in JWT access tokens, with `accessTokenSubject: "pairwise"` and `pairwiseSecret`. Resource servers that key on `sub` then see a different value for the same user in each sector.
 * JWT access token revocation, with `revocableJwtAccessTokens: true`. Resource servers that verify tokens locally against the JWKS don't see it, so they must introspect.
 * RP-initiated logout for registered clients, with `clientRegistrationEnableEndSession`.
-* `verifyResourceRequest()` and `issueAuthorizationCode()` on the provider API, for plugin endpoints served by the auth server.
+* `verifyResourceRequest()`, `issueAuthorizationCode()`, and `validateAuthorizationRequest()` on the provider API, for plugin endpoints served by the auth server.
 
 ***
 
