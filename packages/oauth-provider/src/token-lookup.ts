@@ -219,8 +219,14 @@ export function authorizationCodeGrantId(authorizationCodeId: string) {
  * The entry lasts `accessTokenExpiresIn`: every user access token expires
  * within that of being issued, so the entry outlives every token the grant
  * issued before it was written. One more second covers a token accepted
- * until its `exp` and secondary storage rounding the TTL down.
+ * until its `exp` and secondary storage rounding the TTL down. An issuance
+ * that reaches its check later than that fails anyway (see `createUserTokens`),
+ * so an expired entry cannot let it through.
  */
+export function grantRevocationWindowMs(opts: OAuthOptions<Scope[]>) {
+	return (opts.accessTokenExpiresIn ?? 3600) * 1000;
+}
+
 export async function markGrantRevoked(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -230,9 +236,7 @@ export async function markGrantRevoked(
 	await ctx.context.internalAdapter.createVerificationValue({
 		identifier: grantRevocationIdentifier(grant.grantId),
 		value: grant.clientId,
-		expiresAt: new Date(
-			Date.now() + ((opts.accessTokenExpiresIn ?? 3600) + 1) * 1000,
-		),
+		expiresAt: new Date(Date.now() + grantRevocationWindowMs(opts) + 1000),
 	});
 }
 

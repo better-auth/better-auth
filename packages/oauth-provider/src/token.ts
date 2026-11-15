@@ -47,6 +47,7 @@ import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
 import {
 	authorizationCodeGrantId,
 	findRefreshToken,
+	grantRevocationWindowMs,
 	isGrantRevoked,
 	markGrantRevoked,
 } from "./token-lookup";
@@ -930,10 +931,11 @@ async function createRefreshToken(
 	// revoked, so any subsequent reuse of the original refresh token is handled
 	// by the replay/invalid-grant path in `handleRefreshTokenGrant`.
 	//
-	// RFC 9700 §4.14 prescribes family invalidation on detected concurrent
-	// redemption. The loser does not tear the family down here: a later reuse
-	// of the parent does, and its grant mark fails this rotation if it is
-	// still issuing (see `createUserTokens`).
+	// FIXME(strict-family-invalidation): RFC 9700 §4.14 prescribes family
+	// invalidation on detected concurrent redemption. The loser does not tear
+	// the family down here, so the winner's tokens stay valid until a later
+	// reuse of the parent revokes them. That reuse's grant mark also fails this
+	// rotation if it is still issuing (see `createUserTokens`).
 	const rotatedAt = new Date(iat * 1000);
 	const rotationUpdate: Record<string, unknown> = {
 		revoked: rotatedAt,
@@ -986,6 +988,8 @@ async function createRefreshToken(
 type CreateUserTokensParams = OAuthTokenIssueParams & {
 	grantType: GrantType;
 	authorizationCodeId?: string;
+	/** Epoch milliseconds, taken before the grant's code or token was consumed. */
+	issuanceStartedAt?: number;
 };
 
 interface ResourceGrantIssuance {
@@ -1479,6 +1483,7 @@ async function createUserTokens(
 		verificationValue,
 	} = params;
 	const authenticationContext = { acr, amr };
+	const issuanceStartedAt = params.issuanceStartedAt ?? Date.now();
 	// A delegated issuance gets no refresh token (see `isRefreshToken`), so it
 	// cannot rotate one either: the parent would stay usable.
 	if (params.act && existingRefreshToken) {
@@ -1771,14 +1776,23 @@ async function createUserTokens(
 	// the access token insert after it, and revocation deletes linked access
 	// tokens again after the refresh rows, so an insert it misses sees the
 	// refresh token gone here.
-	const grantExisted = !!(existingRefreshToken || params.authorizationCodeId);
+	const checksGrantMark = !!(
+		(existingRefreshToken || params.authorizationCodeId) &&
+		grantId
+	);
 	const [grantRevoked, refreshTokenGone] = await Promise.all([
-		grantExisted && grantId ? isGrantRevoked(ctx, grantId) : false,
+		checksGrantMark && grantId ? isGrantRevoked(ctx, grantId) : false,
 		refreshToken?.id
 			? refreshTokenExists(ctx, refreshToken.id).then((exists) => !exists)
 			: false,
 	]);
-	if (grantRevoked || refreshTokenGone) {
+	// A revocation that raced this issuance wrote its mark after the grant was
+	// consumed, and the mark outlives that by `grantRevocationWindowMs`. A check
+	// that finished later may have missed an expired mark, so it fails.
+	const markMayHaveExpired =
+		checksGrantMark &&
+		Date.now() - issuanceStartedAt >= grantRevocationWindowMs(opts);
+	if (grantRevoked || refreshTokenGone || markMayHaveExpired) {
 		if (accessToken.id) {
 			await ctx.context.adapter.delete({
 				model: "oauthAccessToken",
@@ -2224,6 +2238,7 @@ async function handleAuthorizationCodeGrant(
 		authorizationCodeId,
 		verificationValue.query,
 	);
+	const issuanceStartedAt = Date.now();
 	const consumed =
 		await ctx.context.internalAdapter.consumeVerificationValue(
 			authorizationCodeId,
@@ -2254,6 +2269,7 @@ async function handleAuthorizationCodeGrant(
 		amr: verificationValue.amr,
 		verificationValue,
 		authorizationCodeId,
+		issuanceStartedAt,
 		requestedUserInfoClaims,
 		resources: effectiveResources,
 		originalResources: authorizedResources,

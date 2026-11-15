@@ -2249,6 +2249,48 @@ describe("oauth token - refresh_token", async () => {
 			}
 		});
 
+		/**
+		 * The mark expires after `accessTokenExpiresIn`, so a rotation stalled
+		 * past that cannot rely on finding it.
+		 *
+		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+		 */
+		it("fails a rotation that stores its refresh token after the grant's revocation mark expired", async () => {
+			const parentToken = await issueParentRefreshToken();
+			const insert = await holdNextInsert(
+				authorizationServer,
+				"oauthRefreshToken",
+			);
+			try {
+				const rotating = refresh(parentToken);
+				await insert.reached;
+				const reused = await refresh(parentToken);
+				expect(reused.error).toMatchObject({ error: "invalid_grant" });
+
+				// The mark lasts `accessTokenExpiresIn` (3600 s) plus one second.
+				// Secondary storage drops it then, and so does verification cleanup.
+				vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 3602_000 });
+				const context = await authorizationServer.$context;
+				await context.adapter.deleteMany({
+					model: "verification",
+					where: [{ field: "expiresAt", operator: "lt", value: new Date() }],
+				});
+				insert.release();
+				const rotated = await rotating;
+
+				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
+				expect(
+					await context.adapter.count({
+						model: "oauthRefreshToken",
+						where: [{ field: "clientId", value: oauthClient!.client_id }],
+					}),
+				).toBe(0);
+			} finally {
+				vi.useRealTimers();
+				insert.restore();
+			}
+		});
+
 		it("fails the rotation and the revoke closed when the rotation wins the swap", async () => {
 			const parentToken = await issueParentRefreshToken();
 			const cas = await holdNextRefreshTokenCas();
