@@ -115,13 +115,13 @@ async function verifyPassword({
 	const user = record.user as User & Record<string, unknown>;
 	// The browser flow sends the verification email.
 	if (emailAndPassword.requireEmailVerification && !user.emailVerified) {
-		return { error: "redirect_to_web" };
+		return { error: "redirect_to_web", userId: user.id };
 	}
 	if (user.twoFactorEnabled === true) {
 		const twoFactor = twoFactorOptions(ctx);
 		const totp = twoFactor && (await findTotp(ctx, twoFactor, user.id));
 		// A second factor the app cannot collect, such as an emailed code.
-		if (!totp) return { error: "redirect_to_web" };
+		if (!totp) return { error: "redirect_to_web", userId: user.id };
 		return {
 			error: "insufficient_authorization",
 			challengeType: TOTP_CHALLENGE,

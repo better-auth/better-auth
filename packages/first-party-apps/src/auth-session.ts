@@ -172,6 +172,24 @@ export async function saveAuthSession(
 }
 
 /**
+ * Counts one failed round on a record and returns the new total. Stored
+ * records count atomically, so parallel guesses on one handle all count.
+ */
+export async function countSessionFailure(
+	ctx: GenericEndpointContext,
+	record: AuthSessionRecord,
+): Promise<number> {
+	if (!record.id) return record.failures + 1;
+	const updated =
+		await ctx.context.adapter.incrementOne<FirstPartyAuthSessionRow>({
+			model: MODEL,
+			where: [{ field: "id", value: record.id }],
+			increment: { failures: 1 },
+		});
+	return updated?.failures ?? record.failures + 1;
+}
+
+/**
  * Revokes a handle. The sign-in session behind it is deleted only when this
  * handle created it (C2), so a step-up handle never signs the user out.
  */

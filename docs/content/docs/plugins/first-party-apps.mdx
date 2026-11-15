@@ -132,7 +132,7 @@ curl -X POST https://auth.example.com/api/auth/oauth2/token \
   -d client_id=APP_CLIENT_ID
 ```
 
-The token response adds `auth_session`. Store it with the tokens, and replace it whenever a response carries a new one. Discard it when the user signs out of the app.
+The token response adds `auth_session`. Store it with the tokens, and replace it whenever a response carries a new one. Discard it when the user signs out of the app. The token response carries it only when the token request uses the same DPoP key as the sign-in, or no DPoP proof when the sign-in had none.
 
 ### Responses
 
@@ -166,13 +166,15 @@ To stop a stolen `auth_session` or code from working on another device, send a [
 
 ## Credential guessing
 
-The endpoint accepts passwords directly, so it limits guessing in three ways, in addition to a per-IP rate limit of 30 requests per minute:
+The endpoint accepts passwords directly, so it limits guessing in three ways. When [rate limiting](/docs/concepts/rate-limit) is on, as it is in production by default, each IP is also limited to 30 requests per minute.
 
-* **Per `auth_session`:** after 3 failed rounds (`authSession.maxFailures`), the endpoint answers `redirect_to_web` and revokes the handle.
+* **Per `auth_session`:** the third failed round (`authSession.maxFailures`) answers `redirect_to_web` and revokes the handle.
 * **Per account and method:** after 10 failures in 15 minutes (`budget.account`), the account answers `authentication_failed` for that method even when the credentials are correct, until the window ends. The response looks the same as for a wrong password, so an attacker cannot tell that the account is locked. Failures for an email that matches no account are counted under that email.
 * **Per client:** after 100 failures across all accounts in one minute (`budget.client`), every credential round of that client answers `redirect_to_web`. Users can still sign in through the browser while the client is under attack.
 
 Only failures count, so a user who signs in successfully does not use up the budget.
+
+Hooks and plugins that run only on `/sign-in/email`, such as a captcha or your own before hooks, do not run on this endpoint. Add `/oauth2/authorize-challenge` to them, or check the request in a strategy.
 
 <Callout type="warn">
   Anyone who knows a user's email can spend that account's budget and stop the user from signing in through the app for the rest of the window. The browser flow is not affected. Lower `budget.account.window` if this matters more to you than slower guessing.
@@ -248,33 +250,33 @@ An optional `stepUp` method handles a step-up the token endpoint asked for, from
 <TypeTable
   type={{
 strategies: {
-  description: "How users sign in. The first strategy whose `params` the request carries handles it.",
-  type: "FirstPartyAuthStrategy[]",
-  required: true,
+description: "How users sign in. The first strategy whose `params` the request carries handles it.",
+type: "FirstPartyAuthStrategy[]",
+required: true,
 },
 "authSession.expiresIn": {
-  description: "Seconds a pending or step-up `auth_session` stays usable. One that signed in lives as long as its session.",
-  type: "number",
-  default: "600",
+description: "Seconds a pending or step-up `auth_session` stays usable. One that signed in lives as long as its session.",
+type: "number",
+default: "600",
 },
 "authSession.maxFailures": {
-  description: "Failed rounds one `auth_session` allows before `redirect_to_web`.",
-  type: "number",
-  default: "3",
+description: "Failed rounds one `auth_session` allows before `redirect_to_web`.",
+type: "number",
+default: "3",
 },
 "budget.account": {
-  description: "Failures per account and method before the account answers `authentication_failed` for the rest of the window.",
-  type: "{ window?: number; max?: number }",
-  default: "{ window: 900, max: 10 }",
+description: "Failures per account and method before the account answers `authentication_failed` for the rest of the window.",
+type: "{ window?: number; max?: number }",
+default: "{ window: 900, max: 10 }",
 },
 "budget.client": {
-  description: "Failures per client before its credential rounds answer `redirect_to_web`. `false` turns it off.",
-  type: "{ window?: number; max?: number } | false",
-  default: "{ window: 60, max: 100 }",
+description: "Failures per client before its credential rounds answer `redirect_to_web`. `false` turns it off.",
+type: "{ window?: number; max?: number } | false",
+default: "{ window: 60, max: 100 }",
 },
 requireStepUp: {
-  description: "Decides at the token endpoint whether a first-party app's grant needs stronger authentication.",
-  type: "(input: OAuthBeforeTokenIssuanceInput) => Awaitable<{ acrValues?: string } | null | undefined>",
+description: "Decides at the token endpoint whether a first-party app's grant needs stronger authentication.",
+type: "(input: OAuthBeforeTokenIssuanceInput) => Awaitable<{ acrValues?: string } | null | undefined>",
 },
 }}
 />

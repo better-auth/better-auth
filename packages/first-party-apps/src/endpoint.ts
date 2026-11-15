@@ -13,6 +13,7 @@ import { isAPIError } from "better-auth/api";
 import * as z from "zod";
 import type { AuthSessionRecord } from "./auth-session";
 import {
+	countSessionFailure,
 	findAuthSession,
 	findLiveSession,
 	revokeAuthSession,
@@ -262,8 +263,8 @@ async function runRound(
 			record,
 			params,
 		);
-		const live = await findLiveSession(ctx, record.sessionId!);
-		return issueCode(ctx, provider, flow, live!, record.amr, false);
+		const live = await requireLiveSession(ctx, record);
+		return issueCode(ctx, provider, flow, live, record.amr, false);
 	}
 	if (options.budget.client) {
 		const key = await budgetKey(ctx, { clientId: client.clientId });
@@ -346,6 +347,24 @@ async function validateFollowUpRequest(
 	return validated.query;
 }
 
+/** The session behind a record, or `invalid_session` once it ended (C2). */
+async function requireLiveSession(
+	ctx: GenericEndpointContext,
+	record: AuthSessionRecord,
+) {
+	const live = record.sessionId
+		? await findLiveSession(ctx, record.sessionId)
+		: null;
+	if (!live) {
+		await revokeAuthSession(ctx, record);
+		return challengeError(
+			"invalid_session",
+			FIRST_PARTY_APPS_ERROR_CODES.INVALID_SESSION.message,
+		);
+	}
+	return live;
+}
+
 function selectStrategy(
 	strategies: FirstPartyAuthStrategy[],
 	record: AuthSessionRecord,
@@ -372,11 +391,15 @@ async function handleResult(
 	// challenge it answered with.
 	const method = record.challenge?.type ?? strategy.id;
 	const accountUserId =
-		"user" in result && result.user ? result.user.id : record.userId;
+		"user" in result && result.user
+			? result.user.id
+			: "error" in result && result.error === "redirect_to_web"
+				? (result.userId ?? record.userId)
+				: record.userId;
 	// C1: a spent account answers as if the credentials were wrong.
 	const locked =
 		accountUserId &&
-		!("error" in result && result.error !== "insufficient_authorization") &&
+		!("error" in result && result.error === "authentication_failed") &&
 		(await isBudgetSpent(
 			ctx,
 			await budgetKey(ctx, { userId: accountUserId, method }),
@@ -436,7 +459,6 @@ async function failRound(
 		| null,
 ) {
 	const { record, client } = flow;
-	// A request with a bad proof learns nothing and spends nothing.
 	if (subject) {
 		await recordFailure(
 			ctx,
@@ -451,7 +473,7 @@ async function failRound(
 			options.budget.client,
 		);
 	}
-	record.failures += 1;
+	record.failures = await countSessionFailure(ctx, record);
 	if (record.failures >= options.authSession.maxFailures) {
 		return redirectToWeb(ctx, record);
 	}
@@ -500,8 +522,8 @@ async function completeSignIn(
 	}
 	// C4: a step-up reuses the grant's session.
 	if (record.state === "step_up" && record.sessionId) {
-		const live = await findLiveSession(ctx, record.sessionId);
-		return issueCode(ctx, provider, flow, live!, amr, false);
+		const live = await requireLiveSession(ctx, record);
+		return issueCode(ctx, provider, flow, live, amr, false);
 	}
 	const session = await ctx.context.internalAdapter.createSession(user.id);
 	const fullUser = await ctx.context.internalAdapter.findUserById(user.id);
@@ -543,13 +565,14 @@ async function issueCode(
 			: undefined;
 		if (code && BROWSER_ERRORS.has(code)) {
 			// A restored handle stays usable; its session is the user's own.
-			if (record.state !== "authenticated") {
-				await revokeAuthSession(ctx, { ...record, ownsSession: false });
+			if (record.state === "authenticated") {
+				return challengeError(
+					"redirect_to_web",
+					FIRST_PARTY_APPS_ERROR_CODES.REDIRECT_TO_WEB.message,
+				);
 			}
-			return challengeError(
-				"redirect_to_web",
-				FIRST_PARTY_APPS_ERROR_CODES.REDIRECT_TO_WEB.message,
-			);
+			// A step-up keeps acr_values and max_age=0 for the browser (C3).
+			return redirectToWeb(ctx, { ...record, ownsSession: false });
 		}
 		throw error;
 	}
@@ -567,7 +590,8 @@ async function issueCode(
 	record.challenge = undefined;
 	record.failures = 0;
 	record.expiresAt = new Date(session.session.expiresAt);
-	// The handle is returned by the token endpoint (§6.1), not here.
-	await saveAuthSession(ctx, record, { rotate: true });
+	// A new handle is returned by the token endpoint (§6.1). A restored
+	// handle keeps working, in case the app never redeems this code.
+	await saveAuthSession(ctx, record, { rotate: !flow.handle });
 	return ctx.json({ authorization_code: code });
 }

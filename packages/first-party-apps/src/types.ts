@@ -105,7 +105,15 @@ export type FirstPartyAuthResult =
 			/** The normalized identifier the client sent, when no account matched. */
 			identifier?: string;
 	  }
-	| { error: "redirect_to_web" };
+	| {
+			error: "redirect_to_web";
+			/**
+			 * The account whose credentials this round verified, if any. A locked
+			 * account then answers `authentication_failed` instead, so the
+			 * response cannot confirm a correct credential.
+			 */
+			userId?: string;
+	  };
 
 /**
  * A way for a first-party app to sign a user in at the authorization
@@ -168,8 +176,8 @@ export interface FirstPartyAppsOptions {
 		 */
 		expiresIn?: number;
 		/**
-		 * Failed rounds one `auth_session` allows. The next failure answers
-		 * `redirect_to_web` and revokes the handle.
+		 * Failed rounds one `auth_session` allows. The failure that reaches it
+		 * answers `redirect_to_web` and revokes the handle.
 		 *
 		 * @default 3
 		 */

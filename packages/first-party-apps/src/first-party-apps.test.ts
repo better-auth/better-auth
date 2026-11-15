@@ -627,6 +627,46 @@ describe("first-party apps", async () => {
 			expect(locked.json.error).toBe("authentication_failed");
 		});
 
+		it("does not confirm a correct password on a locked account that needs the browser", async () => {
+			const { user } = await createUser("locked-web@example.com");
+			await context.internalAdapter.updateUser(user.id, {
+				twoFactorEnabled: true,
+			});
+			for (let attempt = 0; attempt < 5; attempt++) {
+				const { body } = await startRequest(clientId, {
+					login_hint: "locked-web@example.com",
+					password: `wrong-${attempt}`,
+				});
+				await post(challengeURL, body);
+			}
+			const { body } = await startRequest(clientId, {
+				login_hint: "locked-web@example.com",
+				password,
+			});
+			const locked = await post(challengeURL, body);
+			expect(locked.status).toBe(400);
+			expect(locked.json.error).toBe("authentication_failed");
+		});
+
+		it("counts parallel failures on one auth_session", async () => {
+			await createUser("parallel@example.com");
+			const { body } = await startRequest(clientId, {
+				login_hint: "parallel@example.com",
+				password: "wrong-0",
+			});
+			const first = await post(challengeURL, body);
+			const authSession = first.json.auth_session as string;
+			const results = await Promise.all(
+				[1, 2, 3, 4].map((attempt) =>
+					post(challengeURL, {
+						auth_session: authSession,
+						password: `wrong-${attempt}`,
+					}),
+				),
+			);
+			expect(results.map((r) => r.json.error)).toContain("redirect_to_web");
+		});
+
 		it("answers an unknown account the same as a wrong password", async () => {
 			const { body } = await startRequest(clientId, {
 				login_hint: "nobody@example.com",
@@ -664,6 +704,19 @@ describe("first-party apps", async () => {
 			});
 			expect(restored.status).toBe(200);
 			expect(restored.json.authorization_code).toBeTypeOf("string");
+		});
+
+		it("keeps a restored auth_session usable when the app does not redeem the code", async () => {
+			const tokens = await signIn("restore-twice@example.com");
+			for (let attempt = 0; attempt < 2; attempt++) {
+				const { body } = await startRequest(clientId);
+				const restored = await post(challengeURL, {
+					...body,
+					client_id: undefined,
+					auth_session: tokens.json.auth_session as string,
+				});
+				expect(restored.status).toBe(200);
+			}
 		});
 
 		it("answers invalid_session once the session behind the handle ends", async () => {
@@ -786,6 +839,48 @@ describe("first-party apps", async () => {
 					verifier,
 				);
 				expect(stepped.status).toBe(200);
+			} finally {
+				stepUpAcr.value = "urn:test:browser";
+			}
+		});
+	});
+
+	describe("step-up that must finish in the browser", () => {
+		it("keeps acr_values and max_age=0 when issuing fails with login_required", async () => {
+			stepUpAcr.value = "urn:test:native";
+			try {
+				await createUser("stepup-maxage@example.com");
+				const { body: signInBody, verifier } = await startRequest(clientId, {
+					login_hint: "stepup-maxage@example.com",
+					password,
+				});
+				const challenge = await post(challengeURL, signInBody);
+				const tokens = await redeem(
+					clientId,
+					challenge.json.authorization_code as string,
+					verifier,
+				);
+				const refused = await post(tokenURL, {
+					grant_type: "refresh_token",
+					refresh_token: tokens.json.refresh_token as string,
+					client_id: clientId,
+				});
+				const { body } = await startRequest(clientId, { max_age: "0" });
+				const started = await post(challengeURL, {
+					...body,
+					client_id: undefined,
+					auth_session: refused.json.auth_session as string,
+				});
+				const done = await post(challengeURL, {
+					auth_session: started.json.auth_session as string,
+					step_up_code: "424242",
+				});
+				expect(done.status).toBe(403);
+				expect(done.json).toMatchObject({
+					error: "redirect_to_web",
+					acr_values: "urn:test:native",
+					max_age: 0,
+				});
 			} finally {
 				stepUpAcr.value = "urn:test:browser";
 			}
