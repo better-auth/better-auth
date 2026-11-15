@@ -205,12 +205,14 @@ To get a JWT access token for an API, send its [RFC 8707](https://datatracker.ie
 
 ## What the user sees
 
-The link points to `/oauth2/authorize?ciba_request_id=<id>`, so the request runs through the provider's own pages:
+By default, the link points to `/oauth2/authorize?ciba_request_id=<id>`, so the request runs through the provider's own pages:
 
 1. A signed-out user goes to `loginPage` first. Nothing about the request is shown before sign-in.
 2. [`postLogin`](/docs/plugins/oauth-provider/sign-in-flow#post-login-screen) runs as it does for an authorization request, and tokens carry the `referenceId` that `consentReferenceId` returns.
 3. `consentPage` always opens, even for a client with `skip_consent` or a stored consent, because the user must confirm each request. The user can narrow the scopes there.
 4. The decision is recorded only for the user the `login_hint` named. Anyone else who opens the link, signed in as another account, lands on `resultPage` with an error, and the request stays pending for the right user.
+
+To approve only through your own page or app instead, see [Approve only in your own app](#approve-only-in-your-own-app).
 
 A denial is final: the client's next poll returns `access_denied`, and the link stops working. The ID token's `auth_time` is the creation time of the approving user's session, and its `acr` and `amr` are what the provider's [`authenticationContext.resolve`](/docs/plugins/oauth-provider/openid-connect#authentication-context) returned for that session.
 
@@ -364,6 +366,29 @@ The ID token carries only the `auth_time`, `acr`, and `amr` you pass; without `a
 | `invalid_scope`                 | `scopes` includes a scope the client did not request, or leaves out `openid`. The request stays pending.                 |
 | `invalid_authorization_details` | A detail in `authorizationDetails` has a type the request did not carry, or fails `validate`. The request stays pending. |
 
+### Approve only in your own app
+
+The provider's link still works while your app collects decisions. A user who opens it can approve through the provider's consent page and skip the checks your app runs, such as a step-up sign-in. To approve only through your own path, set `approvalPage`:
+
+```ts title="auth.ts"
+ciba({
+  // Your page reads ciba_request_id and calls completeCibaRequest.
+  approvalPage: "/approve",
+  sendNotification: async ({ user, url }) => {
+    await email.send(user.email, { link: url });
+  },
+});
+```
+
+`approvalPage` takes one of these values:
+
+* A path or URL. The notification's `url` opens that page, with the request as `ciba_request_id`, such as `/approve?ciba_request_id=<id>`. A path resolves against your `baseURL`.
+* `false`. The notification has no `url`. Use it when your own app shows the request, as in a push notification.
+
+With either value, `/oauth2/authorize` no longer handles `ciba_request_id`. A request is approved only when your server calls `completeCibaRequest`, and it expires if your server never does. `resultPage` applies only to the provider's pages, so you do not set it.
+
+Your approval page must do everything `completeCibaRequest` leaves to your app: authenticate the user, check that they are the user the request names, and show the client, the scopes, the binding message, and any actor before they decide. Treat `ciba_request_id` as untrusted input. `completeCibaRequest` refuses a request that is unknown, already decided, expired, or for another user.
+
 ## Endpoints
 
 ### `POST /oauth2/bc-authorize`
@@ -391,12 +416,17 @@ export const cibaOptionsType = {
 	sendNotification: {
 		type: "(notification, ctx) => void | Promise<void>",
 		description:
-			"Tell the user about the request: send them the link, or reach them through your own app with `requestId`. Receives `{ requestId, user, clientId, clientName, scopes, bindingMessage, acrValues, authorizationDetails, actor, url, expiresAt }`; pass `requestId` to `completeCibaRequest` when your own app collects the decision. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A failure is logged, and the client still receives its `auth_req_id`.",
+			"Tell the user about the request: send them the link, or reach them through your own app with `requestId`. Receives `{ requestId, user, clientId, clientName, scopes, bindingMessage, acrValues, authorizationDetails, actor, url, expiresAt }`. `url` is absent when `approvalPage` is `false`. Pass `requestId` to `completeCibaRequest` when your own app collects the decision. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A failure is logged, and the client still receives its `auth_req_id`.",
 	},
 	resultPage: {
 		type: "string",
 		description:
-			"Path or URL of the page the user lands on after deciding, with `status=approved` or `status=denied`, or with `error` and `error_description`.",
+			"Path or URL of the page the user lands on after deciding through the provider's pages, with `status=approved` or `status=denied`, or with `error` and `error_description`. Required unless you set `approvalPage`, and not accepted with it.",
+	},
+	approvalPage: {
+		type: "string | false",
+		description:
+			"Approve requests only through your own path and `completeCibaRequest`. A path or URL becomes the notification's `url`, with `ciba_request_id`; `false` sends no `url`. Either value stops `/oauth2/authorize` from approving CIBA requests. See [Approve only in your own app](#approve-only-in-your-own-app).",
 	},
 	resolveUser: {
 		type: "({ loginHint, client }, ctx) => User | null | Promise<User | null>",
