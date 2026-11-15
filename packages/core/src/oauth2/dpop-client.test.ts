@@ -95,13 +95,15 @@ describe("createDpopProof", () => {
 		).rejects.toThrow();
 	});
 
-	it("drops the query and fragment from htu", async () => {
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-4.2
+	 */
+	it.each([
+		"HTTPS://API.Example.com:443/v1/items?limit=10#top",
+		"https://api.example.com/v1/items#",
+	])("drops the query and fragment of %s from htu", async (url) => {
 		const keyPair = await generateDpopKeyPair();
-		const proof = await createDpopProof({
-			keyPair,
-			method: "GET",
-			url: "HTTPS://API.Example.com:443/v1/items?limit=10#top",
-		});
+		const proof = await createDpopProof({ keyPair, method: "GET", url });
 		expect(decodeJwt(proof).htu).toBe("https://api.example.com/v1/items");
 		await verifyDpopProof({
 			proofJwt: proof,
