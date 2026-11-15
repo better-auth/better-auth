@@ -2208,6 +2208,11 @@ describe.each([
 		expect(decodeJwt(issued.body.id_token as string).sub).toBe(user.id);
 	});
 
+	it("requires resultPage without approvalPage", () => {
+		// @ts-expect-error the provider's approval page needs a resultPage.
+		ciba({ sendNotification });
+	});
+
 	it("takes no resultPage", () => {
 		// @ts-expect-error resultPage applies only to the provider's approval page.
 		ciba({ approvalPage, resultPage: "/ciba", sendNotification });

@@ -372,13 +372,16 @@ The provider's link still works while your app collects decisions. A user who op
 
 ```ts title="auth.ts"
 ciba({
-  // Your page reads ciba_request_id and calls completeCibaRequest.
   approvalPage: "/approve",
-  sendNotification: async ({ user, url }) => {
-    await email.send(user.email, { link: url });
+  sendNotification: async ({ url, ...request }) => {
+    // Your page shows this record, looked up by ciba_request_id.
+    await pendingApprovals.save(request.requestId, request);
+    await email.send(request.user.email, { link: url });
   },
 });
 ```
+
+The provider has no API that reads a request by its ID, so keep what `sendNotification` receives, keyed by `requestId`, for your page to show.
 
 `approvalPage` takes one of these values:
 
@@ -387,7 +390,13 @@ ciba({
 
 With either value, `/oauth2/authorize` no longer handles `ciba_request_id`. A request is approved only when your server calls `completeCibaRequest`, and it expires if your server never does. `resultPage` applies only to the provider's pages, so you do not set it.
 
-Your approval page must do everything `completeCibaRequest` leaves to your app: authenticate the user, check that they are the user the request names, and show the client, the scopes, the binding message, and any actor before they decide. Treat `ciba_request_id` as untrusted input. `completeCibaRequest` refuses a request that is unknown, already decided, expired, or for another user.
+Your approval page must do everything `completeCibaRequest` leaves to your app:
+
+* Authenticate the user, and check that they are the stored request's `user`.
+* Show the client, the scopes, the binding message, and any actor or authorization details from the stored request before they decide.
+* Treat `ciba_request_id` as untrusted input, and look it up only in what your server stored.
+
+Delete the stored record once the request is decided or expires. `completeCibaRequest` refuses a request that is unknown, already decided, expired, or for another user.
 
 ## Endpoints
 
