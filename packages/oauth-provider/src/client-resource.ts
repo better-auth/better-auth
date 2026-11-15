@@ -1,9 +1,11 @@
 import { BetterAuthError } from "@better-auth/core/error";
 import type {
+	DpopReplayAuthContext,
 	ResourceRequestInput,
 	VerifyAccessTokenRequestOptions,
 } from "better-auth/oauth2";
 import {
+	createDpopReplayStore,
 	DPOP_SIGNING_ALGORITHMS,
 	requestToResourceInput,
 	verifyAccessTokenRequest,
@@ -15,6 +17,7 @@ import type {
 } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload, JWTVerifyOptions } from "jose";
+import { getLocalIntrospection } from "./introspect";
 import { getIssuerForms, validateIssuerUrl } from "./issuer";
 import { createResourceServerChallenge } from "./resource-challenge";
 import type { ResourceServerMetadata } from "./types/oauth";
@@ -75,15 +78,47 @@ export const oauthProviderResourceClient = <
 		return configuredIssuer ? validateIssuerUrl(configuredIssuer) : undefined;
 	};
 	/**
+	 * Whether tokens are checked against the records of the OAuth provider in
+	 * this process: the default, unless the caller chose `jwksUrl` or
+	 * `remoteVerify`.
+	 */
+	const usesLocalRecords = async (
+		opts: { jwksUrl?: string; remoteVerify?: unknown } | undefined,
+	) =>
+		!!auth &&
+		!opts?.jwksUrl &&
+		!opts?.remoteVerify &&
+		!!(await getOauthProviderPlugin());
+	/**
 	 * Fills a missing nonce secret and lifetime from the auth instance: the
 	 * secret the OAuth provider derives its nonces from and the provider's
 	 * `dpop.nonce.expiresIn`. A resource on the provider's origin then accepts
 	 * the nonce the client already holds for exactly as long as the provider
-	 * does.
+	 * does. With `localRecords`, the provider's `dpop.nonce.required` and the
+	 * database-backed replay store also apply unless `dpop` overrides them.
 	 */
 	const resolveDpopOptions = async (
-		dpop: ResourceDpopAuthOptions | undefined,
+		requested: ResourceDpopAuthOptions | undefined,
+		localRecords: boolean,
 	): Promise<VerifyAccessTokenRequestOptions["dpop"]> => {
+		const providerNonce = localRecords
+			? (await getOauthProviderPlugin())?.options?.dpop?.nonce
+			: undefined;
+		const dpop: ResourceDpopAuthOptions | undefined = localRecords
+			? {
+					...requested,
+					// Shared with the provider, so a proof replayed at another
+					// instance on the same database is rejected.
+					replayStore:
+						requested?.replayStore ??
+						createDpopReplayStore(
+							(await auth!.$context) as unknown as DpopReplayAuthContext,
+						),
+					nonce:
+						requested?.nonce ??
+						(providerNonce?.required ? { required: true } : undefined),
+				}
+			: requested;
 		if (!dpop?.nonce?.required) {
 			const { nonce: _nonce, ...rest } = dpop ?? {};
 			return dpop ? rest : undefined;
@@ -117,27 +152,40 @@ export const oauthProviderResourceClient = <
 			  })
 			| VerifyAccessTokenNoAuthOpts
 			| undefined,
+		request?: Request,
 	): Promise<VerifyAccessTokenRequestOptions> => {
 		const jwtPluginOptions = await getJwtPluginOptions();
 		const authServerBaseUrl = await getAuthServerBaseUrl();
 		const audience = opts?.verifyOptions?.audience ?? authServerBaseUrl;
 		const configuredIssuer = await getConfiguredIssuer();
+		// The provider in this process checks the token against its records,
+		// which accepts opaque tokens and rejects revoked ones, ended sessions,
+		// and disabled clients, without a request to its own endpoints.
+		const introspect =
+			auth && (await usesLocalRecords(opts))
+				? getLocalIntrospection(
+						(await auth.$context) as Parameters<
+							typeof getLocalIntrospection
+						>[0],
+						request,
+						{ subject: "token" },
+					)
+				: undefined;
 		// An auth instance in this process serves its keys without a request to
 		// its own `/jwks`, which some runtimes block.
 		const localJwks =
-			auth && jwtPlugin && !opts?.jwksUrl
+			auth && jwtPlugin && !opts?.jwksUrl && !introspect
 				? getLocalJwksSource(
 						(await auth.$context) as Parameters<typeof getLocalJwksSource>[0],
 					)
 				: undefined;
-		// Keys read from the auth instance in-process also accept the issuer as
-		// configured. Keys fetched from a URL, which is `opts.jwksUrl` or the JWT
+		// Records and keys read in-process also accept the issuer as configured. Keys fetched from a URL, which is `opts.jwksUrl` or the JWT
 		// plugin's `jwks.remoteUrl`, are a remote check: RFC 9068 §4 requires an
 		// exact `iss` match, so only the normalized issuer is accepted.
 		const issuer =
 			opts?.verifyOptions?.issuer ??
 			(configuredIssuer
-				? localJwks
+				? introspect || localJwks
 					? getIssuerForms(configuredIssuer)
 					: validateIssuerUrl(configuredIssuer)
 				: undefined);
@@ -161,6 +209,7 @@ export const oauthProviderResourceClient = <
 		return {
 			...opts,
 			...localJwks,
+			introspect,
 			jwksUrl,
 			verifyOptions: {
 				...opts?.verifyOptions,
@@ -176,15 +225,17 @@ export const oauthProviderResourceClient = <
 					: undefined,
 		};
 	};
+	// Duck-type the `Request` by its header accessor instead of `instanceof`,
+	// so a cross-realm `Request` (mismatched global vs `undici`, Workers) is
+	// still recognized rather than mistaken for a plain input.
+	const isRequest = (
+		request: Request | ResourceRequestInput,
+	): request is Request =>
+		typeof (request as Request).headers?.get === "function";
 	const toResourceRequestInput = (
 		request: Request | ResourceRequestInput,
 	): ResourceRequestInput =>
-		// Duck-type the `Request` by its header accessor instead of `instanceof`,
-		// so a cross-realm `Request` (mismatched global vs `undici`, Workers) is
-		// still recognized rather than mistaken for a plain input.
-		typeof (request as Request).headers?.get === "function"
-			? requestToResourceInput(request as Request)
-			: (request as ResourceRequestInput);
+		isRequest(request) ? requestToResourceInput(request) : request;
 
 	return {
 		id: "oauth-provider-resource-client",
@@ -192,10 +243,14 @@ export const oauthProviderResourceClient = <
 		getActions() {
 			return {
 				/**
-				 * Performs verification of an access token for your APIs. Can perform
-				 * local verification using `jwksUrl` by default. Can also be configured
-				 * for remote introspection using `remoteVerify` if a confidential client
-				 * is set up for this API.
+				 * Performs verification of an access token for your APIs.
+				 *
+				 * With an auth instance that runs the OAuth provider and neither
+				 * `jwksUrl` nor `remoteVerify`, the token is checked against the
+				 * provider's records, as `/oauth2/introspect` does, and the result is
+				 * its RFC 7662 introspection response. Otherwise a JWT access token is
+				 * verified by signature against `jwksUrl`, and `remoteVerify`
+				 * introspects over HTTP with a confidential client set up for this API.
 				 *
 				 * The optional auth parameter can fill known values automatically.
 				 */
@@ -237,7 +292,17 @@ export const oauthProviderResourceClient = <
 				 * Performs verification of a protected-resource request. Use this for
 				 * new resource-server integrations so sender-constrained DPoP access
 				 * tokens are enforced with the request method, URL, Authorization
-				 * scheme, DPoP proof, `ath`, and `cnf.jkt` binding.
+				 * scheme, DPoP proof, `ath`, and `cnf.jkt` binding. The proof's `htu`
+				 * is the request URL, or `url` in a {@link ResourceRequestInput}.
+				 *
+				 * With an auth instance that runs the OAuth provider and neither
+				 * `jwksUrl` nor `remoteVerify`, the token is checked against the
+				 * provider's records: opaque tokens verify, and revoked tokens, ended
+				 * sessions, and disabled clients fail. The result is the token's RFC
+				 * 7662 introspection response, whose `sub` is the subject the access
+				 * token carries. DPoP proofs then use the database-backed replay store,
+				 * and nonces follow the provider's `dpop.nonce` unless `dpop` overrides
+				 * them.
 				 */
 				verifyAccessTokenRequest: (async (
 					request: Request | ResourceRequestInput,
@@ -253,11 +318,20 @@ export const oauthProviderResourceClient = <
 						resourceMetadataMappings?: Record<string, string>;
 					},
 				): Promise<JWTPayload> => {
-					const verifyOptions = await resolveVerifyAccessTokenOptions(opts);
+					const verifyOptions = await resolveVerifyAccessTokenOptions(
+						opts,
+						isRequest(request) ? request : undefined,
+					);
 					try {
 						return await verifyAccessTokenRequest(
 							toResourceRequestInput(request),
-							{ ...verifyOptions, dpop: await resolveDpopOptions(opts?.dpop) },
+							{
+								...verifyOptions,
+								dpop: await resolveDpopOptions(
+									opts?.dpop,
+									!!verifyOptions.introspect,
+								),
+							},
 						);
 					} catch (error) {
 						const challenge = createResourceServerChallenge(
