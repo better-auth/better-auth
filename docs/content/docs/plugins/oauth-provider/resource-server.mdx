@@ -47,6 +47,8 @@ export const GET = async (req: Request) => {
 
 `typ: "at+jwt"` and `requiredClaims: ["azp"]` reject any JWT that is not an OAuth access token. The provider sets both on every JWT access token ([RFC 9068 §2.1](https://datatracker.ietf.org/doc/html/rfc9068#section-2.1)). Without them, a [JWT plugin](/docs/plugins/jwt#oauth-provider-mode) session JWT signed with the same key passes whenever its `iss` and `aud` match. That token was issued to a signed-in user, not to an OAuth client, and carries no consent or scopes.
 
+A resource server built on another library must accept the `at+jwt` type too. For example, the default JWT validators of Spring Security 7.0 accept only `typ: JWT` or no `typ`, so they reject the provider's access tokens. Configure the decoder with `JwtValidators.createAtJwtValidator()`, available since Spring Security 6.5, which accepts `at+jwt` and `application/at+jwt`.
+
 `requestToResourceInput` reads the `Authorization` and `DPoP` headers, the method, and the URL from a standard `Request`. If your framework has no `Request`, pass `{ authorizationHeader, dpopProofJwt, method, url }` instead. When the token lacks a required scope, the call throws a 403 `insufficient_scope` error. Its `body.scope` lists every missing scope ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)), so the client knows which scopes to request when it authorizes again. Catch the thrown `APIError` and return its `statusCode`, as above. Most frameworks turn an uncaught error into a `500`.
 
 The thrown error has no `WWW-Authenticate` header, which [RFC 6750 §3](https://datatracker.ietf.org/doc/html/rfc6750#section-3) requires when a request has no usable token. To add it, pass the error and your API's resource identifier to `createResourceServerChallenge` from `@better-auth/oauth-provider`, and send the returned `headers`. It returns a challenge for 401 and `insufficient_scope` errors, and `undefined` for any other error. Bearer challenges, including `insufficient_scope`, carry a `resource_metadata` link to your [protected resource metadata](#protected-resource-metadata).
@@ -151,7 +153,7 @@ If your API also receives opaque tokens, have it introspect them:
 2. [Link it to the resource](#introspection).
 3. Pass its credentials as `remoteVerify`.
 
-With `remoteVerify` set, every token is introspected after the local JWT check. Introspection also confirms the session is still active. The `typ` check reads the JWT header, which the introspection result does not have, so only the local check applies it. Set `force: true` to skip the local check, including `typ`. Introspection reports a JWT as active only when it has `azp`, so session JWTs still fail with `force: true`.
+With `remoteVerify` set, every token is introspected after the local JWT check. Introspection also confirms the session is still active. The `typ` check reads the JWT header, which the introspection result does not have, so only the local check applies it. Set `force: true` to skip the local check, including `typ`. Introspection reports a JWT as active only when it has `azp`, so session JWTs still fail with `force: true`. Introspection does not check `typ`, though. Any JWT signed with the provider's keys that carries `azp` and your API's `aud` reports active, including one your app signs with the [JWT plugin](/docs/plugins/jwt#oauth-provider-mode). Keep the local check, without `force`, so `typ: "at+jwt"` still applies.
 
 ```ts title="api/posts.ts"
 const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {

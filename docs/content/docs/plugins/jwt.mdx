@@ -243,6 +243,8 @@ betterAuth({
 })
 ```
 
+The provider's own endpoints recognize a JWT access token by its `azp` claim, not by its `typ` header. Introspection, UserInfo, and `requireMcpAuth` from the [MCP](/docs/plugins/mcp) plugin accept any JWT signed with these keys that carries `azp` and an accepted `aud`. A JWT that your code signs with `auth.api.signJWT` and that carries `azp` therefore works as an access token for that client, with the `scope` its payload names. Never sign a payload that carries `azp`, and remove `azp` from any payload built from input you did not write.
+
 ### Remote JWKS Url
 
 Disables the `/jwks` endpoint and uses this endpoint in any discovery such as OIDC.
@@ -323,6 +325,7 @@ Implementers:
 * `remoteUrl` must be defined if using the `sign` function. This shall store all active keys, not just the current one.
 * If using localized approach, ensure server uses the latest private key when rotated. Depending on deployment, the server may need to be restarted.
 * When using remote approach, verify the payload is unchanged after transit. Use integrity validation like CRC32 or SHA256 checks if available.
+* Apply the optional `header` argument to the signed header. The OAuth provider passes `typ: "at+jwt"` for access tokens, and resource servers that check `typ`, as [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) requires, reject an access token without it.
 
 #### Localized Signing
 
