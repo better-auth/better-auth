@@ -1,4 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { serializeSignedCookie } from "better-call";
 import { describe, expect, it } from "vitest";
 import { betterAuth } from "../auth/full";
 import { getCandidateSecrets } from "../context/secret-utils";
@@ -390,6 +392,167 @@ describe("cookie signature secret rotation (#12636)", () => {
 			const body = await (res as Response).json();
 			expect(body).not.toBeNull();
 			expect(body.user.email).toBe("cache-jwt@example.com");
+		});
+	});
+
+	describe("direct ctx.getSignedCookie verification across rotated secrets", () => {
+		it("verifies signed cookies signed with rotated secrets in endpoint handlers", async () => {
+			const db = new DatabaseSync(":memory:");
+			const { runMigrations } = await getMigrations({ database: db });
+			await runMigrations();
+
+			const testPlugin = {
+				id: "test-plugin",
+				endpoints: {
+					verifyCustomCookie: createAuthEndpoint(
+						"/test/verify-cookie",
+						{ method: "GET" },
+						async (ctx) => {
+							const value = await ctx.getSignedCookie(
+								"custom_token",
+								ctx.context.secret,
+							);
+							return ctx.json({ value });
+						},
+					),
+				},
+			};
+
+			const auth1 = betterAuth({
+				database: db,
+				baseURL: "http://localhost:3000",
+				plugins: [testPlugin],
+				secrets: [{ version: 1, value: secretV1 }],
+			});
+
+			const signedVal = await serializeSignedCookie(
+				"custom_token",
+				"hello-from-v1",
+				secretV1,
+			);
+
+			const headers = new Headers();
+			headers.set("cookie", signedVal);
+
+			// Check on auth1
+			const res1 = await auth1.api.verifyCustomCookie({ headers });
+			expect(res1).toEqual({ value: "hello-from-v1" });
+
+			// Check on auth2 (rotated: v2 current, v1 candidate)
+			const auth2 = betterAuth({
+				database: db,
+				baseURL: "http://localhost:3000",
+				plugins: [testPlugin],
+				secrets: [
+					{ version: 2, value: secretV2 },
+					{ version: 1, value: secretV1 },
+				],
+			});
+
+			const res2 = await auth2.api.verifyCustomCookie({ headers });
+			expect(res2).toEqual({ value: "hello-from-v1" });
+
+			// Check on auth3 (only v2, v1 decommissioned)
+			const auth3 = betterAuth({
+				database: db,
+				baseURL: "http://localhost:3000",
+				plugins: [testPlugin],
+				secrets: [{ version: 2, value: secretV2 }],
+			});
+
+			const res3 = await auth3.api.verifyCustomCookie({ headers });
+			expect(res3).toEqual({ value: false });
+		});
+	});
+
+	describe("dontRememberMe cookie preservation during cache refresh under rotation", () => {
+		it("re-signs dont_remember cookie with current secret during cache refresh", async () => {
+			const db = new DatabaseSync(":memory:");
+			const { runMigrations } = await getMigrations({ database: db });
+			await runMigrations();
+
+			const auth1 = betterAuth({
+				database: db,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				secrets: [{ version: 1, value: secretV1 }],
+				session: {
+					cookieCache: {
+						enabled: true,
+						updateAge: 60,
+					},
+					expiresIn: 3600,
+				},
+			});
+
+			// Sign up user
+			await auth1.api.signUpEmail({
+				body: {
+					email: "dontremember@example.com",
+					password: "password123",
+					name: "Dont Remember",
+				},
+			});
+
+			// Sign in with rememberMe: false to generate dont_remember cookie
+			const signInRes = await auth1.api.signInEmail({
+				body: {
+					email: "dontremember@example.com",
+					password: "password123",
+					rememberMe: false,
+				},
+				asResponse: true,
+			});
+			const setCookie = (signInRes as Response).headers.get("set-cookie") || "";
+			const parsed = parseSetCookieHeader(setCookie);
+			const sessionToken = parsed.get("better-auth.session_token");
+			const sessionData = parsed.get("better-auth.session_data");
+			const dontRemember = parsed.get("better-auth.dont_remember");
+
+			expect(sessionToken).toBeDefined();
+			expect(sessionData).toBeDefined();
+			expect(dontRemember).toBeDefined();
+
+			const headers = new Headers();
+			headers.set(
+				"cookie",
+				`better-auth.session_token=${sessionToken?.value}; better-auth.session_data=${sessionData?.value}; better-auth.dont_remember=${dontRemember?.value}`,
+			);
+
+			// Rotate to auth2 with [v2, v1]
+			const auth2 = betterAuth({
+				database: db,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				secrets: [
+					{ version: 2, value: secretV2 },
+					{ version: 1, value: secretV1 },
+				],
+				session: {
+					cookieCache: {
+						enabled: true,
+						updateAge: 60,
+					},
+					expiresIn: 3600,
+				},
+			});
+
+			const res = await auth2.api.getSession({
+				headers,
+				asResponse: true,
+			});
+			const resCookies = parseSetCookieHeader(
+				(res as Response).headers.get("set-cookie") || "",
+			);
+
+			// dont_remember must be re-signed with current secret (v2)
+			const reSignedDontRemember = resCookies.get("better-auth.dont_remember");
+			expect(reSignedDontRemember).toBeDefined();
+			expect(reSignedDontRemember?.value).not.toBe(dontRemember?.value);
+
+			// session_token must have no max-age because of dontRememberMe
+			const reSignedSessionToken = resCookies.get("better-auth.session_token");
+			expect(reSignedSessionToken?.["max-age"]).toBeUndefined();
 		});
 	});
 });

@@ -373,7 +373,12 @@ export async function dispatchAuthEndpoint(
 		headers: input.headers ? new Headers(input.headers) : undefined,
 	};
 
-	if (internalContext.getSignedCookie && internalContext.context?.secretConfig) {
+	if (
+		internalContext.getSignedCookie &&
+		internalContext.context?.secretConfig &&
+		!(internalContext as unknown as { __originalGetSignedCookie?: unknown })
+			.__originalGetSignedCookie
+	) {
 		const originalGetSignedCookie =
 			internalContext.getSignedCookie.bind(internalContext);
 		(
@@ -391,7 +396,7 @@ export async function dispatchAuthEndpoint(
 				if (!secret || secret === internalContext.context.secret) {
 					for (const s of candidateSecrets) {
 						const val = await originalGetSignedCookie(key, s, prefix);
-						if (val) return val;
+						if (typeof val === "string") return val;
 						if (val === null) return null;
 					}
 					return false;

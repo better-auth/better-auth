@@ -47,4 +47,4 @@ export type {
 	ClientFetchOption,
 	ClientStore,
 } from "./plugin-client";
-export type { SecretConfig } from "./secret";
+export { getCandidateSecrets, type SecretConfig } from "./secret";
