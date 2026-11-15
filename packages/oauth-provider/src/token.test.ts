@@ -5944,14 +5944,59 @@ describe("oauth token - DPoP", async () => {
 	});
 
 	/**
-	 * The proof's `jti` is recorded only after the code is consumed, so the
-	 * request that loses the race is told the code is gone, not that the proof
-	 * was replayed. That reuse revokes the grant, so neither request gets
-	 * tokens.
-	 *
-	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-11.1
 	 */
-	it("issues nothing when two exchanges with one DPoP proof arrive together", async () => {
+	it("keeps the authorization code when the DPoP proof was already used", async () => {
+		const dpopKey = await createDpopKey();
+		const usedProof = await createDpopProof(dpopKey, {
+			url: tokenEndpoint,
+			jti: "already-used-proof",
+		});
+		const first = await authorizeForCode(dpopKey.jkt, jwtResource);
+		const issued = await exchangeCode(
+			first.code,
+			first.codeVerifier,
+			jwtResource,
+			usedProof,
+		);
+		expect(issued.error).toBeNull();
+
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const replayed = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			usedProof,
+		);
+		expect((replayed.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const freshProof = await createDpopProof(dpopKey, {
+			url: tokenEndpoint,
+			jti: "fresh-proof-after-replay",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			freshProof,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.token_type).toBe("DPoP");
+	});
+
+	/**
+	 * The proof's `jti` is recorded before the code is consumed, so the request
+	 * that loses the race fails on the replayed proof and leaves the code to the
+	 * winner.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-11.1
+	 */
+	it("issues once when two exchanges with one DPoP proof arrive together", async () => {
 		const dpopKey = await createDpopKey();
 		const { code, codeVerifier } = await authorizeForCode(
 			dpopKey.jkt,
@@ -5967,10 +6012,14 @@ describe("oauth token - DPoP", async () => {
 			exchangeCode(code, codeVerifier, jwtResource, proof),
 			exchangeCode(code, codeVerifier, jwtResource, proof),
 		]);
-		expect(results.map((result) => result.error)).toMatchObject([
-			{ error: "invalid_grant" },
-			{ error: "invalid_grant" },
-		]);
+		const successes = results.filter((result) => result.error === null);
+		const failures = results.filter((result) => result.error !== null);
+		expect(successes).toHaveLength(1);
+		expect(successes[0]?.data?.token_type).toBe("DPoP");
+		expect(failures).toHaveLength(1);
+		expect((failures[0]?.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
 	});
 
 	it("preserves the key binding across refresh and rejects a proofless refresh", async () => {

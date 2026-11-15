@@ -122,7 +122,7 @@ async function exchangeOAuthDeviceCode(
 	const {
 		authorizationContext: { client, scopes },
 		claimedDeviceCode,
-		redemptionContext: { resources, confirmation, recordReplay },
+		redemptionContext: { resources, confirmation },
 		user,
 	} = await redeemDeviceCode<
 		OAuthDeviceCodeFields,
@@ -130,7 +130,6 @@ async function exchangeOAuthDeviceCode(
 		{
 			resources?: string[];
 			confirmation?: Confirmation;
-			recordReplay: () => Promise<void>;
 		}
 	>({
 		ctx,
@@ -192,7 +191,7 @@ async function exchangeOAuthDeviceCode(
 					resources,
 					confirmation: authorization.confirmation,
 				});
-				return { resources, confirmation, recordReplay: async () => {} };
+				return { resources, confirmation };
 			}
 			const dpop = await checkDpopProofBeforeConsume(ctx, input.opts, {
 				client: authorization.client,
@@ -202,7 +201,6 @@ async function exchangeOAuthDeviceCode(
 			return { resources, ...dpop };
 		},
 	});
-	await recordReplay();
 
 	return provider.issueTokens({
 		client,

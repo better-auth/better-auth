@@ -283,7 +283,7 @@ A confidential client that reuses a PKCE code with its secret but without the `c
 
 The provider remembers a redeemed code for the longer of `accessTokenExpiresIn` and `refreshTokenExpiresIn`, 30 days by default, and each refresh-token rotation extends that record. A reuse during that time revokes the tokens, even after the code itself has expired. Codes redeemed before you upgrade have no record, so reusing one revokes nothing. With secondary storage alone, an evicted record has the same effect.
 
-When the issuing client sends two token requests that pass these checks with one code at the same time, the second is a reuse and revokes the grant. The first request now also fails with `invalid_grant`, unless it finished issuing before the revocation started. In that case, the revocation revokes its tokens, as for any reuse. A client that retries a code exchange it thinks timed out must start a new authorization request.
+When the issuing client sends two token requests that pass these checks and their DPoP proof checks with one code at the same time, the second is a reuse and revokes the grant. The first request now also fails with `invalid_grant`, unless it finished issuing before the revocation started. In that case, the revocation revokes its tokens, as for any reuse. A client that retries a code exchange it thinks timed out must start a new authorization request. Two requests with the same DPoP proof can end differently, as described in [Sender-constrained tokens keep their binding](#sender-constrained-tokens-keep-their-binding).
 
 ### Repeated request parameters are rejected
 
@@ -315,9 +315,11 @@ This applies if you bind tokens with DPoP or mTLS, or write a `clientAuthenticat
 * A `client_credentials` token is now bound to the `confirmation` that a `clientAuthentication` strategy returns, such as an mTLS certificate thumbprint. When the strategy returns a DPoP key (`jkt`), the token type is `DPoP`, and the client must send a DPoP proof to every protected resource.
 * A confirmation that is not a DPoP key no longer satisfies a required DPoP binding. When a client registers with `dpop_bound_access_tokens: true`, or a resource sets `dpopBoundAccessTokensRequired: true`, such an issuance fails with `invalid_dpop_proof`.
 * A malformed `confirmation` fails the request with `server_error`. A confirmation must have exactly one member, `jkt` or `x5t#S256`, with a non-empty string value.
+* A token request whose DPoP proof is rejected no longer uses up its authorization code or device code, so the client can retry with a new proof. This includes a proof whose `jti` was already used.
+* When two requests redeem the same authorization code with the same DPoP proof at once, the losing request gets `invalid_dpop_proof`. Before, it got `invalid_grant`.
 * With `oauthTokenExchange()`, a client that exchanges its own DPoP-bound access token must prove the same key, with a DPoP proof or a matching `confirmation`. A client that exchanges its own certificate-bound token must return the same `confirmation` from its strategy, or the exchange fails with `invalid_request`. DPoP checks now run before `allowExchange`.
 
-**What to do:** return a confirmation from a strategy only for the key or certificate the client proved. Clients whose strategy returns a `jkt` must send DPoP proofs.
+**What to do:** return a confirmation from a strategy only for the key or certificate the client proved. Clients whose strategy returns a `jkt` must send DPoP proofs. When a token request fails with `invalid_dpop_proof`, the code is still unused, so retry it with a fresh proof. The exception is a client that sent the same authorization code request twice at once: the other request received the tokens, so treat the duplicate's `invalid_dpop_proof` as you treat `invalid_grant` for a code that was already sent.
 
 ### Consent reference hook runs once
 
