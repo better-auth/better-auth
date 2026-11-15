@@ -321,6 +321,15 @@ This applies if you bind tokens with DPoP or mTLS, or write a `clientAuthenticat
 
 **What to do:** return a confirmation from a strategy only for the key or certificate the client proved. Clients whose strategy returns a `jkt` must send DPoP proofs. When a token request fails with `invalid_dpop_proof`, the code is still unused, so retry it with a fresh proof. The exception is a client that sent the same authorization code request twice at once: the other request received the tokens, so treat the duplicate's `invalid_dpop_proof` as you treat `invalid_grant` for a code that was already sent.
 
+### Token response fields and ID token contributors resolve after the DPoP check
+
+This applies if you set `customTokenResponseFields` or an `extensions[].claims.idToken` contributor:
+
+* Both now run after the provider checks the DPoP proof and binding, and after the new [`beforeTokenIssuance`](/docs/plugins/oauth-provider/tokens#refuse-token-issuance). A request with a rejected DPoP proof no longer reaches them.
+* An error thrown from either now comes after the request's DPoP proof is used, so the client needs a new proof to retry. The authorization code grant already checked the proof before this point.
+
+**What to do:** if you throw from either callback to refuse tokens, move that check to `beforeTokenIssuance`, which is the supported place to refuse an issuance and receives the grant's `acr`, `amr`, and DPoP `confirmation`.
+
 ### Consent reference hook runs once
 
 `postLogin.consentReferenceId` now runs once per acceptance instead of twice. Accepting at `/oauth2/consent` with `reference_id` fails with `invalid_request` when `postLogin.consentReferenceId` is not configured.
@@ -429,6 +438,7 @@ These provider features are new or opt-in, and need no action when you upgrade:
 * JWT access token revocation, with `revocableJwtAccessTokens: true`. Resource servers that verify tokens locally against the JWKS don't see it, so they must introspect.
 * RP-initiated logout for registered clients, with `clientRegistrationEnableEndSession`.
 * `verifyResourceRequest()` and `issueAuthorizationCode()` on the provider API, for plugin endpoints served by the auth server.
+* [`beforeTokenIssuance`](/docs/plugins/oauth-provider/tokens#refuse-token-issuance), to refuse tokens for any grant before they are stored. Extensions can set it too.
 
 ***
 

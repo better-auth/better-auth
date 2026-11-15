@@ -215,6 +215,7 @@ async function exchangeOAuthDeviceCode(
 		originalResources: claimedDeviceCode.resources ?? undefined,
 		// Resolved before the claim: client-auth proof or the poll's DPoP proof.
 		confirmation,
+		grantRequest: claimedDeviceCode,
 	});
 }
 

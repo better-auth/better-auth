@@ -8,6 +8,7 @@ import {
 } from "./client-metadata";
 import type {
 	ClientDiscovery,
+	OAuthBeforeTokenIssuanceInput,
 	OAuthClaimExtensionInput,
 	OAuthClientAuthenticationStrategy,
 	OAuthClientMetadataExtensionInput,
@@ -544,6 +545,23 @@ async function collectClaims(
 		}
 	}
 	return claims;
+}
+
+/**
+ * Runs each extension's `beforeTokenIssuance` in registration order, then the
+ * option's, each with its own input from `createInput`. The first throw
+ * refuses the issuance.
+ */
+export async function runBeforeTokenIssuance(
+	opts: OAuthOptions<Scope[]>,
+	createInput: () => OAuthBeforeTokenIssuanceInput,
+) {
+	for (const extension of getOAuthProviderExtensions(opts)) {
+		if (extension.beforeTokenIssuance) {
+			await extension.beforeTokenIssuance(createInput());
+		}
+	}
+	if (opts.beforeTokenIssuance) await opts.beforeTokenIssuance(createInput());
 }
 
 export function collectExtensionAccessTokenClaims(

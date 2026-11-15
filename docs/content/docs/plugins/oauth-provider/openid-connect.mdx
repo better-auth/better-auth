@@ -123,7 +123,7 @@ How a request for a class is handled depends on whether it is essential:
 
 `resolve` must return an `acr` from `acrValuesSupported`, or omit it to use `"0"`. `amr` must be an array of strings. Any other result fails the authorization with `server_error`.
 
-To refuse an authorization yourself, throw an `APIError` with an OAuth `error` such as `access_denied`. The client receives that error and its `error_description`. For a device code, the user sees the error on your verification page instead, and the code stays pending so the user can retry.
+To refuse an authorization yourself, throw an `APIError` with an OAuth `error` such as `access_denied`. The client receives that error and its `error_description`. For a device code, the user sees the error on your verification page instead, and the code stays pending so the user can retry. To refuse at the token endpoint instead, after the client redeems the grant, use [`beforeTokenIssuance`](/docs/plugins/oauth-provider/tokens#refuse-token-issuance).
 
 The `acr` and `amr` are stored with the authorization code or device code and with the refresh token. ID tokens from later refreshes therefore keep the values of the original authentication ([OIDC Core §12.2](https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse)). They change only when the user authorizes again.
 
