@@ -425,6 +425,66 @@ describe("resource client with the provider in this process", async () => {
 	});
 });
 
+describe("resource client with a dynamic baseURL", async () => {
+	const host = "localhost:3000";
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL: { allowedHosts: [host], protocol: "http" },
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [resource],
+				enforcePerClientResources: false,
+				scopes: ["read:posts"],
+				clientPrivileges: () => true,
+			}),
+		],
+	});
+
+	// The base URL resolves only per request, so there is no issuer or UserInfo
+	// audience to check the records with, and the signature check stays.
+	it("keeps signature-only verification, as it does with jwksUrl", async () => {
+		const { headers } = await signInWithTestUser();
+		headers.set("host", host);
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:posts"],
+			},
+		});
+		const { access_token } = await auth.api.oauth2Token({
+			headers: new Headers({ host }),
+			body: {
+				grant_type: "client_credentials",
+				client_id: client.client_id,
+				client_secret: client.client_secret,
+				scope: "read:posts",
+				resource,
+			},
+		});
+		await (await auth.$context).adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: client.client_id }],
+			update: { disabled: true },
+		});
+
+		const payload = await oauthProviderResourceClient(auth)
+			.getActions()
+			.verifyAccessTokenRequest(await routeRequest(access_token), {
+				verifyOptions: {
+					audience: resource,
+					issuer: `http://${host}/api/auth`,
+				},
+			});
+
+		expect(payload.azp).toBe(client.client_id);
+		expect(payload).not.toHaveProperty("active");
+	});
+});
+
 /**
  * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
  */
@@ -444,6 +504,36 @@ describe("resource client with pairwise access token subjects", async () => {
 
 		expect(payload.sub).toBe(tokenSub);
 		expect(payload).not.toHaveProperty("ba_sub");
+	});
+
+	it("keeps the client ID as the sub of a pairwise client's own token", async () => {
+		const pairwiseMachine = await server.auth.api.adminCreateOAuthClient({
+			headers: (await server.signInWithTestUser()).headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:posts"],
+				subject_type: "pairwise",
+				redirect_uris: [redirectUri],
+			},
+		});
+		const { access_token } = await server.auth.api.oauth2Token({
+			body: {
+				grant_type: "client_credentials",
+				client_id: pairwiseMachine.client_id,
+				client_secret: pairwiseMachine.client_secret,
+				scope: "read:posts",
+				resource,
+			},
+		});
+		const tokenSub = decodeJwt(access_token).sub;
+
+		const payload = await server.resourceClient.verifyAccessTokenRequest(
+			await routeRequest(access_token),
+			{ verifyOptions },
+		);
+
+		expect(payload.sub).toBe(tokenSub);
 	});
 });
 
