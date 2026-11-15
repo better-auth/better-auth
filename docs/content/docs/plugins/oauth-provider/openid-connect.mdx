@@ -129,15 +129,17 @@ The `acr` and `amr` are stored with the authorization code or device code and wi
 
 ## UserInfo
 
-`/oauth2/userinfo` accepts GET and POST and returns claims for an access token whose scopes include `openid`. A token without `openid` gets 400 `invalid_scope`. An expired or revoked token, or one whose session has ended, gets 401 `invalid_token` ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)).
+`/oauth2/userinfo` accepts GET and POST and returns claims for an access token whose scopes include `openid`. Send the token as `Authorization: Bearer <token>`, or `DPoP <token>` for a DPoP-bound token. A header without one of those schemes counts as no token. A token without `openid` gets 403 `insufficient_scope`, with a challenge naming `openid`. An expired or revoked token, or one whose session has ended, gets 401 `invalid_token` ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)).
 
-Every 401 from UserInfo carries a `WWW-Authenticate` challenge that tells the client how to retry. The response also lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, so a browser client on another origin can read the challenge.
+Every 401 and 403 from UserInfo carries a `WWW-Authenticate` challenge that tells the client how to retry. The table shows the 401 challenges. The response also lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, so a browser client on another origin can read the challenge.
 
 | Request                                                                                     | Challenge                                                                                                                      |
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| No access token                                                                             | `Bearer, DPoP algs="…"`, with no error code                                                                                    |
+| No access token                                                                             | `Bearer scope="openid", DPoP scope="openid", algs="…"`, with no error code                                                     |
 | A token sent with the `Bearer` scheme or in the form body, when the token is not DPoP-bound | `Bearer error="invalid_token", …`                                                                                              |
 | A DPoP-bound token, or any request that uses the `DPoP` scheme                              | `DPoP error="…", error_description="…", algs="…"` ([RFC 9449 §7.1](https://datatracker.ietf.org/doc/html/rfc9449#section-7.1)) |
+
+The 403 for a token without `openid` carries `error="insufficient_scope"` and `scope="openid"`. Its scheme follows the table: `DPoP` for a DPoP-bound token or a request that uses the `DPoP` scheme, otherwise `Bearer`.
 
 `algs` lists the proof algorithms from `dpop.signingAlgorithms`. UserInfo validates the access token before it checks the DPoP proof, so an invalid, expired, or revoked token gets `invalid_token` whatever the proof contains. For a valid DPoP-bound token, the error is `invalid_dpop_proof` when the proof is missing or fails verification, for example when its `htu`, `htm`, or key does not match. When [`dpop.nonce.required`](/docs/plugins/oauth-provider/tokens#server-provided-nonces) is on, a proof without a current server nonce gets `use_dpop_nonce` instead, and the response carries a `DPoP-Nonce` header to retry with. Every other failure gets `invalid_token`, including a DPoP-bound token sent with the `Bearer` scheme. An `auth.api.oauth2UserInfo` call has no HTTP request to check a proof against, so a DPoP-bound token fails with `invalid_token`, and the thrown error carries the same challenge in its `headers`.
 
@@ -215,7 +217,7 @@ Resource servers that read `sub` from those tokens then see a different value fo
 
 The option also covers tokens from [delegation](/docs/plugins/oauth-provider/tokens#delegate-to-an-actor). Each user named in `act`, at every level, carries the `sub` that the token's client sees for that user. That is the same `sub` the client saw in the user's own access token. A service named in `act` keeps its client ID.
 
-The token also carries a `ba_uid` claim: the user ID encrypted with the Better Auth secret, with a fresh nonce for each token so the value does not link users across clients. UserInfo, introspection, and token exchange read the user from it. A delegated token also carries `ba_act`, its `act` with user IDs, encrypted the same way. Resource servers should ignore both claims. Rotating the Better Auth secret without keeping the old one makes existing tokens inactive.
+The token also carries a `ba_sub` claim: the user ID, and for a delegated token its `act` with user IDs, encrypted with a key derived from the Better Auth secret. Each token gets a fresh nonce, so the value does not link users across clients. UserInfo, introspection, and token exchange read the user from it. Resource servers should ignore it. Rotating the Better Auth secret without keeping the old one makes existing tokens inactive.
 
 Endpoints you build on the [provider API](/docs/plugins/oauth-provider/reference) still receive the user ID in `sub`, and can call `resolveSubject` to get the value a client sees.
 
@@ -254,7 +256,7 @@ Ending the session also triggers back-channel logout for every client that holds
 
 ### Registered clients
 
-Clients created through [dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration) or a [Client ID Metadata Document](/docs/plugins/cimd) cannot set `enable_end_session` themselves. To let them use RP-initiated logout, set `clientRegistrationEnableEndSession`:
+Clients created through [dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration), a [Client ID Metadata Document](/docs/plugins/cimd), or `createOAuthClient` cannot set `enable_end_session` themselves. To let them use RP-initiated logout, set `clientRegistrationEnableEndSession`:
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -263,7 +265,7 @@ oauthProvider({
 });
 ```
 
-To decide per client, pass a function instead. It receives the validated registration metadata, including the assigned `client_id`, and `registrationSource`, which is `"dynamic"` or `"clientMetadataDocument"`:
+To decide per client, pass a function instead. It receives the validated registration metadata, including the assigned `client_id`, and `registrationSource`, which is `"dynamic"`, `"clientMetadataDocument"`, or `"createOAuthClient"`:
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -272,9 +274,19 @@ oauthProvider({
 });
 ```
 
-Better Auth decides once, when it creates the client. Refreshing a metadata document never grants or removes the permission, and turning the option on does not change clients that already exist. `adminUpdateOAuthClient` can change it only for a client with an owner. Anonymous registrations and metadata document clients have none, so to take the permission back from one of them, set its stored `enableEndSession` to `false` in your database.
+Better Auth decides once, when it creates the client. Refreshing a metadata document never grants or removes the permission, and turning the option on does not change clients that already exist. To change it for one client later, call `adminUpdateOAuthClient` with only `enable_end_session`. That works on any client, including anonymous registrations and metadata document clients, which have no owner:
 
-A registrant chooses its own `post_logout_redirect_uris`, so a client allowed to log out must keep them on the origins it already receives authorization responses on. Each URI must share a scheme, host, and port with one of the client's `redirect_uris`. A loopback address such as `localhost` or `127.0.0.1` matches on any port, and a private-use URI such as `com.example.app:/logout` matches on its scheme and authority. A metadata document client may also use the origin of its `client_id` URL. Otherwise registration, or a later metadata document refresh, fails with `invalid_client_metadata`. The rule does not apply when a client's owner edits it with `updateOAuthClient`, because that owner can change its `redirect_uris` too. Use [`clientPrivileges`](/docs/plugins/oauth-provider/clients#client-crud-privileges) to limit who may update clients.
+```ts title="revoke-logout.ts"
+await auth.api.adminUpdateOAuthClient({
+  headers,
+  body: {
+    client_id: clientId,
+    update: { enable_end_session: false },
+  },
+});
+```
+
+A registrant chooses its own `post_logout_redirect_uris`, so a client allowed to log out must keep them on the origins it already receives authorization responses on. Each URI must share a scheme, host, and port with one of the client's `redirect_uris`. A loopback address such as `localhost` or `127.0.0.1` matches on any port, and a private-use URI such as `com.example.app:/logout` matches on its scheme and authority. A metadata document client may also use the origin of its `client_id` URL. Otherwise registration, or a later metadata document refresh, fails with `invalid_client_metadata`. The code is `invalid_client_metadata`, not the `invalid_redirect_uri` returned for an entry no client may register, such as one with credentials, because the entry is valid on its own and conflicts only with the client's `redirect_uris`. The rule also covers every `post_logout_redirect_uris` entry an owner adds with `updateOAuthClient` to a client allowed to log out, whoever created it. Entries the client already has are kept, so URIs an administrator set stay valid. `adminUpdateOAuthClient` is not limited by the rule, except when it grants `enable_end_session` to a client you do not own: the grant fails with `invalid_client_metadata` if one of the client's stored `post_logout_redirect_uris` breaks it.
 
 <Callout type="warn">
   With [open registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration), anyone can register a client. A client allowed to log out can end the session of any user who signed in to it, using an ID token it received for that user, without the user's browser. Without a hint, the user always confirms on your logout page first.

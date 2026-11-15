@@ -193,6 +193,9 @@ catalogs:
     '@better-auth/utils':
       specifier: ^0.4.2 || ^0.5.0
       version: 0.5.1
+    better-call:
+      specifier: ~1.4.5
+      version: 1.4.5
   react19:
     '@types/react':
       specifier: ^19.2.17
@@ -1230,7 +1233,7 @@ importers:
         specifier: catalog:peer
         version: 0.5.1
       better-call:
-        specifier: 'catalog:'
+        specifier: catalog:peer
         version: 1.4.5(zod@4.6.7)
       zod:
         specifier: 'catalog:'
@@ -1403,7 +1406,7 @@ importers:
   packages/ciba:
     dependencies:
       better-call:
-        specifier: 'catalog:'
+        specifier: catalog:peer
         version: 1.4.5(zod@4.6.7)
       zod:
         specifier: 'catalog:'
@@ -1431,7 +1434,7 @@ importers:
   packages/cimd:
     dependencies:
       better-call:
-        specifier: 'catalog:'
+        specifier: catalog:peer
         version: 1.4.5(zod@4.6.7)
     devDependencies:
       '@better-auth/core':
@@ -1629,7 +1632,7 @@ importers:
         specifier: 'catalog:'
         version: 1.3.3
       better-call:
-        specifier: 'catalog:'
+        specifier: catalog:peer
         version: 1.4.5(zod@4.6.7)
       conf:
         specifier: ^15.0.2
@@ -1662,9 +1665,6 @@ importers:
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.3.3
-      better-call:
-        specifier: 'catalog:'
-        version: 1.4.5(zod@4.6.7)
       zod:
         specifier: 'catalog:'
         version: 4.6.7
@@ -1675,6 +1675,9 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
+      better-call:
+        specifier: 'catalog:'
+        version: 1.4.5(zod@4.6.7)
       expo-constants:
         specifier: ~56.0.18
         version: 56.0.18(expo@54.0.33(@babel/core@8.0.7)(graphql@16.14.2)(react-native@0.86.0(@babel/core@8.0.7)(@types/react@19.2.17)(react@19.3.1)(supports-color@10.2.2))(react@19.3.1)(supports-color@10.2.2)(typescript@6.0.3))(react-native@0.86.0(@babel/core@8.0.7)(@types/react@19.2.17)(react@19.3.1)(supports-color@10.2.2))(supports-color@10.2.2)
@@ -1806,7 +1809,7 @@ importers:
         specifier: 'catalog:'
         version: 1.3.3
       better-call:
-        specifier: 'catalog:'
+        specifier: catalog:peer
         version: 1.4.5(zod@4.6.7)
       jose:
         specifier: ^6.2.3
@@ -1846,7 +1849,7 @@ importers:
         specifier: ^13.3.2
         version: 13.3.3
       better-call:
-        specifier: 'catalog:'
+        specifier: catalog:peer
         version: 1.4.5(zod@4.6.7)
       zod:
         specifier: 'catalog:'
@@ -1978,7 +1981,7 @@ importers:
         specifier: workspace:^
         version: link:../better-auth
       better-call:
-        specifier: 'catalog:'
+        specifier: catalog:peer
         version: 1.4.5(zod@4.6.7)
       zod:
         specifier: 'catalog:'

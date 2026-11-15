@@ -4,7 +4,7 @@ import type { User } from "better-auth/types";
 import { collectExtensionAccessTokenClaims } from "./extensions";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { GrantType } from "./types/oauth";
-import { ENCRYPTED_ACTOR_CHAIN_CLAIM, ENCRYPTED_USER_ID_CLAIM } from "./utils";
+import { ENCRYPTED_SUBJECTS_CLAIM } from "./utils";
 
 /**
  * Claim names the authorization server owns on a JWT access token, which no
@@ -33,8 +33,7 @@ const RESERVED_ACCESS_TOKEN_CLAIMS = new Set([
 	"cnf",
 	"act",
 	"reference_id",
-	ENCRYPTED_USER_ID_CLAIM,
-	ENCRYPTED_ACTOR_CHAIN_CLAIM,
+	ENCRYPTED_SUBJECTS_CLAIM,
 ]);
 
 /**
@@ -162,7 +161,10 @@ export interface AccessTokenClaimsInput {
  * Precedence, lowest to highest: extension contributors < per-issuance
  * `accessTokenClaims` < plugin `customAccessTokenClaims` < per-resource
  * `customClaims`. An `undefined` value is not supplied (see {@link pickClaims}),
- * and reserved names are removed from the merged result.
+ * and reserved names are removed from the merged result. The per-issuance
+ * `authorization_details` claim, which `issueTokens` sets from
+ * `authorizationDetails` and an opaque token stores, outranks every source,
+ * and an empty list removes the claim.
  *
  * Returns only the enriched claims; the caller stamps the AS-owned claims
  * (`iss`/`sub`/`aud`/`exp`/`iat`/`jti`/`client_id`/`scope`/...) itself, so they
@@ -206,7 +208,7 @@ export async function resolveAccessTokenClaims(
 				metadata,
 			})
 		: {};
-	return stripReservedClaims(
+	const claims = stripReservedClaims(
 		{
 			...pickClaims(extensionClaims),
 			...pickClaims(perRequestClaims),
@@ -215,4 +217,14 @@ export async function resolveAccessTokenClaims(
 		},
 		input.opts,
 	);
+	// RFC 9396 §9: details a grant issues are what the user approved, so a
+	// deployment hook cannot replace them, or add any when none apply.
+	const grantedDetails = perRequestClaims?.authorization_details;
+	if (grantedDetails !== undefined) {
+		claims.authorization_details =
+			Array.isArray(grantedDetails) && grantedDetails.length === 0
+				? undefined
+				: grantedDetails;
+	}
+	return claims;
 }

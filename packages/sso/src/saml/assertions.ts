@@ -1,3 +1,4 @@
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { base64 } from "@better-auth/utils/base64";
 import type { Element as XMLElement } from "@xmldom/xmldom";
 import { DOMParser } from "@xmldom/xmldom";
@@ -153,7 +154,7 @@ export function verifySAMLAssertionSignature(
 		}
 	} catch (error) {
 		if (
-			error instanceof APIError &&
+			isAPIError(error) &&
 			error.body?.code === "SAML_ASSERTION_SIGNATURE_REQUIRED"
 		) {
 			throw error;
