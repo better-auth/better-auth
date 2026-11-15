@@ -943,7 +943,11 @@ export interface OAuthBeforeAuthorizationInput {
 	 * scopes fill `scope` when the request named none.
 	 */
 	request: Omit<OAuthAuthorizationQuery, "request" | "request_uri">;
-	/** Whether the client pushed the request to `/oauth2/par`. */
+	/**
+	 * Whether the client pushed the request to this server's `/oauth2/par`.
+	 * A request resolved by `requestUriResolver` reports `false`, as does
+	 * every `issueAuthorizationCode` call.
+	 */
 	pushed: boolean;
 	/** The requesting client's registration. */
 	client: SchemaClient<Scope[]>;
@@ -952,8 +956,13 @@ export interface OAuthBeforeAuthorizationInput {
 		session: Session & Record<string, unknown>;
 		user: User & Record<string, unknown>;
 	} | null;
-	/** Headers of the request to `/oauth2/authorize`. */
+	/**
+	 * Headers of the request being handled: the visit to
+	 * `/oauth2/authorize`, or the plugin endpoint that calls
+	 * `issueAuthorizationCode`.
+	 */
 	headers: Headers;
+	/** Context of the same request as `headers`. */
 	ctx: GenericEndpointContext;
 }
 
@@ -2399,8 +2408,9 @@ export interface OAuthOptions<
 	 *
 	 * `issueAuthorizationCode` runs it too, with `pushed: false`. There, a
 	 * thrown OAuth error fails the call with that error, and
-	 * `{ prompt: "login" }` fails with `login_required` unless the session
-	 * was created in that request.
+	 * `{ prompt: "login" }` always fails with `login_required`, even for a
+	 * session created in that request, because the hook cannot run again on
+	 * the new session.
 	 *
 	 * Interaction requests from extensions, such as device codes and CIBA
 	 * requests, do not run it.
