@@ -21,7 +21,12 @@ import { mergeSchema } from "../../db/schema";
 import { shouldRequirePassword, validatePassword } from "../../utils/password";
 import { PACKAGE_VERSION } from "../../version";
 import type { BackupCodeOptions } from "./backup-codes";
-import { backupCode2fa, generateBackupCodes } from "./backup-codes";
+import {
+	backupCode2fa,
+	generateBackupCodes,
+	storeRemainingBackupCodes,
+	verifyBackupCode,
+} from "./backup-codes";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
@@ -30,12 +35,17 @@ import {
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
 import { schema } from "./schema";
-import { totp2fa } from "./totp";
+import { totp2fa, verifyTOTPCode } from "./totp";
 import type {
 	TwoFactorOptions,
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "./types";
+import {
+	assertTwoFactorNotLocked,
+	recordTwoFactorFailure,
+	resetTwoFactorFailures,
+} from "./verify-two-factor";
 
 export * from "./error-code";
 
@@ -92,6 +102,19 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				method: methodField,
 				issuer: issuerField,
 			});
+	const verifyTwoFactorCodeBodySchema = z.object({
+		userId: z.string().meta({
+			description:
+				"The ID of the user whose first factor the caller already verified",
+		}),
+		code: z.string().meta({
+			description: 'The TOTP or backup code to verify. Eg: "012345"',
+		}),
+		method: z.enum(["totp", "backup_code"]).meta({
+			description:
+				"Which second factor the code belongs to: 'totp' for an authenticator app code, 'backup_code' for a backup code",
+		}),
+	});
 	const disableTwoFactorBodySchema = allowPasswordless
 		? z.object({
 				password: passwordSchema.optional(),
@@ -107,6 +130,103 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 			...totp.endpoints,
 			...otp.endpoints,
 			...backupCode.endpoints,
+			/**
+			 * A server-only function that verifies a user's TOTP or backup code
+			 * without the two-factor cookie. It is meant for headless sign-in
+			 * flows that run on the server. It creates no session and sets no
+			 * cookie. Call it only after the user's first factor is verified.
+			 *
+			 * Failures count toward the same account lockout as the cookie-based
+			 * verifiers, and a backup code is consumed on success.
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyTwoFactorCode`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#verifying-a-code-on-the-server)
+			 */
+			verifyTwoFactorCode: createAuthEndpoint.serverOnly(
+				{
+					method: "POST",
+					body: verifyTwoFactorCodeBodySchema,
+				},
+				async (ctx) => {
+					const { userId, code, method } = ctx.body;
+					if (method === "totp" && options?.totpOptions?.disable) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.TOTP_NOT_CONFIGURED,
+						);
+					}
+					const user = (await ctx.context.internalAdapter.findUserById(
+						userId,
+					)) as UserWithTwoFactor | null;
+					if (!user?.twoFactorEnabled) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
+						);
+					}
+					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+						model: opts.twoFactorTable,
+						where: [{ field: "userId", value: user.id }],
+					});
+					if (!twoFactor) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							method === "totp"
+								? TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED
+								: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
+						);
+					}
+					// Same rule as the sign-in path: an abandoned TOTP enrollment
+					// cannot satisfy the second factor.
+					if (method === "totp" && twoFactor.verified === false) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
+						);
+					}
+					await assertTwoFactorNotLocked(ctx, opts.twoFactorTable, twoFactor);
+					if (method === "totp") {
+						const valid = await verifyTOTPCode(
+							ctx.context.secretConfig,
+							twoFactor,
+							code,
+							options?.totpOptions,
+						);
+						if (!valid) {
+							await recordTwoFactorFailure(ctx, opts.twoFactorTable, twoFactor);
+							throw APIError.from(
+								"UNAUTHORIZED",
+								TWO_FACTOR_ERROR_CODES.INVALID_CODE,
+							);
+						}
+					} else {
+						const result = await verifyBackupCode(
+							{ backupCodes: twoFactor.backupCodes, code },
+							ctx.context.secretConfig,
+							backupCodeOptions,
+						);
+						if (!result.status || !result.updated) {
+							await recordTwoFactorFailure(ctx, opts.twoFactorTable, twoFactor);
+							throw APIError.from(
+								"UNAUTHORIZED",
+								TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
+							);
+						}
+						await storeRemainingBackupCodes(
+							ctx,
+							twoFactor,
+							result.updated,
+							backupCodeOptions,
+						);
+					}
+					await resetTwoFactorFailures(ctx, opts.twoFactorTable, twoFactor);
+					return ctx.json({ status: true });
+				},
+			),
 			/**
 			 * ### Endpoint
 			 *

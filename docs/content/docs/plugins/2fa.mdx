@@ -455,6 +455,50 @@ To display the backup codes to the user, you can call `viewBackupCodes` on the s
   ```
 </APIMethod>
 
+### Verifying a Code on the Server
+
+The verify endpoints above read the two-factor cookie that sign-in sets in the browser. A headless sign-in flow, such as the first-party apps plugin for native and CLI apps, has no browser and no such cookie. For these flows, call `verifyTwoFactorCode` on the server to check a user's TOTP code or backup code.
+
+You must verify the user's first factor, such as their password, before you call `verifyTwoFactorCode`. The function trusts the `userId` you pass. It only checks the second factor.
+
+<APIMethod path="/two-factor/verify-two-factor-code" method="POST" isServerOnly forceAsBody>
+  ```ts
+  type verifyTwoFactorCode = {
+      /**
+       * The ID of the user whose first factor you already verified.
+       */
+      userId: string = "user-id"
+      /**
+       * The TOTP code or backup code the user entered.
+       */
+      code: string = "012345"
+      /**
+       * Which second factor the code belongs to.
+       */
+      method: "totp" | "backup_code" = "totp"
+  }
+  ```
+</APIMethod>
+
+On success, `verifyTwoFactorCode` returns `{ status: true }`. It creates no session and sets no cookie, so your flow decides what to issue next.
+
+It enforces the same [account lockout](#server) as the cookie-based verifiers. With account lockout enabled, which is the default:
+
+* A wrong code counts toward the account's failure limit. This counter is shared with every other way the user verifies a second factor.
+* A correct code resets the counter.
+
+A backup code that verifies is removed and can't be used again.
+
+On failure, it throws an `APIError` with one of these codes:
+
+* `INVALID_CODE` or `INVALID_BACKUP_CODE`: the code is wrong.
+* `ACCOUNT_TEMPORARILY_LOCKED`: too many failed attempts. The account is locked for the configured lockout duration.
+* `TWO_FACTOR_NOT_ENABLED`: the user doesn't exist or hasn't enabled two-factor.
+* `TOTP_NOT_ENABLED` or `BACKUP_CODES_NOT_ENABLED`: the user has no setup for the requested method.
+* `TOTP_NOT_CONFIGURED`: TOTP is disabled in the plugin options.
+
+The account lockout counts failures per account. It does not limit attempts within one sign-in. Cap the attempts each headless sign-in allows in your own flow, as the cookie-based flow does for each sign-in challenge.
+
 ### Trusted Devices
 
 You can mark a device as trusted by passing `trustDevice` to `verifyTotp` or `verifyOtp`.
