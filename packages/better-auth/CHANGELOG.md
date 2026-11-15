@@ -205,6 +205,36 @@
   - @better-auth/prisma-adapter@1.8.0-beta.0
   - @better-auth/telemetry@1.8.0-beta.0
 
+## 1.7.25
+
+### Patch Changes
+
+- [#12603](https://github.com/better-auth/better-auth/pull/12603) [`ad07edd`](https://github.com/better-auth/better-auth/commit/ad07edda1bcb4b5e40368989aa70801839a5926b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - An error thrown from an endpoint no longer drops the `Access-Control-Expose-Headers` names that a hook or the endpoint set earlier. The names from both are kept. Before, the error's value replaced the list, so a browser client on another origin could lose access to headers a hook had exposed.
+
+- Updated dependencies [[`69e14d8`](https://github.com/better-auth/better-auth/commit/69e14d89b856c95ea0998869c9cb8742d483a808), [`2a8750b`](https://github.com/better-auth/better-auth/commit/2a8750b285725a45ff58b0f43487afb796c854e9), [`75c0821`](https://github.com/better-auth/better-auth/commit/75c0821fa61c8ed0ea20f1027d5ad42d16e0daae)]:
+  - @better-auth/core@1.7.25
+  - @better-auth/drizzle-adapter@1.7.25
+  - @better-auth/kysely-adapter@1.7.25
+  - @better-auth/memory-adapter@1.7.25
+  - @better-auth/mongo-adapter@1.7.25
+  - @better-auth/prisma-adapter@1.7.25
+  - @better-auth/telemetry@1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12593](https://github.com/better-auth/better-auth/pull/12593) [`b77e783`](https://github.com/better-auth/better-auth/commit/b77e7834123ce5431af6467b3c758d01a2c9bb92) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Looking up a verification value now deletes expired verification rows at most once a minute per server instance, instead of on every lookup. This removes a delete query from most verification reads. Each flow still checks a value's expiry before it accepts the value.
+
+- Updated dependencies [[`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f)]:
+  - @better-auth/core@1.7.24
+  - @better-auth/drizzle-adapter@1.7.24
+  - @better-auth/kysely-adapter@1.7.24
+  - @better-auth/memory-adapter@1.7.24
+  - @better-auth/mongo-adapter@1.7.24
+  - @better-auth/prisma-adapter@1.7.24
+  - @better-auth/telemetry@1.7.24
+
 ## 1.7.23
 
 ### Patch Changes

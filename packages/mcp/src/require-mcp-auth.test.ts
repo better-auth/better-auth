@@ -27,6 +27,7 @@ const authWith = (baseURL: string, resolvedBaseURL: string) => ({
 	$context: Promise.resolve({
 		baseURL: resolvedBaseURL,
 		internalAdapter: internalAdapterStub,
+		options: {},
 		getPlugin: () => null,
 	}),
 });
@@ -93,7 +94,7 @@ describe("requireMcpAuth", () => {
 
 		expect(response.status).toBe(401);
 		expect(response.headers.get("WWW-Authenticate")).toBe(
-			`Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth"`,
+			`Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", DPoP resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", algs="EdDSA ES256 ES512 PS256 RS256"`,
 		);
 	});
 
@@ -186,6 +187,7 @@ describe("requireMcpAuth", () => {
 				$context: Promise.resolve({
 					baseURL: "https://app.example.com/api/auth",
 					internalAdapter: internalAdapterStub,
+					options: {},
 					getPlugin: () => null,
 					secret,
 				}),
@@ -222,7 +224,7 @@ describe("requireMcpAuth", () => {
 
 		expect(response.status).toBe(401);
 		expect(response.headers.get("WWW-Authenticate")).toBe(
-			`Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", scope="openid profile"`,
+			`Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", scope="openid profile", DPoP resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", scope="openid profile", algs="EdDSA ES256 ES512 PS256 RS256"`,
 		);
 	});
 
@@ -402,7 +404,7 @@ describe("requireMcpAuth", () => {
 
 		expect(response.status).toBe(401);
 		expect(response.headers.get("WWW-Authenticate")).toBe(
-			`Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", scope="mcp:read mcp:write"`,
+			`Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", scope="mcp:read mcp:write", DPoP resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", scope="mcp:read mcp:write", algs="EdDSA ES256 ES512 PS256 RS256"`,
 		);
 	});
 

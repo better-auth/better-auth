@@ -1,3 +1,4 @@
+import type { OAuthAuthorizationDetail } from "@better-auth/oauth-provider";
 import {
 	getOAuthProviderApi,
 	ResourceUriSchema,
@@ -5,12 +6,14 @@ import {
 import {
 	createOAuthEndpoint,
 	parseClientMetadata,
+	parseScopes,
 	resolveResourcePolicy,
 	toResourceList,
 } from "@better-auth/oauth-provider/internal";
 import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 import * as z from "zod";
 import {
+	getRegisteredDetailsTypes,
 	parseAuthorizationDetails,
 	storeAuthorizationDetails,
 	validateAuthorizationDetails,
@@ -24,7 +27,7 @@ import type { CibaDelivery } from "./delivery";
 import { resolveCibaDelivery } from "./delivery";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
 import type { CibaRequest } from "./schema";
-import type { CibaAuthorizationDetail, ResolvedCibaOptions } from "./types";
+import type { ResolvedCibaOptions } from "./types";
 
 // Control and invisible formatting characters, such as bidirectional
 // overrides: a binding message must be plain text (CIBA §7.1).
@@ -102,7 +105,7 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 			},
 		},
 		async (ctx) => {
-			const scopes = ctx.body.scope.split(" ").filter(Boolean);
+			const scopes = parseScopes(ctx.body.scope);
 			// init() fails without oauthProvider(), so the plugin is present.
 			const oauthOptions = ctx.context.getPlugin("oauth-provider")!.options;
 			const provider = getOAuthProviderApi(ctx, oauthOptions, CIBA_GRANT_TYPE);
@@ -114,12 +117,10 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 			});
 			// CIBA §4: registration also validates this; recheck it in case the
 			// stored metadata or the configured modes changed since.
+			const metadata = parseClientMetadata(client.metadata);
 			let delivery: CibaDelivery;
 			try {
-				delivery = resolveCibaDelivery(
-					parseClientMetadata(client.metadata),
-					options.deliveryModes,
-				);
+				delivery = resolveCibaDelivery(metadata, options.deliveryModes);
 			} catch {
 				return oauthError(
 					"unauthorized_client",
@@ -181,19 +182,17 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 				);
 			}
 
-			let authorizationDetails: CibaAuthorizationDetail[] | undefined;
+			let authorizationDetails: OAuthAuthorizationDetail[] | undefined;
 			if (ctx.body.authorization_details !== undefined) {
-				// RFC 9396 §9: resource servers must receive the details. Only a JWT
-				// access token carries them, and only a resource makes one.
-				if (!policy.audienceClaim || oauthOptions.disableJwtPlugin) {
-					oauthError(
-						"invalid_authorization_details",
-						CIBA_ERROR_CODES.AUTHORIZATION_DETAILS_REQUIRE_RESOURCE.message,
-					);
-				}
 				authorizationDetails = await validateAuthorizationDetails(
 					parseAuthorizationDetails(ctx.body.authorization_details),
-					{ options, client, ctx },
+					{
+						options,
+						client,
+						ctx,
+						// RFC 9396 §10: a client that registered types is held to them.
+						allowedTypes: getRegisteredDetailsTypes(metadata),
+					},
 				);
 			}
 			const acrValues = ctx.body.acr_values?.match(/\S+/g) ?? undefined;

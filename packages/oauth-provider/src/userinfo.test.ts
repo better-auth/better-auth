@@ -6,17 +6,16 @@ import {
 	createAuthorizationURL,
 	DPOP_SIGNING_ALGORITHMS,
 	deriveDpopAth,
-	deriveDpopJkt,
 	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { APIError } from "better-call";
-import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { SignJWT } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import { createDpopKey, createDpopProof } from "./test-utils/dpop";
 import type { OAuthClient } from "./types/oauth";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
@@ -133,40 +132,6 @@ describe("oauth userinfo", async () => {
 		});
 
 		return tokens;
-	}
-
-	async function createDpopKey() {
-		const { privateKey, publicKey } = await generateKeyPair("ES256", {
-			extractable: true,
-		});
-		const publicJwk = await exportJWK(publicKey);
-		const jkt = await deriveDpopJkt(publicJwk);
-		return { privateKey, publicJwk, jkt };
-	}
-
-	async function createDpopProof(params: {
-		privateKey: CryptoKey;
-		publicJwk: JWK;
-		method: string;
-		url: string;
-		jti: string;
-		accessToken?: string;
-	}) {
-		return new SignJWT({
-			jti: params.jti,
-			htm: params.method,
-			htu: params.url,
-			iat: Math.floor(Date.now() / 1000),
-			...(params.accessToken
-				? { ath: await deriveDpopAth(params.accessToken) }
-				: {}),
-		})
-			.setProtectedHeader({
-				typ: "dpop+jwt",
-				alg: "ES256",
-				jwk: params.publicJwk,
-			})
-			.sign(params.privateKey);
 	}
 
 	async function getTokens(
@@ -503,9 +468,7 @@ describe("oauth userinfo", async () => {
 			},
 		});
 		const callbackUrl = new URL(callbackRedirectUrl);
-		const tokenDpopProof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const tokenDpopProof = await createDpopProof(dpopKey, {
 			method: "POST",
 			url: `${authServerBaseUrl}/api/auth/oauth2/token`,
 			jti: "token-proof",
@@ -561,9 +524,7 @@ describe("oauth userinfo", async () => {
 			)?.error_description,
 		).toBe("DPoP-bound access token requires the DPoP authorization scheme");
 
-		const userinfoDpopProof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
+		const userinfoDpopProof = await createDpopProof(dpopKey, {
 			method: "GET",
 			url: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
 			jti: "userinfo-proof",
@@ -609,9 +570,7 @@ describe("oauth userinfo", async () => {
 				resource: validResource,
 			},
 			{
-				DPoP: await createDpopProof({
-					privateKey: dpopKey.privateKey,
-					publicJwk: dpopKey.publicJwk,
+				DPoP: await createDpopProof(dpopKey, {
 					method: "POST",
 					url: `${authServerBaseUrl}/api/auth/oauth2/token`,
 					jti: "trailing-slash-token-proof",
@@ -623,9 +582,7 @@ describe("oauth userinfo", async () => {
 		const response = await customFetchImpl(userinfoUrl, {
 			headers: {
 				authorization: `DPoP ${accessToken}`,
-				DPoP: await createDpopProof({
-					privateKey: dpopKey.privateKey,
-					publicJwk: dpopKey.publicJwk,
+				DPoP: await createDpopProof(dpopKey, {
 					method: "GET",
 					url: userinfoUrl,
 					jti: "trailing-slash-userinfo-proof",
@@ -670,9 +627,7 @@ describe("oauth userinfo", async () => {
 					resource: validResource,
 				},
 				{
-					DPoP: await createDpopProof({
-						privateKey: dpopKey.privateKey,
-						publicJwk: dpopKey.publicJwk,
+					DPoP: await createDpopProof(dpopKey, {
 						method: "POST",
 						url: `${authServerBaseUrl}/api/auth/oauth2/token`,
 						jti: crypto.randomUUID(),
@@ -810,9 +765,7 @@ describe("oauth userinfo", async () => {
 			const result = await requestUserinfo({
 				headers: {
 					authorization: `DPoP ${accessToken}`,
-					DPoP: await createDpopProof({
-						privateKey: dpopKey.privateKey,
-						publicJwk: dpopKey.publicJwk,
+					DPoP: await createDpopProof(dpopKey, {
 						method: "GET",
 						url: `${authServerBaseUrl}/api/auth/oauth2/introspect`,
 						jti: crypto.randomUUID(),
@@ -835,9 +788,7 @@ describe("oauth userinfo", async () => {
 			const result = await requestUserinfo({
 				headers: {
 					authorization: `DPoP ${accessToken}`,
-					DPoP: await createDpopProof({
-						privateKey: dpopKey.privateKey,
-						publicJwk: dpopKey.publicJwk,
+					DPoP: await createDpopProof(dpopKey, {
 						method: "POST",
 						url: userinfoUrl,
 						jti: crypto.randomUUID(),
@@ -861,9 +812,7 @@ describe("oauth userinfo", async () => {
 			const result = await requestUserinfo({
 				headers: {
 					authorization: `DPoP ${accessToken}`,
-					DPoP: await createDpopProof({
-						privateKey: otherKey.privateKey,
-						publicJwk: otherKey.publicJwk,
+					DPoP: await createDpopProof(otherKey, {
 						method: "GET",
 						url: userinfoUrl,
 						jti: crypto.randomUUID(),
