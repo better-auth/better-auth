@@ -10,7 +10,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin } from "better-auth/types";
 import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProvider } from "./oauth";
 import { getOAuthProviderApi } from "./token";
@@ -1188,6 +1188,7 @@ describe("provider.issueAuthorizationCode after a sign-in in the same request", 
  */
 describe("provider.issueAuthorizationCode with caller-supplied amr", async () => {
 	const redirectUri = "https://client.example.com/callback";
+	const resource = "https://api.example.com";
 
 	const issuer = {
 		id: "test-amr-code-issuer",
@@ -1228,6 +1229,8 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 					loginPage: "/login",
 					consentPage: "/consent",
 					authenticationContext,
+					resources: [resource],
+					enforcePerClientResources: false,
 				}),
 			],
 		});
@@ -1243,8 +1246,10 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 			},
 		});
 		const context = await instance.auth.$context;
+		let verifier = "";
 		return {
 			async issue(scope: string, authentication?: unknown) {
+				verifier = generateRandomString(43);
 				const issued = await instance.client.$fetch<{ code: string }>(
 					"/test/issue-code",
 					{
@@ -1254,15 +1259,32 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 							response_type: "code",
 							client_id: oauthClient.client_id,
 							scope,
-							code_challenge: await generateCodeChallenge(
-								generateRandomString(43),
-							),
+							resource,
+							code_challenge: await generateCodeChallenge(verifier),
 							code_challenge_method: "S256",
 							authentication,
 						},
 					},
 				);
 				return issued;
+			},
+			async redeem(code: string) {
+				const tokens = await instance.client.$fetch<{
+					access_token: string;
+					id_token?: string;
+				}>("/oauth2/token", {
+					method: "POST",
+					headers: { "content-type": "application/x-www-form-urlencoded" },
+					body: new URLSearchParams({
+						grant_type: "authorization_code",
+						client_id: oauthClient.client_id!,
+						code,
+						code_verifier: verifier,
+						resource,
+					}),
+				});
+				expect(tokens.error).toBeNull();
+				return tokens.data!;
 			},
 			async stored(code: string) {
 				const row = await context.internalAdapter.findVerificationValue(
@@ -1314,11 +1336,22 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 		expect(row.acr).toBeUndefined();
 	});
 
-	it("stores no methods for a request without openid", async () => {
-		const { issue, stored } = await setup();
+	it("puts the methods in the ID token and never in the access token", async () => {
+		const { issue, redeem } = await setup();
+		const issued = await issue("openid", { amr: ["pwd", "otp"] });
+		const tokens = await redeem(issued.data!.code);
+		expect(decodeJwt(tokens.id_token!).amr).toEqual(["pwd", "otp"]);
+		expect(decodeJwt(tokens.access_token)).not.toHaveProperty("amr");
+	});
+
+	it("issues no methods for a request without openid", async () => {
+		const { issue, stored, redeem } = await setup();
 		const issued = await issue("profile", { amr: ["pwd"] });
 		expect(issued.error).toBeNull();
 		expect((await stored(issued.data!.code)).amr).toBeUndefined();
+		const tokens = await redeem(issued.data!.code);
+		expect(tokens.id_token).toBeUndefined();
+		expect(decodeJwt(tokens.access_token)).not.toHaveProperty("amr");
 	});
 
 	it("rejects methods that are not a string array", async () => {
