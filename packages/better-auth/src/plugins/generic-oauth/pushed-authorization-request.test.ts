@@ -252,7 +252,7 @@ describe("generic-oauth pushed authorization requests", async () => {
 		expect(body.get("client_assertion_type")).toBe(
 			"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
 		);
-		// RFC 9126 §2: the server must accept its token endpoint URL as the audience.
+		// The discovered issuer is passed so the assertion can be signed for it.
 		expect(getClientAssertion).toHaveBeenCalledWith({
 			clientId: "par-client",
 			tokenEndpoint: `${authorizationServer.url}/token`,
@@ -262,31 +262,44 @@ describe("generic-oauth pushed authorization requests", async () => {
 	});
 
 	/**
-	 * @see https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	 * @see https://www.rfc-editor.org/rfc/rfc10070#section-5
 	 */
-	it("signs the pushed request assertion for the issuer when audience is issuer", async () => {
-		const { privateKey } = await generateKeyPair("ES256", {
-			extractable: true,
-		});
-		const instance = await createInstance({
-			clientSecret: undefined,
-			tokenEndpointAuth: {
-				method: "private_key_jwt",
-				getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
-					privateKeyJwk: await exportJWK(privateKey),
-					algorithm: "ES256",
-					audience: "issuer",
-				}),
-			},
-		});
-		const { res } = await signIn(instance);
+	it.each([
+		["the issuer by default", undefined, ""],
+		["the issuer when audience is issuer", "issuer", ""],
+		[
+			"the token endpoint when audience is token_endpoint",
+			"token_endpoint",
+			"/token",
+		],
+	] as const)(
+		"signs the pushed request assertion for %s",
+		async (_, audience, path) => {
+			const { privateKey } = await generateKeyPair("ES256", {
+				extractable: true,
+			});
+			const instance = await createInstance({
+				clientSecret: undefined,
+				tokenEndpointAuth: {
+					method: "private_key_jwt",
+					getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+						privateKeyJwk: await exportJWK(privateKey),
+						algorithm: "ES256",
+						...(audience && { audience }),
+					}),
+				},
+			});
+			const { res } = await signIn(instance);
 
-		expect(res.error).toBeNull();
-		const assertion = authorizationServer
-			.pushed()[0]!
-			.body.get("client_assertion");
-		expect(decodeJwt(assertion!).aud).toBe(authorizationServer.url);
-	});
+			expect(res.error).toBeNull();
+			const assertion = authorizationServer
+				.pushed()[0]!
+				.body.get("client_assertion");
+			expect(decodeJwt(assertion!).aud).toBe(
+				`${authorizationServer.url}${path}`,
+			);
+		},
+	);
 
 	it("sends client_secret_basic credentials in the Authorization header", async () => {
 		const instance = await createInstance({

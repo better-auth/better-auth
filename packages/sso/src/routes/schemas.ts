@@ -160,6 +160,7 @@ const oidcConfigSchema = z.object({
 		.optional(),
 	privateKeyId: z.string().optional(),
 	privateKeyAlgorithm: z.string().optional(),
+	clientAssertionAudience: z.enum(["issuer", "token_endpoint"]).optional(),
 	jwksEndpoint: z
 		.string()
 		.url()
