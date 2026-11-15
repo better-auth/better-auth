@@ -564,7 +564,7 @@ describe("drizzle-adapter", () => {
 				select: vi.fn().mockReturnValue({ from: selectFrom }),
 				delete: vi.fn().mockReturnValue({ where: deleteWhere }),
 			} as any;
-			return { db, calls, targetIds };
+			return { db, calls, targetIds, selectLimit };
 		}
 
 		function flattenSqlChunks(expr: SQL): unknown[] {
@@ -586,7 +586,7 @@ describe("drizzle-adapter", () => {
 				value: "old",
 				expiresAt: new Date(),
 			};
-			const { db, calls, targetIds } = createConsumeDb([row]);
+			const { db, calls, targetIds, selectLimit } = createConsumeDb([row]);
 			const adapter = createAdapter(db);
 
 			const result = await adapter.consumeOne({
@@ -599,6 +599,7 @@ describe("drizzle-adapter", () => {
 
 			expect(result).toEqual(row);
 			expect(db.select).toHaveBeenCalledTimes(1);
+			expect(selectLimit).toHaveBeenCalledWith(1);
 			expect(calls.selectGuard).toHaveLength(1);
 
 			// Under READ COMMITTED, PostgreSQL re-evaluates a DELETE's own WHERE against
@@ -616,7 +617,7 @@ describe("drizzle-adapter", () => {
 		});
 
 		it("returns null when the guard matches no row", async () => {
-			const { db } = createConsumeDb([]);
+			const { db, selectLimit } = createConsumeDb([]);
 			const adapter = createAdapter(db);
 
 			const result = await adapter.consumeOne({
@@ -625,6 +626,7 @@ describe("drizzle-adapter", () => {
 			});
 
 			expect(result).toBeNull();
+			expect(selectLimit).toHaveBeenCalledWith(1);
 		});
 	});
 
