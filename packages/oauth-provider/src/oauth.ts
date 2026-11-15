@@ -57,7 +57,7 @@ import {
 } from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
-import { readSignedOAuthQuery } from "./signed-query";
+import { DEFAULT_CODE_EXPIRES_IN, readSignedOAuthQuery } from "./signed-query";
 import { STANDARD_CLAIM_NAMES, STANDARD_CLAIMS } from "./standard-claims";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
@@ -232,7 +232,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	]);
 
 	const opts: O & { claims?: string[] } = {
-		codeExpiresIn: 600, // 10 min
+		codeExpiresIn: DEFAULT_CODE_EXPIRES_IN,
 		accessTokenExpiresIn: 3600, // 1 hour
 		m2mAccessTokenExpiresIn: 3600, // 1 hour
 		refreshTokenExpiresIn: 2592000, // 30 days
