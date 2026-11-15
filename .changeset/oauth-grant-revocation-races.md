@@ -2,6 +2,8 @@
 "@better-auth/oauth-provider": minor
 ---
 
-Revoking a grant now also stops a token request for that grant that is still issuing tokens, so its tokens can no longer survive the revocation. This covers reusing an authorization code while its first redemption is in progress, and reusing or revoking a refresh token while the grant is being refreshed: the in-flight request fails with `invalid_grant` and its tokens are deleted. As a result, two overlapping redemptions of one code by its client now both fail.
+Revoking a grant now also stops a token request for that grant that is still issuing tokens. This covers reusing an authorization code while its first redemption is in progress, and reusing or revoking a refresh token while the grant is being refreshed. The in-flight request fails with `invalid_grant` and deletes the tokens it stored, where before its refresh token could survive the revocation.
 
-Every setup now writes one verification row for each revoked grant, which `databaseHooks.verification` sees, and each code redemption and refresh reads it. Before, these rows were written only with `revocableJwtAccessTokens`.
+When a client sends two overlapping redemptions of one code, the second is a reuse and revokes the grant. The first now fails too, unless it finished issuing before the revocation started. In that case, the revocation revokes its tokens.
+
+Every setup now writes one verification row for each revoked grant, which `databaseHooks.verification` sees, and each code redemption and refresh reads it. Before, these rows were written only with `revocableJwtAccessTokens`. The check needs a verification store that reads its own writes, so a lagging read replica can let an in-flight request keep its tokens.
