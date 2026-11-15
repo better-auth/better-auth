@@ -27,7 +27,9 @@ export interface RequireMcpAuthOptions {
 	 * URL of the authorization server's JWKS. When set, JWT access tokens are
 	 * verified by signature against these keys alone, which does not see
 	 * revocation or an ended session, and opaque tokens are rejected. When
-	 * unset, tokens are checked against the OAuth provider's records in-process.
+	 * unset and the OAuth provider runs in this process, tokens are checked
+	 * against its records. Without that provider, JWT access tokens are verified
+	 * by signature against the in-process keys.
 	 */
 	jwksUrl?: string;
 	/**

@@ -146,7 +146,7 @@ In case a JWT with a different `kid` is received, it is recommended to fetch the
 
 When the OAuth provider signs tokens with the JWT plugin, verifiers in the same process as the auth server read the keys directly instead of requesting `/jwks`, unless `jwks.remoteUrl` is set. These include the provider's introspection, revocation, and end-session endpoints, `oauthProviderResourceClient(auth)`, and `requireMcpAuth`. The read skips the router, so hooks and rate limits on `/jwks` do not apply to it. Passing an explicit `jwksUrl` to `oauthProviderResourceClient(auth)` or `requireMcpAuth` fetches the keys over HTTP instead.
 
-Access tokens are JWTs only when the client requests a `resource` and `disableJwtPlugin` is off. Otherwise they are opaque, and have no signing keys to read. `requireMcpAuth` checks opaque tokens against the provider's records in the same process, unless you pass it a `jwksUrl`, which limits it to JWT access tokens. A separate resource server verifies opaque tokens by introspection with `remoteVerify` in `oauthProviderResourceClient` or `createMcpProtectedRequestHandler`.
+Access tokens are JWTs only when the client requests a `resource` and `disableJwtPlugin` is off. Otherwise they are opaque, and have no signing keys to read. When the OAuth provider runs in the same process, `requireMcpAuth` checks access tokens, opaque ones included, against its records. Given a `jwksUrl`, or without that provider, it verifies JWT signatures only. A separate resource server verifies opaque tokens by introspection with `remoteVerify` in `oauthProviderResourceClient` or `createMcpProtectedRequestHandler`.
 
 ```json
   {
