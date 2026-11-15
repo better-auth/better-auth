@@ -1492,6 +1492,13 @@ async function createUserTokens(
 			error_description: "issueTokens does not accept act with refreshToken",
 		});
 	}
+	if (params.idToken === false && params.idTokenClaims) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description:
+				"issueTokens does not accept idTokenClaims with idToken: false",
+		});
+	}
 	if (params.authorizationDetails?.length && existingRefreshToken) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error: "server_error",
@@ -1564,10 +1571,12 @@ async function createUserTokens(
 	// pure machine-to-machine client that was never authorized for one.
 	// A delegated issuance gets no refresh token: refreshed tokens do not carry
 	// `act`, so a refresh would turn delegated access into impersonation.
-	// Refreshed tokens carry neither `act` nor authorization details.
+	// Refreshed tokens carry neither `act` nor authorization details. An
+	// issuance without an ID token gets none either: a refresh would issue one.
 	const isRefreshToken =
 		user &&
 		!params.act &&
+		params.idToken !== false &&
 		!params.authorizationDetails?.length &&
 		clientAllowsGrant(client, "refresh_token") &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
@@ -1584,7 +1593,8 @@ async function createUserTokens(
 			: isRefreshToken
 				? generateRandomString(32)
 				: undefined);
-	const isIdToken = user && effectiveScopes.includes("openid");
+	const isIdToken =
+		params.idToken !== false && user && effectiveScopes.includes("openid");
 	const metadata = parseClientMetadata(client.metadata);
 	const refreshResources = grantIssuance.refreshResources;
 	// A confirmation supplied by the caller (an extension client-authentication

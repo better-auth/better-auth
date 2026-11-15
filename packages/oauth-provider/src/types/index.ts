@@ -280,6 +280,17 @@ export interface OAuthTokenIssueParams {
 	 */
 	accessTokenClaims?: Record<string, unknown>;
 	/**
+	 * Whether to issue an ID token when `scopes` include `openid` and a `user`
+	 * is set. Pass `false` for a grant that keeps `openid` for UserInfo but has
+	 * no sign-in to describe, such as one without a session. The response then
+	 * has no `id_token`, and no ID-token claim callback runs. It also has no
+	 * refresh token, even with `offline_access`, because a refresh issues an ID
+	 * token for `openid`. Passing `idTokenClaims` with `false` throws.
+	 *
+	 * @default true
+	 */
+	idToken?: boolean;
+	/**
 	 * Additional ID-token claims for this single issuance. Additive: they cannot
 	 * replace identity, authentication-context, or AS-owned claims.
 	 */
