@@ -1457,10 +1457,14 @@ describe("provider.issueAuthorizationCode with serverContext", async () => {
 		return { query, verifier };
 	}
 
-	function issue(query: Record<string, unknown>, serverContext?: unknown) {
+	function issue(
+		query: Record<string, unknown>,
+		serverContext?: unknown,
+		extraHeaders: Record<string, string> = {},
+	) {
 		return client.$fetch<{ code: string }>("/test/issue-code", {
 			method: "POST",
-			headers,
+			headers: { ...Object.fromEntries(headers), ...extraHeaders },
 			body: { ...query, serverContext },
 		});
 	}
@@ -1604,5 +1608,23 @@ describe("provider.issueAuthorizationCode with serverContext", async () => {
 		const { query } = await codeQuery();
 		const issued = await issue(query, serverContext);
 		expect(issued.error?.status).toBe(500);
+	});
+
+	it("rejects serverContext before using up the request's DPoP proof", async () => {
+		const key = await createDpopKey();
+		const proof = await createDpopProof(key, issueCodeEndpoint);
+		const { query } = await codeQuery();
+		const rejected = await issue(query, ["row-1"], { DPoP: proof });
+		expect(rejected.error?.status).toBe(500);
+		expect(rejected.data).toBeNull();
+
+		const issued = await issue(
+			query,
+			{ authSessionId: "row-1" },
+			{ DPoP: proof },
+		);
+		expect(issued.error).toBeNull();
+		const stored = await storedValue(issued.data!.code);
+		expect((stored.query as StoredAuthorizationQuery).dpop_jkt).toBe(key.jkt);
 	});
 });
