@@ -37,7 +37,7 @@ Better Auth advertises `acr_values_supported` from `authenticationContext.acrVal
 
 ## ID token claims
 
-To add claims to the [ID token](https://openid.net/specs/openid-connect-core-1_0.html#IDToken), set `customIdTokenClaims`. It receives the `user`, the granted `scopes`, and the client's `metadata`. It returns an object of claims to add:
+To add claims to the [ID token](https://openid.net/specs/openid-connect-core-1_0.html#IDToken), set `customIdTokenClaims`. It receives the `user`, the granted `scopes`, the client's `metadata`, and the [`grantId`](/docs/plugins/oauth-provider/tokens#per-authorization-grant-id) when the issuance has one. It returns an object of claims to add:
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -167,7 +167,7 @@ Better Auth returns a claim from the table above even when its scope was not gra
 
 Better Auth does not fill in other requested names, such as `locale`. To return one on request, list it in `advertisedMetadata.claims_supported` together with the defaults you still want, as in [Discovery metadata](#discovery-metadata). Then read `requestedClaims` in `customUserInfoClaims`, described below.
 
-To add claims to the [UserInfo response](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse), set `customUserInfoClaims`. It receives the `user`, the access token's `scopes`, the access token payload as `jwt`, and `requestedClaims`. `requestedClaims` lists the claim names requested through `claims.userinfo`. It returns an object of claims to add:
+To add claims to the [UserInfo response](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse), set `customUserInfoClaims`. It receives the `user`, the access token's `scopes`, the access token payload as `jwt`, and `requestedClaims`. `requestedClaims` lists the claim names requested through `claims.userinfo`. It also receives the access token's [`grantId`](/docs/plugins/oauth-provider/tokens#per-authorization-grant-id) when the token records one. A JWT access token records it only when `revocableJwtAccessTokens` is on. It returns an object of claims to add:
 
 ```ts title="auth.ts"
 oauthProvider({
