@@ -13,6 +13,7 @@ import {
 import type { Endpoint, EndpointContext, InputContext } from "better-call";
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
+import { getCandidateSecrets } from "../context/secret-utils";
 import { isAPIError } from "../utils/is-api-error";
 import { isRequestLike } from "../utils/url";
 
@@ -371,6 +372,34 @@ export async function dispatchAuthEndpoint(
 		path: endpoint.path,
 		headers: input.headers ? new Headers(input.headers) : undefined,
 	};
+
+	if (internalContext.getSignedCookie && internalContext.context?.secretConfig) {
+		const originalGetSignedCookie =
+			internalContext.getSignedCookie.bind(internalContext);
+		(
+			internalContext as unknown as {
+				__originalGetSignedCookie?: typeof originalGetSignedCookie;
+			}
+		).__originalGetSignedCookie = originalGetSignedCookie;
+
+		const candidateSecrets = getCandidateSecrets(
+			internalContext.context.secretConfig,
+			internalContext.context.secret,
+		);
+		if (candidateSecrets.length > 1) {
+			internalContext.getSignedCookie = async (key, secret, prefix) => {
+				if (!secret || secret === internalContext.context.secret) {
+					for (const s of candidateSecrets) {
+						const val = await originalGetSignedCookie(key, s, prefix);
+						if (val) return val;
+						if (val === null) return null;
+					}
+					return false;
+				}
+				return originalGetSignedCookie(key, secret, prefix);
+			};
+		}
+	}
 
 	return withSpan(
 		`${methodName} ${route}`,

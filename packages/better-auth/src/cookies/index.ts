@@ -15,6 +15,7 @@ import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
+import { getCandidateSecrets } from "../context/secret-utils";
 import { shouldBindAccountCookieToSessionUser } from "../context/store-capabilities";
 import {
 	signJWT as signSecretJWT,
@@ -311,10 +312,17 @@ export async function decodeCookieCache(
 			};
 		}
 
-		const decoded = await verifySecretJWT<JWTPayload>(
-			value,
+		const candidateSecrets = getCandidateSecrets(
+			ctx.context.secretConfig,
 			ctx.context.secret,
 		);
+		let decoded: JWTPayload | null = null;
+		for (const secret of candidateSecrets) {
+			decoded = await verifySecretJWT<JWTPayload>(value, secret);
+			if (decoded) {
+				break;
+			}
+		}
 		const payload = parseCookieCachePayload(decoded);
 		if (!payload) {
 			return null;
@@ -332,14 +340,25 @@ export async function decodeCookieCache(
 		return null;
 	}
 
-	const valid = await createHMAC("SHA-256", "base64urlnopad").verify(
+	const candidateSecrets = getCandidateSecrets(
+		ctx.context.secretConfig,
 		ctx.context.secret,
-		JSON.stringify({
-			...parsed.session,
-			expiresAt: parsed.expiresAt,
-		}),
-		parsed.signature,
 	);
+	const data = JSON.stringify({
+		...parsed.session,
+		expiresAt: parsed.expiresAt,
+	});
+	let valid = false;
+	for (const secret of candidateSecrets) {
+		valid = await createHMAC("SHA-256", "base64urlnopad").verify(
+			secret,
+			data,
+			parsed.signature,
+		);
+		if (valid) {
+			break;
+		}
+	}
 	if (!valid) {
 		return null;
 	}
@@ -353,6 +372,43 @@ export async function decodeCookieCache(
 		: null;
 }
 
+export interface SignedCookieResult {
+	value: string;
+	isOldSecret: boolean;
+}
+
+/**
+ * Reads and verifies a signed cookie across candidate secrets in rotation order.
+ * Returns null if the cookie is not present or if all signatures fail verification.
+ * `isOldSecret` is true when verification succeeded with an older rotated secret.
+ */
+export async function getSignedCookieWithFallback(
+	ctx: GenericEndpointContext,
+	cookieName: string,
+): Promise<SignedCookieResult | null> {
+	const getFn =
+		(
+			ctx as unknown as {
+				__originalGetSignedCookie?: typeof ctx.getSignedCookie;
+			}
+		).__originalGetSignedCookie || ctx.getSignedCookie.bind(ctx);
+	const secrets = getCandidateSecrets(
+		ctx.context.secretConfig,
+		ctx.context.secret,
+	);
+	for (let i = 0; i < secrets.length; i++) {
+		const secret = secrets[i]!;
+		const val = await getFn(cookieName, secret);
+		if (val) {
+			return { value: val, isOldSecret: i > 0 };
+		}
+		if (val === null) {
+			return null;
+		}
+	}
+	return null;
+}
+
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
 	session: {
@@ -362,13 +418,13 @@ export async function setSessionCookie(
 	dontRememberMe?: boolean | undefined,
 	overrides?: Partial<CookieOptions> | undefined,
 ) {
-	const dontRememberMeCookie = await ctx.getSignedCookie(
+	const dontRememberMeCookie = await getSignedCookieWithFallback(
+		ctx,
 		ctx.context.authCookies.dontRememberToken.name,
-		ctx.context.secret,
 	);
 	// if dontRememberMe is not set, use the cookie value
 	dontRememberMe =
-		dontRememberMe !== undefined ? dontRememberMe : !!dontRememberMeCookie;
+		dontRememberMe !== undefined ? dontRememberMe : !!dontRememberMeCookie?.value;
 
 	const options = ctx.context.authCookies.sessionToken.attributes;
 	const maxAge = dontRememberMe

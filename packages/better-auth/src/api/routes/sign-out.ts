@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { deleteSessionCookie } from "../../cookies";
+import { deleteSessionCookie, getSignedCookieWithFallback } from "../../cookies";
 
 const signOutBodySchema = z
 	.object({
@@ -75,10 +75,11 @@ export const signOut = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const sessionCookieToken = await ctx.getSignedCookie(
+		const sessionCookieResult = await getSignedCookieWithFallback(
+			ctx,
 			ctx.context.authCookies.sessionToken.name,
-			ctx.context.secret,
 		);
+		const sessionCookieToken = sessionCookieResult?.value ?? null;
 		let currentSession: Awaited<
 			ReturnType<typeof ctx.context.internalAdapter.findSession>
 		> | null = null;
