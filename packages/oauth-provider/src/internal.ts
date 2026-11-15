@@ -23,6 +23,7 @@ export {
 } from "./register";
 export { resolveResourcePolicy } from "./resources";
 export {
+	getAuthEndpointUrl,
 	getLocalJwksSource,
 	parseClientMetadata,
 	parseScopes,

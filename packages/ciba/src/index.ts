@@ -1,5 +1,6 @@
 import type { OAuthProviderExtension } from "@better-auth/oauth-provider";
 import { extendOAuthProvider } from "@better-auth/oauth-provider";
+import { getAuthEndpointUrl } from "@better-auth/oauth-provider/internal";
 import type { BetterAuthPlugin } from "better-auth";
 import { mergeSchema } from "better-auth/db";
 import { cibaApprovalRequest, createCompleteCibaRequest } from "./approval";
@@ -74,7 +75,10 @@ export const ciba = (options: CibaOptions) => {
 			},
 		},
 		metadata: ({ ctx }) => ({
-			backchannel_authentication_endpoint: `${ctx.context.baseURL}${BC_AUTHORIZE_PATH}`,
+			backchannel_authentication_endpoint: getAuthEndpointUrl(
+				ctx,
+				BC_AUTHORIZE_PATH,
+			),
 			backchannel_token_delivery_modes_supported: resolvedOptions.deliveryModes,
 			backchannel_user_code_parameter_supported: false,
 			...(resolvedOptions.authorizationDetailsTypes
