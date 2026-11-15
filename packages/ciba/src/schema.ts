@@ -1,4 +1,5 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import type { OAuthActorClaim } from "@better-auth/oauth-provider";
 
 /**
  * A backchannel authentication request.
@@ -64,6 +65,14 @@ export const schema = {
 			/** RFC 8707 resource indicators the issued token is bound to. */
 			resources: {
 				type: "string[]",
+				required: false,
+			},
+			/**
+			 * RFC 8693 `act` claim `resolveActor` returned for the request, issued in
+			 * the access token so it names the user as `sub` and the actor as `act`.
+			 */
+			actor: {
+				type: "json",
 				required: false,
 			},
 			/** One of `pending`, `approved`, `denied`. */
@@ -147,6 +156,7 @@ export interface CibaRequest {
 	/** A JSON array of {@link OAuthAuthorizationDetail}. */
 	authorizationDetails?: string | null;
 	resources?: string[] | null;
+	actor?: OAuthActorClaim | null;
 	status: "pending" | "approved" | "denied";
 	clientNotificationEndpoint?: string | null;
 	encryptedClientNotificationToken?: string | null;

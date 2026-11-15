@@ -1,5 +1,6 @@
 import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import type {
+	OAuthActorClaim,
 	OAuthAuthorizationDetail,
 	SchemaClient,
 	Scope,
@@ -60,6 +61,12 @@ export interface CibaNotification {
 	 */
 	authorizationDetails?: OAuthAuthorizationDetail[] | undefined;
 	/**
+	 * Who acts for the user when the request is approved, as
+	 * {@link CibaOptions.resolveActor} returned it. Show it, so the user knows
+	 * the tokens go to that actor and not to them.
+	 */
+	actor?: OAuthActorClaim | undefined;
+	/**
 	 * Absolute link that opens the provider's sign-in and consent pages for
 	 * this request. Send it to the user.
 	 */
@@ -98,6 +105,41 @@ export interface CibaOptions {
 		input: { loginHint: string; client: SchemaClient<Scope[]> },
 		ctx: GenericEndpointContext,
 	) => Awaitable<User | null>;
+
+	/**
+	 * Name who will act for the user, so the access token is a delegated token
+	 * (RFC 8693 §4.1): `sub` is the user, and `act` is the returned actor. Runs
+	 * at `/oauth2/bc-authorize` after the client authenticates and the user is
+	 * found, and the actor is stored with the request. Return `undefined` for a
+	 * token without `act`, or throw an `APIError` to refuse the request with
+	 * that error.
+	 *
+	 * The actor is the server's own assertion, so return only an actor you have
+	 * verified, such as the authenticated client itself or an agent whose
+	 * credential the request carries in `ctx.request`. Set
+	 * `sub_profile: "service"` on a client or agent actor, or a pairwise client
+	 * reads its `sub` as a user's pairwise subject.
+	 *
+	 * A delegated token gets no refresh token, because refreshed tokens would
+	 * not carry `act`, so the returned scope leaves out `offline_access`.
+	 *
+	 * @example
+	 * ```ts
+	 * // The client is an agent acting for the user it names.
+	 * resolveActor: ({ client }) => ({
+	 * 	sub: client.clientId,
+	 * 	sub_profile: "service",
+	 * }),
+	 * ```
+	 */
+	resolveActor?: (
+		input: {
+			client: SchemaClient<Scope[]>;
+			user: User;
+			scopes: string[];
+		},
+		ctx: GenericEndpointContext,
+	) => Awaitable<OAuthActorClaim | undefined>;
 
 	/**
 	 * Token delivery modes clients may register for, as
