@@ -659,8 +659,19 @@ describe("database rate-limit cleanup scheduling", async () => {
 		});
 
 		const ctxA = await authA.$context;
+		// Populate cleanup state cache for ctxA.adapter through instance A
+		await authA.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { "x-forwarded-for": "198.51.100.44" },
+			}),
+		);
+		expect(backgroundTasksA.length).toBe(1);
+		await Promise.all(backgroundTasksA);
+
+		// Instantiate authB sharing the exact same adapter instance
 		const authB = betterAuth({
 			...ctxA.options,
+			database: () => ctxA.adapter,
 			advanced: {
 				...ctxA.options.advanced,
 				backgroundTasks: {
@@ -671,16 +682,27 @@ describe("database rate-limit cleanup scheduling", async () => {
 			},
 		});
 
-		await authB.handler(
-			new Request("http://localhost:3000/api/auth/get-session", {
-				headers: { "x-forwarded-for": "198.51.100.55" },
-			}),
-		);
+		const ctxB = await authB.$context;
+		expect(ctxB.adapter).toBe(ctxA.adapter);
 
-		// The cleanup task should be delivered to instance B's background handler, not instance A
-		expect(backgroundTasksA.length).toBe(0);
-		expect(backgroundTasksB.length).toBeGreaterThan(0);
-		await Promise.all(backgroundTasksB);
+		// Advance past the 60s cleanup interval so instance B triggers cleanup
+		const realDateNow = Date.now;
+		try {
+			Date.now = () => realDateNow() + 61_000;
+
+			await authB.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: { "x-forwarded-for": "198.51.100.55" },
+				}),
+			);
+
+			// The cleanup task should be delivered to instance B's background handler, not instance A
+			expect(backgroundTasksA.length).toBe(1);
+			expect(backgroundTasksB.length).toBe(1);
+			await Promise.all(backgroundTasksB);
+		} finally {
+			Date.now = realDateNow;
+		}
 	});
 });
 
