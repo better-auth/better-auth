@@ -554,7 +554,7 @@ export const auth = betterAuth({
 
 When a stateless callback hits `/callback/:providerId`, Better Auth discards the provider-issued code and restarts the flow server-side: a fresh `state` and PKCE verifier are generated, and the user is redirected to the provider's authorize endpoint. The provider recognizes the user's live session and completes the flow automatically. CSRF protection and PKCE are preserved throughout.
 
-If the provider rejects an IDP-initiated sign-in, it redirects with `error` and no `state`. Better Auth forwards that `error` and `error_description` to your error URL instead of reporting `state_not_found`.
+If the provider rejects an IDP-initiated sign-in, it redirects with `error` and no `state`. Better Auth forwards that `error` code to `onAPIError.errorURL` (default `${baseURL}/error`) instead of reporting `state_not_found`. It drops `error_description`, and reports `state_not_found` for an `error` that isn't a code, because nothing ties the request to a sign-in.
 
 Leave `allowIdpInitiated` off (the default) for any provider that always initiates the flow from your side — stateless callbacks to those providers indicate malformed or malicious requests and should be rejected.
 

@@ -1912,18 +1912,22 @@ async function bounceIfIdpInitiated(
 	if (!provider?.oidcConfig?.allowIdpInitiated) return;
 
 	// An IdP-initiated error response has no state to echo back
-	// (RFC 6749 section 4.1.2.1), so forward the provider's error.
+	// (RFC 6749 section 4.1.2.1), so forward the provider's error code.
+	// Nothing ties this request to a sign-in, so only a code-shaped `error`
+	// is forwarded and `error_description` is only logged.
 	const { error, error_description } = ctx.query;
 	if (error) {
 		ctx.context.logger.error("IdP-initiated SSO callback failed", {
 			providerId: provider.providerId,
 			error,
+			error_description,
 		});
 		const errorURL =
 			ctx.context.options.onAPIError?.errorURL ||
 			`${ctx.context.baseURL}/error`;
-		const params = new URLSearchParams({ error });
-		if (error_description) params.set("error_description", error_description);
+		const params = new URLSearchParams({
+			error: /^[a-z0-9_]{1,64}$/i.test(error) ? error : "state_not_found",
+		});
 		throw ctx.redirect(appendQueryParams(errorURL, params));
 	}
 

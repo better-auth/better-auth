@@ -2655,19 +2655,30 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12644
 	 */
-	it("should forward a stateless provider error when allowIdpInitiated is true", async () => {
+	it("should forward a stateless provider error code when allowIdpInitiated is true", async () => {
 		const res = await customFetchImpl(
-			"http://localhost:3000/api/auth/sso/callback/idp-initiated?error=access_denied&error_description=User+is+not+registered",
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated?error=access_denied&error_description=Call+this+number",
 			{ method: "GET", redirect: "manual" },
 		);
 
 		expect(res.status).toBe(302);
 		const url = new URL(res.headers.get("location") || "");
-		expect(url.origin).not.toBe("http://localhost:8080");
-		expect(url.searchParams.get("error")).toBe("access_denied");
-		expect(url.searchParams.get("error_description")).toBe(
-			"User is not registered",
+		expect(url.origin + url.pathname).toBe(
+			"http://localhost:3000/api/auth/error",
 		);
+		expect(url.searchParams.get("error")).toBe("access_denied");
+		expect(url.searchParams.get("error_description")).toBeNull();
+	});
+
+	it("should not forward a stateless provider error that is not a code", async () => {
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated?error=Call+this+number",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const url = new URL(res.headers.get("location") || "");
+		expect(url.searchParams.get("error")).toBe("state_not_found");
 	});
 
 	it("should keep state_not_found for a stateless provider error without the flag", async () => {

@@ -4799,7 +4799,7 @@ describe("oauth2", async () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/12644
 		 */
-		it("should forward a stateless provider error when the provider opts in", async () => {
+		it("should forward a stateless provider error code when the provider opts in", async () => {
 			const { customFetchImpl } = await getTestInstance({
 				plugins: [
 					genericOAuth({
@@ -4817,17 +4817,44 @@ describe("oauth2", async () => {
 			});
 
 			const res = await customFetchImpl(
-				"http://localhost:3000/api/auth/callback/idp-initiated-error?error=access_denied&error_description=User+is+not+registered",
+				"http://localhost:3000/api/auth/callback/idp-initiated-error?error=access_denied&error_description=Call+this+number",
 				{ method: "GET", redirect: "manual" },
 			);
 
 			expect(res.status).toBe(302);
 			const url = new URL(res.headers.get("location") || "");
-			expect(url.origin).not.toBe(`http://localhost:${port}`);
-			expect(url.searchParams.get("error")).toBe("access_denied");
-			expect(url.searchParams.get("error_description")).toBe(
-				"User is not registered",
+			expect(url.origin + url.pathname).toBe(
+				"http://localhost:3000/api/auth/error",
 			);
+			expect(url.searchParams.get("error")).toBe("access_denied");
+			expect(url.searchParams.get("error_description")).toBeNull();
+		});
+
+		it("should not forward a stateless provider error that is not a code", async () => {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "idp-initiated-free-text",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								allowIdpInitiated: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const res = await customFetchImpl(
+				"http://localhost:3000/api/auth/callback/idp-initiated-free-text?error=Call+this+number",
+				{ method: "GET", redirect: "manual" },
+			);
+
+			expect(res.status).toBe(302);
+			const url = new URL(res.headers.get("location") || "");
+			expect(url.searchParams.get("error")).toBe("state_not_found");
 		});
 
 		it("should keep state_not_found for a stateless provider error without the flag", async () => {

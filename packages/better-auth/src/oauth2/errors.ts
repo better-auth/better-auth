@@ -24,6 +24,14 @@ export const OAUTH_CALLBACK_ERROR_CODES = {
 	EMAIL_NOT_VERIFIED: "email_not_verified",
 } as const;
 
+/**
+ * Whether `value` looks like an OAuth error code (`access_denied`,
+ * `login_required`), not free text.
+ */
+export function isOAuthErrorCode(value: string): boolean {
+	return /^[a-z0-9_]{1,64}$/i.test(value);
+}
+
 const HANDLING_DOCS_URL =
 	"https://www.better-auth.com/docs/concepts/oauth#handling-providers-without-email";
 
