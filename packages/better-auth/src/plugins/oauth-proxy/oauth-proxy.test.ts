@@ -1,3 +1,4 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
