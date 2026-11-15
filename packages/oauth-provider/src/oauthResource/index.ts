@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
-import { JWS_ALGORITHMS } from "../resources";
+import { ACCESS_TOKEN_FORMATS, JWS_ALGORITHMS } from "../resources";
 import type { OAuthOptions, Scope } from "../types";
 import {
 	createResourceEndpoint,
@@ -22,6 +22,7 @@ const resourceBodySchema = z.object({
 	name: z.string().optional(),
 	accessTokenTtl: z.number().int().positive().nullable().optional(),
 	refreshTokenTtl: z.number().int().positive().nullable().optional(),
+	accessTokenFormat: z.enum(ACCESS_TOKEN_FORMATS).nullable().optional(),
 	signingAlgorithm: z.enum(JWS_ALGORITHMS).nullable().optional(),
 	signingKeyId: z.string().nullable().optional(),
 	// FIXME(#11725): reject [] and point callers to `disabled` or `null`.

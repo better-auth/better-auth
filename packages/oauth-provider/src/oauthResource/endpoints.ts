@@ -59,6 +59,7 @@ function buildResourceRow(input: OAuthResourceInput, now: Date) {
 		name: input.name ?? input.identifier,
 		accessTokenTtl: input.accessTokenTtl ?? null,
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
+		accessTokenFormat: input.accessTokenFormat ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
 		// FIXME(#11725): Prisma list columns reject null and read a stored
@@ -182,6 +183,7 @@ export async function updateResourceEndpoint(
 		"name",
 		"accessTokenTtl",
 		"refreshTokenTtl",
+		"accessTokenFormat",
 		"signingAlgorithm",
 		"signingKeyId",
 		"allowedScopes",

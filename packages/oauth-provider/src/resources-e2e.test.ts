@@ -1152,4 +1152,25 @@ describe("seed path applies identifier validation and warns on failures", () => 
 			),
 		).toBe(true);
 	});
+
+	it("skips a resource with an unsupported accessTokenFormat instead of issuing JWTs for it", async () => {
+		const resourceIdentifier = "https://api.example.com/seed-format";
+		const { ctx } = await bootProvider({
+			resources: [
+				{ identifier: resourceIdentifier, accessTokenFormat: "ref" as never },
+			],
+		});
+		const row = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: resourceIdentifier }],
+		});
+		expect(row).toBeNull();
+		expect(
+			warnMessages.some(
+				(m) =>
+					m.includes(`unsupported accessTokenFormat "ref"`) &&
+					m.includes(resourceIdentifier),
+			),
+		).toBe(true);
+	});
 });

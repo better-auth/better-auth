@@ -220,6 +220,10 @@ How seeding treats existing rows: skip them, update only the configured fields, 
 
 How long a finished seed is remembered. `"adapter"` (default) remembers it per database adapter. `"process"` remembers each seeded entry for the life of the process, for apps that build Better Auth per request, such as on Cloudflare Workers. Use `"process"` only when every instance in the process uses the same database.
 
+`resourceDefaults` <span className="opacity-70">`{ accessTokenFormat? }`</span>
+
+Access token format for every resource that does not set its own. `accessTokenFormat` is `"jwt"` or `"opaque"` and defaults to `"jwt"`. See [Access token format](/docs/plugins/oauth-provider/tokens#access-token-format).
+
 `enforcePerClientResources` <span className="opacity-70">`boolean`</span>
 
 Requires a client to be linked to every `resource` it requests ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)). Defaults to `true`. `false` lets any client, including self-registered ones, get tokens for every enabled resource.
@@ -567,6 +571,7 @@ Returned in any of these cases:
 
 * A `resource` is malformed, unknown, or disabled.
 * A `resource` is not linked to the client while `enforcePerClientResources` is on.
+* The requested resources use different access token formats.
 
 `invalid_dpop_proof` <span className="opacity-70">400</span>
 
@@ -863,6 +868,7 @@ export const oauthResourceTableFields = [
   { name: "name", type: "string", description: "Display name" },
   { name: "accessTokenTtl", type: "number", description: "Access token lifetime in seconds", isOptional: true },
   { name: "refreshTokenTtl", type: "number", description: "Refresh token lifetime in seconds", isOptional: true },
+  { name: "accessTokenFormat", type: "string", description: "`jwt` or `opaque`", isOptional: true },
   { name: "signingAlgorithm", type: "string", description: "JWS algorithm for access tokens", isOptional: true },
   { name: "signingKeyId", type: "string", description: "Signing key ID for access tokens", isOptional: true },
   { name: "allowedScopes", type: "string[]", description: "Scopes allowed for this resource. Requested scopes are narrowed to this set.", isOptional: true },

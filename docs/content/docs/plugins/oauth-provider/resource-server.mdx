@@ -212,7 +212,7 @@ The [resource client](#verify-access-tokens) created with your auth instance tak
 
 ## JWT or opaque tokens
 
-Your provider issues a JWT access token when the request names a `resource` and the JWT plugin is enabled. If either is missing, it issues an opaque token.
+Your provider issues a JWT access token when the request names a `resource` and the JWT plugin is enabled. If either is missing, or the resource uses [opaque access tokens](/docs/plugins/oauth-provider/tokens#access-token-format), it issues an opaque token.
 
 |                         | JWT access token                               | Opaque access token                                                                                              |
 | ----------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |

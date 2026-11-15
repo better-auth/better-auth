@@ -1409,6 +1409,21 @@ export interface OAuthOptions<
 	 */
 	resourceSeedScope?: "adapter" | "process";
 	/**
+	 * Access-token format for resources that do not set their own. A resource's
+	 * `accessTokenFormat` replaces the default. Requests without a `resource`
+	 * still receive opaque tokens.
+	 *
+	 * @example
+	 * ```ts
+	 * resourceDefaults: { accessTokenFormat: "opaque" },
+	 * resources: [
+	 *   "https://internal.example.com",
+	 *   { identifier: "https://api.example.com", accessTokenFormat: "jwt" },
+	 * ]
+	 * ```
+	 */
+	resourceDefaults?: OAuthResourceDefaults;
+	/**
 	 * Opt-in cache membership for resources by `identifier`. Mirrors the
 	 * {@link OAuthOptions.cachedTrustedClients} pattern.
 	 *
@@ -2704,6 +2719,26 @@ export interface OAuthAuthorizationQuery {
 }
 
 /**
+ * Format of an access token issued for a resource. A `"jwt"` token is
+ * self-contained and verifiable with the provider's JWKS; an `"opaque"` token
+ * is a reference that resource servers check through introspection.
+ */
+export type AccessTokenFormat = "jwt" | "opaque";
+
+/**
+ * Token policy applied to every resource that does not set its own value.
+ * Field names match {@link OAuthResourceInput}.
+ */
+export interface OAuthResourceDefaults {
+	/**
+	 * Format of access tokens issued for a resource.
+	 *
+	 * @default "jwt"
+	 */
+	accessTokenFormat?: AccessTokenFormat;
+}
+
+/**
  * A persisted protected-resource row as stored in `oauthResource`.
  *
  * `null` on any policy column means "inherit the plugin-level default at
@@ -2722,6 +2757,11 @@ export interface OAuthResource {
 	accessTokenTtl?: number | null;
 	/** Refresh token TTL in seconds; null inherits {@link OAuthOptions.refreshTokenExpiresIn} */
 	refreshTokenTtl?: number | null;
+	/**
+	 * Format of access tokens issued for this resource; null inherits
+	 * {@link OAuthOptions.resourceDefaults}, then `"jwt"`.
+	 */
+	accessTokenFormat?: AccessTokenFormat | null;
 	/** When set, overrides the JWT plugin's getLatestKey() default at signing time. */
 	signingAlgorithm?: JWSAlgorithms | null;
 	signingKeyId?: string | null;
@@ -2768,6 +2808,14 @@ export interface OAuthResourceInput {
 	name?: string;
 	accessTokenTtl?: number;
 	refreshTokenTtl?: number;
+	/**
+	 * Issue self-contained JWT access tokens (`"jwt"`) or opaque reference
+	 * tokens that resource servers check through introspection (`"opaque"`).
+	 * Both keep the resource as the token audience.
+	 *
+	 * @default resourceDefaults.accessTokenFormat, then "jwt"
+	 */
+	accessTokenFormat?: AccessTokenFormat;
 	signingAlgorithm?: JWSAlgorithms;
 	signingKeyId?: string;
 	allowedScopes?: string[];
