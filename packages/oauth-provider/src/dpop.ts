@@ -96,6 +96,31 @@ export function withExposedHeaders(
 }
 
 /**
+ * The exposed-header list with `WWW-Authenticate` added. Before hooks write to
+ * the dispatch's `ctx.context.responseHeaders`, which the endpoint's own
+ * `ctx.responseHeaders` does not include, and an error's header replaces the
+ * value they accumulated, so both lists are kept here.
+ */
+export function exposeChallengeHeader(
+	ctx: GenericEndpointContext,
+	challengeExposed?: string | null,
+) {
+	const scoped = ctx as GenericEndpointContext & {
+		context: GenericEndpointContext["context"] & { responseHeaders?: Headers };
+	};
+	const names = [
+		scoped.context.responseHeaders?.get("access-control-expose-headers"),
+		ctx.responseHeaders?.get("access-control-expose-headers"),
+		challengeExposed,
+	].flatMap((value) => value?.split(",") ?? []);
+	return withExposedHeaders(
+		undefined,
+		...names.map((name) => name.trim()).filter(Boolean),
+		"WWW-Authenticate",
+	);
+}
+
+/**
  * Sends a fresh `DPoP-Nonce` on this response (RFC 9449 §8, §8.2), forbids
  * caching the response so a cache cannot hand out an expired nonce, and
  * exposes the nonce to cross-origin browser clients. A challenge also exposes
@@ -159,7 +184,10 @@ export async function verifyRequestDpopProof(
 		method: string;
 		url: string;
 		expectedJkt?: string;
-		/** Defaults to the database-backed store. */
+		/**
+		 * Defaults to the auth instance's store: secondary storage when it is
+		 * configured and `verification.storeInDatabase` is off, else the database.
+		 */
 		replayStore?: DpopReplayStore;
 	},
 ): Promise<VerifiedDpopProof> {
@@ -171,8 +199,7 @@ export async function verifyRequestDpopProof(
 			...proofParams,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore:
-				replayStore ?? createDpopReplayStore(ctx.context.internalAdapter),
+			replayStore: replayStore ?? createDpopReplayStore(ctx.context),
 			nonce,
 			// The time the request arrived, which the token endpoint's nonce check
 			// also used, not the time a grant reaches issuance.

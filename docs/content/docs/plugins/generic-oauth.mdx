@@ -220,6 +220,7 @@ interface GenericOAuthConfig {
     context: OAuthAccountKeyContext<GenericOAuthUserInfo>,
   ) => string | number | Promise<string | number>;
   discoveryUrl?: string;
+  issuer?: string;
   requireIdTokenVerification?: boolean;
   authorizationUrl?: string;
   pushedAuthorizationRequest?: boolean | "auto";
@@ -252,6 +253,13 @@ interface GenericOAuthConfig {
 `mapProfileToUser` cannot set the account subject. This keeps local profile mapping separate from account recognition.
 
 **discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` will be auto-discovered at server startup. When the discovery document publishes a `jwks_uri`, `id_token`s returned by the provider are verified against it (signature, issuer, audience, and advertised signing algorithms) before their claims are used; a token that fails verification rejects the sign-in. Discovery providers also bind the `id_token` to the authorization request with a server-generated OIDC `nonce` and reject a callback whose `id_token` does not echo it. Better Auth skips a provider when discovery returns invalid verification metadata, or when discovery leaves no usable authorization endpoint or token exchange after applying explicit endpoints and `getToken`, while keeping other authentication features available. A skipped provider is retried on the next sign-in, callback, or account-linking request that names it, and works again once discovery succeeds. Until then, sign-in and account linking return `PROVIDER_NOT_FOUND`, and callbacks redirect with `error=oauth_provider_not_found`. Explicit endpoints act as a fallback while discovery is temporarily unavailable.
+
+**issuer**: (Optional) The provider's issuer identifier, used only with `discoveryUrl`. A discovery document for another issuer could point sign-in at endpoints and keys that belong to a different server, so Better Auth checks the document's `issuer` before using it:
+
+* With `issuer` set, the document's `issuer` must equal it exactly.
+* Without `issuer`, `discoveryUrl` must be a well-known URL, and the document's `issuer` must be the one it is built from. Both the OpenID Connect form, `https://idp.example.com/tenant/.well-known/openid-configuration`, and the RFC 8414 form, `https://idp.example.com/.well-known/oauth-authorization-server/tenant`, are recognized. The document's `issuer` must match exactly, apart from one optional trailing slash.
+
+When the issuer does not match, Better Auth logs an error and skips the provider. Some providers publish discovery under another name for the same issuer, for example a tenant domain in the URL and the tenant ID in `issuer`. Other providers publish discovery at a path that is not a well-known URL, such as `/oauth/metadata`, so the issuer cannot be derived from it. For both, set `issuer` to the issuer identifier the provider documents. Do not copy the value from an error message without checking it against the provider's documentation. A discovery document without `issuer` cannot be checked at all and always skips the provider, so configure `authorizationUrl`, `tokenUrl`, and `userInfoUrl` for that provider instead of `discoveryUrl`.
 
 **requireIdTokenVerification**: (Optional) Require discovery to provide a usable issuer and `jwks_uri` before registering the provider. Enable this when `accountSubject` or `getUserInfo` derives identity from ID-token claims. If configured discovery is unavailable or incomplete, Better Auth skips the provider instead of falling back to unverified token decoding. Without `discoveryUrl`, missing verification metadata remains an invalid static configuration and initialization fails. The `microsoftEntraId` helper enables this automatically.
 
@@ -416,7 +424,7 @@ getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
 
 Better Auth takes the issuer from the `issuer` field of the discovery document, so `audience: "issuer"` requires `discoveryUrl`. Without a discovered issuer, each token request and pushed authorization request fails with an error instead of falling back to the token endpoint. Before you enable it, check that the provider accepts the issuer as the assertion audience. Some servers accept only the token endpoint URL and reject the request.
 
-A custom `getClientAssertion` receives the discovered issuer as `issuer`. The field is `undefined` when the provider has no discovery document or the document has no issuer.
+A custom `getClientAssertion` receives the discovered issuer as `issuer`. The field is `undefined` when the provider has no discovery document.
 
 **discoveryHeaders**: (Optional) Custom headers to include in the discovery request. Useful for providers that require special headers. Better Auth sends these headers only to the origin (scheme, host, and port) of `discoveryUrl`:
 
@@ -588,6 +596,78 @@ Pushing needs a pushed authorization request endpoint. Better Auth reads it from
 If the pushed request fails, for example because the provider rejects it, sign-in returns a `502` error with the code `PUSHED_AUTHORIZATION_REQUEST_FAILED` and no redirect URL. The server log records the provider's status and error code.
 
 Set `pushedAuthorizationRequest: false` only for a provider whose discovery document claims to require PAR when it does not. Better Auth logs a warning at startup, because a provider that does require PAR rejects every browser-redirect sign-in.
+
+### DPoP
+
+Some providers issue sender-constrained tokens with DPoP (RFC 9449). A DPoP-bound access token only works together with a proof signed by your key, so a token that leaks from your database or logs cannot be used on its own. To request DPoP-bound tokens, set `dpop` with a key pair:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
+
+const keyPair = await loadDpopKeyPair();
+
+export const auth = betterAuth({
+    plugins: [
+        genericOAuth({
+            config: [
+                {
+                    providerId: "example",
+                    discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
+                    clientId: process.env.EXAMPLE_CLIENT_ID,
+                    clientSecret: process.env.EXAMPLE_CLIENT_SECRET,
+                    dpop: { keyPair },
+                },
+            ],
+        }),
+    ],
+});
+```
+
+With `dpop` set, Better Auth:
+
+* Sends `dpop_jkt`, the key's thumbprint, with the authorization request, so the provider binds the authorization code to your key.
+* Sends a DPoP proof with the code exchange, token refresh, and [pushed authorization request](#pushed-authorization-requests).
+* Calls the userinfo endpoint with `Authorization: DPoP` and a proof when the provider returns a DPoP token.
+* Calls the userinfo endpoint for a stored token, such as from `/account-info`, with `Authorization: DPoP` and a proof, because Better Auth does not store the token type. If the provider answers `401`, Better Auth retries once with `Bearer`.
+* Retries a request once when the provider asks for a DPoP nonce.
+
+A provider can still return a `Bearer` token, for example when it does not support DPoP. Better Auth then uses it as a `Bearer` token. A custom `getToken` or `getUserInfo` replaces the request Better Auth would send, so it must send its own proofs.
+
+Tokens bound to a key only work with that key. Use one key pair that survives restarts and is the same on every server instance, and keep it for as long as stored tokens live. A key from `generateDpopKeyPair` lives only in memory. To load a stored key instead, import a private EC P-256 JWK from your secret store:
+
+```ts title="dpop-key.ts"
+export async function loadDpopKeyPair() {
+    const jwk = JSON.parse(process.env.DPOP_PRIVATE_JWK!);
+    const publicJwk = { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y };
+    const algorithm = { name: "ECDSA", namedCurve: "P-256" };
+    return {
+        privateKey: await crypto.subtle.importKey("jwk", jwk, algorithm, false, ["sign"]),
+        publicKey: await crypto.subtle.importKey("jwk", publicJwk, algorithm, true, ["verify"]),
+    };
+}
+```
+
+To call the provider's APIs with a DPoP-bound access token from `getAccessToken`, send the request through `createDpopFetch` with the same key pair, and use the `DPoP` scheme:
+
+```ts
+import { createDpopFetch } from "better-auth/oauth2/dpop-client";
+
+const accounts = await auth.api.listUserAccounts({ headers });
+const account = accounts.find((account) => account.providerId === "example");
+if (!account) {
+    throw new Error("Example account is not linked");
+}
+
+const dpopFetch = createDpopFetch({ keyPair });
+const { accessToken } = await auth.api.getAccessToken({
+    body: { accountId: account.id },
+    headers,
+});
+const response = await dpopFetch("https://api.example.com/items", {
+    headers: { Authorization: `DPoP ${accessToken}` },
+});
+```
 
 ### IDP-Initiated Flows
 

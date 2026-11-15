@@ -3056,6 +3056,7 @@ describe("account resolution in stateless mode", async () => {
 	const idpHandlers = [
 		http.get(`${IDP}/.well-known/openid-configuration`, () =>
 			HttpResponse.json({
+				issuer: IDP,
 				authorization_endpoint: `${IDP}/authorize`,
 				token_endpoint: `${IDP}/token`,
 				userinfo_endpoint: `${IDP}/userinfo`,

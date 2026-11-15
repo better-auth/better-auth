@@ -96,7 +96,7 @@ A session created from an API key with `enableSessionForAPIKeys` is refused on t
 
 ### Expired verification rows are cleaned up on use
 
-Expired verification rows are now also deleted when a single-use value, such as a magic link, an OTP, or an issued nonce, is used. Before, cleanup ran only when a value was looked up. `verification.disableCleanup` turns off both kinds of cleanup.
+Expired verification rows are now also deleted when a single-use value, such as a magic link, an OTP, or an issued nonce, is used. Before, cleanup ran only when a value was looked up. A lookup that finds an expired row deletes the expired rows for that identifier. Deleting every expired row runs at most once a minute per server instance, after a lookup or a consumed single-use value. `verification.disableCleanup` turns off every one of these deletes.
 
 ***
 
@@ -139,6 +139,14 @@ tokenEndpointAuth: {
 ```
 
 Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refreshAccessToken`, or `refreshAccessTokenRequest` from `@better-auth/core/oauth2` that pass `authorization` in `headers` now throw.
+
+### Generic OAuth checks the discovered issuer
+
+Unless `issuer` is set, `discoveryUrl` must now be a well-known URL, and the discovery document's `issuer` must be the issuer the URL is built from. Otherwise Better Auth logs an error that names the provider and both values, and skips the provider. Before, the document was used whatever issuer it named.
+
+A common case is an issuer with a path, such as `https://auth.example.com/api/auth`, whose discovery document is read from the root, `https://auth.example.com/.well-known/openid-configuration`. That URL belongs to the issuer `https://auth.example.com`, so the provider is now skipped.
+
+**What to do:** if a provider is skipped after the upgrade, check its documentation for its issuer identifier. For an issuer with a path, point `discoveryUrl` at the provider's documented well-known URL for that issuer: either `{issuer}/.well-known/openid-configuration`, or the RFC 8414 form with `/.well-known/oauth-authorization-server` inserted between the host and the issuer's path. If the provider publishes discovery at a path that is not a well-known URL, or under another name for the same issuer, such as a tenant domain instead of the tenant ID, set `issuer` to that identifier. A discovery document without `issuer` now skips the provider even when `issuer` is set, so configure `authorizationUrl`, `tokenUrl`, and `userInfoUrl` for that provider instead of `discoveryUrl`. See [`issuer`](/docs/plugins/generic-oauth#configuration).
 
 ### New Generic OAuth and client options
 
@@ -268,6 +276,7 @@ To stop a request from carrying two values that different parts of the server re
 
 * Updating a client with an empty `metadata` object now clears its stored metadata. Before, the old metadata stayed.
 * Sending `backchannel_logout_uri: null` or `frontchannel_logout_uri: null` to `/oauth2/update-client` or `adminUpdateOAuthClient` now clears the URI. Before, `null` was rejected.
+* On a client allowed to use RP-initiated logout, `updateOAuthClient` and `/oauth2/update-client` now reject a new `post_logout_redirect_uris` entry with `invalid_client_metadata` unless it shares a scheme, host, and port with one of the client's `redirect_uris`. Loopback hosts match on any port, and private-use URIs match on scheme and authority. Before, the owner could add any origin. Entries the client already has are kept, and `adminUpdateOAuthClient` is not limited, except when it grants logout to a client you do not own: that grant fails with `invalid_client_metadata` if one of the client's stored entries breaks the rule, where a metadata document client may also use the origin of its `client_id`. **What to do:** to send users to another origin after logout, add a redirect URI on that origin in the same update. If an administrator's grant fails, the client's own registration has to change first, because the grant cannot change `redirect_uris` or `post_logout_redirect_uris`: its owner updates them, or a metadata document client publishes a document that fixes them. See [Registered clients](/docs/plugins/oauth-provider/openid-connect#registered-clients).
 
 ### Client secret expiry takes effect
 
@@ -296,14 +305,39 @@ This applies if you bind tokens with DPoP or mTLS, or write a `clientAuthenticat
 
 Pairwise clients created after the upgrade with private-use redirect URIs, such as `com.example.app:/callback`, or loopback ones, such as `http://localhost:8787/callback`, each get their own `sub`. Before, unrelated clients of either kind could share one. Existing clients keep their current `sub`.
 
+### UserInfo errors follow RFC 6750
+
+`/oauth2/userinfo` now reports its errors the way [RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1) describes, as OpenID Connect requires:
+
+* An access token without the `openid` scope gets `403 insufficient_scope` with a `WWW-Authenticate` challenge naming `openid`. Before, it got `400 invalid_scope`.
+* An `Authorization` header without the `Bearer` or `DPoP` scheme, such as a bare token, is treated as no credentials and gets a `401` challenge. Before, UserInfo read the whole header value as the token.
+
+**What to do:** a client that calls UserInfo must request the `openid` scope when it authorizes. A client whose access token lacks `openid` must authorize again with that scope. Send the access token as `Authorization: Bearer <token>`, or `DPoP <token>` with a DPoP proof in the `DPoP` header for a DPoP-bound token. Update clients and tests that match on `invalid_scope` from UserInfo.
+
 ### Extension and API authors
 
-This applies if you build on `extendOAuthProvider()` or implement the provider API yourself:
+This applies if you build on `extendOAuthProvider()`, call the provider API from your own endpoints, or implement it yourself:
+
+* `provider.requireActiveAccessToken` now refuses a DPoP-bound access token with `401 invalid_token` and a `DPoP` challenge, because a token string alone cannot prove that the client holds the token's key. This breaks the 1.7 recipe that calls `requireActiveAccessToken` and then `enforceDpopBinding` from `better-auth/oauth2`: the first call fails for every DPoP-bound token, so the proof check never runs. Replace both calls with [`provider.verifyResourceRequest()`](/docs/plugins/oauth-provider/resource-server#endpoints-on-the-auth-server), which checks the DPoP proof with your `dpop` settings, including nonces, and then `audience` and `scopes`. When it rejects the token or request, it throws a 401 or 403 that already carries its challenge. It rethrows any other error, such as a database failure, unchanged. Bearer tokens work as before. To read a token's claims whatever its binding, such as a token-exchange subject token, use `provider.validateAccessToken`.
+
+  ```ts title="reports-plugin.ts"
+  // was:
+  // const payload = await provider.requireActiveAccessToken(token);
+  // await enforceDpopBinding({ payload, authorization, proofJwt, ... });
+  const claims = await provider.verifyResourceRequest({
+    audience: "https://auth.example.com/api/auth/reports",
+    scopes: ["read:reports"],
+  });
+  ```
 
 * Custom `OAuthProviderApi` implementations must add `verifyDpopProof()`, `issueDpopNonce()`, `challengeDpopNonce()`, `resolveConfirmation()`, `resolveSubject()`, `verifyResourceRequest()`, and `issueAuthorizationCode()`.
+
 * Extension grants now receive every `audience` value instead of only the last one.
+
 * An `accessTokenClaims` value that a grant passes to `issueTokens` for an opaque access token is now stored on the token. Introspection, `provider.validateAccessToken`, and token exchange subject-token checks such as `may_act` now see it. Keep personal data out of these claims, because they stay in the database until the token row is deleted.
+
 * When two extensions advertise the same list in discovery, such as `authorization_details_types_supported`, discovery publishes both lists combined, in registration order and without duplicates. Before, only the first-registered extension's list appeared. Other colliding keys still resolve to the first extension registered, with a warning.
+
 * `DpopBindingErrorCode` and `DpopProofErrorCode` from `@better-auth/core/oauth2` now include `use_dpop_nonce`. DPoP checks return it only when you pass a `nonce` option, but exhaustive checks over either type must handle it to typecheck:
 
   ```ts
@@ -338,9 +372,19 @@ This section applies if you verify access tokens with `verifyAccessTokenRequest`
 
 ### Unsupported `Authorization` schemes have no error code
 
-`verifyAccessTokenRequest` now rejects an `Authorization` header with no scheme, or with a scheme other than `Bearer` or `DPoP`, such as `Basic`, the same way as a request with no header. The thrown 401 no longer has `error: "invalid_token"` or `error_description` in its `body`. `createResourceServerChallenge` and the MCP handler answer with a `Bearer` challenge that has only its `resource_metadata` link.
+`verifyAccessTokenRequest` now rejects an `Authorization` header with no scheme, or with a scheme other than `Bearer` or `DPoP`, such as `Basic`, the same way as a request with no header. The thrown 401 no longer has `error: "invalid_token"` or `error_description` in its `body`. `createResourceServerChallenge` and the MCP handler answer it as they answer a request without a token: with a `Bearer` and a `DPoP` challenge, each with only its `resource_metadata` link and `scope`, and with `algs` on the `DPoP` challenge.
 
 **What to do:** code that matched `body.error === "invalid_token"` for this case must check for a 401 without `body.error`.
+
+### Challenges offer DPoP and link to resource metadata
+
+`createResourceServerChallenge`, `verifyResourceRequest`, and the MCP handler now build their `WWW-Authenticate` challenges the same way:
+
+* A request without a token gets a `Bearer` and a `DPoP` challenge. Before, `createResourceServerChallenge` and the MCP handler sent only `Bearer`.
+* A `DPoP` challenge carries the `resource_metadata` link, as `Bearer` challenges already did. For a resource identifier that is not a URL, such as a `urn:`, `createResourceServerChallenge` throws when `resourceMetadataMappings` has no entry for it. `Bearer` challenges already did, and now `DPoP` challenges do too.
+* `verifyResourceRequest` has no `resourceMetadataMappings` option and never throws for a missing entry. Without `audience`, or when `audience` is not a URL, its challenges leave out `resource_metadata`.
+
+**What to do:** if you call `createResourceServerChallenge`, add a `resourceMetadataMappings` entry for each resource identifier that is not a URL. Clients and tests that compare the whole header value must expect the `DPoP` challenge too.
 
 ### `authorization_details_types_supported` is a list
 

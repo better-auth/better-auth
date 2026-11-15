@@ -13,7 +13,7 @@ import {
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
-import type { JWTPayload } from "jose";
+import type { JSONWebKeySet, JWTPayload } from "jose";
 import {
 	getClientDiscoveries,
 	getExtensionClientAuthenticationStrategy,
@@ -22,7 +22,6 @@ import {
 import type { oauthProvider } from "../oauth";
 import { canonicalizeOAuthQueryParams } from "../signed-query";
 import type {
-	ClientDiscovery,
 	Confirmation,
 	GrantType,
 	OAuthActorClaim,
@@ -100,16 +99,77 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
 	> | null;
 };
 
+const findJwtPlugin = (ctx: AuthContext) =>
+	ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+
 /**
  * Gets the JWT Plugin
  * @internal
  */
 export const getJwtPlugin = (ctx: AuthContext) => {
-	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+	const plugin = findJwtPlugin(ctx);
 	if (!plugin) {
 		throw new BetterAuthError("jwt_config");
 	}
 	return plugin;
+};
+
+type JwksReadContext = Pick<GenericEndpointContext, "context"> &
+	Partial<Pick<GenericEndpointContext, "request" | "headers" | "path">>;
+
+function readJwksInProcess(
+	{ context, request, headers, path }: JwksReadContext,
+	jwtPlugin: ReturnType<typeof jwt>,
+) {
+	const jwksFetch = async (): Promise<JSONWebKeySet | undefined> =>
+		jwtPlugin.endpoints.getJwks({ context, request, headers, path });
+	// A custom `adapter.getJwks` receives this request and may return different
+	// keys for each one, such as per tenant, so its keys are read on every
+	// verification instead of being shared across requests.
+	if (jwtPlugin.options?.adapter?.getJwks) {
+		return { jwksFetch };
+	}
+	return {
+		jwksFetch,
+		// Endpoints receive a per-request copy of the context, and one `jwt()`
+		// object can serve several auth instances. The adapter is the instance's
+		// key store, so the cached keys are scoped to it.
+		jwksCacheKey: context.adapter,
+	};
+}
+
+/**
+ * Source of this server's signing keys, for verifying tokens it issued in an
+ * endpoint. Keys published at `jwks.remoteUrl` are fetched from there;
+ * otherwise they are read in-process with the endpoint's request, so no
+ * request goes to this server's own `/jwks`. That read skips the router, so
+ * hooks and the rate limiter on `/jwks` do not run for it.
+ */
+export const getJwksSource = (ctx: GenericEndpointContext) => {
+	const jwtPlugin = getJwtPlugin(ctx.context);
+	const remoteUrl = jwtPlugin.options?.jwks?.remoteUrl;
+	return remoteUrl
+		? { jwksFetch: remoteUrl }
+		: readJwksInProcess(ctx, jwtPlugin);
+};
+
+/**
+ * In-process source of this server's signing keys for a verifier in the same
+ * process, or `undefined` without a JWT plugin or when the keys are published
+ * at `jwks.remoteUrl`. Pass the request being verified when there is one, so
+ * a custom key store can read it. See {@link getJwksSource}.
+ */
+export const getLocalJwksSource = (
+	context: AuthContext,
+	request?: Request | undefined,
+) => {
+	const jwtPlugin = findJwtPlugin(context);
+	return jwtPlugin && !jwtPlugin.options?.jwks?.remoteUrl
+		? readJwksInProcess(
+				{ context, request, headers: request?.headers },
+				jwtPlugin,
+			)
+		: undefined;
 };
 
 /**
@@ -328,22 +388,6 @@ export async function getClient(
 	}
 
 	return dbClient;
-}
-
-/**
- * Merge `discoveryMetadata` from every contributed {@link ClientDiscovery}
- * into a single object. Entries are spread in order; later entries override
- * earlier ones on key collisions.
- *
- * @internal
- */
-export function mergeDiscoveryMetadata(
-	discoveries: ClientDiscovery[],
-): Record<string, unknown> {
-	return discoveries.reduce<Record<string, unknown>>(
-		(acc, d) => ({ ...acc, ...(d.discoveryMetadata ?? {}) }),
-		{},
-	);
 }
 
 /**
@@ -720,6 +764,19 @@ export async function normalizeClientAuthenticationParameters(
 	};
 }
 
+/**
+ * Headers for a response that carries an authentication challenge.
+ * `WWW-Authenticate` is not a CORS-safelisted response header, so browsers
+ * hide it from cross-origin clients, such as a browser MCP client registering
+ * itself, unless the response exposes it.
+ */
+export function challengeHeaders(challenge: string) {
+	return {
+		"WWW-Authenticate": challenge,
+		"Access-Control-Expose-Headers": "WWW-Authenticate",
+	};
+}
+
 function basicToClientCredentials(authorization: string) {
 	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
 		return undefined;
@@ -734,7 +791,7 @@ function basicToClientCredentials(authorization: string) {
 				error_description: "invalid authorization header format",
 				error: "invalid_client",
 			},
-			{ "WWW-Authenticate": "Basic" },
+			challengeHeaders("Basic"),
 		);
 	}
 }
@@ -857,7 +914,7 @@ export function throwInvalidClient(
 			error_description: errorDescription,
 			error: "invalid_client",
 		},
-		challengeScheme ? { "WWW-Authenticate": challengeScheme } : undefined,
+		challengeScheme ? challengeHeaders(challengeScheme) : undefined,
 	);
 }
 

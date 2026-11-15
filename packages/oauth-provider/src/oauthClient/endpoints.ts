@@ -5,7 +5,13 @@ import type { ClientJwks } from "../client-jwks";
 import { assertValidClientJwks } from "../client-jwks";
 import { getEndpointUrl } from "../dpop";
 import type { OAuthClientRegistrationMetadata } from "../register";
-import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "../register";
+import {
+	assertEndSessionClientOrigins,
+	assertPostLogoutRedirectOrigins,
+	checkOAuthClient,
+	oauthToSchema,
+	schemaToOAuth,
+} from "../register";
 import type {
 	OAuthClientAdministrativeResponse,
 	OAuthClientRegistrationResponse,
@@ -281,15 +287,32 @@ export async function updateClientEndpoint(
 		: client.referenceId && opts.clientReference
 			? client.referenceId === (await opts.clientReference(session))
 			: false;
-	const isCrossOwnerScopeConfiguration =
+	// An admin may change these server-owned settings on any client, including
+	// metadata document and anonymous clients, which have no owner.
+	const { enable_end_session: enableEndSession, ...clientUpdates } = updates;
+	const isCrossOwnerServerConfiguration =
 		!ownsClient &&
 		settings?.admin &&
-		rawClientCredentialsScopes !== undefined &&
-		!hasUpdates;
-	if (!ownsClient && !isCrossOwnerScopeConfiguration) {
-		throw new APIError("UNAUTHORIZED");
+		(rawClientCredentialsScopes !== undefined ||
+			enableEndSession !== undefined) &&
+		Object.keys(clientUpdates).length === 0 &&
+		!clearsBackchannelLogout &&
+		!clearsFrontchannelLogout;
+	if (!ownsClient && !isCrossOwnerServerConfiguration) {
+		throw new APIError(
+			"UNAUTHORIZED",
+			settings?.admin
+				? {
+						error_description:
+							"only the client's owner can update it; on other clients, send only enable_end_session or client_credentials_scopes",
+					}
+				: undefined,
+		);
 	}
-	if (isCrossOwnerScopeConfiguration) {
+	if (
+		isCrossOwnerServerConfiguration &&
+		rawClientCredentialsScopes !== undefined
+	) {
 		await assertClientPrivileges(
 			ctx,
 			session,
@@ -328,7 +351,10 @@ export async function updateClientEndpoint(
 			finalTokenEndpointAuthMethod,
 			opts,
 		);
-		if (clientCredentialsScopes.length > 0 && !isCrossOwnerScopeConfiguration) {
+		if (
+			clientCredentialsScopes.length > 0 &&
+			!isCrossOwnerServerConfiguration
+		) {
 			await assertClientPrivileges(
 				ctx,
 				session,
@@ -355,9 +381,39 @@ export async function updateClientEndpoint(
 		updatedMetadata.frontchannel_logout_uri = undefined;
 		updatedMetadata.frontchannel_logout_session_required = undefined;
 	}
-	await checkOAuthClient(updatedMetadata, opts, {
-		ctx,
-	});
+	// A cross-owner update leaves the client's metadata as stored. Metadata
+	// document and dynamic clients were validated under their own rules, which
+	// a re-check under the managed rules here could reject.
+	if (!isCrossOwnerServerConfiguration) {
+		await checkOAuthClient(updatedMetadata, opts, {
+			ctx,
+		});
+	} else if (enableEndSession && !client.enableEndSession) {
+		// Granting logout to a client the caller does not own holds its stored
+		// post-logout URIs to the origin rule registration applies on a grant.
+		assertEndSessionClientOrigins({
+			clientId: client.clientId,
+			redirectUris: client.redirectUris ?? undefined,
+			postLogoutRedirectUris: client.postLogoutRedirectUris ?? undefined,
+			isMetadataDocument: !!client.clientDiscoveryId,
+		});
+	}
+	// An owner cannot add a logout target that authorization would not
+	// redirect to; entries already stored, such as an admin's, are kept.
+	if (
+		!settings?.admin &&
+		client.enableEndSession &&
+		updates.post_logout_redirect_uris
+	) {
+		const stored = client.postLogoutRedirectUris ?? [];
+		assertPostLogoutRedirectOrigins(
+			updates.post_logout_redirect_uris.filter(
+				(uri: string) => !stored.includes(uri),
+			),
+			updatedMetadata.redirect_uris ?? [],
+			"its redirect_uris",
+		);
+	}
 
 	// Clear obsolete auth material when switching auth methods
 	const schemaUpdates: Record<string, unknown> = {

@@ -131,7 +131,10 @@ export interface AccessTokenClaimsInput {
  *
  * Precedence, lowest to highest: extension contributors < per-issuance
  * `accessTokenClaims` < plugin `customAccessTokenClaims` < per-resource
- * `customClaims`. Reserved names are removed from the merged result.
+ * `customClaims`. Reserved names are removed from the merged result. The
+ * per-issuance `authorization_details` claim, which `issueTokens` sets from
+ * `authorizationDetails` and an opaque token stores, outranks every source,
+ * and an empty list removes the claim.
  *
  * Returns only the enriched claims; the caller stamps the AS-owned claims
  * (`iss`/`sub`/`aud`/`exp`/`iat`/`jti`/`client_id`/`scope`/...) itself, so they
@@ -175,7 +178,7 @@ export async function resolveAccessTokenClaims(
 				metadata,
 			})
 		: {};
-	return stripReservedClaims(
+	const claims = stripReservedClaims(
 		{
 			...extensionClaims,
 			...(perRequestClaims ?? {}),
@@ -184,4 +187,14 @@ export async function resolveAccessTokenClaims(
 		},
 		input.opts,
 	);
+	// RFC 9396 §9: details a grant issues are what the user approved, so a
+	// deployment hook cannot replace them, or add any when none apply.
+	const grantedDetails = perRequestClaims?.authorization_details;
+	if (grantedDetails !== undefined) {
+		claims.authorization_details =
+			Array.isArray(grantedDetails) && grantedDetails.length === 0
+				? undefined
+				: grantedDetails;
+	}
+	return claims;
 }

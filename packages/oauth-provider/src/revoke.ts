@@ -17,6 +17,7 @@ import {
 } from "./token-lookup";
 import type { OAuthOptions, OAuthRefreshToken, Scope } from "./types";
 import {
+	challengeHeaders,
 	destructureCredentials,
 	extractClientCredentials,
 	getAuthEndpointUrl,
@@ -176,10 +177,14 @@ export async function revokeEndpoint(
 	} = destructureCredentials(credentials);
 
 	if (!client_id) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "missing required credentials",
-			error: "invalid_client",
-		});
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				error_description: "missing required credentials",
+				error: "invalid_client",
+			},
+			challengeHeaders("Basic"),
+		);
 	}
 
 	// Check token

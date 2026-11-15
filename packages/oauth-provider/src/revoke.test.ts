@@ -154,8 +154,13 @@ describe("oauth revoke", async () => {
 		oauthClient = response;
 	});
 
+	/**
+	 * A 401 must carry a challenge, and a browser client must be able to read it.
+	 * @see https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2
+	 */
 	it("should fail unauthenticated request", async () => {
 		const tokens = await getTokens();
+		let responseHeaders: Headers | undefined;
 		const revocation = await client.oauth2.revoke(
 			{
 				token: tokens.data?.access_token!,
@@ -165,9 +170,16 @@ describe("oauth revoke", async () => {
 					accept: "application/json",
 					"content-type": "application/x-www-form-urlencoded",
 				},
+				onError(context) {
+					responseHeaders = context.response.headers;
+				},
 			},
 		);
 		expect(revocation.error?.status).toBe(401);
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("Access-Control-Expose-Headers")).toBe(
+			"WWW-Authenticate",
+		);
 	});
 
 	it("reports unsupported_token_type for a jwt access_token with token_type_hint access_token", async () => {
@@ -674,6 +686,45 @@ describe("oauth revoke - config", async () => {
 			});
 			expect(revoked.error).toBe(null);
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9012
+	 */
+	it("returns 200 when the decoder rejects with an APIError from another copy of better-call", async () => {
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				formatRefreshToken: {
+					encrypt: (token) => `rt.${token}`,
+					decrypt: () => {
+						// Stands in for an APIError from a second better-call install,
+						// which fails `instanceof` against this package's copy.
+						throw Object.assign(new Error("not a refresh token"), {
+							name: "APIError",
+							status: "BAD_REQUEST",
+							statusCode: 400,
+							headers: new Headers(),
+							body: { error: "invalid_request" },
+						});
+					},
+				},
+			},
+		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: "unknown-token",
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.error).toBe(null);
 	});
 
 	/**
