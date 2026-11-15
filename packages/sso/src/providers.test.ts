@@ -2441,6 +2441,32 @@ kBGIJYs=
 			expect(updated.oidcConfig?.clientIdLastFour).toBe("****t123");
 		});
 
+		it("returns the client assertion audience it stores", async () => {
+			const { auth, getAuthHeaders, createOIDCProviderData, data } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			createOIDCProviderData(user!.id, "my-oidc-provider", "client123");
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "my-oidc-provider",
+					oidcConfig: { clientAssertionAudience: "issuer" },
+				},
+				headers,
+			});
+
+			expect(updated.oidcConfig?.clientAssertionAudience).toBe("issuer");
+		});
+
 		it("allows SAML post-login redirect updates when linked account rows exist", async () => {
 			let isAuthenticationBoundaryChange: boolean | undefined;
 			const { auth, getAuthHeaders, registerSAMLProvider, data } =

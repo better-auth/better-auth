@@ -14,6 +14,11 @@ interface ClientCredentialsTokenRequestInput {
 	authentication?: TokenEndpointSecretAuthentication | undefined;
 	tokenEndpointAuth?: TokenEndpointAuth | undefined;
 	tokenEndpoint?: string | undefined;
+	/**
+	 * The authorization server's issuer identifier, passed to client assertion
+	 * getters and custom authentication hooks.
+	 */
+	issuer?: string | undefined;
 	resource?: (string | string[]) | undefined;
 }
 
@@ -43,6 +48,7 @@ export async function clientCredentialsTokenRequest({
 	authentication,
 	tokenEndpointAuth,
 	tokenEndpoint,
+	issuer,
 	resource,
 }: ClientCredentialsTokenRequestInput) {
 	options = typeof options === "function" ? await options() : options;
@@ -58,6 +64,7 @@ export async function clientCredentialsTokenRequest({
 		options,
 		tokenEndpoint: tokenEndpoint ?? "",
 		grantType: "client_credentials",
+		issuer,
 		tokenEndpointAuth,
 		authentication,
 	});
@@ -106,6 +113,7 @@ export async function clientCredentialsToken({
 	scope,
 	authentication,
 	tokenEndpointAuth,
+	issuer,
 	resource,
 	fetch,
 }: ClientCredentialsTokenInput): Promise<OAuth2Tokens> {
@@ -115,6 +123,7 @@ export async function clientCredentialsToken({
 		authentication,
 		tokenEndpointAuth,
 		tokenEndpoint,
+		issuer,
 		resource,
 	});
 

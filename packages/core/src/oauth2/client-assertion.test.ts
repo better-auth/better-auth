@@ -44,6 +44,26 @@ describe("signPrivateKeyJwtClientAssertion", () => {
 		expect(payload.exp! - payload.iat!).toBe(120);
 	});
 
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc10070#section-4
+	 */
+	it("sets the client authentication JWT type", async () => {
+		const { privateKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+
+		const assertion = await signPrivateKeyJwtClientAssertion({
+			clientId,
+			tokenEndpoint,
+			privateKeyJwk: await exportJWK(privateKey),
+			algorithm: "ES256",
+		});
+
+		expect(decodeProtectedHeader(assertion).typ).toBe(
+			"client-authentication+jwt",
+		);
+	});
+
 	it("signs a valid JWT with EdDSA JWK", async () => {
 		const { privateKey, publicKey } = await generateKeyPair("EdDSA", {
 			extractable: true,
@@ -280,13 +300,16 @@ describe("signPrivateKeyJwtClientAssertion", () => {
 
 		expect(payload.iss).toBe(clientId);
 		expect(payload.sub).toBe(clientId);
-		expect(payload.aud).toBe(tokenEndpoint);
+		expect(payload.aud).toBe("https://idp.example.com");
 	});
 
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc10070#section-4
+	 */
 	describe("audience", () => {
 		const issuer = "https://idp.example.com";
 
-		async function createGetter(audience: "token_endpoint" | "issuer") {
+		async function createGetter(audience?: "token_endpoint" | "issuer") {
 			const { privateKey } = await generateKeyPair("ES256", {
 				extractable: true,
 			});
@@ -310,6 +333,44 @@ describe("signPrivateKeyJwtClientAssertion", () => {
 			});
 
 			expect(decodeJwt(assertion).aud).toBe(issuer);
+		});
+
+		it("signs for the issuer by default when the issuer is known", async () => {
+			const getClientAssertion = await createGetter();
+			const assertion = await getClientAssertion({
+				clientId,
+				tokenEndpoint,
+				grantType: "client_credentials",
+				issuer,
+			});
+
+			expect(decodeJwt(assertion).aud).toBe(issuer);
+			expect(decodeProtectedHeader(assertion).typ).toBe(
+				"client-authentication+jwt",
+			);
+		});
+
+		it("signs for the token endpoint by default when no issuer is known", async () => {
+			const getClientAssertion = await createGetter();
+			const assertion = await getClientAssertion({
+				clientId,
+				tokenEndpoint,
+				grantType: "client_credentials",
+			});
+
+			expect(decodeJwt(assertion).aud).toBe(tokenEndpoint);
+		});
+
+		it("signs for the token endpoint when asked, even with a known issuer", async () => {
+			const getClientAssertion = await createGetter("token_endpoint");
+			const assertion = await getClientAssertion({
+				clientId,
+				tokenEndpoint,
+				grantType: "client_credentials",
+				issuer,
+			});
+
+			expect(decodeJwt(assertion).aud).toBe(tokenEndpoint);
 		});
 
 		it("refuses to sign when the issuer audience has no issuer", async () => {

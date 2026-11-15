@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { isAPIError } from "better-auth/api";
 import {
@@ -40,6 +40,7 @@ import {
 	getAuthEndpointUrl,
 	getClient,
 	getJwtPlugin,
+	getOAuthProviderPlugin,
 	parseClientMetadata,
 	resolvePresentedSubjects,
 	restoreAccessTokenUserIds,
@@ -512,6 +513,26 @@ export async function requireActiveAccessToken(
 }
 
 /**
+ * Introspects access tokens against this server's records, for a verifier in
+ * the same process such as `requireMcpAuth`. Accepts JWT and opaque access
+ * tokens, and reports a revoked token, one whose session ended, and one whose
+ * client is disabled as inactive. `sub` is the user ID even when the token's
+ * own `sub` is pairwise. `undefined` without an OAuth provider.
+ *
+ * @internal
+ */
+export function getLocalIntrospection(context: AuthContext, request?: Request) {
+	const provider = getOAuthProviderPlugin(context);
+	if (!provider) return undefined;
+	const ctx = {
+		context,
+		request,
+		headers: request?.headers,
+	} as GenericEndpointContext;
+	return (token: string) => validateAccessToken(ctx, provider.options, token);
+}
+
+/**
  * UserInfo entry point: validates the access token, requires it active, and
  * returns the introspection payload together with the OIDC `claims.userinfo`
  * names persisted for the token. Opaque tokens carry the names on their row;
@@ -538,8 +559,8 @@ export async function requireActiveAccessTokenWithClaims(
 }
 
 /**
- * Resolves pairwise `sub`, and user actors in `act`, on an introspection
- * payload.
+ * Resolves pairwise `sub`, and users in `act` and `may_act`, on an
+ * introspection payload.
  * Applied at the presentation layer so internal validation functions
  * keep real user.id (needed for user lookup in /userinfo).
  */
@@ -566,11 +587,11 @@ async function resolveIntrospectionSubjects(
 			: await getClient(ctx, opts, issuerClientId);
 	if (!issuingClient) return payload;
 	const subjects = await resolvePresentedSubjects(
-		ctx,
 		opts,
 		{
 			sub: payload.sub as string,
 			...(payload.act ? { act: payload.act as OAuthActorClaim } : {}),
+			...(payload.may_act !== undefined ? { may_act: payload.may_act } : {}),
 		},
 		issuingClient,
 	);

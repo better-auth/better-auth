@@ -1,4 +1,5 @@
 import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import { signForTokenEndpoint } from "./token-endpoint-audience";
 
 export interface OktaOptions extends BaseOAuthProviderOptions {
 	/**
@@ -42,7 +43,8 @@ export function okta(options: OktaOptions): GenericOAuthConfig<"okta"> {
 		discoveryUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
-		tokenEndpointAuth: options.tokenEndpointAuth,
+		// Okta documents only its token endpoint URL as the assertion audience.
+		tokenEndpointAuth: signForTokenEndpoint(options.tokenEndpointAuth),
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		endSessionEndpoint: options.endSessionEndpoint,

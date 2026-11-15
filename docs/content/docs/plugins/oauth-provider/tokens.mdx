@@ -144,9 +144,13 @@ A request that fails either check is rejected and the tokens stay valid. This in
 
 The tokens issued from a code can outlive the code, so the provider remembers a redeemed code for as long as those tokens can still be valid. The record lasts for the longer of `accessTokenExpiresIn` and `refreshTokenExpiresIn` after redemption (30 days by default), and each refresh-token rotation extends it by the same amount. A reuse after the code expires still revokes the tokens while that record exists.
 
+Two token requests can send one code at the same time, for example when a client retries a request it thinks timed out. The request that consumes the code starts issuing tokens. The other one is a reuse, so it fails and revokes the code's grant. If the first request is still issuing tokens, it finds the [grant revoked](#grant-revocation-entries) and also fails with `invalid_grant`. If it already finished, the revocation revokes the tokens it returned, as for any reuse. Either way, the client must start a new authorization request.
+
+Two requests with the same DPoP proof can end differently, because the server records the proof's `jti` before it consumes the code. If the second request finds the code before the first consumes it, the second then fails on the recorded `jti` with `invalid_dpop_proof`. It revokes nothing, and the first request keeps its tokens. If it arrives after the code is consumed, it is a reuse as described above.
+
 ## Refresh tokens
 
-Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire. With [`revocableJwtAccessTokens`](#revoke-the-access-tokens-of-a-grant), the replayed grant's JWT access tokens are revoked too. After a replay, the refresh fails with `invalid_grant`, and the client must start a new authorization request to get tokens.
+Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire. With [`revocableJwtAccessTokens`](#revoke-the-access-tokens-of-a-grant), the replayed grant's JWT access tokens are revoked too. After a replay, the refresh fails with `invalid_grant`, and the client must start a new authorization request to get tokens. A refresh of the replayed token's grant that is still issuing tokens when the replay arrives also fails with `invalid_grant`, and the tokens it stored are deleted. This doesn't apply to a replayed token that was rotated before you upgraded to 1.8, because it has no [grant ID](#grant-revocation-entries).
 
 Keep the default, `0`, unless your clients lose refresh responses. To let a client retry a refresh after a lost response, set `refreshTokenReuseInterval` to a number of seconds. A retry within that window gets the same response back, including the replacement refresh token. The retry gets that response only when it uses the same client, scopes, resources, and DPoP key as the first refresh. A retry that differs but is otherwise valid gets `invalid_grant`.
 
@@ -434,6 +438,7 @@ For ID token and UserInfo claims, see [OpenID Connect](/docs/plugins/oauth-provi
 ```ts title="auth.ts"
 oauthProvider({
   extensions: [{
+    id: "org-claims",
     claims: {
       accessToken: ({ client }) =>
         client.referenceId ? { "https://example.com/org": client.referenceId } : {},
@@ -481,11 +486,26 @@ A client can only revoke tokens issued to it ([RFC 7009 §2.1](https://datatrack
 What the endpoint does depends on the token:
 
 * **Opaque access token**: deleted. Refresh tokens from the same grant stay valid.
-* **Refresh token**: marked revoked, so it can no longer issue tokens. The opaque access tokens of its grant are deleted, including those issued before earlier rotations ([RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). An opaque access token issued before your deployment stored grant IDs is deleted only with the refresh token that issued it. JWT access tokens from the same grant are revoked only with [`revocableJwtAccessTokens`](#revoke-jwt-access-tokens). Without it, they stay valid until they expire.
+* **Refresh token**: marked revoked, so it can no longer issue tokens. A refresh of the same grant that is still issuing tokens fails with `invalid_grant`. The opaque access tokens of its grant are deleted, including those issued before earlier rotations ([RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). An opaque access token issued before your deployment stored grant IDs is deleted only with the refresh token that issued it. JWT access tokens from the same grant are revoked only with [`revocableJwtAccessTokens`](#revoke-jwt-access-tokens). Without it, they stay valid until they expire.
 * **Refresh token that was already revoked or rotated**: treated as replay. The endpoint still returns 200, and it deletes the client's refresh tokens for that user, along with the opaque access tokens they issued. With `revocableJwtAccessTokens`, the JWT access tokens of the replayed token's grant are also revoked. Any other JWT access token, and an access token issued without a refresh token, stays valid until it expires.
 * **JWT access token**: revoked only with [`revocableJwtAccessTokens`](#revoke-jwt-access-tokens). Without it, a JWT issued to the calling client that still verifies returns 400 `unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), because the token is never stored. An expired JWT is treated as unknown and returns 200. So does a JWT whose audience names a resource that is not registered.
 
 To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's session. A JWT that carries a `sid` is reported inactive by introspection and rejected by UserInfo once its session ends. A `client_credentials` JWT has no session. Its lifetime is the only limit.
+
+### Grant revocation entries
+
+A grant is revoked when a client revokes a refresh token, replays a rotated refresh token, or reuses an authorization code. The provider then writes one entry for the grant to the [verification store](/docs/concepts/database#verification), whatever your options. The entry lasts `accessTokenExpiresIn`, plus one second.
+
+A refresh token issued before 1.8 gets a grant ID at its first refresh after the upgrade. Revoking it before then, or replaying a token that was rotated before the upgrade, writes no entry, so a request still issuing tokens for that grant isn't stopped.
+
+Each authorization code redemption and each refresh looks up its grant's entry after it stores its tokens. A request that finds the entry fails with `invalid_grant` and deletes the tokens it stored. This is how a revocation stops a request that was already issuing tokens for the grant. A request that reaches the lookup more than `accessTokenExpiresIn` after it consumed its code or refresh token fails the same way, because the grant's entry may already have expired.
+
+These entries are ordinary verification values:
+
+* **Your verification hooks see them.** `databaseHooks.verification` runs for each entry the provider writes. The identifier starts with `oauth-revoked-grant:`.
+* **Reads must see earlier writes.** If your verification store reads from a replica that lags behind writes, a request can miss an entry written moments earlier and keep its tokens.
+* **Secondary storage holds them if you use it.** The entries go there and expire on their own. If the storage drops an entry before it expires, a request that was issuing tokens when the grant was revoked can keep them.
+* **Writes are bounded by the rate limit.** Each grant revocation writes one entry. When rate limiting is enabled, which is the default in production, the [rate limits](/docs/plugins/oauth-provider/reference#rate-limits) bound how fast entries are written: 30 requests per 60 seconds for `/oauth2/revoke`, and 20 for `/oauth2/token`. If you turn rate limiting off, nothing bounds them.
 
 ### Revoke JWT access tokens
 
@@ -501,16 +521,16 @@ Revoking a JWT access token then returns 200 and stores its `jti` in the [verifi
 
 Before you turn it on, consider:
 
-* **Resource servers that verify locally don't see revocations.** `verifyAccessTokenRequest` without `remoteVerify`, and [`requireMcpAuth`](/docs/plugins/mcp), check the signature against the JWKS and never ask the server. A revoked token stays valid there until it expires. To honor revocation, set [`remoteVerify`](/docs/plugins/oauth-provider/resource-server#jwt-or-opaque-tokens) so every token is introspected.
+* **Resource servers that verify locally don't see revocations.** `verifyAccessTokenRequest` without `remoteVerify`, and [`requireMcpAuth`](/docs/plugins/mcp) with a `jwksUrl`, check the signature against the JWKS and never ask the server. A revoked token stays valid there until it expires. To honor revocation, set [`remoteVerify`](/docs/plugins/oauth-provider/resource-server#jwt-or-opaque-tokens) on `verifyAccessTokenRequest` so every token is introspected, and leave `jwksUrl` unset on `requireMcpAuth` so it checks the provider's records in the same process.
 * **Each check adds lookups.** Introspection, UserInfo, and `validateAccessToken` look up the token's `jti` in the verification store, revoked or not. A token that carries a [`grant_id`](#revoke-the-access-tokens-of-a-grant) also has its grant looked up, in parallel. In the database, a lookup that finds an expired row also deletes the expired rows for that identifier. At most once a minute per server instance, a lookup also deletes every expired verification row. `verification.disableCleanup` turns off both deletes. With `verification.storeIdentifier: "hashed"`, each lookup that finds nothing takes two reads.
 * **Revocations last only as long as their storage.** With [secondary storage](/docs/concepts/database#secondary-storage), entries go there and expire on their own: a token's entry at its `exp`, a grant's entry after `accessTokenExpiresIn`. If the storage evicts or loses an entry, the revoked token is accepted again. Use storage that never evicts these keys, or set `verification.storeInDatabase: true` to also keep entries in the database.
-* **Writes are bounded by the rate limit.** Each revocation writes one entry, and only for a valid token issued to the calling client. Revoking a refresh token writes one entry for its grant. A replayed refresh token or authorization code at `/oauth2/token` also writes one entry for its grant. When rate limiting is enabled, which is the default in production, the [rate limits](/docs/plugins/oauth-provider/reference#rate-limits) bound how fast entries are written: 30 requests per 60 seconds for `/oauth2/revoke`, and 20 for `/oauth2/token`. If you turn rate limiting off, nothing bounds them.
+* **Writes are bounded by the rate limit.** Revoking a JWT access token writes one entry, and only for a valid token issued to the calling client. When rate limiting is enabled, which is the default in production, the [rate limits](/docs/plugins/oauth-provider/reference#rate-limits) bound how fast entries are written: 30 requests per 60 seconds for `/oauth2/revoke`. If you turn rate limiting off, nothing bounds them. Grant revocations write their own [entries](#grant-revocation-entries), with or without this option.
 
 #### Revoke the access tokens of a grant
 
 A grant is everything one authorization produced: its first tokens and every refresh token rotated from them. Each refresh token stores its grant's ID. With the option on, each JWT access token issued with a refresh token or for an authorization code also carries it in a `grant_id` claim. Better Auth sets this claim, and custom access-token claims can't override it.
 
-Revoking a refresh token then also revokes the JWT access tokens of its grant, including those issued before earlier rotations ([RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). Better Auth stores one entry for the grant, not one per token, and keeps it for `accessTokenExpiresIn`. Every access token the grant issued before the revocation expires within that time. The same happens in these cases:
+Revoking a refresh token then also revokes the JWT access tokens of its grant, including those issued before earlier rotations ([RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). Better Auth checks each token against the [grant revocation entry](#grant-revocation-entries), so it stores one entry for the grant, not one per token. The entry lasts `accessTokenExpiresIn`, and every access token the grant issued before the revocation expires within that time. The same happens in these cases:
 
 * A refresh token that was already rotated is presented for revocation, or at the token endpoint outside the [`refreshTokenReuseInterval`](#refresh-tokens) window. A retry inside that window gets the earlier response back and revokes nothing.
 * An authorization code is reused by the client it was issued to, and the request passes the checks in [Authorization code reuse](#authorization-code-reuse). The code's grant is revoked, including a JWT access token issued for the code without a refresh token. This holds even when the reuse arrives while the first redemption is still issuing its tokens.
@@ -682,6 +702,8 @@ A DPoP key ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449)) held by t
 * The request carries a DPoP proof from the subject token's key.
 * The request has no `actor_token`.
 
+A public client cannot get a `client_credentials` token, so any actor token it sent would be a user's token issued to the same app. The provider does not support that form of delegation for public clients.
+
 The exchanged token is bound to the same key. Someone who steals a public client's access token cannot exchange it without that key.
 
 Confidential clients still authenticate as before.
@@ -709,16 +731,21 @@ To get that token, register the service for both grants, `grant_types: [TOKEN_EX
 {
   "sub": "user_123",
   "client_id": "mcp-server",
-  "act": { "sub": "mcp-server" }
+  "act": {
+    "sub": "mcp-server",
+    "sub_profile": "service"
+  }
 }
 ```
 
-`act.sub` is the actor token's subject. For a `client_credentials` token, it is the client ID. For a user's token issued to the service, it is that user's ID. Introspection returns `act` for JWT and opaque access tokens.
+`act.sub` is the actor token's subject. For a `client_credentials` token, it is the client ID. For a user's token issued to the service, it is that user's ID. `act.sub_profile` names the actor's kind: `"service"` for a client and `"user"` for a user. Introspection returns `act` for JWT and opaque access tokens.
 
 When the exchanged token's client uses [pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers), it can see each user in `act` as the `sub` it sees for that user, instead of the user ID. Where it sees those values depends on the token format:
 
 * Introspection always returns those values.
 * A JWT access token carries them with `accessTokenSubject: "pairwise"`. With the default `accessTokenSubject: "user"`, the JWT carries user IDs in `act`, as it does in `sub`.
+
+A service named in `act` keeps its client ID, because its entry is marked `"service"`. That still holds after the service's client is deleted. A pairwise client sees an entry without `sub_profile`, such as one from a token delegated before the provider added it, as a user.
 
 `allowExchange`, `actorClaims`, and the [provider API](/docs/plugins/oauth-provider/reference#provider-extensions) receive user IDs.
 
@@ -730,7 +757,11 @@ A delegated token can be exchanged again. When the next service sends its own ac
 {
   "act": {
     "sub": "billing-service",
-    "act": { "sub": "mcp-server" }
+    "sub_profile": "service",
+    "act": {
+      "sub": "mcp-server",
+      "sub_profile": "service"
+    }
   }
 }
 ```
@@ -765,14 +796,19 @@ A token the client got by exchanging a user's token is also issued to the client
 
 #### Limit who may act with `may_act`
 
-A subject token with a `may_act` claim ([RFC 8693 §4.4](https://datatracker.ietf.org/doc/html/rfc8693#section-4.4)) names the only actor allowed to act for its user. The provider never adds `may_act` itself. Add it with `customAccessTokenClaims`, which also covers opaque tokens at introspection:
+A subject token with a `may_act` claim ([RFC 8693 §4.4](https://datatracker.ietf.org/doc/html/rfc8693#section-4.4)) names who may act for its user. The provider never adds `may_act` itself. Add it with `customAccessTokenClaims`, which also covers opaque tokens at introspection:
 
 ```ts title="auth.ts"
 oauthProvider({
   // ...
   customAccessTokenClaims: ({ resources }) =>
     resources?.includes("https://mcp.example.com")
-      ? { may_act: { sub: process.env.MCP_SERVER_CLIENT_ID } }
+      ? {
+          may_act: {
+            client_id: process.env.MCP_SERVER_CLIENT_ID,
+            sub_profile: "service",
+          },
+        }
       : {},
 }),
 ```
@@ -780,12 +816,24 @@ oauthProvider({
 Every member of `may_act` must match the actor:
 
 * `sub` must equal the actor's `act.sub`.
+* `sub_profile` must equal the actor's kind: `"service"` or `"user"`.
 * `client_id` must equal the actor token's client, which is the exchanging client.
 * `iss` must equal this server's issuer.
 
-Any other member denies the exchange, because the provider cannot check it. So does an empty `may_act`. A subject token with `may_act` also cannot be exchanged without an actor token.
+In the example, `client_id` with `sub_profile: "service"` allows only the MCP server acting as itself, with its own `client_credentials` token. `client_id` alone also allows users whose actor tokens were issued to that client.
 
-To name a user actor, set `sub` to the user ID, never to a pairwise `sub`. The client a JWT access token was issued to can read its `may_act`. A `sub` that names a user therefore shows that user's ID to a client that should only see pairwise values. To allow a service to act, prefer `client_id`, which names no user.
+Any other member denies the exchange, because the provider cannot check it. A `may_act` without `sub` or `client_id` also denies it, because it names no one. That includes the example above when `MCP_SERVER_CLIENT_ID` is unset. A subject token with `may_act` also cannot be exchanged without an actor token.
+
+To name a user actor, set `sub` to the user ID, never to a pairwise `sub`. The exchange compares the user ID.
+
+When the subject token's client uses pairwise subject identifiers, the provider presents `may_act.sub` the way it presents users in `act`. The client then sees the `sub` it sees for that user, not the user ID:
+
+* Introspection always returns that value.
+* A JWT access token carries it with `accessTokenSubject: "pairwise"`. With the default `accessTokenSubject: "user"`, the JWT carries the user ID in `may_act`, as it does in `sub`.
+
+The provider treats every `sub` as a user ID unless `sub_profile` is `"service"`, and shows a `"service"` `sub` to every client unchanged. Use `"service"` only for client IDs. To name a service by `sub` instead of `client_id`, set `sub_profile: "service"`. Otherwise, a pairwise client sees a value that matches no client ID.
+
+Other `may_act` members, such as an email address, reach the client as you wrote them, even for a pairwise client. Do not put a user ID or another value that identifies a user in them.
 
 #### Add fields to the actor
 
@@ -795,13 +843,15 @@ To name a user actor, set `sub` to the user ID, never to a pairwise `sub`. The c
 oauthTokenExchange({
   delegation: {
     actorClaims: ({ actor }) => ({
-      actor_type: actor.user ? "user" : "service",
+      actor_issued_at: actor.token.iat,
     }),
   },
 });
 ```
 
-The provider ignores the fields `sub`, `iss`, and `act` and logs a warning. The hook cannot change who acted or the earlier actors.
+The fields you return reach the token's client and its resource servers as you wrote them, even for a pairwise client. Do not return a user ID or another value that identifies a user to clients that should see only pairwise values.
+
+The provider ignores the fields `sub`, `sub_profile`, `iss`, and `act` and logs a warning. The hook cannot change who acted, the actor's kind, or the earlier actors.
 
 `act` belongs to the authorization server, like `cnf`. `customAccessTokenClaims`, claim contributors, and resource `customClaims` cannot set it.
 
@@ -885,7 +935,7 @@ A token exchange fails with one of these errors:
   * The actor token represents the subject token's user.
   * The actor token carries its own `act`.
   * The actor token is bound to a key the request does not prove, by a binding other than DPoP.
-  * The subject token's `may_act` does not match the actor, or the request has no actor.
+  * The subject token's `may_act` names no actor, does not match the actor, or the request has no actor.
   * The `act` chain would exceed `delegation.maxDepth`.
   * `requested_token_type` is unsupported.
   * The request sends neither `resource` nor `audience`.

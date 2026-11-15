@@ -13,7 +13,7 @@ import type {
 import {
 	findToken,
 	jwtRevocationMarker,
-	revokeGrantAccessTokens,
+	markGrantRevoked,
 } from "./token-lookup";
 import type { OAuthOptions, OAuthRefreshToken, Scope } from "./types";
 import {
@@ -21,6 +21,7 @@ import {
 	destructureCredentials,
 	extractClientCredentials,
 	getAuthEndpointUrl,
+	isPublicClient,
 	validateClientCredentials,
 } from "./utils";
 
@@ -95,11 +96,12 @@ async function revokeRefreshToken(
 		await invalidateRefreshFamily(ctx, opts, clientId, refreshToken);
 		return;
 	}
-	// RFC 7009 §2.1: also revoke the grant's JWT access tokens. Written before
-	// the refresh token is marked revoked, so a failed write leaves the refresh
-	// token usable and the request failed, never a revoked refresh token with
-	// live JWTs. If marking the row then throws, the JWTs are already revoked.
-	await revokeGrantAccessTokens(ctx, opts, {
+	// The grant's mark fails a refresh of this grant that is still issuing
+	// tokens, and with `revocableJwtAccessTokens` it also revokes the grant's
+	// JWT access tokens (RFC 7009 §2.1). Written before the refresh token is
+	// marked revoked, so a failed write leaves the refresh token usable and the
+	// request failed. If marking the row then throws, the mark already holds.
+	await markGrantRevoked(ctx, opts, {
 		grantId: refreshToken.grantId,
 		clientId,
 	});
@@ -219,7 +221,7 @@ export async function revokeEndpoint(
 		const ownerClientId =
 			found.type === "jwt" ? found.payload.azp : found.record.clientId;
 		if (ownerClientId !== client.clientId) {
-			if (client.tokenEndpointAuthMethod === "none") return null;
+			if (isPublicClient(client)) return null;
 			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"client is not authorized to revoke the presented token",

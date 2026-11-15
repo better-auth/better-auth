@@ -1,5 +1,8 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
-import { getLocalJwksSource } from "@better-auth/oauth-provider/internal";
+import {
+	getLocalIntrospection,
+	getLocalJwksSource,
+} from "@better-auth/oauth-provider/internal";
 import type {
 	DpopReplayAuthContext,
 	DpopReplayStore,
@@ -21,9 +24,13 @@ export interface RequireMcpAuthOptions {
 	 */
 	issuer?: string;
 	/**
-	 * URL of the authorization server's JWKS. When unset, the signing keys are
-	 * read from the auth instance in-process, without an HTTP request, or
-	 * fetched from the JWT plugin's `jwks.remoteUrl` when it sets one.
+	 * URL of the authorization server's JWKS. When set, JWT access tokens are
+	 * verified by signature against these keys alone, which does not see
+	 * revocation or an ended session, and opaque tokens are rejected. When
+	 * unset and the OAuth provider runs in this process, tokens are checked
+	 * against its records. Without that provider, JWT access tokens are verified
+	 * by signature against the JWT plugin's keys, read in-process, or fetched from
+	 * `jwks.remoteUrl` when the plugin publishes them there.
 	 */
 	jwksUrl?: string;
 	/**
@@ -87,9 +94,10 @@ function getProviderNonceExpiresIn(
 }
 
 /**
- * Protects an MCP server route handler. Verifies the bearer access token
- * against the authorization server's JWKS (checking signature, issuer,
- * audience, and expiry) and forwards the verified JWT payload to the handler.
+ * Protects an MCP server route handler. Checks the bearer access token against
+ * the OAuth provider's records in-process (JWT or opaque; revoked tokens,
+ * ended sessions, and disabled clients fail), verifies issuer, audience, and
+ * expiry, and forwards the token's claims to the handler.
  * Unauthenticated requests receive a JSON-RPC 401 with the RFC 9728
  * `WWW-Authenticate` header so MCP clients can start the authorization flow.
  * Tokens missing a required scope receive a 403 with an RFC 6750
@@ -147,16 +155,23 @@ export const requireMcpAuth = <
 		}
 		const issuer = opts?.issuer ?? baseURL;
 		const resource = opts?.resource ?? baseURL;
-		// A JWT plugin that serves its own keys lets this process verify without
-		// requesting its own `/jwks`, which fails on runtimes that block
-		// requests to their own hostname.
-		const jwtPlugin = authContext.getPlugin("jwt");
-		const localJwks = opts?.jwksUrl
+		// The provider in this process checks the token against its own records,
+		// which accepts opaque tokens and rejects revoked ones, without a request
+		// to its own endpoints.
+		const introspect = opts?.jwksUrl
 			? undefined
-			: getLocalJwksSource(
-					authContext as Parameters<typeof getLocalJwksSource>[0],
+			: getLocalIntrospection(
+					authContext as Parameters<typeof getLocalIntrospection>[0],
 					req,
 				);
+		const jwtPlugin = authContext.getPlugin("jwt");
+		const localJwks =
+			introspect || opts?.jwksUrl
+				? undefined
+				: getLocalJwksSource(
+						authContext as Parameters<typeof getLocalJwksSource>[0],
+						req,
+					);
 		// The JWT plugin disables its `/jwks` endpoint when keys are published at
 		// `jwks.remoteUrl`.
 		const jwksUrl =
@@ -164,6 +179,7 @@ export const requireMcpAuth = <
 		return createProtectedRequestHandler(
 			{
 				...localJwks,
+				introspect,
 				issuer,
 				audience: resource,
 				// Every access token the provider issues names its client in `azp`.

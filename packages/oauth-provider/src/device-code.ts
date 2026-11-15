@@ -316,6 +316,7 @@ function deviceApprovalRequest(
 
 function buildOAuthDeviceGrant(verificationUri: string | undefined) {
 	return {
+		id: "device-authorization",
 		requestSchemaFields: oauthDeviceRequestFields,
 		requestErrorCodes: ["invalid_target"] as const,
 		requestOpenAPIResponses: {

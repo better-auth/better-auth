@@ -107,7 +107,7 @@ Enables pairwise `sub` values for clients with `subject_type: "pairwise"`. Must 
 
 `accessTokenSubject` <span className="opacity-70">`"user" | "pairwise"`</span>
 
-The `sub` of JWT access tokens issued to a user. It has no effect on opaque access tokens, which the provider issues when the client requests no `resource` or the JWT plugin is disabled. `"user"` uses the user ID for every client. `"pairwise"` uses a pairwise client's ID token `sub` and names users in a delegated token's `act` the same way. So the provider can still find the users, the token carries a `ba_sub` claim that encrypts the user ID and, for a delegated token, its real actor chain. `"pairwise"` requires `pairwiseSecret`, or the plugin fails at startup. Defaults to `"user"`. See [Pairwise `sub` in JWT access tokens](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens).
+The `sub` of JWT access tokens issued to a user. It has no effect on opaque access tokens, which the provider issues when the client requests no `resource` or the JWT plugin is disabled. `"user"` uses the user ID for every client. `"pairwise"` uses a pairwise client's ID token `sub` and names users in `act` and `may_act` the same way. So the provider can still find the users, the token carries a `ba_sub` claim that encrypts the user ID and its real `act` and `may_act`. `"pairwise"` requires `pairwiseSecret`, or the plugin fails at startup. Defaults to `"user"`. See [Pairwise `sub` in JWT access tokens](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens).
 
 ### Clients and registration
 
@@ -182,6 +182,17 @@ Resources a registration may request. Each must be in `resources`. When both res
 `assertionMaxLifetime` <span className="opacity-70">`number`</span>
 
 Maximum lifetime in seconds of a `private_key_jwt` assertion. Defaults to `300`. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).
+
+`assertionAudience` <span className="opacity-70">`"issuer" | "issuer-or-endpoint"`</span>
+
+The `aud` values accepted in client assertions, such as `private_key_jwt` assertions, at every endpoint that authenticates a client except `POST /oauth2/client/rotate-keys`. Defaults to `"issuer"`.
+
+* `"issuer"`: the assertion's `aud` must be the provider's issuer and nothing else, as [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) and [§5](https://www.rfc-editor.org/rfc/rfc10070#section-5) require. An `aud` list that also names another value is rejected.
+* `"issuer-or-endpoint"`: the behavior before 1.8. The assertion's `aud` must include the URL of the endpoint called, the issuer, or, at `/oauth2/par`, the token endpoint URL.
+
+`"issuer-or-endpoint"` is a transitional setting for clients that still sign for an endpoint URL. It is weaker: a client that signs for an endpoint URL can be tricked into signing an assertion that a malicious server replays here. Move your clients to the issuer, then remove the setting.
+
+`POST /oauth2/client/rotate-keys` is the exception. In either mode, the assertion's `aud` must include that endpoint's own URL, and may also name other values.
 
 `allowClientKeyRotation` <span className="opacity-70">`boolean`</span>
 
@@ -543,10 +554,10 @@ Token exchange has its own conditions for these errors. See [Token exchange erro
 
 Authorization codes and device codes are single-use, and the token endpoint consumes one only after the request passes validation. A request rejected for its `code_verifier`, `redirect_uri`, `resource`, client, or DPoP proof or nonce leaves the code redeemable until it expires, so the client can retry with a corrected request. When the token endpoint checks the request's DPoP proof, this includes a proof whose `jti` was already used, because the server records the `jti` before it consumes the code. A device code request whose `clientAuthentication` strategy returns a `confirmation` is bound to that confirmation, and its DPoP proof is not checked.
 
-Presenting an authorization code that was already redeemed returns `invalid_grant` and revokes the tokens issued from it. When two requests redeem the same authorization code at once:
+Presenting an authorization code that was already redeemed returns `invalid_grant`. When the client the code was issued to presents it, the provider also revokes the code's grant, as described in [Authorization code reuse](/docs/plugins/oauth-provider/tokens#authorization-code-reuse). When that client sends two requests that redeem the same code at once:
 
-* If both carry the same DPoP proof, one receives tokens and the other gets `invalid_dpop_proof`. The losing request fails before it consumes the code, so the tokens the first one received stay valid.
-* Otherwise, one receives tokens, the other gets `invalid_grant`, and the losing request can revoke the tokens the first one just received.
+* If both carry the same DPoP proof, one can receive tokens. A request that finds the proof's `jti` already recorded fails with `invalid_dpop_proof` before it reaches the code, so it is not a reuse and revokes nothing.
+* Otherwise, the second is a reuse: it fails and revokes the grant. The first request also fails with `invalid_grant`, unless it finished issuing its tokens before the revocation started. In that case, the revocation revokes the tokens it returned, as for any reuse.
 
 When `adminCreateOAuthClient` links resources, an invalid identifier fails validation with `VALIDATION_ERROR`, an unknown or disabled resource returns `invalid_target`, and a `resourcePrivileges` denial returns `401`. The call creates nothing in each case.
 
@@ -599,6 +610,7 @@ export const customOAuthExtension = () =>
     id: "custom-oauth-extension",
     init(ctx) {
       extendOAuthProvider(ctx, {
+        id: "custom-oauth-extension",
         grants: {
           "urn:example:params:oauth:grant-type:custom": async ({ provider }) => {
             const scopes = ["openid"];
@@ -614,6 +626,7 @@ export const customOAuthExtension = () =>
   }) satisfies BetterAuthPlugin;
 ```
 
+* Each extension needs a unique `id`. Use the id of the plugin that registers it. Setup errors and discovery warnings name the extensions involved by this `id`, and two extensions with the same `id` fail at startup. The `id` is not stored, so you can rename it.
 * `grants`, `clientAuthentication`, and `interactionRequests` must not overlap across extensions. A duplicate grant type, auth method, assertion type, or interaction parameter fails at startup. Extension grants and auth methods are advertised in discovery.
 * `metadata` and `claims` only add keys. A key the provider owns is kept, even one it leaves unset because a feature is off, and so is a key a client discovery's `discoveryMetadata` sets. When two client discoveries set the same key, the later one wins. A metadata key two extensions both contribute as lists is combined in registration order, without duplicates. Any other key two extensions contribute resolves to the first one registered.
 * Discovery logs a warning for each contribution it ignores, once per server rather than on every request. To advertise extension claims, set `advertisedMetadata.claims_supported`.
@@ -626,6 +639,12 @@ A grant handler receives `provider` (`getClient`, `authenticateClient`, `issueAu
 </Callout>
 
 When a companion endpoint accepts `application/x-www-form-urlencoded`, set `cloneRequest: true` in its endpoint options before calling `authenticateClient()`. Client authentication re-reads the raw form body to check that client credentials are not repeated or combined across authentication methods. The endpoint must therefore keep a readable request after parsing the form.
+
+To issue a delegated token, pass the actor chain as `act` to `issueTokens`:
+
+* Validate each actor before you pass it. `issueTokens` writes `act` as given, like `sub`.
+* Set `sub_profile: "service"` on each entry whose `sub` is a client ID. A pairwise client sees every other entry's `sub` as a user's pairwise value.
+* A delegated issuance includes no refresh token, even with `offline_access`, because refreshed tokens do not carry `act`. Passing `act` with `refreshToken` throws.
 
 To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html/rfc7800#section-3)), pass `confirmation` to `issueTokens`. A `clientAuthentication` strategy can also return the sender constraint it proved as `confirmation`, such as a DPoP key thumbprint (`jkt`) or a certificate thumbprint (`x5t#S256`):
 
@@ -667,6 +686,7 @@ An extension that defines its own client registration fields, such as CIBA's `ba
 
 ```ts
 extendOAuthProvider(ctx, {
+  id: "example-extension",
   clientMetadata: {
     fields: ["example_mode"],
     validate: ({ metadata }) => {
@@ -695,29 +715,36 @@ A `clientAuthentication` strategy proves which client sent the assertion and ret
 
 ```ts
 import { consumeClientAssertion } from "@better-auth/oauth-provider";
-import { APIError } from "better-auth/api";
 
-authenticate: async ({ ctx, opts, assertion, expectedAudience }) => {
-  if (!expectedAudience) throw new APIError("BAD_REQUEST", { error: "invalid_client" });
+authenticate: async ({ ctx, opts, assertion, acceptedAudiences }) => {
   const payload = await verifyAssertionSignature(assertion); // your key source
   await consumeClientAssertion(ctx, opts, {
     namespace: `urn:example:attestation:${payload.sub}`,
     payload,
-    expectedAudience,
+    acceptedAudiences,
   });
   return { clientId: payload.sub };
 };
 ```
 
+`acceptedAudiences` holds the `aud` values the provider accepts at the endpoint called, as set by the `assertionAudience` option:
+
+* `"issuer"` (default): only the issuer. `consumeClientAssertion` then requires every `aud` value to be the issuer.
+* `"issuer-or-endpoint"`: the URL of the endpoint called, the issuer, and at `/oauth2/par` also the token endpoint URL. `consumeClientAssertion` then requires one `aud` value to be in the list.
+
+The strategy input also has `expectedAudience`, the URL of the endpoint called. It is deprecated. A strategy that checks `aud` against it accepts different audiences than the built-in `private_key_jwt` method does. Pass `acceptedAudiences` to `consumeClientAssertion` instead. `consumeClientAssertion` still accepts `expectedAudience`. It maps that endpoint URL to the audiences `assertionAudience` accepts there, so by default an assertion signed for the endpoint URL is rejected and only the issuer is accepted.
+
 ### Claim precedence
 
 Extension claims only add claim names. Your own callbacks can override profile claims. The provider always owns identity, lifetime, binding, and authentication-context claims.
 
-| Token        | Order, lowest to highest authority                                                                                                                            | Owned by the provider                                                                                                                                                                                                        |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`                                | `iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`, `cnf`, `act`, `reference_id`, `ba_sub`, stripped before signing. The provider also sets `azp` and `sid` after contributed claims. |
-| ID token     | subject and authentication claims \< `customIdTokenClaims`. Extension and per-issuance `idTokenClaims` only add names and cannot set profile or email claims. | `iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`                                                                                             |
-| UserInfo     | scope and `claims.userinfo` claims \< extension `claims.userInfo` (add only) \< `customUserInfoClaims`                                                        | `sub`, applied last                                                                                                                                                                                                          |
+| Token        | Order, lowest to highest authority                                                                                                                            | Owned by the provider                                                                                                                                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`                                | `iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`, `cnf`, `act`, `reference_id`, `ba_sub`, and `grant_id` when `revocableJwtAccessTokens` is on, stripped before signing. The provider also sets `azp` and `sid` after contributed claims. |
+| ID token     | subject and authentication claims \< `customIdTokenClaims`. Extension and per-issuance `idTokenClaims` only add names and cannot set profile or email claims. | `iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`                                                                                                                                                   |
+| UserInfo     | scope and `claims.userinfo` claims \< extension `claims.userInfo` (add only) \< `customUserInfoClaims`                                                        | `sub`, applied last                                                                                                                                                                                                                                                                |
+
+A claim set to `undefined` in any of these sources is left out, so a lower-priority claim with the same name keeps its value. To override a claim, set a value, such as `null`.
 
 When a grant issues RFC 9396 authorization details, such as the details a user approves for a CIBA request, the access token's `authorization_details` claim holds only the details for that token. No other source can replace them or add any.
 
