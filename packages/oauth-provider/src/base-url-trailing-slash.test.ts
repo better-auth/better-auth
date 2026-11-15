@@ -7,7 +7,11 @@ import { describe, expect, it } from "vitest";
 import { oauthProvider } from "./oauth";
 
 /**
- * A `baseURL` that already has a path keeps its trailing slash.
+ * A `baseURL` that already has a path keeps its trailing slash, so joining an
+ * endpoint path onto it must not leave `//`. The empty segment makes a
+ * different URI, because normalization removes only dot-segments.
+ * @see https://www.rfc-editor.org/rfc/rfc3986#section-3.3
+ * @see https://www.rfc-editor.org/rfc/rfc3986#section-6.2.2.3
  */
 describe("baseURL with a trailing slash", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({

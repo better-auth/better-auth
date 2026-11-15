@@ -25,7 +25,7 @@ import type {
 	SchemaClient,
 	Scope,
 } from "../types";
-import { getAuthEndpointUrl, getClient } from "./index";
+import { challengeHeaders, getAuthEndpointUrl, getClient } from "./index";
 
 type JwksCache = Map<string, { jwks: JSONWebKeySet; fetchedAt: number }>;
 type FetchedJwksResult =
@@ -700,16 +700,25 @@ export async function verifyClientAssertion(
 						verifyOpts,
 					));
 				} catch {
-					throw new APIError("UNAUTHORIZED", {
-						error_description: "client assertion signature verification failed",
-						error: "invalid_client",
-					});
+					throw new APIError(
+						"UNAUTHORIZED",
+						{
+							error_description:
+								"client assertion signature verification failed",
+							error: "invalid_client",
+						},
+						challengeHeaders("Basic"),
+					);
 				}
 			} else {
-				throw new APIError("UNAUTHORIZED", {
-					error_description: "client assertion signature verification failed",
-					error: "invalid_client",
-				});
+				throw new APIError(
+					"UNAUTHORIZED",
+					{
+						error_description: "client assertion signature verification failed",
+						error: "invalid_client",
+					},
+					challengeHeaders("Basic"),
+				);
 			}
 		} else if (
 			verifyErr instanceof joseErrors.JWTClaimValidationFailed &&
@@ -724,10 +733,14 @@ export async function verifyClientAssertion(
 				error: "invalid_client",
 			});
 		} else {
-			throw new APIError("UNAUTHORIZED", {
-				error_description: "client assertion signature verification failed",
-				error: "invalid_client",
-			});
+			throw new APIError(
+				"UNAUTHORIZED",
+				{
+					error_description: "client assertion signature verification failed",
+					error: "invalid_client",
+				},
+				challengeHeaders("Basic"),
+			);
 		}
 	}
 
