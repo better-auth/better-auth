@@ -1,8 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { base32 } from "@better-auth/utils/base32";
-import { createOTP } from "@better-auth/utils/otp";
-import { APIError } from "better-auth/api";
-import { symmetricDecrypt } from "better-auth/crypto";
+import { APIError, isAPIError } from "better-auth/api";
 import type { User } from "better-auth/types";
 import type {
 	FirstPartyAuthInput,
@@ -13,17 +10,17 @@ import type {
 const TOTP_CHALLENGE = "totp";
 const DEFAULT_MAX_PASSWORD_LENGTH = 128;
 
-interface TwoFactorRow {
-	id: string;
-	userId: string;
-	secret: string;
-	verified?: boolean | null;
-	lockedUntil?: Date | null;
-}
-
-interface TwoFactorPluginOptions {
-	twoFactorTable?: string;
-	totpOptions?: { digits?: number; period?: number; disable?: boolean };
+interface TwoFactorPlugin {
+	options?: {
+		twoFactorTable?: string;
+		totpOptions?: { disable?: boolean };
+	};
+	endpoints: {
+		verifyTwoFactorCode: (input: {
+			context: GenericEndpointContext["context"];
+			body: { userId: string; code: string; method: "totp" | "backup_code" };
+		}) => Promise<unknown>;
+	};
 }
 
 function invalidRequest(description: string): never {
@@ -33,39 +30,38 @@ function invalidRequest(description: string): never {
 	});
 }
 
-function twoFactorOptions(
-	ctx: GenericEndpointContext,
-): TwoFactorPluginOptions | undefined {
-	const plugin = ctx.context.options.plugins?.find(
+function twoFactorPlugin(ctx: GenericEndpointContext) {
+	return ctx.context.options.plugins?.find(
 		(candidate) => candidate.id === "two-factor",
-	) as { options?: TwoFactorPluginOptions } | undefined;
-	return plugin ? (plugin.options ?? {}) : undefined;
+	) as TwoFactorPlugin | undefined;
 }
 
-async function findTotp(
+/**
+ * Whether the user has a TOTP authenticator the app can ask for, as the
+ * two-factor plugin decides for its `twoFactorMethods`. Verification itself
+ * goes through `verifyTwoFactorCode`.
+ */
+async function hasTotp(
 	ctx: GenericEndpointContext,
-	options: TwoFactorPluginOptions,
+	plugin: TwoFactorPlugin,
 	userId: string,
-): Promise<TwoFactorRow | null> {
-	if (options.totpOptions?.disable) return null;
-	const row = await ctx.context.adapter.findOne<TwoFactorRow>({
-		model: options.twoFactorTable ?? "twoFactor",
+): Promise<boolean> {
+	if (plugin.options?.totpOptions?.disable) return false;
+	const row = await ctx.context.adapter.findOne<{ verified?: boolean | null }>({
+		model: plugin.options?.twoFactorTable ?? "twoFactor",
 		where: [{ field: "userId", value: userId }],
 	});
 	// An abandoned enrollment is not a second factor.
-	return row && row.verified !== false ? row : null;
+	return !!row && row.verified !== false;
 }
 
-/** Secrets imported from other providers are stored as `base32:<secret>`. */
-async function decryptSecret(ctx: GenericEndpointContext, data: string) {
-	const secret = await symmetricDecrypt({
-		key: ctx.context.secretConfig,
-		data,
-	});
-	return secret.startsWith("base32:")
-		? base32.decode(secret.slice("base32:".length).toUpperCase())
-		: secret;
-}
+/** Two-factor errors that mean the code was wrong or the account is locked. */
+const SECOND_FACTOR_FAILURES = new Set([
+	"INVALID_CODE",
+	"INVALID_BACKUP_CODE",
+	// C1: a lock answers like a wrong code.
+	"ACCOUNT_TEMPORARILY_LOCKED",
+]);
 
 async function verifyPassword({
 	ctx,
@@ -118,10 +114,11 @@ async function verifyPassword({
 		return { error: "redirect_to_web", userId: user.id };
 	}
 	if (user.twoFactorEnabled === true) {
-		const twoFactor = twoFactorOptions(ctx);
-		const totp = twoFactor && (await findTotp(ctx, twoFactor, user.id));
+		const plugin = twoFactorPlugin(ctx);
 		// A second factor the app cannot collect, such as an emailed code.
-		if (!totp) return { error: "redirect_to_web", userId: user.id };
+		if (!plugin || !(await hasTotp(ctx, plugin, user.id))) {
+			return { error: "redirect_to_web", userId: user.id };
+		}
 		return {
 			error: "insufficient_authorization",
 			challengeType: TOTP_CHALLENGE,
@@ -132,28 +129,39 @@ async function verifyPassword({
 	return { user, amr: ["pwd"] };
 }
 
-async function verifyTotp({
+async function verifySecondFactor({
 	ctx,
 	authSession,
 	params,
 }: FirstPartyAuthInput): Promise<FirstPartyAuthResult> {
-	const code = params.totp;
-	if (typeof code !== "string" || !code) {
-		invalidRequest("totp is required");
+	const totp = typeof params.totp === "string" ? params.totp : undefined;
+	const backupCode =
+		typeof params.backup_code === "string" ? params.backup_code : undefined;
+	const code = totp || backupCode;
+	if (!code || (totp && backupCode)) {
+		invalidRequest("Send one of totp or backup_code");
 	}
 	const userId = authSession.userId!;
-	const options = twoFactorOptions(ctx);
-	const row = options && (await findTotp(ctx, options, userId));
-	if (!row) return { error: "redirect_to_web" };
-	// Respect a lock the two-factor plugin set for this account.
-	if (row.lockedUntil && new Date(row.lockedUntil).getTime() > Date.now()) {
-		return { error: "authentication_failed", userId };
+	const plugin = twoFactorPlugin(ctx);
+	if (!plugin) return { error: "redirect_to_web", userId };
+	try {
+		await plugin.endpoints.verifyTwoFactorCode({
+			context: ctx.context,
+			body: { userId, code, method: totp ? "totp" : "backup_code" },
+		});
+	} catch (error) {
+		const reason = isAPIError(error)
+			? (error.body as { code?: string } | undefined)?.code
+			: undefined;
+		if (reason && SECOND_FACTOR_FAILURES.has(reason)) {
+			return { error: "authentication_failed", userId };
+		}
+		if (isAPIError(error)) {
+			// The method is not set up, or two-factor was turned off meanwhile.
+			return { error: "redirect_to_web", userId };
+		}
+		throw error;
 	}
-	const valid = await createOTP(await decryptSecret(ctx, row.secret), {
-		digits: options.totpOptions?.digits ?? 6,
-		period: options.totpOptions?.period ?? 30,
-	}).verify(code);
-	if (!valid) return { error: "authentication_failed", userId };
 	const user = await ctx.context.internalAdapter.findUserById(userId);
 	if (!user) return { error: "authentication_failed", userId };
 	return { user, amr: ["otp"] };
@@ -163,7 +171,9 @@ async function verifyTotp({
  * Signs users in with their email (`login_hint`) and password, as
  * `/sign-in/email` does. A user with two-factor authentication gets
  * `insufficient_authorization` with `challenge_type: "totp"` and finishes
- * with a `totp` code on the next request. A user whose second factor the app
+ * with a `totp` code, or a `backup_code`, on the next request. The code is
+ * checked with the two-factor plugin's `verifyTwoFactorCode`, so failures
+ * count toward its account lockout. A user whose second factor the app
  * cannot collect, or whose email is unverified while verification is
  * required, gets `redirect_to_web`.
  *
@@ -172,10 +182,10 @@ async function verifyTotp({
 export function passwordStrategy(): FirstPartyAuthStrategy {
 	return {
 		id: "password",
-		params: ["password", "totp"],
+		params: ["password", "totp", "backup_code"],
 		authenticate: (input) =>
 			input.authSession.challenge?.type === TOTP_CHALLENGE
-				? verifyTotp(input)
+				? verifySecondFactor(input)
 				: verifyPassword(input),
 	};
 }

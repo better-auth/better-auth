@@ -158,6 +158,8 @@ curl -X POST https://auth.example.com/api/auth/oauth2/authorize-challenge \
   -d totp=123456
 ```
 
+A user who lost their authenticator sends `backup_code` instead of `totp`. The backup code is used up.
+
 A user whose only second factor is a code the app cannot collect, such as an emailed OTP, gets `redirect_to_web`. So does a user who has not verified their email while `emailAndPassword.requireEmailVerification` is on, so the browser flow can send the verification email.
 
 ### Bind the sign-in to a DPoP key
@@ -180,7 +182,7 @@ Hooks and plugins that run only on `/sign-in/email`, such as a captcha or your o
   Anyone who knows a user's email can spend that account's budget and stop the user from signing in through the app for the rest of the window. The browser flow is not affected. Lower `budget.account.window` if this matters more to you than slower guessing.
 </Callout>
 
-TOTP failures count against the plugin's own budget. They do not count toward the two-factor plugin's account lockout, but an account that the two-factor plugin has locked also fails here.
+The second factor is checked with the two-factor plugin's [`verifyTwoFactorCode`](/docs/plugins/2fa#verifying-a-code-on-the-server). A wrong code counts toward that plugin's account lockout, shared with the browser sign-in, as well as toward this plugin's budget. An account the two-factor plugin has locked answers `authentication_failed`, like a wrong code.
 
 ## Step-up at the token endpoint
 
@@ -243,7 +245,6 @@ An optional `stepUp` method handles a step-up the token endpoint asked for, from
 ## Limits
 
 * `redirect_to_web` never carries a `request_uri`. The app starts its browser flow with its own authorization request.
-* The password strategy supports TOTP as its second factor, not backup codes.
 
 ## Options
 

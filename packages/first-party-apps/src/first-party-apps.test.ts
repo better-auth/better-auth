@@ -564,6 +564,50 @@ describe("first-party apps", async () => {
 			expect(tokens.status).toBe(200);
 		});
 
+		it("counts a wrong code toward the two-factor plugin's account lockout", async () => {
+			const { user } = await createUser("lockout-shared@example.com", {
+				totp: true,
+			});
+			const { body } = await startRequest(clientId, {
+				login_hint: "lockout-shared@example.com",
+				password,
+			});
+			const first = await post(challengeURL, body);
+			await post(challengeURL, {
+				auth_session: first.json.auth_session as string,
+				totp: "000000",
+			});
+			const row = await context.adapter.findOne<{
+				failedVerificationCount?: number;
+			}>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: user.id }],
+			});
+			expect(row?.failedVerificationCount).toBe(1);
+		});
+
+		it("answers a lock set by the two-factor plugin like a wrong code", async () => {
+			const { user, totpSecret } = await createUser("locked-2fa@example.com", {
+				totp: true,
+			});
+			await context.adapter.updateMany({
+				model: "twoFactor",
+				where: [{ field: "userId", value: user.id }],
+				update: { lockedUntil: new Date(Date.now() + 60_000) },
+			});
+			const { body } = await startRequest(clientId, {
+				login_hint: "locked-2fa@example.com",
+				password,
+			});
+			const first = await post(challengeURL, body);
+			const locked = await post(challengeURL, {
+				auth_session: first.json.auth_session as string,
+				totp: await createOTP(totpSecret!).totp(),
+			});
+			expect(locked.status).toBe(400);
+			expect(locked.json.error).toBe("authentication_failed");
+		});
+
 		it("sends a user whose second factor the app cannot collect to the browser", async () => {
 			const { user } = await createUser("emailotp@example.com");
 			await context.internalAdapter.updateUser(user.id, {
