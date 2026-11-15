@@ -194,7 +194,139 @@ describe("CimdMetadataResolver", () => {
 
 		expect(dbClientA).not.toBeNull();
 		expect(dbClientB).not.toBeNull();
-		expect(dbClientA?.clientId).toBe(clientId);
-		expect(dbClientB?.clientId).toBe(clientId);
+		expect((dbClientA as any)?.clientId).toBe(clientId);
+		expect((dbClientB as any)?.clientId).toBe(clientId);
+	});
+
+	it("returns independent clones so cache entries cannot be mutated", async () => {
+		const clientId = "https://clone.example/metadata.json";
+		const fetchResource = vi.fn(async () =>
+			Response.json(sampleMetadata(clientId), {
+				headers: {
+					"content-type": "application/json",
+					"cache-control": "max-age=3600",
+				},
+			}),
+		);
+		const resolver = createCimdMetadataResolver({
+			fetchClientMetadataResource: fetchResource,
+		});
+
+		const res1 = await resolver(clientId);
+		expect(res1?.client_name).toBe("Test Client");
+		if (res1) {
+			res1.client_name = "Hacked Name";
+			res1.redirect_uris = ["https://evil.example/callback"];
+		}
+
+		const res2 = await resolver(clientId);
+		expect(res2?.client_name).toBe("Test Client");
+		expect(res2?.redirect_uris).toEqual(["https://client.example/callback"]);
+	});
+
+	it("enforces isMetadataDocumentUrlAllowed gate on discovery level with shared resolver", async () => {
+		const clientId = "https://gate.example/metadata.json";
+		const fetchResource = vi.fn(async () =>
+			Response.json(sampleMetadata(clientId), {
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		const sharedResolver = createCimdMetadataResolver({
+			fetchClientMetadataResource: fetchResource,
+		});
+
+		const discovery = createCimdClientDiscovery(sharedResolver, {
+			fetchClientMetadataResource: fetchResource,
+			isMetadataDocumentUrlAllowed: (url) => !url.includes("gate.example"),
+		});
+
+		const instance = await getTestInstance({
+			baseURL: "http://localhost:3903",
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid"],
+				}),
+			],
+		});
+		const context = await instance.auth.$context;
+		const ctx = { context } as unknown as GenericEndpointContext;
+
+		const err = await Promise.resolve(
+			discovery.resolve(ctx, clientId, null),
+		).catch((e: any) => e);
+		expect(err.body?.error_description).toContain(
+			"client_id URL is not permitted by the server's fetch policy",
+		);
+	});
+
+	it("reconciles existing client when database has older metadata than cached document", async () => {
+		const clientId = "https://reconcile.example/metadata.json";
+		let currentName = "Initial Name";
+		const fetchResource = vi.fn(async () =>
+			Response.json(
+				{ ...sampleMetadata(clientId), client_name: currentName },
+				{
+					headers: {
+						"content-type": "application/json",
+						"cache-control": "max-age=3600",
+					},
+				},
+			),
+		);
+		const sharedResolver = createCimdMetadataResolver({
+			fetchClientMetadataResource: fetchResource,
+		});
+
+		const instance = await getTestInstance({
+			baseURL: "http://localhost:3904",
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid"],
+				}),
+			],
+		});
+		const context = await instance.auth.$context;
+		const ctx = { context } as unknown as GenericEndpointContext;
+		const discovery = createCimdClientDiscovery(sharedResolver, {
+			fetchClientMetadataResource: fetchResource,
+		});
+
+		// 1. Initial registration with "Initial Name"
+		const client1 = await discovery.resolve(ctx, clientId, null);
+		expect(client1?.name).toBe("Initial Name");
+
+		// 2. Metadata changes externally; shared resolver re-fetches (e.g. invalidation or worker refresh)
+		currentName = "Updated Name";
+		sharedResolver.invalidate(clientId);
+		await sharedResolver.resolve(clientId);
+
+		// Now shared resolver has "Updated Name" cached (isFresh: true for subsequent calls)
+		// Database still has "Initial Name"
+		const existingDbClient = (await context.adapter.findOne({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		})) as any;
+		expect(existingDbClient?.name).toBe("Initial Name");
+
+		// 3. Next discovery resolution passes existingDbClient
+		const resolvedClient = await discovery.resolve(
+			ctx,
+			clientId,
+			existingDbClient,
+		);
+		expect(resolvedClient?.name).toBe("Updated Name");
+
+		// DB was reconciled and updated
+		const updatedDbClient = (await context.adapter.findOne({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		})) as any;
+		expect(updatedDbClient?.name).toBe("Updated Name");
 	});
 });

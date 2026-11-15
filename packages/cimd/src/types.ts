@@ -53,11 +53,11 @@ export interface CimdMetadataResolver {
 	/**
 	 * Evict a client's metadata from the local cache.
 	 */
-	evict(clientId: string): void;
+	evict(clientId: string, options?: { backoff?: boolean }): void;
 	/**
 	 * Canonical alias for `evict`.
 	 */
-	invalidate(clientId: string): void;
+	invalidate(clientId: string, options?: { backoff?: boolean }): void;
 }
 
 export interface CimdClientCreatedEvent {
@@ -134,13 +134,18 @@ export interface CimdOptions {
 	 * standard Fetch API after DNS resolution, so the application must provide
 	 * them at its runtime-specific network boundary.
 	 */
-	fetchClientMetadataResource: ClientMetadataResourceFetch;
+	fetchClientMetadataResource?: ClientMetadataResourceFetch;
 	/**
 	 * Pre-constructed metadata resolver to use instead of creating a new one.
 	 *
 	 * When provided, discovery consumes this resolver's shared cache, fetch
 	 * policy, and in-flight request coalescing across request-scoped contexts
 	 * (e.g. in Cloudflare Workers or serverless functions).
+	 *
+	 * Note: Document-structure validation and fetch options (`originBoundFields`,
+	 * `metadataProfile`, `fetchClientMetadataResource`, `metadataFetchPolicy`,
+	 * `metadataRevalidationInterval`, and `maxCacheEntries`) are evaluated during
+	 * metadata resolution and must be configured on `createCimdMetadataResolver`.
 	 */
 	metadataResolver?: CimdMetadataResolver;
 	/**
@@ -207,7 +212,7 @@ export interface CimdOptions {
 	 */
 	isMetadataDocumentUrlAllowed?: (
 		clientIdUrl: string,
-		context: GenericEndpointContext,
+		context?: GenericEndpointContext,
 	) => boolean | Promise<boolean>;
 	/**
 	 * Called after a client is created from a metadata document for the

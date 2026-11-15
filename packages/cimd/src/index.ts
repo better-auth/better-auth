@@ -35,17 +35,13 @@ export function createCimdClientDiscovery(
 	const resolvedOptions: CimdOptions =
 		typeof options === "function" || "resolveWithDetails" in options
 			? {
-					fetchClientMetadataResource:
-						additionalOptions?.fetchClientMetadataResource ??
-						(() => {
-							throw new Error(
-								"fetchClientMetadataResource is required for discovery-owned resources",
-							);
-						}),
 					...additionalOptions,
 					metadataResolver: options as CimdMetadataResolver,
 				}
-			: options;
+			: {
+					...options,
+					...additionalOptions,
+				};
 
 	const resolver = createCimdResolver(resolvedOptions);
 	return {

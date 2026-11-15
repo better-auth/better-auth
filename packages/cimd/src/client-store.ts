@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { logger as defaultLogger } from "@better-auth/core/env";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type {
 	OAuthClientMetadata,
@@ -143,13 +144,19 @@ export async function fetchClientMetadataDocument(
 	if (cimdOptions.isMetadataDocumentUrlAllowed) {
 		const allowed = await cimdOptions.isMetadataDocumentUrlAllowed(
 			clientIdUrl,
-			ctx as GenericEndpointContext,
+			ctx,
 		);
 		if (!allowed) {
 			throw invalidClient(
 				"client_id URL is not permitted by the server's fetch policy",
 			);
 		}
+	}
+
+	if (!cimdOptions.fetchClientMetadataResource) {
+		throw invalidClient(
+			"fetchClientMetadataResource is required to fetch metadata documents",
+		);
 	}
 
 	const requestHeaders = new Headers({ Accept: "application/json" });
@@ -246,9 +253,8 @@ export async function fetchClientMetadataDocument(
 		});
 		if (!validation.valid) throw invalidClient(validation.error);
 		for (const warning of validation.warnings ?? []) {
-			ctx?.context?.logger?.warn?.(
-				`cimd metadata document warning: ${warning}`,
-			);
+			const logger = ctx?.context?.logger ?? defaultLogger;
+			logger.warn(`cimd metadata document warning: ${warning}`);
 		}
 
 		return {

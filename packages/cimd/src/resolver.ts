@@ -308,6 +308,11 @@ function createCacheEntry(
 export function createCimdMetadataResolver(
 	cimdOptions: CimdOptions,
 ): CimdMetadataResolver {
+	if (!cimdOptions.fetchClientMetadataResource) {
+		throw new BetterAuthError(
+			"fetchClientMetadataResource is required to create a CIMD metadata resolver",
+		);
+	}
 	const metadataRevalidationInterval =
 		cimdOptions.metadataRevalidationInterval ?? "60m";
 	const maxCacheEntries = cimdOptions.maxCacheEntries ?? 1_000;
@@ -488,7 +493,7 @@ export function createCimdMetadataResolver(
 
 		if (cachedEntry && cachedEntry.expiresAt > nowMs) {
 			return {
-				metadata: cachedEntry.metadata,
+				metadata: structuredClone(cachedEntry.metadata),
 				isFresh: true,
 			};
 		}
@@ -541,7 +546,7 @@ export function createCimdMetadataResolver(
 			}
 			lastFetchStartAtMsByClientId.delete(clientId);
 			return {
-				metadata,
+				metadata: structuredClone(metadata),
 				isFresh: false,
 			};
 		})();
@@ -569,8 +574,11 @@ export function createCimdMetadataResolver(
 		return result ? result.metadata : null;
 	};
 
-	const evict = (clientId: string) => {
+	const evict = (clientId: string, options?: { backoff?: boolean }) => {
 		metadataCache.delete(clientId);
+		if (options?.backoff) {
+			lastFetchStartAtMsByClientId.set(clientId, Date.now());
+		}
 	};
 
 	return Object.assign(
@@ -584,6 +592,64 @@ export function createCimdMetadataResolver(
 			invalidate: evict,
 		},
 	) as CimdMetadataResolver;
+}
+
+function arraysEqual(
+	a: readonly string[] | null | undefined,
+	b: readonly string[] | null | undefined,
+): boolean {
+	const arrA = a ?? [];
+	const arrB = b ?? [];
+	if (arrA.length !== arrB.length) return false;
+	for (let i = 0; i < arrA.length; i++) {
+		if (arrA[i] !== arrB[i]) return false;
+	}
+	return true;
+}
+
+function isClientMatchingMetadata(
+	client: SchemaClient<Scope[]>,
+	metadata: OAuthClientMetadata,
+): boolean {
+	if ((client.name ?? null) !== (metadata.client_name ?? null)) return false;
+	if ((client.uri ?? null) !== (metadata.client_uri ?? null)) return false;
+	if ((client.icon ?? null) !== (metadata.logo_uri ?? null)) return false;
+	if ((client.tos ?? null) !== (metadata.tos_uri ?? null)) return false;
+	if ((client.policy ?? null) !== (metadata.policy_uri ?? null)) return false;
+	if ((client.jwksUri ?? null) !== (metadata.jwks_uri ?? null)) return false;
+	if ((client.softwareId ?? null) !== (metadata.software_id ?? null)) return false;
+	if ((client.softwareVersion ?? null) !== (metadata.software_version ?? null))
+		return false;
+	if (
+		(client.tokenEndpointAuthMethod ?? "none") !==
+		(metadata.token_endpoint_auth_method ?? "none")
+	) {
+		return false;
+	}
+	if (
+		(client.applicationType ?? null) !== (metadata.application_type ?? null)
+	) {
+		return false;
+	}
+	if (!arraysEqual(client.redirectUris, metadata.redirect_uris)) return false;
+	if (
+		!arraysEqual(
+			client.postLogoutRedirectUris,
+			metadata.post_logout_redirect_uris,
+		)
+	) {
+		return false;
+	}
+	if (!arraysEqual(client.grantTypes, metadata.grant_types)) return false;
+	if (!arraysEqual(client.responseTypes, metadata.response_types)) return false;
+	if (!arraysEqual(client.contacts, metadata.contacts)) return false;
+	if (
+		JSON.stringify(client.jwks ?? null) !==
+		JSON.stringify(metadata.jwks ?? null)
+	) {
+		return false;
+	}
+	return true;
 }
 
 /**
@@ -602,6 +668,18 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			return null;
 		}
 
+		if (cimdOptions.isMetadataDocumentUrlAllowed) {
+			const allowed = await cimdOptions.isMetadataDocumentUrlAllowed(
+				clientId,
+				ctx,
+			);
+			if (!allowed) {
+				throw invalidClient(
+					"client_id URL is not permitted by the server's fetch policy",
+				);
+			}
+		}
+
 		const provider = ctx.context.getPlugin("oauth-provider");
 		if (!provider) {
 			throw new BetterAuthError(
@@ -615,7 +693,11 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			return null;
 		}
 
-		if (resolution.isFresh && existingClient) {
+		if (
+			resolution.isFresh &&
+			existingClient &&
+			isClientMatchingMetadata(existingClient, resolution.metadata)
+		) {
 			return existingClient;
 		}
 
@@ -630,7 +712,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			);
 		} catch (error) {
 			if (!resolution.isFresh) {
-				metadataResolver.evict?.(clientId);
+				metadataResolver.evict?.(clientId, { backoff: true });
 			}
 			throw error;
 		}
