@@ -1197,8 +1197,8 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 				"/test/issue-code",
 				{ method: "POST", use: [sessionMiddleware] },
 				async (ctx) => {
-					const { authentication, ...query } = ctx.body as {
-						authentication?: { amr?: string[] };
+					const { amr, ...query } = ctx.body as {
+						amr?: string[];
 					} & StoredAuthorizationQuery;
 					const issued = await getOAuthProviderApi(
 						ctx,
@@ -1206,7 +1206,7 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 					).issueAuthorizationCode({
 						query,
 						session: ctx.context.session,
-						authentication,
+						amr,
 					});
 					return ctx.json({ code: issued.code });
 				},
@@ -1248,7 +1248,7 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 		const context = await instance.auth.$context;
 		let verifier = "";
 		return {
-			async issue(scope: string, authentication?: unknown) {
+			async issue(scope: string, amr?: unknown) {
 				verifier = generateRandomString(43);
 				const issued = await instance.client.$fetch<{ code: string }>(
 					"/test/issue-code",
@@ -1262,7 +1262,7 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 							resource,
 							code_challenge: await generateCodeChallenge(verifier),
 							code_challenge_method: "S256",
-							authentication,
+							amr,
 						},
 					},
 				);
@@ -1303,16 +1303,16 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 		const seen: unknown[] = [];
 		const { issue, stored } = await setup({
 			acrValuesSupported: ["0", "urn:example:mfa"],
-			resolve: ({ authentication }) => {
-				seen.push(authentication);
-				return authentication?.amr?.includes("otp")
-					? { acr: "urn:example:mfa", amr: authentication.amr }
+			resolve: ({ amr }) => {
+				seen.push(amr);
+				return amr?.includes("otp")
+					? { acr: "urn:example:mfa", amr }
 					: undefined;
 			},
 		});
-		const issued = await issue("openid", { amr: ["pwd", "otp"] });
+		const issued = await issue("openid", ["pwd", "otp"]);
 		expect(issued.error).toBeNull();
-		expect(seen).toEqual([{ amr: ["pwd", "otp"] }]);
+		expect(seen).toEqual([["pwd", "otp"]]);
 		const row = await stored(issued.data!.code);
 		expect(row.acr).toBe("urn:example:mfa");
 		expect(row.amr).toEqual(["pwd", "otp"]);
@@ -1323,13 +1323,13 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 			acrValuesSupported: ["0"],
 			resolve: () => ({ amr: ["hwk"] }),
 		});
-		const issued = await issue("openid", { amr: ["pwd"] });
+		const issued = await issue("openid", ["pwd"]);
 		expect((await stored(issued.data!.code)).amr).toEqual(["hwk"]);
 	});
 
 	it("stores the caller's methods when no resolver is configured", async () => {
 		const { issue, stored } = await setup();
-		const issued = await issue("openid", { amr: ["pwd", "otp"] });
+		const issued = await issue("openid", ["pwd", "otp"]);
 		expect(issued.error).toBeNull();
 		const row = await stored(issued.data!.code);
 		expect(row.amr).toEqual(["pwd", "otp"]);
@@ -1338,7 +1338,7 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 
 	it("puts the methods in the ID token and never in the access token", async () => {
 		const { issue, redeem } = await setup();
-		const issued = await issue("openid", { amr: ["pwd", "otp"] });
+		const issued = await issue("openid", ["pwd", "otp"]);
 		const tokens = await redeem(issued.data!.code);
 		expect(decodeJwt(tokens.id_token!).amr).toEqual(["pwd", "otp"]);
 		expect(decodeJwt(tokens.access_token)).not.toHaveProperty("amr");
@@ -1346,7 +1346,7 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 
 	it("issues no methods for a request without openid", async () => {
 		const { issue, stored, redeem } = await setup();
-		const issued = await issue("profile", { amr: ["pwd"] });
+		const issued = await issue("profile", ["pwd"]);
 		expect(issued.error).toBeNull();
 		expect((await stored(issued.data!.code)).amr).toBeUndefined();
 		const tokens = await redeem(issued.data!.code);
@@ -1356,16 +1356,13 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 
 	it("rejects methods that are not a string array", async () => {
 		const { issue } = await setup();
-		const issued = await issue("openid", { amr: ["pwd", 1] });
+		const issued = await issue("openid", ["pwd", 1]);
 		expect(issued.error?.status).toBe(500);
 	});
 
 	it("keeps auth_time from the session", async () => {
 		const { issue, stored } = await setup();
-		const issued = await issue("openid", {
-			amr: ["pwd"],
-			authTime: 0,
-		});
+		const issued = await issue("openid", ["pwd"]);
 		expect((await stored(issued.data!.code)).authTime).toBeGreaterThan(0);
 	});
 });

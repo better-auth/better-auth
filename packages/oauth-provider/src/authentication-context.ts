@@ -47,23 +47,21 @@ export async function resolveAuthenticationContext(
 		scopes: string[];
 		headers: Headers;
 		query: Pick<OAuthInteractionQuery, "claims" | "acr_values">;
-		/** What a plugin endpoint reported to `issueAuthorizationCode`. */
-		authentication?: { amr?: string[] } | undefined;
+		/** The `amr` a plugin endpoint reported to `issueAuthorizationCode`. */
+		amr?: string[] | undefined;
 	},
 ): Promise<OAuthAuthenticationContext> {
 	const resolve = opts.authenticationContext?.resolve;
 	// acr and amr only reach ID tokens, which need the openid scope.
 	if (!info.scopes.includes("openid")) return {};
-	const { query, authentication, ...resolveInfo } = info;
-	const reportedAmr = readReportedAmr(authentication);
+	const { query, amr: callerAmr, ...resolveInfo } = info;
+	const reportedAmr = readReportedAmr(callerAmr);
 	if (!resolve) return reportedAmr?.length ? { amr: reportedAmr } : {};
 	// The resolver is user code; check the runtime shape, not just the types.
 	const resolved: unknown = await resolve({
 		...resolveInfo,
 		requestedAcrValues: getRequestedAcrValues(query.claims, query.acr_values),
-		...(authentication
-			? { authentication: reportedAmr ? { amr: reportedAmr } : {} }
-			: {}),
+		...(reportedAmr ? { amr: reportedAmr } : {}),
 	});
 	if (
 		resolved !== undefined &&
@@ -96,10 +94,7 @@ export async function resolveAuthenticationContext(
 }
 
 /** Checks the caller's `amr` at runtime, since plugin code may forward input. */
-function readReportedAmr(
-	authentication: { amr?: unknown } | undefined,
-): string[] | undefined {
-	const amr = authentication?.amr;
+function readReportedAmr(amr: unknown): string[] | undefined {
 	if (amr === undefined) return undefined;
 	if (
 		!Array.isArray(amr) ||
@@ -107,8 +102,7 @@ function readReportedAmr(
 	) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error: "server_error",
-			error_description:
-				"issueAuthorizationCode authentication.amr must be a string array",
+			error_description: "issueAuthorizationCode amr must be a string array",
 		});
 	}
 	return [...amr];

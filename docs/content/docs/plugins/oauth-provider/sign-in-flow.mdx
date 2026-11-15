@@ -197,17 +197,17 @@ The result is advisory. `validateAuthorizationRequest` does not authenticate the
 
 ### Report how the user signed in
 
-Your endpoint knows which methods it checked, such as a password and a one-time code. Pass them as `authentication.amr`, using the values from [RFC 8176](https://datatracker.ietf.org/doc/html/rfc8176), so the ID token's `amr` claim lists them. List only methods your server verified in this flow. Never copy `amr` values from the client's request, because the ID token asserts them to the client as the provider's own statement:
+Your endpoint knows which methods it checked, such as a password and a one-time code. Pass them as `amr`, using the values from [RFC 8176](https://datatracker.ietf.org/doc/html/rfc8176), so the ID token's `amr` claim lists them. List only methods your server verified in this flow. Never copy `amr` values from the client's request, because the ID token asserts them to the client as the provider's own statement:
 
 ```ts
 const { code } = await provider.issueAuthorizationCode({
   query,
   session,
-  authentication: { amr: ["pwd", "otp"] },
+  amr: ["pwd", "otp"],
 });
 ```
 
-When you configure [`authenticationContext.resolve`](/docs/plugins/oauth-provider/openid-connect#authentication-context), the resolver receives these values as `authentication`, and its result decides the code's `acr` and `amr`. Return `authentication.amr` from the resolver to keep them. Without a resolver, the code carries the methods you pass, and no `acr` beyond the default `"0"`.
+When you configure [`authenticationContext.resolve`](/docs/plugins/oauth-provider/openid-connect#authentication-context), the resolver receives these values as `amr`, and its result decides the code's `acr` and `amr`. Return the `amr` it receives to keep them. Without a resolver, the code carries the methods you pass, and no `acr` beyond the default `"0"`. This matches `issueTokens` and [`completeCibaRequest`](/docs/plugins/ciba#decide-from-your-own-app), which also record the `amr` you pass without calling a resolver.
 
 The methods reach only the ID token, never the access token, so they are ignored for a request without the `openid` scope. The code's `auth_time` always comes from the session's creation time, so your endpoint cannot report an earlier sign-in than the session proves.
 
