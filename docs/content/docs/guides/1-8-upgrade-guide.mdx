@@ -380,6 +380,12 @@ oauthProvider({
 });
 ```
 
+### Back-channel logout resolves the client's host name
+
+Before each delivery, Better Auth now resolves the host name of a client's `backchannel_logout_uri`. If the lookup fails or any address is loopback, private, link-local, or otherwise not publicly routable, it skips that client, logs a warning, and still revokes the session's tokens. Before, only the host name as written was checked, so a public-looking name with an internal DNS record received the Logout Token. The DNS check runs only on runtimes where `node:dns` resolves names.
+
+**What to do:** if a client runs on an internal network and its public-looking name resolves to a private address, add the origin of its `backchannel_logout_uri` to [`trustedOrigins`](/docs/reference/options#trustedorigins) so it keeps receiving Logout Tokens. An origin in `trustedOrigins` skips only the DNS check, and a loopback or private IP literal or a name such as `localhost` is still rejected. Only origins configured at initialization count, so an origin that only a request supplies, such as one a `trustedOrigins` callback returns for a particular `Request`, does not. See [Back-channel logout](/docs/plugins/oauth-provider/openid-connect#back-channel-logout).
+
 ### Extension and API authors
 
 This applies if you build on `extendOAuthProvider()`, call the provider API from your own endpoints, or implement it yourself:
