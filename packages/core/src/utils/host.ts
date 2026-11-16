@@ -203,15 +203,28 @@ function extractEmbedded6to4IPv4(expanded: string): string | null {
 }
 
 /**
+ * Extract the IPv4 address held in the last two 16-bit groups of an expanded
+ * IPv6 address, as in the well-known NAT64 prefix `64:ff9b::/96`.
+ */
+function extractEmbeddedTrailingIPv4(expanded: string): string | null {
+	const g1 = Number.parseInt(expanded.slice(30, 34), 16);
+	const g2 = Number.parseInt(expanded.slice(35, 39), 16);
+	if (!Number.isFinite(g1) || !Number.isFinite(g2)) return null;
+	const combined = ((g1 << 16) | g2) >>> 0;
+	return `${(combined >>> 24) & 0xff}.${(combined >>> 16) & 0xff}.${(combined >>> 8) & 0xff}.${combined & 0xff}`;
+}
+
+/**
  * Classify an expanded, full-form, lowercase IPv6 address (no IPv4-mapped
  * input, those are unmapped to IPv4 before reaching here).
  *
  * An address is `public` only inside global unicast `2000::/3` and outside the
  * special-purpose blocks listed below. Everything else is `reserved` unless it
  * has a more specific kind (`::`, `::1`, `fc00::/7`, `fe80::/10`, `ff00::/8`).
- * That covers `0000::/8` (IPv4-compatible, IPv4-translated, NAT64 and similar
- * encodings), `0100::/8`, deprecated site-local `fec0::/10`, and SRv6 SIDs
- * `5f00::/16`.
+ * The well-known NAT64 prefix `64:ff9b::/96` takes the class of its embedded
+ * IPv4. The rest of `0000::/8` (IPv4-compatible, IPv4-translated, local-use
+ * NAT64, and similar encodings), `0100::/8`, deprecated site-local
+ * `fec0::/10`, and SRv6 SIDs `5f00::/16` are `reserved`.
  *
  * @see https://www.iana.org/assignments/ipv6-address-space/ allocates only
  *   `2000::/3` for global unicast and leaves the rest IETF-reserved, apart from
@@ -237,6 +250,16 @@ function classifyIPv6(expanded: string): HostKind {
 	if (firstByte === 0xff) return "multicast";
 	if (firstByte === 0xfe && (secondByte & 0xc0) === 0x80) return "linkLocal";
 	if ((firstByte & 0xfe) === 0xfc) return "private";
+
+	// 64:ff9b::/96 (RFC 6052 §2.1). The well-known NAT64 prefix only represents
+	// global IPv4 (RFC 6052 §3.1), and a DNS64 resolver synthesizes it for names
+	// with only an A record, so it takes the class of the embedded IPv4.
+	if (expanded.startsWith("0064:ff9b:0000:0000:0000:0000:")) {
+		const embedded = extractEmbeddedTrailingIPv4(expanded);
+		return embedded && classifyIPv4(embedded) === "public"
+			? "public"
+			: "reserved";
+	}
 
 	if ((firstByte & 0xe0) !== 0x20) return "reserved";
 

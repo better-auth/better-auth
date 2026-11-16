@@ -502,6 +502,20 @@ describe("Host Classification", () => {
 			expect(isPublicRoutableHost("::ffff:0:a00:5")).toBe(false);
 		});
 
+		/**
+		 * @see https://www.rfc-editor.org/rfc/rfc6052#section-3.1
+		 */
+		it("should classify the well-known NAT64 prefix by its embedded IPv4", () => {
+			// A DNS64 resolver synthesizes 64:ff9b::/96 answers for names with only
+			// an A record, and the prefix only represents global IPv4 addresses.
+			expect(classifyHost("64:ff9b::808:808").kind).toBe("public"); // 8.8.8.8
+			expect(isPublicRoutableHost("64:ff9b::5db8:d822")).toBe(true); // 93.184.216.34
+			expect(classifyHost("64:ff9b::7f00:1").kind).toBe("reserved"); // 127.0.0.1
+			expect(classifyHost("64:ff9b::a9fe:a9fe").kind).toBe("reserved"); // IMDS
+			expect(classifyHost("64:ff9b::").kind).toBe("reserved"); // 0.0.0.0
+			expect(isLoopbackIP("64:ff9b::808:808")).toBe(false);
+		});
+
 		it("should reject every address in 0000::/8 that is not mapped IPv4", () => {
 			// 0000::/8 is IETF-reserved and has no publicly routable allocation.
 			// Sibling encodings of an embedded IPv4 must not slip through as public.
@@ -514,7 +528,6 @@ describe("Host Classification", () => {
 				"::ffff:0:7f00:1",
 				"::ffff:808:127.0.0.1",
 				"::ffff:0:127.0.0.1",
-				"64:ff9b::808:808",
 				"64:ff9b:1::1",
 				"ff::1",
 			]) {
