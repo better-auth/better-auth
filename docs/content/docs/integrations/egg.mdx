@@ -1,0 +1,106 @@
+---
+icon: integrationsEgg
+sidebarTitle: "Egg.js"
+title: Egg.js Integration
+description: Integrate Better Auth with Egg.js.
+---
+
+This guide shows how to integrate Better Auth with [Egg.js](https://eggjs.org/).
+
+Before you start, configure a Better Auth instance by following the [installation guide](/docs/installation). The examples below import it from `lib/auth.ts` in the project root.
+
+<Callout>
+  These examples use Egg 4, Node.js 22.18.0 or later, and native ES modules (`"type": "module"` in `package.json`). Better Auth is ESM-only, so your TypeScript configuration must preserve ES module imports rather than compile them to `require()` calls.
+</Callout>
+
+### Configure middleware
+
+Egg enables body parsing and CSRF protection by default. Exclude the Better Auth routes from both middleware so that Better Auth can read the original request body and apply its own [CSRF protection](/docs/reference/security#csrf-protection).
+
+Add these options to your existing configuration factory:
+
+```ts title="config/config.default.ts"
+import { defineConfigFactory } from "egg";
+
+const authPath = /^\/api\/auth(?:\/|$)/;
+
+export default defineConfigFactory(() => ({
+  // ...your existing configuration
+  bodyParser: {
+    ignore: authPath,
+  },
+  security: {
+    csrf: {
+      ignore: authPath,
+    },
+  },
+}));
+```
+
+<Callout type="warn">
+  Keep these exclusions scoped to Better Auth routes. If you configure a different `basePath` in Better Auth, update both exclusions and the route below to match it.
+</Callout>
+
+### Mount the handler
+
+Use `toNodeHandler` from `better-auth/node` to handle Egg's underlying Node.js request and response:
+
+```ts title="app/router.ts"
+import type { Application, Context } from "egg";
+import { toNodeHandler } from "better-auth/node";
+import { auth } from "../lib/auth.ts";
+
+const handleAuth = toNodeHandler(auth);
+
+export default (app: Application) => {
+  app.router.all(/^\/api\/auth(?:\/|$)/, async (ctx: Context) => {
+    ctx.respond = false;
+    await handleAuth(ctx.req, ctx.res);
+  });
+};
+```
+
+The regular expression matches `/api/auth` and its subpaths, including nested plugin endpoints, without matching unrelated paths such as `/api/authors`. Setting `ctx.respond = false` lets Better Auth write the response, including cookies and redirects, without Egg sending another response.
+
+Start your Egg application and verify the handler using its default port:
+
+```bash
+curl http://localhost:7001/api/auth/ok
+```
+
+The endpoint should return `{"ok":true}`. Set Better Auth's `baseURL` (or `BETTER_AUTH_URL`) to your Egg application's public URL, such as `http://localhost:7001` for local development.
+
+### Get the user session
+
+Use `auth.api.getSession` in your Egg routes. Convert the incoming request headers with `fromNodeHeaders` to include the user's session cookie:
+
+```ts title="app/router.ts"
+import type { Application, Context } from "egg";
+import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
+import { auth } from "../lib/auth.ts";
+
+const handleAuth = toNodeHandler(auth);
+
+export default (app: Application) => {
+  app.router.all(/^\/api\/auth(?:\/|$)/, async (ctx: Context) => {
+    ctx.respond = false;
+    await handleAuth(ctx.req, ctx.res);
+  });
+
+  app.router.get("/api/me", async (ctx: Context) => {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(ctx.req.headers),
+    });
+
+    if (!session) {
+      ctx.status = 401;
+      ctx.body = { error: "Unauthorized" };
+      return;
+    }
+
+    ctx.body = session;
+  });
+};
+```
+
+If your frontend uses a different origin, configure Egg's CORS middleware to allow that specific origin with credentials and add it to Better Auth's [trusted origins](/docs/reference/security#trusted-origins).
