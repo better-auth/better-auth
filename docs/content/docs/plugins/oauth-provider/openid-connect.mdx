@@ -338,10 +338,12 @@ await auth.api.adminCreateOAuthClient({
 ```
 
 * Recipients are found through the opaque access tokens and refresh tokens stored for the session. A client that holds only a JWT access token for it, such as after a `resource` request without `offline_access`, is not notified.
-* Logout Tokens carry `typ: logout+jwt`, always include `sid`, and live for 120 seconds. The JWT plugin signs them, so a client verifies them with your JWKS. Each [request](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest) has a 5 second timeout and is not retried.
+* Logout Tokens carry `typ: logout+jwt`, always include `sid`, and live for 120 seconds. The JWT plugin signs them, so a client verifies them with your JWKS. Each [request](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest) has a 5 second timeout, which includes the DNS lookup, and is not retried.
 * When a session is deleted, Better Auth revokes the session's access tokens and its refresh tokens without `offline_access`, whether or not any client registered a `backchannel_logout_uri`. Introspection and UserInfo then reject those access tokens, but a resource server that verifies JWT access tokens locally keeps accepting them until they expire. An opaque access token issued by a refresh that runs while sign-out is in progress can also stay active until it expires, on databases that enforce the session foreign key. Refresh tokens with `offline_access` survive, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows. Tokens from the device authorization and [CIBA](/docs/plugins/ciba) grants have no associated session and survive sign-out.
 * A new grant gets a refresh token only when it includes `offline_access`, and that token survives the end of the session. [RFC 10017 §6.3.2.3](https://www.rfc-editor.org/rfc/rfc10017.html#section-6.3.2.3) says authorization servers should link the lifetime of a refresh token to the user's authenticated session when the client is a browser-based app. The provider has no option that binds every refresh token to the session. A browser-based app whose tokens must end with the session has two choices. It can omit `offline_access`, which means it gets no refresh token and must authorize again when its access token expires. Or it can keep its tokens on a server that handles back-channel logout.
-* `backchannel_logout_uri` must be a public `https` URL with no credentials or fragment. Loopback, private, and metadata hosts are rejected with `invalid_client_metadata`. The check does not resolve DNS, so a public name that resolves to a private address passes. If untrusted parties can register clients on your server, block outbound requests from the auth server to private networks.
+* `backchannel_logout_uri` must be a public `https` URL with no credentials or fragment. Loopback, private, and metadata hosts are rejected with `invalid_client_metadata`. This registration check does not resolve DNS.
+* Before each delivery, Better Auth checks the stored URI again and resolves its host name. It skips that client and logs a warning when the lookup fails or any address is loopback, private, link-local (including cloud metadata), or otherwise not publicly routable. The session's tokens are still revoked. This stops a public-looking name whose DNS record points at an internal address from receiving the request.
+* The DNS check applies only on runtimes where `node:dns` resolves names. Elsewhere, only the host name check applies. The `fetch` that sends the request resolves the name again, so a DNS answer that changes between the two lookups, known as DNS rebinding, can still reach an internal address. For a strict guarantee, or if untrusted parties can register clients on your server, restrict outbound requests from the auth server to private networks at the network layer.
 * Clients registered through [CIMD](/docs/plugins/cimd) cannot use back-channel logout.
 
 <Callout type="warn">
@@ -351,6 +353,27 @@ await auth.api.adminCreateOAuthClient({
 <Callout type="info">
   Delivery runs through `advanced.backgroundTasks.handler` when one is set, so a slow client cannot delay sign-out. Without a handler it runs before the sign-out response returns, so set one if you deploy to serverless runtimes.
 </Callout>
+
+### Clients on an internal network
+
+If a client runs on an internal network, its public-looking name can resolve to a private address, as in a split-horizon DNS setup. The delivery check then skips it. To deliver to it, add the origin of its `backchannel_logout_uri` to [`trustedOrigins`](/docs/reference/options#trustedorigins):
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  trustedOrigins: ["https://app.internal.example.com"], // [!code highlight]
+  plugins: [oauthProvider({ /* ... */ }), jwt()],
+});
+```
+
+An origin in `trustedOrigins` skips only the DNS check, because you vouch for where that name points. Registration and delivery still reject a loopback or private IP literal and a name such as `localhost`, so the URI needs a host name or public address that registration accepts.
+
+<Callout type="warn">
+  Clients choose their own `backchannel_logout_uri`. Anyone who can register a client, including through [dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration), can point it at any host that a `trustedOrigins` entry matches, and the server then sends a Logout Token there without checking where the name resolves. Wildcard entries follow the [pattern rules](/docs/reference/options#wildcard-support), so a pattern such as `https://*.example.com`, which other features may already use, covers every host under it. The origin of your configured `baseURL` is always trusted. List exact origins, and never list a pattern that covers a name someone else can create.
+</Callout>
+
+Delivery uses the origins configured at initialization, whether you set them with an array, the `BETTER_AUTH_TRUSTED_ORIGINS` variable, or a callback. A callback runs once without a `Request` for this purpose. An origin that only a request supplies does not count, such as one a callback returns for a particular `Request` or the origin of the `Host` header when you set no `baseURL`, because the sign-out request comes from the party this check guards against.
+
+To find clients that stopped receiving tokens, search your logs for `back-channel logout to client <id> skipped`. The warning names the reason.
 
 ## Front-channel logout
 

@@ -695,9 +695,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									await recordFrontchannelLogoutUris(
 										plan.frontchannelLogoutUris,
 									);
+									// `ctx` holds the trusted origins resolved at init. The
+									// hook context holds the ones the request resolved, which
+									// the request's sender can influence.
 									const logoutTask = applySessionLogoutPlan(
 										hookCtx,
 										plan,
+										(url) => ctx.isTrustedOrigin(url),
 									).catch((error) => {
 										hookCtx.context.logger.error(
 											"Logout notification failed after session deletion",

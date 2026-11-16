@@ -26,6 +26,7 @@ import {
 	isRedirectUriTransportAllowed,
 	resolveSubjectIdentifier,
 } from "./utils";
+import { getDeliveryTargetRejection } from "./utils/delivery-target";
 
 const BACKCHANNEL_LOGOUT_EVENT_URI =
 	"http://schemas.openid.net/event/backchannel-logout";
@@ -263,10 +264,14 @@ async function prepareSessionLogoutPlan(
  * Apply a prepared logout plan after the session deletion succeeds. Core runs
  * `session.delete.after` after the row is consumed and, for transactional
  * callers, only after the transaction commits.
+ *
+ * `isConfiguredOrigin` reports whether the operator vouches for an origin, as
+ * `deliverBackchannelLogoutTokens` describes.
  */
 async function applySessionLogoutPlan(
 	ctx: GenericEndpointContext,
 	plan: SessionLogoutPlan,
+	isConfiguredOrigin: (url: string) => boolean,
 ): Promise<void> {
 	const revokedAt = new Date();
 	const adapter = await getCurrentAdapter(ctx.context.adapter);
@@ -298,7 +303,7 @@ async function applySessionLogoutPlan(
 	}
 
 	if (plan.backchannelTargets.length > 0) {
-		await deliverBackchannelLogoutTokens(ctx, plan);
+		await deliverBackchannelLogoutTokens(ctx, plan, isConfiguredOrigin);
 	}
 }
 
@@ -310,13 +315,28 @@ async function applySessionLogoutPlan(
  * one it completes inline so delivery is not lost on request teardown.
  *
  * Spec §2.5: "the OP SHOULD NOT retransmit", so each RP gets a single attempt
- * within `BACKCHANNEL_DISPATCH_TIMEOUT_MS`. Every per-client failure (fetch
- * error, non-2xx response, signing error, subject resolution error) is
- * logged; none of them can reject the outer promise.
+ * within `BACKCHANNEL_DISPATCH_TIMEOUT_MS`. Every per-client failure (rejected
+ * delivery target, fetch error, non-2xx response, signing error, subject
+ * resolution error) is logged; none of them can reject the outer promise.
+ *
+ * Targets run in parallel without a concurrency limit. The fan-out is bounded
+ * by the clients holding a token bound to this one session, and each target
+ * adds at most one DNS lookup per logout. `dns.lookup` cannot be cancelled, so
+ * the deadline stops the wait and not the lookup, but `fetch` resolves the same
+ * name the same way, so the check does not add a kind of work the delivery
+ * did not already do. A name that fails to resolve skips the POST, so it costs
+ * one lookup. A target whose origin the operator configured in
+ * `trustedOrigins` skips the lookup.
+ *
+ * `isConfiguredOrigin` must decide from the list resolved at initialization,
+ * never from the sign-out request. A `trustedOrigins` callback and the base URL
+ * can resolve from request input such as the Host header, and that request
+ * comes from the party the check defends against.
  */
 async function deliverBackchannelLogoutTokens(
 	ctx: GenericEndpointContext,
 	plan: SessionLogoutPlan,
+	isConfiguredOrigin: (url: string) => boolean,
 ): Promise<void> {
 	const logger = ctx.context.logger;
 	const jwtPluginOptions = getJwtPlugin(ctx.context)?.options;
@@ -332,6 +352,25 @@ async function deliverBackchannelLogoutTokens(
 	await Promise.allSettled(
 		plan.backchannelTargets.map(async ({ client, sub }) => {
 			try {
+				// One deadline covers the target check and the POST, so a slow name
+				// server cannot extend the per-RP ceiling.
+				const signal = AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS);
+				// An origin the operator vouches for may resolve to a private address,
+				// as a split-horizon name does. Unlike SSO discovery, the host as
+				// written is still classified.
+				const rejection = await getDeliveryTargetRejection(
+					client.backchannelLogoutUri!,
+					signal,
+					{
+						skipResolution: isConfiguredOrigin(client.backchannelLogoutUri!),
+					},
+				);
+				if (rejection) {
+					logger.warn(
+						`back-channel logout to client ${client.clientId} skipped: backchannel_logout_uri ${rejection}`,
+					);
+					return;
+				}
 				const jti = generateRandomString(32, "a-z", "A-Z", "0-9");
 				const token = await signLogoutToken(
 					ctx,
@@ -354,7 +393,7 @@ async function deliverBackchannelLogoutTokens(
 						Accept: "application/json",
 					},
 					body: new URLSearchParams({ logout_token: token }),
-					signal: AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS),
+					signal,
 					// Not "error": Workers rejects it. The status check refuses 3xx and opaque redirects.
 					redirect: "manual",
 				});
