@@ -494,6 +494,14 @@ describe("Host Classification", () => {
 			expect(isPublicRoutableHost("::ffff:a9fe:a9fe")).toBe(false);
 		});
 
+		it("should prevent IPv4-translated translated bypass", () => {
+			// ::ffff:0:7f00:1 is the RFC 2765 form of 127.0.0.1, distinct from the
+			// IPv4-mapped ::ffff:7f00:1.
+			expect(isPublicRoutableHost("::ffff:0:7f00:1")).toBe(false);
+			expect(isPublicRoutableHost("::ffff:0:a9fe:a9fe")).toBe(false);
+			expect(isPublicRoutableHost("::ffff:0:a00:5")).toBe(false);
+		});
+
 		it("should prevent zone-id smuggling", () => {
 			// Naive parsers might treat fe80::1%evil.com as FQDN "evil.com"
 			expect(classifyHost("fe80::1%evil.com").kind).toBe("linkLocal");

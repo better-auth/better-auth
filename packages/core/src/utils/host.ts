@@ -265,6 +265,10 @@ function classifyIPv6(expanded: string): HostKind {
 		return "reserved";
 	}
 
+	// ::ffff:0:0:0/96 — IPv4-translated (RFC 2765). Embeds an IPv4 like the
+	// IPv4-mapped form, but is not unmapped, so it is never a valid public target.
+	if (expanded.startsWith("0000:0000:0000:0000:ffff:0000:")) return "reserved";
+
 	if (expanded.startsWith("0100:0000:0000:0000:")) return "reserved";
 
 	// 3fff::/20 — Documentation (RFC 9637). The /20 fixes the first 16 bits to
