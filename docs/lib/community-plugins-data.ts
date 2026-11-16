@@ -561,4 +561,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/mailkite.png",
 		},
 	},
+	{
+		name: "better-auth-kwtsms",
+		url: "https://github.com/kwtsms/kwtsms-better-auth",
+		description:
+			"Send phone number OTP codes by SMS through kwtSMS, the SMS gateway in Kuwait. Drop-in sendOTP for the phoneNumber plugin, with Arabic and English messages, number cleanup and test mode by default.",
+		author: {
+			name: "kwtSMS",
+			github: "kwtsms",
+			avatar: "https://github.com/kwtsms.png",
+		},
+	},
 ];
