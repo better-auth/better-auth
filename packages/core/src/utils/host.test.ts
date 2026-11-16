@@ -494,12 +494,31 @@ describe("Host Classification", () => {
 			expect(isPublicRoutableHost("::ffff:a9fe:a9fe")).toBe(false);
 		});
 
-		it("should prevent IPv4-translated translated bypass", () => {
+		it("should prevent IPv4-translated bypass", () => {
 			// ::ffff:0:7f00:1 is the RFC 2765 form of 127.0.0.1, distinct from the
 			// IPv4-mapped ::ffff:7f00:1.
 			expect(isPublicRoutableHost("::ffff:0:7f00:1")).toBe(false);
 			expect(isPublicRoutableHost("::ffff:0:a9fe:a9fe")).toBe(false);
 			expect(isPublicRoutableHost("::ffff:0:a00:5")).toBe(false);
+		});
+
+		it("should reject every address in 0000::/8 that is not mapped IPv4", () => {
+			// 0000::/8 is IETF-reserved and has no publicly routable allocation.
+			// Sibling encodings of an embedded IPv4 must not slip through as public.
+			for (const host of [
+				"::200:5efe:7f00:1",
+				"::5efe:7f00:1",
+				"0:1::1",
+				"0:0:0:1::7f00:1",
+				"1::1",
+				"::ffff:0:7f00:1",
+				"64:ff9b::808:808",
+				"64:ff9b:1::1",
+				"ff::1",
+			]) {
+				expect(classifyHost(host).kind).toBe("reserved");
+				expect(isPublicRoutableHost(host)).toBe(false);
+			}
 		});
 
 		it("should prevent zone-id smuggling", () => {

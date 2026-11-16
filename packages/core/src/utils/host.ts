@@ -249,25 +249,11 @@ function classifyIPv6(expanded: string): HostKind {
 		return "public";
 	}
 
-	if (expanded.startsWith("0064:ff9b:0000:0000:0000:0000:")) {
-		const embedded = extractEmbeddedIPv4(expanded, 6);
-		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
-		return "reserved";
-	}
-
-	// 64:ff9b:1::/48 — Local-Use IPv4/IPv6 Translation (RFC 8215). Distinct from
-	// the well-known NAT64 /96 prefix above and not globally reachable.
-	if (expanded.startsWith("0064:ff9b:0001:")) return "reserved";
-
 	if (expanded.startsWith("2001:0000:")) {
 		const embedded = extractEmbeddedIPv4(expanded, 6, { xor: true });
 		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
 		return "reserved";
 	}
-
-	// ::ffff:0:0:0/96 — IPv4-translated (RFC 2765). Embeds an IPv4 like the
-	// IPv4-mapped form, but is not unmapped, so it is never a valid public target.
-	if (expanded.startsWith("0000:0000:0000:0000:ffff:0000:")) return "reserved";
 
 	if (expanded.startsWith("0100:0000:0000:0000:")) return "reserved";
 
@@ -278,10 +264,11 @@ function classifyIPv6(expanded: string): HostKind {
 	// 5f00::/16 — SRv6 SIDs (RFC 9602), not globally reachable.
 	if (expanded.startsWith("5f00:")) return "reserved";
 
-	// ::/96 — deprecated IPv4-compatible IPv6 (RFC 4291 §2.5.5.1). `::` and
-	// `::1` are matched above; the rest of the block embeds an IPv4 (e.g.
-	// `::127.0.0.1`) and is never a valid public target.
-	if (expanded.startsWith("0000:0000:0000:0000:0000:0000:")) return "reserved";
+	// 0000::/8 — IETF-reserved, with no publicly routable allocation. `::`, `::1`
+	// and unmapped IPv4-mapped addresses are handled before this point; the rest
+	// of the block embeds an IPv4 in encodings that are never a valid public
+	// target, such as IPv4-compatible, IPv4-translated, and NAT64 forms.
+	if (firstByte === 0x00) return "reserved";
 
 	return "public";
 }
