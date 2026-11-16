@@ -217,7 +217,9 @@ function extractEmbedded6to4IPv4(expanded: string): string | null {
  *   `2000::/3` for global unicast and leaves the rest IETF-reserved, apart from
  *   unique local, link-local, and multicast.
  * @see https://www.iana.org/assignments/iana-ipv6-special-registry/ lists the
- *   special-purpose blocks inside `2000::/3`.
+ *   special-purpose blocks inside `2000::/3`. Only the blocks named below are
+ *   rejected. The rest of `2001::/23` and the deprecated ORCHID block
+ *   `2001:10::/28` still classify as `public`.
  *
  * 6to4 (`2002::/16`) embeds an IPv4 that can route to private or loopback
  * space. If the embedded IPv4 classifies as non-`public`, return `reserved`,
