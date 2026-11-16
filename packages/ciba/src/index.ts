@@ -14,6 +14,7 @@ import {
 	BC_AUTHORIZE_PATH,
 	CIBA_GRANT_TYPE,
 } from "./constants";
+import type { IsConfiguredOrigin } from "./delivery";
 import {
 	DELIVERY_MODE_FIELD,
 	NOTIFICATION_ENDPOINT_FIELD,
@@ -51,13 +52,24 @@ export const ciba = (options: CibaOptions) => {
 		expiresIn: options.expiresIn ?? 300,
 		interval: options.interval ?? 5,
 	};
+	// The origins resolved at initialization, per auth instance (keyed by its
+	// schema, which request-scoped contexts share) so one plugin
+	// object can serve several. Ping delivery trusts only these, never the list
+	// a request resolves, which can come from request input such as the Host
+	// header and so from the party the delivery check defends against.
+	const configuredOrigins = new WeakMap<object, (url: string) => boolean>();
+	const isConfiguredOrigin: IsConfiguredOrigin = (ctx, url) =>
+		configuredOrigins.get(ctx.context.tables)?.(url) ?? false;
 	const extension: OAuthProviderExtension = {
 		name: "ciba",
 		grants: {
 			[CIBA_GRANT_TYPE]: createCibaGrantHandler(resolvedOptions),
 		},
 		interactionRequests: {
-			[APPROVAL_PARAMETER]: cibaApprovalRequest(options.resultPage),
+			[APPROVAL_PARAMETER]: cibaApprovalRequest(
+				options.resultPage,
+				isConfiguredOrigin,
+			),
 		},
 		clientMetadata: {
 			// CIBA §4 and RFC 9396 §10: clients register these through dynamic
@@ -97,11 +109,15 @@ export const ciba = (options: CibaOptions) => {
 		// `mergeSchema` applies overrides in place, so merge into a copy.
 		schema: mergeSchema(structuredClone(schema), options.schema),
 		init(ctx) {
+			configuredOrigins.set(ctx.tables, (url) => ctx.isTrustedOrigin(url));
 			extendOAuthProvider(ctx, extension);
 		},
 		endpoints: {
 			bcAuthorize: createBcAuthorize(resolvedOptions),
-			completeCibaRequest: createCompleteCibaRequest(resolvedOptions),
+			completeCibaRequest: createCompleteCibaRequest(
+				resolvedOptions,
+				isConfiguredOrigin,
+			),
 		},
 		// Each request notifies a user, so it gets a tighter limit than the
 		// generic per-IP default.

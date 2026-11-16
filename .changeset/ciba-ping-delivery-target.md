@@ -1,0 +1,5 @@
+---
+"@better-auth/ciba": patch
+---
+
+CIBA ping mode now checks the stored `backchannel_client_notification_endpoint` again, and resolves its host name, before each ping. If the host resolves to a loopback, private, link-local, or other address that is not publicly routable, or the lookup fails, the server skips the ping and logs a warning. The decision is kept, and the client can still poll the token endpoint. Registration only checked the host name as written, so a public-looking name could still resolve to an internal address. The ping cannot be pinned to the address that was checked, so restrict outbound network access where you need a strict guarantee. On runtimes where `node:dns` is missing or cannot resolve names, such as Cloudflare Workers, only the host name check applies. Clients whose endpoint resolves only to public addresses are unaffected. An endpoint whose origin is listed in `trustedOrigins` at initialization skips the lookup, so a client on an internal network keeps receiving pings.

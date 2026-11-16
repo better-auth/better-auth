@@ -32,6 +32,7 @@ export {
 	toResourceList,
 	validateClientScopes,
 } from "./utils";
+export { getDeliveryTargetRejection } from "./utils/delivery-target";
 export {
 	isLocalCapacityRefusal,
 	isTransientAbort,
