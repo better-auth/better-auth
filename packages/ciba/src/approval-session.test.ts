@@ -174,14 +174,20 @@ describe.each([
 		return row?.status;
 	}
 
+	async function consentCount() {
+		return (await auth.$context).adapter.count({ model: "oauthConsent" });
+	}
+
 	it("does not approve after the session was revoked in the store", async () => {
 		const { headers, token } = await signIn();
 		const request = await startRequest(headers);
 		await revoke(token);
+		const consentsBefore = await consentCount();
 
 		const result = await answer(request.consent, true, headers);
 
 		expect(result.searchParams.get("status")).toBeNull();
+		expect(await consentCount()).toBe(consentsBefore);
 		expect(result.searchParams.get("error")).toEqual(expect.any(String));
 		expect(await statusOf(request.requestId)).toBe("pending");
 		expect((await request.poll()).body.error).toBe("authorization_pending");
