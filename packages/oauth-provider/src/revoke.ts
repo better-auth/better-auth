@@ -411,7 +411,8 @@ export async function revokeEndpoint(
 			if (error.body?.error === "unsupported_token_type") {
 				throw error;
 			}
-			if (error.name === "BAD_REQUEST") {
+			// better-call sets name to "APIError"; the status lives on .status / .statusCode
+			if (error.status === "BAD_REQUEST" || error.statusCode === 400) {
 				return null;
 			}
 			throw error;

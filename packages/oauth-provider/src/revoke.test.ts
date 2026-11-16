@@ -223,7 +223,7 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
-	it("should fail with token_type_hint access_token and sent refresh_token", async () => {
+	it("returns success for refresh_token with token_type_hint access_token (RFC 7009)", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(
 			{
@@ -239,7 +239,8 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.error?.status).toBe(400);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
 	});
 
 	it("should pass verification with token_type_hint refresh_token and sent refresh_token", async () => {
@@ -262,7 +263,7 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
-	it("should fail verification with token_type_hint refresh_token and sent access_token", async () => {
+	it("returns success for access_token with token_type_hint refresh_token (RFC 7009)", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(
 			{
@@ -278,7 +279,8 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.error?.status).toBe(400);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
 	});
 
 	it("reports unsupported_token_type for a jwt access_token without token_type_hint", async () => {
@@ -338,6 +340,49 @@ describe("oauth revoke", async () => {
 		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
+	});
+
+	/**
+	 * RFC 7009 §2.2: unknown tokens must not cause an error response.
+	 * @see https://github.com/better-auth/better-auth/issues/12680
+	 */
+	it("returns success for an unknown token", async () => {
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: "does-not-exist",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+	});
+
+	it("returns success when revoking an already-revoked refresh token", async () => {
+		const tokens = await getTokens();
+		const revokeOpts = {
+			client_id: oauthClient?.client_id,
+			client_secret: oauthClient?.client_secret,
+			token: tokens.data?.refresh_token!,
+			token_type_hint: "refresh_token" as const,
+		};
+		const headers = {
+			accept: "application/json",
+			"content-type": "application/x-www-form-urlencoded",
+		};
+		const first = await client.oauth2.revoke(revokeOpts, { headers });
+		expect(first.data).toBe(null);
+		expect(first.error).toBe(null);
+
+		const second = await client.oauth2.revoke(revokeOpts, { headers });
+		expect(second.data).toBe(null);
+		expect(second.error).toBe(null);
 	});
 });
 
