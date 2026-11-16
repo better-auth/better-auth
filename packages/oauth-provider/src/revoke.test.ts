@@ -388,7 +388,7 @@ describe("oauth revoke", async () => {
 		expect(refreshedA.data?.refresh_token).not.toBe(firstRefreshTokenA);
 
 		// Client B attempts to revoke Client A's already-revoked refresh token
-		await client.oauth2.revoke(
+		const revocation = await client.oauth2.revoke(
 			{
 				client_id: clientBResponse?.client_id,
 				client_secret: clientBResponse?.client_secret,
@@ -402,6 +402,7 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
+		expect(revocation.error).toBe(null);
 
 		// Client B's own refresh token family must NOT have been invalidated
 		const refreshedB = await client.oauth2.token(
