@@ -10,6 +10,7 @@ import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { getSecretValues } from "@better-auth/core/utils/secret";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
@@ -311,10 +312,14 @@ export async function decodeCookieCache(
 			};
 		}
 
-		const decoded = await verifySecretJWT<JWTPayload>(
-			value,
-			ctx.context.secret,
-		);
+		const secrets = getSecretValues(ctx.context.secretConfig);
+		let decoded: JWTPayload | null = null;
+		for (const secret of secrets) {
+			decoded = await verifySecretJWT<JWTPayload>(value, secret);
+			if (decoded) {
+				break;
+			}
+		}
 		const payload = parseCookieCachePayload(decoded);
 		if (!payload) {
 			return null;
@@ -332,14 +337,19 @@ export async function decodeCookieCache(
 		return null;
 	}
 
-	const valid = await createHMAC("SHA-256", "base64urlnopad").verify(
-		ctx.context.secret,
-		JSON.stringify({
-			...parsed.session,
-			expiresAt: parsed.expiresAt,
-		}),
-		parsed.signature,
-	);
+	const secrets = getSecretValues(ctx.context.secretConfig);
+	const hmac = createHMAC("SHA-256", "base64urlnopad");
+	const signedPayload = JSON.stringify({
+		...parsed.session,
+		expiresAt: parsed.expiresAt,
+	});
+	let valid = false;
+	for (const secret of secrets) {
+		valid = await hmac.verify(secret, signedPayload, parsed.signature);
+		if (valid) {
+			break;
+		}
+	}
 	if (!valid) {
 		return null;
 	}
