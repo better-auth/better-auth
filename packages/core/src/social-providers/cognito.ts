@@ -6,6 +6,7 @@ import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
+	parseStringBoolean,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -222,7 +223,9 @@ export const cognito = (options: CognitoOptions) => {
 									"",
 								email: userInfo.email,
 								image: userInfo.picture,
-								emailVerified: userInfo.email_verified,
+								// The user info endpoint returns `email_verified` as a string.
+								emailVerified:
+									parseStringBoolean(userInfo.email_verified) ?? false,
 								...userMap,
 							},
 							data: userInfo,

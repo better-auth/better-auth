@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import type { JSONValue, LanguageModel } from "ai";
+import type { FlexibleSchema, JSONValue, LanguageModel } from "ai";
 import { asSchema } from "ai";
 import { test as baseTest, describe, expect } from "vitest";
 import type { StructuredGenerator } from "../src/ai/generate-structured.ts";
@@ -18,6 +18,30 @@ function modelId(model: LanguageModel): string {
 	return typeof model === "string" ? model : model.modelId;
 }
 
+/** Models return results keyed by change ID; fixtures list them with an `id`. */
+function keyedById(value: unknown): unknown {
+	if (typeof value !== "object" || value === null) return value;
+	return Object.fromEntries(
+		Object.entries(value).map(([key, list]) => [
+			key,
+			Array.isArray(list)
+				? Object.fromEntries(list.map(({ id, ...rest }) => [id, rest]))
+				: list,
+		]),
+	);
+}
+
+async function validateGenerated<T>(
+	request: { schema: FlexibleSchema<T> },
+	value: unknown,
+): Promise<T> {
+	const validate = asSchema(request.schema).validate;
+	if (!validate) throw new Error("Schema does not provide validation");
+	const result = await validate(keyedById(value));
+	if (!result.success) throw result.error;
+	return result.value;
+}
+
 function generatorFor(
 	value:
 		| JSONValue
@@ -26,13 +50,10 @@ function generatorFor(
 ): StructuredGenerator {
 	return async (request) => {
 		onRequest?.(request);
-		const validate = asSchema(request.schema).validate;
-		if (!validate) throw new Error("Schema does not provide validation");
-		const result = await validate(
+		return validateGenerated(
+			request,
 			typeof value === "function" ? value(request) : value,
 		);
-		if (!result.success) throw result.error;
-		return result.value;
 	};
 }
 
@@ -201,7 +222,7 @@ describe("release-note rewriting", () => {
 		releaseFiles,
 	}) => {
 		const context = Object.fromEntries(
-			Array.from({ length: 31 }, (_, index) => {
+			Array.from({ length: 17 }, (_, index) => {
 				const number = index + 1;
 				return [
 					"pr-" + number,
@@ -243,11 +264,7 @@ describe("release-note rewriting", () => {
 								feedback: null,
 							})),
 						};
-			const validate = asSchema(request.schema).validate;
-			if (!validate) throw new Error("Schema does not provide validation");
-			const result = await validate(value);
-			if (!result.success) throw result.error;
-			return result.value;
+			return validateGenerated(request, value);
 		};
 
 		await rewriteReleaseNotes(
@@ -262,7 +279,7 @@ describe("release-note rewriting", () => {
 			JSON.parse(readFileSync(releaseFiles.outputPath, "utf-8")),
 			"Invalid rewrite output",
 		);
-		expect(output.rewrites).toHaveLength(31);
+		expect(output.rewrites).toHaveLength(17);
 	});
 
 	test("repairs copy when review feedback contradicts approval", async ({

@@ -1,6 +1,7 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { admin } from "../../plugins/admin/admin";
+import { emailOTP } from "../../plugins/email-otp";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("sign-up with custom fields", async () => {
@@ -1174,5 +1175,117 @@ describe("sign-up enumeration protection — customSyntheticUser with admin plug
 		expect(secondUser.banned).toBe(false);
 		expect(secondUser.banReason).toBeNull();
 		expect(secondUser.banExpires).toBeNull();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12051
+ */
+describe("sign-up side effects run after the commit", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const advanced = {
+		backgroundTasks: {
+			handler: (promise: Promise<unknown>) => {
+				backgroundTasks.push(promise);
+			},
+		},
+	};
+	const drainBackgroundTasks = async () => {
+		while (backgroundTasks.length) {
+			await Promise.all(backgroundTasks.splice(0));
+		}
+	};
+
+	it("stores and sends the email OTP after the sign-up commits", async () => {
+		const sendVerificationOTP = vi.fn(async () => {});
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: { sendOnSignUp: true },
+				advanced,
+				plugins: [
+					emailOTP({
+						overrideDefaultEmailVerification: true,
+						sendVerificationOTP,
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		const email = "otp-transaction@test.com";
+
+		await auth.api.signUpEmail({
+			body: { email, password: "password123", name: "OTP Transaction" },
+		});
+		await drainBackgroundTasks();
+
+		const stored = await ctx.internalAdapter.findVerificationValue(
+			`email-verification-otp-${email}`,
+		);
+		expect(stored).not.toBeNull();
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps onExistingUserSignUp writes made in the background", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+					onExistingUserSignUp: async ({ user }) => {
+						const ctx = await auth.$context;
+						await ctx.internalAdapter.createVerificationValue({
+							identifier: `existing-sign-up-${user.id}`,
+							value: "notified",
+							expiresAt: new Date(Date.now() + 60_000),
+						});
+					},
+				},
+				advanced,
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		const body = {
+			email: "existing@test.com",
+			password: "password123",
+			name: "E",
+		};
+		await auth.api.signUpEmail({ body });
+		await auth.api.signUpEmail({ body });
+		await drainBackgroundTasks();
+
+		const existing = await ctx.internalAdapter.findUserByEmail(body.email);
+		expect(
+			await ctx.internalAdapter.findVerificationValue(
+				`existing-sign-up-${existing!.user.id}`,
+			),
+		).not.toBeNull();
+	});
+
+	it("keeps the committed sign-up when the sender throws", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail: () => {
+						throw new Error("mailer down");
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const email = "sender-throws@test.com";
+
+		await expect(
+			auth.api.signUpEmail({
+				body: { email, password: "password123", name: "Sender Throws" },
+			}),
+		).resolves.toMatchObject({ token: null });
+
+		const ctx = await auth.$context;
+		expect(await ctx.internalAdapter.findUserByEmail(email)).not.toBeNull();
 	});
 });

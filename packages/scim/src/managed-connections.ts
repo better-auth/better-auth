@@ -1,4 +1,5 @@
 import { getCurrentAdapter } from "@better-auth/core/context";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { DBAdapter, DBTransactionAdapter } from "better-auth";
 import { APIError, createAuthEndpoint } from "better-auth/api";
@@ -11,7 +12,9 @@ import type {
 } from "./configuration";
 import { decommissionSCIMConnection } from "./connection-decommission";
 import type { SCIMIdentityCoordinator } from "./identity";
+import { SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
+import { assertNativeSCIMTransactions } from "./transaction";
 
 export const SCIM_MANAGED_CONNECTION_ID_PREFIX = "ba_scim_connection_";
 const SCIM_MANAGED_CREDENTIAL_ID_PREFIX = "ba_scim_credential_";
@@ -369,6 +372,7 @@ async function getManagedConnectionState(
 		model: "scimManagedCredential",
 		where: [{ field: "connectionRecordId", value: connection.id }],
 		sortBy: { field: "createdAt", direction: "desc" },
+		limit: SCIM_UNBOUNDED_ROW_LIMIT,
 	});
 	return {
 		connection: toManagedConnection(connection),
@@ -880,6 +884,7 @@ export function createSCIMManagedConnectionEndpoints(
 				metadata: { noStore: true },
 			},
 			async (ctx) => {
+				assertNativeSCIMTransactions(ctx.context.adapter);
 				const options = requireManagedOptions();
 				assertFutureExpiry(ctx.body.expiresAt);
 				if (new Set(ctx.body.scopes).size !== ctx.body.scopes.length) {
@@ -914,7 +919,7 @@ export function createSCIMManagedConnectionEndpoints(
 						},
 					);
 				} catch (error) {
-					if (error instanceof APIError) throw error;
+					if (isAPIError(error)) throw error;
 					if (joinsAmbientTransaction) throw error;
 					const duplicate = await findManagedConnectionByCreationRequestId(
 						ctx.context.adapter,
@@ -949,6 +954,7 @@ export function createSCIMManagedConnectionEndpoints(
 						},
 					],
 					sortBy: { field: "createdAt", direction: "desc" },
+					limit: SCIM_UNBOUNDED_ROW_LIMIT,
 				});
 				return ctx.json({
 					connections: connections.map((connection) =>
@@ -981,6 +987,7 @@ export function createSCIMManagedConnectionEndpoints(
 				metadata: { noStore: true },
 			},
 			async (ctx) => {
+				assertNativeSCIMTransactions(ctx.context.adapter);
 				const options = requireManagedOptions();
 				assertFutureExpiry(ctx.body.expiresAt);
 				if (new Set(ctx.body.scopes).size !== ctx.body.scopes.length) {
@@ -1024,6 +1031,7 @@ export function createSCIMManagedConnectionEndpoints(
 				body: revokeManagedCredentialBodySchema,
 			},
 			async (ctx) => {
+				assertNativeSCIMTransactions(ctx.context.adapter);
 				requireManagedOptions();
 				for (let attempt = 0; attempt < 5; attempt++) {
 					const revoked = await runManagedMutationTransaction(
@@ -1082,6 +1090,7 @@ export function createSCIMManagedConnectionEndpoints(
 				body: decommissionManagedConnectionBodySchema,
 			},
 			async (ctx) => {
+				assertNativeSCIMTransactions(ctx.context.adapter);
 				requireManagedOptions();
 				const database = await getCurrentAdapter(ctx.context.adapter);
 				let started: ManagedConnectionRow | undefined;

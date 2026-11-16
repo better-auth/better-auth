@@ -1568,6 +1568,54 @@ describe("oauth register - protected dynamic registration", async () => {
 		expect(body.error).toBe("access_denied");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9012
+	 */
+	it("passes through an APIError from another copy of better-call", async () => {
+		// Stands in for an APIError from a second better-call install, which
+		// fails `instanceof` against this package's copy.
+		const foreignAPIError = Object.assign(new Error("tenant suspended"), {
+			name: "APIError",
+			status: "FORBIDDEN",
+			statusCode: 403,
+			headers: new Headers(),
+			body: { error: "access_denied", error_description: "tenant suspended" },
+		});
+		const foreignBaseUrl = "http://localhost:3007";
+		const { customFetchImpl: foreignFetch } = await getTestInstance({
+			baseURL: foreignBaseUrl,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					validateInitialAccessToken: () => {
+						throw foreignAPIError;
+					},
+				}),
+			],
+		});
+
+		const response = await foreignFetch(
+			`${foreignBaseUrl}/api/auth/oauth2/register`,
+			{
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${validInitialAccessToken}`,
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					client_name: "Machine Client",
+					redirect_uris: [redirectUri],
+				}),
+			},
+		);
+		expect(response.status).toBe(403);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("access_denied");
+	});
+
 	it("should not consult the validator for session-backed registration", async () => {
 		const sessionBaseUrl = "http://localhost:3004";
 		const sessionValidator = vi.fn<
@@ -1722,12 +1770,35 @@ describe("oauth register - application_type", async () => {
 			metadata: { custom: "value" },
 		});
 		expect(stored.applicationType).toBe("native");
-		expect(stored.metadata).toBe(JSON.stringify({ custom: "value" }));
+		expect(stored.metadata).toEqual({ custom: "value" });
 
 		const wire = schemaToOAuth(stored);
 		expect(wire.application_type).toBe("native");
 		expect(Reflect.get(wire, "custom")).toBe("value");
 		expect(wire).not.toHaveProperty("applicationType");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12019
+	 */
+	it("stores client metadata as an object for the json column", () => {
+		const stored = oauthToSchema({
+			client_id: "metadata-client",
+			redirect_uris: ["https://app.example.com/callback"],
+			metadata: { foo: "bar" },
+		});
+		expect(stored.metadata).toEqual({ foo: "bar" });
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12019
+	 */
+	it("reads client metadata stored as a JSON string", () => {
+		const wire = schemaToOAuth({
+			clientId: "legacy-metadata-client",
+			metadata: JSON.stringify({ foo: "bar" }),
+		});
+		expect(Reflect.get(wire, "foo")).toBe("bar");
 	});
 
 	it("keeps reserved client fields out of opaque metadata responses", () => {
@@ -1780,7 +1851,7 @@ describe("oauth register - application_type", async () => {
 				...reservedMetadata,
 			},
 		});
-		expect(JSON.parse(stored.metadata ?? "{}")).toEqual({
+		expect(stored.metadata).toEqual({
 			custom: "preserved",
 		});
 

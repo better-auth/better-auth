@@ -7,7 +7,7 @@ permissions: {}
 
 jobs:
   promote:
-    if: github.repository_owner == 'better-auth' && github.ref == 'refs/heads/next'
+    if: github.repository == 'better-auth/better-auth' && github.ref == 'refs/heads/next'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
 
       - name: Exit pre-release and version
         env:

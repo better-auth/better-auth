@@ -76,7 +76,7 @@ Use the `sendVerificationOtp()` method to send an OTP to the user's email addres
 
 ### Check an OTP (optional)
 
-Use the `checkVerificationOtp()` method to check if an OTP is valid.
+Use the `checkVerificationOtp()` method to check if an OTP is valid. A wrong OTP counts toward `allowedAttempts`, and a correct one stays usable for the matching sign-in, email verification, or password reset call.
 
 <APIMethod path="/email-otp/check-verification-otp" method="POST">
   ```ts

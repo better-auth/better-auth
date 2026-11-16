@@ -218,6 +218,15 @@ export interface OAuthProvider<
 		data: T;
 	} | null>;
 	/**
+	 * Resolve a profile from a client-submitted ID token the route already verified.
+	 *
+	 * @internal
+	 */
+	getUserInfoFromIdToken?: (idToken: string) => Promise<{
+		user: OAuth2UserInfo;
+		data: T;
+	} | null>;
+	/**
 	 * Custom function to refresh a token.
 	 *
 	 * Receives request metadata from the endpoint that triggered the refresh.

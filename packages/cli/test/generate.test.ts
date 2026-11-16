@@ -5,17 +5,24 @@ import * as path from "node:path";
 import { promisify } from "node:util";
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor, username } from "better-auth/plugins";
 import Database from "better-sqlite3";
-import { describe, expect, it } from "vitest";
+import prompts from "prompts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { generate } from "../src/commands/generate";
 import { generateSchema } from "../src/generators";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { generateKyselySchema } from "../src/generators/kysely";
 import { generatePrismaSchema } from "../src/generators/prisma";
+import * as config from "../src/utils/get-config";
 import { getPrismaVersion } from "../src/utils/get-package-info";
 import { cliPath } from "./utils";
+
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
 
 const execFileAsync = promisify(execFile);
 
@@ -2720,5 +2727,34 @@ describe("--dialect flag support", () => {
 		expect(schema.code).toContain("skippedTableId");
 		expect(schema.code).not.toContain("SkippedTable");
 		expect(schema.code).not.toContain("skippedtable");
+	});
+});
+
+describe("generate: declined confirmation", () => {
+	let cwd: string;
+
+	afterEach(() => {
+		fs.rmSync(cwd, { recursive: true, force: true });
+	});
+
+	it("exits 130 without writing the schema", async () => {
+		cwd = fs.mkdtempSync(path.join(os.tmpdir(), "ba-generate-"));
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: new Database(":memory:"),
+		});
+		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
+		const exit = vi.spyOn(process, "exit").mockImplementation(() => {
+			throw new Error("exit");
+		});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		prompts.inject([false]);
+
+		await expect(
+			generate.parseAsync(["node", "generate", "--cwd", cwd]),
+		).rejects.toThrow("exit");
+
+		expect(exit).toHaveBeenCalledWith(130);
+		expect(fs.readdirSync(cwd)).toEqual([]);
 	});
 });

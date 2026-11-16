@@ -1,7 +1,6 @@
-import { createAuthEndpoint } from "@better-auth/core/api";
+import { createAuthEndpoint, HIDE_METADATA } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import type { GenericEndpointContext, User } from "better-auth";
-import { HIDE_METADATA } from "better-auth";
 import { getSessionFromCtx, originCheck } from "better-auth/api";
 import type { Organization } from "better-auth/plugins/organization";
 import { defu } from "defu";
@@ -280,7 +279,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 		},
 		async (ctx) => {
 			const { user, session } = ctx.context.session;
-			const customerType = ctx.body.customerType || "user";
+			const customerType = ctx.context.customerType;
 			const referenceId = ctx.context.referenceId;
 
 			if (!user.emailVerified && subscriptionOptions.requireEmailVerification) {
@@ -1933,7 +1932,7 @@ export const createBillingPortal = (options: StripeOptions) => {
 		},
 		async (ctx) => {
 			const { user } = ctx.context.session;
-			const customerType = ctx.body.customerType || "user";
+			const customerType = ctx.context.customerType;
 			const referenceId = ctx.context.referenceId;
 
 			let customerId: string | undefined;

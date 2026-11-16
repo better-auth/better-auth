@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from "vitest";
+import { getTestInstance } from "../test-utils/test-instance";
+import { getGlobalBroadcastChannel } from "./broadcast-channel";
 import { createAuthClient as createVueClient } from "./vue";
 
 afterEach(() => {
@@ -133,3 +135,32 @@ it.each([
 		);
 	},
 );
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12233
+ */
+it("does not subscribe session refresh listeners on the server", async () => {
+	const { client } = await getTestInstance(undefined, {
+		disableTestUser: true,
+	});
+	const subscribe = vi.spyOn(getGlobalBroadcastChannel(), "subscribe");
+
+	// SSR mounts the session store but never unmounts it.
+	client.useSession.listen(() => {});
+
+	expect(subscribe).not.toHaveBeenCalled();
+});
+
+it("refetches the session on the server when the session signal fires", async () => {
+	const { client } = await getTestInstance(undefined, {
+		disableTestUser: true,
+	});
+	client.useSession.listen(() => {});
+
+	// Electron's main process has no window and relies on this refetch.
+	client.$store.notify("$sessionSignal");
+
+	await vi.waitFor(() => {
+		expect(client.useSession.get().isPending).toBe(false);
+	});
+});

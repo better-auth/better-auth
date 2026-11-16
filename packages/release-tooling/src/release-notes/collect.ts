@@ -654,7 +654,7 @@ export async function collectEntries(
 	const seenPRs = new Set<number>();
 	const consumedOrphans = new Set<ChangesetEntry>();
 
-	for (const { msg } of seen.values()) {
+	for (const { hash, msg } of seen.values()) {
 		const parsed = parseConventionalHeader(msg);
 
 		// Direct commits without PRs are infra/version bumps, not user-facing
@@ -677,6 +677,7 @@ export async function collectEntries(
 
 		const prInfo = await fetchPR(github, prNumber);
 		const author = prInfo?.author ?? "unknown";
+		const commitAuthors = github ? await github.getCommitAuthors(hash) : [];
 		const title = prInfo?.title ?? subject;
 		const domain = prInfo
 			? classifyEntry(prInfo, parsed.scope || undefined, prInfo.files)
@@ -707,6 +708,7 @@ export async function collectEntries(
 					changesetDescription: changeset.description,
 					prNumber,
 					author,
+					commitAuthors,
 					domain,
 					packageName: releasePackage,
 					changeType: classifyChangeType(parsed.type, breaking),
@@ -746,6 +748,7 @@ export async function collectEntries(
 				changesetDescription: changeset.description,
 				prNumber: null,
 				author: "unknown",
+				commitAuthors: [],
 				domain,
 				packageName: releasePackage,
 				changeType: classifyChangeType("fix", changeset.breaking),

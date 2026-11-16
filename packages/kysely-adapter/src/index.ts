@@ -3,6 +3,7 @@ export * from "./kysely-adapter";
 export {
 	getMssqlSchema,
 	getPostgresSchema,
+	introspectPostgresTables,
 	toIntrospectedTables,
 	toPhysicalSchema,
 } from "./schema-check";

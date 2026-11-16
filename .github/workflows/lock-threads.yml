@@ -17,7 +17,7 @@ jobs:
     permissions:
       issues: write
       pull-requests: write
-    if: github.repository_owner == 'better-auth'
+    if: github.repository == 'better-auth/better-auth'
     steps:
       - name: Generate App Token
         id: app-token

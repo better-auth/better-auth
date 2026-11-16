@@ -1,8 +1,10 @@
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getCookieCache } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { User } from "../../types";
 import { bearer } from "../bearer";
 import { emailOTP } from ".";
 import { emailOTPClient } from "./client";
@@ -647,6 +649,170 @@ describe("email-otp", async () => {
 	});
 });
 
+/**
+ * Password reset must require the stored address even when the database
+ * compares email addresses without accents.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6532#section-3.1
+ */
+describe("email-otp password reset on an accent-insensitive database", () => {
+	const email = "user@example.com";
+	const lookalikeEmail = "user@exámple.com";
+
+	async function setup() {
+		const fold = (value: string) =>
+			value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+		const db: Record<string, Record<string, unknown>[]> = {
+			user: [],
+			session: [],
+			account: [],
+			verification: [],
+		};
+		const sent: { email: string; otp: string }[] = [];
+
+		const { auth, client } = await getTestInstance(
+			{
+				database: (options) => {
+					const base = memoryAdapter(db)(options);
+					// A miss on an exact `email` match is retried accent- and
+					// case-insensitively, as the database's collation would.
+					const findOne: typeof base.findOne = async <T>(
+						query: Parameters<typeof base.findOne>[0],
+					): Promise<T | null> => {
+						const found = await base.findOne<T>(query);
+						if (found || query.model !== "user") return found;
+						const emailWhere = query.where?.find(
+							(where) =>
+								where.field === "email" && (where.operator ?? "eq") === "eq",
+						);
+						if (typeof emailWhere?.value !== "string") return found;
+						const requested = fold(emailWhere.value);
+						const row = (db.user ?? []).find(
+							(user) =>
+								typeof user.email === "string" &&
+								fold(user.email) === requested,
+						);
+						return (row ?? null) as T | null;
+					};
+					return { ...base, findOne };
+				},
+				emailAndPassword: { enabled: true },
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ email, otp }) {
+							sent.push({ email, otp });
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		const { internalAdapter } = await auth.$context;
+		const registration = await client.signUp.email({
+			email,
+			password: "original-password",
+			name: "User",
+		});
+
+		return {
+			auth,
+			client,
+			internalAdapter,
+			sent,
+			userId: registration.data!.user.id,
+		};
+	}
+
+	it("does not reset another account's password through a look-alike address", async () => {
+		const { auth, client, internalAdapter, sent, userId } = await setup();
+
+		// Confirm that the adapter applies the simulated collation.
+		const collated = await (await auth.$context).adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: lookalikeEmail }],
+		});
+		expect(collated?.id).toBe(userId);
+
+		sent.length = 0;
+		const request = await client.emailOtp.requestPasswordReset({
+			email: lookalikeEmail,
+		});
+		expect(request.data).toBeNull();
+		expect(sent).toEqual([]);
+
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "forget-password",
+		});
+		const otp = sent.at(-1)!.otp;
+		expect(sent.at(-1)!.email).toBe(email);
+		const reset = await client.emailOtp.resetPassword({
+			email: lookalikeEmail,
+			otp,
+			password: "replacement-password",
+		});
+		expect(reset.data).toBeNull();
+
+		const withRejectedPassword = await client.signIn.email({
+			email,
+			password: "replacement-password",
+		});
+		expect(withRejectedPassword.error?.status).toBe(401);
+		const withOwnPassword = await client.signIn.email({
+			email,
+			password: "original-password",
+		});
+		expect(withOwnPassword.data?.user.id).toBe(userId);
+		await expect(
+			internalAdapter.findUserByEmail(lookalikeEmail),
+		).resolves.toBeNull();
+	});
+
+	it("still resets the password for the address itself, regardless of case", async () => {
+		const { client, sent } = await setup();
+		await client.emailOtp.sendVerificationOtp({
+			email: "User@Example.com",
+			type: "forget-password",
+		});
+		expect(sent.at(-1)!.email).toBe(email);
+		const reset = await client.emailOtp.resetPassword({
+			email: "User@Example.com",
+			otp: sent.at(-1)!.otp,
+			password: "rotated-password",
+		});
+		expect(reset.data?.success).toBe(true);
+		const signedIn = await client.signIn.email({
+			email,
+			password: "rotated-password",
+		});
+		expect(signedIn.data?.user.email).toBe(email);
+	});
+
+	it("resolves the stored address written in another normalization form", async () => {
+		const { auth, internalAdapter } = await setup();
+		const stored = "accent@exámple.com".normalize("NFC");
+		const { adapter } = await auth.$context;
+		const user = await adapter.create<User>({
+			model: "user",
+			data: {
+				email: stored,
+				name: "Accent",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		await expect(
+			internalAdapter.findUserByEmail(stored.normalize("NFD")),
+		).resolves.toMatchObject({ user: { id: user.id } });
+	});
+});
+
 describe("change email", async () => {
 	const otpFn = vi.fn();
 	let otp = "";
@@ -1237,6 +1403,167 @@ describe("change email", async () => {
 				expect.any(Object),
 			);
 		});
+	});
+});
+
+describe("change email code binding", () => {
+	// The two (current, new) pairs join to the same string with a "-" separator
+	const first = {
+		email: "a@binding.test",
+		newEmail: "y.org-target@example.com",
+	};
+	const second = {
+		email: "a@binding.test-y.org",
+		newEmail: "target@example.com",
+	};
+	const password = "binding-password-123";
+
+	async function setup() {
+		const otps = new Map<string, string>();
+		const { auth, signInWithUser } = await getTestInstance({
+			plugins: [
+				emailOTP({
+					generateOTP: ({ email }) =>
+						email === first.newEmail ? "123456" : "654321",
+					async sendVerificationOTP({ email, otp }) {
+						otps.set(email, otp);
+					},
+					changeEmail: { enabled: true },
+				}),
+			],
+		});
+		for (const { email } of [first, second]) {
+			await auth.api.signUpEmail({
+				body: {
+					email,
+					password,
+					name: email,
+				},
+			});
+		}
+		const { headers: firstHeaders } = await signInWithUser(
+			first.email,
+			password,
+		);
+		const { headers: secondHeaders } = await signInWithUser(
+			second.email,
+			password,
+		);
+		return { auth, otps, firstHeaders, secondHeaders };
+	}
+
+	it("should not accept a code issued to another account", async () => {
+		const { auth, otps, firstHeaders, secondHeaders } = await setup();
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: firstHeaders,
+			body: {
+				newEmail: first.newEmail,
+			},
+		});
+		const otp = otps.get(first.newEmail);
+		expect.assert.isDefined(otp);
+		const res = auth.api.changeEmailEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+				otp,
+			},
+		});
+
+		await expect(res).rejects.toMatchObject({
+			body: {
+				code: "INVALID_OTP",
+			},
+		});
+		const session = await auth.api.getSession({ headers: secondHeaders });
+		expect(session?.user.email).toBe(second.email);
+	});
+
+	it("should not accept another account's code when both accounts requested one", async () => {
+		const { auth, otps, firstHeaders, secondHeaders } = await setup();
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+			},
+		});
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: firstHeaders,
+			body: {
+				newEmail: first.newEmail,
+			},
+		});
+		const firstOTP = otps.get(first.newEmail);
+		const secondOTP = otps.get(second.newEmail);
+		expect.assert.isDefined(firstOTP);
+		expect.assert.isDefined(secondOTP);
+		expect(firstOTP).not.toBe(secondOTP);
+		const res = auth.api.changeEmailEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+				otp: firstOTP,
+			},
+		});
+
+		await expect(res).rejects.toMatchObject({
+			body: {
+				code: "INVALID_OTP",
+			},
+		});
+		const session = await auth.api.getSession({ headers: secondHeaders });
+		expect(session?.user.email).toBe(second.email);
+	});
+
+	it("should not accept a code for a different new address", async () => {
+		const { auth, otps, firstHeaders } = await setup();
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: firstHeaders,
+			body: {
+				newEmail: "requested@binding.test",
+			},
+		});
+		const otp = otps.get("requested@binding.test");
+		expect.assert.isDefined(otp);
+		const res = auth.api.changeEmailEmailOTP({
+			headers: firstHeaders,
+			body: {
+				newEmail: "other@binding.test",
+				otp,
+			},
+		});
+
+		await expect(res).rejects.toMatchObject({
+			body: {
+				code: "INVALID_OTP",
+			},
+		});
+		const session = await auth.api.getSession({ headers: firstHeaders });
+		expect(session?.user.email).toBe(first.email);
+	});
+
+	it("should change email with a code issued to the same account", async () => {
+		const { auth, otps, secondHeaders } = await setup();
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+			},
+		});
+		const otp = otps.get(second.newEmail);
+		expect.assert.isDefined(otp);
+		const res = await auth.api.changeEmailEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+				otp,
+			},
+		});
+
+		expect(res.success).toBe(true);
+		const session = await auth.api.getSession({ headers: secondHeaders });
+		expect(session?.user.email).toBe(second.newEmail);
+		expect(session?.user.emailVerified).toBe(true);
 	});
 });
 

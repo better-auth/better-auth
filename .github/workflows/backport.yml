@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: >
-      github.repository_owner == 'better-auth' && (
+      github.repository == 'better-auth/better-auth' && (
         (
           github.event_name == 'pull_request_target' &&
           github.event.pull_request.merged &&

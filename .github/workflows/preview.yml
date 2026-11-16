@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.repository == 'better-auth/better-auth'
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
     permissions:
       contents: read
@@ -32,7 +33,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
 
       - name: Build
         run: pnpm build

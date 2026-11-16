@@ -2,6 +2,8 @@
 /// <reference types="bun" />
 //https://github.com/unjs/std-env/blob/main/src/env.ts
 
+import { isBun, isDeno } from "./runtime";
+
 const _envShim = Object.create(null);
 
 export type EnvObject = Record<string, string | undefined>;
@@ -69,14 +71,13 @@ export function getEnvVar<Fallback extends string>(
 		return process.env[key] ?? (fallback as any);
 	}
 
-	// @ts-expect-error deno
-	if (typeof Deno !== "undefined") {
+	if (isDeno()) {
 		// @ts-expect-error deno
 		return Deno.env.get(key) ?? (fallback as string);
 	}
 
 	// Handle Bun
-	if (typeof Bun !== "undefined") {
+	if (isBun()) {
 		return Bun.env[key] ?? (fallback as string);
 	}
 

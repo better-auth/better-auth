@@ -1,5 +1,6 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { APIError } from "better-auth/api";
+import { DEFAULT_CLOCK_SKEW_MS } from "../constants";
 import { resolveSigningCerts } from "../saml";
 import { parseSAMLServiceProviderMetadata } from "../saml/response-binding";
 import { saml } from "../samlify";
@@ -64,6 +65,7 @@ export function createSP(
 	},
 ) {
 	const spData = config.spMetadata;
+	const clockSkew = opts?.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
 	const sloLocation = `${baseURL}/sso/saml2/sp/slo/${providerId}`;
 	const acsUrl = `${baseURL}/sso/saml2/sp/acs/${providerId}`;
 
@@ -115,10 +117,10 @@ export function createSP(
 		encPrivateKey: normalizePem(spData?.encPrivateKey),
 		encPrivateKeyPass: spData?.encPrivateKeyPass,
 		relayState: opts?.relayState,
-		clockDrifts:
-			opts?.clockSkew && opts?.clockSkew !== 0
-				? [-opts.clockSkew, opts.clockSkew]
-				: undefined,
+		// samlify checks the assertion window before the pipeline's own
+		// timestamp step and defaults to zero tolerance, so the documented
+		// default must reach it too.
+		clockDrifts: [-clockSkew, clockSkew],
 	});
 	return provider;
 }

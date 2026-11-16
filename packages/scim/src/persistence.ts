@@ -3,6 +3,24 @@ import type {
 	SCIMConnectionDecommissionStatus,
 } from "./configuration";
 
+/** Limit for reads that must return every matching row, which the adapter otherwise caps at `advanced.database.defaultFindManyLimit`. */
+export const SCIM_UNBOUNDED_ROW_LIMIT = 2_147_483_647;
+
+const SCIM_ID_QUERY_CHUNK_SIZE = 500;
+
+/** Splits ids so each `in` list stays under the 999 bound values older SQLite accepts. */
+export function chunkSCIMIds(ids: readonly string[]): string[][] {
+	const chunks: string[][] = [];
+	for (
+		let offset = 0;
+		offset < ids.length;
+		offset += SCIM_ID_QUERY_CHUNK_SIZE
+	) {
+		chunks.push(ids.slice(offset, offset + SCIM_ID_QUERY_CHUNK_SIZE));
+	}
+	return chunks;
+}
+
 /** Immutable connection scope plus durable decommission reconciliation state. */
 export interface SCIMConnectionBinding {
 	id: string;

@@ -340,6 +340,13 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					],
 				}),
 			]);
+			// An empty `in` list is a syntax error on Postgres and MSSQL.
+			if (members[0].length === 0) {
+				return {
+					members: [],
+					total: members[1],
+				};
+			}
 			// Prisma/Drizzle default findMany to ~100 when limit is omitted.
 			// Bound by the members result so every joined user row is fetched.
 			const users = await adapter.findMany<User>({
@@ -1200,12 +1207,17 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				options?.invitationExpiresIn || defaultExpiration,
 				"sec",
 			);
+			// Invitation ids gate unverified accepts, so they must stay opaque even
+			// when the adapter's own default id is sequential (e.g. MongoDB ObjectId).
 			const invite = await adapter.create<
 				InvitationInput,
 				InferInvitation<O, false>
 			>({
 				model: "invitation",
 				data: {
+					...(context.options.advanced?.database?.generateId === undefined && {
+						id: context.generateId({ model: "invitation" }),
+					}),
 					status: "pending",
 					expiresAt,
 					createdAt: new Date(),

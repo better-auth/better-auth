@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cimd",
-  "version": "1.7.15",
+  "version": "1.7.25",
   "description": "Client ID Metadata Document plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -76,6 +76,6 @@
     "@better-auth/core": "workspace:^",
     "@better-auth/oauth-provider": "workspace:^",
     "better-auth": "workspace:^",
-    "better-call": "catalog:"
+    "better-call": "catalog:peer"
   }
 }

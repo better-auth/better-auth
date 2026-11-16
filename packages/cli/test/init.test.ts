@@ -11,6 +11,9 @@ import { getPackageInfo, hasDependency } from "../src/utils/get-package-info";
 import { installDependencies } from "../src/utils/install-dependencies";
 import { testWithTmpDir } from "./test-utils";
 
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
+
 vi.mock(import("../src/version"), () => ({
 	cliVersion: "1.0.0",
 }));
@@ -1518,4 +1521,110 @@ describe("initAction", () => {
 			expect(mockExec).not.toHaveBeenCalled();
 		},
 	);
+
+	describe("cancellation", () => {
+		let lastQuestion: { name?: string; message?: string } = {};
+
+		beforeEach(() => {
+			vi.spyOn(process, "exit").mockImplementation((code) => {
+				throw new Error(`process.exit(${code})`);
+			});
+		});
+
+		function answer(questions: any, cancelWhen: (q: any) => boolean) {
+			const question = Array.isArray(questions) ? questions[0] : questions;
+			lastQuestion = question;
+			if (cancelWhen(question)) return {};
+			if (question.message?.includes("install better-auth")) {
+				return { value: false };
+			}
+			if (question.message?.includes("environment variables")) {
+				return { value: false };
+			}
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
+				return { filePath: "src/lib/auth.ts" };
+			}
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("route handler")
+			) {
+				return { filePath: "src/app/api/auth/[...all]/route.ts" };
+			}
+			if (question.message?.includes("configure a database")) {
+				return { value: "yes" };
+			}
+			if (question.message?.includes("Select the database")) {
+				return { value: "drizzle-postgresql" };
+			}
+			if (question.name === "shouldInstallDeps") {
+				return { shouldInstallDeps: false };
+			}
+			if (question.name === "shouldGenerate") {
+				return { shouldGenerate: true };
+			}
+			if (question.type === "confirm" && question.name === "value") {
+				return { value: false };
+			}
+			if (question.type === "multiselect") {
+				return { value: [] };
+			}
+			if (question.name === "connect") {
+				return { connect: false };
+			}
+			return { [question.name]: question.initial };
+		}
+
+		testWithTmpDir(
+			"exits 130 when the schema overwrite prompt is canceled",
+			async ({ tmp }) => {
+				await fs.writeFile(
+					path.join(tmp, "package.json"),
+					JSON.stringify({ name: "test-project", version: "1.0.0" }),
+				);
+				await fs.mkdir(path.join(tmp, "src/lib"), { recursive: true });
+				await fs.writeFile(
+					path.join(tmp, "src/lib/auth-schema.ts"),
+					"export const oldSchema = {};",
+				);
+				mockGenerateDrizzleSchema.mockResolvedValue({
+					code: "export const schema = {};",
+					fileName: "auth-schema.ts",
+					overwrite: true,
+				});
+				mockPrompts.mockImplementation(async (questions: any) =>
+					answer(questions, (q) => q.message?.includes("overwrite it")),
+				);
+
+				await expect(initAction({ cwd: tmp })).rejects.toThrow();
+				expect(process.exit).toHaveBeenNthCalledWith(1, 130);
+				expect(lastQuestion.message).toContain("overwrite it");
+			},
+		);
+
+		testWithTmpDir(
+			"exits 130 when the connect prompt is canceled",
+			async ({ tmp }) => {
+				await fs.writeFile(
+					path.join(tmp, "package.json"),
+					JSON.stringify({ name: "test-project", version: "1.0.0" }),
+				);
+				mockGenerateDrizzleSchema.mockResolvedValue({
+					code: "export const schema = {};",
+					fileName: "auth-schema.ts",
+					overwrite: false,
+				});
+				mockPrompts.mockImplementation(async (questions: any) =>
+					answer(questions, (q) => q.name === "connect"),
+				);
+
+				await expect(initAction({ cwd: tmp })).rejects.toThrow(
+					"process.exit(130)",
+				);
+				expect(lastQuestion.name).toBe("connect");
+			},
+		);
+	});
 });

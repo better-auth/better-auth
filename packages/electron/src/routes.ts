@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import {
@@ -17,9 +18,17 @@ import type { ElectronOptions } from "./types";
 
 type ElectronVerificationValue = {
 	userId: string;
+	sourceSessionTokenHash: string;
 	codeChallenge: string;
 	state: string;
 };
+
+/**
+ * Verification rows are readable by hooks and exports, so they hold a digest
+ * of the session token rather than the token itself.
+ */
+export const hashSessionToken = (token: string) =>
+	createHash("SHA-256", "base64urlnopad").digest(token);
 
 const electronTokenBodySchema = z.object({
 	token: z.string().nonempty(),
@@ -101,6 +110,21 @@ export const electronToken = (_opts: ElectronOptions) =>
 					"BAD_REQUEST",
 					ELECTRON_ERROR_CODES.INVALID_CODE_VERIFIER,
 				);
+			}
+			const sessions = await ctx.context.internalAdapter.listSessions(
+				tokenRecord.userId,
+			);
+			const now = Date.now();
+			const sourceSessionHashes = await Promise.all(
+				sessions
+					.filter((session) => new Date(session.expiresAt).getTime() > now)
+					.map((session) => hashSessionToken(session.token)),
+			);
+			if (
+				!tokenRecord.sourceSessionTokenHash ||
+				!sourceSessionHashes.includes(tokenRecord.sourceSessionTokenHash)
+			) {
+				throw APIError.from("NOT_FOUND", ELECTRON_ERROR_CODES.INVALID_TOKEN);
 			}
 			const user = await ctx.context.internalAdapter.findUserById(
 				tokenRecord.userId,

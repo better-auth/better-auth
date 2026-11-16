@@ -189,12 +189,30 @@ function registerProtocolScheme(
 		);
 	}
 
+	// App event listeners have no caller to receive a rejection.
+	const onDeepLink = (url: string) =>
+		handleDeepLink({
+			$fetch,
+			options,
+			url,
+			getWindow,
+			clientOptions,
+		}).catch((error) => {
+			console.error("Error while handling deep link", error);
+		});
+
+	// Chromium can reorder the arguments and append its own switches, so match the callback by scheme.
+	const findDeepLink = (argv: string[]) =>
+		argv
+			.map((arg) => URL.parse(arg))
+			.find((url) => url?.protocol === `${scheme}:`)?.href;
+
 	const gotTheLock = app.requestSingleInstanceLock();
 
 	if (!gotTheLock) {
 		app.quit();
 	} else {
-		app.on("second-instance", async (_event, commandLine, _workingDir, url) => {
+		app.on("second-instance", async (_event, commandLine) => {
 			// Someone tried to run a second instance, we should focus our window.
 			const win = getWindow();
 			if (win) {
@@ -202,52 +220,22 @@ function registerProtocolScheme(
 				win.focus();
 			}
 
-			if (!url) {
-				const maybeURL = commandLine.pop();
-				if (typeof maybeURL === "string" && maybeURL.trim() !== "") {
-					try {
-						url = new URL(maybeURL).toString();
-					} catch {
-						//
-					}
-				}
-			}
-
-			if (process?.platform !== "darwin" && typeof url === "string") {
-				await handleDeepLink({
-					$fetch,
-					options,
-					url,
-					getWindow,
-					clientOptions,
-				});
+			const url = findDeepLink(commandLine);
+			if (process?.platform !== "darwin" && url) {
+				await onDeepLink(url);
 			}
 		});
 
 		app.on("open-url", async (_event, url) => {
 			if (process?.platform === "darwin") {
-				await handleDeepLink({
-					$fetch,
-					options,
-					url,
-					getWindow,
-					clientOptions,
-				});
+				await onDeepLink(url);
 			}
 		});
 
 		app.whenReady().then(async () => {
-			if (
-				process?.platform !== "darwin" &&
-				typeof process.argv[1] === "string"
-			) {
-				await handleDeepLink({
-					$fetch,
-					options,
-					url: process.argv[1],
-					getWindow,
-					clientOptions,
-				});
+			const url = findDeepLink(process.argv);
+			if (process?.platform !== "darwin" && url) {
+				await onDeepLink(url);
 			}
 		});
 	}

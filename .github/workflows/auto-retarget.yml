@@ -10,7 +10,7 @@ permissions: {}
 jobs:
   retarget:
     if: >
-      github.repository_owner == 'better-auth' &&
+      github.repository == 'better-auth/better-auth' &&
       !startsWith(github.event.pull_request.head.ref, 'changeset-release/') &&
       github.event.pull_request.head.ref != 'next' &&
       github.actor != 'github-actions[bot]' &&

@@ -373,6 +373,69 @@ describe("trusted origins", () => {
 	});
 
 	describe("custom-scheme origin matching", () => {
+		/**
+		 * @see https://www.better-auth.com/docs/reference/options#trustedorigins
+		 */
+		it.for([
+			["myapp://h?st/cb", "myapp://h/other", false],
+			["myapp://h?st/cb", "myapp://h/cb", false],
+			["myapp://h?st/cb", "myapp://host/cb", true],
+			["myapp://h?st/cb", "myapp://host/cb?next=/other", true],
+			["myapp://h?st/cb", "myapp://host/cb/../other", false],
+			["myapp://h?st/cb", "myapp://host@other/cb", false],
+			["myapp://host/c?b", "myapp://host/c", false],
+			["myapp://host/c?b", "myapp://host/cab", true],
+			["myapp://host/c?b", "myapp://host/c/b", false],
+		] as const)(
+			"keeps question-mark wildcard restrictions for %s and %s (%s)",
+			async ([pattern, url, trusted]) => {
+				const { isTrustedOrigin } = await createAuthTestInstance({
+					trustedOrigins: [pattern],
+				});
+
+				await expect(isTrustedOrigin(url)).resolves.toBe(trusted);
+			},
+		);
+
+		/**
+		 * @see https://www.better-auth.com/docs/reference/options#trustedorigins
+		 */
+		it.for([
+			["exp://192.168.*.*:*/**", "exp://192.168.attacker.com:80/--/", false],
+			["exp://192.168.*.*:*/**", "exp://192.168.1.attacker.com:80/--/", false],
+			["exp://192.168.*.*:*/**", "exp://10.0.0.29:8081/path", false],
+			["exp://192.168.*.*:*/**", "exp://192.168.1.100:8081/path", true],
+			[
+				"exp://192.168.*.*:*/**",
+				"exp://192.168.50.200:19000/auth/callback",
+				true,
+			],
+			["http://192.168.*.*:*", "http://192.168.attacker.com:8080", false],
+			["http://192.168.*.*:*", "http://192.168.1.20:8080", true],
+			["192.168.*.*:*", "https://192.168.attacker.com:8080", false],
+			["192.168.*.*:*", "https://192.168.1.20:8080", true],
+			["exp://192.168.*:*/**", "exp://192.168.attacker.com:80/--/", false],
+			["exp://192.168.*:*/**", "exp://192.168.1.20:8081/--/", true],
+			["exp://192.168.*.*:*/**", "exp://192.168.999.999:8081/--/", false],
+			["exp://192.168.*.*:*/**", "exp://192.168.1.256:8081/--/", false],
+			["exp://192.168.*.*:*/**", "exp://192.168.010.1:8081/--/", false],
+			["exp://192.168.*.*:*/**", "exp://192.168.255.0:8081/--/", true],
+			["http://192.168.*.*:*", "http://192.168.999.999:8080", false],
+			["10.*", "https://10.attacker.com", false],
+			["10.*", "https://10.0.0.5", true],
+			["http://*.example.com", "http://api.app.example.com", true],
+			["https://**.example.com", "https://api.app.example.com", true],
+		] as const)(
+			"matches IP wildcard hosts only against IPv4 addresses for %s and %s (%s)",
+			async ([pattern, url, trusted]) => {
+				const { isTrustedOrigin } = await createAuthTestInstance({
+					trustedOrigins: [pattern],
+				});
+
+				await expect(isTrustedOrigin(url)).resolves.toBe(trusted);
+			},
+		);
+
 		it("should reject URLs where the host extends the trusted pattern", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance({
 				trustedOrigins: ["myapp://callback"],

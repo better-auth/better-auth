@@ -144,6 +144,10 @@ Since this key is not subject to frequent changes, it can be cached indefinitely
 The key ID (`kid`) that was used to sign a JWT is included in the header of the token.
 In case a JWT with a different `kid` is received, it is recommended to fetch the JWKS again.
 
+When the OAuth provider signs tokens with the JWT plugin, verifiers in the same process as the auth server read the keys directly instead of requesting `/jwks`, unless `jwks.remoteUrl` is set. These include the provider's introspection, revocation, and end-session endpoints, `oauthProviderResourceClient(auth)`, and `requireMcpAuth`. The read skips the router, so hooks and rate limits on `/jwks` do not apply to it. Passing an explicit `jwksUrl` to `oauthProviderResourceClient(auth)` or `requireMcpAuth` fetches the keys over HTTP instead.
+
+Access tokens are JWTs only when the client requests a `resource` and `disableJwtPlugin` is off. Otherwise they are opaque, and have no signing keys to read. Verify opaque tokens by introspection with `remoteVerify` in `oauthProviderResourceClient` or `createMcpProtectedRequestHandler`; `requireMcpAuth` verifies JWT access tokens only.
+
 ```json
   {
     "keys": [
@@ -221,10 +225,13 @@ const payload = await validateToken(token)
 
 ### OAuth Provider Mode
 
-If you are making your system oAuth compliant (such as when utilizing the OIDC or MCP plugins), you **MUST** disable the `/token` endpoint (oAuth equivalent `/oauth2/token`) and disable setting the jwt header (oAuth equivalent `/oauth2/userinfo`).
+When you use the [OAuth Provider](/docs/plugins/oauth-provider) or [MCP](/docs/plugins/mcp) plugin, disable both ways the JWT plugin hands session JWTs to the browser: the `/token` endpoint and the `set-auth-jwt` header. OAuth clients get tokens from `/oauth2/token` and claims from `/oauth2/userinfo`, so they need neither.
+
+Session JWTs are signed with the same keys as OAuth access tokens, and by default they carry the auth server's URL as both `iss` and `aud`. A resource server that checks only signature, issuer, and audience can therefore accept a signed-in user's session JWT as an access token, without any client, consent, or scope. Disabling both paths removes that token from the browser. Resource servers should also reject tokens that are not OAuth access tokens; see [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
 
 betterAuth({
   disabledPaths: [
@@ -581,3 +588,7 @@ jwt({
   }
 })
 ```
+
+When a verifier in the same process reads the keys, `getJwks` receives the request being verified in `ctx.request` and `ctx.headers`. That applies to introspection, revocation, end-session, and `requireMcpAuth`. `oauthProviderResourceClient(auth)` does not pass its request to `getJwks`, so there `ctx` carries only the auth context in `ctx.context`.
+
+Because `getJwks` can return different keys for each request, such as per tenant, these verifiers do not cache its result. They call it on every verification, so cache inside your store if reads are expensive. Keep any such cache keyed by whatever your store selects keys by.

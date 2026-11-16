@@ -8,10 +8,14 @@ import {
 } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
-import { mergeScopes } from "@better-auth/core/oauth2";
+import { mergeScopes, parseStringBoolean } from "@better-auth/core/oauth2";
 import { createEmailVerificationToken } from "../api";
+import { isStateful } from "../api/routes/session";
 import { setAccountCookie } from "../cookies/session-store";
+import { symmetricDecrypt } from "../crypto";
+import { derivePurposeKey } from "../crypto/purpose";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
+import type { StateData } from "../state";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { assertValidUserInfo } from "../utils/validate-user-info";
@@ -37,10 +41,7 @@ type LinkedProviderProfile = {
 };
 
 interface LinkOAuthAccountOptions {
-	link: {
-		userId: string;
-		email: string;
-	};
+	link: NonNullable<StateData["link"]>;
 	userInfo: LinkedProviderProfile;
 	account: OAuthAccountData;
 	profile: Record<string, unknown>;
@@ -64,10 +65,43 @@ function linkOAuthAccountFailure(
 	return { linked: false, error: { code, message } };
 }
 
+/**
+ * Whether the session that started a link is still live when the provider
+ * returns. Links whose state carries no session token (started before the
+ * token was recorded, or built by a direct caller) are not checked.
+ */
+async function isLinkSessionLive(
+	c: GenericEndpointContext,
+	link: LinkOAuthAccountOptions["link"],
+) {
+	if (!link.encryptedSessionToken || !isStateful(c)) return true;
+	const sessionToken = await symmetricDecrypt({
+		key: derivePurposeKey(c.context.secretConfig, "oauth-link-session-token"),
+		data: link.encryptedSessionToken,
+	}).catch(() => null);
+	if (!sessionToken) return false;
+	const source = await c.context.internalAdapter.findSession(sessionToken);
+	if (!source) return false;
+	return (
+		source.session.userId === link.userId &&
+		source.session.expiresAt > new Date()
+	);
+}
+
 export async function linkOAuthAccount(
 	c: GenericEndpointContext,
-	{ link, userInfo, account, profile, scopes }: LinkOAuthAccountOptions,
+	opts: LinkOAuthAccountOptions,
 ): Promise<LinkOAuthAccountResult> {
+	const { link, account, profile, scopes } = opts;
+	const userInfo = {
+		...opts.userInfo,
+		emailVerified: parseStringBoolean(opts.userInfo.emailVerified) ?? false,
+	};
+	if (!(await isLinkSessionLive(c, link))) {
+		return linkOAuthAccountFailure(
+			OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+		);
+	}
 	try {
 		await assertValidUserInfo(c, {
 			user: {
@@ -179,8 +213,11 @@ export async function handleOAuthUserInfo(
 		requireExactAccountBinding?: boolean | undefined;
 	},
 ) {
-	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
-		opts;
+	const { account, callbackURL, disableSignUp, overrideUserInfo } = opts;
+	const userInfo = {
+		...opts.userInfo,
+		emailVerified: parseStringBoolean(opts.userInfo.emailVerified) ?? false,
+	};
 	const source = opts.source ?? {
 		method: "oauth",
 		oauth: { providerId: account.providerId },
@@ -539,26 +576,33 @@ export async function handleOAuthUserInfo(
 				providerId: account.providerId,
 				accountId: account.accountId,
 			};
-			const { createdUser, createdAccount } = await runWithTransaction(
-				c.context.adapter,
-				async () => {
-					const createdUser = await c.context.internalAdapter.createUser(
-						{
-							name,
-							image,
-							...additionalUserFields,
-							email: userInfo.email.toLowerCase(),
-							emailVerified: userInfo.emailVerified,
-						},
-						source,
-					);
-					const createdAccount = await c.context.internalAdapter.createAccount({
-						...accountData,
-						userId: createdUser.id,
-					});
-					return { createdUser, createdAccount };
-				},
-			);
+			const created = await runWithTransaction(c.context.adapter, async () => {
+				const createdUser = await c.context.internalAdapter.createUser(
+					{
+						name,
+						image,
+						...additionalUserFields,
+						email: userInfo.email.toLowerCase(),
+						emailVerified: userInfo.emailVerified,
+					},
+					source,
+				);
+				// A `user.create.before` hook returning false aborts with null.
+				if (!createdUser) return null;
+				const createdAccount = await c.context.internalAdapter.createAccount({
+					...accountData,
+					userId: createdUser.id,
+				});
+				return { createdUser, createdAccount };
+			});
+			if (!created) {
+				return {
+					error: "unable to create user",
+					data: null,
+					isRegister: false,
+				};
+			}
+			const { createdUser, createdAccount } = created;
 			if (
 				requireExactAccountBinding &&
 				(createdAccount.accountId !== account.accountId ||
@@ -682,6 +726,7 @@ async function dispatchVerificationEmail(
 				user.email,
 				undefined,
 				c.context.options.emailVerification?.expiresIn,
+				{ userId: user.id },
 			);
 			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 				callbackURL || "/",

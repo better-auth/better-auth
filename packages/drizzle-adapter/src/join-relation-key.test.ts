@@ -165,6 +165,35 @@ describe("getOneToOneRelationKey", () => {
 		).toBe("users");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10716
+	 */
+	it("ignores references to tables outside the schema", () => {
+		const appReferenceSchema = {
+			...schema,
+			user: {
+				modelName: "user",
+				fields: {
+					id: { type: "string" },
+					roleId: {
+						type: "string",
+						references: { model: "roles", field: "id" },
+					},
+				},
+			},
+		} satisfies BetterAuthDBSchema;
+
+		expect(
+			resolveRelationKey({
+				baseModel: "session",
+				joinModel: "user",
+				relationKeys: ["user"],
+				usePlural: false,
+				databaseSchema: appReferenceSchema,
+			}),
+		).toBe("user");
+	});
+
 	it("uses the generated key when metadata has no matching candidate", () => {
 		expect(
 			resolveRelationKey({

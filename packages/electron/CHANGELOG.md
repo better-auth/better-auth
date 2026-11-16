@@ -1,5 +1,45 @@
 # @better-auth/electron
 
+## 1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+## 1.7.23
+
+### Patch Changes
+
+- [#12490](https://github.com/better-auth/better-auth/pull/12490) [`53abb96`](https://github.com/better-auth/better-auth/commit/53abb9664ab634086b58e9fe5d6c47c66445deca) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed sign-in callbacks being missed on Windows and Linux when Chromium reorders or appends launch arguments.
+
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12409](https://github.com/better-auth/better-auth/pull/12409) [`9362c0d`](https://github.com/better-auth/better-auth/commit/9362c0d42e7f65a1dbfd6318360cd97ea9dd9d5b) Thanks [@bytaesu](https://github.com/bytaesu)! - A deep link that fails to authenticate, such as one opened again after sign-in, is now logged instead of causing an unhandled promise rejection in the main process.
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Sign-in and sign-up now return their normal response when the Electron transfer cookie does not hold a valid transfer request.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Desktop authorization codes are now bound to the browser session that issued them and stop working once that session ends.
+
 ## 1.7.15
 
 ## 1.7.14
