@@ -397,6 +397,21 @@ Any key left out of the new set stops working at once. To roll a key without dow
   The provider refuses to start with this option on the memory adapter or with `advanced.database.generateId: "serial"`, because neither enforces single-use assertions.
 </Callout>
 
+### Rotating `jwks_uri` keys
+
+Better Auth caches a client's `jwks_uri` key set for 5 minutes. When an assertion names a key the cached set lacks, such as a `kid` the client published after the set was cached, Better Auth fetches the `jwks_uri` again and verifies against the new set ([OIDC Core §10.1.1](https://openid.net/specs/openid-connect-core-1_0.html#RotateSigKeys)). It does this at most once every 60 seconds for each `jwks_uri`, whether or not the fetch succeeds, so assertions that name keys the client never published add at most one fetch a minute on top of the regular cache refresh. Each server process keeps its own limit, and a key set that leaves the process cache, which holds up to 500 entries, loses its limit.
+
+An assertion signed with a key missing from the cached key set, such as a newly published key, fails with `401 invalid_client` when another unknown-key fetch of the same `jwks_uri` started in the last 60 seconds, even if that fetch failed, unless a request has already cached a set that holds the key. The client can retry after the 60 seconds.
+
+To rotate without failed authentications, keep the `jwks_uri` reachable throughout, give every key a unique `kid`, and follow this order:
+
+1. Publish the new key at the `jwks_uri`, next to the old key.
+2. Wait 5 minutes, so every cached copy includes the new key, then start signing with it.
+3. Keep the old key published until the assertions signed with it have expired, which takes `assertionMaxLifetime` (5 minutes by default).
+4. Remove the old key. A server that cached it keeps accepting it until its cache expires: at most 5 minutes after removal, or 10 minutes if the `jwks_uri` is unreachable.
+
+A client with inline `jwks` has no refetch. To rotate its keys, see [Rotating client keys](#rotating-client-keys).
+
 ## Trusted clients
 
 To skip database lookups for first-party apps whose redirect URIs you control, list their client IDs in `cachedTrustedClients`. To also skip the consent screen, set `skip_consent` on each client.

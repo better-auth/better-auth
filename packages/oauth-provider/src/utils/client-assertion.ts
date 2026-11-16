@@ -38,6 +38,8 @@ type FetchedJwksResult =
 	| { valid: true; jwks: JSONWebKeySet }
 	| { valid: false };
 type JwksCacheEntry = {
+	/** Start time of the last unknown-key refetch, including a failed one. */
+	refetchedAt?: number;
 	jwks: JSONWebKeySet;
 	fetchedAt: number;
 	sequence: number;
@@ -66,6 +68,7 @@ type JwksCache = {
 // Provider-scoped JWKS URI caches with 5-minute TTL and bounded size.
 const jwksCaches = new WeakMap<OAuthOptions<Scope[]>, JwksCache>();
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+const JWKS_REFETCH_COOLDOWN_MS = 60_000;
 const JWKS_CACHE_MAX_ENTRIES = 500;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
 // A transport that honors the abort settles the fetch before this backstop, so
@@ -203,7 +206,12 @@ function setJwksCache(
 	const current = cache.sets.get(cacheKey);
 	if (current && current.sequence > sequence) return current.jwks;
 	cache.sets.delete(cacheKey);
-	cache.sets.set(cacheKey, { jwks, fetchedAt, sequence });
+	cache.sets.set(cacheKey, {
+		jwks,
+		fetchedAt,
+		sequence,
+		refetchedAt: current?.refetchedAt,
+	});
 	if (cache.sets.size > JWKS_CACHE_MAX_ENTRIES) {
 		const leastRecentlyUsed = cache.sets.keys().next().value;
 		if (leastRecentlyUsed !== undefined) cache.sets.delete(leastRecentlyUsed);
@@ -234,9 +242,11 @@ async function loadJwks(
 	{
 		canJoin = () => true,
 		recordsFailures = false,
+		retryJoinedFailure = true,
 	}: {
 		canJoin?: (fetch: JwksFetch) => boolean;
 		recordsFailures?: boolean;
+		retryJoinedFailure?: boolean;
 	} = {},
 ): Promise<FetchedJwksResult> {
 	const start = (joinable: (fetch: JwksFetch) => boolean) => {
@@ -336,7 +346,7 @@ async function loadJwks(
 	};
 
 	const first = start(canJoin);
-	if (!first.joined) return answer(first.fetch);
+	if (!first.joined || !retryJoinedFailure) return answer(first.fetch);
 	try {
 		const result = await settle(first.fetch);
 		if (result.valid) return result;
@@ -695,6 +705,7 @@ async function refetchClientJwks(
 	opts: OAuthOptions<Scope[]>,
 	client: SchemaClient<Scope[]>,
 	requestedSequence: number,
+	failedJwks: JSONWebKeySet,
 ): Promise<JSONWebKeySet | null> {
 	if (!client.jwksUri) return null;
 	const discovery = client.clientDiscoveryId
@@ -705,14 +716,32 @@ async function refetchClientJwks(
 	if (client.clientDiscoveryId && !discovery?.fetchClientMetadataResource) {
 		return null;
 	}
+	const cache = getJwksCache(opts);
+	const cacheKey = getJwksCacheKey(client);
+	const cached = readJwksCache(cache, cacheKey);
+	if (cached && cached.jwks !== failedJwks) return cached.jwks;
+
+	const canJoin = (fetch: JwksFetch) => fetch.sequence >= requestedSequence;
+	const inFlight = cache.fetches.get(cacheKey);
+	const now = Date.now();
+	if (cached && !(inFlight && isFetching(inFlight, now) && canJoin(inFlight))) {
+		if (
+			cached.refetchedAt !== undefined &&
+			now - cached.refetchedAt < JWKS_REFETCH_COOLDOWN_MS
+		) {
+			return null;
+		}
+		cached.refetchedAt = now;
+	}
 	try {
 		const result = await loadJwks(
-			getJwksCache(opts),
-			getJwksCacheKey(client),
+			cache,
+			cacheKey,
 			client.jwksUri,
 			discovery?.fetchClientMetadataResource,
 			{
-				canJoin: (fetch) => fetch.sequence >= requestedSequence,
+				canJoin,
+				retryJoinedFailure: false,
 				recordsFailures: getJwksStaleIfErrorMs(discovery) > 0,
 			},
 		);
@@ -1116,6 +1145,7 @@ export async function verifyClientAssertion(
 				opts,
 				client,
 				requestedSequence,
+				jwks,
 			);
 			if (refreshed) {
 				try {
