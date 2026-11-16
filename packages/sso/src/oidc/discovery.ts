@@ -8,7 +8,10 @@
  * @see https://openid.net/specs/openid-connect-discovery-1_0.html
  */
 
-import { verifyIdToken } from "@better-auth/core/oauth2/internal";
+import {
+	classifyResolvedHost,
+	verifyIdToken,
+} from "@better-auth/core/oauth2/internal";
 import {
 	classifyHost,
 	isPublicRoutableHost,
@@ -259,31 +262,23 @@ export async function assertEndpointResolvesPublic(
 	// IP literals are already classified synchronously; only FQDNs need resolving.
 	if (classifyHost(host).literal !== "fqdn") return;
 
-	let dns: typeof import("node:dns/promises");
-	try {
-		dns = await import("node:dns/promises");
-	} catch {
-		// Runtime without node:dns — rely on the synchronous host check.
-		return;
-	}
-
-	let resolved: Array<{ address: string }>;
-	try {
-		resolved = await dns.lookup(host, { all: true });
-	} catch {
-		// Resolution failure: let the actual fetch surface the network error.
-		return;
-	}
-
-	for (const { address } of resolved) {
-		if (!isPublicRoutableHost(address)) {
-			throw new DiscoveryError(
-				"discovery_private_host",
-				`The ${name} host "${host}" resolves to a non-publicly-routable address (${address}). If this is an internal IdP, add its origin to trustedOrigins.`,
-				{ endpoint: name, url: endpoint, hostname: host, resolved: address },
-			);
-		}
-	}
+	// Fail open: without a resolver or an answer, the fetch surfaces the network
+	// error and the synchronous host check stands.
+	const result = await classifyResolvedHost(host);
+	if (result.status !== "non-public") return;
+	const reason = result.address
+		? `resolves to a non-publicly-routable address (${result.address})`
+		: "is not publicly routable";
+	throw new DiscoveryError(
+		"discovery_private_host",
+		`The ${name} host "${host}" ${reason}. If this is an internal IdP, add its origin to trustedOrigins.`,
+		{
+			endpoint: name,
+			url: endpoint,
+			hostname: host,
+			...(result.address && { resolved: result.address }),
+		},
+	);
 }
 
 /**
