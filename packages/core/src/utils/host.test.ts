@@ -521,6 +521,38 @@ describe("Host Classification", () => {
 			}
 		});
 
+		it("should reject every address outside global unicast 2000::/3 unless it has a more specific kind", () => {
+			// Only 2000::/3 is allocated for global unicast. Everything else is
+			// IETF-reserved, even when no special-purpose entry names it.
+			for (const host of [
+				"100:0:0:1::1",
+				"200::1",
+				"400::1",
+				"800::1",
+				"1000::1",
+				"4000::1",
+				"6000::1",
+				"8000::1",
+				"a000::1",
+				"c000::1",
+				"e000::1",
+				"f000::1",
+				"f800::1",
+				"fe00::1",
+				"0:1::1",
+			]) {
+				expect(classifyHost(host).kind).toBe("reserved");
+				expect(isPublicRoutableHost(host)).toBe(false);
+			}
+		});
+
+		it("should keep the edges of global unicast 2000::/3 public", () => {
+			expect(classifyHost("2000::1").kind).toBe("public");
+			expect(classifyHost("3ffe::1").kind).toBe("public");
+			expect(classifyHost("3fff:1000::1").kind).toBe("public");
+			expect(isPublicRoutableHost("2a00:1450:4001:828::200e")).toBe(true);
+		});
+
 		it("should prevent zone-id smuggling", () => {
 			// Naive parsers might treat fe80::1%evil.com as FQDN "evil.com"
 			expect(classifyHost("fe80::1%evil.com").kind).toBe("linkLocal");
