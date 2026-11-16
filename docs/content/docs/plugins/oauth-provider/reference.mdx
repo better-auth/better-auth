@@ -621,6 +621,8 @@ Companion plugins call `extendOAuthProvider()` from their `init()` hook to add t
 
 An interaction request is a request other than an authorization request that the user approves through the `/oauth2/authorize` sign-in, account selection, post-login, and consent pages. It is approved when the user accepts consent, instead of issuing an authorization code. `oauthDeviceAuthorization()` uses one keyed by `user_code`, and `ciba()` one keyed by `ciba_request_id`.
 
+The provider confirms the session in the session store before it calls the handler's `approve` or `deny`. With `session.cookieCache`, a session revoked in the store can still be served from the cache, and such a session cannot approve or deny. Without a server-side session store, the signed cookie is the session record and is trusted. The handler does not repeat this check. The user is sent to the handler's `errorPage`, or to the provider error page, with `access_denied`.
+
 Add companion plugins such as `oauthDeviceAuthorization()` and `oauthTokenExchange()` to every `betterAuth()` instance that registers OAuth clients, including a separate admin or provisioning instance. An instance without the plugin does not support its extension grant:
 
 * `createOAuthClient`, `adminCreateOAuthClient`, and client updates reject the grant with `invalid_client_metadata`.

@@ -452,6 +452,7 @@ The plugin adds one model, `cibaRequest`:
 * **Authorization details come from the client.** The provider checks only their shape and type, and leaves each field to your `validate`. Validate strictly, render them as text, and have your API enforce the granted details itself.
 * **The ping callback only reaches safe endpoints.** Registration and each request check that the notification endpoint is absolute `https` on a public host, with no credentials or fragment, the same rules as `backchannel_logout_uri`. The check does not resolve DNS, so restrict outbound network access where you can.
 * **Tokens are issued once.** An approved request is claimed and deleted in one atomic step, so of two concurrent polls only one receives tokens. The `auth_req_id` is stored hashed.
+* **Only an active session can decide.** The provider's own pages confirm the approving session in the session store before they record an approval, and before they record a denial from the consent page. With `session.cookieCache`, a session you revoked can still be served from the cache until it expires. That session cannot approve or deny a request, and the user is sent to the result page with an error. The request stays pending, and the user can decide again after signing in. `completeCibaRequest` does not use sessions, so your server owns that check.
 
 ## Current limitations
 

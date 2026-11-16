@@ -4,7 +4,11 @@ import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
 import { INSECURE_REDIRECT_URI_MESSAGE } from "@better-auth/core/utils/redirect-uri";
 import { appendQueryParams } from "@better-auth/core/utils/url";
-import { getSessionFromCtx, isAPIError } from "better-auth/api";
+import {
+	getAuthoritativeSessionFromCtx,
+	getSessionFromCtx,
+	isAPIError,
+} from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import { APIError } from "better-call";
 import {
@@ -579,8 +583,23 @@ export async function authorizeEndpoint(
 		}
 		return runAuthorizationInteraction(ctx, opts, headers, settings, {
 			...interactionRequest,
-			approve: (approval) =>
-				interactionRequest.approve(approval).catch(toErrorURL),
+			approve: async (approval) => {
+				try {
+					// The cookie cache can serve a session the store already revoked, so
+					// confirm it with the store before the decision is recorded.
+					const live = await getAuthoritativeSessionFromCtx(ctx);
+					if (live?.session.id !== approval.sessionId) {
+						tokenError(
+							"UNAUTHORIZED",
+							"access_denied",
+							"session is no longer active",
+						);
+					}
+					return await interactionRequest.approve(approval);
+				} catch (error) {
+					return toErrorURL(error);
+				}
+			},
 			errorURL: toErrorURL,
 		});
 	}
