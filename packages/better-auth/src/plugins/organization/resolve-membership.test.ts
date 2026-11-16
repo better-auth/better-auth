@@ -385,6 +385,24 @@ describe("resolveMembership", () => {
 				}),
 			).rejects.toMatchObject({ status: "BAD_REQUEST" });
 		});
+
+		it("lets a stored non-owner resolved as owner change their own role", async () => {
+			const { auth, staff, staffUser, org } = await setup(
+				forStaff({ role: "owner" }),
+			);
+			const staffMember = await auth.api.addMember({
+				body: { organizationId: org.id, userId: staffUser.id, role: "member" },
+			});
+			const updated = await auth.api.updateMemberRole({
+				body: {
+					organizationId: org.id,
+					memberId: staffMember!.id,
+					role: "admin",
+				},
+				headers: staff,
+			});
+			expect(updated.role).toBe("admin");
+		});
 	});
 
 	it("refuses a real member when the resolver returns null", async () => {

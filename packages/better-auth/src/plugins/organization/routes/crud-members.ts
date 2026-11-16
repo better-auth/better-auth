@@ -623,7 +623,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				);
 			}
 
-			if (updaterIsCreator && memberIsUpdatingThemselves) {
+			if (isUpdatingCreator && memberIsUpdatingThemselves) {
 				const members = await ctx.context.adapter.findMany<Member>({
 					model: "member",
 					where: [
