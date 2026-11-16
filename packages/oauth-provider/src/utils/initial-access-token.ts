@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { NO_STORE_HEADERS } from "better-auth/api";
+import { isAPIError, NO_STORE_HEADERS } from "better-auth/api";
 import { APIError } from "better-call";
 import type {
 	ClientRegistrationRequest,
@@ -7,7 +7,7 @@ import type {
 	OAuthOptions,
 	Scope,
 } from "../types";
-import { parseBearerToken } from "./index";
+import { challengeHeaders, parseBearerToken } from "./index";
 
 /**
  * Builds an RFC 6750 §3 Bearer challenge for the registration endpoint. The
@@ -26,7 +26,7 @@ function registrationBearerError(
 		status,
 		{ error, error_description: errorDescription },
 		{
-			"WWW-Authenticate": `Bearer error="${error}"`,
+			...challengeHeaders(`Bearer error="${error}"`),
 			...NO_STORE_HEADERS,
 		},
 	);
@@ -87,7 +87,7 @@ export async function authorizeInitialAccessToken(
 		// A deployment validator may deliberately throw an APIError to shape its
 		// own response. Anything else is unexpected, so fail closed with a generic
 		// server_error rather than letting the thrown message or stack surface.
-		if (error instanceof APIError) throw error;
+		if (isAPIError(error)) throw error;
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error: "server_error",
 			error_description: "Initial access token validation failed",

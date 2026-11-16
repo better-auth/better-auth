@@ -33,6 +33,7 @@ export type {
 	DpopBindingErrorCode,
 	DpopProofError,
 	DpopProofErrorCode,
+	DpopReplayAuthContext,
 	DpopReplayReservation,
 	DpopReplayReservations,
 	DpopReplayStore,

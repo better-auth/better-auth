@@ -399,7 +399,7 @@ export async function processSAMLResponse(
 		});
 	}
 
-	const { extract } = parsedResponse!;
+	const { extract } = parsedResponse;
 	const samlContent = parsedResponse.samlContent;
 
 	// Destination validation (SAML Core §3.2.2) is handled by samlify's

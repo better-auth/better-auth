@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/sso",
-  "version": "1.7.22",
+  "version": "1.7.25",
   "description": "SSO plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -90,6 +90,6 @@
     "@better-auth/utils": "catalog:peer",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:^",
-    "better-call": "catalog:"
+    "better-call": "catalog:peer"
   }
 }

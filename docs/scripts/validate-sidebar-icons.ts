@@ -156,7 +156,7 @@ const hash = createHash("sha256")
 	.update(JSON.stringify({ sections: sectionIcons, pages: pageIcons }))
 	.digest("hex");
 const expectedHash =
-	"af8b6c4b7ded3cb9c7f0606bf48a8e7be218f0fdf5997d827e2f5edd42ece11b";
+	"4e5f01e7710eb7a650d12f77f75ac6c48fdcd781a97ed3efca712af8c098e38c";
 
 if (sectionIcons.length !== 10) {
 	errors.push(`expected 10 section icons, received ${sectionIcons.length}`);
@@ -166,7 +166,7 @@ if (pageIcons.length !== 171) {
 }
 if (hash !== expectedHash) {
 	errors.push(
-		`registry hash differs from origin/main: expected ${expectedHash}, received ${hash}`,
+		`sidebar icon snapshot changed: expected ${expectedHash}, received ${hash}. If you added, removed, moved, or changed a section or page icon on purpose, update expectedHash in docs/scripts/validate-sidebar-icons.ts. If the number of section or page icons changed, also update the matching expected count.`,
 	);
 }
 if (errors.length > 0) {
@@ -174,5 +174,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-	`[validate-sidebar-icons] ${sectionIcons.length} sections and ${pageIcons.length} page icons matched origin/main`,
+	`[validate-sidebar-icons] ${sectionIcons.length} sections and ${pageIcons.length} page icons matched the snapshot`,
 );

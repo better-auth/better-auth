@@ -228,7 +228,7 @@ export async function userInfoEndpoint(
 			url: getEndpointUrl(ctx, "/oauth2/userinfo"),
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
+			replayStore: createDpopReplayStore(ctx.context),
 		});
 	} catch (error) {
 		// Every binding failure means the token is DPoP-bound or the request

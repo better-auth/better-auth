@@ -456,7 +456,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					const result = await db[model]!.create({
+					const result = await db[model].create({
 						data: values,
 						select: convertSelect(select, modelKey),
 					});
@@ -488,7 +488,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					const selects = convertSelect(select, modelKey, join);
 
-					const result = await db[model]!.findFirst({
+					const result = await db[model].findFirst({
 						where: whereClause,
 						select: selects,
 					});
@@ -541,7 +541,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					const selects = convertSelect(select, modelKey, join);
 
-					const result = await db[model]!.findMany({
+					const result = await db[model].findMany({
 						where: whereClause,
 						take: limit || 100,
 						skip: offset || 0,
@@ -582,7 +582,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					return await db[model]!.count({
+					return await db[model].count({
 						where: whereClause,
 					});
 				},
@@ -605,21 +605,21 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						// `update` targets one row. Write only the row found here, still
 						// guarded by the filter, and read it back by ID, because the
 						// update can change a filtered field.
-						const matched = await db[model]!.findFirst({
+						const matched = await db[model].findFirst({
 							where: whereClause,
 						});
 						if (!matched) {
 							return null;
 						}
 						const idField = getFieldName({ model: modelKey, field: "id" });
-						const result = await db[model]!.updateMany({
+						const result = await db[model].updateMany({
 							where: { AND: [whereClause, { [idField]: matched[idField] }] },
 							data: update,
 						});
 						if (!result?.count) {
 							return null;
 						}
-						return await db[model]!.findFirst({
+						return await db[model].findFirst({
 							where: {
 								[idField]:
 									(update as Record<string, unknown>)[idField] ??
@@ -644,7 +644,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// row" signal. `incrementOne` and `delete` already convert
 					// P2025 the same way.
 					try {
-						return await db[model]!.update({
+						return await db[model].update({
 							where: whereClause,
 							data: update,
 						});
@@ -664,7 +664,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						where,
 						action: "updateMany",
 					});
-					const result = await db[model]!.updateMany({
+					const result = await db[model].updateMany({
 						where: whereClause,
 						data: update,
 					});
@@ -685,7 +685,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where,
 							action: "deleteMany",
 						});
-						await db[model]!.deleteMany({
+						await db[model].deleteMany({
 							where: whereClause,
 						});
 						return;
@@ -696,7 +696,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						action: "delete",
 					});
 					try {
-						await db[model]!.delete({
+						await db[model].delete({
 							where: whereClause,
 						});
 					} catch (e: any) {
@@ -740,7 +740,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							action: "delete",
 						});
 						try {
-							const row = await db[model]!.delete({ where: whereClause });
+							const row = await db[model].delete({ where: whereClause });
 							return (row as any) ?? null;
 						} catch (e: any) {
 							if (isPrismaNotFoundError(e)) return null;
@@ -823,7 +823,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							action: "update",
 						});
 						try {
-							const row = await db[model]!.update({
+							const row = await db[model].update({
 								where: whereClause,
 								data,
 							});

@@ -77,6 +77,25 @@ describe("createMcpProtectedRequestHandler", () => {
 	});
 
 	/**
+	 * @see https://fetch.spec.whatwg.org/#cors-safelisted-response-header-name
+	 */
+	it("exposes WWW-Authenticate on a challenge", async () => {
+		verifyAccessTokenRequest.mockRejectedValue(
+			new APIError("UNAUTHORIZED", { message: "missing bearer token" }),
+		);
+
+		const response = await createMcpProtectedRequestHandler(
+			protectedRequestOptions,
+			async () => new Response("unreachable"),
+		)(request());
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
+			"WWW-Authenticate",
+		);
+	});
+
+	/**
 	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-7.2
 	 */
 	it("answers a failed DPoP request with a DPoP challenge", async () => {
@@ -168,6 +187,29 @@ describe("createMcpProtectedRequestHandler", () => {
 		expect(response.status).toBe(403);
 		expect(response.headers.get("WWW-Authenticate")).toContain(
 			'scope="mcp:admin"',
+		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-7.1
+	 */
+	it("answers a handler insufficient-scope error on a DPoP request with a DPoP challenge", async () => {
+		verifyAccessTokenRequest.mockResolvedValue({ sub: "user-5" });
+
+		const response = await createMcpProtectedRequestHandler(
+			{ ...protectedRequestOptions, dpop: { signingAlgorithms: ["ES256"] } },
+			async () => {
+				throw createInsufficientScopeError(["mcp:admin"]);
+			},
+		)(
+			new Request("https://app.example.com/mcp", {
+				headers: { Authorization: "DPoP access-token" },
+			}),
+		);
+
+		expect(response.status).toBe(403);
+		expect(response.headers.get("WWW-Authenticate")).toBe(
+			'DPoP error="insufficient_scope", scope="mcp:admin", error_description="access token is missing required scope: mcp:admin", algs="ES256"',
 		);
 	});
 

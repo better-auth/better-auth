@@ -153,8 +153,13 @@ describe("oauth revoke", async () => {
 		oauthClient = response;
 	});
 
+	/**
+	 * A 401 must carry a challenge, and a browser client must be able to read it.
+	 * @see https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2
+	 */
 	it("should fail unauthenticated request", async () => {
 		const tokens = await getTokens();
+		let responseHeaders: Headers | undefined;
 		const revocation = await client.oauth2.revoke(
 			{
 				token: tokens.data?.access_token!,
@@ -164,9 +169,16 @@ describe("oauth revoke", async () => {
 					accept: "application/json",
 					"content-type": "application/x-www-form-urlencoded",
 				},
+				onError(context) {
+					responseHeaders = context.response.headers;
+				},
 			},
 		);
 		expect(revocation.error?.status).toBe(401);
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("Access-Control-Expose-Headers")).toBe(
+			"WWW-Authenticate",
+		);
 	});
 
 	it("reports unsupported_token_type for a jwt access_token with token_type_hint access_token", async () => {
