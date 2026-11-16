@@ -28,14 +28,14 @@ import { challengeHeaders, getAuthEndpointUrl, getClient } from "./index";
 type FetchedJwksResult =
 	| { valid: true; jwks: JSONWebKeySet }
 	| { valid: false };
-type JwksCacheEntry = {
-	/** Last valid key set; absent until a fetch succeeds. */
-	jwks?: JSONWebKeySet;
-	/** Start time of the fetch that produced `jwks`. */
-	fetchedAt: number;
-	pending?: { promise: Promise<FetchedJwksResult>; startedAt: number };
+type JwksCacheEntry = { jwks: JSONWebKeySet; fetchedAt: number };
+type JwksFetch = { promise: Promise<FetchedJwksResult>; startedAt: number };
+type JwksCache = {
+	/** Last valid key set per `jwks_uri`; only this map is bounded. */
+	sets: Map<string, JwksCacheEntry>;
+	/** Fetch in flight per `jwks_uri`, kept apart so failures never evict a set. */
+	fetches: Map<string, JwksFetch>;
 };
-type JwksCache = Map<string, JwksCacheEntry>;
 
 // Provider-scoped JWKS URI caches with 5-minute TTL and bounded size.
 const jwksCaches = new WeakMap<OAuthOptions<Scope[]>, JwksCache>();
@@ -45,94 +45,108 @@ const JWKS_FETCH_TIMEOUT_MS = 5_000;
 const MAX_JWKS_RESPONSE_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
 
-function getJwksCacheEntry(
-	opts: OAuthOptions<Scope[]>,
-	cacheKey: string,
-): JwksCacheEntry {
+function getJwksCache(opts: OAuthOptions<Scope[]>): JwksCache {
 	let cache = jwksCaches.get(opts);
 	if (!cache) {
-		cache = new Map();
+		cache = { sets: new Map(), fetches: new Map() };
 		jwksCaches.set(opts, cache);
 	}
-	let entry = cache.get(cacheKey);
-	if (!entry) {
-		entry = { fetchedAt: 0 };
-		cache.set(cacheKey, entry);
-		if (cache.size > JWKS_CACHE_MAX_ENTRIES) {
-			// Evict oldest entry (Map iterates in insertion order)
-			const oldest = cache.keys().next().value;
-			if (oldest !== undefined) cache.delete(oldest);
-		}
-	}
-	return entry;
+	return cache;
 }
 
-// Drops an entry whose fetch left no key set, so failing `jwks_uri`s cannot
-// evict cached key sets from the bounded cache.
-function discardEmptyJwksCacheEntry(
-	opts: OAuthOptions<Scope[]>,
+function setJwksCache(
+	cache: JwksCache,
 	cacheKey: string,
-	entry: JwksCacheEntry,
-): void {
-	if (entry.jwks || isFetching(entry, Date.now())) return;
-	const cache = jwksCaches.get(opts);
-	if (cache?.get(cacheKey) === entry) cache.delete(cacheKey);
+	jwks: JSONWebKeySet,
+	fetchedAt: number,
+) {
+	const current = cache.sets.get(cacheKey);
+	if (current && current.fetchedAt > fetchedAt) return;
+	cache.sets.set(cacheKey, { jwks, fetchedAt });
+	if (cache.sets.size > JWKS_CACHE_MAX_ENTRIES) {
+		// Evict oldest entry (Map iterates in insertion order)
+		const oldest = cache.sets.keys().next().value;
+		if (oldest !== undefined) cache.sets.delete(oldest);
+	}
 }
 
 // A fetch older than its own timeout is dead: some runtimes cancel a
 // request's I/O when that request ends, so its promise may never settle.
-function isFetching(entry: JwksCacheEntry, now: number): boolean {
-	return (
-		entry.pending !== undefined &&
-		now - entry.pending.startedAt < JWKS_FETCH_TIMEOUT_MS
-	);
+function isFetching(fetch: JwksFetch | undefined, now: number): boolean {
+	return fetch !== undefined && now - fetch.startedAt < JWKS_FETCH_TIMEOUT_MS;
 }
 
 /**
- * Fetches the key set into `entry`, joining a fetch already in flight so
- * concurrent requests share one call. Each caller bounds its own wait, since
- * the request that started the fetch may end before it settles.
+ * Loads a key set, sharing one request per `jwks_uri` between callers. A
+ * caller joins a fetch in flight only when `canJoin` accepts it, so a request
+ * can require a fetch that started after it did. Each caller bounds its own
+ * wait, since the request that started a fetch may end before it settles.
+ * A caller whose joined fetch throws makes one fetch of its own, as it would
+ * without sharing, so a failure that is not its own does not fail it.
  */
 async function loadJwks(
-	opts: OAuthOptions<Scope[]>,
+	cache: JwksCache,
 	cacheKey: string,
-	entry: JwksCacheEntry,
 	jwksUri: string,
 	fetchClientMetadataResource: ClientMetadataResourceFetch | undefined,
+	canJoin: (fetch: JwksFetch) => boolean = () => true,
 ): Promise<FetchedJwksResult> {
-	const now = Date.now();
-	if (!entry.pending || !isFetching(entry, now)) {
-		const pending: NonNullable<JwksCacheEntry["pending"]> = {
-			startedAt: now,
+	const start = (joinable: (fetch: JwksFetch) => boolean) => {
+		const current = cache.fetches.get(cacheKey);
+		if (current && isFetching(current, Date.now()) && joinable(current)) {
+			return { fetch: current, joined: true };
+		}
+		const startedAt = Date.now();
+		const fetch: JwksFetch = {
+			startedAt,
 			promise: fetchJwksFromUri(jwksUri, fetchClientMetadataResource)
 				.then((result) => {
-					if (result.valid && now >= entry.fetchedAt) {
-						entry.jwks = result.jwks;
-						entry.fetchedAt = now;
+					if (result.valid) {
+						setJwksCache(cache, cacheKey, result.jwks, startedAt);
 					}
 					return result;
 				})
 				.finally(() => {
-					if (entry.pending === pending) entry.pending = undefined;
+					if (cache.fetches.get(cacheKey) === fetch) {
+						cache.fetches.delete(cacheKey);
+					}
 				}),
 		};
-		entry.pending = pending;
-	}
-	let timeout: ReturnType<typeof setTimeout> | undefined;
+		cache.fetches.set(cacheKey, fetch);
+		return { fetch, joined: false };
+	};
+	const settle = async (fetch: JwksFetch): Promise<FetchedJwksResult> => {
+		let timeout: ReturnType<typeof setTimeout> | undefined;
+		try {
+			return await Promise.race([
+				fetch.promise,
+				new Promise<never>((_, reject) => {
+					timeout = setTimeout(
+						() => reject(new Error("JWKS fetch timed out")),
+						Math.max(0, fetch.startedAt + JWKS_FETCH_TIMEOUT_MS - Date.now()),
+					);
+				}),
+			]);
+		} finally {
+			clearTimeout(timeout);
+			if (
+				cache.fetches.get(cacheKey) === fetch &&
+				!isFetching(fetch, Date.now())
+			) {
+				cache.fetches.delete(cacheKey);
+			}
+		}
+	};
+
+	const first = start(canJoin);
 	try {
-		return await Promise.race([
-			entry.pending.promise,
-			new Promise<never>((_, reject) => {
-				timeout = setTimeout(
-					() => reject(new Error("JWKS fetch timed out")),
-					JWKS_FETCH_TIMEOUT_MS,
-				);
-			}),
-		]);
-	} finally {
-		clearTimeout(timeout);
-		discardEmptyJwksCacheEntry(opts, cacheKey, entry);
+		return await settle(first.fetch);
+	} catch (error) {
+		if (!first.joined) throw error;
 	}
+	return settle(
+		start((fetch) => fetch !== first.fetch && canJoin(fetch)).fetch,
+	);
 }
 
 function getJwksCacheKey(client: SchemaClient<Scope[]>): string {
@@ -348,17 +362,17 @@ async function fetchClientJwks(
 
 	const now = Date.now();
 	const cacheKey = getJwksCacheKey(client);
-	const entry = getJwksCacheEntry(opts, cacheKey);
-	if (entry.jwks && now - entry.fetchedAt < JWKS_CACHE_TTL_MS) {
-		return entry.jwks;
+	const cache = getJwksCache(opts);
+	const cached = cache.sets.get(cacheKey);
+	if (cached && now - cached.fetchedAt < JWKS_CACHE_TTL_MS) {
+		return cached.jwks;
 	}
 
 	let result: FetchedJwksResult;
 	try {
 		result = await loadJwks(
-			opts,
+			cache,
 			cacheKey,
-			entry,
 			client.jwksUri,
 			discovery?.fetchClientMetadataResource,
 		);
@@ -367,8 +381,8 @@ async function fetchClientJwks(
 		// After 2x the TTL, stale keys are no longer trusted (prevents accepting
 		// revoked keys indefinitely when the JWKS endpoint is down).
 		const staleLimitMs = JWKS_CACHE_TTL_MS * 2;
-		if (entry.jwks && now - entry.fetchedAt < staleLimitMs) {
-			return entry.jwks;
+		if (cached && now - cached.fetchedAt < staleLimitMs) {
+			return cached.jwks;
 		}
 		throw createClientJwksFetchError();
 	}
@@ -379,10 +393,14 @@ async function fetchClientJwks(
 /**
  * Refetch JWKS from jwks_uri when signature verification fails with cached keys.
  * Handles key rotation: the client may have published a new key that isn't in our cache yet.
+ *
+ * Only a fetch that started at or after `requestedAt` is shared. An earlier one
+ * may predate the key the assertion names, so it cannot answer for it.
  */
 async function refetchClientJwks(
 	opts: OAuthOptions<Scope[]>,
 	client: SchemaClient<Scope[]>,
+	requestedAt: number,
 ): Promise<JSONWebKeySet | null> {
 	if (!client.jwksUri) return null;
 	const discovery = client.clientDiscoveryId
@@ -396,11 +414,11 @@ async function refetchClientJwks(
 	const cacheKey = getJwksCacheKey(client);
 	try {
 		const result = await loadJwks(
-			opts,
+			getJwksCache(opts),
 			cacheKey,
-			getJwksCacheEntry(opts, cacheKey),
 			client.jwksUri,
 			discovery?.fetchClientMetadataResource,
+			(fetch) => fetch.startedAt >= requestedAt,
 		);
 		return result.valid ? result.jwks : null;
 	} catch {
@@ -570,6 +588,7 @@ export async function verifyClientAssertion(
 		assertClient?: (client: SchemaClient<Scope[]>) => void;
 	},
 ): Promise<{ clientId: string; client: SchemaClient<Scope[]> }> {
+	const requestedAt = Date.now();
 	if (clientAssertionType !== CLIENT_ASSERTION_TYPE) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "unsupported client_assertion_type",
@@ -679,7 +698,7 @@ export async function verifyClientAssertion(
 			verifyErr instanceof Error &&
 			/no matching key|no applicable key/i.test(verifyErr.message);
 		if (isKeyError) {
-			const refreshed = await refetchClientJwks(opts, client);
+			const refreshed = await refetchClientJwks(opts, client, requestedAt);
 			if (refreshed) {
 				try {
 					({ payload } = await jwtVerify(

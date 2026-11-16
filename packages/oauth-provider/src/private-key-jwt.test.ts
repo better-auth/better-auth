@@ -413,20 +413,30 @@ describe("private_key_jwt authentication", async () => {
 				fetchClientMetadataResource: transport,
 				jwksUri: `https://${name}.example.com/jwks.json`,
 			});
-			const verify = async (keyId: string, key: CryptoKey) =>
+			const sign = (keyId: string, key: CryptoKey) =>
+				signDiscoveredClientAssertion({ audience, clientId, key, keyId });
+			const verifyAssertion = (assertion: string) =>
 				verifyClientAssertion(
 					provider.ctx,
 					provider.opts,
-					await signDiscoveredClientAssertion({
-						audience,
-						clientId,
-						key,
-						keyId,
-					}),
+					assertion,
 					CLIENT_ASSERTION_TYPE,
 					clientId,
 					audience,
 				);
+			const verify = async (keyId: string, key: CryptoKey) =>
+				verifyAssertion(await sign(keyId, key));
+			// Signing first makes the assertions reach the provider together.
+			const verifyTogether = async (
+				count: number,
+				keyId: string,
+				key: CryptoKey,
+			) => {
+				const assertions = await Promise.all(
+					Array.from({ length: count }, () => sign(keyId, key)),
+				);
+				return Promise.allSettled(assertions.map(verifyAssertion));
+			};
 			return {
 				clientId,
 				oldKey: oldPair.privateKey as CryptoKey,
@@ -435,6 +445,7 @@ describe("private_key_jwt authentication", async () => {
 					published.push({ ...newJwk, kid: "new", alg: "RS256" }),
 				transport,
 				verify,
+				verifyTogether,
 				delayFetches: (ms: number) => {
 					const fetchJwks = transport.getMockImplementation()!;
 					transport.mockImplementation(async (...args) => {
@@ -476,9 +487,7 @@ describe("private_key_jwt authentication", async () => {
 			const fixture = await setup("share-cold");
 			fixture.delayFetches(50);
 
-			const results = await Promise.allSettled(
-				Array.from({ length: 5 }, () => fixture.verify("old", fixture.oldKey)),
-			);
+			const results = await fixture.verifyTogether(5, "old", fixture.oldKey);
 			expect(results.map((r) => r.status)).toEqual(Array(5).fill("fulfilled"));
 			expect(fixture.transport).toHaveBeenCalledTimes(1);
 		});
@@ -489,14 +498,12 @@ describe("private_key_jwt authentication", async () => {
 			fixture.publishNewKey();
 			fixture.delayFetches(50);
 
-			const results = await Promise.allSettled(
-				Array.from({ length: 5 }, () => fixture.verify("new", fixture.newKey)),
-			);
+			const results = await fixture.verifyTogether(5, "new", fixture.newKey);
 			expect(results.map((r) => r.status)).toEqual(Array(5).fill("fulfilled"));
 			expect(fixture.transport).toHaveBeenCalledTimes(2);
 		});
 
-		it("lets every waiting assertion fail when the shared fetch fails", async () => {
+		it("fails the assertions when the shared fetch and the retry both fail", async () => {
 			const fixture = await setup("share-failed");
 			await fixture.verify("old", fixture.oldKey);
 			fixture.publishNewKey();
@@ -505,11 +512,57 @@ describe("private_key_jwt authentication", async () => {
 				return new Response("nope", { status: 500 });
 			});
 
-			const results = await Promise.allSettled(
-				Array.from({ length: 3 }, () => fixture.verify("new", fixture.newKey)),
-			);
+			const results = await fixture.verifyTogether(3, "new", fixture.newKey);
 			expect(results.map((r) => r.status)).toEqual(Array(3).fill("rejected"));
-			expect(fixture.transport).toHaveBeenCalledTimes(2);
+			// The shared fetch, plus one retry shared by the two joiners.
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		it("lets a joiner make its own fetch when the shared fetch fails", async () => {
+			const fixture = await setup("share-transient");
+			await fixture.verify("old", fixture.oldKey);
+			fixture.publishNewKey();
+			const fetchJwks = fixture.transport.getMockImplementation()!;
+			fixture.transport.mockImplementationOnce(async () => {
+				await new Promise((resolve) => setTimeout(resolve, 50));
+				return new Response("blip", { status: 500 });
+			});
+			fixture.transport.mockImplementation(fetchJwks);
+
+			const results = await fixture.verifyTogether(3, "new", fixture.newKey);
+			// The assertion that started the failed fetch fails as it would without
+			// sharing; the joiners succeed on one shared retry.
+			expect(results.map((r) => r.status).sort()).toEqual([
+				"fulfilled",
+				"fulfilled",
+				"rejected",
+			]);
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		it("does not join a fetch that started before the assertion arrived", async () => {
+			const fixture = await setup("share-published-after");
+			await fixture.verify("old", fixture.oldKey);
+			// A fetch in flight returns the key set as it was when the fetch began.
+			const fetchJwks = fixture.transport.getMockImplementation()!;
+			fixture.transport.mockImplementation(async (...args) => {
+				const response = await fetchJwks(...args);
+				await new Promise((resolve) => setTimeout(resolve, 100));
+				return response;
+			});
+
+			const ghost = fixture.verify("ghost", fixture.oldKey);
+			const ghostResult = expect(ghost).rejects.toBeDefined();
+			await vi.waitFor(() =>
+				expect(fixture.transport).toHaveBeenCalledTimes(2),
+			);
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			fixture.publishNewKey();
+			await expect(
+				fixture.verify("new", fixture.newKey),
+			).resolves.toMatchObject({ clientId: fixture.clientId });
+			await ghostResult;
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
 		});
 
 		it("replaces a fetch that outlived its timeout", async () => {
@@ -541,19 +594,28 @@ describe("private_key_jwt authentication", async () => {
 		});
 	});
 
-	it("keeps cached key sets when other clients' jwks_uri fetches fail", async () => {
+	it("keeps cached key sets when other clients' jwks_uri fetches fail at capacity", async () => {
 		const audience = "https://evict-provider.example.com/oauth2/token";
-		const goodClientId = "https://evict-good.example.com/client.json";
-		const goodJwksUri = "https://evict-good.example.com/jwks.json";
+		const okClientIds = Array.from(
+			{ length: 500 },
+			(_, index) => `https://evict-ok-${index}.example.com/client.json`,
+		);
+		const failingClientIds = Array.from(
+			{ length: 20 },
+			(_, index) => `https://evict-fail-${index}.example.com/client.json`,
+		);
+		const oldestJwksUri = "https://evict-ok-0.example.com/jwks.json";
 		const keyPair = await generateKeyPair("ES256", { extractable: true });
 		const publicJwk = await exportJWK(keyPair.publicKey);
-		const transport = vi.fn((url: string | URL | Request) =>
-			Promise.resolve(
-				String(url) === goodJwksUri
-					? Response.json({ keys: [{ ...publicJwk, kid: "k", alg: "ES256" }] })
-					: new Response("unavailable", { status: 503 }),
-			),
-		);
+		const transport = vi.fn(async (url: string | URL | Request) => {
+			if (String(url).startsWith("https://evict-ok-")) {
+				return Response.json({
+					keys: [{ ...publicJwk, kid: "k", alg: "ES256" }],
+				});
+			}
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			return new Response("unavailable", { status: 503 });
+		});
 		const opts = {
 			loginPage: "/login",
 			consentPage: "/consent",
@@ -579,11 +641,7 @@ describe("private_key_jwt authentication", async () => {
 		});
 		const context = await instance.auth.$context;
 		const ctx = { context } as unknown as GenericEndpointContext;
-		const failingClientIds = Array.from(
-			{ length: 500 },
-			(_, index) => `https://evict-${index}.example.com/client.json`,
-		);
-		for (const clientId of [goodClientId, ...failingClientIds]) {
+		for (const clientId of [...okClientIds, ...failingClientIds]) {
 			await context.adapter.create<SchemaClient<Scope[]>>({
 				model: "oauthClient",
 				data: {
@@ -621,16 +679,19 @@ describe("private_key_jwt authentication", async () => {
 			);
 		};
 
-		await verify(goodClientId);
-		for (const clientId of failingClientIds) {
-			await expect(verify(clientId)).rejects.toBeDefined();
+		// Fill the cache to its limit with key sets.
+		for (const clientId of okClientIds) {
+			await verify(clientId);
 		}
-		await verify(goodClientId);
+		// Slow failures in flight at the same time must not push key sets out.
+		const failures = await Promise.allSettled(failingClientIds.map(verify));
+		expect(failures.map((r) => r.status)).toEqual(Array(20).fill("rejected"));
+		await verify(okClientIds[0]!);
 
-		const goodFetches = transport.mock.calls.filter(
-			([url]) => String(url) === goodJwksUri,
+		const oldestFetches = transport.mock.calls.filter(
+			([url]) => String(url) === oldestJwksUri,
 		);
-		expect(goodFetches).toHaveLength(1);
+		expect(oldestFetches).toHaveLength(1);
 	});
 
 	it.each([
