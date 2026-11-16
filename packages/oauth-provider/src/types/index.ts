@@ -987,7 +987,9 @@ export interface OAuthInteractionRequest {
 	requireConsent?: boolean | undefined;
 	/**
 	 * Records the approval once every interaction is complete and returns the
-	 * URL to send the user to.
+	 * URL to send the user to. The provider has already verified that
+	 * `sessionId` is still active in the session store, so a cached session
+	 * that was revoked never reaches this call.
 	 */
 	approve: (approval: {
 		query: OAuthInteractionQuery;
@@ -1016,7 +1018,8 @@ export interface OAuthInteractionRequestHandler {
 	}) => Promise<OAuthInteractionRequest>;
 	/**
 	 * Records a denial from the consent page and returns the URL to send the
-	 * user to.
+	 * user to. The provider has already verified that `userId` belongs to a
+	 * session that is still active in the session store.
 	 */
 	deny: (input: {
 		ctx: GenericEndpointContext;
