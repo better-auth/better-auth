@@ -119,11 +119,35 @@ function rowChanged(baseRow: any, cloneRow: any): boolean {
 	return JSON.stringify(baseRow) !== JSON.stringify(cloneRow);
 }
 
+/**
+ * Serial ids come from a counter shared by every adapter and transaction on
+ * the same live database. A transaction writes to its own clone, so an id read
+ * only from the table being written could be picked twice by overlapping
+ * transactions, and the later commit would overwrite the other's row. The
+ * table's highest id is still read as a floor, for rows seeded into the
+ * database directly or created with a forced id. The row count is not a safe
+ * next id, since it can equal a stored row's id once an earlier row is deleted.
+ */
+const lastSerialIdsByDb = new WeakMap<MemoryDB, Map<string, number>>();
+
 export const memoryAdapter = (
 	db: MemoryDB,
 	config?: MemoryAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
+	const lastSerialIds = lastSerialIdsByDb.get(db) ?? new Map<string, number>();
+	lastSerialIdsByDb.set(db, lastSerialIds);
+	const reserveSerialId = (
+		model: string,
+		rows: Record<string, unknown>[] | undefined,
+	) => {
+		let max = lastSerialIds.get(model) ?? 0;
+		for (const row of rows ?? []) {
+			if (typeof row.id === "number" && row.id > max) max = row.id;
+		}
+		lastSerialIds.set(model, max + 1);
+		return max + 1;
+	};
 
 	/**
 	 * Build an adapter factory whose operations read and write `activeDb`.
@@ -145,18 +169,6 @@ export const memoryAdapter = (
 				usePlural: false,
 				debugLogs: config?.debugLogs || false,
 				supportsArrays: true,
-				customTransformInput(props) {
-					const useNumberId =
-						props.options.advanced?.database?.generateId === "serial";
-					if (
-						useNumberId &&
-						props.field === "id" &&
-						props.action === "create"
-					) {
-						return activeDb[props.model]!.length + 1;
-					}
-					return props.data;
-				},
 				transaction: async (cb) => {
 					// Copy-on-write isolation: run the callback against a clone, then
 					// replay its delta onto the live db on success. On failure the clone
@@ -429,12 +441,12 @@ export const memoryAdapter = (
 							options.advanced?.database?.generateId === "serial";
 						if (useNumberId) {
 							// @ts-expect-error
-							data.id = activeDb[model]!.length + 1;
+							data.id = reserveSerialId(model, activeDb[model]);
 						}
 						if (!activeDb[model]) {
 							activeDb[model] = [];
 						}
-						activeDb[model]!.push(data);
+						activeDb[model].push(data);
 						return data;
 					},
 					findOne: async ({ model, modelKey = model, where, select, join }) => {
@@ -503,10 +515,10 @@ export const memoryAdapter = (
 						const resArray = res as any[];
 						let table = applySortToRecords(resArray, sortBy, modelKey);
 						if (offset !== undefined) {
-							table = table!.slice(offset);
+							table = table.slice(offset);
 						}
 						if (limit !== undefined) {
-							table = table!.slice(0, limit);
+							table = table.slice(0, limit);
 						}
 						return table || [];
 					},

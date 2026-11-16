@@ -1,5 +1,45 @@
 # @better-auth/oauth-provider
 
+## 1.7.25
+
+### Patch Changes
+
+- [#12587](https://github.com/better-auth/better-auth/pull/12587) [`75c0821`](https://github.com/better-auth/better-auth/commit/75c0821fa61c8ed0ea20f1027d5ad42d16e0daae) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - DPoP now works on deployments that keep verification values only in secondary storage. Before, every request with a DPoP proof to the OAuth provider, UserInfo, or `requireMcpAuth` failed with a 500 error unless `verification.storeInDatabase: true` was set. Used proofs are now recorded in secondary storage, so a replayed proof is still rejected across instances. `createDpopReplayStore` now also accepts the auth context, as `createDpopReplayStore(await auth.$context)`, and picks the same storage.
+
+- [#12603](https://github.com/better-auth/better-auth/pull/12603) [`ad07edd`](https://github.com/better-auth/better-auth/commit/ad07edda1bcb4b5e40368989aa70801839a5926b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Every 401 challenge from the OAuth provider now lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, including client registration, initial access tokens, and token endpoint client authentication. A browser client on another origin, such as a browser MCP client that registers itself, can now read the challenge. Before, only UserInfo and resource challenges exposed it.
+
+- [#12578](https://github.com/better-auth/better-auth/pull/12578) [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The end-session endpoint now verifies `id_token_hint` with the signing keys of the auth instance instead of requesting its own `/jwks` endpoint, so RP-initiated logout works on runtimes that block requests to their own hostname.
+
+- [#12578](https://github.com/better-auth/better-auth/pull/12578) [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Introspection and revocation no longer report a valid JWT access token as inactive when two auth instances share one `jwt()` plugin object. Each instance now caches its own signing keys.
+
+- [#12578](https://github.com/better-auth/better-auth/pull/12578) [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `oauthProviderResourceClient(auth)` now reads the signing keys from the auth instance instead of requesting its own `/jwks` endpoint, so APIs served from the same app as the auth server can verify tokens on runtimes that block requests to their own hostname. Set `jwksUrl` to keep fetching the keys over HTTP.
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+- [#12598](https://github.com/better-auth/better-auth/pull/12598) [`d7f831c`](https://github.com/better-auth/better-auth/commit/d7f831cdd4ae3a5ebf591641d34a0b2561316aa8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Discovery no longer advertises endpoint URLs with a double slash when `baseURL` ends in `/`, such as `https://example.com/api/auth/`. Those URLs returned 404, so clients that followed discovery could not reach the token, introspection, revocation, or other endpoints. The client assertion audiences that `private_key_jwt` accepts now use the same single-slash endpoint URLs.
+
+- [#12503](https://github.com/better-auth/better-auth/pull/12503) [`87ede79`](https://github.com/better-auth/better-auth/commit/87ede7984d4df152ae3c0f5a58a2d08299b24281) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed errors from hooks and endpoints turning into generic 500 responses or skipping their error handling in the OAuth provider, Client ID Metadata Document, passkey, SSO, SCIM, and Stripe plugins when the app installs more than one copy of `better-call`.
+
+- [#12498](https://github.com/better-auth/better-auth/pull/12498) [`3dcbc10`](https://github.com/better-auth/better-auth/commit/3dcbc1044cf8bf2d51bd73273581a980c5400591) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `requireActiveAccessToken` documentation now states that it checks only the token. For a DPoP-bound token, your endpoint must also call `enforceDpopBinding` from `better-auth/oauth2` with the request and a shared replay store.
+
+## 1.7.23
+
+### Patch Changes
+
+- [#12499](https://github.com/better-auth/better-auth/pull/12499) [`b9c259b`](https://github.com/better-auth/better-auth/commit/b9c259b61d453a2ca604b2f054e05e0d0a653625) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A token request that fails validation no longer uses up its authorization code or approved device code. Before, the code was consumed before the `code_verifier`, `redirect_uri`, `resource`, and DPoP proof were checked, so a client that retried with a corrected request got `invalid_grant` and the user had to sign in or approve the device again. Codes are now consumed only after the request passes validation. A DPoP proof whose `jti` was already used is still detected after the code is consumed, so that request uses up the code and returns `invalid_dpop_proof`, as before. Codes stay single-use, and an authorization code presented after redemption still revokes the tokens issued from it.
+
+- [#12525](https://github.com/better-auth/better-auth/pull/12525) [`06925b3`](https://github.com/better-auth/better-auth/commit/06925b35dd14ca39e2080fb2b8e85c14f5c2931b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Answer a DPoP request whose token lacks a required scope with a `DPoP` challenge. Before, the `insufficient_scope` 403 always carried a `Bearer` challenge, even when the client sent a valid DPoP-bound token and proof. The `DPoP` challenge keeps `error="insufficient_scope"` and the missing scopes in `scope`, so the client can still authorize again for them. Like other `DPoP` challenges, it lists the accepted proof algorithms in `algs` and has no `resource_metadata`. A `Bearer` request still gets the `Bearer` challenge with `resource_metadata`. This applies when `createResourceServerChallenge` receives the failed `request`, which the resource client's `verifyAccessTokenRequest`, `requireMcpAuth`, and `createMcpProtectedRequestHandler` pass automatically, including for an `insufficient_scope` error thrown by an MCP tool handler.
+
+- [#12521](https://github.com/better-auth/better-auth/pull/12521) [`7c61c40`](https://github.com/better-auth/better-auth/commit/7c61c40534b878f6e53d50daf03fba5db6fbdd59) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Browser clients on another origin can now read resource-server and MCP `WWW-Authenticate` challenges. `createResourceServerChallenge`, and the resource client and MCP helpers built on it, now send `Access-Control-Expose-Headers: WWW-Authenticate` with every Bearer, `insufficient_scope`, and `DPoP` challenge. If your CORS layer sets its own `Access-Control-Expose-Headers`, include `WWW-Authenticate` in it.
+
+- [#12500](https://github.com/better-auth/better-auth/pull/12500) [`be0d01c`](https://github.com/better-auth/better-auth/commit/be0d01c8c254dbde2ec35975cd72ac437245b256) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The OAuth provider now logs a warning when two extensions contribute the same discovery metadata key. The first-registered extension's value is still the one served, so discovery output is unchanged, but the dropped contribution is no longer silent.
+
+- [#12515](https://github.com/better-auth/better-auth/pull/12515) [`2959544`](https://github.com/better-auth/better-auth/commit/295954490665cdef7f25f0ec0f7fa671b368bc45) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A protected resource request that uses an unsupported authorization scheme, such as `Basic`, or sends a token with no scheme, now gets a `Bearer` challenge with its `resource_metadata` pointer instead of a `DPoP` challenge. MCP clients can find the authorization server again from that response.
+
 ## 1.7.22
 
 ### Patch Changes

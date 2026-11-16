@@ -480,6 +480,84 @@ describe("passkey", async () => {
 		expect(await context.internalAdapter.findUserById(userId)).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9012
+	 */
+	it("should keep an APIError from another copy of better-call during registration", async () => {
+		const {
+			auth: preAuth,
+			client: preAuthClient,
+			cookieSetter,
+		} = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+				passkey: [],
+			}),
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "pending-foreign-error-registration",
+							name: "foreign-error@example.com",
+						}),
+						afterVerification: async ({ ctx }) => {
+							const user = await ctx.context.internalAdapter.createUser(
+								{
+									name: "Foreign Error",
+									email: "foreign-error@example.com",
+								},
+								{ method: "test" },
+							);
+							return { userId: user.id };
+						},
+					},
+				}),
+			],
+		});
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		await preAuthClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			onResponse: cookieSetter(headers),
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		// Stands in for an APIError from a second better-call install, such as
+		// one a session hook throws, which fails `instanceof` against this copy.
+		const foreignAPIError = Object.assign(new Error("session blocked"), {
+			name: "APIError",
+			status: "FORBIDDEN",
+			statusCode: 403,
+			headers: new Headers(),
+			body: { code: "SESSION_BLOCKED", message: "session blocked" },
+		});
+		const context = await preAuth.$context;
+		const createSession = vi
+			.spyOn(context.internalAdapter, "createSession")
+			.mockRejectedValueOnce(foreignAPIError);
+
+		try {
+			await expect(
+				preAuth.api.verifyPasskeyRegistration({
+					headers,
+					body: {
+						response: mockRegistrationResponse,
+						createSession: true,
+					},
+				}),
+			).rejects.toMatchObject({
+				statusCode: 403,
+				body: { code: "SESSION_BLOCKED" },
+			});
+		} finally {
+			createSession.mockRestore();
+		}
+	});
+
 	it("should require resolveUser when session is not available", async () => {
 		const { auth: preAuth } = await getTestInstance({
 			plugins: [

@@ -23,7 +23,7 @@ import type {
 	SchemaClient,
 	Scope,
 } from "../types";
-import { getClient } from "./index";
+import { challengeHeaders, getAuthEndpointUrl, getClient } from "./index";
 
 type JwksCache = Map<string, { jwks: JSONWebKeySet; fetchedAt: number }>;
 type FetchedJwksResult =
@@ -555,7 +555,7 @@ export async function verifyClientAssertion(
 	// Fetch JWKS and verify signature + claims
 	const jwks = await fetchClientJwks(ctx, opts, client);
 	const endpointAudience =
-		expectedAudience ?? `${ctx.context.baseURL}/oauth2/token`;
+		expectedAudience ?? getAuthEndpointUrl(ctx, "/oauth2/token");
 	const issuerAudience = getIssuer(ctx, opts);
 	const acceptedAudiences = options?.endpointAudienceOnly
 		? [endpointAudience]
@@ -595,22 +595,35 @@ export async function verifyClientAssertion(
 						verifyOpts,
 					));
 				} catch {
-					throw new APIError("UNAUTHORIZED", {
-						error_description: "client assertion signature verification failed",
-						error: "invalid_client",
-					});
+					throw new APIError(
+						"UNAUTHORIZED",
+						{
+							error_description:
+								"client assertion signature verification failed",
+							error: "invalid_client",
+						},
+						challengeHeaders("Basic"),
+					);
 				}
 			} else {
-				throw new APIError("UNAUTHORIZED", {
-					error_description: "client assertion signature verification failed",
-					error: "invalid_client",
-				});
+				throw new APIError(
+					"UNAUTHORIZED",
+					{
+						error_description: "client assertion signature verification failed",
+						error: "invalid_client",
+					},
+					challengeHeaders("Basic"),
+				);
 			}
 		} else {
-			throw new APIError("UNAUTHORIZED", {
-				error_description: "client assertion signature verification failed",
-				error: "invalid_client",
-			});
+			throw new APIError(
+				"UNAUTHORIZED",
+				{
+					error_description: "client assertion signature verification failed",
+					error: "invalid_client",
+				},
+				challengeHeaders("Basic"),
+			);
 		}
 	}
 

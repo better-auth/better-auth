@@ -90,6 +90,10 @@ jobs:
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
         run: pnpm lint:types
 
+      # Versioned docs content comes from other branches, so check its icons against this registry.
+      - name: Lint Docs Sidebar Icons
+        run: pnpm --filter docs validate:sidebar-icons
+
   typecheck:
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
     permissions:

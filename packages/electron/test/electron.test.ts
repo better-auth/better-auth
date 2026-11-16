@@ -1144,6 +1144,97 @@ describe("Electron", () => {
 		}
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12487
+	 * @see https://www.electronjs.org/docs/latest/api/app#event-second-instance
+	 */
+	describe("deep link arguments", () => {
+		const url = `${options.protocol.scheme}://auth/callback#token=${encodeRedirectToken("identifier", "unknown-state")}`;
+
+		const withWindows = async (run: () => Promise<void>) => {
+			const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
+			const argv = process.argv;
+			Object.defineProperty(process, "platform", { value: "win32" });
+			const consoleError = vi
+				.spyOn(console, "error")
+				.mockImplementation(() => {});
+			try {
+				await run();
+				// No code verifier is stored for this state, so a handled link fails to authenticate.
+				expect(consoleError).toHaveBeenCalledWith(
+					"Error while handling deep link",
+					expect.anything(),
+				);
+			} finally {
+				Object.defineProperty(process, "platform", platform);
+				process.argv = argv;
+				consoleError.mockRestore();
+			}
+		};
+
+		it("handles the callback when Chromium appends switches to a second instance", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			await withWindows(async () => {
+				client.setupMain({
+					scheme: true,
+					getWindow: () => null,
+				});
+				const secondInstance = mockElectron.app.on.mock.calls
+					.filter(([event]) => event === "second-instance")
+					.at(-1)?.[1];
+
+				await secondInstance(
+					{},
+					["C:\\app\\app.exe", url, "--original-process-start-time=13371337"],
+					"C:\\app",
+					null,
+				);
+			});
+		});
+
+		it("handles the callback on a cold start that is not the first argument", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			await withWindows(async () => {
+				// `electron .` puts the app path before the callback.
+				process.argv = ["electron.exe", "C:\\app", url];
+				client.setupMain({
+					scheme: true,
+				});
+				await vi.waitFor(() => {
+					expect(console.error).toHaveBeenCalled();
+				});
+			});
+		});
+
+		/**
+		 * @see https://www.rfc-editor.org/rfc/rfc3986#section-3.1
+		 */
+		it("matches the callback scheme case-insensitively", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			await withWindows(async () => {
+				process.argv = [
+					"C:\\app\\app.exe",
+					url.replace(
+						options.protocol.scheme,
+						options.protocol.scheme.toUpperCase(),
+					),
+				];
+				client.setupMain({
+					scheme: true,
+				});
+				await vi.waitFor(() => {
+					expect(console.error).toHaveBeenCalled();
+				});
+			});
+		});
+	});
+
 	it("should add client origin to CSP if missing", async ({
 		setProcessType,
 	}) => {

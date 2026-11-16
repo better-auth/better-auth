@@ -1,5 +1,31 @@
 # @better-auth/core
 
+## 1.7.25
+
+### Patch Changes
+
+- [#12572](https://github.com/better-auth/better-auth/pull/12572) [`69e14d8`](https://github.com/better-auth/better-auth/commit/69e14d89b856c95ea0998869c9cb8742d483a808) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Authorization URLs now keep the authorization endpoint's existing query text unchanged. Before, building the URL re-encoded parameters already on the endpoint, for example `%20` became `+`, which broke providers that expect the exact query they published. A parameter that Better Auth sets still replaces an endpoint parameter with the same name.
+
+- [#12586](https://github.com/better-auth/better-auth/pull/12586) [`2a8750b`](https://github.com/better-auth/better-auth/commit/2a8750b285725a45ff58b0f43487afb796c854e9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The default in-memory DPoP replay store used by `verifyAccessTokenRequest` no longer slows down as traffic grows. Before, each DPoP request scanned every proof recorded in the replay window, so CPU time per request grew with the request rate.
+
+- [#12587](https://github.com/better-auth/better-auth/pull/12587) [`75c0821`](https://github.com/better-auth/better-auth/commit/75c0821fa61c8ed0ea20f1027d5ad42d16e0daae) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - DPoP now works on deployments that keep verification values only in secondary storage. Before, every request with a DPoP proof to the OAuth provider, UserInfo, or `requireMcpAuth` failed with a 500 error unless `verification.storeInDatabase: true` was set. Used proofs are now recorded in secondary storage, so a replayed proof is still rejected across instances. `createDpopReplayStore` now also accepts the auth context, as `createDpopReplayStore(await auth.$context)`, and picks the same storage.
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+## 1.7.23
+
+### Patch Changes
+
+- [#12501](https://github.com/better-auth/better-auth/pull/12501) [`cfa73e9`](https://github.com/better-auth/better-auth/commit/cfa73e90fae636f22179b933c29171bada503515) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `requireMcpAuth` now reads the signing keys from the auth instance instead of requesting its own `/jwks` endpoint, so MCP routes served from the same app as the auth server no longer fail with a 500 on runtimes that block requests to their own hostname, such as a single Cloudflare Worker.
+
+  Set `jwksUrl` to keep fetching the keys over HTTP.
+
+- [#12480](https://github.com/better-auth/better-auth/pull/12480) [`c10b35d`](https://github.com/better-auth/better-auth/commit/c10b35da7383ddefe1710190a100dabb7283803e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `advanced.database.validateSchema` JSDoc now says validation runs when the auth instance is first used, and that adapters other than Kysely, Drizzle, and Prisma skip it with a log message.
+
 ## 1.7.22
 
 ### Patch Changes

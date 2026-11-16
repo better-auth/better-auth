@@ -591,9 +591,19 @@ describe("oauth token - authorization_code", async () => {
 		expect(tokens.data?.refresh_token).toBeDefined();
 
 		const context = await auth.$context;
+		const originalDeleteMany = context.adapter.deleteMany.bind(context.adapter);
+		let accessTokenCleanupFailed = false;
 		const deleteMany = vi
 			.spyOn(context.adapter, "deleteMany")
-			.mockRejectedValueOnce(new Error("cleanup failed"));
+			.mockImplementation(async (data) => {
+				// The code lookup's expired-row cleanup also calls deleteMany, so
+				// fail the first access-token cleanup rather than the first call.
+				if (data.model === "oauthAccessToken" && !accessTokenCleanupFailed) {
+					accessTokenCleanupFailed = true;
+					throw new Error("cleanup failed");
+				}
+				return originalDeleteMany(data);
+			});
 		const loggerError = vi
 			.spyOn(context.logger, "error")
 			.mockImplementation(() => undefined);
@@ -608,14 +618,17 @@ describe("oauth token - authorization_code", async () => {
 				"authorization code replay cleanup failed",
 				expect.any(Error),
 			);
-			expect(deleteMany).toHaveBeenNthCalledWith(
-				1,
-				expect.objectContaining({ model: "oauthAccessToken" }),
-			);
-			expect(deleteMany).toHaveBeenNthCalledWith(
-				2,
-				expect.objectContaining({ model: "oauthRefreshToken" }),
-			);
+			const cleanupModels = deleteMany.mock.calls
+				.map(([data]) => data.model)
+				.filter(
+					(model) =>
+						model === "oauthAccessToken" || model === "oauthRefreshToken",
+				);
+			expect(cleanupModels).toEqual([
+				"oauthAccessToken",
+				"oauthRefreshToken",
+				"oauthAccessToken",
+			]);
 
 			const { body, headers } = await refreshAccessTokenRequest({
 				refreshToken: tokens.data!.refresh_token!,
@@ -638,6 +651,77 @@ describe("oauth token - authorization_code", async () => {
 			deleteMany.mockRestore();
 			loggerError.mockRestore();
 		}
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-15#section-4.1.3
+	 */
+	it("keeps the authorization code when the PKCE verifier is rejected", async () => {
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const rejected = await validateAuthCode({
+			code: code!,
+			codeVerifier: generateRandomString(32),
+		});
+		expect((rejected.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const replay = await validateAuthCode({ code: code!, codeVerifier });
+		expect((replay.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-15#section-4.1.3
+	 */
+	it("rejects an expired authorization code with invalid_grant", async () => {
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const context = await auth.$context;
+		await context.adapter.update({
+			model: "verification",
+			where: [
+				{
+					field: "identifier",
+					value: await storeToken("hashed", code!, "authorization_code"),
+				},
+			],
+			update: { expiresAt: new Date(Date.now() - 1000) },
+		});
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.data?.access_token).toBeUndefined();
+		expect((tokens.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
 	});
 
 	/**
@@ -5333,6 +5417,120 @@ describe("oauth token - DPoP", async () => {
 		);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-8
+	 */
+	it("keeps the authorization code when the DPoP proof is rejected", async () => {
+		const dpopKey = await createDpopKey();
+		const otherKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+
+		const wrongKeyProof = await createDpopProof({
+			privateKey: otherKey.privateKey,
+			publicJwk: otherKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "retry-wrong-key-proof",
+		});
+		const rejected = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			wrongKeyProof,
+		);
+		expect((rejected.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "retry-valid-proof",
+		});
+		const tokens = await exchangeCode(code, codeVerifier, jwtResource, proof);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.token_type).toBe("DPoP");
+		expect(decodeJwt(tokens.data!.access_token!).cnf).toMatchObject({
+			jkt: dpopKey.jkt,
+		});
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-8
+	 */
+	it("keeps the authorization code when a required DPoP proof is missing", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			undefined,
+			dpopRequiredResource,
+		);
+
+		const rejected = await exchangeCode(
+			code,
+			codeVerifier,
+			dpopRequiredResource,
+		);
+		expect((rejected.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "retry-required-proof",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			dpopRequiredResource,
+			proof,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.token_type).toBe("DPoP");
+	});
+
+	/**
+	 * The proof's `jti` is recorded only after the code is consumed, so the
+	 * request that loses the race is told the code is gone, not that the proof
+	 * was replayed.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+	 */
+	it("issues once when two exchanges with one DPoP proof arrive together", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "concurrent-shared-proof",
+		});
+
+		const results = await Promise.all([
+			exchangeCode(code, codeVerifier, jwtResource, proof),
+			exchangeCode(code, codeVerifier, jwtResource, proof),
+		]);
+		const successes = results.filter((result) => result.error === null);
+		const failures = results.filter((result) => result.error !== null);
+		expect(successes).toHaveLength(1);
+		expect(successes[0]?.data?.token_type).toBe("DPoP");
+		expect(failures).toHaveLength(1);
+		expect((failures[0]?.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
 	it("preserves the key binding across refresh and rejects a proofless refresh", async () => {
 		const dpopKey = await createDpopKey();
 		const { code, codeVerifier } = await authorizeForCode(
@@ -5956,5 +6154,90 @@ describe("oauth token - refresh family revocation with serial ids", async () => 
 		expect(reused.error).toMatchObject({ error: "invalid_grant" });
 		expect(database.oauthAccessToken).toHaveLength(1);
 		expect(database.oauthAccessToken?.[0]?.refreshId).toBeUndefined();
+	});
+});
+
+describe("DPoP with secondary storage and no database-backed verification", async () => {
+	const store = new Map<string, string>();
+	const baseURL = "http://localhost:3000";
+	const tokenEndpoint = `${baseURL}/api/auth/oauth2/token`;
+	const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		secondaryStorage: {
+			get: (key) => store.get(key) ?? null,
+			set: (key, value) => void store.set(key, value),
+			delete: (key) => void store.delete(key),
+			getAndDelete: (key) => {
+				const value = store.get(key) ?? null;
+				store.delete(key);
+				return value;
+			},
+			increment: (key) => {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
+		},
+		session: { storeSessionInDatabase: true },
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				clientPrivileges: () => true,
+			}),
+		],
+	});
+
+	it("issues a DPoP-bound token and rejects a replayed proof", async () => {
+		const { headers } = await signInWithTestUser();
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read"],
+			},
+		});
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const proof = await new SignJWT({
+			jti: generateRandomString(16),
+			htm: "POST",
+			htu: tokenEndpoint,
+			iat: Math.floor(Date.now() / 1000),
+		})
+			.setProtectedHeader({
+				typ: "dpop+jwt",
+				alg: "ES256",
+				jwk: (await exportJWK(publicKey)) as JWK,
+			})
+			.sign(privateKey);
+		const requestToken = () =>
+			customFetchImpl(tokenEndpoint, {
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					DPoP: proof,
+				},
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret!,
+					scope: "read",
+				}).toString(),
+			});
+
+		const issued = await requestToken();
+		expect(issued.status).toBe(200);
+		expect(await issued.json()).toMatchObject({ token_type: "DPoP" });
+
+		const replayed = await requestToken();
+		expect(replayed.status).toBe(400);
+		expect(await replayed.json()).toMatchObject({
+			error: "invalid_dpop_proof",
+		});
 	});
 });
