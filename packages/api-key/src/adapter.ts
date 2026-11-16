@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { SecondaryStorage } from "@better-auth/core/db";
+import { isWorkerd } from "@better-auth/core/env";
 import { mapConcurrent } from "@better-auth/core/utils/async";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { PredefinedApiKeyOptions } from "./routes";
@@ -247,28 +248,76 @@ async function getApiKeyByIdFromStorage(
  * sharing one secondary storage, concurrent writers can still lose updates.
  * Secondary storage with `fallbackToDatabase` avoids this by treating the list
  * as an invalidate-only cache with the database as the source of truth.
+ *
+ * On Cloudflare Workers, I/O from a request that has ended never settles, so an
+ * unbounded wait on a prior holder would hang later writers for the same key.
+ * Callers bound that wait (5s); after the bound they proceed, accepting the
+ * same lost-update risk as multi-instance writers.
+ *
  * FIXME(api-key-reflist-durable): on `next`, drop the source-of-truth reference
  * list entirely and make the database authoritative for listing, removing this
  * in-process lock.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/12397
  */
-const refListLocks = new Map<string, Promise<unknown>>();
+const REF_LIST_LOCK_WAIT_MS = 5_000;
 
-function withRefListLock<T>(
+type RefListLock = {
+	promise: Promise<unknown>;
+	startedAt: number;
+};
+
+const refListLocks = new Map<string, RefListLock>();
+
+/**
+ * Wait for `previous` to settle, or until its wait bound elapses on workerd.
+ * The caller's own timer must bound the wait: a timer from the prior request
+ * is canceled when that request ends.
+ */
+function waitForRefListLock(previous: RefListLock | undefined): Promise<void> {
+	if (!previous) return Promise.resolve();
+	if (!isWorkerd()) {
+		return previous.promise.then(
+			() => {},
+			() => {},
+		);
+	}
+	const remaining = previous.startedAt + REF_LIST_LOCK_WAIT_MS - Date.now();
+	if (remaining <= 0) return Promise.resolve();
+	return new Promise<void>((resolve) => {
+		let settled = false;
+		const done = () => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timeout);
+			resolve();
+		};
+		const timeout = setTimeout(done, remaining);
+		previous.promise.then(done, done);
+	});
+}
+
+/** @internal Exported for unit tests. */
+export function withRefListLock<T>(
 	refKey: string,
 	task: () => Promise<T>,
 ): Promise<T> {
-	const previous = refListLocks.get(refKey) ?? Promise.resolve();
-	const run = previous.then(task, task);
+	const previous = refListLocks.get(refKey);
+	const startedAt = Date.now();
+	const run = waitForRefListLock(previous).then(task);
 	// The map holds the `.finally()` chain, so the cleanup must compare against
 	// that same promise (not `run`) or the entry is never removed and the map
 	// grows without bound.
-	const tracked = run.finally(() => {
-		if (refListLocks.get(refKey) === tracked) {
-			refListLocks.delete(refKey);
-		}
-	});
+	const tracked: RefListLock = {
+		startedAt,
+		promise: run.finally(() => {
+			if (refListLocks.get(refKey) === tracked) {
+				refListLocks.delete(refKey);
+			}
+		}),
+	};
 	refListLocks.set(refKey, tracked);
-	return tracked;
+	return tracked.promise as Promise<T>;
 }
 
 /**
