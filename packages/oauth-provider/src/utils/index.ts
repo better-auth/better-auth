@@ -356,6 +356,10 @@ export async function getClient(
 	options: OAuthOptions<Scope[]>,
 	clientId: string,
 ) {
+	// No client ID contains U+0000, and Postgres rejects it in text values,
+	// so answer as an unknown client instead of failing the lookup.
+	if (clientId.includes("\u0000")) return null;
+
 	const trustedClientCache = getTrustedClientCache(options);
 	const trustedClient = trustedClientCache.get(clientId);
 	if (trustedClient && !trustedClient.clientDiscoveryId) {
