@@ -25,10 +25,17 @@ import type {
 } from "../types";
 import { challengeHeaders, getAuthEndpointUrl, getClient } from "./index";
 
-type JwksCache = Map<string, { jwks: JSONWebKeySet; fetchedAt: number }>;
 type FetchedJwksResult =
 	| { valid: true; jwks: JSONWebKeySet }
 	| { valid: false };
+type JwksCacheEntry = {
+	/** Last valid key set; absent until a fetch succeeds. */
+	jwks?: JSONWebKeySet;
+	/** Start time of the fetch that produced `jwks`. */
+	fetchedAt: number;
+	pending?: { promise: Promise<FetchedJwksResult>; startedAt: number };
+};
+type JwksCache = Map<string, JwksCacheEntry>;
 
 // Provider-scoped JWKS URI caches with 5-minute TTL and bounded size.
 const jwksCaches = new WeakMap<OAuthOptions<Scope[]>, JwksCache>();
@@ -38,26 +45,94 @@ const JWKS_FETCH_TIMEOUT_MS = 5_000;
 const MAX_JWKS_RESPONSE_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
 
-function setJwksCache(
-	jwksCache: JwksCache,
+function getJwksCacheEntry(
+	opts: OAuthOptions<Scope[]>,
 	cacheKey: string,
-	jwks: JSONWebKeySet,
-	fetchedAt: number,
-) {
-	jwksCache.set(cacheKey, { jwks, fetchedAt });
-	if (jwksCache.size > JWKS_CACHE_MAX_ENTRIES) {
-		// Evict oldest entry (Map iterates in insertion order)
-		const oldest = jwksCache.keys().next().value;
-		if (oldest !== undefined) jwksCache.delete(oldest);
+): JwksCacheEntry {
+	let cache = jwksCaches.get(opts);
+	if (!cache) {
+		cache = new Map();
+		jwksCaches.set(opts, cache);
 	}
+	let entry = cache.get(cacheKey);
+	if (!entry) {
+		entry = { fetchedAt: 0 };
+		cache.set(cacheKey, entry);
+		if (cache.size > JWKS_CACHE_MAX_ENTRIES) {
+			// Evict oldest entry (Map iterates in insertion order)
+			const oldest = cache.keys().next().value;
+			if (oldest !== undefined) cache.delete(oldest);
+		}
+	}
+	return entry;
 }
 
-function getJwksCache(opts: OAuthOptions<Scope[]>): JwksCache {
-	const existingCache = jwksCaches.get(opts);
-	if (existingCache) return existingCache;
-	const cache: JwksCache = new Map();
-	jwksCaches.set(opts, cache);
-	return cache;
+// Drops an entry whose fetch left no key set, so failing `jwks_uri`s cannot
+// evict cached key sets from the bounded cache.
+function discardEmptyJwksCacheEntry(
+	opts: OAuthOptions<Scope[]>,
+	cacheKey: string,
+	entry: JwksCacheEntry,
+): void {
+	if (entry.jwks || isFetching(entry, Date.now())) return;
+	const cache = jwksCaches.get(opts);
+	if (cache?.get(cacheKey) === entry) cache.delete(cacheKey);
+}
+
+// A fetch older than its own timeout is dead: some runtimes cancel a
+// request's I/O when that request ends, so its promise may never settle.
+function isFetching(entry: JwksCacheEntry, now: number): boolean {
+	return (
+		entry.pending !== undefined &&
+		now - entry.pending.startedAt < JWKS_FETCH_TIMEOUT_MS
+	);
+}
+
+/**
+ * Fetches the key set into `entry`, joining a fetch already in flight so
+ * concurrent requests share one call. Each caller bounds its own wait, since
+ * the request that started the fetch may end before it settles.
+ */
+async function loadJwks(
+	opts: OAuthOptions<Scope[]>,
+	cacheKey: string,
+	entry: JwksCacheEntry,
+	jwksUri: string,
+	fetchClientMetadataResource: ClientMetadataResourceFetch | undefined,
+): Promise<FetchedJwksResult> {
+	const now = Date.now();
+	if (!entry.pending || !isFetching(entry, now)) {
+		const pending: NonNullable<JwksCacheEntry["pending"]> = {
+			startedAt: now,
+			promise: fetchJwksFromUri(jwksUri, fetchClientMetadataResource)
+				.then((result) => {
+					if (result.valid && now >= entry.fetchedAt) {
+						entry.jwks = result.jwks;
+						entry.fetchedAt = now;
+					}
+					return result;
+				})
+				.finally(() => {
+					if (entry.pending === pending) entry.pending = undefined;
+				}),
+		};
+		entry.pending = pending;
+	}
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			entry.pending.promise,
+			new Promise<never>((_, reject) => {
+				timeout = setTimeout(
+					() => reject(new Error("JWKS fetch timed out")),
+					JWKS_FETCH_TIMEOUT_MS,
+				);
+			}),
+		]);
+	} finally {
+		clearTimeout(timeout);
+		discardEmptyJwksCacheEntry(opts, cacheKey, entry);
+	}
 }
 
 function getJwksCacheKey(client: SchemaClient<Scope[]>): string {
@@ -273,15 +348,17 @@ async function fetchClientJwks(
 
 	const now = Date.now();
 	const cacheKey = getJwksCacheKey(client);
-	const jwksCache = getJwksCache(opts);
-	const cached = jwksCache.get(cacheKey);
-	if (cached && now - cached.fetchedAt < JWKS_CACHE_TTL_MS) {
-		return cached.jwks;
+	const entry = getJwksCacheEntry(opts, cacheKey);
+	if (entry.jwks && now - entry.fetchedAt < JWKS_CACHE_TTL_MS) {
+		return entry.jwks;
 	}
 
 	let result: FetchedJwksResult;
 	try {
-		result = await fetchJwksFromUri(
+		result = await loadJwks(
+			opts,
+			cacheKey,
+			entry,
 			client.jwksUri,
 			discovery?.fetchClientMetadataResource,
 		);
@@ -290,13 +367,12 @@ async function fetchClientJwks(
 		// After 2x the TTL, stale keys are no longer trusted (prevents accepting
 		// revoked keys indefinitely when the JWKS endpoint is down).
 		const staleLimitMs = JWKS_CACHE_TTL_MS * 2;
-		if (cached && now - cached.fetchedAt < staleLimitMs) {
-			return cached.jwks;
+		if (entry.jwks && now - entry.fetchedAt < staleLimitMs) {
+			return entry.jwks;
 		}
 		throw createClientJwksFetchError();
 	}
 	if (!result.valid) throw createClientJwksFetchError();
-	setJwksCache(jwksCache, cacheKey, result.jwks, now);
 	return result.jwks;
 }
 
@@ -317,19 +393,16 @@ async function refetchClientJwks(
 	if (client.clientDiscoveryId && !discovery?.fetchClientMetadataResource) {
 		return null;
 	}
+	const cacheKey = getJwksCacheKey(client);
 	try {
-		const result = await fetchJwksFromUri(
+		const result = await loadJwks(
+			opts,
+			cacheKey,
+			getJwksCacheEntry(opts, cacheKey),
 			client.jwksUri,
 			discovery?.fetchClientMetadataResource,
 		);
-		if (!result.valid) return null;
-		setJwksCache(
-			getJwksCache(opts),
-			getJwksCacheKey(client),
-			result.jwks,
-			Date.now(),
-		);
-		return result.jwks;
+		return result.valid ? result.jwks : null;
 	} catch {
 		return null;
 	}
