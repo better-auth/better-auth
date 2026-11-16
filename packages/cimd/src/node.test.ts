@@ -99,6 +99,30 @@ describe("Node CIMD metadata transport", () => {
 		expect(mocks.request).not.toHaveBeenCalled();
 	});
 
+	it("rejects a private IPv6 literal host without a lookup", async () => {
+		await expect(
+			fetchClientMetadataResource("https://[fd00::1]/client.json"),
+		).rejects.toThrow("public");
+		expect(mocks.lookup).not.toHaveBeenCalled();
+		expect(mocks.request).not.toHaveBeenCalled();
+	});
+
+	it("pins a public IPv6 literal host without a lookup and sends no SNI", async () => {
+		mockHttpsResponse({ body: "ok" });
+
+		const response = await fetchClientMetadataResource(
+			"https://[2606:2800:220:1:248:1893:25c8:1946]/client.json",
+		);
+		expect(await response.text()).toBe("ok");
+		expect(mocks.lookup).not.toHaveBeenCalled();
+		const options = mocks.request.mock.calls[0]?.[1] as {
+			headers: Record<string, string>;
+			servername?: string;
+		};
+		expect(options.servername).toBeUndefined();
+		expect(options.headers.host).toBe("[2606:2800:220:1:248:1893:25c8:1946]");
+	});
+
 	it("resolves once, pins an approved address, and preserves Host and TLS SNI", async () => {
 		mocks.lookup.mockResolvedValue([
 			{ address: "93.184.216.34", family: 4 },
