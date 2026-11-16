@@ -615,6 +615,21 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			);
 			return session as Session;
 		},
+		clearActiveOrganizationFromSessions: async (
+			userId: string,
+			organizationId: string,
+		) => {
+			const sessions: (Session & {
+				activeOrganizationId?: string | null | undefined;
+			})[] = await context.internalAdapter.listSessions(userId);
+			for (const session of sessions) {
+				if (session.activeOrganizationId === organizationId) {
+					await context.internalAdapter.updateSession(session.token, {
+						activeOrganizationId: null,
+					});
+				}
+			}
+		},
 		findOrganizationById: async (
 			organizationId: string,
 		): Promise<InferOrganization<O> | null> => {

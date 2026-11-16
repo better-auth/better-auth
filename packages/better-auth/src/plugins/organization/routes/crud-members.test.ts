@@ -932,3 +932,90 @@ describe("inviteMember role validation", async () => {
 		expect(data).toBeDefined();
 	});
 });
+
+describe("membership removal clears the organization from every session", async () => {
+	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
+		plugins: [organization()],
+	});
+	const ctx = await auth.$context;
+	const { headers: adminHeaders } = await signInWithTestUser();
+	const orgA = await auth.api.createOrganization({
+		body: { name: "org-a", slug: "org-a" },
+		headers: adminHeaders,
+	});
+	const orgB = await auth.api.createOrganization({
+		body: { name: "org-b", slug: "org-b" },
+		headers: adminHeaders,
+	});
+
+	let userCount = 0;
+	async function createMemberWithSessions(activeOrgIds: string[]) {
+		const email = `removal-${userCount++}@test.com`;
+		const password = "password1234";
+		const { user } = await auth.api.signUpEmail({
+			body: { email, password, name: email },
+		});
+		for (const organizationId of [orgA.id, orgB.id]) {
+			await auth.api.addMember({
+				body: { organizationId, userId: user.id, role: "member" },
+			});
+		}
+		const sessions = [];
+		for (const organizationId of activeOrgIds) {
+			const { headers } = await signInWithUser(email, password);
+			await auth.api.setActiveOrganization({
+				body: { organizationId },
+				headers,
+			});
+			const current = await auth.api.getSession({ headers });
+			sessions.push({ headers, token: current!.session.token });
+		}
+		return { user, sessions };
+	}
+
+	async function activeOrganizationOf(token: string) {
+		const found = await ctx.internalAdapter.findSession(token);
+		return found?.session.activeOrganizationId;
+	}
+
+	it("should clear the organization from all sessions of a member removed by an admin", async () => {
+		const { user, sessions } = await createMemberWithSessions([
+			orgA.id,
+			orgA.id,
+		]);
+
+		await auth.api.removeMember({
+			body: { organizationId: orgA.id, memberIdOrEmail: user.email },
+			headers: adminHeaders,
+		});
+
+		for (const { token } of sessions) {
+			expect(await activeOrganizationOf(token)).toBeNull();
+		}
+	});
+
+	it("should clear the organization from all sessions of a member who leaves", async () => {
+		const { sessions } = await createMemberWithSessions([orgA.id, orgA.id]);
+
+		await auth.api.leaveOrganization({
+			body: { organizationId: orgA.id },
+			headers: sessions[0]!.headers,
+		});
+
+		for (const { token } of sessions) {
+			expect(await activeOrganizationOf(token)).toBeNull();
+		}
+	});
+
+	it("should keep sessions active in another organization", async () => {
+		const { sessions } = await createMemberWithSessions([orgA.id, orgB.id]);
+
+		await auth.api.leaveOrganization({
+			body: { organizationId: orgA.id },
+			headers: sessions[0]!.headers,
+		});
+
+		expect(await activeOrganizationOf(sessions[0]!.token)).toBeNull();
+		expect(await activeOrganizationOf(sessions[1]!.token)).toBe(orgB.id);
+	});
+});
