@@ -516,10 +516,21 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					],
 				});
 				if (options?.teams?.enabled) {
-					const teams = await adapter.findMany<Team>({
+					const teamsWhere = [
+						{ field: "organizationId", value: organizationId },
+					];
+					const teamsCount = await adapter.count({
 						model: "team",
-						where: [{ field: "organizationId", value: organizationId }],
+						where: teamsWhere,
 					});
+					const teams =
+						teamsCount > 0
+							? await adapter.findMany<Team>({
+									model: "team",
+									where: teamsWhere,
+									limit: teamsCount,
+								})
+							: [];
 					for (const team of teams) {
 						const deleted = await adapter.deleteMany({
 							model: "teamMember",
@@ -702,10 +713,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					? await adapter.findMany<User>({
 							model: "user",
 							where: [{ field: "id", value: userIds, operator: "in" }],
-							limit:
-								(typeof options?.membershipLimit === "number"
-									? options.membershipLimit
-									: 100) || 100,
+							limit: userIds.length,
 						})
 					: [];
 
@@ -751,19 +759,30 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			userId: string,
 		): Promise<InferOrganization<O>[]> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const where = [
+				{
+					field: "userId",
+					value: userId,
+				},
+			];
+			const count = await adapter.count({
+				model: "member",
+				where,
+			});
+
+			if (count === 0) {
+				return [];
+			}
+
 			const result = await adapter.findMany<
 				InferMember<O, false> & { organization: InferOrganization<O, false> }
 			>({
 				model: "member",
-				where: [
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
+				where,
 				join: {
 					organization: true,
 				},
+				limit: count,
 			});
 
 			if (!result || result.length === 0) {
@@ -916,14 +935,23 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 		listTeams: async (organizationId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const where = [
+				{
+					field: "organizationId",
+					value: organizationId,
+				},
+			];
+			const count = await adapter.count({
+				model: "team",
+				where,
+			});
+			if (count === 0) {
+				return [];
+			}
 			const teams = await adapter.findMany<InferTeam<O, false>>({
 				model: "team",
-				where: [
-					{
-						field: "organizationId",
-						value: organizationId,
-					},
-				],
+				where,
+				limit: count,
 			});
 			return teams.map((team) => {
 				const { memberCount: _memberCount, ...output } = team as InferTeam<
@@ -990,14 +1018,23 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 		listTeamMembers: async (data: { teamId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const where = [
+				{
+					field: "teamId",
+					value: data.teamId,
+				},
+			];
+			const count = await adapter.count({
+				model: "teamMember",
+				where,
+			});
+			if (count === 0) {
+				return [];
+			}
 			const members = await adapter.findMany<StoredTeamMember>({
 				model: "teamMember",
-				where: [
-					{
-						field: "teamId",
-						value: data.teamId,
-					},
-				],
+				where,
+				limit: count,
 			});
 
 			return stripTeamMembershipKeys(members);
@@ -1020,17 +1057,26 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		listTeamsByUser: async (data: { userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const where = [
+				{
+					field: "userId",
+					value: data.userId,
+				},
+			];
+			const count = await adapter.count({
+				model: "teamMember",
+				where,
+			});
+			if (count === 0) {
+				return [];
+			}
 			const results = await adapter.findMany<TeamMember & { team: Team }>({
 				model: "teamMember",
-				where: [
-					{
-						field: "userId",
-						value: data.userId,
-					},
-				],
+				where,
 				join: {
 					team: true,
 				},
+				limit: count,
 			});
 
 			return results.map((result) => {
@@ -1160,29 +1206,47 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		findInvitationsByTeamId: async (teamId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const where = [
+				{
+					field: "teamId",
+					value: teamId,
+				},
+			];
+			const count = await adapter.count({
+				model: "invitation",
+				where,
+			});
+			if (count === 0) {
+				return [];
+			}
 			const invitations = await adapter.findMany<InferInvitation<O, false>>({
 				model: "invitation",
-				where: [
-					{
-						field: "teamId",
-						value: teamId,
-					},
-				],
+				where,
+				limit: count,
 			});
 			return invitations;
 		},
 		listUserInvitations: async (email: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const where = [{ field: "email", value: email.toLowerCase() }];
+			const count = await adapter.count({
+				model: "invitation",
+				where,
+			});
+			if (count === 0) {
+				return [];
+			}
 			const invitations = await adapter.findMany<
 				InferInvitation<O, false> & {
 					organization: InferOrganization<O, false>;
 				}
 			>({
 				model: "invitation",
-				where: [{ field: "email", value: email.toLowerCase() }],
+				where,
 				join: {
 					organization: true,
 				},
+				limit: count,
 			});
 			return invitations.filter(Boolean).map(({ organization, ...inv }) => ({
 				...inv,
@@ -1249,22 +1313,31 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const where = [
+				{
+					field: "email",
+					value: data.email.toLowerCase(),
+				},
+				{
+					field: "organizationId",
+					value: data.organizationId,
+				},
+				{
+					field: "status",
+					value: "pending",
+				},
+			];
+			const count = await adapter.count({
+				model: "invitation",
+				where,
+			});
+			if (count === 0) {
+				return [];
+			}
 			const invitation = await adapter.findMany<InferInvitation<O, false>>({
 				model: "invitation",
-				where: [
-					{
-						field: "email",
-						value: data.email.toLowerCase(),
-					},
-					{
-						field: "organizationId",
-						value: data.organizationId,
-					},
-					{
-						field: "status",
-						value: "pending",
-					},
-				],
+				where,
+				limit: count,
 			});
 			return invitation.filter(
 				(invite) => new Date(invite.expiresAt) > new Date(),
@@ -1272,18 +1345,27 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		findPendingInvitations: async (data: { organizationId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const where = [
+				{
+					field: "organizationId",
+					value: data.organizationId,
+				},
+				{
+					field: "status",
+					value: "pending",
+				},
+			];
+			const count = await adapter.count({
+				model: "invitation",
+				where,
+			});
+			if (count === 0) {
+				return [];
+			}
 			const invitations = await adapter.findMany<InferInvitation<O, false>>({
 				model: "invitation",
-				where: [
-					{
-						field: "organizationId",
-						value: data.organizationId,
-					},
-					{
-						field: "status",
-						value: "pending",
-					},
-				],
+				where,
+				limit: count,
 			});
 			return invitations.filter(
 				(invite) => new Date(invite.expiresAt) > new Date(),
@@ -1291,14 +1373,23 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		listInvitations: async (data: { organizationId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const where = [
+				{
+					field: "organizationId",
+					value: data.organizationId,
+				},
+			];
+			const count = await adapter.count({
+				model: "invitation",
+				where,
+			});
+			if (count === 0) {
+				return [];
+			}
 			const invitations = await adapter.findMany<InferInvitation<O, false>>({
 				model: "invitation",
-				where: [
-					{
-						field: "organizationId",
-						value: data.organizationId,
-					},
-				],
+				where,
+				limit: count,
 			});
 			return invitations;
 		},

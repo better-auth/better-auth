@@ -24,6 +24,7 @@ import { isAPIError } from "../../utils/is-api-error";
 import { createAccessControl } from "../access";
 import { admin } from "../admin";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
+import { getOrgAdapter } from "./adapter";
 import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { organization } from "./organization";
@@ -4254,5 +4255,112 @@ describe("delete cascade rollback", async () => {
 			],
 		});
 		expect(teamMemberCount).toBe(1);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12698
+ */
+describe("defaultFindManyLimit handling in organization adapter", () => {
+	it("returns all organizations and active pending invitations when defaultFindManyLimit is constrained", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			advanced: { database: { defaultFindManyLimit: 1 } },
+			plugins: [
+				organization({
+					async sendInvitationEmail() {},
+					teams: { enabled: true },
+				}),
+			],
+		});
+		const { headers, user } = await signInWithTestUser();
+
+		const org1 = await auth.api.createOrganization({
+			body: { name: "Org 1", slug: "org-1" },
+			headers,
+		});
+		const org2 = await auth.api.createOrganization({
+			body: { name: "Org 2", slug: "org-2" },
+			headers,
+		});
+		const org3 = await auth.api.createOrganization({
+			body: { name: "Org 3", slug: "org-3" },
+			headers,
+		});
+
+		const orgs = await auth.api.listOrganizations({ headers });
+		expect(orgs?.length).toBe(3);
+		expect(orgs?.map((o) => o.id).sort()).toEqual(
+			[org1?.id, org2?.id, org3?.id].sort(),
+		);
+
+		const ctx = await auth.$context;
+		const adapter = getOrgAdapter(ctx);
+
+		const invite1 = await adapter.createInvitation({
+			invitation: {
+				email: "pending1@example.com",
+				role: "member",
+				organizationId: org1!.id,
+				teamIds: [],
+			},
+			user,
+		});
+		const invite2 = await adapter.createInvitation({
+			invitation: {
+				email: "pending2@example.com",
+				role: "member",
+				organizationId: org1!.id,
+				teamIds: [],
+			},
+			user,
+		});
+		await ctx.adapter.create({
+			model: "invitation",
+			data: {
+				email: "expired@example.com",
+				role: "member",
+				organizationId: org1!.id,
+				inviterId: user.id,
+				status: "pending",
+				expiresAt: new Date(Date.now() - 1000 * 60 * 60),
+				createdAt: new Date(),
+			},
+		});
+
+		const pendingInvites = await adapter.findPendingInvitations({
+			organizationId: org1!.id,
+		});
+		expect(pendingInvites.length).toBe(2);
+		expect(pendingInvites.map((i) => i.id).sort()).toEqual(
+			[invite1.id, invite2.id].sort(),
+		);
+
+		const allInvites = await adapter.listInvitations({
+			organizationId: org1!.id,
+		});
+		expect(allInvites.length).toBe(3);
+
+		const userInvites = await adapter.listUserInvitations(
+			"pending1@example.com",
+		);
+		expect(userInvites.length).toBe(1);
+		expect(userInvites[0].organizationName).toBe("Org 1");
+
+		const team1 = await adapter.createTeam({
+			name: "Team 1",
+			organizationId: org1!.id,
+			createdAt: new Date(),
+		});
+		const team2 = await adapter.createTeam({
+			name: "Team 2",
+			organizationId: org1!.id,
+			createdAt: new Date(),
+		});
+
+		const teams = await adapter.listTeams(org1!.id);
+		expect(teams.length).toBe(3);
+		expect(teams.map((t) => t.id)).toEqual(
+			expect.arrayContaining([team1.id, team2.id]),
+		);
 	});
 });
