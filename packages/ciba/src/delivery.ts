@@ -1,5 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { assertPublicRoutableHttpsUri } from "@better-auth/oauth-provider/internal";
+import {
+	assertPublicRoutableHttpsUri,
+	getDeliveryTargetRejection,
+} from "@better-auth/oauth-provider/internal";
 import { symmetricDecrypt } from "better-auth/crypto";
 import { oauthError } from "./error-codes";
 import type { CibaRequest } from "./schema";
@@ -12,6 +15,15 @@ export const NOTIFICATION_ENDPOINT_FIELD =
 
 // Matches the back-channel logout dispatch timeout.
 const PING_TIMEOUT_MS = 5_000;
+
+/**
+ * Reports whether the operator of the auth instance handling the request
+ * vouches for the origin of a URL.
+ */
+export type IsConfiguredOrigin = (
+	ctx: GenericEndpointContext,
+	url: string,
+) => boolean;
 
 export type CibaDelivery =
 	| { mode: "poll" }
@@ -52,12 +64,16 @@ export function resolveCibaDelivery(
 /**
  * Ping callback (CIBA §10.2): tells a ping-mode client that the user decided,
  * so it polls the token endpoint. One attempt, off the response path when a
- * background handler is configured. The decision is already recorded, so a
- * failure is only logged, and the client can still poll.
+ * background handler is configured. The stored endpoint is checked again and
+ * its host resolved first, and a ping to a non-public address is skipped. An
+ * endpoint whose origin `isConfiguredOrigin` vouches for skips only the
+ * lookup. The decision is already recorded, so a skip or failure is only
+ * logged, and the client can still poll.
  */
 export async function pingClient(
 	ctx: GenericEndpointContext,
 	request: CibaRequest,
+	isConfiguredOrigin: IsConfiguredOrigin,
 ): Promise<void> {
 	const {
 		clientNotificationEndpoint: endpoint,
@@ -69,7 +85,18 @@ export async function pingClient(
 	}
 	const decrypt = (data: string) =>
 		symmetricDecrypt({ key: ctx.context.secretConfig, data });
+	// One deadline covers the address check and the POST.
+	const signal = AbortSignal.timeout(PING_TIMEOUT_MS);
 	const ping = (async () => {
+		const rejection = await getDeliveryTargetRejection(endpoint, signal, {
+			skipResolution: isConfiguredOrigin(ctx, endpoint),
+		});
+		if (rejection) {
+			ctx.context.logger.warn(
+				`CIBA ping to client ${request.clientId} skipped: ${NOTIFICATION_ENDPOINT_FIELD} ${rejection}`,
+			);
+			return;
+		}
 		const response = await fetch(endpoint, {
 			method: "POST",
 			headers: {
@@ -79,7 +106,7 @@ export async function pingClient(
 			body: JSON.stringify({
 				auth_req_id: await decrypt(encryptedAuthReqId),
 			}),
-			signal: AbortSignal.timeout(PING_TIMEOUT_MS),
+			signal,
 			redirect: "error",
 		});
 		if (!response.ok) {

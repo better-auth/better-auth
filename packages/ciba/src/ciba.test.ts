@@ -10,9 +10,12 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { JWK } from "jose";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CibaNotification, CibaOptions } from "./index";
 import { CIBA_GRANT_TYPE, ciba } from "./index";
+
+const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
+vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
 
 const baseURL = "http://localhost:3000";
 const resource = "https://api.example.com";
@@ -59,9 +62,16 @@ const sendNotification = vi.fn((notification: CibaNotification) => {
 	lastNotification = notification;
 });
 
+// What the next request resolves as trusted. Ping delivery ignores it.
+let requestTrustedOrigins: string[] = [];
+
 const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 	await getTestInstance({
 		baseURL,
+		trustedOrigins: async (request) => [
+			baseURL,
+			...(request ? requestTrustedOrigins : []),
+		],
 		plugins: [
 			jwt({ jwt: { issuer: baseURL } }),
 			oauthProvider({
@@ -1320,6 +1330,10 @@ describe("ciba authorization_details", () => {
 });
 
 describe("ciba ping mode", () => {
+	beforeEach(() => {
+		lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+	});
+
 	let pingClient: OAuthClient;
 	const token = "client-token.123";
 
@@ -1424,6 +1438,182 @@ describe("ciba ping mode", () => {
 		await approve(url);
 		expect(ping).not.toHaveBeenCalled();
 	});
+
+	/**
+	 * Registration only checks the host as written, so a public-looking name
+	 * can still resolve to an internal address when the ping is sent.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-10.7
+	 */
+	describe("delivery destination", () => {
+		async function expectPingSkipped(ping: ReturnType<typeof mockPing>) {
+			const warn = vi.spyOn((await auth.$context).logger, "warn");
+			const { authReqId, url } = await startPing();
+			await approve(url);
+
+			expect(ping).not.toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledWith(
+				expect.stringContaining(
+					`CIBA ping to client ${pingClient.client_id} skipped`,
+				),
+			);
+			expect((await poll(authReqId, pingClient)).status).toBe(200);
+		}
+
+		it.each([
+			["a private address", [{ address: "10.0.0.5", family: 4 }]],
+			["loopback", [{ address: "127.0.0.1", family: 4 }]],
+			[
+				"the cloud metadata address",
+				[{ address: "169.254.169.254", family: 4 }],
+			],
+			["a unique local IPv6 address", [{ address: "fd00::1", family: 6 }]],
+			[
+				"an IPv4-mapped IPv6 loopback",
+				[{ address: "::ffff:127.0.0.1", family: 6 }],
+			],
+			[
+				"a public address and a private address",
+				[
+					{ address: "93.184.216.34", family: 4 },
+					{ address: "10.0.0.5", family: 4 },
+				],
+			],
+		])("skips a host that resolves to %s", async (_, answer) => {
+			lookupMock.mockResolvedValue(answer);
+			await expectPingSkipped(mockPing());
+			expect(lookupMock).toHaveBeenCalledWith("client.example.com", {
+				all: true,
+				verbatim: true,
+			});
+		});
+
+		it.each([
+			[
+				"cannot be resolved",
+				() => lookupMock.mockRejectedValue(new Error("ENOTFOUND")),
+			],
+			["resolves to no address", () => lookupMock.mockResolvedValue([])],
+		])("skips a host that %s", async (_, arrange) => {
+			arrange();
+			await expectPingSkipped(mockPing());
+		});
+
+		it("pings a host that resolves only to public addresses", async () => {
+			lookupMock.mockResolvedValue([
+				{ address: "93.184.216.34", family: 4 },
+				{ address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+			]);
+			const ping = mockPing();
+			const { url } = await startPing();
+			await approve(url);
+			expect(ping).toHaveBeenCalledOnce();
+		});
+
+		it("skips a stored endpoint that is no longer public without a lookup", async () => {
+			const ping = mockPing();
+			const warn = vi.spyOn((await auth.$context).logger, "warn");
+			const ctx = await auth.$context;
+			const decide = async (action: "link" | "complete" | "deny") => {
+				const { url } = await startPing();
+				const { requestId, user } = lastNotification!;
+				await ctx.adapter.update({
+					model: "cibaRequest",
+					where: [{ field: "id", value: requestId }],
+					update: { clientNotificationEndpoint: "https://10.0.0.5/ciba" },
+				});
+				if (action === "complete") {
+					await auth.api.completeCibaRequest({
+						body: { requestId, userId: user.id, decision: "approved" },
+					});
+				} else {
+					await answerConsent(await openLink(url), action === "link");
+				}
+			};
+			for (const action of ["link", "complete", "deny"] as const) {
+				await decide(action);
+			}
+			expect(ping).not.toHaveBeenCalled();
+			expect(lookupMock).not.toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledTimes(3);
+		});
+
+		/**
+		 * An origin the operator lists in `trustedOrigins` is vouched for, so a
+		 * name that resolves to a private address on an internal network, as a
+		 * split-horizon name does, still receives the ping. Only the lookup is
+		 * skipped.
+		 */
+		describe("trusted origins", async () => {
+			const initContext = await auth.$context;
+			const configuredTrustedOrigins = initContext.trustedOrigins;
+			const trustOrigins = (...origins: string[]) => {
+				initContext.trustedOrigins = [...configuredTrustedOrigins, ...origins];
+			};
+			const decide = async (action: "link" | "complete" | "deny") => {
+				const { url } = await startPing();
+				const { requestId, user } = lastNotification!;
+				if (action === "complete") {
+					await auth.api.completeCibaRequest({
+						body: { requestId, userId: user.id, decision: "approved" },
+					});
+				} else {
+					await answerConsent(await openLink(url), action === "link");
+				}
+				return requestId;
+			};
+
+			beforeEach(() => {
+				requestTrustedOrigins = [];
+				initContext.trustedOrigins = configuredTrustedOrigins;
+				lookupMock.mockResolvedValue([{ address: "10.0.0.5", family: 4 }]);
+			});
+
+			it.each(["link", "complete", "deny"] as const)(
+				"pings a host that resolves to a private address when its origin is trusted (%s)",
+				async (action) => {
+					trustOrigins("https://client.example.com");
+					const ping = mockPing();
+					await decide(action);
+					expect(ping).toHaveBeenCalledOnce();
+					expect(lookupMock).not.toHaveBeenCalled();
+				},
+			);
+
+			it("skips the same host when its origin is not trusted", async () => {
+				const ping = mockPing();
+				await decide("link");
+				expect(ping).not.toHaveBeenCalled();
+			});
+
+			it("still skips a stored private address when its origin is trusted", async () => {
+				trustOrigins("https://10.0.0.5");
+				const ping = mockPing();
+				const { url } = await startPing();
+				const { requestId } = lastNotification!;
+				await (await auth.$context).adapter.update({
+					model: "cibaRequest",
+					where: [{ field: "id", value: requestId }],
+					update: { clientNotificationEndpoint: "https://10.0.0.5/ciba" },
+				});
+				await approve(url);
+				expect(ping).not.toHaveBeenCalled();
+			});
+
+			/**
+			 * `trustedOrigins` can resolve from request input, such as the Host
+			 * header when no `baseURL` is configured, and the request that decides a
+			 * ping comes from the party the check defends against. Only the list
+			 * resolved at initialization counts.
+			 */
+			it("ignores an origin that only the deciding request resolves as trusted", async () => {
+				requestTrustedOrigins = ["https://client.example.com"];
+				const ping = mockPing();
+				await decide("link");
+				expect(ping).not.toHaveBeenCalled();
+			});
+		});
+	});
 });
 
 it("keeps one instance's schema overrides out of another", () => {
@@ -1435,6 +1625,76 @@ it("keeps one instance's schema overrides out of another", () => {
 	expect(
 		ciba({ resultPage: "/ciba", sendNotification }).schema.cibaRequest,
 	).not.toHaveProperty("modelName");
+});
+
+/**
+ * The origins an operator vouches for belong to one auth instance, so an
+ * instance that reuses a plugin object another instance also initialized
+ * does not take on that instance's trust.
+ */
+describe("ciba ping trust with a plugin object shared by two instances", async () => {
+	const shared = ciba({
+		resultPage: "/ciba",
+		deliveryModes: ["poll", "ping"],
+		sendNotification,
+	});
+	const instance = (trustedOrigins: string[]) =>
+		getTestInstance({
+			baseURL,
+			trustedOrigins,
+			plugins: [
+				jwt({ jwt: { issuer: baseURL } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					allowUnauthenticatedClientRegistration: true,
+				}),
+				shared,
+			],
+		});
+	// Initialized first, then the instance that trusts the client's origin.
+	const untrusting = await instance([baseURL]);
+	await instance([baseURL, "https://client.example.com"]);
+
+	it("does not ping a private address for an instance that does not trust the origin", async () => {
+		lookupMock.mockResolvedValue([{ address: "10.0.0.5", family: 4 }]);
+		const ping = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(async () => new Response(null, { status: 204 }));
+		const { headers: adminHeaders } = await untrusting.signInWithTestUser();
+		const client = await untrusting.auth.api.adminCreateOAuthClient({
+			headers: adminHeaders,
+			body: {
+				client_name: "Support Agent",
+				grant_types: [CIBA_GRANT_TYPE],
+				metadata: PING,
+			},
+		});
+		const authentication = clientAuthentication(client);
+		const res = await untrusting.customFetchImpl(
+			`${baseURL}/api/auth/oauth2/bc-authorize`,
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					...authentication.headers,
+				},
+				body: new URLSearchParams({
+					...authentication.params,
+					scope: "openid",
+					login_hint: untrusting.testUser.email,
+					client_notification_token: "client-token.123",
+				}).toString(),
+			},
+		);
+		expect(res.status).toBe(200);
+		const { requestId, user } = lastNotification!;
+		await untrusting.auth.api.completeCibaRequest({
+			body: { requestId, userId: user.id, decision: "approved" },
+		});
+		expect(ping).not.toHaveBeenCalled();
+	});
 });
 
 describe("ciba completion when acrValuesSupported omits 0", async () => {
