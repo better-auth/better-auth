@@ -197,12 +197,13 @@ describe("oauthProviderClient", async () => {
 		it("appends oauth_query to a URLSearchParams body", async () => {
 			stubSignedPage();
 
-			const sent = new URLSearchParams(
-				(await send({ body: new URLSearchParams("tag=a&tag=b") })) as string,
-			);
+			const sent = await send({ body: new URLSearchParams("tag=a&tag=b") });
 
-			expect(sent.getAll("tag")).toEqual(["a", "b"]);
-			expectSignedQuery(sent.get("oauth_query"));
+			// fetch derives the form content type only from a URLSearchParams object.
+			expect(sent).toBeInstanceOf(URLSearchParams);
+			const params = sent as URLSearchParams;
+			expect(params.getAll("tag")).toEqual(["a", "b"]);
+			expectSignedQuery(params.get("oauth_query"));
 		});
 
 		/**

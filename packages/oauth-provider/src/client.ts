@@ -32,7 +32,8 @@ export const oauthProviderClient = () => {
 							const params = new URLSearchParams(ctx.body);
 							if (params.get("oauth_query")) return;
 							params.set("oauth_query", oauthQuery);
-							ctx.body = params.toString();
+							// Keep a URLSearchParams object so fetch derives the form content type.
+							ctx.body = isParams ? params : params.toString();
 							return;
 						}
 						// Leave other media types, such as text/plain, untouched.
