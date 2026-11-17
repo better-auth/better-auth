@@ -92,7 +92,7 @@ A string uses the plugin defaults. An object sets per-resource policy:
 
 In a request for several resources, a `signingAlgorithm` or `signingKeyId` set on one of them applies to the whole token, and resources without one do not conflict with it. The request fails with `invalid_request` only when two resources set different values, because one token carries one signature. To fix it, set the same value on both resources, or leave it unset on one of them.
 
-Omit `allowedScopes` (or pass `null` at runtime) to allow every requested scope. A non-empty array is an allowlist; scopes outside it are removed and an empty intersection is rejected with `invalid_scope`. In config, an empty array (`[]`) is rejected at construction to prevent ambiguity with blocking access (use `disabled: true` to stop issuing tokens). Pass `null` through the admin API to remove the restriction; `[]` is rejected there too. Admin responses serialize an unrestricted allowlist as `null`, which echoes back cleanly.
+Omit `allowedScopes` (or pass `null`) to allow every requested scope. A non-empty array is an allowlist; scopes outside it are removed and an empty intersection is rejected with `invalid_scope`. In config, an empty array (`[]`) is rejected at construction to prevent ambiguity with blocking access (use `disabled: true` to stop issuing tokens). Pass `null` through the admin API to remove the restriction; `[]` is rejected there too. Admin responses serialize an unrestricted allowlist as `null`, which echoes back cleanly.
 
 In a request for several resources, the granted scopes are narrowed to the intersection of the `allowedScopes` of the requested resources. A resource without `allowedScopes` does not restrict, and accepts any requested scope.
 
