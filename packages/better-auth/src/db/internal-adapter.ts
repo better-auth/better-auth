@@ -53,6 +53,9 @@ type ActiveSessionReference = {
 
 const VERIFICATION_CLEANUP_INTERVAL_MS = 60_000;
 
+/** Thrown inside `deleteUser`'s transaction to roll it back when a hook vetoes the delete. */
+const DELETE_USER_SKIPPED = Symbol("delete-user-skipped");
+
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -246,6 +249,8 @@ export const createInternalAdapter = (
 	async function queueCachedUserSessionDeletion(
 		userId: string,
 		sessionReferences?: readonly ActiveSessionReference[],
+		/** Checked when the hook runs; the revocation is skipped when it returns `false`. */
+		shouldRevoke?: () => boolean,
 	) {
 		if (!secondaryStorage) return;
 
@@ -255,7 +260,10 @@ export const createInternalAdapter = (
 			sessionReferences ?? (await getActiveSessionReferences(userId));
 		const revokedAt = Date.now();
 		await queueAfterTransactionHook(
-			() => deleteCachedUserSessions(userId, references, revokedAt),
+			async () => {
+				if (shouldRevoke && !shouldRevoke()) return;
+				await deleteCachedUserSessions(userId, references, revokedAt);
+			},
 			{
 				onError(error) {
 					logger.error(
@@ -516,47 +524,63 @@ export const createInternalAdapter = (
 		},
 		deleteUser: async (userId: string) => {
 			const sessionReferences = await getActiveSessionReferences(userId);
-			// One transaction, so a failed user delete does not leave the user
-			// without its sessions and accounts. The cached sessions are revoked
-			// once it commits.
-			await runWithTransaction(adapter, async () => {
-				if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-					await deleteManyWithHooks(
+			let userDeleted = false;
+			// One transaction, so a failed or vetoed delete does not leave the
+			// user without its sessions and accounts.
+			try {
+				await runWithTransaction(adapter, async () => {
+					// An adapter may run this callback again after a transient abort.
+					userDeleted = false;
+					// Queued first, so an earlier after hook that throws cannot skip it.
+					// It only revokes the cached sessions once the user row is gone.
+					await queueCachedUserSessionDeletion(
+						userId,
+						sessionReferences,
+						() => userDeleted,
+					);
+					if (!secondaryStorage || options.session?.storeSessionInDatabase) {
+						const deletedSessions = await deleteManyWithHooks(
+							[
+								{
+									field: "userId",
+									value: userId,
+								},
+							],
+							"session",
+							undefined,
+						);
+						if (deletedSessions === null) throw DELETE_USER_SKIPPED;
+					}
+					const deletedAccounts = await deleteManyWithHooks(
 						[
 							{
 								field: "userId",
 								value: userId,
 							},
 						],
-						"session",
+						"account",
 						undefined,
 					);
-				}
-				await deleteManyWithHooks(
-					[
-						{
-							field: "userId",
-							value: userId,
-						},
-					],
-					"account",
-					undefined,
-				);
+					if (deletedAccounts === null) throw DELETE_USER_SKIPPED;
 
-				const deletedUser = await deleteWithHooks(
-					[
-						{
-							field: "id",
-							value: userId,
-						},
-					],
-					"user",
-					undefined,
-				);
-				if (deletedUser !== null) {
-					await queueCachedUserSessionDeletion(userId, sessionReferences);
-				}
-			});
+					const deletedUser = await deleteWithHooks(
+						[
+							{
+								field: "id",
+								value: userId,
+							},
+						],
+						"user",
+						undefined,
+					);
+					// A `delete.before` hook vetoed the delete, or the user is gone.
+					if (deletedUser === null) throw DELETE_USER_SKIPPED;
+					userDeleted = true;
+				});
+			} catch (error) {
+				// Rolled back on purpose: a vetoed delete is not an error.
+				if (error !== DELETE_USER_SKIPPED) throw error;
+			}
 		},
 		createSession: async (
 			userId: string,
