@@ -506,6 +506,94 @@ describe("CIMD in-flight coalescing", () => {
 			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 		});
 
+		it("keeps an abandoned fetch that finishes later from overwriting the fetch that replaced it", async () => {
+			const clientId = "https://abandoned-late.example/client.json";
+			const leaderPolicy = deferred<boolean>();
+			const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
+			isMetadataDocumentUrlAllowed.mockImplementationOnce(
+				() => leaderPolicy.promise,
+			);
+			const { discovery, fetchClientMetadataResource } = createDiscovery({
+				isMetadataDocumentUrlAllowed,
+			});
+			const documentNamed = (name: string) =>
+				Response.json(
+					{
+						client_id: clientId,
+						client_name: name,
+						redirect_uris: ["http://127.0.0.1:5199/callback"],
+						application_type: "native",
+						token_endpoint_auth_method: "none",
+						grant_types: ["authorization_code"],
+						response_types: ["code"],
+					},
+					{ headers: { "cache-control": "max-age=60" } },
+				);
+			const names = ["Replacement", "Abandoned"];
+			fetchClientMetadataResource.mockImplementation(async () =>
+				documentNamed(names.shift() ?? "unexpected"),
+			);
+			const leader = await createRequestContext();
+			const joiner = await createRequestContext();
+			const later = await createRequestContext();
+			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+			const leaderResolution = discovery.resolve(leader.ctx, clientId, null);
+			await vi.advanceTimersByTimeAsync(0);
+			const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
+			await vi.advanceTimersByTimeAsync(10_000);
+			await expect(joinerResolution).resolves.toMatchObject({
+				name: "Replacement",
+			});
+
+			leaderPolicy.resolve(true);
+			await expect(leaderResolution).resolves.toMatchObject({
+				name: "Abandoned",
+			});
+			await expect(
+				discovery.resolve(later.ctx, clientId, null),
+			).resolves.toMatchObject({ name: "Replacement" });
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+		});
+
+		it("does not let an abandoned fetch that fails later pace the fetch that replaced it", async () => {
+			const clientId = "https://abandoned-failure.example/client.json";
+			let failLeaderPolicy!: (error: Error) => void;
+			const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
+			isMetadataDocumentUrlAllowed.mockImplementationOnce(
+				() =>
+					new Promise<boolean>((_resolve, reject) => {
+						failLeaderPolicy = reject;
+					}),
+			);
+			const { discovery, fetchClientMetadataResource } = createDiscovery({
+				isMetadataDocumentUrlAllowed,
+				metadataFetchPolicy: { minimumFetchInterval: 3_600 },
+			});
+			fetchClientMetadataResource.mockImplementation(async () =>
+				metadataResponse(clientId, { "cache-control": "no-store" }),
+			);
+			const leader = await createRequestContext();
+			const joiner = await createRequestContext();
+			const later = await createRequestContext();
+			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+			const leaderResolution = discovery.resolve(leader.ctx, clientId, null);
+			void Promise.resolve(leaderResolution).catch(() => {});
+			await vi.advanceTimersByTimeAsync(0);
+			const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
+			await vi.advanceTimersByTimeAsync(10_000);
+			// The abandoned fetch's pacing record is gone, so the replacement ran.
+			await expect(joinerResolution).resolves.toMatchObject({ clientId });
+
+			failLeaderPolicy(new Error("policy service failed"));
+			await expect(leaderResolution).rejects.toThrow("policy service failed");
+			await expect(
+				discovery.resolve(later.ctx, clientId, null),
+			).resolves.toMatchObject({ clientId });
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+		});
+
 		it("lets a later request fetch after a joined request gave up", async () => {
 			const clientId = "https://abandoned-then-later.example/client.json";
 			const { discovery, fetchClientMetadataResource } = createDiscovery();

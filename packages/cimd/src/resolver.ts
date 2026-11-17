@@ -19,7 +19,9 @@ import { isCimdClientIdUrlCandidate } from "./validate-metadata-document";
 
 const FETCH_BUDGET_WINDOW_MS = 60_000;
 // A request that joins a fetch stops waiting for it after twice the fetch
-// timeout, which the request that started the fetch enforces itself.
+// timeout. The request that started the fetch enforces that timeout on the
+// network fetch only, so a URL policy callback that runs longer than the wait
+// counts as a stuck fetch.
 const JOINED_FETCH_WAIT_MS = FETCH_TIMEOUT_MS * 2;
 const DEFAULT_METADATA_FETCH_POLICY = {
 	minimumFetchInterval: 1,
@@ -50,7 +52,8 @@ interface FetchedMetadata {
 
 interface InFlightMetadataFetch {
 	fetched: Promise<FetchedMetadata>;
-	releasePermit: () => void;
+	/** Retires the fetch and returns its permit. Calling it again does nothing. */
+	abandon: () => void;
 }
 
 interface ResolvedMetadataFetchPolicy {
@@ -490,8 +493,10 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 	};
 
 	// A fetch started by a request that the runtime then ends never settles, and
-	// its permit is never released. A request that joined it stops waiting, drops
-	// the abandoned fetch, and returns its permit, so later requests fetch again.
+	// its permit is never released. A request that joined it stops waiting and
+	// retires the fetch: it leaves the in-flight map, its pacing record and permit
+	// are returned, and it can no longer publish or record a failure, so later
+	// requests fetch again.
 	const joinFetch = async (
 		clientId: string,
 		inFlight: InFlightMetadataFetch,
@@ -510,8 +515,9 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		if (fetched === undefined) {
 			if (inFlightMetadataByClientId.get(clientId) === inFlight) {
 				inFlightMetadataByClientId.delete(clientId);
+				lastFetchStartAtMsByClientId.delete(clientId);
 			}
-			inFlight.releasePermit();
+			inFlight.abandon();
 		}
 		return fetched;
 	};
@@ -576,6 +582,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		}
 
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
+		let abandoned = false;
 		const metadataFetch = (async (): Promise<FetchedMetadata> => {
 			const fetched = await fetchClientMetadataDocument(
 				ctx,
@@ -612,26 +619,32 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				metadataRevalidationInterval,
 				Date.now(),
 			);
-			if (nextEntry) {
-				storeCacheEntry(clientId, nextEntry);
-			} else {
-				metadataCache.delete(clientId);
+			// A retired fetch leaves the cache and pacing to the fetch that replaced it.
+			if (!abandoned) {
+				if (nextEntry) {
+					storeCacheEntry(clientId, nextEntry);
+				} else {
+					metadataCache.delete(clientId);
+				}
+				// Successful fetches are governed by HTTP freshness and origin/global
+				// budgets. Keep the per-client interval only as failed-fetch backoff.
+				lastFetchStartAtMsByClientId.delete(clientId);
 			}
-			// Successful fetches are governed by HTTP freshness and origin/global
-			// budgets. Keep the per-client interval only as failed-fetch backoff.
-			lastFetchStartAtMsByClientId.delete(clientId);
 			return { metadata, nextEntry };
 		})();
 		const inFlight = {
 			fetched: metadataFetch,
-			releasePermit: releaseMetadataFetchPermit,
+			abandon() {
+				abandoned = true;
+				releaseMetadataFetchPermit();
+			},
 		};
 		inFlightMetadataByClientId.set(clientId, inFlight);
 		let fetchedMetadata: FetchedMetadata;
 		try {
 			fetchedMetadata = await metadataFetch;
 		} catch (error) {
-			recordFailedFetch(clientId);
+			if (!abandoned) recordFailedFetch(clientId);
 			throw error;
 		} finally {
 			if (inFlightMetadataByClientId.get(clientId) === inFlight) {
