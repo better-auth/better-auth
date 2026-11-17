@@ -113,6 +113,47 @@ describe("oauth - init", () => {
 		).resolves.not.toThrowError();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12703
+	 */
+	it.each([
+		["not a URL", "mcp.example.com"],
+		["a non-http scheme", "ftp://mcp.example.com"],
+		["embedded credentials", "https://user:pass@mcp.example.com"],
+		["a query", "https://mcp.example.com?x=1"],
+		["a fragment", "https://mcp.example.com#x"],
+	])("should fail when advertisedBaseURL has %s", async (_label, value) => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						advertisedBaseURL: value,
+					}),
+				],
+			}),
+		).rejects.toThrowError(
+			"`advertisedBaseURL` must be an absolute http(s) URL",
+		);
+	});
+
+	it("should pass with a valid advertisedBaseURL", async () => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						advertisedBaseURL: "https://mcp.example.com",
+					}),
+				],
+			}),
+		).resolves.not.toThrowError();
+	});
+
 	it("should fail with secondaryStorage when session config is omitted", async () => {
 		await expect(
 			getTestInstance({

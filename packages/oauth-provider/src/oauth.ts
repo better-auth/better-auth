@@ -127,6 +127,32 @@ const sessionLogoutPlansByContext = new WeakMap<
 >();
 const signedQueryIssuedAtMsKey = "signedQueryIssuedAtMs";
 
+/**
+ * `advertisedBaseURL` only ever widens an accepted assertion audience, so a
+ * value that is not a usable base silently accepts nothing. Reject it at
+ * startup instead of leaving it to look like a client key problem.
+ */
+function assertValidAdvertisedBaseURL(advertisedBaseURL: string): void {
+	let parsed: URL | undefined;
+	try {
+		parsed = new URL(advertisedBaseURL);
+	} catch {
+		parsed = undefined;
+	}
+	if (
+		!parsed ||
+		(parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+		parsed.username ||
+		parsed.password ||
+		parsed.search ||
+		parsed.hash
+	) {
+		throw new BetterAuthError(
+			"`advertisedBaseURL` must be an absolute http(s) URL with no credentials, query, or fragment",
+		);
+	}
+}
+
 function getServerContextSignedQueryIssuedAt(value: unknown) {
 	const issuedAtMs =
 		typeof value === "number"
@@ -583,6 +609,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				throw new BetterAuthError(
 					"OAuth Provider requires `session.storeSessionInDatabase: true` when using secondaryStorage",
 				);
+			}
+
+			// A typo here would silently accept no extra audience at all, and the
+			// first sign of it would be a client's `invalid_client`. Fail now.
+			if (opts.advertisedBaseURL !== undefined) {
+				assertValidAdvertisedBaseURL(opts.advertisedBaseURL);
 			}
 
 			// A replayed rotation assertion would hand over a client's keys, so

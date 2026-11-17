@@ -21,6 +21,7 @@ const attestationType =
 
 async function setup(
 	assertionAudience?: OAuthOptions<Scope[]>["assertionAudience"],
+	advertisedBaseURL?: string,
 ) {
 	const clientKeys = await generateKeyPair("RS256", { extractable: true });
 	const attestationKeys = await generateKeyPair("ES256", {
@@ -47,6 +48,7 @@ async function setup(
 				clientPrivileges: () => true,
 				pushedAuthorizationRequests: { enabled: true },
 				...(assertionAudience && { assertionAudience }),
+				...(advertisedBaseURL && { advertisedBaseURL }),
 				extensions: [
 					{
 						clientAuthentication: {
@@ -330,6 +332,107 @@ describe("client assertion audience", () => {
 				[tokenEndpoint, issuer],
 				[parEndpoint, issuer, tokenEndpoint],
 			]);
+		});
+	});
+
+	/**
+	 * A server whose server-to-server endpoints clients reach through a gateway
+	 * on another host.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12703
+	 */
+	describe("with advertisedBaseURL", () => {
+		const advertisedBaseURL = "https://mcp.example.com";
+		// The advertised base stands in for the whole of `baseURL`, base path
+		// included: the gateway publishes the endpoints at its own root.
+		const advertisedTokenEndpoint = `${advertisedBaseURL}/oauth2/token`;
+		const advertisedParEndpoint = `${advertisedBaseURL}/oauth2/par`;
+
+		describe("and assertionAudience: issuer-or-endpoint", async () => {
+			const { methods, requestToken, pushRequest, observedAcceptedAudiences } =
+				await setup("issuer-or-endpoint", advertisedBaseURL);
+
+			it.each([
+				[
+					"private_key_jwt",
+					"the advertised token endpoint",
+					advertisedTokenEndpoint,
+				],
+				["private_key_jwt", "the token endpoint", tokenEndpoint],
+				["private_key_jwt", "the issuer", issuer],
+				["strategy", "the advertised token endpoint", advertisedTokenEndpoint],
+				["strategy", "the token endpoint", tokenEndpoint],
+			] as const)(
+				"accepts %s assertions addressed to %s at the token endpoint",
+				async (method, _, aud) => {
+					const token = await requestToken(await methods[method](aud));
+					expect(token.status).toBe(200);
+				},
+			);
+
+			it("accepts the advertised PAR endpoint at the PAR endpoint", async () => {
+				const pushed = await pushRequest(
+					await methods.private_key_jwt(advertisedParEndpoint),
+				);
+				expect(pushed.status).toBe(201);
+			});
+
+			it("keeps the assertion bound to one endpoint under the advertised base", async () => {
+				const token = await requestToken(
+					await methods.private_key_jwt(advertisedParEndpoint),
+				);
+				expect(token).toMatchObject(invalidClient);
+			});
+
+			it("rejects an endpoint under an unrelated host", async () => {
+				const token = await requestToken(
+					await methods.private_key_jwt(
+						"https://attacker.example.com/oauth2/token",
+					),
+				);
+				expect(token).toMatchObject(invalidClient);
+			});
+
+			it("offers a strategy each endpoint under both bases", async () => {
+				observedAcceptedAudiences.length = 0;
+				await requestToken(await methods.strategy(issuer));
+				await pushRequest(await methods.strategy(issuer));
+				expect(observedAcceptedAudiences).toEqual([
+					[tokenEndpoint, advertisedTokenEndpoint, issuer],
+					[
+						parEndpoint,
+						advertisedParEndpoint,
+						issuer,
+						tokenEndpoint,
+						advertisedTokenEndpoint,
+					],
+				]);
+			});
+		});
+
+		describe("and the default issuer audience", async () => {
+			const { methods, requestToken, observedAcceptedAudiences } = await setup(
+				undefined,
+				advertisedBaseURL,
+			);
+
+			it("does not widen the issuer-only audience", async () => {
+				const token = await requestToken(
+					await methods.private_key_jwt(advertisedTokenEndpoint),
+				);
+				expect(token).toMatchObject(invalidClient);
+			});
+
+			it("still accepts the issuer", async () => {
+				const token = await requestToken(await methods.private_key_jwt(issuer));
+				expect(token.status).toBe(200);
+			});
+
+			it("offers a strategy only the issuer", async () => {
+				observedAcceptedAudiences.length = 0;
+				await requestToken(await methods.strategy(issuer));
+				expect(observedAcceptedAudiences).toEqual([[issuer]]);
+			});
 		});
 	});
 

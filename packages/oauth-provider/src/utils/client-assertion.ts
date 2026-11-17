@@ -25,7 +25,12 @@ import type {
 	SchemaClient,
 	Scope,
 } from "../types";
-import { challengeHeaders, getAuthEndpointUrl, getClient } from "./index";
+import {
+	challengeHeaders,
+	getAdvertisedEndpointUrl,
+	getAuthEndpointUrl,
+	getClient,
+} from "./index";
 
 type JwksCache = Map<string, { jwks: JSONWebKeySet; fetchedAt: number }>;
 type FetchedJwksResult =
@@ -325,6 +330,23 @@ async function refetchClientJwks(
 }
 
 /**
+ * Each endpoint URL, followed by the same endpoint under `advertisedBaseURL`
+ * where that option is set. A server whose endpoints clients reach through
+ * another host accepts both; every endpoint keeps its own path, so widening
+ * the audience never lets an assertion cross between endpoints.
+ */
+function withAdvertisedEndpoints(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	endpoints: string[],
+): string[] {
+	return endpoints.flatMap((endpoint) => {
+		const advertised = getAdvertisedEndpointUrl(ctx, opts, endpoint);
+		return advertised ? [endpoint, advertised] : [endpoint];
+	});
+}
+
+/**
  * Returns the `aud` values a client assertion presented at `endpoint` may
  * carry, as set by `assertionAudience`:
  * - `"issuer"` (default): only the issuer identifier (RFC 10070 §4, §5).
@@ -335,6 +357,10 @@ async function refetchClientJwks(
  * it returns only `endpoint` in either mode. Endpoints that change client
  * credentials use it, so an assertion minted for the token endpoint or the
  * issuer cannot be redirected to them.
+ *
+ * Wherever an endpoint URL is accepted, `advertisedBaseURL` adds that same
+ * endpoint under the base clients reach it at. The issuer-only mode accepts no
+ * endpoint URL, so the option does not widen it.
  */
 export function getClientAssertionAudiences(
 	ctx: GenericEndpointContext,
@@ -344,7 +370,9 @@ export function getClientAssertionAudiences(
 ): string[] {
 	const tokenEndpoint = getAuthEndpointUrl(ctx, "/oauth2/token");
 	const servedEndpoint = endpoint ?? tokenEndpoint;
-	if (options?.endpointAudienceOnly) return [servedEndpoint];
+	if (options?.endpointAudienceOnly) {
+		return withAdvertisedEndpoints(ctx, opts, [servedEndpoint]);
+	}
 	const issuer = getIssuer(ctx, opts);
 	if (requiresSoleAudience(opts)) return [issuer];
 	// RFC 9126 §2: the PAR endpoint also accepts the token endpoint URL.
@@ -353,7 +381,15 @@ export function getClientAssertionAudiences(
 		getAuthEndpointUrl(ctx, PUSHED_AUTHORIZATION_REQUEST_PATH)
 			? [tokenEndpoint]
 			: [];
-	return [...new Set([servedEndpoint, issuer, ...parTokenEndpoint])];
+	// Each advertised twin follows its own endpoint, so the order with the
+	// option unset is exactly what it was before.
+	return [
+		...new Set([
+			...withAdvertisedEndpoints(ctx, opts, [servedEndpoint]),
+			issuer,
+			...withAdvertisedEndpoints(ctx, opts, parTokenEndpoint),
+		]),
+	];
 }
 
 function requiresSoleAudience(opts: OAuthOptions<Scope[]>): boolean {

@@ -1388,6 +1388,29 @@ export interface OAuthOptions<
 	 */
 	assertionAudience?: "issuer" | "issuer-or-endpoint";
 	/**
+	 * The base URL clients reach this server's endpoints at, when that is not
+	 * `baseURL`. Set it when a gateway on another host forwards the
+	 * server-to-server endpoints to the app, for example to keep them reachable
+	 * while `baseURL` sits behind an access gate.
+	 *
+	 * Wherever an endpoint's own URL is an accepted client assertion `aud`, the
+	 * same endpoint under this base is accepted too. The assertion stays bound
+	 * to the one endpoint it names: one minted for `/oauth2/revoke` is still
+	 * refused at `/oauth2/token`.
+	 *
+	 * This has no effect under the default `assertionAudience: "issuer"`, which
+	 * accepts no endpoint URL at all. It applies with
+	 * `assertionAudience: "issuer-or-endpoint"`, and at
+	 * `POST /oauth2/client/rotate-keys`, which accepts only its own URL.
+	 *
+	 * This only widens the accepted assertion audience. Discovery still
+	 * publishes the endpoints at `baseURL`, so the gateway is responsible for
+	 * what it serves to clients.
+	 *
+	 * @example "https://mcp.example.com"
+	 */
+	advertisedBaseURL?: string;
+	/**
 	 * Lets a confidential `private_key_jwt` client replace its own inline `jwks`
 	 * at `POST /oauth2/client/rotate-keys`, authenticated by a client assertion
 	 * signed with one of its current keys. No user session is involved.
