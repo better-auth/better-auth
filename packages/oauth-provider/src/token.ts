@@ -640,18 +640,24 @@ function grantRevokedDuringIssuance() {
  * Marks every grant revoked, then runs `deleteTokens`. A failed mark does not
  * stop the delete, and the first one is rethrown after it, so the request
  * fails rather than leave a grant's JWT access tokens active unnoticed.
+ *
+ * With `keepTokensOnFailedMark`, a failed mark skips the delete instead. The
+ * stored tokens are the only record of their grant IDs, so a caller that
+ * retries needs them to mark the grants again.
  */
 async function revokeGrantTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	grants: readonly { grantId?: string | null; clientId: string }[],
 	deleteTokens: () => Promise<void>,
+	{ keepTokensOnFailedMark = false } = {},
 ) {
 	const marks = await Promise.allSettled(
 		grants.map((grant) => markGrantRevoked(ctx, opts, grant)),
 	);
-	await deleteTokens();
 	const failed = marks.find((mark) => mark.status === "rejected");
+	if (failed && keepTokensOnFailedMark) throw failed.reason;
+	await deleteTokens();
 	if (failed) throw failed.reason;
 }
 
@@ -754,6 +760,9 @@ async function findGrantIds(
  * consent's scope alone. A JWT access token issued without a refresh token has
  * no stored row to find, so it stays valid until it expires.
  *
+ * When a grant cannot be marked, no token is deleted and the call throws, so
+ * a retry still finds the grant IDs on the stored tokens.
+ *
  * @internal
  */
 export async function revokeConsentTokens(
@@ -801,6 +810,7 @@ export async function revokeConsentTokens(
 					});
 				}
 			}),
+		{ keepTokensOnFailedMark: true },
 	);
 }
 

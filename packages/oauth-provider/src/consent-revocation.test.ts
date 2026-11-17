@@ -304,6 +304,27 @@ describe("oauth-provider - deleting a consent revokes its tokens", async () => {
 		expect(await refreshStatus(server, grant.refresh_token!)).toBe(400);
 	});
 
+	it("keeps the tokens when a grant cannot be marked revoked, so a retry still revokes the JWT access token", async () => {
+		const grant = await authorize(server, {
+			referenceId: "org-h",
+			jwtAccessToken: true,
+		});
+		const consent = await createConsent(server, "org-h");
+		const ctx = await server.auth.$context;
+		const spy = vi.spyOn(ctx.internalAdapter, "createVerificationValue");
+		spy.mockRejectedValue(new Error("verification store unavailable"));
+		try {
+			await expect(deleteConsent(server, consent.id)).rejects.toThrow();
+		} finally {
+			spy.mockRestore();
+		}
+
+		await deleteConsent(server, consent.id);
+
+		expect(await isActive(server, grant.access_token)).toBe(false);
+		expect(await refreshStatus(server, grant.refresh_token!)).toBe(400);
+	});
+
 	/**
 	 * The rotation consumed its parent before the consent was deleted and
 	 * stores its refresh token after, so the delete misses that row.
