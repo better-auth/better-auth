@@ -2255,6 +2255,16 @@ describe("access control", async () => {
 			},
 		});
 		expect(ungranted.success).toBe(false);
+
+		const prototypeRole = await auth.api.userHasPermission({
+			body: {
+				role: " constructor ",
+				permissions: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(prototypeRole.success).toBe(false);
 	});
 
 	it("should prioritize role over userId when both are provided", async () => {
