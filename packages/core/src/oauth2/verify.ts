@@ -499,7 +499,11 @@ async function getJwksForVerification(
 		};
 
 		if (stale && now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) {
-			return { jwks: stale, kid, refresh: refreshStale };
+			if (canUseStale) return { jwks: stale, kid, refresh: refreshStale };
+			// The set is not known to lack the key, because the refetch that
+			// could tell failed, so this is an outage rather than an invalid
+			// token. A refetch still in flight settles it, and this joins it.
+			if (!isFetching(entry, now)) throw new Error("JWKS fetch failed");
 		}
 
 		try {

@@ -1266,7 +1266,8 @@ describe("verifyBearerToken", () => {
 				}),
 			).rejects.toMatchObject({ message: "JWKS fetch failed" });
 
-			// A subsequent unknown-kid request within cooldown should not trigger another fetch
+			// Inside the cooldown, another unknown-kid token stays an outage error
+			// without another fetch: the set is not known to lack its key.
 			const secondUnknownKey = await createTestJWKS();
 			const secondUnknownToken = await createSignedToken(
 				secondUnknownKey.privateKey,
@@ -1274,13 +1275,12 @@ describe("verifyBearerToken", () => {
 			);
 			vi.advanceTimersByTime(5_000);
 
-			await expectUnauthorized(
+			await expect(
 				verify(secondUnknownToken, {
 					jwksUrl,
 					verifyOptions: { issuer, audience },
 				}),
-				"invalid access token",
-			);
+			).rejects.toMatchObject({ message: "JWKS fetch failed" });
 			expect(mockedFetch).toHaveBeenCalledTimes(2);
 
 			vi.useRealTimers();
@@ -1430,6 +1430,47 @@ describe("verifyBearerToken", () => {
 			refetch.reject(new TypeError("fetch failed"));
 
 			await Promise.all([whileFresh, whileStale]);
+			expect(mockedFetch).toHaveBeenCalledTimes(2);
+
+			vi.useRealTimers();
+			mockedFetch.mockReset();
+			vi.resetModules();
+		});
+
+		it("should join a refetch in flight for an unknown kid once the set has expired", async () => {
+			vi.resetModules();
+			const { verifyBearerToken: verify } = await import("./verify");
+			const oldKey = await createTestJWKS();
+			const newKey = await createTestJWKS();
+			const newKeyToken = await createSignedToken(
+				newKey.privateKey,
+				newKey.kid,
+			);
+			const options = { jwksUrl, verifyOptions: { issuer, audience } };
+			mockedFetch.mockImplementationOnce(() =>
+				Promise.resolve(jwksResponse(oldKey.publicJWK)),
+			);
+			await expect(
+				verify(await createSignedToken(oldKey.privateKey, oldKey.kid), options),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			// One second before the set expires, a token with an unknown kid starts a
+			// refetch that stays in flight.
+			vi.useFakeTimers({ now: Date.now() + 5 * 60 * 1000 - 1000 });
+			const refetch = Promise.withResolvers<Response>();
+			mockedFetch.mockReturnValueOnce(refetch.promise);
+			const first = verify(newKeyToken, options);
+			await vi.advanceTimersByTimeAsync(0);
+
+			// Once the set has expired, the same kid joins that fetch instead of
+			// failing for want of a key the fetch may be about to return.
+			await vi.advanceTimersByTimeAsync(2_000);
+			const second = verify(newKeyToken, options);
+			await vi.advanceTimersByTimeAsync(0);
+			refetch.resolve(jwksResponse(oldKey.publicJWK, newKey.publicJWK));
+
+			await expect(first).resolves.toMatchObject({ sub: "user-123" });
+			await expect(second).resolves.toMatchObject({ sub: "user-123" });
 			expect(mockedFetch).toHaveBeenCalledTimes(2);
 
 			vi.useRealTimers();
