@@ -33,6 +33,3 @@ Mikro
 anthropics
 Zitadel
 agentid
-
-Bachs
-bachs
