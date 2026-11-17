@@ -1415,8 +1415,8 @@ export interface OAuthOptions<
 	 * Access-token format and signing for resources that do not set their own.
 	 * A resource's `accessTokenFormat` replaces the default format. A resource
 	 * that sets `signingAlgorithm` or `signingKeyId` replaces both signing
-	 * defaults. A JWT needs a request that names a `resource` and the JWT plugin; other
-	 * requests receive opaque tokens.
+	 * defaults. A JWT needs a request that names a `resource` and the JWT
+	 * plugin; other requests receive opaque tokens.
 	 *
 	 * @example
 	 * ```ts
