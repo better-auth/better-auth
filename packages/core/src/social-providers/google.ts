@@ -93,6 +93,8 @@ export interface VerifyGoogleIdTokenOptions {
 	token: string;
 	audience: string | string[];
 	nonce?: string | undefined;
+	/** Overrides the URL of the key set that verifies the token. */
+	jwksEndpoint?: string | undefined;
 }
 
 /**
@@ -103,12 +105,13 @@ export const verifyGoogleIdToken = async ({
 	token,
 	audience,
 	nonce,
+	jwksEndpoint,
 }: VerifyGoogleIdTokenOptions): Promise<JWTPayload | null> => {
 	try {
 		const { kid, alg } = decodeProtectedHeader(token);
 		if (!isGoogleIdTokenAlgorithm(alg)) return null;
 
-		const publicKeys = await getGooglePublicKeys(kid);
+		const publicKeys = await getGooglePublicKeys(kid, jwksEndpoint);
 		for (const publicKey of publicKeys) {
 			try {
 				const { payload: jwtClaims } = await jwtVerify(

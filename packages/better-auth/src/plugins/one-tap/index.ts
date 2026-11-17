@@ -164,6 +164,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						token: idToken,
 						audience,
 						nonce,
+						jwksEndpoint: googleProvider?.jwksEndpoint,
 					})) as Partial<GoogleProfile> | null;
 					if (!payload) {
 						throw new APIError("BAD_REQUEST", {

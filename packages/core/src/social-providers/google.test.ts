@@ -256,6 +256,25 @@ describe("verifyGoogleIdToken", () => {
 		expect(payload?.sub).toBe("google-user-123");
 	});
 
+	it("reads the key set from a jwksEndpoint override", async () => {
+		const { publicJWK, token } = await createSignedGoogleToken({});
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: { keys: [publicJWK] },
+		} as never);
+
+		const payload = await verifyGoogleIdToken({
+			token,
+			audience: CLIENT_ID,
+			jwksEndpoint: "https://emulator.example.com/certs",
+		});
+
+		expect(payload?.sub).toBe("google-user-123");
+		expect(mockedBetterFetch).toHaveBeenCalledWith(
+			"https://emulator.example.com/certs",
+			expect.anything(),
+		);
+	});
+
 	it("rejects tokens signed with symmetric algorithms before fetching Google keys", async () => {
 		const secret = await generateSecret("HS256");
 		const token = await new SignJWT({
