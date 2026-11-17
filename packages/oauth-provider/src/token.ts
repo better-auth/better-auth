@@ -466,10 +466,7 @@ async function encodeRefreshToken(
  *
  * @internal
  */
-export async function decodeRefreshToken(
-	opts: OAuthOptions<Scope[]>,
-	token: string,
-) {
+async function decodeRefreshToken(opts: OAuthOptions<Scope[]>, token: string) {
 	if (opts.prefix?.refreshToken) {
 		if (token.startsWith(opts.prefix.refreshToken)) {
 			token = token.replace(opts.prefix.refreshToken, "");
