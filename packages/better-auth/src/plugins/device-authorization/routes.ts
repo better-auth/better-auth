@@ -623,7 +623,8 @@ export interface DeviceCodeRedemptionPreparation<
 	deviceCode: DeviceCode & DeviceCodeFields & { userId: string };
 	/**
 	 * Claims the device code with one atomic consume and returns it. Fails with
-	 * `invalid_grant` when a concurrent request claimed it first.
+	 * `invalid_grant` when a concurrent request claimed it first, or
+	 * `expired_token` when it expired.
 	 */
 	claim: () => Promise<DeviceCode & DeviceCodeFields & { userId: string }>;
 }
@@ -805,9 +806,17 @@ export async function prepareDeviceCodeRedemption<
 					{ field: "id", value: deviceCodeRecord.id },
 					authorization.ownershipWhere,
 					{ field: "status", value: "approved" },
+					{ field: "expiresAt", operator: "gt", value: new Date() },
 				],
 			});
 			if (!claimedDeviceCode?.userId) {
+				if (deviceCodeRecord.expiresAt <= new Date()) {
+					throw new APIError("BAD_REQUEST", {
+						error: "expired_token",
+						error_description:
+							DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE.message,
+					});
+				}
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_grant",
 					error_description:

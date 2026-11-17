@@ -479,6 +479,38 @@ describe("oauth-provider device-code grant", async () => {
 		expect(await db.findOne({ model: "deviceCode", where })).toBeNull();
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
+	 */
+	it("refuses a device code that expires while beforeTokenIssuance runs", async () => {
+		const clientId = await createDeviceClient();
+		const deviceCode = await approvedDeviceCode(clientId);
+		const where = [{ field: "deviceCode", value: deviceCode }];
+		const expiresAt = new Date(Date.now() + 2_000);
+		await db.update({
+			model: "deviceCode",
+			where,
+			update: { expiresAt },
+		});
+		// The hook waits out the expiry, so it has run when the claim finds the
+		// code expired.
+		beforeTokenIssuance.mockImplementationOnce(async () => {
+			await new Promise((resolve) =>
+				setTimeout(resolve, Math.max(0, expiresAt.getTime() - Date.now()) + 20),
+			);
+		});
+
+		const result = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+		});
+
+		expect(result.data).toBeNull();
+		expect(result.error).toMatchObject({ error: "expired_token" });
+		expect(beforeTokenIssuance).toHaveBeenCalledTimes(1);
+	});
+
 	it("issues once when two polls with one DPoP proof arrive together", async () => {
 		const clientId = await createDeviceClient();
 		const { proofFor, poll } = await createDpopPoller(
