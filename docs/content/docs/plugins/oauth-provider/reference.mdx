@@ -721,7 +721,7 @@ To issue a delegated token, pass the actor chain as `act` to `issueTokens`:
 * Passing `idTokenClaims` or `refreshToken` with `idToken: false` throws.
 * The response has no refresh token either, even with `offline_access`. A refresh issues an ID token for `openid`, so a refresh token would bring back the ID token you left out. The client requests new tokens through the grant again.
 
-The built-in authorization code and refresh token grants always issue an ID token for `openid`, and so does the CIBA grant, as [OIDC Core §3.1.3.3](https://openid.net/specs/openid-connect-core-1_0.html#TokenResponse) and [CIBA Core §10.1.1](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1.1) require.
+The built-in authorization code and refresh token grants always issue an ID token for `openid`, and so does the CIBA grant, except for a public client when `disableJwtPlugin` is `true` (such a client has no secret to sign with), as [OIDC Core §3.1.3.3](https://openid.net/specs/openid-connect-core-1_0.html#TokenResponse) and [CIBA Core §10.1.1](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1.1) require.
 
 To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html/rfc7800#section-3)), pass `confirmation` to `issueTokens`. A `clientAuthentication` strategy can also return the sender constraint it proved as `confirmation`, such as a DPoP key thumbprint (`jkt`) or a certificate thumbprint (`x5t#S256`):
 
