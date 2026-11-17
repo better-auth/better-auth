@@ -340,6 +340,51 @@ describe("CIMD in-flight coalescing", () => {
 		await expect(joinerResolution).resolves.toMatchObject({ clientId });
 		await expect(later).resolves.toMatchObject({ clientId });
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12358
+	 */
+	it("does not publish a document that a joined request failed to save", async () => {
+		const clientId = "https://joiner-failure.example/client.json";
+		const { discovery, fetchClientMetadataResource } = createDiscovery();
+		const response = deferred<Response>();
+		fetchClientMetadataResource.mockImplementationOnce(() => response.promise);
+		const leader = await createRequestContext();
+		const joiner = await createRequestContext();
+		const saveGate = deferred<void>();
+		const transaction = leader.context.adapter.transaction.bind(
+			leader.context.adapter,
+		);
+		vi.spyOn(leader.context.adapter, "transaction").mockImplementationOnce(
+			async (callback) => {
+				await saveGate.promise;
+				return transaction(callback);
+			},
+		);
+		vi.spyOn(joiner.context.adapter, "transaction").mockRejectedValueOnce(
+			new Error("forced client persistence failure"),
+		);
+
+		const leaderResolution = discovery.resolve(leader.ctx, clientId, null);
+		const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
+		await vi.waitFor(() => {
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+		});
+		response.resolve(metadataResponse(clientId));
+		await expect(joinerResolution).rejects.toThrow(
+			"forced client persistence failure",
+		);
+		saveGate.resolve();
+		await expect(leaderResolution).resolves.toMatchObject({ clientId });
+
+		fetchClientMetadataResource.mockImplementationOnce(async () =>
+			metadataResponse(clientId),
+		);
+		await expect(
+			discovery.resolve(joiner.ctx, clientId, null),
+		).resolves.toMatchObject({ clientId });
+		expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+	});
 });
 
 describe("CIMD resolution of a cached document", () => {

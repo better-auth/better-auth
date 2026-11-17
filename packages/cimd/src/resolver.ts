@@ -601,19 +601,25 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			}
 			const { metadata, nextEntry } = fetchedMetadata;
 			const storedClient = await persistFetchedMetadata(metadata);
-			if (nextEntry) {
-				storeCacheEntry(clientId, nextEntry);
-			} else {
-				metadataCache.delete(clientId);
-			}
+			let joinerFailed = false;
 			while (inFlightEntry.joinerSaves.size > 0) {
 				const pending = [...inFlightEntry.joinerSaves];
 				inFlightEntry.joinerSaves.clear();
-				await Promise.allSettled(pending);
+				const results = await Promise.allSettled(pending);
+				joinerFailed ||= results.some((result) => result.status === "rejected");
 			}
-			// Successful fetches are governed by HTTP freshness and origin/global
-			// budgets. Keep the per-client interval only as failed-fetch backoff.
-			lastFetchStartAtMsByClientId.delete(clientId);
+			// A joined request that failed to save has already dropped the cached
+			// document and recorded the retry delay; publishing would undo both.
+			if (!joinerFailed) {
+				if (nextEntry) {
+					storeCacheEntry(clientId, nextEntry);
+				} else {
+					metadataCache.delete(clientId);
+				}
+				// Successful fetches are governed by HTTP freshness and origin/global
+				// budgets. Keep the per-client interval only as failed-fetch backoff.
+				lastFetchStartAtMsByClientId.delete(clientId);
+			}
 			return storedClient;
 		} finally {
 			if (inFlightMetadataByClientId.get(clientId) === inFlightEntry) {
