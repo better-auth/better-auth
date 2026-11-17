@@ -391,7 +391,11 @@ With either value, `/oauth2/authorize` no longer handles `ciba_request_id`. A re
 Your approval page reads the request with `auth.api.getCibaRequest`, then records the decision with `completeCibaRequest`:
 
 ```ts title="approve.ts"
-const session = await auth.api.getSession({ headers });
+// Read the session from the session store, not the cookie cache.
+const session = await auth.api.getSession({
+  headers,
+  query: { disableCookieCache: true },
+});
 if (!session) return redirectToSignIn();
 
 const request = await auth.api.getCibaRequest({
@@ -407,11 +411,12 @@ await auth.api.completeCibaRequest({
 });
 ```
 
-`getCibaRequest` is server-only. It returns the same fields `sendNotification` receives, without `user` and `url`, and with the requested `resources`. It returns `null` in each case where `completeCibaRequest` would refuse: the request is unknown, already decided, or expired, or `userId` is not the user the `login_hint` named.
+`getCibaRequest` is server-only. It returns the same fields `sendNotification` receives, without `user` and `url`. It returns `null` in every case where `completeCibaRequest` would refuse: the request is unknown, already decided, or expired, or `userId` is not the user the `login_hint` named.
 
 Your page must still do everything `completeCibaRequest` leaves to your app:
 
 * Authenticate the user before you read the request, and pass that user's ID as `userId`. Never take `userId` from the link.
+* Confirm the session in the session store, as the example does with `disableCookieCache: true`. With `session.cookieCache`, a session you revoked can still be served from the cache, and `completeCibaRequest` does not use sessions, as [Security](#security) explains. Without a server-side session store, the signed cookie is the session record, so leave the option out.
 * Show the client, the scopes, the binding message, and any actor or authorization details before the user decides.
 * Treat `ciba_request_id` as untrusted input. `getCibaRequest` returns `null` for an ID that is not the signed-in user's pending request.
 
@@ -442,7 +447,7 @@ export const cibaOptionsType = {
 	sendNotification: {
 		type: "(notification, ctx) => void | Promise<void>",
 		description:
-			"Tell the user about the request: send them the link, or reach them through your own app with `requestId`. Receives `{ requestId, user, clientId, clientName, scopes, bindingMessage, acrValues, authorizationDetails, actor, url, expiresAt }`. `url` is absent when `approvalPage` is `false`. Pass `requestId` to `completeCibaRequest` when your own app collects the decision. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A failure is logged, and the client still receives its `auth_req_id`.",
+			"Tell the user about the request: send them the link, or reach them through your own app with `requestId`. Receives `{ requestId, user, clientId, clientName, scopes, resources, bindingMessage, acrValues, authorizationDetails, actor, url, expiresAt }`. `url` is absent when `approvalPage` is `false`. Pass `requestId` to `completeCibaRequest` when your own app collects the decision. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A failure is logged, and the client still receives its `auth_req_id`.",
 	},
 	resultPage: {
 		type: "string",
