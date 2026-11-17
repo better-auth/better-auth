@@ -61,7 +61,7 @@ await smsSender.send({
 
 ## Use with Better Auth
 
-`dash()` does not send SMS for you. Pass `sendSMS` into the plugin callback that already receives the OTP, such as [`phoneNumber.sendOTP`](/docs/plugins/phone-number):
+`dash()` does not send SMS for you. Pass `sendSMS` into the plugin callback that already receives the OTP, such as [`phoneNumber.sendOTP`](/docs/plugins/phone-number). Keep `sendOTP` `async` and `await` the send:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -71,20 +71,23 @@ import { sendSMS } from "@better-auth/infra";
 export const auth = betterAuth({
   plugins: [
     phoneNumber({
-      sendOTP: ({ phoneNumber, code }) => {
-        void sendSMS({
+      sendOTP: async ({ phoneNumber, code }) => {
+        const result = await sendSMS({
           to: phoneNumber,
           code,
           template: "phone-verification",
         });
+        if (!result.success) {
+          console.error("Failed to send SMS:", result.error);
+        }
       },
     }),
   ],
 });
 ```
 
-<Callout type="warn">
-  On long-running servers, the fire-and-forget callback above avoids waiting for delivery. On serverless platforms, configure a [`backgroundTasks` handler](/docs/reference/options#backgroundtasks) such as `waitUntil`, make `sendOTP` async, and use `await sendSMS(...)` instead of `void sendSMS(...)` inside it. Better Auth can then pass the pending callback promise to the handler without waiting for delivery before responding.
+<Callout type="info">
+  On serverless, set [`advanced.backgroundTasks.handler`](/docs/reference/options#backgroundtasks) to your platform's `waitUntil`. Better Auth then passes the `sendOTP` promise to the handler, so the HTTP response does not wait for delivery.
 </Callout>
 
 ## Available Templates
