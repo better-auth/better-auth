@@ -9,7 +9,7 @@ import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { createLocalJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import { isAudienceClaimAllowed } from "./resources";
-import { decodeRefreshToken, invalidateRefreshFamily } from "./token";
+import { decodeRefreshTokenForLookup, invalidateRefreshFamily } from "./token";
 import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
@@ -384,7 +384,7 @@ export async function revokeEndpoint(
 
 		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
 			try {
-				const refreshToken = await decodeRefreshToken(opts, token);
+				const refreshToken = await decodeRefreshTokenForLookup(opts, token);
 				return await revokeRefreshToken(
 					ctx,
 					opts,
