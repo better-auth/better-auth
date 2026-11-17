@@ -190,7 +190,7 @@ Before each ping, the server checks the stored endpoint again and resolves its h
 
 If a client runs on an internal network and its public-looking name resolves to a private address, add the origin of its `backchannel_client_notification_endpoint` to [`trustedOrigins`](/docs/reference/options#trustedorigins). An origin in `trustedOrigins` skips only the lookup, and a loopback or private IP literal or a name such as `localhost` is still rejected. Only origins configured at initialization count, so an origin that a request resolves, such as from the `Host` header, does not.
 
-The ping itself resolves the host name again and cannot be pinned to the address that was checked, so an answer that changes between the two lookups is still possible. On runtimes where `node:dns` is missing, such as Cloudflare Workers, only the host name check applies. If you need a strict guarantee, restrict outbound network access from the server.
+The ping itself resolves the host name again and cannot be pinned to the address that was checked, so an answer that changes between the two lookups is still possible. On runtimes with no working DNS lookup, such as Cloudflare Workers, only the host name check applies. If you need a strict guarantee, restrict outbound network access from the server.
 
 To get a JWT access token for an API, send its [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) `resource` with the request, as with other grants. A DPoP proof on the token poll binds the token to the client's key.
 
