@@ -22,10 +22,12 @@ export const oauthProviderClient = () => {
 						if (!oauthQuery) return;
 						// Reading FormData, Blob or stream bodies would consume them.
 						if (ctx.body && typeof ctx.body !== "string") return;
-						if (
-							ctx.headers.get("content-type") ===
-							"application/x-www-form-urlencoded"
-						) {
+						const mediaType = ctx.headers
+							.get("content-type")
+							?.split(";")[0]
+							?.trim()
+							.toLowerCase();
+						if (mediaType === "application/x-www-form-urlencoded") {
 							const params = new URLSearchParams(ctx.body);
 							if (params.get("oauth_query")) return;
 							params.set("oauth_query", oauthQuery);
@@ -33,10 +35,12 @@ export const oauthProviderClient = () => {
 							return;
 						}
 						// Plain JSON parse so ISO strings are not revived into Dates.
-						const body = await new Response(ctx.body ?? "{}")
+						const body: unknown = await new Response(ctx.body ?? "{}")
 							.json()
 							.catch(() => null);
-						if (!body || body.oauth_query) return;
+						if (typeof body !== "object" || body === null) return;
+						if (Array.isArray(body)) return;
+						if ("oauth_query" in body && body.oauth_query) return;
 						ctx.body = JSON.stringify({
 							...body,
 							oauth_query: oauthQuery,
