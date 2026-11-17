@@ -349,6 +349,9 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12679
+	 */
 	it("does not invalidate presenting client's refresh family when revoking a foreign revoked token", async () => {
 		const clientBResponse = await auth.api.adminCreateOAuthClient({
 			headers,
