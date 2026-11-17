@@ -272,6 +272,17 @@ Revoking a refresh token at `/oauth2/revoke` now deletes every opaque access tok
 * A refresh of the grant that is still issuing tokens when you revoke it now fails with `invalid_grant`, and the tokens it stored are deleted. This needs a refresh token issued or refreshed since you upgraded.
 * Each grant revocation now writes one row to the verification store, with or without `revocableJwtAccessTokens`. This includes revoking a refresh token, replaying one, and reusing an authorization code. Your `databaseHooks.verification` hooks see these rows. See [Grant revocation entries](/docs/plugins/oauth-provider/tokens#grant-revocation-entries).
 
+### A password reset revokes the user's tokens
+
+When `emailAndPassword.revokeSessionsOnPasswordReset` is on, a password reset now also revokes every access and refresh token the user holds, including `offline_access` grants that no session holds. It runs for `/reset-password`, `/email-otp/reset-password`, and `/phone-number/reset-password`, and for a user with no live session. Before, an `offline_access` refresh token kept working after the reset.
+
+* A client that refreshes after a reset gets `400 invalid_grant` and must start a new authorization request.
+* Signing out and revoking all sessions still keep `offline_access` grants.
+* With `revocableJwtAccessTokens: true`, the JWT access tokens of those grants are revoked too. Otherwise they stay valid until they expire.
+* A reset on a deployment that leaves `revokeSessionsOnPasswordReset` off revokes nothing.
+
+**What to do:** if agents or other long-lived clients must survive a reset, set `revokeGrantsOnPasswordReset: false`. See [Password reset](/docs/plugins/oauth-provider/openid-connect#password-reset).
+
 ### Deleting a consent revokes its tokens
 
 `deleteOAuthConsent` now revokes the access and refresh tokens issued under the consent it deletes, scoped to that user, that client, and the consent's reference. Before, they stayed valid after the consent was gone, and a refresh token kept renewing itself indefinitely.

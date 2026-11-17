@@ -721,77 +721,68 @@ export async function invalidateRefreshFamily(
 
 const GRANT_ID_PAGE_SIZE = 100;
 
+type TokenScope = { field: string; value: string | null }[];
+
 /**
- * The grant IDs stored on a user's tokens for one client and reference. It
- * reads a page at a time, because `findMany` would cap the list at
+ * The grants, as grant ID to client ID, of the tokens a scope matches. It reads
+ * a page at a time, because `findMany` would cap the list at
  * `defaultFindManyLimit` and leave a grant past the cap unmarked.
  */
-async function findGrantIds(
+async function findGrants(
 	ctx: GenericEndpointContext,
 	model: "oauthAccessToken" | "oauthRefreshToken",
-	where: { field: string; value: string | null }[],
+	where: TokenScope,
+	grants: Map<string, string>,
 ) {
-	const grantIds = new Set<string>();
 	for (let offset = 0; ; offset += GRANT_ID_PAGE_SIZE) {
 		const rows = await ctx.context.adapter.findMany<{
+			clientId: string;
 			grantId?: string | null;
 		}>({
 			model,
 			where,
-			select: ["id", "grantId"],
+			select: ["id", "clientId", "grantId"],
 			limit: GRANT_ID_PAGE_SIZE,
 			offset,
 			sortBy: { field: "id", direction: "asc" },
 		});
-		for (const row of rows) if (row.grantId) grantIds.add(row.grantId);
-		if (rows.length < GRANT_ID_PAGE_SIZE) return grantIds;
+		for (const row of rows) {
+			if (row.grantId) grants.set(row.grantId, row.clientId);
+		}
+		if (rows.length < GRANT_ID_PAGE_SIZE) return;
 	}
 }
 
 /**
- * Revokes the tokens issued under one consent: those stored for its client,
- * user, and reference. The same user's tokens for the client under another
- * reference stay valid.
+ * Revokes the access and refresh tokens that any of `scopes` matches. Each
+ * grant of those tokens is marked revoked before they are deleted, so a
+ * rotation that is still storing its tokens fails with the mark, and the JWT
+ * access tokens of the grant are revoked with `revocableJwtAccessTokens`. A
+ * token stored without a grant ID, such as an opaque access token issued
+ * without a refresh token, is deleted by the scope alone. A JWT access token
+ * issued without a refresh token has no stored row to find, so it stays valid
+ * until it expires.
  *
- * Each grant the tokens belong to is marked revoked before the tokens are
- * deleted, so a rotation that is still storing its tokens fails with the
- * mark, and the JWT access tokens of the grant are revoked with
- * `revocableJwtAccessTokens`. A token stored without a grant ID, such as an
- * opaque access token issued without a refresh token, is deleted by the
- * consent's scope alone. A JWT access token issued without a refresh token has
- * no stored row to find, so it stays valid until it expires.
- *
- * When a grant cannot be marked, no token is deleted and the call throws, so
- * a retry still finds the grant IDs on the stored tokens.
- *
- * @internal
+ * With `keepTokensOnFailedMark`, a grant that cannot be marked deletes no
+ * token and the call throws, so a retry still finds the grant IDs on the
+ * stored tokens.
  */
-export async function revokeConsentTokens(
+async function revokeTokensInScopes(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	consent: { clientId: string; userId: string; referenceId?: string | null },
+	scopes: TokenScope[],
+	{ keepTokensOnFailedMark = false } = {},
 ) {
-	const { clientId, userId } = consent;
-	// A consent stored without a reference matches tokens whose reference is
-	// null or empty, as `findConsent` does.
-	const references = consent.referenceId ? [consent.referenceId] : [null, ""];
-	const scopes = references.map((referenceId) => [
-		{ field: "clientId", value: clientId },
-		{ field: "userId", value: userId },
-		{ field: "referenceId", value: referenceId },
-	]);
-	const grantIds = new Set<string>();
+	const grants = new Map<string, string>();
 	for (const where of scopes) {
 		for (const model of ["oauthRefreshToken", "oauthAccessToken"] as const) {
-			for (const grantId of await findGrantIds(ctx, model, where)) {
-				grantIds.add(grantId);
-			}
+			await findGrants(ctx, model, where, grants);
 		}
 	}
 	await revokeGrantTokens(
 		ctx,
 		opts,
-		[...grantIds].map((grantId) => ({ grantId, clientId })),
+		[...grants].map(([grantId, clientId]) => ({ grantId, clientId })),
 		// See `invalidateRefreshFamily` for the retry and the second delete of
 		// access tokens.
 		() =>
@@ -811,8 +802,50 @@ export async function revokeConsentTokens(
 					});
 				}
 			}),
+		{ keepTokensOnFailedMark },
+	);
+}
+
+/**
+ * Revokes the tokens issued under one consent: those stored for its client,
+ * user, and reference. The same user's tokens for the client under another
+ * reference stay valid. When a grant cannot be marked revoked, no token is
+ * deleted, so the caller can retry.
+ *
+ * @internal
+ */
+export async function revokeConsentTokens(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	consent: { clientId: string; userId: string; referenceId?: string | null },
+) {
+	// A consent stored without a reference matches tokens whose reference is
+	// null or empty, as `findConsent` does.
+	const references = consent.referenceId ? [consent.referenceId] : [null, ""];
+	await revokeTokensInScopes(
+		ctx,
+		opts,
+		references.map((referenceId) => [
+			{ field: "clientId", value: consent.clientId },
+			{ field: "userId", value: consent.userId },
+			{ field: "referenceId", value: referenceId },
+		]),
 		{ keepTokensOnFailedMark: true },
 	);
+}
+
+/**
+ * Revokes every access and refresh token a user holds, for every client and
+ * reference, including `offline_access` grants that no session holds.
+ *
+ * @internal
+ */
+export async function revokeUserTokens(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	userId: string,
+) {
+	await revokeTokensInScopes(ctx, opts, [[{ field: "userId", value: userId }]]);
 }
 
 const IDEMPOTENT_RETRY_ATTEMPTS = 3;

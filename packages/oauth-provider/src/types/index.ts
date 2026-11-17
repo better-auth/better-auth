@@ -2233,6 +2233,22 @@ export interface OAuthOptions<
 	 */
 	revocableJwtAccessTokens?: boolean;
 	/**
+	 * Revokes every access and refresh token a user holds when their password is
+	 * reset, including `offline_access` grants that no session holds.
+	 *
+	 * It applies when `emailAndPassword.revokeSessionsOnPasswordReset` is on,
+	 * to `/reset-password` and the reset endpoints of the email OTP and phone
+	 * number plugins, and also for a user with no live session. Ending sessions
+	 * or signing out keeps `offline_access` grants. With
+	 * `revocableJwtAccessTokens`, the JWT access tokens of those grants are
+	 * revoked too.
+	 *
+	 * Set it to `false` to keep a user's tokens across a password reset.
+	 *
+	 * @default true
+	 */
+	revokeGrantsOnPasswordReset?: boolean;
+	/**
 	 * Rate limit configuration for OAuth endpoints.
 	 *
 	 * Each endpoint can be configured with a `window` (in seconds) and `max` requests.

@@ -282,6 +282,10 @@ Issues opaque access tokens and HS256 ID tokens. Defaults to `false`. See [Witho
 
 Lets `/oauth2/revoke` revoke JWT access tokens by `jti`, and makes revoking a refresh token also revoke the JWT access tokens of its grant. The same happens when a rotated refresh token or an authorization code is replayed. Introspection, UserInfo, and `validateAccessToken` then look up each JWT access token in the verification store. Defaults to `false`. See [Revoke JWT access tokens](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
 
+`revokeGrantsOnPasswordReset` <span className="opacity-70">`boolean`</span>
+
+Revokes every access and refresh token a user holds when their password is reset, including `offline_access` grants that no session holds. It applies when `emailAndPassword.revokeSessionsOnPasswordReset` is on. Defaults to `true`. Set it to `false` to keep a user's tokens across a password reset. See [Password reset](/docs/plugins/oauth-provider/openid-connect#password-reset).
+
 `dpop` <span className="opacity-70">`{ proofMaxAgeSeconds?, signingAlgorithms?, nonce? }`</span>
 
 DPoP proof validation. `proofMaxAgeSeconds` defaults to `300`, and `signingAlgorithms` to `["EdDSA", "ES256", "ES512", "PS256", "RS256"]`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
