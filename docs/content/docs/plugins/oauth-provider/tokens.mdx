@@ -595,7 +595,7 @@ oauthProvider({
 
 `revokedTokens` and `revokedGrants` stand for your own storage. A resource server that reads them rejects a JWT access token whose `jti` or `grant_id` it finds there.
 
-The provider reports a revoked [grant](#revoke-the-access-tokens-of-a-grant), or a single revoked access token. A refresh token and an authorization code each stand for their grant, so revoking one revokes the grant's opaque access tokens, and its JWT access tokens too with `revocableJwtAccessTokens`. The event names the grant either way. A client revokes an access token on its own, so the event names that token.
+The provider reports a revoked [grant](#revoke-the-access-tokens-of-a-grant), or a single revoked access token. A refresh token and an authorization code each stand for their grant, so revoking one revokes the grant's opaque access tokens, and its JWT access tokens too with `revocableJwtAccessTokens`. The event names the grant for authorization codes and refresh tokens with a grant ID; a refresh token stored before 1.8 may have no `grantId` and reaches only the access tokens linked to it. A client revokes an access token on its own, so the event names that token.
 
 The provider calls `onTokenRevoked` after it revokes tokens, with an event that has these fields:
 
