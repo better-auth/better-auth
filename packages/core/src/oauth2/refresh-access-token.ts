@@ -159,12 +159,14 @@ export async function refreshAccessToken({
 	headers: extraHeaders,
 	fetch,
 }: RefreshAccessTokenInput): Promise<OAuth2Tokens> {
+	// A client assertion's audience must be the endpoint that receives it.
+	const requestEndpoint = options.tokenEndpoint ?? tokenEndpoint;
 	const { body, headers } = await refreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,
 		tokenEndpointAuth,
-		tokenEndpoint,
+		tokenEndpoint: requestEndpoint,
 		issuer,
 		extraParams,
 		resource,
@@ -179,7 +181,7 @@ export async function refreshAccessToken({
 		token_type?: string | undefined;
 		scope?: unknown;
 		id_token?: string | undefined;
-	}>(options.tokenEndpoint ?? tokenEndpoint, {
+	}>(requestEndpoint, {
 		method: "POST",
 		body,
 		headers,

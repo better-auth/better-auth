@@ -153,6 +153,8 @@ export async function validateAuthorizationCode({
 	fetch,
 }: ValidateAuthorizationCodeInput) {
 	options = typeof options === "function" ? await options() : options;
+	// A client assertion's audience must be the endpoint that receives it.
+	const requestEndpoint = options.tokenEndpoint ?? tokenEndpoint;
 
 	const { body, headers: requestHeaders } = await authorizationCodeRequest({
 		code,
@@ -161,7 +163,7 @@ export async function validateAuthorizationCode({
 		options,
 		authentication,
 		tokenEndpointAuth,
-		tokenEndpoint,
+		tokenEndpoint: requestEndpoint,
 		issuer,
 		deviceId,
 		headers,
@@ -170,7 +172,7 @@ export async function validateAuthorizationCode({
 	});
 
 	const { data, error } = await fetchRefusingRedirects<object>(
-		options.tokenEndpoint ?? tokenEndpoint,
+		requestEndpoint,
 		{
 			method: "POST",
 			body: body,
