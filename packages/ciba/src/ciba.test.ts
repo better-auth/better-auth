@@ -94,7 +94,6 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 				resultPage: "/ciba",
 				interval: INTERVAL,
 				deliveryModes: ["poll", "ping"],
-				allowPublicClients: true,
 				sendNotification,
 				authorizationDetailsTypes: {
 					[PAYMENT]: { validate: validatePayment },
@@ -747,16 +746,57 @@ describe("ciba backchannel request validation", () => {
 		expect(res.status).toBe(415);
 	});
 
-	it("rejects an unauthenticated client", async () => {
-		const res = await bcAuthorize(
-			{
-				client_id: pollClient.client_id,
-				scope: "openid",
-				login_hint: testUser.email,
-			},
-			null,
-		);
-		expect(res.body.error).toBe("invalid_client");
+	/**
+	 * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.13
+	 */
+	describe("answers invalid_client with 401 and a challenge", () => {
+		const request = { scope: "openid", login_hint: testUser.email };
+		const expectChallenge = (res: Awaited<ReturnType<typeof bcAuthorize>>) => {
+			expect(res.status).toBe(401);
+			expect(res.body.error).toBe("invalid_client");
+			expect(res.headers.get("www-authenticate")).toBe("Basic");
+			expect(res.headers.get("access-control-expose-headers")).toContain(
+				"WWW-Authenticate",
+			);
+		};
+
+		it("when the client sends no credentials", async () => {
+			expectChallenge(
+				await bcAuthorize(
+					{ client_id: pollClient.client_id, ...request },
+					null,
+				),
+			);
+		});
+
+		it("when the secret sent in the body is wrong", async () => {
+			expectChallenge(
+				await bcAuthorize(
+					{
+						client_id: pollClient.client_id,
+						client_secret: "wrong",
+						...request,
+					},
+					null,
+				),
+			);
+		});
+
+		it("when the secret sent with Basic is wrong", async () => {
+			expectChallenge(
+				await bcAuthorize(request, { ...pollClient, client_secret: "wrong" }),
+			);
+		});
+
+		it("when the request names no client", async () => {
+			expectChallenge(await bcAuthorize(request, null));
+		});
+
+		it("when the client is unknown", async () => {
+			expectChallenge(
+				await bcAuthorize({ client_id: "unknown-client", ...request }, null),
+			);
+		});
 	});
 
 	it.each([
@@ -823,13 +863,18 @@ describe("ciba backchannel request validation", () => {
 		expect(res.status).toBe(200);
 	});
 
-	it("lets a public client complete the flow with allowPublicClients", async () => {
+	it("rejects a public client at both endpoints", async () => {
 		const publicClient = await createClient(POLL, {
 			token_endpoint_auth_method: "none",
 		});
-		const { authReqId, url } = await start({}, publicClient);
-		await approve(url);
-		expect((await poll(authReqId, publicClient)).status).toBe(200);
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: testUser.email },
+			publicClient,
+		);
+		expect(res.status).toBe(401);
+		expect(res.body.error).toBe("invalid_client");
+		const polled = await poll("unknown", publicClient);
+		expect(polled.body.error).toBe("invalid_client");
 	});
 
 	it("caps requested_expiry at the configured lifetime", async () => {
@@ -1763,6 +1808,7 @@ describe("ciba defaults", async () => {
 	it("rejects a public client", async () => {
 		const client = await register({ token_endpoint_auth_method: "none" });
 		const res = await bcAuthorize(request, client, instance.customFetchImpl);
+		expect(res.status).toBe(401);
 		expect(res.body.error).toBe("invalid_client");
 	});
 

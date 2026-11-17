@@ -100,16 +100,6 @@ export interface CibaOptions {
 	) => Awaitable<User | null>;
 
 	/**
-	 * Accept clients registered with `token_endpoint_auth_method: "none"`, such
-	 * as agents and CLIs that cannot keep a secret. CIBA §7.1 requires client
-	 * authentication, so enable this only for public clients that bind their
-	 * tokens another way, such as DPoP.
-	 *
-	 * @default false
-	 */
-	allowPublicClients?: boolean;
-
-	/**
 	 * Token delivery modes clients may register for, as
 	 * `backchannel_token_delivery_mode` (CIBA §4). In `ping` mode the server
 	 * also calls the client's `backchannel_client_notification_endpoint` once

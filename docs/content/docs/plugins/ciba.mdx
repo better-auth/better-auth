@@ -120,7 +120,7 @@ const client = await auth.api.adminCreateOAuthClient({
 // Store client.client_id and client.client_secret for the agent.
 ```
 
-The client must authenticate (CIBA §7.1). Agents and CLIs that cannot keep a secret can register with `token_endpoint_auth_method: "none"` when you set `allowPublicClients`; they send `client_id` in the form body of both `/oauth2/bc-authorize` and `/oauth2/token` instead, and should bind their tokens with DPoP.
+The client must authenticate at both `/oauth2/bc-authorize` and `/oauth2/token` (CIBA §7.1), so clients registered with `token_endpoint_auth_method: "none"` cannot use CIBA. An agent or CLI that cannot keep a client secret can authenticate with `private_key_jwt` instead.
 
 If anyone can register a client, any client can name any user. Set `resolveUser` to accept only identifiers the requesting client was already given, such as the `sub` from its earlier ID tokens, so a client cannot prompt or look up users it does not know:
 
@@ -365,12 +365,6 @@ export const cibaOptionsType = {
 		description:
 			"Delivery modes clients may register for, advertised as `backchannel_token_delivery_modes_supported`.",
 	},
-	allowPublicClients: {
-		type: "boolean",
-		default: "false",
-		description:
-			"Accept clients registered with `token_endpoint_auth_method: \"none\"`. CIBA §7.1 requires client authentication, so enable this only for public clients that bind their tokens another way, such as DPoP.",
-	},
 	expiresIn: {
 		type: "number",
 		default: "300",
@@ -404,7 +398,7 @@ The backchannel endpoint returns these [CIBA §13](https://openid.net/specs/open
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `invalid_request`               | A required parameter is missing or malformed, the request uses a hint other than `login_hint`, or a ping client sent no valid `client_notification_token`.               |
 | `invalid_scope`                 | `scope` does not include `openid`, the client may not request it, or a requested resource does not allow `openid`.                                                       |
-| `invalid_client`                | The client did not authenticate, or is public and `allowPublicClients` is off.                                                                                           |
+| `invalid_client`                | The client did not authenticate, is unknown, or is registered as a public client. Returned with status 401 and a `WWW-Authenticate` challenge.                           |
 | `unauthorized_client`           | The client is not registered for the CIBA grant with a delivery mode this server supports.                                                                               |
 | `invalid_binding_message`       | The binding message is longer than 64 characters or contains control or invisible formatting characters.                                                                 |
 | `unknown_user_id`               | No user matches the `login_hint`.                                                                                                                                        |
