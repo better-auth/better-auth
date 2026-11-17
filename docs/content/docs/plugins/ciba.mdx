@@ -319,11 +319,11 @@ The provider checks that the actor has the `act` shape: a non-empty string `sub`
 
 ## Decide from your own app
 
-When your own app can reach the user, such as a mobile app that shows a push notification with Approve and Deny buttons, record the decision from your server with `auth.api.completeCibaRequest` instead of sending the user to the link. `sendNotification` receives the `requestId` to send to the app:
+When your own app can reach the user, such as a mobile app that shows a push notification with Approve and Deny buttons, record the decision from your server with `auth.api.completeCibaRequest` instead of sending the user to the link. Set `approvalPage: false` so the provider's own link cannot approve the request, which would skip the checks your app runs (see [Approve only in your own app](#approve-only-in-your-own-app)). `sendNotification` receives the `requestId` to send to the app:
 
 ```ts title="auth.ts"
 ciba({
-  resultPage: "/ciba",
+  approvalPage: false, // no link: only your server decides
   sendNotification: async ({ requestId, user, clientId, clientName, scopes, bindingMessage, actor }) => {
     // Always show who is asking; not every client has a name.
     await push.send(user.id, { requestId, client: clientName ?? clientId, scopes, bindingMessage, actor });

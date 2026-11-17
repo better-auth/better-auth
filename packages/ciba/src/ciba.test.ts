@@ -2139,6 +2139,10 @@ describe("ciba delegated tokens", () => {
 
 describe.each([
 	["your own approval page", "/approve" as const],
+	[
+		"an approval page that already names a request",
+		"/approve?ciba_request_id=stale" as const,
+	],
 	["no approval page", false as const],
 ])("ciba with %s", async (_, approvalPage) => {
 	const instance = await getTestInstance({
@@ -2172,7 +2176,7 @@ describe.each([
 		const { requestId } = await startOwn();
 		expect(lastNotification!.url).toBe(
 			approvalPage
-				? `${baseURL}${approvalPage}?ciba_request_id=${requestId}`
+				? `${baseURL}${approvalPage.split("?")[0]}?ciba_request_id=${requestId}`
 				: undefined,
 		);
 	});

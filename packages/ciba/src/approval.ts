@@ -114,13 +114,7 @@ export function cibaApprovalRequest(
 				model: "cibaRequest",
 				where: [{ field: "id", value }],
 			});
-			if (
-				!request ||
-				!session ||
-				request.userId !== session.user.id ||
-				request.status !== "pending" ||
-				request.expiresAt <= new Date()
-			) {
+			if (!session || !isPendingFor(request, session.user.id)) {
 				return unknownRequest();
 			}
 			const client = await getOAuthProviderApi(ctx, opts).getClient(
