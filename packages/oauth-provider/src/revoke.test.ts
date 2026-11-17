@@ -405,7 +405,11 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.error).toBe(null);
+		expect(revocation.error?.status).toBe(400);
+		expect(revocation.error).toMatchObject({
+			error: "invalid_request",
+			error_description: "refresh token revoked",
+		});
 
 		// Client B's own refresh token family must NOT have been invalidated
 		const refreshedB = await client.oauth2.token(
@@ -424,6 +428,61 @@ describe("oauth revoke", async () => {
 		);
 		expect(refreshedB.data?.refresh_token).toBeDefined();
 		expect(refreshedB.error).toBe(null);
+	});
+
+	it("invalidates the refresh family when the owning client presents its own revoked token", async () => {
+		const tokens = await getTokens();
+		const firstRefreshToken = tokens.data?.refresh_token;
+		expect(firstRefreshToken).toBeDefined();
+
+		const refreshed = await client.oauth2.token(
+			{
+				grant_type: "refresh_token",
+				refresh_token: firstRefreshToken!,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		const currentRefreshToken = refreshed.data?.refresh_token;
+		expect(currentRefreshToken).toBeDefined();
+
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: firstRefreshToken!,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.error?.status).toBe(400);
+
+		const reused = await client.oauth2.token(
+			{
+				grant_type: "refresh_token",
+				refresh_token: currentRefreshToken!,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(reused.error?.status).toBe(400);
 	});
 });
 
