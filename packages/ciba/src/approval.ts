@@ -283,9 +283,9 @@ export const createCompleteCibaRequest = (
 
 /**
  * Reads a pending request for your own approval page, so it can show the user
- * what they are asked to approve. Returns `null` in every case where
- * `completeCibaRequest` would refuse the request: unknown, already decided,
- * expired, or for another user.
+ * what they are asked to approve. Returns `null` when `completeCibaRequest`
+ * would refuse the request as unknown: unknown, already decided, expired, or
+ * for another user. It also returns `null` when the client no longer exists.
  */
 export const createGetCibaRequest = () =>
 	createAuthEndpoint.serverOnly(
