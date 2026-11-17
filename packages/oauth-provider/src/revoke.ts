@@ -359,51 +359,64 @@ export async function revokeEndpoint(
 	);
 
 	try {
-		if (token_type_hint === undefined || token_type_hint === "access_token") {
+		const tryRevokeAccessToken = async () => {
+			return await revokeAccessToken(ctx, opts, client.clientId, token);
+		};
+
+		const tryRevokeRefreshToken = async () => {
+			const refreshToken = await decodeRefreshToken(opts, token);
+			return await revokeRefreshToken(
+				ctx,
+				opts,
+				refreshToken.token,
+				client.clientId,
+			);
+		};
+
+		if (token_type_hint === "refresh_token") {
 			try {
-				return await revokeAccessToken(ctx, opts, client.clientId, token);
+				return await tryRevokeRefreshToken();
 			} catch (error) {
-				if (isAPIError(error)) {
-					if (
-						token_type_hint === "access_token" ||
-						error.body?.error === "unsupported_token_type"
-					) {
-						throw error;
-					} // else continue
-				} else if (error instanceof Error) {
-					throw error;
-				} else {
-					throw new Error(error as unknown as string);
+				// RFC 7009 §2.1: If the server is unable to locate the token using
+				// the given hint, it MUST extend its search across all supported token types.
+				if (isAPIError(error) && error.status === "BAD_REQUEST") {
+					return await tryRevokeAccessToken();
 				}
+				throw error;
 			}
 		}
 
-		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
+		if (token_type_hint === "access_token") {
 			try {
-				const refreshToken = await decodeRefreshToken(opts, token);
-				return await revokeRefreshToken(
-					ctx,
-					opts,
-					refreshToken.token,
-					client.clientId,
-				);
+				return await tryRevokeAccessToken();
 			} catch (error) {
-				if (isAPIError(error)) {
-					if (token_type_hint === "refresh_token") {
-						throw error;
-					} // else continue
-				} else if (error instanceof Error) {
+				if (
+					isAPIError(error) &&
+					error.body?.error === "unsupported_token_type"
+				) {
 					throw error;
-				} else {
-					throw new Error(error as unknown as string);
 				}
+				// RFC 7009 §2.1: If the server is unable to locate the token using
+				// the given hint, it MUST extend its search across all supported token types.
+				if (isAPIError(error) && error.status === "BAD_REQUEST") {
+					return await tryRevokeRefreshToken();
+				}
+				throw error;
 			}
 		}
 
-		throw new APIError("BAD_REQUEST", {
-			error_description: "token not found",
-			error: "invalid_request",
-		});
+		// token_type_hint is undefined or unrecognised: try access_token first, then refresh_token
+		try {
+			return await tryRevokeAccessToken();
+		} catch (error) {
+			if (isAPIError(error) && error.body?.error === "unsupported_token_type") {
+				throw error;
+			}
+			if (isAPIError(error) && error.status === "BAD_REQUEST") {
+				return await tryRevokeRefreshToken();
+			}
+			throw error;
+		}
 	} catch (error) {
 		if (isAPIError(error)) {
 			// RFC 7009 §2.2.1: an explicit protocol error (unsupported_token_type)

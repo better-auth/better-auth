@@ -1851,7 +1851,7 @@ describe("oauth token - refresh_token", async () => {
 			}
 		});
 
-		it("fails the revoke closed when the rotation wins", async () => {
+		it("returns 200 for the losing revoke and still tears down the family", async () => {
 			const parentToken = await issueParentRefreshToken();
 			const cas = await holdNextRefreshTokenCas();
 			try {

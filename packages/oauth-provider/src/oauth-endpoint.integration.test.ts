@@ -215,7 +215,9 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 
 			const ctx = await auth.$context;
 			const rawTokenA = "revoked-token-client-a";
-			const tokenHashA = createHash("sha256").update(rawTokenA).digest("hex");
+			const tokenHashA = createHash("sha256")
+				.update(rawTokenA)
+				.digest("base64url");
 
 			// Seed an already-revoked token belonging to client A
 			await ctx.adapter.create({
@@ -233,7 +235,9 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 
 			// Seed an active token for client B belonging to the same user
 			const rawTokenB = "active-token-client-b";
-			const tokenHashB = createHash("sha256").update(rawTokenB).digest("hex");
+			const tokenHashB = createHash("sha256")
+				.update(rawTokenB)
+				.digest("base64url");
 			const seededB = await ctx.adapter.create<{ id: string }>({
 				model: "oauthRefreshToken",
 				data: {
@@ -270,6 +274,7 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 				model: "oauthRefreshToken",
 				where: [{ field: "id", value: seededB.id }],
 			});
+			expect(activeB).toBeDefined();
 			expect(activeB?.revoked ?? null).toBeNull();
 		});
 	});
