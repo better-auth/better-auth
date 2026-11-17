@@ -628,6 +628,10 @@ describe("oauth introspect", async () => {
 		expect(introspection.data?.sid).toBeUndefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11132
+	 * @see https://github.com/better-auth/better-auth/issues/12222
+	 */
 	it("reports a jwt access_token refreshed after the session expired as active", async () => {
 		const { headers: testHeaders } = await signInWithTestUser();
 		const tokens = await getTokens(
@@ -635,9 +639,9 @@ describe("oauth introspect", async () => {
 			{ resource: validResource },
 			testHeaders,
 		);
-		const current = await auth.api.getSession({ headers: testHeaders });
+		const session = await auth.api.getSession({ headers: testHeaders });
 		const context = await auth.$context;
-		await context.internalAdapter.updateSession(current!.session.token, {
+		await context.internalAdapter.updateSession(session!.session.token, {
 			expiresAt: new Date(Date.now() - 1000),
 		});
 
@@ -659,7 +663,7 @@ describe("oauth introspect", async () => {
 		// logout still finds it when the session is deleted.
 		const bound = await context.adapter.findMany<{ revoked?: Date | null }>({
 			model: "oauthRefreshToken",
-			where: [{ field: "sessionId", value: current!.session.id }],
+			where: [{ field: "sessionId", value: session!.session.id }],
 		});
 		expect(bound.filter((token) => !token.revoked)).toHaveLength(1);
 
