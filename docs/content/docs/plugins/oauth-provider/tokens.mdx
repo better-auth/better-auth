@@ -163,7 +163,7 @@ oauthProvider({
 })
 ```
 
-Introspection and revocation also pass values that are not refresh tokens to `decrypt`, such as an access token or an unknown string. For a value your format cannot decode, throw a JOSE error, as `compactDecrypt` does. The endpoint then treats the value as an unknown token. A key set failure (`JWKSTimeout`, `JWKSInvalid`, or `JWKSMultipleMatchingKeys`) and any other error are treated as a failure of `decrypt` and returns a server error.
+Introspection and revocation also pass values that are not refresh tokens to `decrypt`, such as an access token or an unknown string. For a value your format cannot decode, throw a JOSE error, as `compactDecrypt` does. The endpoint then treats the value as an unknown token. A key set failure (`JWKSTimeout`, `JWKSInvalid`, or `JWKSMultipleMatchingKeys`) and any other error are treated as a failure of `decrypt` and return a server error.
 
 ## PKCE
 
