@@ -540,7 +540,7 @@ export const auth = betterAuth({
 
 ### authorizationEndpoint, tokenEndpoint, userInfoEndpoint, jwksEndpoint
 
-Optional endpoint overrides for the provider's OAuth flow. These are useful when testing against local OAuth emulators, mock servers, or sandbox environments without changing the provider's default production endpoints.
+Point a built-in provider at a different server, such as a local OAuth emulator, a mock server, or a sandbox environment. Without these options, each provider uses its own production endpoints.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -562,10 +562,50 @@ export const auth = betterAuth({
 
 All four options are optional:
 
-- `authorizationEndpoint`: Override the authorization URL used to start sign-in
-- `tokenEndpoint`: Override the token exchange and refresh URL
-- `userInfoEndpoint`: Override the user info/profile URL
-- `jwksEndpoint`: Override the JWKS URL used for ID token verification
+* `authorizationEndpoint`: The URL that starts sign-in.
+* `tokenEndpoint`: The URL for the authorization code exchange and for refresh requests. When the provider signs a client assertion (`private_key_jwt`), its audience is this URL.
+* `userInfoEndpoint`: The URL that returns the user's profile.
+* `jwksEndpoint`: The URL of the key set that verifies ID tokens.
+
+<Callout type="warn">
+  Better Auth sends your client secret and the authorization code to `tokenEndpoint`, and the user's access token to `userInfoEndpoint`. Facebook's `debug_token` check receives the access token too. Point them only at servers you run or trust, and never build them from user input.
+</Callout>
+
+A provider ignores an option when it has no matching step. Google, Apple, and Microsoft Entra ID read the profile from the ID token, so they ignore `userInfoEndpoint`. Only Apple, Cognito, Facebook, Google, Kakao, and Microsoft Entra ID verify ID tokens with a key set, so only they read `jwksEndpoint`.
+
+If an endpoint URL already has a query string, Better Auth keeps it and adds its own parameters after it.
+
+#### ID token issuer
+
+`jwksEndpoint` changes where the signing keys come from. It does not change who may be the issuer. Better Auth still requires the provider's own issuer and your client ID in the ID token. An emulator must therefore mint ID tokens with the provider's issuer, for example `https://accounts.google.com` for Google.
+
+Microsoft Entra ID builds its issuer from `authority` and `tenantId`. To accept ID tokens from an emulator that uses its own issuer, set `authority` to the emulator instead of using `jwksEndpoint` alone.
+
+#### Provider-specific behavior
+
+* **GitHub:** When the profile has no email, Better Auth requests the email list from the `/emails` path next to the user endpoint. The lookup runs only when your `userInfoEndpoint` path ends with `/user`, such as `https://ghe.example.com/api/v3/user`. For other paths, the email comes from the profile response only.
+* **Facebook:** Before it reads the profile, Better Auth checks the access token with the `debug_token` endpoint. When you set `userInfoEndpoint`, this check uses the `debug_token` path next to it, for example `https://emulator.example.com/graph/debug_token` for `https://emulator.example.com/graph/me`.
+* **Microsoft Entra ID:** The profile photo comes from Microsoft Graph and does not follow `userInfoEndpoint`. Set `disableProfilePhoto: true` when you test without Microsoft Graph.
+* **Cloudflare:** `userInfoEndpoint` must return Cloudflare's `/user` response shape, an object with `success`, `errors`, and `result`, not a flat OpenID Connect profile.
+* **LINE:** LINE verifies ID tokens with its own verify endpoint, not a key set, so `jwksEndpoint` has no effect.
+* **WeChat:** WeChat refreshes tokens at a different URL than the code exchange. Set `refreshTokenEndpoint` for the refresh request, and `tokenEndpoint` for the code exchange.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  // Other configurations...
+  socialProviders: {
+    wechat: {
+      clientId: "YOUR_WECHAT_APP_ID",
+      clientSecret: "YOUR_WECHAT_APP_SECRET",
+      tokenEndpoint: "http://localhost:3000/sns/oauth2/access_token",
+      refreshTokenEndpoint: "http://localhost:3000/sns/oauth2/refresh_token",
+      userInfoEndpoint: "http://localhost:3000/sns/userinfo",
+    },
+  },
+});
+```
 
 ### disableSignUp
 

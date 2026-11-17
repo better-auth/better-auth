@@ -370,8 +370,9 @@ export const auth = betterAuth({
 * `disableDefaultScope`: Disable the provider's default scopes (optional)
 * `authorizationEndpoint`: Custom authorization endpoint URL for emulators, local OAuth servers, or sandbox environments (optional)
 * `tokenEndpoint`: Custom token endpoint URL for emulators, local OAuth servers, or sandbox environments (optional)
-* `userInfoEndpoint`: Custom user info endpoint URL for emulators, local OAuth servers, or sandbox environments (optional)
-* `jwksEndpoint`: Custom JWKS endpoint URL for emulators, local OAuth servers, or sandbox environments (optional)
+* `userInfoEndpoint`: Custom user info endpoint URL for emulators, local OAuth servers, or sandbox environments. Only providers that fetch the profile from a user info endpoint read it (optional)
+* `jwksEndpoint`: Custom JWKS endpoint URL for emulators, local OAuth servers, or sandbox environments. Only providers that verify ID tokens with a key set read it (optional)
+* `refreshTokenEndpoint`: Custom refresh token endpoint URL, WeChat only (optional)
 
 ## `plugins`
 
