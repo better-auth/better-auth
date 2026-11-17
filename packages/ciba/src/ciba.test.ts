@@ -1974,6 +1974,25 @@ describe("ciba delegated tokens", () => {
 		expect(claims.act).toEqual(agent);
 	});
 
+	/**
+	 * CIBA Core §10.1.1 requires an ID token with every successful response, so
+	 * a delegated response must not drop it, and `act` belongs to access tokens.
+	 *
+	 * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#successful_token_response
+	 */
+	it("issues an ID token for the user without act", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start({ resource });
+		await approve(url);
+
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		expect(decodeJwt(issued.body.access_token as string).act).toEqual(agent);
+		const idToken = decodeJwt(issued.body.id_token as string);
+		expect(idToken.sub).toBe(lastNotification!.user.id);
+		expect(idToken.act).toBeUndefined();
+	});
+
 	it("returns the actor at introspection of an opaque access token", async () => {
 		resolveActor.mockResolvedValueOnce(agent);
 		const { authReqId, url } = await start();
