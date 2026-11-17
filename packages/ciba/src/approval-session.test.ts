@@ -142,9 +142,12 @@ describe.each([
 		);
 		expect(res.status).toBe(200);
 		const { auth_req_id } = (await res.json()) as { auth_req_id: string };
+		// The default approval page always sends a link.
+		const link = notification?.url;
+		if (!link) throw new Error("No CIBA link was sent");
 		return {
 			requestId: notification!.requestId,
-			consent: await redirectOf(notification!.url, headers),
+			consent: await redirectOf(link, headers),
 			poll: async () => {
 				await new Promise((resolve) => setTimeout(resolve, 1050));
 				const polled = await customFetchImpl(
