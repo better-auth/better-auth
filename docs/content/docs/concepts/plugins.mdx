@@ -407,7 +407,7 @@ const myPlugin = () => {
 
 The `onPasswordReset` function runs after a user's credential password is reset through `/reset-password`, or through a plugin's reset endpoint such as [email OTP](/docs/plugins/email-otp) or [phone number](/docs/plugins/phone-number). It takes the `userId` and the endpoint `context`. It runs once the new password is saved and, when [`revokeSessionsOnPasswordReset`](/docs/authentication/email-password#revoking-sessions-on-password-reset) is on, the user's sessions are revoked. It also runs when the user had no live session, which a session hook cannot see.
 
-If it throws, the request returns an error, but the reset has already taken effect. A failed reset does not call it.
+If it throws, the hooks of the other plugins still run, and the request then returns the first error. The reset has already taken effect. A reset that fails before the password is saved does not call it.
 
 ```ts title="plugin.ts"
 import type { BetterAuthPlugin } from "better-auth";
