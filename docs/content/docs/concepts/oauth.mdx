@@ -716,7 +716,9 @@ Better Auth ignores these returned values:
 * Values that are `undefined`. A stored value stays as it is.
 * Better Auth's own account columns: `id`, `userId`, `providerId`, `accountId`, `accessToken`, `refreshToken`, `idToken`, `accessTokenExpiresAt`, `refreshTokenExpiresAt`, `scope`, `password`, `createdAt`, and `updatedAt`. A returned value can never rebind an account or replace its tokens.
 
-Return `null` to store nothing.
+Return `null` for the whole result to store nothing. A `null` value for a key is stored as `null` and replaces the stored value.
+
+Values pass through the field's `validator.input` and `transform.input`. A value that fails validation stops the sign-in or link with a validation error. In the redirect flow, the user lands on your error URL with `error=VALIDATION_ERROR`.
 
 Better Auth treats the returned values as provider input, like the values from `mapProfileToUser`. Keep security-sensitive fields, such as roles or internal flags, at `input: false` so that a provider claim cannot set them. Do not copy a provider claim you have not verified into a field your application trusts for authorization. See [server-owned fields and authorization claims](/docs/concepts/oauth#server-owned-fields-and-authorization-claims).
 

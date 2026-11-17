@@ -4,6 +4,7 @@ import type {
 	OAuth2UserInfo,
 	OAuthProvider,
 } from "@better-auth/core/oauth2";
+import { parseAccountInput } from "../db/schema";
 
 /**
  * Account columns Better Auth owns. A provider's `getAccountFields` can never
@@ -32,7 +33,9 @@ const RESERVED_ACCOUNT_FIELDS: ReadonlySet<string> = new Set([
  *
  * The values come from the provider, so they follow the same rule as
  * `mapProfileToUser` values for user fields: a field marked `input: false`
- * stays server-owned and the provider cannot set it.
+ * stays server-owned and the provider cannot set it, and the remaining values
+ * pass through the field's `validator.input` and `transform.input`. A value that
+ * fails validation rejects the hook result with a `BAD_REQUEST` `APIError`.
  */
 export async function resolveOAuthAccountFields(
 	c: GenericEndpointContext,
@@ -56,5 +59,13 @@ export async function resolveOAuthAccountFields(
 			Object.hasOwn(declaredFields, key) &&
 			declaredFields[key]?.input !== false,
 	);
-	return accepted.length > 0 ? Object.fromEntries(accepted) : undefined;
+	if (accepted.length === 0) {
+		return undefined;
+	}
+	const parsed: Record<string, unknown> = parseAccountInput(
+		c.context.options,
+		Object.fromEntries(accepted),
+		"update",
+	);
+	return Object.keys(parsed).length > 0 ? parsed : undefined;
 }

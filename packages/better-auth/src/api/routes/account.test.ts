@@ -22,6 +22,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import * as z from "zod";
 import { betterAuth } from "../../auth/minimal";
 import { parseSetCookieHeader } from "../../cookies";
 import {
@@ -3275,6 +3276,12 @@ describe("provider getAccountFields", async () => {
 		someAccountField: { type: "string", required: false },
 		providerEmail: { type: "string", required: false },
 		serverOwnedField: { type: "string", required: false, input: false },
+		checkedField: {
+			type: "string",
+			required: false,
+			validator: { input: z.string().email() },
+			transform: { input: (value: unknown) => String(value).toLowerCase() },
+		},
 	} as const;
 
 	async function createInstance(
@@ -3329,6 +3336,30 @@ describe("provider getAccountFields", async () => {
 					cookieSetter(headers)({ response: context.response });
 				},
 			});
+		}
+
+		async function signInWithGoogleLocation(socialEmail: string) {
+			const headers = new Headers();
+			email = socialEmail;
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/callback",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const state =
+				signInRes.data && "url" in signInRes.data && signInRes.data.url
+					? new URL(signInRes.data.url).searchParams.get("state") || ""
+					: "";
+			let location = "";
+			await client.$fetch("/callback/google", {
+				query: { state, code: "test" },
+				headers,
+				method: "GET",
+				onError(context) {
+					location = context.response.headers.get("location") || "";
+				},
+			});
+			return location;
 		}
 
 		async function linkGoogle(socialEmail: string) {
@@ -3392,6 +3423,7 @@ describe("provider getAccountFields", async () => {
 			ctx,
 			googleVerifyIdToken,
 			signInWithGoogle,
+			signInWithGoogleLocation,
 			linkGoogle,
 			googleAccounts,
 			mockGoogleIdTokenProfile,
@@ -3759,6 +3791,52 @@ describe("provider getAccountFields", async () => {
 			const [account] = await googleAccounts();
 			expect(account).toMatchObject({ someAccountField: "kept" });
 			expect(account).not.toHaveProperty("notDeclared");
+		});
+	});
+
+	describe("field validators", () => {
+		it("stores the value a field transform returns", async () => {
+			const { signInWithGoogle, googleAccounts } = await createInstance({
+				getAccountFields: vi.fn<GetAccountFields>(async () => ({
+					checkedField: "Mixed.Case@Example.com",
+				})),
+			});
+
+			await signInWithGoogle("oauth-test@test.com");
+
+			expect(await googleAccounts()).toMatchObject([
+				{ checkedField: "mixed.case@example.com" },
+			]);
+		});
+
+		it("redirects to the error URL with the validation code when a value fails its validator", async () => {
+			const { signInWithGoogleLocation, googleAccounts } = await createInstance(
+				{
+					getAccountFields: vi.fn<GetAccountFields>(async () => ({
+						checkedField: "not-an-email",
+					})),
+				},
+			);
+
+			const location = await signInWithGoogleLocation("oauth-test@test.com");
+
+			expect(location).toContain("error=VALIDATION_ERROR");
+			expect(await googleAccounts()).toHaveLength(0);
+		});
+
+		it("redirects to the error URL when the hook throws", async () => {
+			const { signInWithGoogleLocation, googleAccounts } = await createInstance(
+				{
+					getAccountFields: vi.fn<GetAccountFields>(async () => {
+						throw new Error("lookup failed");
+					}),
+				},
+			);
+
+			const location = await signInWithGoogleLocation("oauth-test@test.com");
+
+			expect(location).toContain("error=unable_to_get_user_info");
+			expect(await googleAccounts()).toHaveLength(0);
 		});
 	});
 

@@ -392,8 +392,8 @@ export type ProviderOptions<Profile extends object = object> = {
 	 * `mapProfileToUser`. It ignores keys that are not declared account fields,
 	 * fields marked `input: false`, values that are `undefined`, and its own
 	 * account columns (`id`, `userId`, `providerId`, `accountId`, token and
-	 * scope columns, `password`, and the timestamps). Return `null` to store
-	 * nothing.
+	 * scope columns, `password`, and the timestamps). Return `null` for the whole
+	 * result to store nothing. A `null` value for a key is stored as `null`.
 	 *
 	 * On sign-in the values are written only while `account.updateAccountOnSignIn`
 	 * is not `false`. ID token sign-in passes the tokens the client sent.

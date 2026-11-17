@@ -189,12 +189,23 @@ export const callbackOAuth = createAuthEndpoint(
 			...tokens,
 			scope: tokens.scopes?.join(","),
 		};
-		const accountFields = await resolveOAuthAccountFields(
-			c,
-			provider,
-			tokens,
-			userInfo,
-		);
+		let accountFields: Awaited<ReturnType<typeof resolveOAuthAccountFields>>;
+		try {
+			accountFields = await resolveOAuthAccountFields(
+				c,
+				provider,
+				tokens,
+				userInfo,
+			);
+		} catch (e) {
+			if (isAPIError(e) && e.body?.code) {
+				return redirectOnError(e.body.code, e.body.message);
+			}
+			c.context.logger.error("getAccountFields failed", e);
+			return redirectOnError(
+				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
+			);
+		}
 
 		if (link) {
 			const linkResult = await linkOAuthAccount(c, {
