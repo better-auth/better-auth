@@ -687,7 +687,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				const org = await adapter.findOne<InferOrganization<O, false>>({
 					model: "organization",
 					where: [{ field: "slug", value: organizationId }],
-					select: ["id"],
 				});
 				if (!org) {
 					return null;
