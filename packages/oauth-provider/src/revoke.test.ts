@@ -6,7 +6,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { CompactEncrypt, compactDecrypt } from "jose";
+import { CompactEncrypt, compactDecrypt, errors as joseErrors } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -817,6 +817,7 @@ describe("oauth revoke - config", async () => {
 	 * decoder itself, such as an unreachable key service, is a server error.
 	 */
 	describe("formatRefreshToken fails for another reason", async () => {
+		let failure: Error = new Error("key service unavailable");
 		const testScopes = ["openid", "offline_access"];
 		const { client, oauthClient } = await createTestInstance({
 			oauthProviderConfig: {
@@ -824,15 +825,24 @@ describe("oauth revoke - config", async () => {
 				formatRefreshToken: {
 					encrypt: (token) => `enc.${token}`,
 					decrypt: () => {
-						throw new Error("key service unavailable");
+						throw failure;
 					},
 				},
 			},
 		});
 
-		it.each([undefined, "refresh_token"] as const)(
-			"returns a server error for token_type_hint %s",
-			async (token_type_hint) => {
+		it.each([
+			[undefined, "a plain error"],
+			["refresh_token", "a plain error"],
+			[undefined, "a key set timeout"],
+			["refresh_token", "a key set timeout"],
+		] as const)(
+			"returns a server error for token_type_hint %s and %s",
+			async (token_type_hint, kind) => {
+				failure =
+					kind === "a key set timeout"
+						? new joseErrors.JWKSTimeout()
+						: new Error("key service unavailable");
 				const revocation = await client.oauth2.revoke(
 					{
 						client_id: oauthClient?.client_id,
