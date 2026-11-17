@@ -1,5 +1,4 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { appendQueryParams } from "@better-auth/core/utils/url";
 import type {
 	OAuthActorClaim,
 	OAuthAuthorizationDetail,
@@ -91,13 +90,15 @@ function approvalURL(
 	requestId: string,
 ): string | undefined {
 	if (approvalPage === false) return undefined;
-	const params = new URLSearchParams({ [APPROVAL_PARAMETER]: requestId });
-	return appendQueryParams(
+	const url = new URL(
 		approvalPage === undefined
 			? getAuthEndpointUrl(ctx, "/oauth2/authorize")
-			: new URL(approvalPage, ctx.context.baseURL).toString(),
-		params,
+			: approvalPage,
+		ctx.context.baseURL,
 	);
+	// A page URL that already names the parameter must not keep a stale id.
+	url.searchParams.set(APPROVAL_PARAMETER, requestId);
+	return url.toString();
 }
 
 export function createBcAuthorize(options: ResolvedCibaOptions) {
@@ -324,14 +325,18 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 				},
 			});
 
-			const url = approvalURL(ctx, options.approvalPage, request.id);
-			// The async wrapper turns a synchronous throw into a logged failure too,
-			// so the client always receives its auth_req_id.
+			// The async wrapper turns a synchronous throw, including one from
+			// building the link, into a logged failure too, so the client always
+			// receives its auth_req_id.
 			await ctx.context.runInBackgroundOrAwait(
 				(async () =>
 					options.sendNotification(
 						// The same view getCibaRequest returns, plus the user and link.
-						{ ...toPendingRequest(request, client), user, url },
+						{
+							...toPendingRequest(request, client),
+							user,
+							url: approvalURL(ctx, options.approvalPage, request.id),
+						},
 						ctx,
 					))(),
 			);

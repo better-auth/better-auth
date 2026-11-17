@@ -124,7 +124,7 @@ export type CibaOptions = CibaSharedOptions & CibaApprovalOptions;
 export interface CibaSharedOptions {
 	/**
 	 * Tell the user about a new request on a channel they trust, such as email
-	 * or a push notification, and include `url`. Runs in the background when
+	 * or a push notification, and include `url` when the notification has one. Runs in the background when
 	 * `advanced.backgroundTasks` is configured and is awaited otherwise. A
 	 * failure is logged, and the client still receives its `auth_req_id`.
 	 */
