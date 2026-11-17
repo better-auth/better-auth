@@ -172,18 +172,16 @@ describe("Steam OpenID verification", () => {
 		expect(await validate()).toBeNull();
 	});
 
-	it("rejects assertions received at a different callback origin or path", async () => {
-		const fetchMock = vi.fn();
-		vi.stubGlobal("fetch", fetchMock);
-		for (const target of [
-			"https://attacker.example",
-			"https://app.example/other",
-		]) {
-			const url = new URL(target);
-			url.search = assertion().search;
-			expect(await validate(url)).toBeNull();
-		}
-		expect(fetchMock).not.toHaveBeenCalled();
+	it("accepts a callback received at an internal origin behind a proxy", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi
+				.fn()
+				.mockResolvedValue(new Response(`ns:${namespace}\nis_valid:true\n`)),
+		);
+		const url = new URL("http://localhost:3000/internal/callback");
+		url.search = assertion().search;
+		expect(await validate(url)).toEqual({ raw: { steamId } });
 	});
 
 	it("loads the matching Steam profile with the server-side API key", async () => {

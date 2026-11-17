@@ -88,13 +88,10 @@ export const steam = (options: SteamOptions) => {
 				options.redirectURI || redirectURI,
 				new URLSearchParams({ state }),
 			);
+			// The signed `openid.return_to` is matched against the expected URL below.
+			// The transport URL is not compared because behind a TLS-terminating
+			// proxy it can carry an internal origin.
 			const expectedURL = new URL(returnTo);
-			if (
-				callbackURL.origin !== expectedURL.origin ||
-				callbackURL.pathname !== expectedURL.pathname
-			) {
-				return null;
-			}
 			for (const [key, value] of expectedURL.searchParams) {
 				if (params.getAll(key).length !== 1 || params.get(key) !== value)
 					return null;
