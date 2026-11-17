@@ -4900,25 +4900,22 @@ describe("authorization code without scopes", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const redirectUri = `${rpBaseUrl}/callback`;
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		baseURL: authServerBaseUrl,
-		plugins: [
-			jwt({ jwt: { issuer: authServerBaseUrl } }),
-			oauthProvider({
-				loginPage: "/login",
-				consentPage: "/consent",
-				scopes: ["openid", "profile", "members:write"],
-			}),
-		],
-	});
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid", "profile", "members:write"],
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
 
 	const { headers } = await signInWithTestUser();
-	const client = createAuthClient({
-		plugins: [oauthProviderClient()],
-		baseURL: authServerBaseUrl,
-		fetchOptions: { customFetchImpl, headers },
-	});
-
 	async function createClient(
 		options: { skipConsent: boolean; scope?: string } = { skipConsent: true },
 	) {
@@ -4960,6 +4957,7 @@ describe("authorization code without scopes", async () => {
 		}).toString();
 		let location = "";
 		await client.$fetch(url.toString(), {
+			headers,
 			onError(context) {
 				location = context.response.headers.get("Location") || "";
 			},
