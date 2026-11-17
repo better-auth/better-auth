@@ -1,5 +1,10 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type {
+	OAuth2Tokens,
+	OAuth2UserInfo,
+	ProviderOptions,
+} from "@better-auth/core/oauth2";
+import type {
 	CognitoProfile,
 	GoogleProfile,
 } from "@better-auth/core/social-providers";
@@ -3258,5 +3263,575 @@ describe("account resolution in stateless mode", async () => {
 		const accountCookie = cookies.get(accountCookieName);
 		expect(accountCookie?.value).toBeTruthy();
 		expect(accountCookie?.maxAge).not.toBe(0);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/2272
+ */
+describe("provider getAccountFields", async () => {
+	type GetAccountFields = NonNullable<ProviderOptions["getAccountFields"]>;
+	const additionalFields = {
+		someAccountField: { type: "string", required: false },
+		providerEmail: { type: "string", required: false },
+		serverOwnedField: { type: "string", required: false, input: false },
+	} as const;
+
+	async function createInstance(
+		options: {
+			getAccountFields?: GetAccountFields | undefined;
+			updateAccountOnSignIn?: boolean | undefined;
+		} = {},
+	) {
+		const googleVerifyIdToken = vi
+			.fn<(token: string, nonce?: string) => Promise<boolean>>()
+			.mockResolvedValue(true);
+		const instance = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					verifyIdToken: googleVerifyIdToken,
+					getAccountFields: options.getAccountFields,
+				},
+			},
+			account: {
+				accountLinking: { allowDifferentEmails: true },
+				additionalFields,
+				updateAccountOnSignIn: options.updateAccountOnSignIn,
+			},
+		});
+		const ctx = await instance.auth.$context;
+		const { client, cookieSetter, signInWithTestUser } = instance;
+
+		async function signInWithGoogle(socialEmail: string) {
+			const headers = new Headers();
+			email = socialEmail;
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/callback",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const state =
+				signInRes.data && "url" in signInRes.data && signInRes.data.url
+					? new URL(signInRes.data.url).searchParams.get("state") || ""
+					: "";
+			await client.$fetch("/callback/google", {
+				query: { state, code: "test" },
+				headers,
+				method: "GET",
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					expect(context.response.headers.get("location")).toContain(
+						"/callback",
+					);
+					cookieSetter(headers)({ response: context.response });
+				},
+			});
+		}
+
+		async function linkGoogle(socialEmail: string) {
+			const { runWithUser } = await signInWithTestUser();
+			await runWithUser(async (headers) => {
+				const linkRes = await client.linkSocial(
+					{ provider: "google", callbackURL: "/callback" },
+					{
+						onSuccess(context) {
+							const cookies = parseSetCookieHeader(
+								context.response.headers.get("set-cookie") || "",
+							);
+							headers.set(
+								"cookie",
+								`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+							);
+						},
+					},
+				);
+				const state =
+					linkRes.data && "url" in linkRes.data
+						? new URL(linkRes.data.url).searchParams.get("state") || ""
+						: "";
+				email = socialEmail;
+				await client.$fetch("/callback/google", {
+					query: { state, code: "test" },
+					method: "GET",
+					onError(context) {
+						expect(context.response.status).toBe(302);
+						expect(context.response.headers.get("location")).toContain(
+							"/callback",
+						);
+					},
+				});
+			});
+		}
+
+		async function googleAccounts() {
+			const accounts = await ctx.adapter.findMany<Record<string, unknown>>({
+				model: "account",
+			});
+			return accounts.filter((account) => account.providerId === "google");
+		}
+
+		function mockGoogleIdTokenProfile(profile: { sub: string; email: string }) {
+			const googleProvider = ctx.socialProviders.find(
+				(provider) => provider.id === "google",
+			)!;
+			return vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
+				user: {
+					name: "Id Token User",
+					email: profile.email,
+					emailVerified: true,
+				},
+				data: { sub: profile.sub },
+			});
+		}
+
+		return {
+			...instance,
+			ctx,
+			googleVerifyIdToken,
+			signInWithGoogle,
+			linkGoogle,
+			googleAccounts,
+			mockGoogleIdTokenProfile,
+		};
+	}
+
+	let someAccountField = "";
+	const getAccountFields = vi.fn<GetAccountFields>(
+		async (_tokens, userInfo) => ({
+			someAccountField,
+			providerEmail: userInfo.email,
+		}),
+	);
+
+	beforeEach(() => {
+		someAccountField = "initial-value";
+		getAccountFields.mockClear();
+	});
+
+	describe("creating accounts", () => {
+		it("stores the fields when linking a new account", async () => {
+			const { linkGoogle, googleAccounts } = await createInstance({
+				getAccountFields,
+			});
+
+			await linkGoogle("test2@test.com");
+
+			expect(await googleAccounts()).toMatchObject([
+				{
+					someAccountField: "initial-value",
+					providerEmail: "test2@test.com",
+				},
+			]);
+		});
+
+		it("stores the fields when a new user signs in", async () => {
+			const { signInWithGoogle, googleAccounts } = await createInstance({
+				getAccountFields,
+			});
+
+			await signInWithGoogle("oauth-test@test.com");
+
+			expect(await googleAccounts()).toMatchObject([
+				{
+					someAccountField: "initial-value",
+					providerEmail: "oauth-test@test.com",
+				},
+			]);
+		});
+
+		it("stores the fields when sign-in links a provider to an existing user", async () => {
+			const { signInWithGoogle, googleAccounts, ctx } = await createInstance({
+				getAccountFields,
+			});
+			const existing =
+				await ctx.internalAdapter.findUserByEmail("test@test.com");
+			await ctx.internalAdapter.updateUser(existing!.user.id, {
+				emailVerified: true,
+			});
+
+			await signInWithGoogle("test@test.com");
+
+			expect(await googleAccounts()).toMatchObject([
+				{
+					someAccountField: "initial-value",
+					providerEmail: "test@test.com",
+				},
+			]);
+		});
+
+		it("passes the provider tokens and the normalized profile to the hook", async () => {
+			const { signInWithGoogle } = await createInstance({ getAccountFields });
+
+			await signInWithGoogle("oauth-test@test.com");
+
+			expect(getAccountFields).toHaveBeenCalledTimes(1);
+			const [tokens, userInfo] = getAccountFields.mock.calls[0]!;
+			expect(tokens).toMatchObject({
+				accessToken: "test",
+				refreshToken: "test",
+			} satisfies OAuth2Tokens);
+			expect(userInfo).toMatchObject({
+				email: "oauth-test@test.com",
+				emailVerified: true,
+			} satisfies Partial<OAuth2UserInfo>);
+		});
+
+		it("stores the fields on ID token sign-in with the tokens the client sent", async () => {
+			const { client, googleAccounts, mockGoogleIdTokenProfile } =
+				await createInstance({ getAccountFields });
+			mockGoogleIdTokenProfile({ sub: "id-token-sub", email: "id@test.com" });
+
+			const res = await client.signIn.social({
+				provider: "google",
+				idToken: { token: "id-token", accessToken: "client-access-token" },
+			});
+
+			expect(res.error).toBeNull();
+			expect(getAccountFields.mock.calls[0]![0]).toMatchObject({
+				idToken: "id-token",
+				accessToken: "client-access-token",
+			});
+			expect(await googleAccounts()).toMatchObject([
+				{ someAccountField: "initial-value", providerEmail: "id@test.com" },
+			]);
+		});
+
+		it("stores the fields when linking with an ID token", async () => {
+			const {
+				client,
+				signInWithTestUser,
+				googleAccounts,
+				mockGoogleIdTokenProfile,
+			} = await createInstance({ getAccountFields });
+			mockGoogleIdTokenProfile({ sub: "link-sub", email: "link@test.com" });
+
+			const { runWithUser } = await signInWithTestUser();
+			await runWithUser(async () => {
+				const res = await client.linkSocial({
+					provider: "google",
+					callbackURL: "/callback",
+					idToken: { token: "id-token" },
+				});
+				expect(res.error).toBeNull();
+			});
+			expect(await googleAccounts()).toMatchObject([
+				{ someAccountField: "initial-value", providerEmail: "link@test.com" },
+			]);
+
+			someAccountField = "new-value";
+			const { runWithUser: runAgain } = await signInWithTestUser();
+			await runAgain(async () => {
+				const res = await client.linkSocial({
+					provider: "google",
+					callbackURL: "/callback",
+					idToken: { token: "id-token" },
+				});
+				expect(res.error).toBeNull();
+			});
+			expect(await googleAccounts()).toMatchObject([
+				{ someAccountField: "new-value", providerEmail: "link@test.com" },
+			]);
+		});
+	});
+
+	describe("updating accounts", () => {
+		it("updates the fields when an already linked account is linked again", async () => {
+			const { linkGoogle, googleAccounts } = await createInstance({
+				getAccountFields,
+			});
+			await linkGoogle("test2@test.com");
+
+			someAccountField = "new-value";
+			await linkGoogle("test2@test.com");
+
+			expect(await googleAccounts()).toMatchObject([
+				{ someAccountField: "new-value", providerEmail: "test2@test.com" },
+			]);
+		});
+
+		it("updates the fields when the user signs in again", async () => {
+			const { signInWithGoogle, googleAccounts } = await createInstance({
+				getAccountFields,
+			});
+			await signInWithGoogle("oauth-test@test.com");
+
+			someAccountField = "new-value";
+			await signInWithGoogle("oauth-test@test.com");
+
+			expect(await googleAccounts()).toMatchObject([
+				{ someAccountField: "new-value", providerEmail: "oauth-test@test.com" },
+			]);
+		});
+
+		it("updates the fields on ID token sign-in", async () => {
+			const { client, googleAccounts, mockGoogleIdTokenProfile } =
+				await createInstance({ getAccountFields });
+			mockGoogleIdTokenProfile({ sub: "id-token-sub", email: "id@test.com" });
+			await client.signIn.social({
+				provider: "google",
+				idToken: { token: "id-token" },
+			});
+
+			someAccountField = "new-value";
+			await client.signIn.social({
+				provider: "google",
+				idToken: { token: "id-token" },
+			});
+
+			expect(await googleAccounts()).toMatchObject([
+				{ someAccountField: "new-value" },
+			]);
+		});
+
+		it("keeps a stored value when the hook leaves its field undefined", async () => {
+			const keepField = vi.fn<GetAccountFields>(async () => ({
+				someAccountField: undefined,
+				providerEmail: "kept@test.com",
+			}));
+			const { signInWithGoogle, googleAccounts, ctx } = await createInstance({
+				getAccountFields: keepField,
+			});
+			await signInWithGoogle("oauth-test@test.com");
+			const [account] = await googleAccounts();
+			await ctx.internalAdapter.updateAccount(String(account!.id), {
+				someAccountField: "stored-value",
+			} as never);
+
+			await signInWithGoogle("oauth-test@test.com");
+
+			expect(await googleAccounts()).toMatchObject([
+				{ someAccountField: "stored-value", providerEmail: "kept@test.com" },
+			]);
+		});
+	});
+
+	describe("Better Auth owned columns", () => {
+		const reservedOverrides = {
+			id: "attacker-id",
+			userId: "attacker-user",
+			providerId: "attacker-provider",
+			accountId: "attacker-account",
+			accessToken: "attacker-access-token",
+			refreshToken: "attacker-refresh-token",
+			idToken: "attacker-id-token",
+			accessTokenExpiresAt: new Date(0),
+			refreshTokenExpiresAt: new Date(0),
+			scope: "attacker-scope",
+			password: "attacker-password",
+			createdAt: new Date(0),
+			updatedAt: new Date(0),
+		};
+		const hookWithReservedKeys = vi.fn<GetAccountFields>(async () => ({
+			...reservedOverrides,
+			someAccountField: "kept",
+		}));
+
+		async function expectCoreColumnsIntact(
+			accounts: Record<string, unknown>[],
+			userEmail: string,
+			ctx: Awaited<ReturnType<typeof createInstance>>["ctx"],
+		) {
+			expect(accounts).toHaveLength(1);
+			const [account] = accounts;
+			const user = await ctx.internalAdapter.findUserByEmail(userEmail);
+			expect(account).toMatchObject({
+				providerId: "google",
+				accountId: "1234567890",
+				accessToken: "test",
+				refreshToken: "test",
+				userId: user!.user.id,
+				someAccountField: "kept",
+			});
+			expect(account!.id).not.toBe(reservedOverrides.id);
+			expect(account!.idToken).not.toBe(reservedOverrides.idToken);
+			expect(account!.scope).not.toBe(reservedOverrides.scope);
+			expect(account!.password ?? null).toBeNull();
+			expect(account!.accessTokenExpiresAt).not.toEqual(new Date(0));
+			expect(account!.createdAt).not.toEqual(new Date(0));
+		}
+
+		it("cannot be replaced when a user signs in or signs up", async () => {
+			const { signInWithGoogle, googleAccounts, ctx } = await createInstance({
+				getAccountFields: hookWithReservedKeys,
+			});
+
+			await signInWithGoogle("oauth-test@test.com");
+			await expectCoreColumnsIntact(
+				await googleAccounts(),
+				"oauth-test@test.com",
+				ctx,
+			);
+
+			await signInWithGoogle("oauth-test@test.com");
+			await expectCoreColumnsIntact(
+				await googleAccounts(),
+				"oauth-test@test.com",
+				ctx,
+			);
+		});
+
+		it("cannot be replaced when an account is linked", async () => {
+			const { linkGoogle, googleAccounts, ctx } = await createInstance({
+				getAccountFields: hookWithReservedKeys,
+			});
+
+			await linkGoogle("test2@test.com");
+			await expectCoreColumnsIntact(
+				await googleAccounts(),
+				"test@test.com",
+				ctx,
+			);
+
+			await linkGoogle("test2@test.com");
+			await expectCoreColumnsIntact(
+				await googleAccounts(),
+				"test@test.com",
+				ctx,
+			);
+		});
+
+		it("cannot be replaced when an ID token is linked", async () => {
+			const {
+				client,
+				signInWithTestUser,
+				googleAccounts,
+				ctx,
+				mockGoogleIdTokenProfile,
+			} = await createInstance({ getAccountFields: hookWithReservedKeys });
+			mockGoogleIdTokenProfile({ sub: "1234567890", email: "link@test.com" });
+
+			const { runWithUser } = await signInWithTestUser();
+			await runWithUser(async () => {
+				await client.linkSocial({
+					provider: "google",
+					callbackURL: "/callback",
+					idToken: {
+						token: "id-token",
+						accessToken: "test",
+						refreshToken: "test",
+					},
+				});
+			});
+
+			const accounts = await googleAccounts();
+			const user = await ctx.internalAdapter.findUserByEmail("test@test.com");
+			expect(accounts).toMatchObject([
+				{
+					providerId: "google",
+					accountId: "1234567890",
+					accessToken: "test",
+					userId: user!.user.id,
+					someAccountField: "kept",
+				},
+			]);
+			expect(accounts[0]!.id).not.toBe(reservedOverrides.id);
+		});
+
+		it("ignores fields marked input: false", async () => {
+			const { signInWithGoogle, googleAccounts } = await createInstance({
+				getAccountFields: vi.fn<GetAccountFields>(async () => ({
+					serverOwnedField: "from-provider",
+					someAccountField: "kept",
+				})),
+			});
+
+			await signInWithGoogle("oauth-test@test.com");
+			await signInWithGoogle("oauth-test@test.com");
+
+			expect(await googleAccounts()).toMatchObject([
+				{ serverOwnedField: null, someAccountField: "kept" },
+			]);
+		});
+
+		it("ignores keys that are not declared account fields", async () => {
+			const { signInWithGoogle, googleAccounts } = await createInstance({
+				getAccountFields: vi.fn<GetAccountFields>(async () => ({
+					notDeclared: "ignored",
+					someAccountField: "kept",
+				})),
+			});
+
+			await signInWithGoogle("oauth-test@test.com");
+
+			const [account] = await googleAccounts();
+			expect(account).toMatchObject({ someAccountField: "kept" });
+			expect(account).not.toHaveProperty("notDeclared");
+		});
+	});
+
+	describe("when the hook has nothing to store", () => {
+		const tokenColumns = [
+			"accessToken",
+			"idToken",
+			"providerId",
+			"refreshToken",
+		];
+
+		async function signInTwiceAndSpyOnUpdates(
+			options: Parameters<typeof createInstance>[0],
+		) {
+			const instance = await createInstance(options);
+			const updateAccount = vi.spyOn(
+				instance.ctx.internalAdapter,
+				"updateAccount",
+			);
+			await instance.signInWithGoogle("oauth-test@test.com");
+			await instance.signInWithGoogle("oauth-test@test.com");
+			return { ...instance, updateAccount };
+		}
+
+		it("adds no account fields to the sign-in update when the option is unset", async () => {
+			const { updateAccount, googleAccounts } =
+				await signInTwiceAndSpyOnUpdates({});
+
+			expect(updateAccount).toHaveBeenCalledTimes(1);
+			const [, data] = updateAccount.mock.calls[0]!;
+			expect(Object.keys(data).sort()).toEqual(tokenColumns);
+			expect(await googleAccounts()).toMatchObject([
+				{ someAccountField: null, providerEmail: null },
+			]);
+		});
+
+		it("makes no update call when the option is unset and sign-in updates are off", async () => {
+			const { updateAccount } = await signInTwiceAndSpyOnUpdates({
+				updateAccountOnSignIn: false,
+			});
+
+			expect(updateAccount).not.toHaveBeenCalled();
+		});
+
+		it("writes nothing on sign-in when updateAccountOnSignIn is false", async () => {
+			const { updateAccount, googleAccounts } =
+				await signInTwiceAndSpyOnUpdates({
+					getAccountFields,
+					updateAccountOnSignIn: false,
+				});
+
+			expect(getAccountFields).toHaveBeenCalledTimes(2);
+			expect(updateAccount).not.toHaveBeenCalled();
+			expect(await googleAccounts()).toMatchObject([
+				{ someAccountField: "initial-value" },
+			]);
+		});
+
+		it.each([
+			["null", null],
+			["an empty object", {}],
+			["only undefined values", { someAccountField: undefined }],
+		])(
+			"leaves the sign-in update as it was when the hook returns %s",
+			async (_, result) => {
+				const { updateAccount } = await signInTwiceAndSpyOnUpdates({
+					getAccountFields: async () => result,
+				});
+
+				expect(updateAccount).toHaveBeenCalledTimes(1);
+				const [, data] = updateAccount.mock.calls[0]!;
+				expect(Object.keys(data).sort()).toEqual(tokenColumns);
+			},
+		);
 	});
 });
