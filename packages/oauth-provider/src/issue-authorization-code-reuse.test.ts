@@ -200,3 +200,106 @@ describe("provider.issueAuthorizationCode after authenticateClient and verifyDpo
 		expect(errorCode(issued)).toBe("invalid_dpop_proof");
 	});
 });
+
+/**
+ * Request state is shared by nested calls to another auth instance. A client
+ * that one instance authenticated is not authenticated on another instance
+ * that holds a different client under the same `client_id`.
+ *
+ * @see https://github.com/better-auth/better-auth/pull/12759
+ */
+describe("request authentication across nested auth instances", async () => {
+	const secondary = await getTestInstance({
+		baseURL: `${baseURL}/api/auth`,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				pushedAuthorizationRequests: { enabled: true },
+			}),
+		],
+	});
+	const secondaryHeaders = (await secondary.signInWithTestUser()).headers;
+	const confidential = await secondary.auth.api.adminCreateOAuthClient({
+		headers: secondaryHeaders,
+		body: {
+			grant_types: ["authorization_code"],
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "client_secret_post",
+			skip_consent: true,
+		},
+	});
+
+	const nested = {
+		id: "test-nested-par",
+		endpoints: {
+			testNestedPar: createAuthEndpoint(
+				"/test/nested-par",
+				{ method: "POST" },
+				async (ctx) => {
+					const provider = getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+					);
+					await provider.authenticateClient({
+						clientId: confidential.client_id,
+						requireCredentials: false,
+					});
+					return ctx.json(
+						await secondary.auth.api.oauth2PushedAuthorizationRequest({
+							body: {
+								client_id: confidential.client_id,
+								response_type: "code",
+								redirect_uri: redirectUri,
+								scope: "openid",
+								code_challenge: await generateCodeChallenge(
+									generateRandomString(43),
+								),
+								code_challenge_method: "S256",
+							},
+						}),
+					);
+				},
+			),
+		},
+	} satisfies BetterAuthPlugin;
+
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL: `${baseURL}/api/auth`,
+		plugins: [
+			nested,
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const context = await auth.$context;
+
+	it("requires the other instance to authenticate its own client", async () => {
+		const publicClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "none",
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+		await context.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: publicClient.client_id }],
+			update: { clientId: confidential.client_id },
+		});
+
+		const pushed = await client.$fetch<{ request_uri: string }>(
+			"/test/nested-par",
+			{ method: "POST", headers: Object.fromEntries(headers) },
+		);
+		expect((pushed.error as { error?: string } | null)?.error).toBe(
+			"invalid_client",
+		);
+		expect(pushed.data).toBeNull();
+	});
+});

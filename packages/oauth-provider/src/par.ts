@@ -93,7 +93,7 @@ export async function authenticateAuthorizationRequest(
 	}
 	// A client that `authenticateClient` already proved on this request is not
 	// authenticated again: its one-time assertion `jti` is already used up.
-	const authenticated = await getRecordedAuthenticatedClient();
+	const authenticated = await getRecordedAuthenticatedClient(ctx);
 	let clientId: string;
 	if (authenticated) {
 		if (body.client_id && body.client_id !== authenticated.clientId) {
@@ -131,7 +131,7 @@ export async function authenticateAuthorizationRequest(
 	const bindDpopProof = async (query: { dpop_jkt?: string }) => {
 		// A proof `verifyDpopProof` already checked on this request is not
 		// verified again, which would reject its `jti` as replayed.
-		const verified = await getRecordedDpopProof();
+		const verified = await getRecordedDpopProof(ctx);
 		if (verified) {
 			if (query.dpop_jkt !== undefined && query.dpop_jkt !== verified.jkt) {
 				throwInvalidDpopProof("DPoP proof key does not match dpop_jkt");
