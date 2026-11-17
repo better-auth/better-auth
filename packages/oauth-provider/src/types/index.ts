@@ -609,7 +609,9 @@ export interface OAuthProviderApi {
 	 * another key fails with `invalid_dpop_proof` before its `jti` is used up,
 	 * and a request without a proof still binds the code to that key.
 	 * With `dpop.nonce.required`, the nonce challenge runs before client
-	 * authentication, so a retry can resend a one-time client assertion. An
+	 * authentication, so a retry can resend a one-time client assertion. It is
+	 * skipped when `authenticateClient` already ran on the request, so call
+	 * `challengeDpopNonce` before it. An
 	 * endpoint that accepts form-encoded bodies must set `cloneRequest: true`,
 	 * as for `authenticateClient`.
 	 *
@@ -618,8 +620,8 @@ export interface OAuthProviderApi {
 	 * key before the user's credentials, the method reuses those results
 	 * instead of checking again, which would reject a one-time assertion or
 	 * proof `jti` as replayed. A `client_id` in `query` must then name the
-	 * client `authenticateClient` returned, and a `dpop_jkt` must match the
-	 * verified proof's key; otherwise the call fails with `invalid_client` or
+	 * client `authenticateClient` returned. The verified proof's key binds the
+	 * code, and a `dpop_jkt` must match it; otherwise the call fails with `invalid_client` or
 	 * `invalid_dpop_proof`. Only results the provider produced on this
 	 * request are reused, so a caller cannot supply its own.
 	 *
