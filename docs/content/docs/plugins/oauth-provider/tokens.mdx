@@ -80,7 +80,7 @@ The resources you configure are written to the `oauthResource` table at startup.
 * `merge`: adds missing rows and updates the fields present in the config.
 * `overwrite`: replaces existing rows with the config values.
 
-Each instance reads the table once to seed it. If you build Better Auth per request, for example on Cloudflare Workers with a database client per request, that read runs on every request. Set `resourceSeedScope: "process"` to remember each seeded entry for the life of the process instead, as long as every instance in the process uses the same database.
+Each instance reads the table once per configured resource to seed it. If you build Better Auth per request, for example on Cloudflare Workers with a database client per request, those reads run on every request. Set `resourceSeedScope: "process"` to remember each seeded entry for the life of the process instead, as long as every instance in the process uses the same database.
 
 ### Manage resources at runtime
 

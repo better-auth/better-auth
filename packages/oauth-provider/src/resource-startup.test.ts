@@ -369,6 +369,38 @@ describe("resource seeding at startup", () => {
 			expect(reads).toHaveLength(1);
 		});
 
+		it("retries only the entries that failed, without rewriting finished ones", async () => {
+			const second = "https://other.example.com/mcp";
+			let creates = 0;
+			const fault = {
+				current: ((operation) => {
+					if (operation === "create" && ++creates === 2) {
+						throw new TypeError("fetch failed");
+					}
+				}) as ResourceFault | null,
+			};
+			const { register, database } = await bootWithResourceFault(fault, {
+				resources: [
+					{ identifier: resource, name: "From config" },
+					{ identifier: second, name: "Second from config" },
+				],
+				resourceSeedMode: "merge",
+				resourceSeedScope: "process",
+			});
+			expect(database.oauthResource.map((row) => row.identifier)).toEqual([
+				resource,
+			]);
+
+			database.oauthResource[0]!.name = "Edited by admin";
+			fault.current = null;
+			await register();
+
+			expect(database.oauthResource).toMatchObject([
+				{ identifier: resource, name: "Edited by admin" },
+				{ identifier: second, name: "Second from config" },
+			]);
+		});
+
 		it("an entry one instance skipped is still seeded by another", async () => {
 			const database = createDatabase();
 			const fault = { current: null };
