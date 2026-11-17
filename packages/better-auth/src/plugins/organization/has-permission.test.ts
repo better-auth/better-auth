@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 import { createAccessControl } from "../access";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { hasPermission } from "./has-permission";
-import { hasPermissionFn } from "./permission";
 import { organization } from "./organization";
+import { hasPermissionFn } from "./permission";
 import type { OrganizationRole } from "./schema";
 import type { OrganizationOptions } from "./types";
 

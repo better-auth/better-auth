@@ -2202,6 +2202,61 @@ describe("access control", async () => {
 		expect(canUpdateOrderAndUpdateUser.success).toBe(false);
 	});
 
+	it("should validate permissions with multiple roles and whitespace padding", async () => {
+		const paddedSingle = await auth.api.userHasPermission({
+			body: {
+				role: " creator ",
+				permissions: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(paddedSingle.success).toBe(true);
+
+		const creatorOnly = await auth.api.userHasPermission({
+			body: {
+				role: "creator",
+				permissions: {
+					user: ["create"],
+					order: ["update"],
+				},
+			},
+		});
+		expect(creatorOnly.success).toBe(false);
+
+		const supportOnly = await auth.api.userHasPermission({
+			body: {
+				role: "support",
+				permissions: {
+					user: ["create"],
+					order: ["update"],
+				},
+			},
+		});
+		expect(supportOnly.success).toBe(false);
+
+		const mergedMultiple = await auth.api.userHasPermission({
+			body: {
+				role: " creator , support ",
+				permissions: {
+					user: ["create"],
+					order: ["update"],
+				},
+			},
+		});
+		expect(mergedMultiple.success).toBe(true);
+
+		const ungranted = await auth.api.userHasPermission({
+			body: {
+				role: "creator, support",
+				permissions: {
+					user: ["delete"],
+				},
+			},
+		});
+		expect(ungranted.success).toBe(false);
+	});
+
 	it("should prioritize role over userId when both are provided", async () => {
 		const testUser = await client.signUp.email({
 			email: "rolepriority@test.com",

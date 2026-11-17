@@ -19,7 +19,10 @@ export const hasPermission = (
 	if (!input.permissions) {
 		return false;
 	}
-	const roles = (input.role || input.options?.defaultRole || "user").split(",");
+	const roles = (input.role || input.options?.defaultRole || "user")
+		.split(",")
+		.map((r) => r.trim())
+		.filter(Boolean);
 	const acRoles = input.options?.roles || defaultRoles;
 	for (const role of roles) {
 		const _role = acRoles[role as keyof typeof acRoles];
@@ -31,7 +34,7 @@ export const hasPermission = (
 
 	if (roles.length > 1) {
 		const resolvedRoles = roles
-			.map((r) => acRoles[r.trim() as keyof typeof acRoles])
+			.map((r) => acRoles[r as keyof typeof acRoles])
 			.filter((r): r is Role<any> => Boolean(r));
 		if (resolvedRoles.length > 1) {
 			const merged = mergeRoles(resolvedRoles);

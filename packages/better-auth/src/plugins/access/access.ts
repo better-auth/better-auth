@@ -175,7 +175,7 @@ export function createAccessControl<const TStatements extends Statements>(
 export function mergeRoles(
 	roles: (Role<any, any> | undefined)[],
 ): Role<Record<string, string[]>> {
-	const mergedStatements: Record<string, string[]> = {};
+	const mergedStatements: Record<string, string[]> = Object.create(null);
 
 	for (const r of roles) {
 		if (!r?.statements) continue;

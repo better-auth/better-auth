@@ -266,5 +266,28 @@ describe("access", () => {
 			const merged = mergeRoles([undefined, roleADup, undefined, roleBDup]);
 			expect(merged.statements.project).toEqual(["create", "delete"]);
 		});
+
+		it("should safely handle prototype properties like constructor or toString as resource names", () => {
+			const customAc = createAccessControl({
+				constructor: ["read", "write"],
+				toString: ["read"],
+			} as const);
+			const roleWithConstructor = customAc.newRole({
+				constructor: ["read"],
+			});
+			const roleWithToString = customAc.newRole({
+				toString: ["read"],
+			});
+
+			const merged = mergeRoles([roleWithConstructor, roleWithToString]);
+			expect(merged.statements.constructor).toEqual(["read"]);
+			expect(merged.statements.toString).toEqual(["read"]);
+
+			const authRes = merged.authorize({
+				constructor: ["read"],
+				toString: ["read"],
+			});
+			expect(authRes.success).toBe(true);
+		});
 	});
 });
