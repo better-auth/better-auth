@@ -681,6 +681,12 @@ export interface OAuthOptions<
 	 *   uses the same database: an instance on another database with the same
 	 *   `resources` skips its seed.
 	 *
+	 * This option is a stopgap. It is superseded by the planned change that
+	 * stops `init` from accessing the database to seed configured resources,
+	 * and can be removed when that ships. The `next` branch (1.8) carries the
+	 * same option with the same name, type, and default.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11725
 	 * @default "adapter"
 	 */
 	resourceSeedScope?: "adapter" | "process";
