@@ -299,6 +299,8 @@ It returns the token's claims in [introspection](#introspection) form, including
 | Missing or expired DPoP nonce                         | 401    | `DPoP` with `use_dpop_nonce` and a `DPoP-Nonce` header |
 | Missing scopes                                        | 403    | `insufficient_scope`, naming every missing scope       |
 
+The table describes the `WWW-Authenticate` challenge. A request with no token also gets a 401 body, `{ error: "invalid_request", error_description: "access token not found" }`, which does not match the challenge. Branch on the status and the challenge, not on the body `error`.
+
 When `audience` is a URL, the `Bearer` and `DPoP` challenges also point to its [protected resource metadata](#protected-resource-metadata). Without `audience`, or when `audience` is not a URL, such as a `urn:`, the challenges leave out `resource_metadata`. `verifyResourceRequest` does not read `resourceMetadataMappings`, so it never throws for a missing mapping. With `scopes`, the challenge for a request without a token names them in `scope`. Every challenge lists `WWW-Authenticate` in `Access-Control-Expose-Headers`.
 
 A DPoP-bound token fails through `auth.api`, because there is no HTTP request to check the proof against. A bearer token works there.
