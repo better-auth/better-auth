@@ -307,9 +307,9 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 	}
 	const fetchPolicy = resolveMetadataFetchPolicy(cimdOptions);
 	const metadataCache = new Map<string, CimdMetadataCacheEntry>();
-	const inFlightResolutionByClientId = new Map<
+	const inFlightMetadataByClientId = new Map<
 		string,
-		Promise<SchemaClient<Scope[]> | null>
+		Promise<OAuthClientMetadata>
 	>();
 	const lastFetchStartAtMsByClientId = new Map<string, number>();
 	const fetchStateByOrigin = new Map<string, OriginFetchState>();
@@ -342,7 +342,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				candidateClientId,
 				candidateLastFetchStartAtMs,
 			] of lastFetchStartAtMsByClientId) {
-				if (inFlightResolutionByClientId.has(candidateClientId)) {
+				if (inFlightMetadataByClientId.has(candidateClientId)) {
 					continue;
 				}
 				if (
@@ -464,6 +464,11 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		};
 	};
 
+	const recordFailedFetch = (clientId: string) => {
+		lastFetchStartAtMsByClientId.delete(clientId);
+		lastFetchStartAtMsByClientId.set(clientId, Date.now());
+	};
+
 	return async (ctx, clientId, existingClient) => {
 		if (!isCimdClientIdUrlCandidate(clientId)) {
 			return null;
@@ -490,11 +495,30 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			);
 		}
 
-		const inFlightResolution = inFlightResolutionByClientId.get(clientId);
-		if (inFlightResolution !== undefined) return inFlightResolution;
+		const persistFetchedMetadata = async (metadata: OAuthClientMetadata) => {
+			try {
+				return await persistMetadataDocumentClient(
+					ctx,
+					clientId,
+					metadata,
+					cimdOptions,
+					oauthOptions,
+					existingClient ?? undefined,
+				);
+			} catch (error) {
+				metadataCache.delete(clientId);
+				recordFailedFetch(clientId);
+				throw error;
+			}
+		};
+
+		const inFlightMetadata = inFlightMetadataByClientId.get(clientId);
+		if (inFlightMetadata !== undefined) {
+			return persistFetchedMetadata(await inFlightMetadata);
+		}
 
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
-		const resolution = (async () => {
+		const metadataFetch = (async () => {
 			const fetched = await fetchClientMetadataDocument(
 				ctx,
 				clientId,
@@ -517,14 +541,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				fetched.status === "modified"
 					? fetched.metadata
 					: (cachedEntry as CimdMetadataCacheEntry).metadata;
-			const storedClient = await persistMetadataDocumentClient(
-				ctx,
-				clientId,
-				metadata,
-				cimdOptions,
-				oauthOptions,
-				existingClient ?? undefined,
-			);
 
 			const cacheHeaders =
 				fetched.status === "modified"
@@ -547,20 +563,21 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			// Successful fetches are governed by HTTP freshness and origin/global
 			// budgets. Keep the per-client interval only as failed-fetch backoff.
 			lastFetchStartAtMsByClientId.delete(clientId);
-			return storedClient;
+			return metadata;
 		})();
-		inFlightResolutionByClientId.set(clientId, resolution);
+		inFlightMetadataByClientId.set(clientId, metadataFetch);
+		let metadata: OAuthClientMetadata;
 		try {
-			return await resolution;
+			metadata = await metadataFetch;
 		} catch (error) {
-			lastFetchStartAtMsByClientId.delete(clientId);
-			lastFetchStartAtMsByClientId.set(clientId, Date.now());
+			recordFailedFetch(clientId);
 			throw error;
 		} finally {
-			if (inFlightResolutionByClientId.get(clientId) === resolution) {
-				inFlightResolutionByClientId.delete(clientId);
+			if (inFlightMetadataByClientId.get(clientId) === metadataFetch) {
+				inFlightMetadataByClientId.delete(clientId);
 			}
 			releaseMetadataFetchPermit();
 		}
+		return persistFetchedMetadata(metadata);
 	};
 }
