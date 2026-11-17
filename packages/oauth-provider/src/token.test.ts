@@ -2173,8 +2173,23 @@ describe("oauth token - refresh_token", async () => {
 		 * @see https://github.com/better-auth/better-auth/issues/12087
 		 */
 		it("stores no replay state when a rotation fails at the default interval", async () => {
-			const parentToken = await issueParentRefreshToken();
 			const context = await authorizationServer.$context;
+			const findRows = () =>
+				context.adapter.findMany<{
+					id: string;
+					revoked?: Date | null;
+					rotationReplayResponse?: string | null;
+				}>({
+					model: "oauthRefreshToken",
+					where: [{ field: "clientId", value: oauthClient!.client_id }],
+					limit: 1000,
+				});
+			const existingIds = new Set((await findRows()).map((row) => row.id));
+			const parentToken = await issueParentRefreshToken();
+			const parentId = (await findRows()).find(
+				(row) => !existingIds.has(row.id),
+			)?.id;
+			expect(parentId).toBeDefined();
 			const create = context.adapter.create.bind(context.adapter);
 			const spy = vi.spyOn(context.adapter, "create");
 			spy.mockImplementation(async (...args) => {
@@ -2190,16 +2205,9 @@ describe("oauth token - refresh_token", async () => {
 				spy.mockRestore();
 			}
 
-			const rows = await context.adapter.findMany<{
-				revoked?: Date | null;
-				rotationReplayResponse?: string | null;
-			}>({
-				model: "oauthRefreshToken",
-				where: [{ field: "clientId", value: oauthClient!.client_id }],
-				limit: 1000,
-			});
-			expect(rows.some((row) => row.revoked)).toBe(true);
-			expect(rows.filter((row) => row.rotationReplayResponse)).toHaveLength(0);
+			const parent = (await findRows()).find((row) => row.id === parentId);
+			expect(parent?.revoked).toBeTruthy();
+			expect(parent?.rotationReplayResponse ?? null).toBeNull();
 		});
 
 		it("rotates once and fails the other rotation with invalid_grant", async () => {
