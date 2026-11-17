@@ -1769,6 +1769,42 @@ describe("oauth-provider device-code grant", async () => {
 	});
 });
 
+describe("oauth-provider device-code grant with requireOpenId", async () => {
+	const baseURL = "http://localhost:3000";
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				requireOpenId: true,
+			}),
+			oauthDeviceAuthorization(),
+		],
+	});
+
+	it("does not apply to the device authorization request", async () => {
+		const { headers } = await signInWithTestUser();
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "profile",
+				application_type: "native",
+			},
+		});
+
+		const res = await auth.api.deviceCode({
+			body: { client_id: created!.client_id, scope: "profile" },
+		});
+
+		expect(res.device_code).toBeTruthy();
+		expect(res.user_code).toBeTruthy();
+	});
+});
+
 describe("oauth-provider device-code immutable routing", async () => {
 	const baseURL = "http://localhost:3007";
 	const firstPartyClientId = "late-registered-oauth-client";

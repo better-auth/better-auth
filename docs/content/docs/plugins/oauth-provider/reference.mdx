@@ -79,7 +79,7 @@ Scopes clients may request. Without `openid`, the provider is OAuth only. Defaul
 
 `requireOpenId` <span className="opacity-70">`boolean`</span>
 
-Requires every authorization request to include the `openid` scope, so the provider only serves OpenID Connect requests. A request without `openid`, or with no `scope` at all, is redirected to the client's `redirect_uri` with `invalid_scope`. Defaults to `false`, where a request with no `scope` receives the client's registered scopes. `openid` must be in `scopes`, or the plugin fails at startup.
+Requires every request to `/oauth2/authorize` to include the `openid` scope, so the provider only serves OpenID Connect requests there. A request without `openid`, or with no `scope` at all, is redirected to the client's `redirect_uri` with `invalid_scope`. The option does not apply to a device authorization request at `/device/code`. Defaults to `false`, where a request without `openid` is served as plain OAuth and a request with no `scope` falls back to the default scopes. `openid` must be in `scopes`, or the plugin fails at startup.
 
 `advertisedMetadata` <span className="opacity-70">`{ scopes_supported?, claims_supported?, token_endpoint_auth_methods_supported? }`</span>
 

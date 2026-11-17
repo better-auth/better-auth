@@ -545,13 +545,16 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
-	 * Require every authorization request to include the `openid` scope, so the
-	 * provider only serves OpenID Connect requests.
+	 * Require every request to `/oauth2/authorize` to include the `openid`
+	 * scope, so the provider only serves OpenID Connect requests there.
 	 *
 	 * A request without `openid`, including one with no `scope` parameter at
 	 * all, is redirected to the validated `redirect_uri` with `invalid_scope`.
-	 * Without this option, a request with no `scope` receives the client's
-	 * registered scopes.
+	 * Without this option, a request without `openid` is served as plain OAuth
+	 * and a request with no `scope` falls back to the default scopes.
+	 *
+	 * The option does not apply to a device authorization request at
+	 * `/device/code`.
 	 *
 	 * Requires `openid` to be in `scopes`.
 	 *
