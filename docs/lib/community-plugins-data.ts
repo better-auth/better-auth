@@ -141,6 +141,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "better-auth-bachs",
+		url: "https://github.com/grtsnx/better-auth-bachs",
+		description:
+			"Bachs billing plugin for Better Auth — hosted checkout, subscriptions, organization billing, payments, customer portal, and secure webhooks via the official @bachs/sdk.",
+		author: {
+			name: "Greatness Abolade",
+			github: "grtsnx",
+			avatar: "https://github.com/grtsnx.png",
+		},
+	},
+	{
 		name: "better-auth-flutterwave",
 		url: "https://github.com/alexasomba/better-auth-flutterwave",
 		description:
