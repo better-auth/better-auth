@@ -372,12 +372,21 @@ export async function verifyJwsToken<PayloadType = JWTPayload>(
 	token: string,
 	opts: JwksFetchOptions & {
 		verifyOptions: JWTVerifyOptions;
+		/**
+		 * Verify against an expired cached key set when its refetch fails. Only
+		 * access-token verification sets it.
+		 */
+		allowStaleJwks?: boolean;
 	},
 ) {
 	if (token.split(".").length !== 3) {
 		throw new joseErrors.JWSInvalid("Invalid Compact JWS");
 	}
-	const resolved = await getJwksForVerification(token, opts);
+	const resolved = await getJwksForVerification(
+		token,
+		opts,
+		opts.allowStaleJwks,
+	);
 	let jwks = resolved.jwks;
 	// Retry with a newer cached key set, then await a fetch already in progress.
 	// Allow at most two retries.
@@ -413,7 +422,7 @@ export async function verifyJwsAccessToken(
 	},
 ) {
 	try {
-		const jwt = await verifyJwsToken(token, opts);
+		const jwt = await verifyJwsToken(token, { ...opts, allowStaleJwks: true });
 		// Return the JWT payload in introspection format
 		// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 		if (jwt.payload.azp) {
@@ -433,6 +442,7 @@ export async function getJwks(token: string, opts: JwksFetchOptions) {
 async function getJwksForVerification(
 	token: string,
 	opts: JwksFetchOptions,
+	allowStale = false,
 ): Promise<ResolvedJwks> {
 	// Attempt to decode the token and find a matching kid in jwks
 	let jwtHeaders: ProtectedHeaderParameters | undefined;
@@ -461,6 +471,9 @@ async function getJwksForVerification(
 	const cached =
 		now - entry.fetchedAt < JWKS_CACHE_TTL_MS ? entry.jwks : undefined;
 	if (!cached) {
+		if (!allowStale) {
+			return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
+		}
 		const stale =
 			entry.jwks &&
 			Array.isArray(entry.jwks.keys) &&

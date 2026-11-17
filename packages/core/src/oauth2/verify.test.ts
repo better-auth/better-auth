@@ -1479,6 +1479,87 @@ describe("verifyBearerToken", () => {
 		});
 	});
 
+	describe("expired JWKS cache outside access-token verification", () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12242
+		 */
+		it("should fail getJwks when the refetch of an expired set fails", async () => {
+			vi.resetModules();
+			const { getJwks } = await import("./verify");
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockImplementationOnce(() =>
+				Promise.resolve(jwksResponse(publicJWK)),
+			);
+			await expect(getJwks(token, { jwksFetch: jwksUrl })).resolves.toEqual({
+				keys: [publicJWK],
+			});
+
+			// Within the window the access-token path would serve the expired set;
+			// the authorization server's own endpoints must not accept a key set
+			// they could not confirm.
+			vi.useFakeTimers({ now: Date.now() + 5 * 60 * 1000 + 1 });
+			mockedFetch.mockRejectedValue(new TypeError("fetch failed"));
+			await expect(
+				getJwks(token, { jwksFetch: jwksUrl }),
+			).rejects.toMatchObject({ message: "JWKS fetch failed" });
+			await expect(
+				getJwks(token, { jwksFetch: jwksUrl }),
+			).rejects.toMatchObject({ message: "JWKS fetch failed" });
+			expect(mockedFetch).toHaveBeenCalledTimes(3);
+
+			vi.useRealTimers();
+			mockedFetch.mockReset();
+			vi.resetModules();
+		});
+
+		it("should fail getJwks for an in-process source when the key store read fails", async () => {
+			vi.resetModules();
+			const { getJwks } = await import("./verify");
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			const jwksCacheKey = {};
+			const jwksFetch = vi
+				.fn<() => Promise<{ keys: JWK[] } | undefined>>()
+				.mockResolvedValueOnce({ keys: [publicJWK] })
+				.mockRejectedValue(new Error("key store unavailable"));
+			await expect(
+				getJwks(token, { jwksFetch, jwksCacheKey }),
+			).resolves.toEqual({ keys: [publicJWK] });
+
+			vi.useFakeTimers({ now: Date.now() + 5 * 60 * 1000 + 1 });
+			await expect(getJwks(token, { jwksFetch, jwksCacheKey })).rejects.toThrow(
+				"key store unavailable",
+			);
+
+			vi.useRealTimers();
+			vi.resetModules();
+		});
+
+		it("should fail validateToken when the refetch of an expired set fails", async () => {
+			vi.resetModules();
+			const { validateToken } = await import("./validate-authorization-code");
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockImplementationOnce(() =>
+				Promise.resolve(jwksResponse(publicJWK)),
+			);
+			await expect(
+				validateToken(token, jwksUrl, { issuer, audience }),
+			).resolves.toMatchObject({ payload: { sub: "user-123" } });
+
+			vi.useFakeTimers({ now: Date.now() + 5 * 60 * 1000 + 1 });
+			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
+			await expect(
+				validateToken(token, jwksUrl, { issuer, audience }),
+			).rejects.toMatchObject({ message: "JWKS fetch failed" });
+
+			vi.useRealTimers();
+			mockedFetch.mockReset();
+			vi.resetModules();
+		});
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9654
 	 */
