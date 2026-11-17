@@ -389,19 +389,10 @@ export async function verifyJwsToken<PayloadType = JWTPayload>(
 				opts.verifyOptions,
 			);
 		} catch (error) {
-			let refreshed: JSONWebKeySet | undefined;
-			if (
-				refreshes < 2 &&
-				shouldRefetchCachedJwksWithoutKid(error, resolved) &&
-				resolved.refresh
-			) {
-				try {
-					refreshed = await resolved.refresh(jwks);
-				} catch {
-					// A failed refresh during verification of a kid-less token must
-					// not displace the original JWT verification error.
-				}
-			}
+			const refreshed =
+				refreshes < 2 && shouldRefetchCachedJwksWithoutKid(error, resolved)
+					? await resolved.refresh?.(jwks)
+					: undefined;
 			if (!refreshed) throw error;
 			jwks = refreshed;
 		}
@@ -483,10 +474,19 @@ async function getJwksForVerification(
 					(jwk) => jwk && typeof jwk === "object" && jwk.kid === kid,
 				));
 
+		// Only while serving a stale set does a failed refresh leave a token
+		// without `kid` with its own verification error. With a fresh set, the
+		// failure stays an outage error.
+		const refreshStale = async (failed: JSONWebKeySet) => {
+			try {
+				return await refreshJwks(entry, failed, opts.jwksFetch);
+			} catch {
+				return undefined;
+			}
+		};
+
 		if (stale && now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) {
-			const refresh = (failed: JSONWebKeySet) =>
-				refreshJwks(entry, failed, opts.jwksFetch);
-			return { jwks: stale, kid, refresh };
+			return { jwks: stale, kid, refresh: refreshStale };
 		}
 
 		try {
@@ -494,14 +494,8 @@ async function getJwksForVerification(
 		} catch (error) {
 			const failedAt = Date.now();
 			entry.refetchedAt = failedAt;
-			if (
-				canUseStale &&
-				entry.fetchedAt !== undefined &&
-				failedAt - entry.fetchedAt < JWKS_MAX_STALE_MS
-			) {
-				const refresh = (failed: JSONWebKeySet) =>
-					refreshJwks(entry, failed, opts.jwksFetch);
-				return { jwks: stale, kid, refresh };
+			if (canUseStale && failedAt - entry.fetchedAt < JWKS_MAX_STALE_MS) {
+				return { jwks: stale, kid, refresh: refreshStale };
 			}
 			throw error;
 		}
