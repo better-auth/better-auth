@@ -340,7 +340,8 @@ async function refetchClientJwks(
  * verification keys come from:
  * - `aud` MUST include `expectedAudience` (RFC 7523 §3 rule 3),
  * - `exp` MUST be present, unexpired (within `assertionClockTolerance`), and
- *   at most `assertionMaxLifetime` seconds away (RFC 7523 §3 rule 4),
+ *   at most `assertionMaxLifetime` plus `assertionClockTolerance` seconds away
+ *   (RFC 7523 §3 rule 4),
  * - `iat`, when present, MUST be within `assertionMaxLifetime` (plus
  *   `assertionClockTolerance`),
  * - `jti` MUST be present and single-use; this consumes a replay tombstone keyed
