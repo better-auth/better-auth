@@ -1,8 +1,12 @@
-import { CLIENT_ASSERTION_TYPE } from "@better-auth/core/oauth2";
+import {
+	authorizationCodeRequest,
+	CLIENT_ASSERTION_TYPE,
+	createAuthorizationURL,
+} from "@better-auth/core/oauth2";
 import { generateRandomString } from "better-auth/crypto";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 import { oauthProvider } from "./oauth";
 
@@ -84,5 +88,76 @@ describe("baseURL with a trailing slash", async () => {
 		expect(await response.json()).toMatchObject({
 			error: "unauthorized_client",
 		});
+	});
+	/**
+	 * ID tokens carry the configured issuer, trailing slash included, while
+	 * discovery publishes it without one. The hint check accepts both forms.
+	 * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout
+	 */
+	it("accepts an ID token it issued as the end-session id_token_hint", async () => {
+		const { headers: sessionHeaders } = await signInWithTestUser();
+		const redirectUri = "https://rp.example.test/callback";
+		const client = await auth.api.adminCreateOAuthClient({
+			headers: sessionHeaders,
+			body: {
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_post",
+				skip_consent: true,
+				enable_end_session: true,
+			},
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		const codeVerifier = generateRandomString(32);
+		const authorizationURL = await createAuthorizationURL({
+			id: "trailing-slash",
+			options: {
+				clientId: client.client_id,
+				clientSecret: client.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: redirectUri,
+			authorizationEndpoint: metadata.authorization_endpoint,
+			state: "state",
+			scopes: ["openid"],
+			codeVerifier,
+		});
+		const authorization = await customFetchImpl(authorizationURL.toString(), {
+			headers: sessionHeaders,
+			redirect: "manual",
+		});
+		const code = new URL(
+			authorization.headers.get("location") ?? "",
+		).searchParams.get("code");
+		expect(code).toBeTruthy();
+		const tokenRequest = await authorizationCodeRequest({
+			code: code!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: client.client_id,
+				clientSecret: client.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokenResponse = await customFetchImpl(metadata.token_endpoint, {
+			method: "POST",
+			headers: tokenRequest.headers,
+			body: tokenRequest.body,
+		});
+		const { id_token: idToken } = (await tokenResponse.json()) as {
+			id_token: string;
+		};
+		expect(decodeJwt(idToken).iss).toBe("http://localhost:3000/api/auth/");
+		expect(metadata.issuer).toBe("http://localhost:3000/api/auth");
+
+		const endSession = new URL(metadata.end_session_endpoint!);
+		endSession.searchParams.set("id_token_hint", idToken);
+		const response = await customFetchImpl(endSession.toString(), {
+			headers: sessionHeaders,
+			redirect: "manual",
+		});
+
+		expect(response.status).toBe(200);
+		expect(await auth.api.getSession({ headers: sessionHeaders })).toBeNull();
 	});
 });
