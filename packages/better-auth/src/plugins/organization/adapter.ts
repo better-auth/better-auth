@@ -682,6 +682,38 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			membersLimit?: number | undefined;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			let orgId = organizationId;
+			if (isSlug) {
+				const org = await adapter.findOne<InferOrganization<O, false>>({
+					model: "organization",
+					where: [{ field: "slug", value: organizationId }],
+					select: ["id"],
+				});
+				if (!org) {
+					return null;
+				}
+				orgId = org.id;
+			}
+
+			const [invitationCount, memberCount, teamCount] = await Promise.all([
+				adapter.count({
+					model: "invitation",
+					where: [{ field: "organizationId", value: orgId }],
+				}),
+				membersLimit
+					? Promise.resolve(membersLimit)
+					: adapter.count({
+							model: "member",
+							where: [{ field: "organizationId", value: orgId }],
+						}),
+				includeTeams
+					? adapter.count({
+							model: "team",
+							where: [{ field: "organizationId", value: orgId }],
+						})
+					: Promise.resolve(0),
+			]);
+
 			const result = await adapter.findOne<
 				InferOrganization<O, false> & {
 					invitation: InferInvitation<O>[];
@@ -690,11 +722,13 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				}
 			>({
 				model: "organization",
-				where: [{ field: isSlug ? "slug" : "id", value: organizationId }],
+				where: [{ field: "id", value: orgId }],
 				join: {
-					invitation: true,
-					member: membersLimit ? { limit: membersLimit } : true,
-					...(includeTeams ? { team: true } : {}),
+					invitation: invitationCount > 0 ? { limit: invitationCount } : true,
+					member: memberCount > 0 ? { limit: memberCount } : true,
+					...(includeTeams
+						? { team: teamCount > 0 ? { limit: teamCount } : true }
+						: {}),
 				},
 			});
 			if (!result) {

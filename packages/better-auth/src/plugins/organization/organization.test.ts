@@ -4362,5 +4362,20 @@ describe("defaultFindManyLimit handling in organization adapter", () => {
 		expect(teams.map((t) => t.id)).toEqual(
 			expect.arrayContaining([team1.id, team2.id]),
 		);
+
+		const fullOrgById = await adapter.findFullOrganization({
+			organizationId: org1!.id,
+			includeTeams: true,
+		});
+		expect(fullOrgById?.invitations.length).toBe(3);
+		expect(fullOrgById?.teams?.length).toBe(3);
+
+		const fullOrgBySlug = await adapter.findFullOrganization({
+			organizationId: "org-1",
+			isSlug: true,
+			includeTeams: true,
+		});
+		expect(fullOrgBySlug?.invitations.length).toBe(3);
+		expect(fullOrgBySlug?.teams?.length).toBe(3);
 	});
 });
