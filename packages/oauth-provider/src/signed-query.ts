@@ -5,9 +5,8 @@ const signedQueryParameterNameParam = "ba_param";
 /**
  * Rewrites a standard base64 string into the base64url alphabet.
  *
- * Signatures travel in the query string, where a `+` turns into a space as soon
- * as something in front of the auth server url-decodes the query once. The
- * base64url alphabet has no such characters, so the signature survives.
+ * The verifier compares signatures in this form, so a `sig` matches whether it
+ * is written in the standard or the base64url alphabet.
  */
 export function toBase64Url(value: string) {
 	return value.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");

@@ -342,12 +342,16 @@ export async function verifyOAuthQueryParams(
 		canonicalizeOAuthQueryParams(queryParams).toString(),
 		secret,
 	);
-	// Compare in base64url so signatures issued before this alphabet change keep
-	// verifying, and so a `sig` that went through a url decode still matches.
+	// A standard base64 `sig` can carry `+`, which reads back as a space once
+	// something in front of the server decodes the query. Restore it, then
+	// compare both sides in base64url so either alphabet matches.
 	return (
 		sigs.length === 1 &&
 		!!sig &&
-		constantTimeEqual(toBase64Url(sig), toBase64Url(verifySig)) &&
+		constantTimeEqual(
+			toBase64Url(sig.replace(/ /g, "+")),
+			toBase64Url(verifySig),
+		) &&
 		new Date(exp * 1000) >= new Date()
 	);
 }
