@@ -493,7 +493,7 @@ In the browser, `oauthProviderClient()` forwards the signed `oauth_query` from t
 Some endpoints behave differently with other plugins or requests:
 
 * With `oauthDeviceAuthorization()`, `/oauth2/authorize` also accepts `user_code` instead of an authorization request. The user approves the device code on the same pages. See [Device code grant](/docs/plugins/oauth-provider/tokens#device-code-grant).
-* With [`ciba()`](/docs/plugins/ciba), `/oauth2/authorize` also accepts `ciba_request_id`. The user approves the backchannel request on the same pages. See [What the user sees](/docs/plugins/ciba#what-the-user-sees).
+* With [`ciba()`](/docs/plugins/ciba), `/oauth2/authorize` also accepts `ciba_request_id`. The user approves the backchannel request on the same pages. See [What the user sees](/docs/plugins/ciba#what-the-user-sees). When you set `approvalPage`, `/oauth2/authorize` rejects `ciba_request_id` with `invalid_request`, and only your own app decides. See [Approve only in your own app](/docs/plugins/ciba#approve-only-in-your-own-app).
 * During a browser navigation, `/oauth2/end-session` can return the [front-channel logout](/docs/plugins/oauth-provider/openid-connect#front-channel-logout) page.
 * `/oauth2/token`, `/oauth2/introspect`, and `/oauth2/revoke` return 400 `invalid_request` for a parameter sent more than once. At the token endpoint, only `resource` and `audience` may repeat.
 
@@ -617,7 +617,7 @@ oauthProvider({
 
 Companion plugins call `extendOAuthProvider()` from their `init()` hook to add token grants, assertion-based client authentication, discovery metadata, claims, client registration metadata, client-id discovery, and interaction requests. The [CIMD plugin](/docs/plugins/cimd) uses this to add URL-based client discovery.
 
-An interaction request is a request other than an authorization request that the user approves through the `/oauth2/authorize` sign-in, account selection, post-login, and consent pages. It is approved when the user accepts consent, instead of issuing an authorization code. `oauthDeviceAuthorization()` uses one keyed by `user_code`, and `ciba()` one keyed by `ciba_request_id`.
+An interaction request is a request other than an authorization request that the user approves through the `/oauth2/authorize` sign-in, account selection, post-login, and consent pages. It is approved when the user accepts consent, instead of issuing an authorization code. `oauthDeviceAuthorization()` uses one keyed by `user_code`, and `ciba()` one keyed by `ciba_request_id`, unless you set its `approvalPage`.
 
 The provider confirms the session in the session store before it calls the handler's `approve` or `deny`. With `session.cookieCache`, a session revoked in the store can still be served from the cache, and such a session cannot approve or deny. Without a server-side session store, the signed cookie is the session record and is trusted. The handler does not repeat this check. The user is sent to the handler's `errorPage`, or to the provider error page, with `access_denied`.
 
