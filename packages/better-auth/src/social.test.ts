@@ -2,7 +2,10 @@ import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { refreshAccessToken } from "@better-auth/core/oauth2";
+import {
+	refreshAccessToken,
+	verifyProviderIdToken,
+} from "@better-auth/core/oauth2";
 import type {
 	CloudflareProfile,
 	GoogleProfile,
@@ -666,7 +669,10 @@ describe("Social Providers", async (c) => {
 			.setExpirationTime("1h")
 			.sign(googleKeyPair.privateKey);
 
-		const validIdToken = await googleProvider!.verifyIdToken?.(emulatorIdToken);
+		const validIdToken = await verifyProviderIdToken(
+			googleProvider!,
+			emulatorIdToken,
+		);
 		expect(validIdToken).toBe(true);
 		expect(googleJwksEndpointHit).toBe(true);
 	});
@@ -912,39 +918,42 @@ describe("Social Providers", async (c) => {
 		let slackUserInfoEndpointHit = false;
 
 		mswServer.use(
-			http.get(`http://localhost:${port}/emulator/slack/userinfo`, async () => {
-				slackUserInfoEndpointHit = true;
-				return HttpResponse.json({
-					ok: true,
-					sub: "slack-emulator-sub",
-					"https://slack.com/user_id": "slack-emulator-user",
-					"https://slack.com/team_id": "team-1",
-					email: "slack-emulator@example.com",
-					email_verified: true,
-					date_email_verified: 1234567890,
-					name: "Slack Emulator",
-					picture: "https://test.com/slack-emulator.png",
-					given_name: "Slack",
-					family_name: "Emulator",
-					locale: "en-US",
-					"https://slack.com/team_name": "Emulator Team",
-					"https://slack.com/team_domain": "emulator",
-					"https://slack.com/user_image_24": "",
-					"https://slack.com/user_image_32": "",
-					"https://slack.com/user_image_48": "",
-					"https://slack.com/user_image_72": "",
-					"https://slack.com/user_image_192": "",
-					"https://slack.com/user_image_512": "",
-					"https://slack.com/team_image_34": "",
-					"https://slack.com/team_image_44": "",
-					"https://slack.com/team_image_68": "",
-					"https://slack.com/team_image_88": "",
-					"https://slack.com/team_image_102": "",
-					"https://slack.com/team_image_132": "",
-					"https://slack.com/team_image_230": "",
-					"https://slack.com/team_image_default": false,
-				});
-			}),
+			http.post(
+				`http://localhost:${port}/emulator/slack/userinfo`,
+				async () => {
+					slackUserInfoEndpointHit = true;
+					return HttpResponse.json({
+						ok: true,
+						sub: "slack-emulator-sub",
+						"https://slack.com/user_id": "slack-emulator-user",
+						"https://slack.com/team_id": "team-1",
+						email: "slack-emulator@example.com",
+						email_verified: true,
+						date_email_verified: 1234567890,
+						name: "Slack Emulator",
+						picture: "https://test.com/slack-emulator.png",
+						given_name: "Slack",
+						family_name: "Emulator",
+						locale: "en-US",
+						"https://slack.com/team_name": "Emulator Team",
+						"https://slack.com/team_domain": "emulator",
+						"https://slack.com/user_image_24": "",
+						"https://slack.com/user_image_32": "",
+						"https://slack.com/user_image_48": "",
+						"https://slack.com/user_image_72": "",
+						"https://slack.com/user_image_192": "",
+						"https://slack.com/user_image_512": "",
+						"https://slack.com/team_image_34": "",
+						"https://slack.com/team_image_44": "",
+						"https://slack.com/team_image_68": "",
+						"https://slack.com/team_image_88": "",
+						"https://slack.com/team_image_102": "",
+						"https://slack.com/team_image_132": "",
+						"https://slack.com/team_image_230": "",
+						"https://slack.com/team_image_default": false,
+					});
+				},
+			),
 		);
 
 		const slackProvider = slack({
