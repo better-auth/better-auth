@@ -81,6 +81,33 @@ describe("requireMcpAuth", () => {
 		);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9068#section-4
+	 */
+	it("requires typ at+jwt and azp on JWT access tokens", async () => {
+		verifyAccessTokenRequest.mockResolvedValue({ sub: "user-1" });
+		const auth = authWith(
+			"https://app.example.com",
+			"https://app.example.com/api/auth",
+		);
+
+		await requireMcpAuth(auth, async () => Response.json({ ok: true }))(
+			new Request("https://app.example.com/mcp", {
+				headers: { Authorization: "Bearer access-token" },
+			}),
+		);
+
+		expect(verifyAccessTokenRequest).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				verifyOptions: expect.objectContaining({
+					typ: "at+jwt",
+					requiredClaims: ["azp"],
+				}),
+			}),
+		);
+	});
+
 	it("challenges with the served resource_metadata URL when no token is present", async () => {
 		verifyAccessTokenRequest.mockRejectedValue(
 			new APIError("UNAUTHORIZED", {
