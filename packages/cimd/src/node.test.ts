@@ -21,6 +21,7 @@ interface MockResponseOptions {
 	body?: string;
 	headers?: Record<string, string>;
 	lookupOptions?: { all?: boolean };
+	onLookup?: (result: string | MockLookupAddress[], family?: number) => void;
 	status?: number;
 	statusMessage?: string;
 }
@@ -50,11 +51,12 @@ function mockHttpsResponse(options: MockResponseOptions = {}) {
 				requestOptions.lookup(
 					"client.example.com",
 					options.lookupOptions ?? {},
-					(error, result) => {
+					(error, result, family) => {
 						if (error) {
 							request.emit("error", error);
 							return;
 						}
+						options.onLookup?.(result, family);
 
 						if (options.lookupOptions?.all && !Array.isArray(result)) {
 							request.emit("error", new TypeError("Invalid IP address"));
@@ -107,14 +109,28 @@ describe("Node CIMD metadata transport", () => {
 		expect(mocks.request).not.toHaveBeenCalled();
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc3986#section-3.2.2
+	 * @see https://datatracker.ietf.org/doc/html/rfc6066#section-3
+	 */
 	it("pins a public IPv6 literal host without a lookup and sends no SNI", async () => {
-		mockHttpsResponse({ body: "ok" });
+		let pinned: { address: string; family?: number } | undefined;
+		mockHttpsResponse({
+			body: "ok",
+			onLookup: (result, family) => {
+				pinned = { address: result as string, family };
+			},
+		});
 
 		const response = await fetchClientMetadataResource(
 			"https://[2606:2800:220:1:248:1893:25c8:1946]/client.json",
 		);
 		expect(await response.text()).toBe("ok");
 		expect(mocks.lookup).not.toHaveBeenCalled();
+		expect(pinned).toEqual({
+			address: "2606:2800:0220:0001:0248:1893:25c8:1946",
+			family: 6,
+		});
 		const options = mocks.request.mock.calls[0]?.[1] as {
 			headers: Record<string, string>;
 			servername?: string;
