@@ -239,14 +239,17 @@ describe("Steam OpenID verification", () => {
 		Response.json({}, { status: 429 }),
 		Response.json({ response: { players: [] } }),
 		Response.json({}),
-	])("uses the verified ID when profile lookup is unavailable: %#", async (response) => {
-		vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
-		const info = await steam({ apiKey: "key" }).getUserInfo({
-			raw: { steamId },
-		});
-		expect(info?.user).toMatchObject({ name: steamId, emailVerified: false });
-		expect(info?.data).toEqual({ steamid: steamId });
-	});
+	])(
+		"uses the verified ID when profile lookup is unavailable: %#",
+		async (response) => {
+			vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+			const info = await steam({ apiKey: "key" }).getUserInfo({
+				raw: { steamId },
+			});
+			expect(info?.user).toMatchObject({ name: steamId, emailVerified: false });
+			expect(info?.data).toEqual({ steamid: steamId });
+		},
+	);
 
 	it("uses the verified ID when the profile request fails", async () => {
 		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
