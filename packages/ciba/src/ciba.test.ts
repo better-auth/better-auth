@@ -678,6 +678,9 @@ describe("ciba poll mode", () => {
 
 		expect((await refresh(replayed.refresh_token)).error).toBe("invalid_grant");
 
+		expect((await introspect(replayed.access_token, client)).active).toBe(
+			false,
+		);
 		expect((await introspect(rotated.access_token, client)).active).toBe(false);
 		expect((await refresh(rotated.refresh_token)).error).toBe("invalid_grant");
 		expect((await introspect(other.access_token, client)).active).toBe(true);

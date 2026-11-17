@@ -8309,14 +8309,19 @@ describe("oauth token - in-flight issuance without foreign keys", async () => {
 			const context = await dropGrantIds();
 			expect((await refresh(legacyToken)).error).toBeNull();
 			const [family] = database.oauthRefreshToken as {
+				id: string;
 				clientId: string;
 				userId: string;
 				grantId: string;
 			}[];
 			for (let i = 0; i < 101; i++) {
+				// Zero-led IDs sort before the legacy row's ID, which pushes that row
+				// onto the second page of the teardown's ID-ordered read.
 				const sibling = await context.adapter.create<{ id: string }>({
 					model: "oauthRefreshToken",
+					forceAllowId: true,
 					data: {
+						id: `${"0".repeat(24)}${String(i).padStart(3, "0")}`,
 						token: `sibling-refresh-${i}`,
 						clientId: family!.clientId,
 						userId: family!.userId,
@@ -8339,6 +8344,14 @@ describe("oauth token - in-flight issuance without foreign keys", async () => {
 					},
 				});
 			}
+			const ordered = await context.adapter.findMany<{ id: string }>({
+				model: "oauthRefreshToken",
+				sortBy: { field: "id", direction: "asc" },
+				limit: 1000,
+			});
+			expect(
+				ordered.findIndex((row) => row.id === family!.id),
+			).toBeGreaterThanOrEqual(100);
 
 			const replay = await refresh(legacyToken);
 
