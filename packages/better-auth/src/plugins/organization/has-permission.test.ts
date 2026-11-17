@@ -390,5 +390,33 @@ describe("hasPermission role cache", () => {
 				),
 			).toBe(false);
 		});
+
+		it("safely denies prototype property names passed as role", () => {
+			expect(
+				hasPermissionFn(
+					{
+						role: "constructor",
+						permissions: {
+							project: ["create"],
+						},
+						options: baseOptions,
+					},
+					acRoles,
+				),
+			).toBe(false);
+
+			expect(
+				hasPermissionFn(
+					{
+						role: " toString , constructor ",
+						permissions: {
+							project: ["create"],
+						},
+						options: baseOptions,
+					},
+					acRoles,
+				),
+			).toBe(false);
+		});
 	});
 });

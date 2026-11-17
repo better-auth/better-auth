@@ -192,3 +192,42 @@ export function mergeRoles(
 
 	return role(mergedStatements);
 }
+
+/**
+ * Evaluates whether any assigned role (or their merged composite) grants the
+ * requested permissions. Roles are looked up using `Object.hasOwn` to prevent
+ * prototype property collisions.
+ */
+export function authorizeRoles(
+	roleNames: string[],
+	roleMap: Record<string, Role<any, any> | undefined>,
+	permissions: Record<string, string[]>,
+): boolean {
+	for (const name of roleNames) {
+		if (Object.hasOwn(roleMap, name)) {
+			const r = roleMap[name];
+			if (r?.authorize(permissions)?.success) {
+				return true;
+			}
+		}
+	}
+
+	if (roleNames.length > 1) {
+		const resolvedRoles: Role<any, any>[] = [];
+		for (const name of roleNames) {
+			if (Object.hasOwn(roleMap, name)) {
+				const r = roleMap[name];
+				if (r) {
+					resolvedRoles.push(r);
+				}
+			}
+		}
+
+		if (resolvedRoles.length > 1) {
+			const merged = mergeRoles(resolvedRoles);
+			return merged.authorize(permissions).success;
+		}
+	}
+
+	return false;
+}

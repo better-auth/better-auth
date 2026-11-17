@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { createAccessControl, mergeRoles } from "./access";
+import { authorizeRoles, createAccessControl, mergeRoles } from "./access";
 
 describe("access", () => {
 	const statements = {
@@ -288,6 +288,43 @@ describe("access", () => {
 				toString: ["read"],
 			});
 			expect(authRes.success).toBe(true);
+		});
+	});
+
+	describe("authorizeRoles", () => {
+		const roleA = ac.newRole({
+			project: ["create"],
+		});
+		const roleB = ac.newRole({
+			project: ["update"],
+			ui: ["view"],
+		});
+		const roleMap = { roleA, roleB };
+
+		it("should authorize single role matching permission", () => {
+			expect(
+				authorizeRoles(["roleA"], roleMap, { project: ["create"] }),
+			).toBe(true);
+			expect(
+				authorizeRoles(["roleA"], roleMap, { project: ["update"] }),
+			).toBe(false);
+		});
+
+		it("should authorize across merged multiple roles", () => {
+			expect(
+				authorizeRoles(["roleA", "roleB"], roleMap, {
+					project: ["create", "update"],
+					ui: ["view"],
+				}),
+			).toBe(true);
+		});
+
+		it("should safely ignore missing or prototype role names", () => {
+			expect(
+				authorizeRoles(["constructor", "toString"], roleMap, {
+					project: ["create"],
+				}),
+			).toBe(false);
 		});
 	});
 });
