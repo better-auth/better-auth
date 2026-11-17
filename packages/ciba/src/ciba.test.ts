@@ -2250,6 +2250,30 @@ describe.each([
 		expect(await read(expiring.requestId)).toBeNull();
 	});
 
+	it("reads nothing once the client no longer exists", async () => {
+		const removed = await instance.auth.api.adminCreateOAuthClient({
+			headers: userHeaders,
+			body: { grant_types: [CIBA_GRANT_TYPE], metadata: POLL },
+		});
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: user.email },
+			removed,
+			instance.customFetchImpl,
+		);
+		expect(res.status).toBe(200);
+		const { requestId } = lastNotification!;
+		const ctx = await instance.auth.$context;
+		await ctx.adapter.delete({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: removed.client_id }],
+		});
+		expect(
+			await instance.auth.api.getCibaRequest({
+				body: { requestId, userId: user.id },
+			}),
+		).toBeNull();
+	});
+
 	it("requires resultPage without approvalPage", () => {
 		// @ts-expect-error the provider's approval page needs a resultPage.
 		ciba({ sendNotification });
