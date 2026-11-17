@@ -116,7 +116,7 @@ If every JWT access token fails with a 401 `invalid access token` error, check t
 
 To accept bearer tokens alone on a route, use `verifyBearerToken`. It takes a raw token string and rejects DPoP-bound tokens.
 
-Signing keys are cached for five minutes. If a refetch after that fails or times out, a key set fetched less than ten minutes ago still verifies tokens that name one of its keys, so a slow or unreachable auth server does not reject valid tokens right away. A key the issuer already rotated out can pass for up to ten minutes after the last successful fetch. Without a cached key set, or for a token that names a key the set lacks, the failed refetch is reported as an error, as it is without this fallback. These windows are local choices and ignore the key set's `Cache-Control` header.
+Signing keys are cached for five minutes. If a refetch after that fails or times out, a key set fetched less than ten minutes ago still verifies tokens that name one of its keys, or name none, so a slow or unreachable auth server does not reject valid tokens right away. A key the issuer already rotated out can pass for up to ten minutes after the last successful fetch. Without a cached key set (a cold start, or a custom `jwt.adapter.getJwks`, whose keys are not cached), or for a token that names a key the set lacks, the failed refetch is reported as an error, as it is without this fallback. These windows are local choices and ignore the key set's `Cache-Control` header.
 
 <Callout type="warn">
   For DPoP-bound tokens:

@@ -1509,7 +1509,9 @@ describe("verifyBearerToken", () => {
 				jwksUrl,
 				verifyOptions: { issuer, audience },
 			});
-			const assertion = expect(verification).rejects.toThrow();
+			const assertion = expect(verification).rejects.toMatchObject({
+				code: "ERR_JWKS_TIMEOUT",
+			});
 
 			await vi.advanceTimersByTimeAsync(5_000);
 			await assertion;
@@ -1625,6 +1627,9 @@ describe("verifyBearerToken", () => {
 		}
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12242
+	 */
 	it("should safely handle JWKS keys array containing null or non-object elements without throwing", async () => {
 		const { errors: isolatedJoseErrors } = await import("jose");
 		const { verifyBearerToken: verify } = await import("./verify");
