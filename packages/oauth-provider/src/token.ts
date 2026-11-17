@@ -2238,9 +2238,11 @@ async function createUserTokens(
 	} catch (error) {
 		// A rotation that won the compare-and-swap and then failed leaves no
 		// replay for a concurrent duplicate to wait on, so mark the parent
-		// unavailable and let those duplicates fail now instead of polling.
+		// unavailable and let those duplicates fail now instead of polling. At the
+		// default interval, `0`, no duplicate waits, so no state is written.
 		if (
 			existingRefreshToken?.id &&
+			(opts.refreshTokenReuseInterval ?? 0) > 0 &&
 			!isRefreshTokenRotationInFlightError(error)
 		) {
 			const created = await refreshTokenPromise.then(

@@ -2166,6 +2166,42 @@ describe("oauth token - refresh_token", async () => {
 			return tokens!.refresh_token!;
 		}
 
+		/**
+		 * At the default interval no duplicate waits for a replay, so a rotation
+		 * that fails must not leave replay state on the rotated parent.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12087
+		 */
+		it("stores no replay state when a rotation fails at the default interval", async () => {
+			const parentToken = await issueParentRefreshToken();
+			const context = await authorizationServer.$context;
+			const create = context.adapter.create.bind(context.adapter);
+			const spy = vi.spyOn(context.adapter, "create");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === "oauthAccessToken") {
+					spy.mockRestore();
+					throw new Error("access token store unavailable");
+				}
+				return create(...args);
+			});
+			try {
+				expect((await refresh(parentToken)).error).not.toBeNull();
+			} finally {
+				spy.mockRestore();
+			}
+
+			const rows = await context.adapter.findMany<{
+				revoked?: Date | null;
+				rotationReplayResponse?: string | null;
+			}>({
+				model: "oauthRefreshToken",
+				where: [{ field: "clientId", value: oauthClient!.client_id }],
+				limit: 1000,
+			});
+			expect(rows.some((row) => row.revoked)).toBe(true);
+			expect(rows.filter((row) => row.rotationReplayResponse)).toHaveLength(0);
+		});
+
 		it("rotates once and fails the other rotation with invalid_grant", async () => {
 			const parentToken = await issueParentRefreshToken();
 			const cas = await holdNextRefreshTokenCas();
