@@ -1,7 +1,7 @@
 import { APIError } from "better-call";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils";
-import type { Account, BetterAuthOptions } from "../../types";
+import type { Account, BetterAuthOptions, BetterAuthPlugin } from "../../types";
 
 describe("forgot password", async () => {
 	const mockSendEmail = vi.fn();
@@ -660,6 +660,106 @@ describe("revoke sessions on password reset", async () => {
 			expect(await getExistingSession()).toBeNull();
 			expect((await signInWith(testUser.password)).data).not.toBeNull();
 		});
+	});
+});
+
+describe("plugin onPasswordReset hook", async () => {
+	const onPasswordReset = vi.fn<
+		NonNullable<BetterAuthPlugin["onPasswordReset"]>
+	>(async () => {});
+	const failingReset = vi.fn<NonNullable<BetterAuthPlugin["onPasswordReset"]>>(
+		async () => {},
+	);
+	let token = "";
+
+	const { auth, client, testUser } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				revokeSessionsOnPasswordReset: true,
+				async sendResetPassword({ url }) {
+					token = url.split("?")[0]!.split("/").pop() || "";
+				},
+			},
+			plugins: [
+				{
+					id: "password-reset-failing-listener",
+					onPasswordReset: failingReset,
+				},
+				{ id: "password-reset-listener", onPasswordReset },
+			],
+		},
+		{ testWith: "sqlite" },
+	);
+	const userId = async () =>
+		(await (
+			await auth.$context
+		).internalAdapter.findUserByEmail(testUser.email))!.user.id;
+	const requestReset = () =>
+		client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+
+	it("runs once after a reset, for a user with no live session", async () => {
+		onPasswordReset.mockClear();
+		await requestReset();
+
+		const reset = await client.resetPassword({
+			newPassword: testUser.password,
+			token,
+		});
+
+		expect(reset.error).toBeNull();
+		expect(onPasswordReset).toHaveBeenCalledTimes(1);
+		expect(onPasswordReset).toHaveBeenCalledWith(
+			{ userId: await userId() },
+			expect.objectContaining({ path: "/reset-password" }),
+		);
+	});
+
+	it("does not run when the reset fails", async () => {
+		onPasswordReset.mockClear();
+
+		const reset = await client.resetPassword({
+			newPassword: "new-password",
+			token: "unknown-token",
+		});
+
+		expect(reset.error?.status).toBe(400);
+		expect(onPasswordReset).not.toHaveBeenCalled();
+	});
+
+	it("fails the request when it throws, and keeps the new password", async () => {
+		onPasswordReset.mockClear();
+		onPasswordReset.mockRejectedValueOnce(new Error("hook failed"));
+		await requestReset();
+
+		const reset = await client.resetPassword({
+			newPassword: "password-after-hook-failure",
+			token,
+		});
+
+		expect(reset.error?.status).toBe(500);
+		const signIn = await client.signIn.email({
+			email: testUser.email,
+			password: "password-after-hook-failure",
+		});
+		expect(signIn.error).toBeNull();
+	});
+
+	it("runs the hooks of later plugins when an earlier one throws", async () => {
+		onPasswordReset.mockClear();
+		failingReset.mockRejectedValueOnce(new Error("earlier hook failed"));
+		await requestReset();
+
+		const reset = await client.resetPassword({
+			newPassword: "password-after-earlier-failure",
+			token,
+		});
+
+		expect(reset.error?.status).toBe(500);
+		expect(onPasswordReset).toHaveBeenCalledTimes(1);
 	});
 });
 

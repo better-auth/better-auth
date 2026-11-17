@@ -1097,6 +1097,7 @@ describe("reset password with requireVerification", async () => {
 describe("reset password session revocation", async () => {
 	let otp = "";
 	let resetOtp = "";
+	const onPasswordReset = vi.fn(async () => {});
 
 	const { auth, client, sessionSetter } = await getTestInstance(
 		{
@@ -1118,6 +1119,7 @@ describe("reset password session revocation", async () => {
 						},
 					},
 				}),
+				{ id: "password-reset-listener", onPasswordReset },
 			],
 		},
 		{
@@ -1174,6 +1176,27 @@ describe("reset password session revocation", async () => {
 			},
 		});
 		expect(sessionAfter.data).toBe(null);
+	});
+
+	it("runs each plugin's onPasswordReset once the password is reset", async () => {
+		const phoneNumber = "+251911000003";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await client.phoneNumber.verify({ phoneNumber, code: otp });
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		onPasswordReset.mockClear();
+
+		const resetRes = await client.phoneNumber.resetPassword({
+			phoneNumber,
+			otp: resetOtp,
+			newPassword: "new-secure-password",
+		});
+
+		expect(resetRes.error).toBeNull();
+		expect(onPasswordReset).toHaveBeenCalledTimes(1);
+		expect(onPasswordReset).toHaveBeenCalledWith(
+			{ userId: expect.any(String) },
+			expect.objectContaining({ path: "/phone-number/reset-password" }),
+		);
 	});
 
 	/**

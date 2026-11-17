@@ -63,6 +63,7 @@ Server plugins are the backbone of all plugins, and client plugins are there to 
 * Use a `middleware` to target a group of routes using its route matcher, and run only when those routes are called through a request.
 * Use `hooks` to target a specific route or request. And if you want to run the hook even if the endpoint is called directly.
 * Use `onRequest` or `onResponse` if you want to do something that affects all requests or responses.
+* Use `onPasswordReset` if you want to act when a user's password is reset, even for a user with no live session.
 * Create a custom `rate-limit` rule.
 
 ## Create a Server plugin
@@ -397,6 +398,25 @@ const myPlugin = () => {
         id: "my-plugin",
         onResponse: async (response, context) => {
             // do something
+        },
+    } satisfies BetterAuthPlugin
+}
+```
+
+### On Password Reset
+
+The `onPasswordReset` function runs after a user's credential password is reset through `/reset-password`, or through a plugin's reset endpoint such as [email OTP](/docs/plugins/email-otp) or [phone number](/docs/plugins/phone-number). It takes the `userId` and the endpoint `context`. It runs once the new password is saved and, when [`revokeSessionsOnPasswordReset`](/docs/authentication/email-password#revoking-sessions-on-password-reset) is on, the user's sessions are revoked. It also runs when the user had no live session, which a session hook cannot see.
+
+If it throws, the request returns an error, but the reset has already taken effect. A failed reset does not call it.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        onPasswordReset: async ({ userId }, context) => {
+            // revoke the credentials your plugin issued to this user
         },
     } satisfies BetterAuthPlugin
 }

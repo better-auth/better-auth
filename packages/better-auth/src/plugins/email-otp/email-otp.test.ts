@@ -356,6 +356,44 @@ describe("email-otp", async () => {
 		expect(data?.user).toBeDefined();
 	});
 
+	it("runs each plugin's onPasswordReset once the password is reset", async () => {
+		const onPasswordReset = vi.fn(async () => {});
+		const { auth, client, testUser } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp: _otp }) {
+							otp = _otp;
+						},
+					}),
+					{ id: "password-reset-listener", onPasswordReset },
+				],
+				emailAndPassword: { enabled: true },
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "forget-password",
+		});
+
+		const reset = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp,
+			password: "new-password",
+		});
+
+		expect(reset.error).toBeNull();
+		const { user } = (await (
+			await auth.$context
+		).internalAdapter.findUserByEmail(testUser.email))!;
+		expect(onPasswordReset).toHaveBeenCalledTimes(1);
+		expect(onPasswordReset).toHaveBeenCalledWith(
+			{ userId: user.id },
+			expect.objectContaining({ path: "/email-otp/reset-password" }),
+		);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11597
 	 */
