@@ -223,7 +223,7 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
-	it("should fail with token_type_hint access_token and sent refresh_token", async () => {
+	it("should return 200 with token_type_hint access_token and sent refresh_token (RFC 7009 §2.2)", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(
 			{
@@ -239,7 +239,8 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.error?.status).toBe(400);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
 	});
 
 	it("should pass verification with token_type_hint refresh_token and sent refresh_token", async () => {
@@ -262,7 +263,7 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
-	it("should fail verification with token_type_hint refresh_token and sent access_token", async () => {
+	it("should return 200 with token_type_hint refresh_token and sent access_token (RFC 7009 §2.2)", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(
 			{
@@ -278,7 +279,8 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.error?.status).toBe(400);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
 	});
 
 	it("reports unsupported_token_type for a jwt access_token without token_type_hint", async () => {

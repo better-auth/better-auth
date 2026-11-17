@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createAuthClient } from "better-auth/client";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -27,7 +28,7 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 		],
 	});
 
-	const { headers } = await signInWithTestUser();
+	const { headers, user } = await signInWithTestUser();
 	const client = createAuthClient({
 		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
@@ -175,6 +176,101 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 				error: "invalid_request",
 				error_description: "token is required",
 			});
+		});
+
+		it("revoking an unknown token returns 200 with empty body (RFC 7009 §2.2)", async () => {
+			if (!oauthClient?.client_id || !oauthClient.client_secret) {
+				throw new Error("OAuth client was not created");
+			}
+			const basic = Buffer.from(
+				`${oauthClient.client_id}:${oauthClient.client_secret}`,
+			).toString("base64");
+			const { status, body } = await captureJsonResponse("/oauth2/revoke", {
+				method: "POST",
+				body: new URLSearchParams([
+					["token", "unknown-or-already-revoked-token"],
+				]),
+				headers: {
+					authorization: `Basic ${basic}`,
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			});
+			expect(status).toBe(200);
+			expect(body).toBeNull();
+		});
+
+		it("cross-client revocation of an already-revoked refresh token does not trigger family invalidation", async () => {
+			if (!oauthClient?.client_id || !oauthClient.client_secret) {
+				throw new Error("OAuth client was not created");
+			}
+			const clientB = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					application_type: "native",
+					skip_consent: true,
+				},
+			});
+			expect(clientB?.client_id).toBeDefined();
+
+			const ctx = await auth.$context;
+			const rawTokenA = "revoked-token-client-a";
+			const tokenHashA = createHash("sha256").update(rawTokenA).digest("hex");
+
+			// Seed an already-revoked token belonging to client A
+			await ctx.adapter.create({
+				model: "oauthRefreshToken",
+				data: {
+					token: tokenHashA,
+					clientId: oauthClient.client_id,
+					userId: user.id,
+					revoked: new Date(),
+					scopes: ["openid", "offline_access"],
+					expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+					createdAt: new Date(),
+				},
+			});
+
+			// Seed an active token for client B belonging to the same user
+			const rawTokenB = "active-token-client-b";
+			const tokenHashB = createHash("sha256").update(rawTokenB).digest("hex");
+			const seededB = await ctx.adapter.create<{ id: string }>({
+				model: "oauthRefreshToken",
+				data: {
+					token: tokenHashB,
+					clientId: clientB!.client_id,
+					userId: user.id,
+					scopes: ["openid", "offline_access"],
+					expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+					createdAt: new Date(),
+				},
+			});
+
+			// Client B attempts to revoke Client A's revoked token
+			const basicB = Buffer.from(
+				`${clientB!.client_id}:${clientB!.client_secret}`,
+			).toString("base64");
+			const { status, body } = await captureJsonResponse("/oauth2/revoke", {
+				method: "POST",
+				body: new URLSearchParams([
+					["token", rawTokenA],
+					["token_type_hint", "refresh_token"],
+				]),
+				headers: {
+					authorization: `Basic ${basicB}`,
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			});
+
+			expect(status).toBe(200);
+			expect(body).toBeNull();
+
+			// Verify that client B's active token is NOT invalidated
+			const activeB = await ctx.adapter.findOne<{ revoked?: Date | null }>({
+				model: "oauthRefreshToken",
+				where: [{ field: "id", value: seededB.id }],
+			});
+			expect(activeB?.revoked ?? null).toBeNull();
 		});
 	});
 
