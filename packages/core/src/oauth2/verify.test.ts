@@ -1091,7 +1091,7 @@ describe("verifyBearerToken", () => {
 				}),
 			).resolves.toMatchObject({ sub: "user-123" });
 
-			// Advance time past the 5-minute TTL, but within the 1-hour max-stale window
+			// Advance time past the 5-minute TTL, but within the 10-minute max-stale window
 			vi.useFakeTimers({ now: Date.now() + 5 * 60 * 1000 + 1 });
 
 			// Next refetch fails with a network error
@@ -1174,10 +1174,52 @@ describe("verifyBearerToken", () => {
 				}),
 			).resolves.toMatchObject({ sub: "user-123" });
 
-			// Advance time past the 1-hour max-stale window
+			// Advance time past the max-stale window
 			vi.useFakeTimers({ now: Date.now() + JWKS_MAX_STALE_MS + 1000 });
 			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).rejects.toMatchObject({ message: "JWKS fetch failed" });
+
+			vi.useRealTimers();
+			mockedFetch.mockReset();
+			vi.resetModules();
+		});
+
+		it("should stop trusting an expired set two cache lifetimes after it was fetched", async () => {
+			vi.resetModules();
+			const { verifyBearerToken: verify } = await import("./verify");
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockImplementationOnce(() =>
+				Promise.resolve(jwksResponse(publicJWK)),
+			);
+
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			// One second before the set is ten minutes old, it still verifies
+			const fetchedAt = Date.now();
+			vi.useFakeTimers({ now: fetchedAt + 10 * 60 * 1000 - 1000 });
+			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).resolves.toMatchObject({ sub: "user-123" });
+
+			// One second after, the window has closed
+			vi.setSystemTime(fetchedAt + 10 * 60 * 1000 + 1000);
+			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 			await expect(
 				verify(token, {
 					jwksUrl,

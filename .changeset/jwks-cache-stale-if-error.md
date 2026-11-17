@@ -2,4 +2,4 @@
 "@better-auth/core": patch
 ---
 
-`verifyBearerToken` and `verifyAccessTokenRequest` now fall back to an expired cached JWKS within a 1-hour max-stale window when a refetch fails or times out (RFC 5861 `stale-if-error`), preventing transient network errors or slow JWKS cold-starts from rejecting valid tokens.
+Fixed valid access tokens being rejected while the JWKS refetch fails or times out, such as on a slow cold start. After the five-minute key cache expires and the refetch fails, `verifyBearerToken` and `verifyAccessTokenRequest` now verify against the expired key set when it holds the token's `kid` and was fetched less than 10 minutes ago. Verification still fails with no cached set, for a `kid` the set lacks, and once the set is older than 10 minutes. The 10 minutes are a local choice that ignores the key set's `Cache-Control`, so a token signed with a key the issuer already rotated out can still pass for up to 10 minutes after the last successful fetch.

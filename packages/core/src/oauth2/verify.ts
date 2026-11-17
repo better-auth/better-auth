@@ -108,11 +108,14 @@ const JWKS_REFETCH_COOLDOWN_MS = 30 * 1000;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
 /**
  * Maximum age an expired cached JWKS is trusted for verification when a refetch
- * fails or times out (RFC 5861 stale-if-error).
+ * fails or times out, measured from the fetch that produced it. It is two cache
+ * lifetimes, the bound the client `jwks_uri` fallback in the OAuth provider
+ * uses. The window is a local choice and ignores the key set's `Cache-Control`.
+ * A key the issuer has already rotated out is accepted until the window ends.
  *
  * @internal
  */
-export const JWKS_MAX_STALE_MS = 60 * 60 * 1000;
+export const JWKS_MAX_STALE_MS = 2 * JWKS_CACHE_TTL_MS;
 
 function getJwksCacheEntry<K>(
 	cache: {
