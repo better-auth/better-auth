@@ -16,6 +16,7 @@ const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 const ADMIN_GROUP = "Admins";
+const CONNECTION_ID = "workforce";
 
 const LEGACY_SQLITE_BOUND_VARIABLE_LIMIT = 999;
 
@@ -69,17 +70,31 @@ function createFixture({
 		account: [] as { id: string }[],
 		scimConnectionBinding: [] as { id: string }[],
 		scimIdentityTombstone: [] as { id: string }[],
-		scimSubject: [] as { id: string }[],
+		scimSubject: [] as {
+			id: string;
+			userId?: string;
+			profileSourceId?: string;
+			revision?: number;
+			createdAt?: Date;
+			updatedAt?: Date;
+		}[],
 		scimUser: [] as {
 			id: string;
 			connectionId?: string;
+			provisioningDomainId?: string;
+			userId?: string;
 			displayName?: string;
+			active?: boolean;
 		}[],
 		scimGroup: [] as {
 			id: string;
 			connectionId?: string;
+			provisioningDomainId?: string;
+			revision?: number;
 			displayName: string;
 			displayNameKey: string;
+			orderKey?: string;
+			createdAt?: Date;
 			updatedAt: Date;
 		}[],
 		scimGroupMember: [] as {
@@ -88,6 +103,7 @@ function createFixture({
 			groupId: string;
 			scimUserId: string;
 			membershipKey: string;
+			createdAt?: Date;
 		}[],
 		scimProjectionGrant: [] as {
 			userId: string;
@@ -103,7 +119,7 @@ function createFixture({
 			scim({
 				connections: [
 					{
-						id: "workforce",
+						id: CONNECTION_ID,
 						credentials: [
 							{
 								type: "bearer",
@@ -134,12 +150,66 @@ function createFixture({
 		return user.id;
 	}
 
-	async function createUsers(count: number) {
+	function seedUsers(count: number) {
+		const now = new Date();
 		const ids: string[] = [];
 		for (let index = 0; index < count; index++) {
-			ids.push(await createUser(index));
+			const scimUserId = `seeded-scim-user-${index}`;
+			const userId = `seeded-user-${index}`;
+			const email = `user-${index}@example.com`;
+			data.user.push({
+				id: userId,
+				name: email,
+				email,
+				emailVerified: false,
+				createdAt: now,
+				updatedAt: now,
+			});
+			data.scimSubject.push({
+				id: `seeded-subject-${index}`,
+				userId,
+				profileSourceId: scimUserId,
+				revision: 1,
+				createdAt: now,
+				updatedAt: now,
+			});
+			data.scimUser.push({
+				id: scimUserId,
+				connectionId: CONNECTION_ID,
+				provisioningDomainId: CONNECTION_ID,
+				userId,
+				displayName: email,
+				active: true,
+			});
+			ids.push(scimUserId);
 		}
 		return ids;
+	}
+
+	function seedAdminGroups(scimUserId: string, count: number) {
+		const now = new Date();
+		for (let index = 0; index < count; index++) {
+			const groupId = `seeded-admin-group-${index}`;
+			data.scimGroup.push({
+				id: groupId,
+				connectionId: CONNECTION_ID,
+				provisioningDomainId: CONNECTION_ID,
+				revision: 0,
+				displayName: `${ADMIN_GROUP} ${index}`,
+				displayNameKey: `seeded-admin-group-key-${index}`,
+				orderKey: `seeded-admin-group-order-${index}`,
+				createdAt: now,
+				updatedAt: now,
+			});
+			data.scimGroupMember.push({
+				id: `seeded-admin-membership-${index}`,
+				connectionId: CONNECTION_ID,
+				groupId,
+				scimUserId,
+				membershipKey: `seeded-admin-membership-key-${index}`,
+				createdAt: now,
+			});
+		}
 	}
 
 	function createGroup(displayName: string, memberIds: string[]) {
@@ -175,7 +245,7 @@ function createFixture({
 	}
 
 	async function createGroupGrownPast100(displayName: string) {
-		const userIds = await createUsers(150);
+		const userIds = seedUsers(150);
 		const group = await createGroup(displayName, userIds.slice(0, 100));
 		await patchMembers(group.id, "add", userIds.slice(100));
 		return { group, userIds };
@@ -183,9 +253,8 @@ function createFixture({
 
 	async function createUserInAdminGroups(groupCount: number) {
 		const userId = await createUser(0);
-		for (let index = 0; index < groupCount; index++) {
-			await createGroup(`${ADMIN_GROUP} ${index}`, [userId]);
-		}
+		if (groupCount > 1) seedAdminGroups(userId, groupCount - 1);
+		await createGroup(`${ADMIN_GROUP} ${groupCount - 1}`, [userId]);
 		return userId;
 	}
 
@@ -225,7 +294,7 @@ function createFixture({
 		auth,
 		data,
 		headers,
-		createUsers,
+		seedUsers,
 		createGroup,
 		patchMembers,
 		createGroupGrownPast100,
@@ -242,8 +311,8 @@ function createFixture({
  */
 describe("SCIM Group writes and role mapping past the default findMany limit", () => {
 	it("creates a Group with 150 members", async () => {
-		const { createUsers, createGroup, memberIdsOf } = createFixture();
-		const userIds = await createUsers(150);
+		const { seedUsers, createGroup, memberIdsOf } = createFixture();
+		const userIds = seedUsers(150);
 
 		const group = await createGroup("Engineering", userIds);
 
@@ -331,8 +400,8 @@ describe("SCIM Group writes and role mapping past the default findMany limit", (
 	});
 
 	it("maps the role of members who are also in two other Groups", async () => {
-		const { createUsers, createGroup, usersWithAdminGrant } = createFixture();
-		const userIds = await createUsers(50);
+		const { seedUsers, createGroup, usersWithAdminGrant } = createFixture();
+		const userIds = seedUsers(50);
 		await createGroup("Team A", userIds);
 		await createGroup("Team B", userIds);
 
@@ -374,10 +443,10 @@ describe("SCIM Group writes and role mapping past the default findMany limit", (
 	});
 
 	it("maps the role of every member when the default findMany limit is 10", async () => {
-		const { createUsers, createGroup, usersWithAdminGrant } = createFixture({
+		const { seedUsers, createGroup, usersWithAdminGrant } = createFixture({
 			defaultFindManyLimit: 10,
 		});
-		const userIds = await createUsers(20);
+		const userIds = seedUsers(20);
 
 		await createGroup(ADMIN_GROUP, userIds);
 
