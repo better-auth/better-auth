@@ -222,7 +222,7 @@ How long a finished seed is remembered. `"adapter"` (default) remembers it per d
 
 `resourceDefaults` <span className="opacity-70">`{ accessTokenFormat? }`</span>
 
-Access token format for every resource that does not set its own. `accessTokenFormat` is `"jwt"` or `"opaque"` and defaults to `"jwt"`. See [Access token format](/docs/plugins/oauth-provider/tokens#access-token-format).
+Access token format for every resource that does not set its own. `accessTokenFormat` is `"jwt"` or `"opaque"` and defaults to `"jwt"`. A JWT is issued only when the request names a resource and the JWT plugin is enabled. See [Access token format](/docs/plugins/oauth-provider/tokens#access-token-format).
 
 `enforcePerClientResources` <span className="opacity-70">`boolean`</span>
 

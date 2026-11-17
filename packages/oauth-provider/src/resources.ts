@@ -471,10 +471,15 @@ export async function resolveResourcePolicy(
 		uniqueSigningKids.values().next().value ?? null;
 
 	// RFC 8707 §2.2: one token cannot be both self-contained and a reference,
-	// so a request whose resources disagree on the format is refused.
+	// so a request whose resources disagree on the format is refused. Without
+	// the JWT plugin every token is opaque, so the formats cannot disagree.
 	const defaultFormat = opts.resourceDefaults?.accessTokenFormat ?? "jwt";
-	const formats = new Set(
-		resolved.map((row) => row.accessTokenFormat ?? defaultFormat),
+	const formats = new Set<AccessTokenFormat>(
+		resolved.map((row) =>
+			opts.disableJwtPlugin
+				? "opaque"
+				: (row.accessTokenFormat ?? defaultFormat),
+		),
 	);
 	if (formats.size > 1) {
 		throw new APIError("BAD_REQUEST", {

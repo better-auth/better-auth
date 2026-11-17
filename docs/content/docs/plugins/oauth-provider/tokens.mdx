@@ -93,7 +93,7 @@ Each instance reads the table once per configured resource to seed it. If you bu
 
 ### Access token format
 
-A resource gets JWT access tokens by default. Its API can verify a JWT locally with your JWKS, without calling the provider. A JWT stays valid until it expires, unless you turn on `revocableJwtAccessTokens` and the API [introspects](/docs/plugins/oauth-provider/resource-server#introspection) it.
+A resource gets JWT access tokens by default, when the request names it and the JWT plugin is enabled. Its API can verify a JWT locally with your JWKS, without calling the provider. A JWT stays valid until it expires, unless you turn on `revocableJwtAccessTokens` and the API [introspects](/docs/plugins/oauth-provider/resource-server#introspection) it.
 
 To issue opaque reference tokens for a resource instead, set `accessTokenFormat: "opaque"` on it. The API must then introspect each token, or call `verifyResourceRequest` when the API runs on the auth server. An opaque token keeps the resource as its audience, so introspection reports it in `aud`. Revoking the token or deleting the resource cuts off access on the next introspection.
 

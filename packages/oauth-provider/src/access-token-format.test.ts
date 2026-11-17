@@ -237,6 +237,19 @@ describe("per-resource access token format", () => {
 		expect(status).toBe(200);
 		expect(isJwt(body.access_token)).toBe(false);
 	});
+
+	it("accepts resources that set different formats when the JWT plugin is disabled", async () => {
+		const { clientCredentials } = await setup(
+			{ disableJwtPlugin: true, storeClientSecret: "encrypted" },
+			{ withJwtPlugin: false },
+		);
+		const { status, body } = await clientCredentials([
+			opaqueResource,
+			jwtResource,
+		]);
+		expect(status).toBe(200);
+		expect(isJwt(body.access_token)).toBe(false);
+	});
 });
 
 describe("access token format managed at runtime", () => {

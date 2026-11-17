@@ -1410,8 +1410,8 @@ export interface OAuthOptions<
 	resourceSeedScope?: "adapter" | "process";
 	/**
 	 * Access-token format for resources that do not set their own. A resource's
-	 * `accessTokenFormat` replaces the default. Requests without a `resource`
-	 * still receive opaque tokens.
+	 * `accessTokenFormat` replaces the default. A JWT needs a request that names
+	 * a `resource` and the JWT plugin; other requests receive opaque tokens.
 	 *
 	 * @example
 	 * ```ts
@@ -2811,7 +2811,9 @@ export interface OAuthResourceInput {
 	/**
 	 * Issue self-contained JWT access tokens (`"jwt"`) or opaque reference
 	 * tokens that resource servers check through introspection (`"opaque"`).
-	 * Both keep the resource as the token audience.
+	 * Both keep the resource as the token audience. A JWT needs a request that
+	 * names a `resource` and the JWT plugin; other requests receive opaque
+	 * tokens.
 	 *
 	 * @default resourceDefaults.accessTokenFormat, then "jwt"
 	 */
