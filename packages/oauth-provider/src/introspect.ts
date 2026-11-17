@@ -15,7 +15,7 @@ import {
 	isAudienceClaimAllowed,
 	isClientLinkedToAnyResource,
 } from "./resources";
-import { confirmationTokenType, decodeRefreshToken } from "./token";
+import { confirmationTokenType, decodeRefreshTokenForLookup } from "./token";
 import type {
 	ActiveAccessTokenPayload,
 	Confirmation,
@@ -716,7 +716,7 @@ export async function introspectEndpoint(
 
 		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
 			try {
-				const refreshToken = await decodeRefreshToken(opts, token);
+				const refreshToken = await decodeRefreshTokenForLookup(opts, token);
 				const payload = await validateRefreshToken(
 					ctx,
 					opts,

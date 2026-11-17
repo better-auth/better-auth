@@ -19,7 +19,12 @@ import {
 import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
-import { base64url, decodeProtectedHeader, SignJWT } from "jose";
+import {
+	base64url,
+	decodeProtectedHeader,
+	errors as joseErrors,
+	SignJWT,
+} from "jose";
 import {
 	LEVEL_0_ACR,
 	stripReservedIdTokenClaims,
@@ -479,6 +484,32 @@ export async function decodeRefreshToken(
 	return opts.formatRefreshToken?.decrypt
 		? opts.formatRefreshToken?.decrypt(token)
 		: { token };
+}
+
+/**
+ * Decodes a value that may be another token type, as introspection and
+ * revocation search across types. A value `formatRefreshToken.decrypt` rejects
+ * with a JOSE error, such as `compactDecrypt` throws, is not a refresh token of
+ * this server, so it fails like an unknown token: a 400 `invalid_token`. Any
+ * other failure of the decoder is a server error and is not hidden.
+ *
+ * @internal
+ */
+export async function decodeRefreshTokenForLookup(
+	opts: OAuthOptions<Scope[]>,
+	token: string,
+) {
+	try {
+		return await decodeRefreshToken(opts, token);
+	} catch (error) {
+		if (error instanceof joseErrors.JOSEError) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "refresh token not found",
+				error: "invalid_token",
+			});
+		}
+		throw error;
+	}
 }
 
 async function createOpaqueAccessToken(
