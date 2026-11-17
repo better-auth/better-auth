@@ -864,9 +864,9 @@ export interface OAuthOptions<
 	 * accepts PUBLIC clients, meaning clients registered with
 	 * `token_endpoint_auth_method: "none"` that hold no client secret.
 	 *
-	 * Controls `public_client_supported` and, through it, the `"none"` entry
-	 * in the discovery documents' `token_endpoint_auth_methods_supported`.
-	 * It changes only what is advertised. It does not make the token endpoint
+	 * Controls whether the `"none"` entry appears in the discovery documents'
+	 * `token_endpoint_auth_methods_supported`. It changes only what is
+	 * advertised. It does not make the token endpoint
 	 * accept or refuse public clients, and it does not open
 	 * `POST /oauth2/register`.
 	 *
