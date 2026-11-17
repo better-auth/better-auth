@@ -3254,10 +3254,16 @@ describe("oauth token - refresh_token reuse interval", async () => {
 			return result;
 		});
 
+		// The first request waits for the second to read the parent, so neither
+		// rotates before both have read it.
+		const secondReadParent = Promise.withResolvers<void>();
 		let fieldCalls = 0;
 		refreshTokenResponseFieldsHook = async () => {
 			fieldCalls += 1;
-			if (fieldCalls > 1) {
+			if (fieldCalls === 1) {
+				await secondReadParent.promise;
+			} else {
+				secondReadParent.resolve();
 				await casWon.promise;
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_grant",
