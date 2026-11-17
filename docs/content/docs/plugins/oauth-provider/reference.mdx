@@ -135,6 +135,10 @@ Enables `POST /oauth2/register`. Defaults to `false`. See [Dynamic client regist
 
 Accepts registration requests without a session. Defaults to `false`. Anyone on the internet can then register a client; read [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration) before you enable it.
 
+`publicClientsSupported` <span className="opacity-70">`boolean`</span>
+
+Controls whether discovery lists `none` in `token_endpoint_auth_methods_supported`. When unset, `none` is listed if `allowUnauthenticatedClientRegistration` is `true` or an extension contributes client discovery, such as the [CIMD plugin](/docs/plugins/cimd). Set it to `true` when you create public clients yourself and keep registration protected, so clients that read the list do not conclude that public clients are unsupported. Set it to `false` to leave `none` out. The option changes only what discovery advertises. It does not open `/oauth2/register` and does not change which clients the token endpoint accepts.
+
 `validateInitialAccessToken` <span className="opacity-70">`(context) => Awaitable<{ referenceId? } | false>`</span>
 
 Enables registration with an initial access token ([RFC 7591 §3](https://datatracker.ietf.org/doc/html/rfc7591#section-3)).

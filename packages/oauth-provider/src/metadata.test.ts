@@ -13,7 +13,7 @@ import {
 	oauthProviderOpenIdConfigMetadata,
 } from "./metadata";
 import { oauthProvider } from "./oauth";
-import type { OAuthOptions, Scope } from "./types";
+import type { ClientDiscovery, OAuthOptions, Scope } from "./types";
 
 describe("oauth metadata", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -179,6 +179,70 @@ describe("oauth metadata", async () => {
 			"client_secret_post",
 			"private_key_jwt",
 		]);
+	});
+
+	describe("publicClientsSupported with a contributed clientDiscovery", () => {
+		const clientDiscovery = {
+			id: "test-client-discovery",
+			matches: () => false,
+			resolve: () => null,
+		} satisfies ClientDiscovery;
+		const withoutNone = [
+			"client_secret_basic",
+			"client_secret_post",
+			"private_key_jwt",
+		];
+
+		it('should keep advertising "none" for a contributed clientDiscovery when publicClientsSupported is unset', async () => {
+			const { auth } = await createTestInstance({
+				oauthProviderConfig: {
+					allowUnauthenticatedClientRegistration: false,
+					extensions: [{ clientDiscovery }],
+				},
+			});
+
+			const openId = await auth.api.getOpenIdConfig();
+			expect(openId?.token_endpoint_auth_methods_supported).toEqual([
+				"none",
+				...withoutNone,
+			]);
+			const oauth = await auth.api.getOAuthServerConfig();
+			expect(oauth?.token_endpoint_auth_methods_supported).toEqual([
+				"none",
+				...withoutNone,
+			]);
+		});
+
+		it('should omit "none" when publicClientsSupported is false, even with a contributed clientDiscovery', async () => {
+			const { auth } = await createTestInstance({
+				oauthProviderConfig: {
+					allowUnauthenticatedClientRegistration: false,
+					publicClientsSupported: false,
+					extensions: [{ clientDiscovery }],
+				},
+			});
+
+			const openId = await auth.api.getOpenIdConfig();
+			expect(openId?.token_endpoint_auth_methods_supported).toEqual(
+				withoutNone,
+			);
+			const oauth = await auth.api.getOAuthServerConfig();
+			expect(oauth?.token_endpoint_auth_methods_supported).toEqual(withoutNone);
+		});
+
+		it('should omit "none" when publicClientsSupported is false, even with unauthenticated client registration', async () => {
+			const { auth } = await createTestInstance({
+				oauthProviderConfig: {
+					allowUnauthenticatedClientRegistration: true,
+					publicClientsSupported: false,
+				},
+			});
+
+			const metadata = await auth.api.getOpenIdConfig();
+			expect(metadata?.token_endpoint_auth_methods_supported).toEqual(
+				withoutNone,
+			);
+		});
 	});
 
 	/**
