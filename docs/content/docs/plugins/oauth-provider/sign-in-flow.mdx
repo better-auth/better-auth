@@ -138,9 +138,10 @@ If your endpoint accepts `application/x-www-form-urlencoded` bodies, set `cloneR
 
 ### Check the client before the user's credentials
 
-An endpoint that checks a password or another credential should first confirm which client is asking. Otherwise, a request in another client's name, or from another DPoP key, could still learn whether the password is right. Call `authenticateClient` and `verifyDpopProof` first, then check the user's credentials, then call `issueAuthorizationCode` on the same request:
+An endpoint that checks a password or another credential should first confirm which client is asking. Otherwise, a request in another client's name, or from another DPoP key, could still learn whether the password is right. Call `challengeDpopNonce`, `authenticateClient`, and `verifyDpopProof` first, then check the user's credentials, then call `issueAuthorizationCode` on the same request. With `dpop.nonce.required` on, `challengeDpopNonce` answers a proof without a current nonce with `use_dpop_nonce` before client authentication uses up a one-time client assertion:
 
 ```ts
+await provider.challengeDpopNonce();
 const { clientId } = await provider.authenticateClient({
   clientId: pending.clientId,
   // A public client sends no credentials. A confidential client still must.
