@@ -3914,6 +3914,26 @@ describe("provider getAccountFields", async () => {
 			]);
 		});
 
+		it("still rejects an invalid value on sign-in when updateAccountOnSignIn is false", async () => {
+			const getFields = vi
+				.fn<GetAccountFields>()
+				.mockResolvedValueOnce({ checkedField: "user@example.com" })
+				.mockResolvedValue({ checkedField: "not-an-email" });
+			const { signInWithGoogle, signInWithGoogleLocation, googleAccounts } =
+				await createInstance({
+					getAccountFields: getFields,
+					updateAccountOnSignIn: false,
+				});
+
+			await signInWithGoogle("oauth-test@test.com");
+			const location = await signInWithGoogleLocation("oauth-test@test.com");
+
+			expect(location).toContain("error=VALIDATION_ERROR");
+			expect(await googleAccounts()).toMatchObject([
+				{ checkedField: "user@example.com" },
+			]);
+		});
+
 		it.each([
 			["null", null],
 			["an empty object", {}],
