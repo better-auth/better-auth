@@ -295,6 +295,51 @@ describe("CIMD in-flight coalescing", () => {
 			redirectUris: ["http://127.0.0.1:5199/renamed"],
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12358
+	 */
+	it("holds the in-flight fetch until a joined request has saved its client", async () => {
+		const clientId = "https://joiner-order.example/client.json";
+		const { discovery, fetchClientMetadataResource } = createDiscovery();
+		const response = deferred<Response>();
+		fetchClientMetadataResource.mockImplementationOnce(() => response.promise);
+		const leader = await createRequestContext();
+		const joiner = await createRequestContext();
+		const saveGate = deferred<void>();
+		const transaction = joiner.context.adapter.transaction.bind(
+			joiner.context.adapter,
+		);
+		vi.spyOn(joiner.context.adapter, "transaction").mockImplementationOnce(
+			async (callback) => {
+				await saveGate.promise;
+				return transaction(callback);
+			},
+		);
+
+		const leaderResolution = discovery.resolve(leader.ctx, clientId, null);
+		const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
+		await vi.waitFor(() => {
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+		});
+		response.resolve(
+			metadataResponse(clientId, { "cache-control": "no-store" }),
+		);
+
+		// The joiner's save is still pending, so a later request must wait for
+		// it instead of starting a second fetch that could be saved first.
+		fetchClientMetadataResource.mockImplementation(async () =>
+			metadataResponse(clientId, { "cache-control": "no-store" }),
+		);
+		const later = discovery.resolve(joiner.ctx, clientId, null);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+
+		saveGate.resolve();
+		await expect(leaderResolution).resolves.toMatchObject({ clientId });
+		await expect(joinerResolution).resolves.toMatchObject({ clientId });
+		await expect(later).resolves.toMatchObject({ clientId });
+	});
 });
 
 describe("CIMD resolution of a cached document", () => {
