@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { createResourceServerChallenge } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
@@ -25,7 +26,7 @@ import {
 	deriveDpopAth,
 } from "better-auth/oauth2";
 import type { Jwk } from "better-auth/plugins/jwt";
-import { jwt } from "better-auth/plugins/jwt";
+import { jwt, signJWT } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -766,8 +767,10 @@ describe("requireMcpAuth default issuer", async () => {
 
 	it("accepts a token that carries jwt.issuer as configured", async () => {
 		const issued = decodeJwt(await issueAccessToken());
-		const { token } = await instance.auth.api.signJWT({
-			body: { payload: { ...issued, iss: configuredIssuer } },
+		const context = await instance.auth.$context;
+		const token = await signJWT({ context } as GenericEndpointContext, {
+			payload: { ...issued, iss: configuredIssuer },
+			header: { typ: "at+jwt" },
 		});
 
 		const { response, handler } = await callMcp(token);

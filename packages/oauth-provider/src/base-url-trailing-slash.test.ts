@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import {
 	authorizationCodeRequest,
 	CLIENT_ASSERTION_TYPE,
@@ -5,7 +6,7 @@ import {
 	generateCodeChallenge,
 } from "@better-auth/core/oauth2";
 import { generateRandomString } from "better-auth/crypto";
-import { jwt } from "better-auth/plugins/jwt";
+import { jwt, signJWT } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -263,6 +264,9 @@ describe("issuer with a trailing-slash baseURL", async () => {
 	const configuredIssuer = "http://localhost:3000/api/auth/";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: configuredIssuer,
+		// The relying party's name never resolves here, so the logout delivery
+		// check must not look it up.
+		trustedOrigins: [rpOrigin],
 		plugins: [
 			jwt(),
 			oauthProvider({
@@ -273,6 +277,13 @@ describe("issuer with a trailing-slash baseURL", async () => {
 		],
 	});
 	const metadata = await auth.api.getOpenIdConfig();
+	const context = await auth.$context;
+	/** Re-signs a JWT access token with the issuer exactly as configured. */
+	const withConfiguredIssuer = (token: string) =>
+		signJWT({ context } as GenericEndpointContext, {
+			payload: { ...decodeJwt(token), iss: configuredIssuer },
+			header: { typ: "at+jwt" },
+		});
 	const logoutTokens: string[] = [];
 
 	beforeEach(() => {
@@ -407,14 +418,12 @@ describe("issuer with a trailing-slash baseURL", async () => {
 
 	it("accepts tokens that carry the issuer as configured", async () => {
 		const { client, tokens } = await issueTokens({ resource });
-		const withConfiguredIssuer = async (token: string) => {
-			const signed = await auth.api.signJWT({
-				body: { payload: { ...decodeJwt(token), iss: configuredIssuer } },
-			});
-			return signed.token;
-		};
 		const accessToken = await withConfiguredIssuer(tokens.access_token);
-		const idToken = await withConfiguredIssuer(tokens.id_token);
+		const { token: idToken } = await auth.api.signJWT({
+			body: {
+				payload: { ...decodeJwt(tokens.id_token), iss: configuredIssuer },
+			},
+		});
 
 		expect(await introspect(client, accessToken)).toMatchObject({
 			active: true,
@@ -427,11 +436,9 @@ describe("issuer with a trailing-slash baseURL", async () => {
 
 	it("defaults the resource client to the same issuer", async () => {
 		const { tokens } = await issueTokens({ resource });
-		const { token: configuredIssuerToken } = await auth.api.signJWT({
-			body: {
-				payload: { ...decodeJwt(tokens.access_token), iss: configuredIssuer },
-			},
-		});
+		const configuredIssuerToken = await withConfiguredIssuer(
+			tokens.access_token,
+		);
 		const resourceClient = oauthProviderResourceClient(auth).getActions();
 
 		for (const token of [tokens.access_token, configuredIssuerToken]) {
