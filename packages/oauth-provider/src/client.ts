@@ -21,19 +21,22 @@ export const oauthProviderClient = () => {
 						const oauthQuery = buildSignedOAuthQuery(window.location?.search);
 						if (!oauthQuery) return;
 						// Reading FormData, Blob or stream bodies would consume them.
-						if (ctx.body && typeof ctx.body !== "string") return;
+						const isParams = ctx.body instanceof URLSearchParams;
+						if (ctx.body && typeof ctx.body !== "string" && !isParams) return;
 						const mediaType = ctx.headers
 							.get("content-type")
 							?.split(";")[0]
 							?.trim()
 							.toLowerCase();
-						if (mediaType === "application/x-www-form-urlencoded") {
+						if (isParams || mediaType === "application/x-www-form-urlencoded") {
 							const params = new URLSearchParams(ctx.body);
 							if (params.get("oauth_query")) return;
 							params.set("oauth_query", oauthQuery);
 							ctx.body = params.toString();
 							return;
 						}
+						// Leave other media types, such as text/plain, untouched.
+						if (mediaType && mediaType !== "application/json") return;
 						// Plain JSON parse so ISO strings are not revived into Dates.
 						const body: unknown = await new Response(ctx.body ?? "{}")
 							.json()

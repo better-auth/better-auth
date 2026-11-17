@@ -194,6 +194,34 @@ describe("oauthProviderClient", async () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/12072
 		 */
+		it("appends oauth_query to a URLSearchParams body", async () => {
+			stubSignedPage();
+
+			const sent = new URLSearchParams(
+				(await send({ body: new URLSearchParams("tag=a&tag=b") })) as string,
+			);
+
+			expect(sent.getAll("tag")).toEqual(["a", "b"]);
+			expectSignedQuery(sent.get("oauth_query"));
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12072
+		 */
+		it("leaves a text/plain body untouched even when it looks like JSON", async () => {
+			stubSignedPage();
+
+			expect(
+				await send({
+					body: '{"a":1}',
+					headers: { "content-type": "text/plain" },
+				}),
+			).toBe('{"a":1}');
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12072
+		 */
 		it("hands a FormData body to fetch untouched", async () => {
 			stubSignedPage();
 			const body = new FormData();
