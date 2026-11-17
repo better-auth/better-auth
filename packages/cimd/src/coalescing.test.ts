@@ -238,6 +238,63 @@ describe("CIMD in-flight coalescing", () => {
 		expect(revalidationHeaders.get("if-none-match")).toBe('"v1"');
 		expect(refetchHeaders.has("if-none-match")).toBe(false);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12358
+	 */
+	it("does not serve a stored client from a refreshed document before the refresh is saved", async () => {
+		let now = 1_800_000_000_000;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		const clientId = "https://refresh-ordering.example/client.json";
+		const { discovery, fetchClientMetadataResource } = createDiscovery();
+		const request = await createRequestContext();
+		fetchClientMetadataResource.mockImplementationOnce(async () =>
+			metadataResponse(clientId),
+		);
+		const stored = await discovery.resolve(request.ctx, clientId, null);
+
+		now += 120_000;
+		fetchClientMetadataResource.mockImplementationOnce(async () =>
+			Response.json(
+				{
+					client_id: clientId,
+					client_name: "Coalescing Client",
+					redirect_uris: ["http://127.0.0.1:5199/renamed"],
+					application_type: "native",
+					token_endpoint_auth_method: "none",
+					grant_types: ["authorization_code"],
+					response_types: ["code"],
+				},
+				{ headers: { "cache-control": "max-age=60" } },
+			),
+		);
+		const saveGate = deferred<void>();
+		const transaction = request.context.adapter.transaction.bind(
+			request.context.adapter,
+		);
+		vi.spyOn(request.context.adapter, "transaction").mockImplementationOnce(
+			async (callback) => {
+				await saveGate.promise;
+				return transaction(callback);
+			},
+		);
+
+		const refresh = discovery.resolve(request.ctx, clientId, stored);
+		await vi.waitFor(() => {
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+		});
+		// Let the fetch finish so the refresh is waiting on its save.
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		const concurrent = discovery.resolve(request.ctx, clientId, stored);
+		saveGate.resolve();
+
+		await expect(refresh).resolves.toMatchObject({
+			redirectUris: ["http://127.0.0.1:5199/renamed"],
+		});
+		await expect(concurrent).resolves.toMatchObject({
+			redirectUris: ["http://127.0.0.1:5199/renamed"],
+		});
+	});
 });
 
 describe("CIMD resolution of a cached document", () => {

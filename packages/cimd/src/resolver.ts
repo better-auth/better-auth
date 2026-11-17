@@ -465,8 +465,17 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 	};
 
 	const recordFailedFetch = (clientId: string) => {
+		const nowMs = Date.now();
 		lastFetchStartAtMsByClientId.delete(clientId);
-		lastFetchStartAtMsByClientId.set(clientId, Date.now());
+		try {
+			ensureClientFetchStateCapacity(clientId, nowMs);
+		} catch {
+			// The state map is full of clients still inside their backoff. Skip
+			// the backoff for this client rather than outgrow the bound or replace
+			// the error being reported.
+			return;
+		}
+		lastFetchStartAtMsByClientId.set(clientId, nowMs);
 	};
 
 	return async (ctx, clientId, existingClient) => {
@@ -518,6 +527,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		}
 
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
+		let nextEntry: ReturnType<typeof createCacheEntry>;
 		const metadataFetch = (async () => {
 			const fetched = await fetchClientMetadataDocument(
 				ctx,
@@ -549,12 +559,29 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 							(cachedEntry as CimdMetadataCacheEntry).responseCacheHeaders,
 							fetched.cacheHeaders,
 						);
-			const nextEntry = createCacheEntry(
+			nextEntry = createCacheEntry(
 				metadata,
 				cacheHeaders,
 				metadataRevalidationInterval,
 				Date.now(),
 			);
+			return metadata;
+		})();
+		inFlightMetadataByClientId.set(clientId, metadataFetch);
+		// The in-flight entry stays until this request has saved the client and
+		// published the fetched document, so no other request starts a fetch or
+		// reads a fresh cache entry ahead of the saved client.
+		try {
+			let metadata: OAuthClientMetadata;
+			try {
+				metadata = await metadataFetch;
+			} catch (error) {
+				recordFailedFetch(clientId);
+				throw error;
+			} finally {
+				releaseMetadataFetchPermit();
+			}
+			const storedClient = await persistFetchedMetadata(metadata);
 			if (nextEntry) {
 				storeCacheEntry(clientId, nextEntry);
 			} else {
@@ -563,21 +590,11 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			// Successful fetches are governed by HTTP freshness and origin/global
 			// budgets. Keep the per-client interval only as failed-fetch backoff.
 			lastFetchStartAtMsByClientId.delete(clientId);
-			return metadata;
-		})();
-		inFlightMetadataByClientId.set(clientId, metadataFetch);
-		let metadata: OAuthClientMetadata;
-		try {
-			metadata = await metadataFetch;
-		} catch (error) {
-			recordFailedFetch(clientId);
-			throw error;
+			return storedClient;
 		} finally {
 			if (inFlightMetadataByClientId.get(clientId) === metadataFetch) {
 				inFlightMetadataByClientId.delete(clientId);
 			}
-			releaseMetadataFetchPermit();
 		}
-		return persistFetchedMetadata(metadata);
 	};
 }
