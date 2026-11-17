@@ -1099,7 +1099,7 @@ describe("reset password session revocation", async () => {
 	let resetOtp = "";
 	const onPasswordReset = vi.fn(async () => {});
 
-	const { auth, client, sessionSetter } = await getTestInstance(
+	const { auth, client, db, sessionSetter } = await getTestInstance(
 		{
 			emailAndPassword: {
 				enabled: true,
@@ -1191,10 +1191,14 @@ describe("reset password session revocation", async () => {
 			newPassword: "new-secure-password",
 		});
 
+		const [user] = await db.findMany<{ id: string }>({
+			model: "user",
+			where: [{ field: "phoneNumber", value: phoneNumber }],
+		});
 		expect(resetRes.error).toBeNull();
 		expect(onPasswordReset).toHaveBeenCalledTimes(1);
 		expect(onPasswordReset).toHaveBeenCalledWith(
-			{ userId: expect.any(String) },
+			{ userId: user!.id },
 			expect.objectContaining({ path: "/phone-number/reset-password" }),
 		);
 	});
