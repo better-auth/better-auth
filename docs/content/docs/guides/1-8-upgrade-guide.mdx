@@ -360,7 +360,7 @@ This applies if a client authenticates with `private_key_jwt` and registers a `j
 
 An assertion signed with a key missing from the cached key set now fails with `401 invalid_client` if another unknown-key fetch of the same `jwks_uri` started in the last 60 seconds, even when that fetch failed, unless a request has already cached a set that holds the key. Before, the provider could fetch again and retry, which worked only if the endpoint was reachable and already published the key.
 
-**What to do:** tell the clients that rotate keys through a `jwks_uri` to publish the new key and wait 5 minutes, the cache lifetime, before they sign with it. A client that gets this error can also retry after 60 seconds. Clients with inline `jwks` are unaffected. See [Rotating `jwks_uri` keys](/docs/plugins/oauth-provider/clients#rotating-jwks_uri-keys).
+**What to do:** tell the clients that rotate keys through a `jwks_uri` to keep it reachable, publish the new key, and wait 5 minutes, the cache lifetime, before they sign with it. A client that gets this error can also retry after 60 seconds. Clients with inline `jwks` are unaffected. See [Rotating `jwks_uri` keys](/docs/plugins/oauth-provider/clients#rotating-jwks_uri-keys).
 
 ### UserInfo errors follow RFC 6750
 
