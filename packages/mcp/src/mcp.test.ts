@@ -1149,7 +1149,7 @@ describe("requireMcpAuth with pairwise subjects", () => {
 			clientSecret: client.client_secret!,
 			redirectURI: REDIRECT_URI,
 		};
-		const codeVerifier = generateRandomString(32);
+		const codeVerifier = generateRandomString(64);
 		const authorizationUrl = await createAuthorizationURL({
 			id: "test",
 			options: oauth,
