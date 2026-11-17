@@ -24,9 +24,7 @@ export const createCibaGrantHandler =
 		}
 		// CIBA §10.1: the client authenticates as registered.
 		const { client, clientId, confirmation } =
-			await provider.authenticateClient({
-				requireCredentials: !options.allowPublicClients,
-			});
+			await provider.authenticateClient();
 
 		const { adapter } = ctx.context;
 		const request = await adapter.findOne<CibaRequest>({

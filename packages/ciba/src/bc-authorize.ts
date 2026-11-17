@@ -11,6 +11,7 @@ import {
 	resolveResourcePolicy,
 	toResourceList,
 } from "@better-auth/oauth-provider/internal";
+import { APIError, isAPIError } from "better-auth/api";
 import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 import * as z from "zod";
 import {
@@ -33,6 +34,48 @@ import type { ResolvedCibaOptions } from "./types";
 // Control and invisible formatting characters, such as bidirectional
 // overrides: a binding message must be plain text (CIBA §7.1).
 const NON_PLAIN_TEXT = /[\p{Cc}\p{Cf}]/u;
+
+/**
+ * CIBA §13 answers `invalid_client` with 401 for every cause: bad credentials,
+ * an unknown client, no client identifier, no client authentication, or an
+ * unsupported method.
+ * RFC 9110 §15.5.2 requires a challenge on a 401, so a challenge the client
+ * authentication already set is kept and `Basic` is sent otherwise.
+ */
+async function authenticateBackchannelClient<T>(
+	authenticate: () => T | Promise<T>,
+) {
+	try {
+		return await authenticate();
+	} catch (error) {
+		const body = isAPIError(error)
+			? (error.body as
+					| { error?: unknown; error_description?: unknown }
+					| undefined)
+			: undefined;
+		// A request that names no client has no client authentication to check,
+		// which RFC 6749 §5.2 also reports as `invalid_client`.
+		const missingClientId =
+			body?.error === "invalid_request" &&
+			body.error_description === "Missing required client_id";
+		if (
+			!isAPIError(error) ||
+			(body?.error !== "invalid_client" && !missingClientId)
+		) {
+			throw error;
+		}
+		const headers = new Headers(error.headers);
+		if (!headers.has("WWW-Authenticate")) {
+			headers.set("WWW-Authenticate", "Basic");
+		}
+		headers.set("Access-Control-Expose-Headers", "WWW-Authenticate");
+		throw new APIError(
+			"UNAUTHORIZED",
+			missingClientId ? { ...body, error: "invalid_client" } : error.body,
+			headers,
+		);
+	}
+}
 
 export function createBcAuthorize(options: ResolvedCibaOptions) {
 	return createOAuthEndpoint(
@@ -112,10 +155,9 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 			const provider = getOAuthProviderApi(ctx, oauthOptions, CIBA_GRANT_TYPE);
 			// Authenticate first, so an unauthenticated caller cannot probe request
 			// validation. The bound grant type requires CIBA in `grant_types`.
-			const { client, clientId } = await provider.authenticateClient({
-				scopes,
-				requireCredentials: !options.allowPublicClients,
-			});
+			const { client, clientId } = await authenticateBackchannelClient(() =>
+				provider.authenticateClient({ scopes }),
+			);
 			// CIBA §4: registration also validates this; recheck it in case the
 			// stored metadata or the configured modes changed since.
 			const metadata = parseClientMetadata(client.metadata);
