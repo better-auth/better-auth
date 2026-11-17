@@ -1,4 +1,4 @@
-import type { Role, Statements } from "../access";
+import { type Role, type Statements, mergeRoles } from "../access";
 import { parseRoleList } from "./roles";
 import type { OrganizationOptions } from "./types";
 
@@ -24,6 +24,17 @@ export const hasPermissionFn = (
 			return true;
 		}
 	}
+
+	if (roles.length > 1) {
+		const resolvedRoles = roles
+			.map((r) => acRoles[r as keyof typeof acRoles])
+			.filter((r): r is Role<Statements> => Boolean(r));
+		if (resolvedRoles.length > 1) {
+			const merged = mergeRoles(resolvedRoles);
+			return merged.authorize(input.permissions).success;
+		}
+	}
+
 	return false;
 };
 

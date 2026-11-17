@@ -2415,6 +2415,22 @@ describe("owner can update roles", async () => {
 		expect(permissionRes.error).toBeNull();
 	});
 
+	it("allows checking permissions spanning multiple roles granted to a member", async () => {
+		const permissionRes = await auth.api.hasPermission({
+			headers: { cookie: adminCookie },
+			body: {
+				organizationId: org.id,
+				permissions: {
+					custom: ["custom"],
+					organization: ["update"],
+				},
+			},
+		});
+
+		expect(permissionRes.success).toBe(true);
+		expect(permissionRes.error).toBeNull();
+	});
+
 	it("allows an org owner to remove their own creator role if not sole owner", async () => {
 		const updated = await auth.api.updateMemberRole({
 			headers: { cookie: adminCookie },

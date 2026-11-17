@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createAccessControl } from "../access";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { hasPermission } from "./has-permission";
+import { hasPermissionFn } from "./permission";
 import { organization } from "./organization";
 import type { OrganizationRole } from "./schema";
 import type { OrganizationOptions } from "./types";
@@ -264,5 +265,130 @@ describe("hasPermission role cache", () => {
 		});
 
 		expect(await check(organizationId, "update", true)).toBe(false);
+	});
+
+	describe("multiple roles permission aggregation", () => {
+		const acMulti = createAccessControl({
+			project: ["create", "read", "update", "delete"],
+			team: ["create", "read", "update", "delete"],
+			billing: ["view", "manage"],
+		});
+
+		const roleAUser = acMulti.newRole({
+			project: ["create"],
+			team: ["read"],
+		});
+		const roleBUser = acMulti.newRole({
+			project: ["delete"],
+			billing: ["view"],
+		});
+		const roleCUser = acMulti.newRole({
+			project: ["read"],
+		});
+
+		const acRoles = {
+			AUser: roleAUser,
+			BUser: roleBUser,
+			CUser: roleCUser,
+		};
+
+		const baseOptions = {
+			ac: acMulti,
+			roles: acRoles,
+		} satisfies OrganizationOptions;
+
+		it("authorizes when requested permissions are satisfied by combining multiple roles", () => {
+			// Permission granted across distinct resources in roleAUser and roleBUser
+			expect(
+				hasPermissionFn(
+					{
+						role: "AUser,BUser",
+						permissions: {
+							project: ["create"],
+							billing: ["view"],
+						},
+						options: baseOptions,
+					},
+					acRoles,
+				),
+			).toBe(true);
+
+			// Individual roles fail the combined request
+			expect(
+				hasPermissionFn(
+					{
+						role: "AUser",
+						permissions: {
+							project: ["create"],
+							billing: ["view"],
+						},
+						options: baseOptions,
+					},
+					acRoles,
+				),
+			).toBe(false);
+			expect(
+				hasPermissionFn(
+					{
+						role: "BUser",
+						permissions: {
+							project: ["create"],
+							billing: ["view"],
+						},
+						options: baseOptions,
+					},
+					acRoles,
+				),
+			).toBe(false);
+		});
+
+		it("authorizes when multiple roles contribute different actions on the same resource", () => {
+			// roleAUser has "create", roleBUser has "delete" on "project"
+			expect(
+				hasPermissionFn(
+					{
+						role: "AUser, BUser",
+						permissions: {
+							project: ["create", "delete"],
+						},
+						options: baseOptions,
+					},
+					acRoles,
+				),
+			).toBe(true);
+		});
+
+		it("authorizes across three roles and handles whitespace in role string", () => {
+			expect(
+				hasPermissionFn(
+					{
+						role: " AUser , BUser , CUser ",
+						permissions: {
+							project: ["create", "read", "delete"],
+							team: ["read"],
+							billing: ["view"],
+						},
+						options: baseOptions,
+					},
+					acRoles,
+				),
+			).toBe(true);
+		});
+
+		it("rejects when combined roles are still missing a requested permission", () => {
+			expect(
+				hasPermissionFn(
+					{
+						role: "AUser,BUser",
+						permissions: {
+							project: ["create", "update"], // neither has update
+							billing: ["view"],
+						},
+						options: baseOptions,
+					},
+					acRoles,
+				),
+			).toBe(false);
+		});
 	});
 });

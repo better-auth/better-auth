@@ -167,3 +167,28 @@ export function createAccessControl<const TStatements extends Statements>(
 		statements: s,
 	};
 }
+
+/**
+ * Merges multiple roles into a single composite role by unioning their allowed
+ * actions for each resource.
+ */
+export function mergeRoles(
+	roles: (Role<any, any> | undefined)[],
+): Role<Record<string, string[]>> {
+	const mergedStatements: Record<string, string[]> = {};
+
+	for (const r of roles) {
+		if (!r?.statements) continue;
+		for (const [resource, actions] of Object.entries(r.statements)) {
+			if (!Array.isArray(actions)) continue;
+			const current = (mergedStatements[resource] ??= []);
+			for (const action of actions) {
+				if (typeof action === "string" && !current.includes(action)) {
+					current.push(action);
+				}
+			}
+		}
+	}
+
+	return role(mergedStatements);
+}

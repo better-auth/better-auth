@@ -1,3 +1,4 @@
+import { type Role, mergeRoles } from "../access";
 import { defaultRoles } from "./access";
 import type { AdminOptions } from "./types";
 
@@ -27,5 +28,16 @@ export const hasPermission = (
 			return true;
 		}
 	}
+
+	if (roles.length > 1) {
+		const resolvedRoles = roles
+			.map((r) => acRoles[r.trim() as keyof typeof acRoles])
+			.filter((r): r is Role<any> => Boolean(r));
+		if (resolvedRoles.length > 1) {
+			const merged = mergeRoles(resolvedRoles);
+			return merged.authorize(input.permissions).success;
+		}
+	}
+
 	return false;
 };

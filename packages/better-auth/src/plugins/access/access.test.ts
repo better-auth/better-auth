@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { createAccessControl } from "./access";
+import { createAccessControl, mergeRoles } from "./access";
 
 describe("access", () => {
 	const statements = {
@@ -222,6 +222,49 @@ describe("access", () => {
 		expect(response).toEqual({
 			success: false,
 			error: 'unauthorized to access resource "project"',
+		});
+	});
+
+	describe("mergeRoles", () => {
+		const roleA = ac.newRole({
+			project: ["create"],
+		});
+		const roleB = ac.newRole({
+			project: ["update"],
+			ui: ["view"],
+		});
+
+		it("should union allowed actions across distinct resources and actions", () => {
+			const merged = mergeRoles([roleA, roleB]);
+			expect(merged.statements.project).toEqual(["create", "update"]);
+			expect(merged.statements.ui).toEqual(["view"]);
+
+			// Both individual roles fail on the combined request
+			expect(roleA.authorize({ project: ["create", "update"] }).success).toBe(
+				false,
+			);
+			expect(roleB.authorize({ project: ["create", "update"] }).success).toBe(
+				false,
+			);
+
+			// Merged role satisfies permissions granted across both roles
+			const result = merged.authorize({
+				project: ["create", "update"],
+				ui: ["view"],
+			});
+			expect(result.success).toBe(true);
+		});
+
+		it("should deduplicate actions and ignore undefined/empty roles", () => {
+			const roleADup = ac.newRole({
+				project: ["create", "delete"],
+			});
+			const roleBDup = ac.newRole({
+				project: ["create"],
+			});
+
+			const merged = mergeRoles([undefined, roleADup, undefined, roleBDup]);
+			expect(merged.statements.project).toEqual(["create", "delete"]);
 		});
 	});
 });
