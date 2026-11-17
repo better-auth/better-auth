@@ -253,7 +253,8 @@ function classifyIPv6(expanded: string): HostKind {
 
 	// 64:ff9b::/96 (RFC 6052 §2.1). The well-known NAT64 prefix only represents
 	// global IPv4 (RFC 6052 §3.1), and a DNS64 resolver synthesizes it for names
-	// with only an A record, so it takes the class of the embedded IPv4.
+	// with only an A record, so it is public when the embedded IPv4 is public
+	// and reserved otherwise.
 	if (expanded.startsWith("0064:ff9b:0000:0000:0000:0000:")) {
 		const embedded = extractEmbeddedTrailingIPv4(expanded);
 		return embedded && classifyIPv4(embedded) === "public"
