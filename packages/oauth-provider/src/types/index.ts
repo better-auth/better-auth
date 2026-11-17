@@ -1109,9 +1109,11 @@ export interface InitialAccessTokenAuthorization {
 }
 
 /**
- * A revocation reported to {@link OAuthOptions.onTokenRevoked}. `type` names
- * the token the request presented, and `reason` says why the provider
- * revoked it.
+ * A revocation reported to {@link OAuthOptions.onTokenRevoked}. A refresh
+ * token and an authorization code each stand for their grant, so the event
+ * names the grant that was revoked. An access token is revoked on its own,
+ * so the event names the token. `type` names the token the request
+ * presented, and `reason` says why the provider revoked it.
  */
 export type OAuthTokenRevokedEvent = {
 	/** The client the revoked tokens were issued to. */
@@ -1148,7 +1150,8 @@ export type OAuthTokenRevokedEvent = {
 			 *
 			 * When the token had already been rotated or revoked, or a rotation
 			 * of it raced the revocation, the provider also revokes every other
-			 * refresh token the client holds for the user.
+			 * refresh token the client holds for the user. The event names only
+			 * this token's grant.
 			 */
 			type: "refresh_token";
 			reason: "revocation_request" | "reuse_detected";
@@ -2303,22 +2306,46 @@ export interface OAuthOptions<
 	 */
 	revocableJwtAccessTokens?: boolean;
 	/**
-	 * Called after the provider revokes tokens: when a client revokes a token
-	 * at `/oauth2/revoke`, and when a client presents an authorization code or
-	 * refresh token again. Use it to tell resource servers that verify JWT
-	 * access tokens locally, or to keep an audit log.
+	 * Called after the provider revokes a grant or a single access token: when
+	 * a client revokes a token at `/oauth2/revoke`, and when a client presents
+	 * an authorization code or refresh token again after the provider used it.
+	 * Use it to tell resource servers that verify JWT access tokens locally,
+	 * or to keep an audit log.
+	 *
+	 * A refresh token and an authorization code each stand for their grant, so
+	 * revoking one revokes the grant's opaque access tokens, and its JWT access
+	 * tokens too with `revocableJwtAccessTokens`. The event carries the
+	 * `grantId`, which a refresh token stored before 1.8 lacks; revoking such a
+	 * token reaches only the access tokens linked to it. An access token is
+	 * revoked on its own, and the event carries its `jti`.
 	 *
 	 * It is not called when nothing is revoked, such as for an unknown,
 	 * expired, or already revoked access token, a token issued to another
-	 * client, or an authorization code reused by another client or without its
-	 * `code_verifier`. Tokens revoked because their session ended are not
-	 * reported; `databaseHooks.session.delete.after` sees the session end.
+	 * client, an authorization code reused by another client or without its
+	 * `code_verifier`, or a refresh that rotates the refresh token.
 	 *
-	 * The response waits for the callback. The tokens are already revoked
-	 * when it runs, so an error it throws is logged and the response stays the
-	 * same. A request that fails partway can leave tokens revoked without
-	 * calling it. Concurrent requests that revoke the same token can each
-	 * report it.
+	 * Tokens also stop working for these causes, and none of them is
+	 * reported:
+	 * - An ended session. `databaseHooks.session.delete.after` sees it.
+	 * - A disabled client. Introspection reports its tokens as inactive.
+	 * - A deleted client or user. Introspection reports a deleted client's
+	 *   tokens as inactive, and a database that enforces the schema's foreign
+	 *   keys deletes the tokens of a deleted client or user.
+	 * - A deleted resource. Introspection reports its tokens as inactive.
+	 * - The other grants of a replayed refresh token. The provider also
+	 *   deletes the client's refresh tokens of the user's other grants, and
+	 *   the event names the replayed token's grant only. The JWT access
+	 *   tokens of those grants stay valid until they expire.
+	 *
+	 * Deleting a consent does not revoke the tokens already issued, so there
+	 * is nothing to report.
+	 *
+	 * Delivery is best effort. The response waits for the callback. The
+	 * tokens are already revoked when it runs, so an error it throws is logged
+	 * and the response stays the same. A request that fails partway can leave
+	 * tokens revoked without calling it. A reused authorization code is
+	 * reported even if deleting its tokens failed. Concurrent requests that
+	 * revoke the same token can each report it.
 	 */
 	onTokenRevoked?: (event: OAuthTokenRevokedEvent) => Awaitable<void>;
 	/**
