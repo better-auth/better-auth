@@ -243,7 +243,7 @@ betterAuth({
 })
 ```
 
-In 1.7, the provider's own endpoints recognize a JWT access token by its `azp` claim, not by its `typ` header. Introspection, UserInfo, and `requireMcpAuth` from the [MCP](/docs/plugins/mcp) plugin accept any JWT signed with these keys that carries `azp` and an accepted `aud`. A JWT that your code signs with `auth.api.signJWT` and that carries `azp` therefore works as an access token for that client, with the `scope` its payload names. Never sign a payload that carries `azp`, and remove `azp` from any payload built from input you did not write. The gap is closed in 1.8: introspection and UserInfo require `typ: "at+jwt"`.
+In 1.7, the provider's own endpoints recognize a JWT access token by its `azp` claim, not by its `typ` header. Introspection, UserInfo, and `requireMcpAuth` from the [MCP](/docs/plugins/mcp) plugin accept any JWT signed with these keys that carries `azp` and an accepted `aud`. A JWT that your code signs with `auth.api.signJWT` and that carries `azp` therefore works as an access token for that client, with the `scope` its payload names. Never sign a payload that carries `azp`, and remove `azp` from any payload built from input you did not write. The gap is closed in 1.8: introspection, UserInfo, and `requireMcpAuth` require `typ: "at+jwt"`.
 
 ### Remote JWKS Url
 
@@ -325,7 +325,7 @@ Implementers:
 * `remoteUrl` must be defined if using the `sign` function. This shall store all active keys, not just the current one.
 * If using localized approach, ensure server uses the latest private key when rotated. Depending on deployment, the server may need to be restarted.
 * When using remote approach, verify the payload is unchanged after transit. Use integrity validation like CRC32 or SHA256 checks if available.
-* Apply the optional `header` argument to the signed header. The OAuth provider passes `typ: "at+jwt"` for access tokens, and resource servers that check `typ`, as [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) requires, reject an access token without it. In 1.8, the provider's own endpoints reject it too.
+* Apply the optional `header` argument to the signed header. The OAuth provider passes `typ: "at+jwt"` for access tokens, and resource servers that check `typ`, as [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) requires, reject an access token without it. In 1.8, the provider's own endpoints and `requireMcpAuth` reject it too.
 
 #### Localized Signing
 
@@ -338,13 +338,14 @@ jwt({
     },
   },
   jwt: {
-    sign: async (jwtPayload: JWTPayload) => {
+    sign: async (jwtPayload: JWTPayload, header) => {
       // this is pseudocode
       return await new SignJWT(jwtPayload)
         .setProtectedHeader({
           alg: "EdDSA",
           kid: process.env.currentKid,
           typ: "JWT",
+          ...header, // carries typ: "at+jwt" for OAuth access tokens
         })
         .sign(process.env.clientPrivateKey);
     },
@@ -365,9 +366,10 @@ jwt({
     },
   },
   jwt: {
-    sign: async (jwtPayload: JWTPayload) => {
+    sign: async (jwtPayload: JWTPayload, header) => {
       // this is pseudocode
-      const headers = JSON.stringify({ kid: '123', alg: 'ES256', typ: 'JWT' })
+      // `header` carries typ: "at+jwt" for OAuth access tokens
+      const headers = JSON.stringify({ kid: '123', alg: 'ES256', typ: 'JWT', ...header })
       const payload = JSON.stringify(jwtPayload)
       const encodedHeaders = Buffer.from(headers).toString('base64url')
       const encodedPayload = Buffer.from(payload).toString('base64url')
