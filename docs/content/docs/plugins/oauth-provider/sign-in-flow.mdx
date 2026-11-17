@@ -184,7 +184,7 @@ const { query, client } = await provider.validateAuthorizationRequest({
 // issueAuthorizationCode on the last request.
 ```
 
-The method runs the checks that `/oauth2/authorize` and `issueAuthorizationCode` run on the request: the client, `response_type`, the `redirect_uri` when present, scopes, claims, resources, and PKCE. An invalid request fails with a 400 error carrying the code `/oauth2/authorize` reports for the same request, such as `invalid_scope` or `invalid_target`. The method never redirects and writes nothing to the database. It needs no session.
+The method runs the checks that `/oauth2/authorize` and `issueAuthorizationCode` run on the request: the client, `response_type`, the `redirect_uri` when present, scopes, claims, resources, and PKCE. An invalid request fails with a 400 error carrying the code `/oauth2/authorize` reports for the same request, such as `invalid_scope` or `invalid_target`. The method never redirects, issues no code, stores no pushed request, and records no DPoP proof. Looking up the client and resources can still write, as it does for `/oauth2/authorize`: a client discovered from a client ID metadata document is saved, and `onClientCreated` runs for it. It needs no session.
 
 The request must name its client with `client_id`. A `request_uri` fails with `invalid_request`, and a `request` object fails with `request_not_supported`, as with `issueAuthorizationCode`.
 

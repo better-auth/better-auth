@@ -1286,6 +1286,10 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 				expect(tokens.error).toBeNull();
 				return tokens.data!;
 			},
+			async sessionCreatedAt() {
+				const session = await instance.auth.api.getSession({ headers });
+				return new Date(session!.session.createdAt).getTime();
+			},
 			async stored(code: string) {
 				const row = await context.internalAdapter.findVerificationValue(
 					await storeToken("hashed", code, "authorization_code"),
@@ -1361,8 +1365,10 @@ describe("provider.issueAuthorizationCode with caller-supplied amr", async () =>
 	});
 
 	it("keeps auth_time from the session", async () => {
-		const { issue, stored } = await setup();
+		const { issue, stored, sessionCreatedAt } = await setup();
 		const issued = await issue("openid", ["pwd"]);
-		expect((await stored(issued.data!.code)).authTime).toBeGreaterThan(0);
+		expect((await stored(issued.data!.code)).authTime).toBe(
+			await sessionCreatedAt(),
+		);
 	});
 });

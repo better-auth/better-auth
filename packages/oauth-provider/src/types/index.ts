@@ -618,8 +618,9 @@ export interface OAuthProviderApi {
 	 * It checks the client, the `redirect_uri` when present, `response_type`,
 	 * scopes, claims, resources, and PKCE. It fails with an HTTP 400
 	 * `APIError` carrying the OAuth error `/oauth2/authorize` reports for the
-	 * same request, and it never redirects. It writes nothing: no code, no
-	 * pushed request, and no DPoP `jti`.
+	 * same request, and it never redirects. It issues no code, stores no pushed
+	 * request, and records no DPoP `jti`. The client lookup can still save a
+	 * client discovered from a client ID metadata document.
 	 *
 	 * The result is advisory. It does not authenticate the client, so your
 	 * endpoint must still authenticate a confidential client, and
