@@ -718,7 +718,7 @@ Better Auth ignores these returned values:
 
 Return `null` for the whole result to store nothing. A `null` value for a key is stored as `null` and replaces the stored value.
 
-Values pass through the field's `validator.input` and `transform.input`. A value that fails validation stops the sign-in or link with a validation error. In the redirect flow, the user lands on your error URL with `error=VALIDATION_ERROR`.
+Values pass through the field's `validator.input` and `transform.input`. A value that fails validation stops the sign-in or link with a validation error, even when `updateAccountOnSignIn` is `false` and the value is not stored. In the redirect flow, the user lands on your error URL with `error=VALIDATION_ERROR`.
 
 Better Auth treats the returned values as provider input, like the values from `mapProfileToUser`. Keep security-sensitive fields, such as roles or internal flags, at `input: false` so that a provider claim cannot set them. Do not copy a provider claim you have not verified into a field your application trusts for authorization. See [server-owned fields and authorization claims](/docs/concepts/oauth#server-owned-fields-and-authorization-claims).
 
