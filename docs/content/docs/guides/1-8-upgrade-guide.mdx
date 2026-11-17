@@ -302,6 +302,12 @@ To stop a request from carrying two values that different parts of the server re
 * Sending `backchannel_logout_uri: null` or `frontchannel_logout_uri: null` to `/oauth2/update-client` or `adminUpdateOAuthClient` now clears the URI. Before, `null` was rejected.
 * On a client allowed to use RP-initiated logout, `updateOAuthClient` and `/oauth2/update-client` now reject a new `post_logout_redirect_uris` entry with `invalid_client_metadata` unless it shares a scheme, host, and port with one of the client's `redirect_uris`. Loopback hosts match on any port, and private-use URIs match on scheme and authority. Before, the owner could add any origin. Entries the client already has are kept, and `adminUpdateOAuthClient` is not limited, except when it grants logout to a client you do not own: that grant fails with `invalid_client_metadata` if one of the client's stored entries breaks the rule, where a metadata document client may also use the origin of its `client_id`. **What to do:** to send users to another origin after logout, add a redirect URI on that origin in the same update. If an administrator's grant fails, the client's own registration has to change first, because the grant cannot change `redirect_uris` or `post_logout_redirect_uris`: its owner updates them, or a metadata document client publishes a document that fixes them. See [Registered clients](/docs/plugins/oauth-provider/openid-connect#registered-clients).
 
+### Refused metadata document URLs answer 400
+
+This applies if you use `@better-auth/cimd`. A `client_id` URL that URL validation or `isMetadataDocumentUrlAllowed` refuses now answers `invalid_client` with status 400 and uses none of the fetch budget. Before, it could answer 429 with `temporarily_unavailable` once the budget was spent. `isMetadataDocumentUrlAllowed` now runs once for each request that needs a fetch, including requests that join a fetch already in flight. Before, those requests skipped it.
+
+**What to do:** if your `isMetadataDocumentUrlAllowed` consults an external service, keep it cheap or cache its decisions. See [Configuration](/docs/plugins/cimd#configuration).
+
 ### Client secret expiry takes effect
 
 This applies if you set `clientRegistrationClientSecretExpiration`, or pass `client_secret_expires_at` to `adminCreateOAuthClient` or `adminUpdateOAuthClient`. The expiry is now saved and enforced. Once it passes, the token, introspection, and revocation endpoints reject the secret with `invalid_client`. Before, the value was discarded and secrets never expired.
