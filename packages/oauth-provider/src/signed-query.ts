@@ -9,7 +9,11 @@ const signedQueryParameterNameParam = "ba_param";
  * is written in the standard or the base64url alphabet.
  */
 export function toBase64Url(value: string) {
-	return value.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+	let end = value.length;
+	// A loop, not a trailing `=+$` pattern, so a long run of `=` in an untrusted
+	// `sig` cannot make the match quadratic.
+	while (end > 0 && value.charCodeAt(end - 1) === 61) end--;
+	return value.slice(0, end).replace(/\+/g, "-").replace(/\//g, "_");
 }
 
 export function canonicalizeOAuthQueryParams(params: URLSearchParams) {
