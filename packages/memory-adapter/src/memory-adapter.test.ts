@@ -640,7 +640,7 @@ it("rejects committing a transaction when a concurrent operation created the sam
 	expect(db.widget?.[0]?.name).toBe("concurrent-live");
 });
 
-it("rejects the second overlapping transaction that created the same id", async () => {
+it("rejects the transaction that commits last when an overlapping transaction already created the same id", async () => {
 	const { db, adapter } = setup();
 
 	let releaseFirst: () => void;
