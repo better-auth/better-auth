@@ -9,6 +9,11 @@ import type { User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
+import {
+	destructureCredentials,
+	extractClientCredentials,
+	validateClientCredentials,
+} from "./client-authentication";
 import { exposeChallengeHeader } from "./dpop";
 import { buildResourceServerChallenge } from "./resource-challenge";
 import {
@@ -39,8 +44,6 @@ import type {
 } from "./types";
 import {
 	challengeHeaders,
-	destructureCredentials,
-	extractClientCredentials,
 	findActiveSessionId,
 	getAuthEndpointUrl,
 	getClient,
@@ -51,7 +54,6 @@ import {
 	resolveRefreshTokenSession,
 	restoreAccessTokenUserIds,
 	toAudienceClaim,
-	validateClientCredentials,
 } from "./utils";
 
 const INVALID_ACCESS_TOKEN_ERROR_DESCRIPTION = "Invalid access token";
