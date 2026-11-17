@@ -248,9 +248,13 @@ Authorizes resource actions: `create`, `read`, `update`, `delete`, `list`, `link
 
 ### Tokens
 
-`accessTokenExpiresIn` <span className="opacity-70">`number`</span>
+`accessTokenExpiresIn` <span className="opacity-70">`number | ({ user, client, scopes, grantType }) => Awaitable<number>`</span>
 
-Access token lifetime in seconds. Defaults to `3600`. See [Lifetimes](/docs/plugins/oauth-provider/tokens#lifetimes).
+Access token lifetime in seconds. Defaults to `3600`. A function decides it for each grant. See [Lifetimes](/docs/plugins/oauth-provider/tokens#lifetimes) and [Per-grant access token lifetime](/docs/plugins/oauth-provider/tokens#per-grant-access-token-lifetime).
+
+`accessTokenMaxExpiresIn` <span className="opacity-70">`number`</span>
+
+The longest lifetime in seconds that an `accessTokenExpiresIn` function may return. A longer result is lowered to it. The grant revocation entry lasts this long plus one second, and the record of a redeemed code lasts the longer of this and `refreshTokenExpiresIn`. Defaults to `3600`. Ignored when `accessTokenExpiresIn` is a number. It must be a positive whole number of at most ten years in seconds.
 
 `m2mAccessTokenExpiresIn` <span className="opacity-70">`number`</span>
 

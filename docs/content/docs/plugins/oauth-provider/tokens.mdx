@@ -159,14 +159,14 @@ Deleting a resource makes introspection report its tokens as inactive, while `di
 
 All values are in seconds.
 
-| Option                    | Default             | Applies to                              |
-| ------------------------- | ------------------- | --------------------------------------- |
-| `accessTokenExpiresIn`    | `3600` (1 hour)     | Access tokens issued for a user         |
-| `m2mAccessTokenExpiresIn` | `3600` (1 hour)     | Access tokens from `client_credentials` |
-| `idTokenExpiresIn`        | `36000` (10 hours)  | ID tokens                               |
-| `refreshTokenExpiresIn`   | `2592000` (30 days) | Refresh tokens                          |
-| `codeExpiresIn`           | `600` (10 minutes)  | Authorization codes                     |
-| `assertionMaxLifetime`    | `300` (5 minutes)   | `private_key_jwt` client assertions     |
+| Option                    | Default             | Applies to                                                                                                   |
+| ------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `accessTokenExpiresIn`    | `3600` (1 hour)     | Access tokens issued for a user, or a [function](#per-grant-access-token-lifetime) that decides it per grant |
+| `m2mAccessTokenExpiresIn` | `3600` (1 hour)     | Access tokens from `client_credentials`                                                                      |
+| `idTokenExpiresIn`        | `36000` (10 hours)  | ID tokens                                                                                                    |
+| `refreshTokenExpiresIn`   | `2592000` (30 days) | Refresh tokens                                                                                               |
+| `codeExpiresIn`           | `600` (10 minutes)  | Authorization codes                                                                                          |
+| `assertionMaxLifetime`    | `300` (5 minutes)   | `private_key_jwt` client assertions                                                                          |
 
 A refresh token's lifetime restarts at each refresh: the replacement token gets a new `refreshTokenExpiresIn` window. A client that refreshes regularly therefore keeps its grant indefinitely. To end a grant, [revoke](#revocation) the refresh token. Deleting the user's [consent](/docs/plugins/oauth-provider/sign-in-flow#manage-consents) also ends the grants issued under it. See [Revoke tokens with a consent](#revoke-tokens-with-a-consent).
 
@@ -181,6 +181,24 @@ oauthProvider({
 })
 ```
 
+### Per-grant access token lifetime
+
+To decide the lifetime of a user access token per grant, such as when the user picks how long a connection may last, set `accessTokenExpiresIn` to a function. It runs each time a grant is issued or refreshed.
+
+```ts title="auth.ts"
+oauthProvider({
+  accessTokenExpiresIn: ({ user, client, scopes, grantType }) =>
+    scopes.includes("write:payments") ? 300 : 3600, // [!code highlight]
+})
+```
+
+* **The function gets copies of the grant, and nothing from the request.** It receives the `user`, the `client`, the `scopes`, and the `grantType`. A client cannot lengthen its own token by asking.
+* **A throw fails the token request.** The error reaches the client and no token is stored.
+* **An unusable result falls back to 1 hour.** A result below one second, or one that is not a finite number, gets 3600 seconds, or `accessTokenMaxExpiresIn` when that is lower. A fraction is rounded down first, so `0.5` is unusable.
+* **A result above `accessTokenMaxExpiresIn` is lowered to it.** The default is 3600. To let the function return more, set `accessTokenMaxExpiresIn`, for example `accessTokenMaxExpiresIn: 86400`. Every window that has to outlast a token, such as the [grant revocation entry](#grant-revocation-entries) and the record of a [redeemed code](#authorization-code-reuse), lasts that long, whatever the function returns for a grant.
+* **`client_credentials` tokens are unaffected.** They use `m2mAccessTokenExpiresIn`.
+* **`scopeExpirations` and a resource's `accessTokenTtl` still apply.** The earliest expiry wins.
+
 ## Authorization code reuse
 
 An authorization code works once. A second token request with the same code is rejected. When that request comes from the client the code was issued to, the provider also revokes the refresh tokens and opaque access tokens issued from the code. JWT access tokens stay valid until they expire ([OAuth 2.1 §7.5.3](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-7.5.3)). The request comes from the issuing client when:
@@ -190,7 +208,7 @@ An authorization code works once. A second token request with the same code is r
 
 A request that fails either check is rejected and the tokens stay valid. This includes a confidential client that sends its secret but leaves out the `code_verifier` for a code issued with PKCE. Someone who has the code but not the `code_verifier` therefore cannot revoke the client's tokens.
 
-The tokens issued from a code can outlive the code, so the provider remembers a redeemed code for as long as those tokens can still be valid. The record lasts for the longer of `accessTokenExpiresIn` and `refreshTokenExpiresIn` after redemption (30 days by default), and each refresh-token rotation extends it by the same amount. A reuse after the code expires still revokes the tokens while that record exists.
+The tokens issued from a code can outlive the code, so the provider remembers a redeemed code for as long as those tokens can still be valid. The record lasts for the longer of `accessTokenExpiresIn` and `refreshTokenExpiresIn` after redemption (30 days by default), where a function `accessTokenExpiresIn` counts as its [`accessTokenMaxExpiresIn`](#per-grant-access-token-lifetime), and each refresh-token rotation extends it by the same amount. A reuse after the code expires still revokes the tokens while that record exists.
 
 Two token requests can send one code at the same time, for example when a client retries a request it thinks timed out. The request that consumes the code starts issuing tokens. The other one is a reuse, so it fails and revokes the code's grant. If the first request is still issuing tokens, it finds the [grant revoked](#grant-revocation-entries) and also fails with `invalid_grant`. If it already finished, the revocation revokes the tokens it returned, as for any reuse. Either way, the client must start a new authorization request.
 
@@ -566,11 +584,11 @@ To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's
 
 ### Grant revocation entries
 
-A grant is revoked when a client revokes a refresh token, replays a rotated refresh token, or reuses an authorization code. It is also revoked when the user deletes the [consent](#revoke-tokens-with-a-consent) it was issued under, or resets their [password](/docs/plugins/oauth-provider/openid-connect#password-reset) while `emailAndPassword.revokeSessionsOnPasswordReset` is on and `revokeGrantsOnPasswordReset` is not `false`. The provider then writes one entry for the grant to the [verification store](/docs/concepts/database#verification), whatever your options. The entry lasts `accessTokenExpiresIn`, plus one second.
+A grant is revoked when a client revokes a refresh token, replays a rotated refresh token, or reuses an authorization code. It is also revoked when the user deletes the [consent](#revoke-tokens-with-a-consent) it was issued under, or resets their [password](/docs/plugins/oauth-provider/openid-connect#password-reset) while `emailAndPassword.revokeSessionsOnPasswordReset` is on and `revokeGrantsOnPasswordReset` is not `false`. The provider then writes one entry for the grant to the [verification store](/docs/concepts/database#verification), whatever your options. The entry lasts `accessTokenExpiresIn`, plus one second. With a [function](#per-grant-access-token-lifetime), it lasts `accessTokenMaxExpiresIn`, plus one second, instead.
 
 A refresh token issued before 1.8 gets a grant ID at its first refresh after the upgrade. Revoking it before then, or replaying a token that was rotated before the upgrade, writes no entry, so a request still issuing tokens for that grant isn't stopped.
 
-Each authorization code redemption and each refresh looks up its grant's entry after it stores its tokens. A request that finds the entry fails with `invalid_grant` and deletes the tokens it stored. This is how a revocation stops a request that was already issuing tokens for the grant. A request that reaches the lookup more than `accessTokenExpiresIn` after it consumed its code or refresh token fails the same way, because the grant's entry may already have expired.
+Each authorization code redemption and each refresh looks up its grant's entry after it stores its tokens. A request that finds the entry fails with `invalid_grant` and deletes the tokens it stored. This is how a revocation stops a request that was already issuing tokens for the grant. A request that reaches the lookup more than `accessTokenExpiresIn` (`accessTokenMaxExpiresIn` for a function) after it consumed its code or refresh token fails the same way, because the grant's entry may already have expired.
 
 These entries are ordinary verification values:
 
@@ -595,14 +613,14 @@ Before you turn it on, consider:
 
 * **Resource servers that verify locally don't see revocations.** `verifyAccessTokenRequest` without `remoteVerify`, and [`requireMcpAuth`](/docs/plugins/mcp) with a `jwksUrl`, check the signature against the JWKS and never ask the server. A revoked token stays valid there until it expires. To honor revocation, set [`remoteVerify`](/docs/plugins/oauth-provider/resource-server#jwt-or-opaque-tokens) on `verifyAccessTokenRequest` so every token is introspected, and leave `jwksUrl` unset on `requireMcpAuth` so it checks the provider's records in the same process.
 * **Each check adds lookups.** Introspection, UserInfo, and `validateAccessToken` look up the token's `jti` in the verification store, revoked or not. A token that carries a [`grant_id`](#revoke-the-access-tokens-of-a-grant) also has its grant looked up, in parallel. In the database, a lookup that finds an expired row also deletes the expired rows for that identifier. At most once a minute per server instance, a lookup also deletes every expired verification row. `verification.disableCleanup` turns off both deletes. With `verification.storeIdentifier: "hashed"`, each lookup that finds nothing takes two reads.
-* **Revocations last only as long as their storage.** With [secondary storage](/docs/concepts/database#secondary-storage), entries go there and expire on their own: a token's entry at its `exp`, a grant's entry after `accessTokenExpiresIn`. If the storage evicts or loses an entry, the revoked token is accepted again. Use storage that never evicts these keys, or set `verification.storeInDatabase: true` to also keep entries in the database.
+* **Revocations last only as long as their storage.** With [secondary storage](/docs/concepts/database#secondary-storage), entries go there and expire on their own: a token's entry at its `exp`, a grant's entry after `accessTokenExpiresIn`, or `accessTokenMaxExpiresIn` when that is a function. If the storage evicts or loses an entry, the revoked token is accepted again. Use storage that never evicts these keys, or set `verification.storeInDatabase: true` to also keep entries in the database.
 * **Writes are bounded by the rate limit.** Revoking a JWT access token writes one entry, and only for a valid token issued to the calling client. When rate limiting is enabled, which is the default in production, the [rate limits](/docs/plugins/oauth-provider/reference#rate-limits) bound how fast entries are written: 30 requests per 60 seconds for `/oauth2/revoke`. If you turn rate limiting off, nothing bounds them. Grant revocations write their own [entries](#grant-revocation-entries), with or without this option.
 
 #### Revoke the access tokens of a grant
 
 A grant is everything one authorization produced: its first tokens and every refresh token rotated from them. Each refresh token stores its grant's ID. With the option on, each JWT access token issued with a refresh token or for an authorization code also carries it in a `grant_id` claim. Better Auth sets this claim, and custom access-token claims can't override it.
 
-Revoking a refresh token then also revokes the JWT access tokens of its grant, including those issued before earlier rotations ([RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). Better Auth checks each token against the [grant revocation entry](#grant-revocation-entries), so it stores one entry for the grant, not one per token. The entry lasts `accessTokenExpiresIn`, and every access token the grant issued before the revocation expires within that time. The same happens in these cases:
+Revoking a refresh token then also revokes the JWT access tokens of its grant, including those issued before earlier rotations ([RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). Better Auth checks each token against the [grant revocation entry](#grant-revocation-entries), so it stores one entry for the grant, not one per token. The entry lasts `accessTokenExpiresIn`, or `accessTokenMaxExpiresIn` when that is a function, and every access token the grant issued before the revocation expires within that time. The same happens in these cases:
 
 * A refresh token that was already rotated is presented for revocation, or at the token endpoint outside the [`refreshTokenReuseInterval`](#refresh-tokens) window. A retry inside that window gets the earlier response back and revokes nothing.
 * An authorization code is reused by the client it was issued to, and the request passes the checks in [Authorization code reuse](#authorization-code-reuse). The code's grant is revoked, including a JWT access token issued for the code without a refresh token. This holds even when the reuse arrives while the first redemption is still issuing its tokens.
@@ -615,7 +633,7 @@ The grant revocation has these limits:
 * **Most tokens without a refresh token aren't covered.** A JWT access token issued without a refresh token has a `grant_id` only when it was issued for an authorization code, and only a reuse of that code revokes it. Revoke any other such token by its `jti`, or end the user's session.
 * **Tokens from token exchange aren't covered.** A token that a client obtained by exchanging one of the grant's access tokens doesn't carry the grant's `grant_id`. It stays valid until it expires.
 * **Tokens from before you turned the option on aren't covered.** They carry no `grant_id`. JWT access tokens issued from then on carry it, including those issued by refreshing an earlier refresh token.
-* **Shortening the lifetime shortens the entry.** If you lower `accessTokenExpiresIn`, a token issued under the longer lifetime can outlive the entry for its grant.
+* **Shortening the lifetime shortens the entry.** If you lower `accessTokenExpiresIn`, or `accessTokenMaxExpiresIn` for a function, a token issued under the longer lifetime can outlive the entry for its grant.
 
 ### Revoke tokens with a consent
 

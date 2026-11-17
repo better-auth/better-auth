@@ -325,8 +325,8 @@ export const mcpOauthOptionsType = {
     type: "Array<string | OAuthResourceInput>",
   },
   accessTokenExpiresIn: {
-    description: "Lifetime of access tokens in seconds.",
-    type: "number",
+    description: "Lifetime of user access tokens in seconds, or a function that decides it per grant. client_credentials uses m2mAccessTokenExpiresIn.",
+    type: "number | function",
     default: 3600,
   },
   idTokenExpiresIn: {

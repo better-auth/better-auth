@@ -228,24 +228,21 @@ export function authorizationCodeGrantId(authorizationCodeId: string) {
 export const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
 
 /**
- * The configured lifetime where no grant is in scope to resolve one against.
- *
- * A resolver can only be evaluated with a grant, so on these paths a configured
- * function is treated as "not a static value" and the default applies. Both callers
- * are reached with an already-computed `exp` during a normal grant, so this is the
- * fallback for direct callers rather than the usual path.
+ * The longest lifetime, in seconds, of a user access token this configuration
+ * can issue: `accessTokenExpiresIn`, or `accessTokenMaxExpiresIn` when that is
+ * a function and the resolver's result is bounded by it. A window that has to
+ * outlast every token, such as a grant's revocation entry or the record of a
+ * redeemed code, sizes itself from this and never from one grant's lifetime.
  */
-export function staticAccessTokenExpiresIn(
-	opts: OAuthOptions<Scope[]>,
-): number {
-	return typeof opts.accessTokenExpiresIn === "number"
-		? opts.accessTokenExpiresIn
-		: DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
+export function maxAccessTokenExpiresIn(opts: OAuthOptions<Scope[]>): number {
+	return typeof opts.accessTokenExpiresIn === "function"
+		? (opts.accessTokenMaxExpiresIn ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN)
+		: (opts.accessTokenExpiresIn ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN);
 }
 
 /** How long a grant's revocation mark lasts, before its one-second margin. */
 export function grantRevocationWindowMs(opts: OAuthOptions<Scope[]>) {
-	return staticAccessTokenExpiresIn(opts) * 1000;
+	return maxAccessTokenExpiresIn(opts) * 1000;
 }
 
 /**
@@ -256,9 +253,10 @@ export function grantRevocationWindowMs(opts: OAuthOptions<Scope[]>) {
  * With `revocableJwtAccessTokens`, the mark also revokes every JWT access token
  * carrying the grant's `grant_id`.
  *
- * The entry lasts `accessTokenExpiresIn`: every user access token expires
- * within that of being issued, so the entry outlives every token the grant
- * issued before it was written. One more second covers a token accepted
+ * The entry lasts the longest access token lifetime (see
+ * `maxAccessTokenExpiresIn`): every user access token expires within that of
+ * being issued, so the entry outlives every token the grant issued before it
+ * was written. One more second covers a token accepted
  * until its `exp` and secondary storage rounding the TTL down. An issuance
  * that reaches its check that long after consuming its grant fails anyway
  * (see `createUserTokens`).
