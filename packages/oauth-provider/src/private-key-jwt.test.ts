@@ -144,6 +144,7 @@ describe("private_key_jwt authentication", async () => {
 		clientId?: string;
 		aud?: string | string[];
 		exp?: number;
+		nbf?: number;
 		jti?: string;
 		kid?: string;
 		key?: CryptoKey;
@@ -161,6 +162,10 @@ describe("private_key_jwt authentication", async () => {
 			.setAudience(overrides?.aud ?? tokenEndpoint)
 			.setIssuedAt(now)
 			.setExpirationTime(overrides?.exp ?? now + 120);
+
+		if (overrides?.nbf !== undefined) {
+			builder.setNotBefore(overrides.nbf);
+		}
 
 		if (!overrides?.omitJti) {
 			builder.setJti(overrides?.jti ?? crypto.randomUUID());
@@ -687,15 +692,48 @@ describe("private_key_jwt authentication", async () => {
 		});
 	});
 
-	// The next four tests pin the released status split: a failed signature or
-	// claim check is 401 with a Basic challenge, and a failure found while
-	// consuming the assertion (lifetime, jti, replay) is 400 with no challenge.
+	// The next five tests pin the status split: a failed signature or JWT claim
+	// check is 401 with a Basic challenge, and a failure found while consuming
+	// the assertion (lifetime, jti, replay) is 400 with no challenge.
 	it("should reject expired assertion", async () => {
 		let responseHeaders: Headers | undefined;
 		const now = Math.floor(Date.now() / 1000);
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
 		const assertion = await signAssertion({ exp: now - 60 });
+
+		const result = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "authorization_code",
+				code,
+				redirect_uri: redirectUri,
+				client_id: assertionClient.client_id,
+				client_assertion_type:
+					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+				client_assertion: assertion,
+				code_verifier: codeVerifier,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
+		});
+
+		expect(result.error?.status).toBe(401);
+		expect(result.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client assertion signature verification failed",
+		});
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+	});
+
+	it("should reject assertion that is not yet valid", async () => {
+		let responseHeaders: Headers | undefined;
+		const now = Math.floor(Date.now() / 1000);
+		const codeVerifier = generateRandomString(32);
+		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
+		const assertion = await signAssertion({ nbf: now + 3600 });
 
 		const result = await client.$fetch("/oauth2/token", {
 			method: "POST",
