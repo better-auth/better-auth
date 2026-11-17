@@ -554,12 +554,20 @@ export const createInternalAdapter = (
 						await queueAfterTransactionHook(
 							async () => {
 								if (!userDeleted) return;
+								// Best effort: the cutoff and the tokens read before the delete
+								// are revoked even when this second read fails.
+								let currentReferences: ActiveSessionReference[] = [];
+								try {
+									currentReferences = await getActiveSessionReferences(userId);
+								} catch (error) {
+									logger.error(
+										"Failed to read the user's sessions from secondary storage",
+										error,
+									);
+								}
 								await deleteCachedUserSessions(
 									userId,
-									[
-										...sessionReferences,
-										...(await getActiveSessionReferences(userId)),
-									],
+									[...sessionReferences, ...currentReferences],
 									Date.now(),
 								);
 							},

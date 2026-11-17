@@ -2981,6 +2981,38 @@ describe("deleteUser atomicity", () => {
 		expect(await internalAdapter.findSession(lateToken)).toBeNull();
 	});
 
+	it("revokes cached sessions when reading the session index fails after the delete", async () => {
+		const storage = createStringSecondaryStorage(new Map());
+		let failNextIndexRead = false;
+		const { internalAdapter, userId, sessionToken } = await makeFailingAdapter({
+			secondaryStorage: {
+				...storage,
+				get(key) {
+					if (failNextIndexRead && key.startsWith("active-sessions-")) {
+						failNextIndexRead = false;
+						throw new Error("index read failed");
+					}
+					return storage.get(key);
+				},
+			},
+			databaseHooks: {
+				user: {
+					delete: {
+						// The next index read is the revocation's, after the commit.
+						before: async () => {
+							failNextIndexRead = true;
+						},
+					},
+				},
+			},
+		});
+
+		await expect(internalAdapter.deleteUser(userId)).resolves.toBe(true);
+
+		expect(failNextIndexRead).toBe(false);
+		expect(await internalAdapter.findSession(sessionToken)).toBeNull();
+	});
+
 	it("revokes cached sessions even when a session delete.after hook throws", async () => {
 		const { internalAdapter, userId, sessionToken, remaining } =
 			await makeFailingAdapter({
