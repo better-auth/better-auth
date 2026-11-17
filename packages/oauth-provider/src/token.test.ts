@@ -5070,41 +5070,42 @@ describe("oauth token - omitted scope with registration defaults", async () => {
 	const codeVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 	const codeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		baseURL: authServerBaseUrl,
-		plugins: [
-			jwt({
-				jwt: {
-					issuer: authServerBaseUrl,
-				},
-			}),
-			oauthProvider({
-				loginPage: "/login",
-				consentPage: "/consent",
-				allowDynamicClientRegistration: true,
-				scopes: ["openid", "profile", "members:write"],
-				clientRegistrationDefaultScopes: ["openid", "profile"],
-				clientRegistrationAllowedScopes: ["openid", "profile", "members:write"],
-			}),
-		],
-	});
+	const { auth, signInWithTestUser, client } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({
+					jwt: {
+						issuer: authServerBaseUrl,
+					},
+				}),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					scopes: ["openid", "profile", "members:write"],
+					clientRegistrationDefaultScopes: ["openid", "profile"],
+					clientRegistrationAllowedScopes: [
+						"openid",
+						"profile",
+						"members:write",
+					],
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
 
 	const { headers } = await signInWithTestUser();
-	const client = createAuthClient({
-		plugins: [oauthProviderClient()],
-		baseURL: authServerBaseUrl,
-		fetchOptions: {
-			customFetchImpl,
-			headers,
-		},
-	});
-
 	async function registerClient() {
-		const response = await client.oauth2.register({
-			redirect_uris: [redirectUri],
-			token_endpoint_auth_method: "client_secret_post",
-			application_type: "native",
-		});
+		const response = await client.oauth2.register(
+			{
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_post",
+				application_type: "native",
+			},
+			{ headers },
+		);
 		expect(response.error).toBeNull();
 		const registered = response.data!;
 		await auth.api.adminUpdateOAuthClient({
@@ -5130,6 +5131,7 @@ describe("oauth token - omitted scope with registration defaults", async () => {
 
 		let callbackRedirectUrl = "";
 		await client.$fetch(authUrl.toString(), {
+			headers,
 			onError(context) {
 				callbackRedirectUrl = context.response.headers.get("Location") || "";
 			},
@@ -5232,6 +5234,7 @@ describe("oauth token - omitted scope with registration defaults", async () => {
 
 		let callbackRedirectUrl = "";
 		await client.$fetch(authUrl.toString(), {
+			headers,
 			onError(context) {
 				callbackRedirectUrl = context.response.headers.get("Location") || "";
 			},
@@ -5260,41 +5263,38 @@ describe("oauth token - omitted scope with empty registration defaults", async (
 	const codeVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 	const codeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		baseURL: authServerBaseUrl,
-		plugins: [
-			jwt({
-				jwt: {
-					issuer: authServerBaseUrl,
-				},
-			}),
-			oauthProvider({
-				loginPage: "/login",
-				consentPage: "/consent",
-				allowDynamicClientRegistration: true,
-				scopes: ["openid"],
-				clientRegistrationDefaultScopes: [],
-				clientRegistrationAllowedScopes: ["openid"],
-			}),
-		],
-	});
+	const { auth, signInWithTestUser, client } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({
+					jwt: {
+						issuer: authServerBaseUrl,
+					},
+				}),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					scopes: ["openid"],
+					clientRegistrationDefaultScopes: [],
+					clientRegistrationAllowedScopes: ["openid"],
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
 
 	const { headers } = await signInWithTestUser();
-	const client = createAuthClient({
-		plugins: [oauthProviderClient()],
-		baseURL: authServerBaseUrl,
-		fetchOptions: {
-			customFetchImpl,
-			headers,
-		},
-	});
-
 	it("exchanges an empty-scope code instead of rejecting it with invalid_scope", async () => {
-		const response = await client.oauth2.register({
-			redirect_uris: [redirectUri],
-			token_endpoint_auth_method: "client_secret_post",
-			application_type: "native",
-		});
+		const response = await client.oauth2.register(
+			{
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_post",
+				application_type: "native",
+			},
+			{ headers },
+		);
 		expect(response.error).toBeNull();
 		const registered = response.data!;
 		await auth.api.adminUpdateOAuthClient({
@@ -5317,6 +5317,7 @@ describe("oauth token - omitted scope with empty registration defaults", async (
 
 		let callbackRedirectUrl = "";
 		await client.$fetch(authUrl.toString(), {
+			headers,
 			onError(context) {
 				callbackRedirectUrl = context.response.headers.get("Location") || "";
 			},
