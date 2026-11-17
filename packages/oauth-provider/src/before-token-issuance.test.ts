@@ -279,8 +279,11 @@ describe("oauth-provider - beforeTokenIssuance", async () => {
 
 		// The code was consumed before the hook ran, so a refusal is final.
 		server.policy.refuse = false;
+		const hookCalls = server.events.length;
 		const retried = await redeem();
 		expect(oauthError(retried)).toBe("invalid_grant");
+		expect(server.events).toHaveLength(hookCalls);
+		expect(await countTokenRows(server)).toBe(rowsBefore);
 	});
 
 	it("leaves the presented refresh token usable after a refused refresh", async () => {
