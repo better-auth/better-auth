@@ -122,6 +122,12 @@ describe("oauth - init", () => {
 		["embedded credentials", "https://user:pass@mcp.example.com"],
 		["a query", "https://mcp.example.com?x=1"],
 		["a fragment", "https://mcp.example.com#x"],
+		// The URL parser leaves `search` and `hash` empty for these, and strips
+		// whitespace and tabs, so each passes a check made on the parsed URL.
+		["a bare query marker", "https://mcp.example.com?"],
+		["a bare fragment marker", "https://mcp.example.com#"],
+		["surrounding whitespace", " https://mcp.example.com "],
+		["an embedded tab", "https://mcp.ex\tample.com"],
 	])("should fail when advertisedBaseURL has %s", async (_label, value) => {
 		await expect(
 			getTestInstance({
@@ -139,7 +145,12 @@ describe("oauth - init", () => {
 		);
 	});
 
-	it("should pass with a valid advertisedBaseURL", async () => {
+	it.each([
+		["no path", "https://mcp.example.com"],
+		["a trailing slash", "https://mcp.example.com/"],
+		["a base path", "https://mcp.example.com/auth"],
+		["http", "http://localhost:3000"],
+	])("should pass with an advertisedBaseURL with %s", async (_label, value) => {
 		await expect(
 			getTestInstance({
 				plugins: [
@@ -147,7 +158,7 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						advertisedBaseURL: "https://mcp.example.com",
+						advertisedBaseURL: value,
 					}),
 				],
 			}),

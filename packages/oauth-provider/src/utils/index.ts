@@ -1687,7 +1687,7 @@ export function getAuthEndpointUrl(
 }
 
 /** `url` without its trailing slashes, which `baseURL` is allowed to carry. */
-function trimTrailingSlashes(url: string): string {
+export function trimTrailingSlashes(url: string): string {
 	let end = url.length;
 	// A loop, not `/\/+$/`, which backtracks quadratically on runs of slashes.
 	while (end > 0 && url[end - 1] === "/") end--;

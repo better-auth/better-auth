@@ -1398,10 +1398,12 @@ export interface OAuthOptions<
 	 * to the one endpoint it names: one minted for `/oauth2/revoke` is still
 	 * refused at `/oauth2/token`.
 	 *
-	 * This has no effect under the default `assertionAudience: "issuer"`, which
-	 * accepts no endpoint URL at all. It applies with
-	 * `assertionAudience: "issuer-or-endpoint"`, and at
-	 * `POST /oauth2/client/rotate-keys`, which accepts only its own URL.
+	 * Under the default `assertionAudience: "issuer"` the token, introspection,
+	 * revocation and PAR endpoints accept no endpoint URL, so this option
+	 * changes nothing there; it applies to them with
+	 * `assertionAudience: "issuer-or-endpoint"`.
+	 * `POST /oauth2/client/rotate-keys` accepts only its own URL in either mode,
+	 * so its advertised URL is accepted whatever `assertionAudience` is set to.
 	 *
 	 * This only widens the accepted assertion audience. Discovery still
 	 * publishes the endpoints at `baseURL`, so the gateway is responsible for
