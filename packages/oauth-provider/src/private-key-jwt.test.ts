@@ -444,6 +444,8 @@ describe("private_key_jwt authentication", async () => {
 				publishNewKey: () =>
 					published.push({ ...newJwk, kid: "new", alg: "RS256" }),
 				transport,
+				sign,
+				verifyAssertion,
 				verify,
 				verifyTogether,
 				delayFetches: (ms: number) => {
@@ -562,6 +564,90 @@ describe("private_key_jwt authentication", async () => {
 				fixture.verify("new", fixture.newKey),
 			).resolves.toMatchObject({ clientId: fixture.clientId });
 			await ghostResult;
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		/**
+		 * @see https://datatracker.ietf.org/doc/html/rfc7517#section-5
+		 */
+		it("does not join a fetch that started in the same millisecond as the assertion", async () => {
+			const fixture = await setup("share-same-millisecond");
+			await fixture.verify("old", fixture.oldKey);
+			const fetchJwks = fixture.transport.getMockImplementation()!;
+			let fetchStarted!: () => void;
+			const started = new Promise<void>((resolve) => {
+				fetchStarted = resolve;
+			});
+			fixture.transport.mockImplementation(async (...args) => {
+				const response = await fetchJwks(...args);
+				fetchStarted();
+				await new Promise((resolve) => setTimeout(resolve, 100));
+				return response;
+			});
+			// Frozen, so the fetch and the next assertion share one millisecond.
+			vi.useFakeTimers({ toFake: ["Date"] });
+
+			const ghost = fixture.verify("ghost", fixture.oldKey);
+			const ghostResult = expect(ghost).rejects.toBeDefined();
+			await started;
+			fixture.publishNewKey();
+			await expect(
+				fixture.verify("new", fixture.newKey),
+			).resolves.toMatchObject({ clientId: fixture.clientId });
+			await ghostResult;
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		/**
+		 * @see https://datatracker.ietf.org/doc/html/rfc7517#section-5
+		 */
+		it("answers with the newer key set when an older overlapping fetch finishes last", async () => {
+			const fixture = await setup("share-stale-finish");
+			await fixture.verify("old", fixture.oldKey);
+			const fetchJwks = fixture.transport.getMockImplementation()!;
+			let calls = 0;
+			fixture.transport.mockImplementation(async (...args) => {
+				const delay = ++calls === 1 ? 150 : 10;
+				const response = await fetchJwks(...args);
+				await new Promise((resolve) => setTimeout(resolve, delay));
+				return response;
+			});
+
+			const [first, second] = await Promise.all([
+				fixture.sign("new", fixture.newKey),
+				fixture.sign("new", fixture.newKey),
+			]);
+			const slowResults = Promise.allSettled([
+				fixture.verifyAssertion(first),
+				fixture.verifyAssertion(second),
+			]);
+			await vi.waitFor(() => expect(calls).toBe(1));
+			fixture.publishNewKey();
+			await expect(
+				fixture.verify("new", fixture.newKey),
+			).resolves.toMatchObject({ clientId: fixture.clientId });
+
+			const results = await slowResults;
+			expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
+		});
+
+		it("lets a joiner make its own fetch when the shared fetch returns an invalid key set", async () => {
+			const fixture = await setup("share-invalid");
+			await fixture.verify("old", fixture.oldKey);
+			fixture.publishNewKey();
+			const fetchJwks = fixture.transport.getMockImplementation()!;
+			fixture.transport.mockImplementationOnce(async () => {
+				await new Promise((resolve) => setTimeout(resolve, 50));
+				return Response.json({ keys: "malformed" });
+			});
+			fixture.transport.mockImplementation(fetchJwks);
+
+			const results = await fixture.verifyTogether(3, "new", fixture.newKey);
+			expect(results.map((r) => r.status).sort()).toEqual([
+				"fulfilled",
+				"fulfilled",
+				"rejected",
+			]);
 			expect(fixture.transport).toHaveBeenCalledTimes(3);
 		});
 
