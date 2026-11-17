@@ -629,7 +629,7 @@ export async function collectExtensionTokenResponseFields(
 	for (const key of Object.keys(fields)) {
 		if (RESERVED_TOKEN_RESPONSE_FIELDS.has(key)) {
 			logger.warn(
-				`oauth-provider: an extension contributed the token response field "${key}", which the provider sets; leaving it out.`,
+				`oauth-provider: an extension contributed the token response field "${key}", which the provider owns; leaving it out.`,
 			);
 			delete fields[key];
 		}
