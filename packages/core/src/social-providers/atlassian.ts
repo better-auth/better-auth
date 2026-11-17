@@ -111,7 +111,7 @@ export const atlassian = (options: AtlassianOptions) => {
 					name: string;
 					email?: string | undefined;
 					picture?: string | undefined;
-				}>("https://api.atlassian.com/me", {
+				}>(options.userInfoEndpoint ?? "https://api.atlassian.com/me", {
 					headers: { Authorization: `Bearer ${token.accessToken}` },
 				});
 

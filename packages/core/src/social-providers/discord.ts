@@ -162,7 +162,7 @@ export const discord = (options: DiscordOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<DiscordProfile>(
-				"https://discord.com/api/users/@me",
+				options.userInfoEndpoint ?? "https://discord.com/api/users/@me",
 				{
 					headers: {
 						authorization: `Bearer ${token.accessToken}`,

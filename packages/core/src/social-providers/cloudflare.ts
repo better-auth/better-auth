@@ -176,7 +176,7 @@ export const cloudflare = (options: CloudflareOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 				tokenEndpointAuth: getTokenEndpointAuth(options),
 			});
 		},
@@ -190,7 +190,7 @@ export const cloudflare = (options: CloudflareOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 						tokenEndpointAuth: getTokenEndpointAuth(options),
 					});
 				},
@@ -200,7 +200,7 @@ export const cloudflare = (options: CloudflareOptions) => {
 			}
 
 			const { data, error } = await betterFetch<CloudflareUserResponse>(
-				userEndpoint,
+				options.userInfoEndpoint ?? userEndpoint,
 				{ headers: { authorization: `Bearer ${token.accessToken}` } },
 			);
 

@@ -6,6 +6,7 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 import { createPlaceholderEmail } from "../utils/email";
+import { appendQueryParams } from "../utils/url";
 
 interface TwitterUrlEntity {
 	start: number;
@@ -119,6 +120,8 @@ export interface TwitterOption extends ProviderOptions<TwitterProfile> {
 
 export const twitter = (options: TwitterOption) => {
 	const tokenEndpoint = "https://api.x.com/2/oauth2/token";
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? "https://api.x.com/2/users/me";
 	return {
 		id: "twitter",
 		name: "Twitter",
@@ -171,7 +174,10 @@ export const twitter = (options: TwitterOption) => {
 			}
 			const { data: profile, error: profileError } =
 				await betterFetch<TwitterProfile>(
-					"https://api.x.com/2/users/me?user.fields=profile_image_url",
+					appendQueryParams(
+						userInfoEndpoint,
+						new URLSearchParams({ "user.fields": "profile_image_url" }),
+					),
 					{
 						method: "GET",
 						headers: {
@@ -186,12 +192,18 @@ export const twitter = (options: TwitterOption) => {
 
 			const { data: emailData, error: emailError } = await betterFetch<{
 				data: { confirmed_email: string };
-			}>("https://api.x.com/2/users/me?user.fields=confirmed_email", {
-				method: "GET",
-				headers: {
-					Authorization: `Bearer ${token.accessToken}`,
+			}>(
+				appendQueryParams(
+					userInfoEndpoint,
+					new URLSearchParams({ "user.fields": "confirmed_email" }),
+				),
+				{
+					method: "GET",
+					headers: {
+						Authorization: `Bearer ${token.accessToken}`,
+					},
 				},
-			});
+			);
 			let emailVerified = false;
 			if (!emailError && emailData?.data?.confirmed_email) {
 				profile.data.email = emailData.data.confirmed_email;

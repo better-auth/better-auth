@@ -80,7 +80,7 @@ export const spotify = (options: SpotifyOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<SpotifyProfile>(
-				"https://api.spotify.com/v1/me",
+				options.userInfoEndpoint ?? "https://api.spotify.com/v1/me",
 				{
 					method: "GET",
 					headers: {

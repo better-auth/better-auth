@@ -29,7 +29,7 @@ export const RESERVED_AUTHORIZATION_PARAMS_SET: ReadonlySet<string> = new Set(
  * because re-serializing it would change its encoding, such as `%20` to `+`,
  * and break providers that sign the query.
  */
-function withQueryParams(endpoint: string, params: URLSearchParams) {
+export function withQueryParams(endpoint: string, params: URLSearchParams) {
 	const url = new URL(endpoint);
 	const query = url.search.slice(1);
 	const kept = query

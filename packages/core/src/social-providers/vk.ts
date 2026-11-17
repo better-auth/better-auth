@@ -27,8 +27,6 @@ export interface VkOption extends ProviderOptions<VkProfile> {
 
 export const vk = (options: VkOption) => {
 	const tokenEndpoint = "https://id.vk.com/oauth2/auth";
-	const authorizationEndpoint =
-		options.authorizationEndpoint ?? "https://id.vk.com/authorize";
 	const userInfoEndpoint =
 		options.userInfoEndpoint ?? "https://id.vk.com/oauth2/user_info";
 	return {
@@ -45,6 +43,7 @@ export const vk = (options: VkOption) => {
 			const _scopes = options.disableDefaultScope ? [] : ["email", "phone"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
+			const authorizationEndpoint = "https://id.vk.com/authorize";
 
 			return createAuthorizationURL({
 				id: "vk",

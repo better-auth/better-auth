@@ -84,7 +84,7 @@ export const linear = (options: LinearOptions) => {
 			}
 
 			const { data: profile, error } = await betterFetch<LinearProfile>(
-				"https://api.linear.app/graphql",
+				options.userInfoEndpoint ?? "https://api.linear.app/graphql",
 				{
 					method: "POST",
 					headers: {

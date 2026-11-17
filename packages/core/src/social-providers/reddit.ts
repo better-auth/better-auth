@@ -85,7 +85,7 @@ export const reddit = (options: RedditOptions) => {
 			}
 
 			const { data: profile, error } = await betterFetch<RedditProfile>(
-				"https://oauth.reddit.com/api/v1/me",
+				options.userInfoEndpoint ?? "https://oauth.reddit.com/api/v1/me",
 				{
 					headers: {
 						Authorization: `Bearer ${token.accessToken}`,

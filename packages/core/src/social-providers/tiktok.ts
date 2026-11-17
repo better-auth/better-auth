@@ -9,7 +9,9 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { withQueryParams } from "../oauth2/create-authorization-url";
 import { createPlaceholderEmail } from "../utils/email";
+import { appendQueryParams } from "../utils/url";
 
 /**
  * [More info](https://developers.tiktok.com/doc/tiktok-api-v2-get-user-info/)
@@ -154,23 +156,26 @@ export const tiktok = (options: TiktokOptions) => {
 			if (scopes) _scopes.push(...scopes);
 			// TikTok uses `client_key` instead of the standard `client_id`, so the
 			// shared createAuthorizationURL helper cannot be used directly.
-			const url = new URL(
-				options.authorizationEndpoint ??
-					"https://www.tiktok.com/v2/auth/authorize",
-			);
-			url.searchParams.set("scope", _scopes.join(","));
-			url.searchParams.set("response_type", "code");
-			url.searchParams.set("client_key", options.clientKey);
-			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
-			url.searchParams.set("state", state);
+			const params = new URLSearchParams();
+			params.set("scope", _scopes.join(","));
+			params.set("response_type", "code");
+			params.set("client_key", options.clientKey);
+			params.set("redirect_uri", options.redirectURI || redirectURI);
+			params.set("state", state);
 			if (additionalParams) {
 				for (const [key, value] of Object.entries(additionalParams)) {
 					if (RESERVED_AUTHORIZATION_PARAMS_SET.has(key)) continue;
 					if (key === "client_key") continue;
-					url.searchParams.set(key, value);
+					params.set(key, value);
 				}
 			}
-			return url;
+			return new URL(
+				withQueryParams(
+					options.authorizationEndpoint ??
+						"https://www.tiktok.com/v2/auth/authorize",
+					params,
+				),
+			);
 		},
 
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -205,7 +210,11 @@ export const tiktok = (options: TiktokOptions) => {
 				"username",
 			];
 			const { data: profile, error } = await betterFetch<TiktokProfile>(
-				`https://open.tiktokapis.com/v2/user/info/?fields=${fields.join(",")}`,
+				appendQueryParams(
+					options.userInfoEndpoint ??
+						"https://open.tiktokapis.com/v2/user/info/",
+					new URLSearchParams({ fields: fields.join(",") }),
+				),
 				{
 					headers: {
 						authorization: `Bearer ${token.accessToken}`,

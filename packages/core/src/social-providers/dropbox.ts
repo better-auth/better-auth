@@ -153,7 +153,8 @@ export const dropbox = (options: DropboxOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<DropboxProfile>(
-				"https://api.dropboxapi.com/2/users/get_current_account",
+				options.userInfoEndpoint ??
+					"https://api.dropboxapi.com/2/users/get_current_account",
 				{
 					method: "POST",
 					headers: {

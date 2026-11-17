@@ -1,8 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens, OAuthProvider, ProviderOptions } from "../oauth2";
 import { RESERVED_AUTHORIZATION_PARAMS_SET } from "../oauth2";
+import { withQueryParams } from "../oauth2/create-authorization-url";
 import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 import { createPlaceholderEmail } from "../utils/email";
+import { appendQueryParams } from "../utils/url";
 
 /**
  * WeChat user profile information
@@ -74,23 +76,27 @@ export const wechat = (options: WeChatOptions) => {
 
 			// WeChat uses non-standard OAuth2 parameters (appid instead of client_id)
 			// and requires a fragment (#wechat_redirect), so we construct the URL manually.
-			const url = new URL(
-				options.authorizationEndpoint ??
-					"https://open.weixin.qq.com/connect/qrconnect",
-			);
-			url.searchParams.set("scope", _scopes.join(","));
-			url.searchParams.set("response_type", "code");
-			url.searchParams.set("appid", options.clientId);
-			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
-			url.searchParams.set("state", state);
-			url.searchParams.set("lang", options.lang || "cn");
+			const params = new URLSearchParams();
+			params.set("scope", _scopes.join(","));
+			params.set("response_type", "code");
+			params.set("appid", options.clientId);
+			params.set("redirect_uri", options.redirectURI || redirectURI);
+			params.set("state", state);
+			params.set("lang", options.lang || "cn");
 			if (additionalParams) {
 				for (const [key, value] of Object.entries(additionalParams)) {
 					if (RESERVED_AUTHORIZATION_PARAMS_SET.has(key)) continue;
 					if (key === "appid") continue;
-					url.searchParams.set(key, value);
+					params.set(key, value);
 				}
 			}
+			const url = new URL(
+				withQueryParams(
+					options.authorizationEndpoint ??
+						"https://open.weixin.qq.com/connect/qrconnect",
+					params,
+				),
+			);
 			url.hash = "wechat_redirect";
 
 			return url;
@@ -205,9 +211,10 @@ export const wechat = (options: WeChatOptions) => {
 			const { data: profile, error } = await betterFetch<
 				WeChatProfile & { errcode?: number; errmsg?: string }
 			>(
-				`${
-					options.userInfoEndpoint ?? "https://api.weixin.qq.com/sns/userinfo"
-				}?${params.toString()}`,
+				appendQueryParams(
+					options.userInfoEndpoint ?? "https://api.weixin.qq.com/sns/userinfo",
+					params,
+				),
 				{
 					method: "GET",
 				},

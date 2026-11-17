@@ -85,7 +85,7 @@ export const naver = (options: NaverOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<NaverProfile>(
-				"https://openapi.naver.com/v1/nid/me",
+				options.userInfoEndpoint ?? "https://openapi.naver.com/v1/nid/me",
 				{
 					headers: {
 						Authorization: `Bearer ${token.accessToken}`,

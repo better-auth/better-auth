@@ -112,6 +112,82 @@ describe("github profile", () => {
 	});
 });
 
+describe("github userInfoEndpoint override", () => {
+	const profile = { ...publicProfile, email: null };
+
+	function serve(userURL: string, emailsURL?: string) {
+		mockedFetch.mockImplementation(async (input, init) => {
+			const request = new Request(input, init);
+			if (request.url === userURL) return Response.json(profile);
+			if (request.url === emailsURL) {
+				return Response.json([
+					{
+						email: "octocat@example.com",
+						primary: true,
+						verified: true,
+						visibility: null,
+					},
+				]);
+			}
+			throw new Error(`Unexpected request to ${request.url}`);
+		});
+	}
+
+	it("reads the email list next to an Enterprise Server user endpoint", async () => {
+		serve(
+			"https://ghe.example.com/api/v3/user",
+			"https://ghe.example.com/api/v3/user/emails",
+		);
+		const provider = github({
+			clientId: "github-app",
+			userInfoEndpoint: "https://ghe.example.com/api/v3/user",
+		});
+		const result = await provider.getUserInfo({ accessToken: "access-token" });
+		expect(result?.user).toMatchObject({
+			email: "octocat@example.com",
+			emailVerified: true,
+		});
+	});
+
+	it("leaves the override query out of the email list request", async () => {
+		serve(
+			"https://ghe.example.com/api/v3/user?org=acme",
+			"https://ghe.example.com/api/v3/user/emails",
+		);
+		const provider = github({
+			clientId: "github-app",
+			userInfoEndpoint: "https://ghe.example.com/api/v3/user?org=acme",
+		});
+		const result = await provider.getUserInfo({ accessToken: "access-token" });
+		expect(result?.user.email).toBe("octocat@example.com");
+	});
+
+	it("reads the email list next to a user endpoint with a trailing slash", async () => {
+		serve(
+			"https://ghe.example.com/api/v3/user/",
+			"https://ghe.example.com/api/v3/user/emails",
+		);
+		const provider = github({
+			clientId: "github-app",
+			userInfoEndpoint: "https://ghe.example.com/api/v3/user/",
+		});
+		const result = await provider.getUserInfo({ accessToken: "access-token" });
+		expect(result?.user.email).toBe("octocat@example.com");
+	});
+
+	it("skips the email list when the override does not end in /user", async () => {
+		serve("https://emulator.example.com/profile");
+		const provider = github({
+			clientId: "github-app",
+			userInfoEndpoint: "https://emulator.example.com/profile",
+		});
+		const result = await provider.getUserInfo({ accessToken: "access-token" });
+		expect(mockedFetch).toHaveBeenCalledOnce();
+		expect(result?.user).toMatchObject({ emailVerified: false });
+		expect(result?.data.email).toBeNull();
+	});
+});
+
 /**
  * @see https://docs.github.com/en/rest/users/users#get-the-authenticated-user
  */

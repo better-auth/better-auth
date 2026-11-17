@@ -86,7 +86,7 @@ export const notion = (options: NotionOptions) => {
 						user: NotionProfile;
 					};
 				};
-			}>("https://api.notion.com/v1/users/me", {
+			}>(options.userInfoEndpoint ?? "https://api.notion.com/v1/users/me", {
 				headers: {
 					Authorization: `Bearer ${token.accessToken}`,
 					"Notion-Version": "2022-06-28",

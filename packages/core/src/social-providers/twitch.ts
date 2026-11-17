@@ -104,7 +104,7 @@ export const twitch = (options: TwitchOptions) => {
 				return null;
 			}
 			const { data } = await betterFetch<{ data: TwitchUser[] }>(
-				"https://api.twitch.tv/helix/users",
+				options.userInfoEndpoint ?? "https://api.twitch.tv/helix/users",
 				{
 					headers: {
 						Authorization: `Bearer ${token.accessToken}`,

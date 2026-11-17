@@ -34,7 +34,8 @@ export const paybin = (options: PaybinOptions) => {
 	const issuerBaseURL = issuer.endsWith("/") ? issuer : `${issuer}/`;
 	const authorizationEndpoint = new URL("oauth/authorize", issuerBaseURL).href;
 	const tokenEndpoint = new URL("oauth/token", issuerBaseURL).href;
-	const userInfoEndpoint = new URL("oauth/userinfo", issuerBaseURL).href;
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? new URL("oauth/userinfo", issuerBaseURL).href;
 
 	return {
 		id: "paybin",

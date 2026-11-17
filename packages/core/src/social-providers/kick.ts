@@ -86,7 +86,7 @@ export const kick = (options: KickOptions) => {
 
 			const { data, error } = await betterFetch<{
 				data: KickProfile[];
-			}>("https://api.kick.com/public/v1/users", {
+			}>(options.userInfoEndpoint ?? "https://api.kick.com/public/v1/users", {
 				method: "GET",
 				headers: {
 					Authorization: `Bearer ${token.accessToken}`,

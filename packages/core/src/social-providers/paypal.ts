@@ -12,6 +12,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { appendQueryParams } from "../utils/url";
 
 export interface PayPalProfile {
 	sub?: string | undefined;
@@ -172,13 +173,11 @@ export const paypal = (options: PayPalOptions) => {
 			}
 
 			try {
-				const userInfoUrl = new URL(
-					options.userInfoEndpoint ?? userInfoEndpoint,
-				);
-				userInfoUrl.searchParams.set("schema", "paypalv1.1");
-
 				const response = await betterFetch<PayPalProfile>(
-					userInfoUrl.toString(),
+					appendQueryParams(
+						options.userInfoEndpoint ?? userInfoEndpoint,
+						new URLSearchParams({ schema: "paypalv1.1" }),
+					),
 					{
 						headers: {
 							Authorization: `Bearer ${token.accessToken}`,
