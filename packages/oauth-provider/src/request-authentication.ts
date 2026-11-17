@@ -22,9 +22,11 @@ const authenticatedClientState =
 const verifiedDpopProofState =
 	defineRequestState<Recorded<VerifiedDpopProof> | null>(() => null);
 
-// The adapter survives the per-request copy that dynamic base URLs make of the
-// context, and no two instances share one.
-const instanceOf = (ctx: GenericEndpointContext): object => ctx.context.adapter;
+// The internal adapter is built once per auth context and survives the
+// per-request copy that dynamic base URLs make of it. Unlike `adapter`, which
+// a `database` factory may hand to several instances, it is never shared.
+const instanceOf = (ctx: GenericEndpointContext): object =>
+	ctx.context.internalAdapter;
 
 export const recordAuthenticatedClient = (
 	ctx: GenericEndpointContext,

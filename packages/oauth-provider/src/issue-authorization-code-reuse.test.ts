@@ -206,7 +206,7 @@ describe("provider.issueAuthorizationCode after authenticateClient and verifyDpo
  * that one instance authenticated is not authenticated on another instance
  * that holds a different client under the same `client_id`.
  *
- * @see https://github.com/better-auth/better-auth/pull/12759
+ * @see https://github.com/better-auth/better-auth/issues/10414
  */
 describe("request authentication across nested auth instances", async () => {
 	const secondary = await getTestInstance({
@@ -231,6 +231,7 @@ describe("request authentication across nested auth instances", async () => {
 		},
 	});
 
+	let primaryClientId: string | undefined;
 	const nested = {
 		id: "test-nested-par",
 		endpoints: {
@@ -242,10 +243,11 @@ describe("request authentication across nested auth instances", async () => {
 						ctx,
 						ctx.context.getPlugin("oauth-provider")!.options,
 					);
-					await provider.authenticateClient({
+					const primary = await provider.authenticateClient({
 						clientId: confidential.client_id,
 						requireCredentials: false,
 					});
+					primaryClientId = primary.clientId;
 					return ctx.json(
 						await secondary.auth.api.oauth2PushedAuthorizationRequest({
 							body: {
@@ -301,5 +303,6 @@ describe("request authentication across nested auth instances", async () => {
 			"invalid_client",
 		);
 		expect(pushed.data).toBeNull();
+		expect(primaryClientId).toBe(confidential.client_id);
 	});
 });
