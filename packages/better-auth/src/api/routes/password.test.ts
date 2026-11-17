@@ -703,6 +703,9 @@ describe("plugin onPasswordReset hook", async () => {
 
 	it("runs once after a reset, for a user with no live session", async () => {
 		onPasswordReset.mockClear();
+		const { internalAdapter } = await auth.$context;
+		await internalAdapter.deleteUserSessions(await userId());
+		expect(await internalAdapter.listSessions(await userId())).toHaveLength(0);
 		await requestReset();
 
 		const reset = await client.resetPassword({
