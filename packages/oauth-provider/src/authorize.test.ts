@@ -2630,33 +2630,28 @@ describe("oauth authorize - pending authorization codes follow their consent", a
 	// The reference the next authorization request stores its consent under.
 	const state: { referenceId?: string } = {};
 
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		baseURL: authServerBaseUrl,
-		plugins: [
-			oauthProvider({
-				loginPage: "/login",
-				consentPage: "/consent",
-				resources: [validResource],
-				enforcePerClientResources: false,
-				postLogin: {
-					page: "/select-organization",
-					shouldRedirect: () => false,
-					consentReferenceId: () => state.referenceId,
-				},
-			}),
-			jwt(),
-		],
-	});
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					resources: [validResource],
+					enforcePerClientResources: false,
+					postLogin: {
+						page: "/select-organization",
+						shouldRedirect: () => false,
+						consentReferenceId: () => state.referenceId,
+					},
+				}),
+				jwt(),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
 
 	const { headers, user } = await signInWithTestUser();
-	const client = createAuthClient({
-		plugins: [oauthProviderClient()],
-		baseURL: authServerBaseUrl,
-		fetchOptions: {
-			customFetchImpl,
-			headers,
-		},
-	});
 
 	async function createOAuthClient(skipConsent: boolean) {
 		const created = await auth.api.adminCreateOAuthClient({
@@ -2725,6 +2720,7 @@ describe("oauth authorize - pending authorization codes follow their consent", a
 
 		let redirect = "";
 		await client.$fetch(authUrl.toString(), {
+			headers,
 			onError(context) {
 				redirect = context.response.headers.get("Location") || "";
 			},
@@ -2749,7 +2745,7 @@ describe("oauth authorize - pending authorization codes follow their consent", a
 		try {
 			const consentResult = await client.oauth2.consent(
 				{ accept: true },
-				{ throw: true },
+				{ headers, throw: true },
 			);
 			const code = new URL(consentResult.url!).searchParams.get("code");
 			expect(code).toBeTruthy();
@@ -2821,6 +2817,7 @@ describe("oauth authorize - pending authorization codes follow their consent", a
 
 	async function deleteStoredConsent(id: string) {
 		const deleted = await client.$fetch("/oauth2/delete-consent", {
+			headers,
 			method: "POST",
 			body: { id },
 		});
@@ -2857,6 +2854,7 @@ describe("oauth authorize - pending authorization codes follow their consent", a
 		expect(granted?.scopes).toContain("profile");
 
 		const narrowed = await client.$fetch("/oauth2/update-consent", {
+			headers,
 			method: "POST",
 			body: { id: granted!.id, update: { scopes: ["openid"] } },
 		});

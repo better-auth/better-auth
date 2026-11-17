@@ -301,7 +301,7 @@ Redeeming an authorization code at `/oauth2/token` now needs a stored consent th
 
 * A redemption after the user deleted the consent, or narrowed it below what the code authorizes, fails with `400 invalid_grant`. The client must start a new authorization request.
 * A consent that was deleted and then given again for the same request leaves the code valid.
-* Codes of a client with `skip_consent` are not checked, because that client has no stored consent.
+* Codes redeemed while the client is configured with `skip_consent` bypass this check, even if a stored consent exists.
 * A redemption that passed the check just before the user deleted the consent can still finish, and the tokens it issues stay valid.
 
 **What to do:** clients that exchange a code right after the user approves it need no change. See [Manage consents](/docs/plugins/oauth-provider/sign-in-flow#manage-consents).
