@@ -2091,6 +2091,25 @@ describe("ciba delegated tokens", () => {
 		expect(sendNotification.mock.calls.length).toBe(notified);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8693#section-4.1
+	 */
+	it("refuses a falsy stored actor instead of issuing a token without act", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start();
+		await approve(url);
+		const row = await cibaRequestRow(authReqId);
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "cibaRequest",
+			where: [{ field: "id", value: row!.id }],
+			update: { actor: false as unknown as OAuthActorClaim },
+		});
+		const refused = await poll(authReqId);
+		expect(refused.status).toBe(500);
+		expect(refused.body.error).toBe("server_error");
+	});
+
 	it("keeps the approval when the stored actor is invalid", async () => {
 		resolveActor.mockResolvedValueOnce(agent);
 		const { authReqId, url } = await start();
