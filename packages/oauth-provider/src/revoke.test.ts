@@ -430,6 +430,9 @@ describe("oauth revoke", async () => {
 		expect(refreshedB.error).toBe(null);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+	 */
 	it("invalidates the refresh family when the owning client presents its own revoked token", async () => {
 		const tokens = await getTokens();
 		const firstRefreshToken = tokens.data?.refresh_token;
