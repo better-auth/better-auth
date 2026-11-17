@@ -216,7 +216,7 @@ describe("provider.validateAuthorizationRequest", async () => {
 		expect(withRequest.body?.error).toBe("request_not_supported");
 	});
 
-	it("writes no rows", async () => {
+	it("issues no code and stores no verification row", async () => {
 		const before = await countVerificationRows();
 		await validate(await requestQuery({ redirect_uri: redirectUri }));
 		await validate(await requestQuery({ scope: "openid admin" }));

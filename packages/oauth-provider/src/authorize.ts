@@ -1200,8 +1200,8 @@ export async function parseAuthorizationRequest(
  * Validates an authorization request for a plugin endpoint before any
  * session exists, through the request checks `issueAuthorizationCode` runs.
  * It does not run `beforeAuthorization`, which `issueAuthorizationCode`
- * runs on the session. Authenticates no client, issues no code, and stores no pushed request or
- * DPoP `jti`.
+ * runs on the session. Authenticates no client, issues no code, and stores
+ * no pushed request or DPoP `jti`.
  */
 export async function validateAuthorizationRequestParams(
 	ctx: GenericEndpointContext,
