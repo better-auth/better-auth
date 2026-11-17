@@ -2819,7 +2819,7 @@ describe("deleteUser atomicity", () => {
 				return (base.delete as (data: unknown) => unknown)(data);
 			}) as unknown as A["delete"],
 		});
-		const { internalAdapter } = await init({
+		const { adapter, internalAdapter } = await init({
 			...extraOptions,
 			database: (options) => {
 				const base = kyselyAdapter(db, {
@@ -2849,6 +2849,7 @@ describe("deleteUser atomicity", () => {
 			sessions: (await internalAdapter.listSessions(user.id)).length,
 		});
 		return {
+			adapter,
 			internalAdapter,
 			userId: user.id,
 			sessionToken: session.token,
@@ -2910,7 +2911,7 @@ describe("deleteUser atomicity", () => {
 	it("still deletes the user, its accounts and its sessions", async () => {
 		const { internalAdapter, userId, remaining } = await makeFailingAdapter();
 
-		await internalAdapter.deleteUser(userId);
+		await expect(internalAdapter.deleteUser(userId)).resolves.toBe(true);
 
 		expect(await remaining()).toEqual({ user: null, accounts: 0, sessions: 0 });
 	});
@@ -2924,7 +2925,7 @@ describe("deleteUser atomicity", () => {
 				} as BetterAuthOptions["databaseHooks"],
 			});
 
-			await internalAdapter.deleteUser(userId);
+			await expect(internalAdapter.deleteUser(userId)).resolves.toBe(false);
 
 			const left = await remaining();
 			expect(left.user?.id).toBe(userId);
@@ -2932,6 +2933,53 @@ describe("deleteUser atomicity", () => {
 			expect(left.sessions).toBe(1);
 		},
 	);
+
+	it("rolls back the caller's transaction when a hook vetoes inside it", async () => {
+		const { adapter, internalAdapter, userId, remaining } =
+			await makeFailingAdapter({
+				databaseHooks: {
+					account: { delete: { before: async () => false } },
+				},
+			});
+
+		// The sessions are deleted before the account veto, in the caller's
+		// transaction, which only the thrown veto can roll back.
+		await expect(
+			runWithTransaction(adapter, () => internalAdapter.deleteUser(userId)),
+		).rejects.toMatchObject({ body: { code: "FAILED_TO_DELETE_USER" } });
+
+		const left = await remaining();
+		expect(left.user?.id).toBe(userId);
+		expect(left.accounts).toBe(1);
+		expect(left.sessions).toBe(1);
+	});
+
+	it("revokes a cached session created while the delete runs", async () => {
+		let createSessionDuringDelete: (() => Promise<void>) | undefined;
+		const { internalAdapter, userId, sessionToken } = await makeFailingAdapter({
+			secondaryStorage: createStringSecondaryStorage(new Map()),
+			databaseHooks: {
+				user: {
+					delete: {
+						// Stands in for a sign-in that lands while the delete runs.
+						before: async () => {
+							await createSessionDuringDelete?.();
+						},
+					},
+				},
+			},
+		});
+		let lateToken = "";
+		createSessionDuringDelete = async () => {
+			lateToken = (await internalAdapter.createSession(userId)).token;
+		};
+
+		await expect(internalAdapter.deleteUser(userId)).resolves.toBe(true);
+
+		expect(lateToken).not.toBe("");
+		expect(await internalAdapter.findSession(sessionToken)).toBeNull();
+		expect(await internalAdapter.findSession(lateToken)).toBeNull();
+	});
 
 	it("revokes cached sessions even when a session delete.after hook throws", async () => {
 		const { internalAdapter, userId, sessionToken, remaining } =

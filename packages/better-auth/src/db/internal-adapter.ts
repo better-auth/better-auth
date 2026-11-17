@@ -9,6 +9,7 @@ import type {
 import {
 	getCurrentAdapter,
 	getCurrentAuthEndpointContext,
+	getCurrentDBAdapterAsyncLocalStorage,
 	queueAfterTransactionHook,
 	runWithTransaction,
 	tryGetCurrentAuthEndpointContext,
@@ -17,7 +18,11 @@ import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import type { InternalLogger } from "@better-auth/core/env";
 import { isWorkerd } from "@better-auth/core/env";
-import { APIError, BetterAuthError } from "@better-auth/core/error";
+import {
+	APIError,
+	BASE_ERROR_CODES,
+	BetterAuthError,
+} from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -53,8 +58,16 @@ type ActiveSessionReference = {
 
 const VERIFICATION_CLEANUP_INTERVAL_MS = 60_000;
 
-/** Thrown inside `deleteUser`'s transaction to roll it back when a hook vetoes the delete. */
-const DELETE_USER_SKIPPED = Symbol("delete-user-skipped");
+/** Whether the current call already runs inside a `runWithTransaction`. */
+async function isTransactionActive() {
+	try {
+		const storage = await getCurrentDBAdapterAsyncLocalStorage();
+		return storage.getStore()?.isTransactionActive === true;
+	} catch {
+		// Runtimes without async storage cannot have joined a transaction.
+		return false;
+	}
+}
 
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
@@ -249,8 +262,6 @@ export const createInternalAdapter = (
 	async function queueCachedUserSessionDeletion(
 		userId: string,
 		sessionReferences?: readonly ActiveSessionReference[],
-		/** Checked when the hook runs; the revocation is skipped when it returns `false`. */
-		shouldRevoke?: () => boolean,
 	) {
 		if (!secondaryStorage) return;
 
@@ -260,10 +271,7 @@ export const createInternalAdapter = (
 			sessionReferences ?? (await getActiveSessionReferences(userId));
 		const revokedAt = Date.now();
 		await queueAfterTransactionHook(
-			async () => {
-				if (shouldRevoke && !shouldRevoke()) return;
-				await deleteCachedUserSessions(userId, references, revokedAt);
-			},
+			() => deleteCachedUserSessions(userId, references, revokedAt),
 			{
 				onError(error) {
 					logger.error(
@@ -522,22 +530,49 @@ export const createInternalAdapter = (
 			}
 			return total;
 		},
-		deleteUser: async (userId: string) => {
+		deleteUser: async (userId: string): Promise<boolean> => {
 			const sessionReferences = await getActiveSessionReferences(userId);
 			let userDeleted = false;
-			// One transaction, so a failed or vetoed delete does not leave the
-			// user without its sessions and accounts.
+			// A `delete.before` hook that vetoes any of the deletes throws this
+			// inside the transaction, so it rolls back instead of leaving the user
+			// without its sessions and accounts.
+			const veto = APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.FAILED_TO_DELETE_USER,
+			);
+			// Joining a caller's transaction gives no savepoint to roll back to, so
+			// the veto is left to roll back the caller's transaction instead.
+			const joinsTransaction = await isTransactionActive();
 			try {
 				await runWithTransaction(adapter, async () => {
 					// An adapter may run this callback again after a transient abort.
 					userDeleted = false;
-					// Queued first, so an earlier after hook that throws cannot skip it.
-					// It only revokes the cached sessions once the user row is gone.
-					await queueCachedUserSessionDeletion(
-						userId,
-						sessionReferences,
-						() => userDeleted,
-					);
+					if (secondaryStorage) {
+						// Queued first, so a `delete.after` hook that throws cannot skip it.
+						// The index and the cutoff are read when it runs, so a session
+						// created while the delete was running is revoked too.
+						await queueAfterTransactionHook(
+							async () => {
+								if (!userDeleted) return;
+								await deleteCachedUserSessions(
+									userId,
+									[
+										...sessionReferences,
+										...(await getActiveSessionReferences(userId)),
+									],
+									Date.now(),
+								);
+							},
+							{
+								onError(error) {
+									logger.error(
+										"Failed to delete committed user sessions from secondary storage",
+										error,
+									);
+								},
+							},
+						);
+					}
 					if (!secondaryStorage || options.session?.storeSessionInDatabase) {
 						const deletedSessions = await deleteManyWithHooks(
 							[
@@ -549,7 +584,7 @@ export const createInternalAdapter = (
 							"session",
 							undefined,
 						);
-						if (deletedSessions === null) throw DELETE_USER_SKIPPED;
+						if (deletedSessions === null) throw veto;
 					}
 					const deletedAccounts = await deleteManyWithHooks(
 						[
@@ -561,7 +596,7 @@ export const createInternalAdapter = (
 						"account",
 						undefined,
 					);
-					if (deletedAccounts === null) throw DELETE_USER_SKIPPED;
+					if (deletedAccounts === null) throw veto;
 
 					const deletedUser = await deleteWithHooks(
 						[
@@ -573,14 +608,27 @@ export const createInternalAdapter = (
 						"user",
 						undefined,
 					);
-					// A `delete.before` hook vetoed the delete, or the user is gone.
-					if (deletedUser === null) throw DELETE_USER_SKIPPED;
+					if (deletedUser === null) {
+						// Nothing to delete is not a failure; a row that is still there
+						// means a `delete.before` hook vetoed it.
+						const stillThere = await (
+							await getCurrentAdapter(adapter)
+						).findOne<User>({
+							model: "user",
+							where: [{ field: "id", value: userId }],
+						});
+						if (stillThere) throw veto;
+						return;
+					}
 					userDeleted = true;
 				});
 			} catch (error) {
-				// Rolled back on purpose: a vetoed delete is not an error.
-				if (error !== DELETE_USER_SKIPPED) throw error;
+				// A veto is reported, not thrown, once this delete's own transaction
+				// has rolled it back.
+				if (error === veto && !joinsTransaction) return false;
+				throw error;
 			}
+			return userDeleted;
 		},
 		createSession: async (
 			userId: string,
