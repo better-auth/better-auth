@@ -46,8 +46,8 @@ const MFA = "urn:example:acr:mfa";
 oauthProvider({
   loginPage: "/sign-in",
   consentPage: "/consent",
-  beforeAuthorization: ({ request, session }) => { // [!code highlight]
-    const wantsMfa = request.acr_values?.split(" ").includes(MFA); // [!code highlight]
+  beforeAuthorization: ({ query, session }) => { // [!code highlight]
+    const wantsMfa = query.acr_values?.split(" ").includes(MFA); // [!code highlight]
     // `twoFactorVerified` is a session field your app sets after the second factor.
     if (wantsMfa && session?.session.twoFactorVerified !== true) { // [!code highlight]
       return { prompt: "login" }; // [!code highlight]
@@ -58,8 +58,8 @@ oauthProvider({
 
 The input holds the request, the client, and the session:
 
-* `request` is a copy of the validated request, after the provider resolves a `request_uri`. It includes parameters the client added. It never holds client credentials or the `request_uri`.
-* `pushed` is `true` when the client pushed the request to [`/oauth2/par`](#pushed-authorization-requests). A request resolved by your own `requestUriResolver` reports `false`, as does every `issueAuthorizationCode` call.
+* `query` is a copy of the validated authorization request, after the provider resolves a `request_uri`. It includes parameters the client added. It never holds client credentials or the `request_uri`.
+* `pushed` is `true` only when your server's own [`/oauth2/par`](#pushed-authorization-requests) stored the request. A request that your `requestUriResolver` returns reports `false` on every visit, even if your resolver reads pushed requests from your own store, and so does every `issueAuthorizationCode` call.
 * `client` is the client's registration.
 * `session` is the user's session on this visit, or `null` before sign-in.
 * `headers` and `ctx` belong to the request being handled: the visit to `/oauth2/authorize`, or the plugin endpoint that calls `issueAuthorizationCode`.
@@ -83,7 +83,7 @@ throw new APIError("BAD_REQUEST", {
 });
 ```
 
-The client receives the error at its validated `redirect_uri`, with `error_description`, `state`, and `iss`, in the `response_mode` it asked for. Nothing is used up: the provider issues no code, and a pushed `request_uri` stays valid until it expires. Use an error from [OIDC Core §3.1.2.6](https://openid.net/specs/openid-connect-core-1_0.html#AuthError) or [RFC 6749 §4.1.2.1](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1), such as `login_required`, `interaction_required`, `consent_required`, or `access_denied`. When the user cannot meet an authentication requirement at all, `unmet_authentication_requirements` from [OpenID Connect Unmet Authentication Requirements 1.0](https://openid.net/specs/openid-connect-unmet-authentication-requirements-1_0.html) tells the client so. Any other error, such as a redirect thrown with `ctx.redirect`, passes through unchanged.
+The client receives the error at its validated `redirect_uri`, with `error_description`, `state`, and `iss` in the query, like every other error the provider reports after it validates the request. Nothing is used up: the provider issues no code, and a pushed `request_uri` stays valid until it expires. Use an error from [OIDC Core §3.1.2.6](https://openid.net/specs/openid-connect-core-1_0.html#AuthError) or [RFC 6749 §4.1.2.1](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1), such as `login_required`, `interaction_required`, `consent_required`, or `access_denied`. When the user cannot meet an authentication requirement at all, `unmet_authentication_requirements` from [OpenID Connect Unmet Authentication Requirements 1.0](https://openid.net/specs/openid-connect-unmet-authentication-requirements-1_0.html) tells the client so. Any other error, such as a redirect thrown with `ctx.redirect`, passes through unchanged.
 
 A plugin registered as a [provider extension](/docs/plugins/oauth-provider/reference#provider-extensions) can set `beforeAuthorization` too. Extension hooks run first, in registration order, and then your own. Every hook runs unless one throws. A hook that throws ends the request even when another one asked for a sign-in.
 
@@ -271,7 +271,9 @@ const { query, client } = await provider.validateAuthorizationRequest({
 // issueAuthorizationCode on the last request.
 ```
 
-The method runs the checks that `/oauth2/authorize` and `issueAuthorizationCode` run on the request: the client, `response_type`, the `redirect_uri` when present, scopes, claims, resources, and PKCE. An invalid request fails with a 400 error carrying the code `/oauth2/authorize` reports for the same request, such as `invalid_scope` or `invalid_target`. The method never redirects, issues no code, stores no pushed request, and records no DPoP proof. Looking up the client and resources can still write, as it does for `/oauth2/authorize`: a client discovered from a client ID metadata document is saved, and `onClientCreated` runs for it. It needs no session.
+The method runs the request checks that `/oauth2/authorize` and `issueAuthorizationCode` run: the client, `response_type`, the `redirect_uri` when present, scopes, claims, resources, and PKCE. An invalid request fails with a 400 error carrying the code `/oauth2/authorize` reports for the same request, such as `invalid_scope` or `invalid_target`. The method never redirects, issues no code, stores no pushed request, and records no DPoP proof. Looking up the client and resources can still write, as it does for `/oauth2/authorize`: a client discovered from a client ID metadata document is saved, and `onClientCreated` runs for it. It needs no session.
+
+The method does not run [`beforeAuthorization`](#authorization-policy), because that policy looks at the session as well as the request. On a plugin endpoint the policy runs inside `issueAuthorizationCode`, after your endpoint has checked the user's credentials, so a refusal can arrive later than it does at `/oauth2/authorize`.
 
 The request must name its client with `client_id`. A `request_uri` fails with `invalid_request`, and a `request` object fails with `request_not_supported`, as with `issueAuthorizationCode`.
 
@@ -280,7 +282,7 @@ The result holds two values:
 * `query`: the request after validation, with the client's default scopes filled in when the request named none. Client credentials such as `client_secret` are left out. Pass it to `issueAuthorizationCode` unchanged.
 * `client`: the fields a sign-in page may show, such as `name` and `icon`, plus `tokenEndpointAuthMethod` and `applicationType`. Call `getClient` for the full registration.
 
-The result is advisory. `validateAuthorizationRequest` does not authenticate the client, so your endpoint must still authenticate a confidential client, for example with [`authenticateClient`](/docs/plugins/oauth-provider/reference#provider-extensions). `issueAuthorizationCode` checks the request again on the last request, together with the session, consent, `prompt`, and `max_age`.
+The result is advisory. `validateAuthorizationRequest` does not authenticate the client, so your endpoint must still authenticate a confidential client, for example with [`authenticateClient`](/docs/plugins/oauth-provider/reference#provider-extensions). `issueAuthorizationCode` checks the request again on the last request, together with the session, consent, `prompt`, `max_age`, and `beforeAuthorization`.
 
 ### Report how the user signed in
 

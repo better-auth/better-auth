@@ -18,6 +18,7 @@ const parEndpoint = `${baseURL}/api/auth/oauth2/par`;
 const authorizeEndpoint = `${baseURL}/api/auth/oauth2/authorize`;
 const redirectUri = "https://rp.example.com/callback";
 const mfaAcr = "urn:example:acr:mfa";
+const resolverRequestUri = "urn:example:app-hosted";
 
 /**
  * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthError
@@ -46,6 +47,10 @@ describe("beforeAuthorization", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					pushedAuthorizationRequests: { enabled: true },
+					requestUriResolver: async ({ requestUri }) =>
+						requestUri === resolverRequestUri
+							? await requestParams({ acr_values: mfaAcr })
+							: null,
 					authenticationContext: {
 						acrValuesSupported: ["0", mfaAcr],
 						resolve: () => undefined,
@@ -158,12 +163,24 @@ describe("beforeAuthorization", async () => {
 		expect(calls).toHaveLength(1);
 		const [input] = calls;
 		expect(input!.pushed).toBe(true);
-		expect(input!.request.acr_values).toBe(mfaAcr);
-		expect(input!.request).toMatchObject({ custom_param: "kept" });
-		expect(input!.request).not.toHaveProperty("client_secret");
-		expect(input!.request).not.toHaveProperty("request_uri");
+		expect(input!.query.acr_values).toBe(mfaAcr);
+		expect(input!.query).toMatchObject({ custom_param: "kept" });
+		expect(input!.query).not.toHaveProperty("client_secret");
+		expect(input!.query).not.toHaveProperty("request_uri");
 		expect(input!.client.clientId).toBe(client.client_id);
 		expect(input!.session?.user.email).toBe("test@test.com");
+	});
+
+	it("sees a request from requestUriResolver with pushed: false", async () => {
+		const location = await authorize({
+			client_id: client.client_id,
+			request_uri: resolverRequestUri,
+		});
+		expect(location.searchParams.get("code")).toEqual(expect.any(String));
+		expect(calls).toHaveLength(1);
+		expect(calls[0]!.pushed).toBe(false);
+		expect(calls[0]!.query.acr_values).toBe(mfaAcr);
+		expect(calls[0]!.query).not.toHaveProperty("request_uri");
 	});
 
 	it("sees a direct request with pushed: false", async () => {
@@ -173,7 +190,7 @@ describe("beforeAuthorization", async () => {
 		expect(location.searchParams.get("code")).toEqual(expect.any(String));
 		expect(calls).toHaveLength(1);
 		expect(calls[0]!.pushed).toBe(false);
-		expect(calls[0]!.request.acr_values).toBe(mfaAcr);
+		expect(calls[0]!.query.acr_values).toBe(mfaAcr);
 	});
 
 	it("runs before the login redirect for a request without a session", async () => {
@@ -240,17 +257,19 @@ describe("beforeAuthorization", async () => {
 		expect(issued.searchParams.get("code")).toEqual(expect.any(String));
 	});
 
-	it("delivers the error in the fragment for response_mode=fragment", async () => {
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
+	 */
+	it("delivers the error in the query whatever response_mode asks", async () => {
 		policy = () => {
 			throw new APIError("BAD_REQUEST", { error: "access_denied" });
 		};
 		const location = await authorize(
 			await requestParams({ response_mode: "fragment" }),
 		);
-		expect(location.search).toBe("");
-		expect(new URLSearchParams(location.hash.slice(1)).get("error")).toBe(
-			"access_denied",
-		);
+		expect(location.hash).toBe("");
+		expect(location.searchParams.get("error")).toBe("access_denied");
+		expect(location.searchParams.get("state")).toBe("policy-state");
 	});
 
 	it("passes other APIErrors through unchanged", async () => {

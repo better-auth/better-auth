@@ -140,4 +140,15 @@ describe("public oauth-provider types", () => {
 			>["serverContext"]
 		>().toEqualTypeOf<Record<string, unknown> | undefined>();
 	});
+
+	it("names the beforeAuthorization request query, as the other authorization methods do", () => {
+		type Input = Parameters<
+			NonNullable<OAuthOptions["beforeAuthorization"]>
+		>[0];
+		expectTypeOf<Input>().toHaveProperty("query");
+		expectTypeOf<Input>().not.toHaveProperty("request");
+		expectTypeOf<Input["query"]>().not.toHaveProperty("request_uri");
+		expectTypeOf<Input["query"]>().toHaveProperty("acr_values");
+		expectTypeOf<Input["pushed"]>().toEqualTypeOf<boolean>();
+	});
 });

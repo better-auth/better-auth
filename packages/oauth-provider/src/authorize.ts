@@ -772,7 +772,7 @@ export async function authorizeEndpoint(
  */
 async function evaluateBeforeAuthorization(
 	opts: OAuthOptions<Scope[]>,
-	input: Omit<OAuthBeforeAuthorizationInput, "request" | "pushed"> & {
+	input: Omit<OAuthBeforeAuthorizationInput, "query" | "pushed"> & {
 		query: StoredAuthorizationQuery;
 	},
 ): Promise<
@@ -793,9 +793,9 @@ async function evaluateBeforeAuthorization(
 			const result = await hook({
 				...context,
 				// Each hook gets its own copy, so one cannot change what the next sees.
-				request: structuredClone(
+				query: structuredClone(
 					requestParameters,
-				) as OAuthBeforeAuthorizationInput["request"],
+				) as OAuthBeforeAuthorizationInput["query"],
 				pushed: requestUri !== undefined,
 			});
 			if (result?.prompt === "login") requiresLogin = true;
@@ -821,9 +821,9 @@ async function evaluateBeforeAuthorization(
 }
 
 /**
- * Applies `beforeAuthorization` at `/oauth2/authorize`. A refusal is
- * delivered to the client like a validation failure, before anything is
- * consumed. A request the policy sends to sign in gets the `login` prompt,
+ * Applies `beforeAuthorization` at `/oauth2/authorize`. A refusal goes to the
+ * client's redirect URI in the query, as every error after validation does,
+ * before anything is consumed. A request the policy sends to sign in gets the `login` prompt,
  * which the sign-in clears as it does for a client's own.
  */
 async function runBeforeAuthorization(
@@ -846,16 +846,12 @@ async function runBeforeAuthorization(
 	});
 	const promptSet = query.prompt ? parsePrompt(query.prompt) : undefined;
 	const toClient = (error: OAuthErrorCode, description: string) => ({
-		redirect: handleRedirect(
+		redirect: redirectWithAuthorizationError(
 			ctx,
-			formatErrorURL(
-				query.redirect_uri,
-				error,
-				description,
-				query.state,
-				getIssuer(ctx, opts),
-				deriveResponseMode(query as unknown as Record<string, unknown>),
-			),
+			opts,
+			query,
+			error,
+			description,
 		),
 	});
 	if ("refused" in outcome) {
@@ -1202,8 +1198,9 @@ export async function parseAuthorizationRequest(
 
 /**
  * Validates an authorization request for a plugin endpoint before any
- * session exists, through the same checks `issueAuthorizationCode` runs.
- * Authenticates no client, issues no code, and stores no pushed request or
+ * session exists, through the request checks `issueAuthorizationCode` runs.
+ * It does not run `beforeAuthorization`, which `issueAuthorizationCode`
+ * runs on the session. Authenticates no client, issues no code, and stores no pushed request or
  * DPoP `jti`.
  */
 export async function validateAuthorizationRequestParams(

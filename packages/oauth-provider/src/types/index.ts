@@ -658,10 +658,15 @@ export interface OAuthProviderApi {
 	 * request, and records no DPoP `jti`. The client lookup can still save a
 	 * client discovered from a client ID metadata document.
 	 *
+	 * It does not run `beforeAuthorization`. The policy runs inside
+	 * `issueAuthorizationCode`, after your endpoint has checked the user's
+	 * credentials, so a refusal can arrive later than it does at
+	 * `/oauth2/authorize`.
+	 *
 	 * The result is advisory. It does not authenticate the client, so your
 	 * endpoint must still authenticate a confidential client, and
 	 * `issueAuthorizationCode` checks the request again, along with the
-	 * session, consent, `prompt`, and `max_age`.
+	 * session, consent, `prompt`, `max_age`, and `beforeAuthorization`.
 	 */
 	validateAuthorizationRequest: (
 		params: ValidateAuthorizationRequestParams,
@@ -979,11 +984,13 @@ export interface OAuthBeforeAuthorizationInput {
 	 * client credentials or the `request_uri` itself. The client's default
 	 * scopes fill `scope` when the request named none.
 	 */
-	request: Omit<OAuthAuthorizationQuery, "request" | "request_uri">;
+	query: Omit<OAuthAuthorizationQuery, "request" | "request_uri">;
 	/**
-	 * Whether the client pushed the request to this server's `/oauth2/par`.
-	 * A request resolved by `requestUriResolver` reports `false`, as does
-	 * every `issueAuthorizationCode` call.
+	 * Whether this server's own `/oauth2/par` stored the request. A request
+	 * that `requestUriResolver` returns reports `false` on every visit, even
+	 * when your resolver reads pushed requests from your own store, because
+	 * the provider keeps no record of how that request arrived. Every
+	 * `issueAuthorizationCode` call reports `false` too.
 	 */
 	pushed: boolean;
 	/** The requesting client's registration. */
