@@ -296,7 +296,7 @@ ciba({
 `resolveActor` runs at `/oauth2/bc-authorize`, after the client authenticates and the `login_hint` resolves to a user. It receives `{ client, user, scopes }` and the endpoint context. The provider stores the actor with the request, so it does not change between the request and the poll. Then:
 
 1. `sendNotification` receives the actor as `actor`, and the consent page receives it as JSON in the `actor` query parameter. Show it, so the user knows who will hold the tokens.
-2. The access token carries the actor as `act`. A JWT access token has it in its payload. For an opaque access token, introspection returns it.
+2. The access token carries the actor as `act`. A JWT access token has it in its payload. For an opaque access token, introspection returns it. The ID token is issued as usual: it names the user and has no `act`.
 3. The token response has no refresh token, even with `offline_access`, and the returned `scope` leaves out `offline_access`. A refreshed token would not carry `act`.
 
 Return `undefined` to issue a token without `act`. Throw an `APIError` to refuse the request: the client receives that error, and no request is created and no notification is sent.
