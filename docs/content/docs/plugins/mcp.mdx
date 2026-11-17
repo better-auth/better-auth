@@ -239,12 +239,12 @@ To require server-provided DPoP nonces, set `dpop: { nonce: { required: true } }
 
 An MCP server that calls a downstream API for the user must not pass the user's token through. Exchange it for a token to that API with [token exchange](/docs/plugins/oauth-provider/tokens#token-exchange) instead. `mcp()` links every dynamically registered client to the MCP resource, so read the registration default resources item in [token exchange limitations](/docs/plugins/oauth-provider/tokens#limitations) before you enable it.
 
-By default, `requireMcpAuth` reads the server's resolved Better Auth URL from the auth context and uses it as the expected issuer and resource. If `mcp({ resource })` uses a different identifier, pass that same value to `requireMcpAuth`, as shown above. Override the issuer when `jwt.issuer` is custom. Set `jwksUrl` to verify JWT access tokens with the keys at that URL instead, for example when the authorization server runs separately. Signature checks alone do not see revocation or an ended session, and they reject opaque tokens:
+By default, `requireMcpAuth` reads the server's resolved Better Auth URL from the auth context and uses it as the expected resource. It expects the issuer the provider signs, which follows `jwt.issuer` when you set it. It also accepts that issuer as you configured it, which tokens issued before 1.8 carry. If `mcp({ resource })` uses a different identifier, pass that same value to `requireMcpAuth`, as shown above. Pass `issuer` only when the tokens come from an authorization server with a different issuer. An `issuer` you pass is the only value accepted. Set `jwksUrl` to verify JWT access tokens with the keys at that URL instead, for example when the authorization server runs separately. Signature checks alone do not see revocation or an ended session, and they reject opaque tokens:
 
 ```ts
 requireMcpAuth(auth, handler, {
     resource: "https://api.example.com/mcp", // protected resource identifier
-    issuer: "https://auth.example.com", // override when jwt.issuer is custom
+    issuer: "https://auth.example.com", // only for another authorization server
     jwksUrl: "https://auth.example.com/api/auth/jwks",
     challengeScopes: ["openid", "profile"] // advertised in the 401 challenge
 })

@@ -81,7 +81,7 @@ export const serverClient = createAuthClient({
 
 The defaults come from your auth server's resolved base URL. That URL includes `basePath`, such as `https://auth.example.com/api/auth`:
 
-* `issuer` defaults to `jwt.issuer` when the JWT plugin sets it. Otherwise, it defaults to the base URL, which matches the issuer the provider signs.
+* `issuer` defaults to the issuer the provider signs. It comes from `jwt.issuer` when the JWT plugin sets it, and otherwise from the base URL, normalized as [discovery](/docs/plugins/oauth-provider/openid-connect#discovery-metadata) describes. The default also accepts that URL as you configured it, which tokens issued before 1.8 carry. An `issuer` you pass is the only value accepted.
 * Without `jwksUrl`, the signing keys are read from the auth instance in-process, with no request to its own `/jwks` endpoint. When the JWT plugin sets `jwks.remoteUrl`, the keys are fetched from that URL instead. Set `jwksUrl` to fetch them from another URL. With `disableJwtPlugin`, the provider issues only opaque access tokens, which have no signing keys to read, so verify them with `remoteVerify`, as shown in [JWT or opaque tokens](#jwt-or-opaque-tokens).
 * `audience` defaults to the base URL. See the warning below.
 
@@ -339,7 +339,7 @@ The simplest setup maps each scope to exactly one permission, such as `read:post
 
 ## Protected resource metadata
 
-To advertise which authorization server protects your API, serve an [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728#section-3) document at `/.well-known/oauth-protected-resource`. `serverClient.getProtectedResourceMetadata()` builds it for you. Its default `authorization_servers` entry is the same issuer that the resource client verifies by default. With a dynamic `baseURL` and no `jwt.issuer`, it has no default entry, so pass `authorization_servers`. The [MCP plugin](/docs/plugins/mcp) serves this document automatically.
+To advertise which authorization server protects your API, serve an [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728#section-3) document at `/.well-known/oauth-protected-resource`. `serverClient.getProtectedResourceMetadata()` builds it for you. Its default `authorization_servers` entry is the issuer that discovery publishes. With a dynamic `baseURL` and no `jwt.issuer`, it has no default entry, so pass `authorization_servers`. The [MCP plugin](/docs/plugins/mcp) serves this document automatically.
 
 ```ts title="app/.well-known/oauth-protected-resource/route.ts"
 import { serverClient } from "@/lib/server-client";

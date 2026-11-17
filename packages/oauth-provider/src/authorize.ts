@@ -25,6 +25,7 @@ import {
 	getBeforeAuthorizationHooks,
 	getExtensionInteractionRequest,
 } from "./extensions";
+import { getIssuer } from "./issuer";
 import { oauthAuthorizationServerMetadata } from "./metadata";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
@@ -71,7 +72,6 @@ import {
 	findConsent,
 	getClient,
 	getConsentReferenceId,
-	getJwtPlugin,
 	isPKCERequired,
 	isRecord,
 	isRedirectUriTransportAllowed,
@@ -251,63 +251,6 @@ export function getAPIErrorURL(
 	return errorPage
 		? formatErrorURL(errorPage, code, description)
 		: getErrorURL(ctx, code, description);
-}
-
-/**
- * Normalizes the issuer URL by removing query and fragment components, which
- * RFC 8414 §2 forbids. The scheme is kept as configured: the issuer must match
- * the `iss` claim of issued tokens exactly (RFC 9207 §2.4).
- *
- * @returns The issuer URL without query, fragment, or trailing slash
- */
-export function validateIssuerUrl(issuer: string): string {
-	try {
-		const url = new URL(issuer);
-		url.search = "";
-		url.hash = "";
-
-		return url.toString().replace(/\/$/, "");
-	} catch {
-		// If URL parsing fails, return as-is
-		return issuer;
-	}
-}
-
-function getConfiguredIssuer(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
-): string {
-	if (opts.disableJwtPlugin) return ctx.context.baseURL;
-	try {
-		const jwtPluginOptions = getJwtPlugin(ctx.context).options;
-		return jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
-	} catch {
-		return ctx.context.baseURL;
-	}
-}
-
-/**
- * Gets the issuer identifier
- */
-export function getIssuer(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
-): string {
-	return validateIssuerUrl(getConfiguredIssuer(ctx, opts));
-}
-
-/**
- * Gets every `iss` value this server's own tokens can carry: the published
- * issuer and, when it differs, the configured value that issued tokens
- * carry, such as a base URL with a trailing slash.
- */
-export function getAcceptedIssuers(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
-): string[] {
-	const configured = getConfiguredIssuer(ctx, opts);
-	const issuer = validateIssuerUrl(configured);
-	return configured === issuer ? [issuer] : [issuer, configured];
 }
 
 /**

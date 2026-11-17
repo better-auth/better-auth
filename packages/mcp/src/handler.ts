@@ -183,8 +183,14 @@ export const createMcpProtectedRequestHandler = (
  * @internal
  */
 export const createProtectedRequestHandler = (
-	options: McpProtectedRequestHandlerOptions &
-		Pick<VerifyAccessTokenOptions, "jwksFetch" | "jwksCacheKey" | "introspect">,
+	options: Omit<McpProtectedRequestHandlerOptions, "issuer"> &
+		Pick<
+			VerifyAccessTokenOptions,
+			"jwksFetch" | "jwksCacheKey" | "introspect"
+		> & {
+			/** Expected issuer, or every issuer value accepted. */
+			issuer: string | string[];
+		},
 	handler: McpRequestHandler,
 ) => {
 	const resource = validateMcpResource(options.audience);

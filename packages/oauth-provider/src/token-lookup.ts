@@ -9,6 +9,7 @@ import {
 	errors as joseErrors,
 	jwtVerify,
 } from "jose";
+import { getAcceptedIssuers } from "./issuer";
 import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
@@ -16,12 +17,7 @@ import type {
 	OAuthTokenRevokedEvent,
 	Scope,
 } from "./types";
-import {
-	getJwksSource,
-	getJwtPlugin,
-	getStoredToken,
-	JWT_ACCESS_TOKEN_TYPE,
-} from "./utils";
+import { getJwksSource, getStoredToken, JWT_ACCESS_TOKEN_TYPE } from "./utils";
 
 /** Signature, issuer, and `azp` are verified; audience and client are not. */
 export type JwtAccessTokenPayload = JWTPayload & { azp: string; sid?: string };
@@ -68,14 +64,13 @@ async function verifyJwtAccessToken(
 	} catch {
 		return null;
 	}
-	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 	const jwks = await getJwks(token, getJwksSource(ctx));
 	let payload: JWTPayload;
 	try {
 		// Do not pass jose's `audience` option: access-token audiences are
 		// resource identifiers, which each endpoint validates itself.
 		({ payload } = await jwtVerify(token, createLocalJWKSet(jwks), {
-			issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+			issuer: getAcceptedIssuers(ctx.context, opts),
 			// RFC 9068 §4: other JWTs signed with these keys, such as session or
 			// app JWTs, must not pass as access tokens. jose compares media
 			// types, so `application/at+jwt` and any letter case also match.

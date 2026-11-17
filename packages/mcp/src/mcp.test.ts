@@ -681,6 +681,120 @@ describe("requireMcpAuth access token profile", async () => {
 });
 
 /**
+ * Without an `issuer` option, `requireMcpAuth` expects the issuer the provider
+ * stamps, which follows a custom `jwt.issuer`. Tokens issued by earlier
+ * versions carry `jwt.issuer` as configured, here with a trailing slash.
+ * @see https://www.rfc-editor.org/rfc/rfc9068#section-4
+ */
+describe("requireMcpAuth default issuer", async () => {
+	// Its own origin: verification caches JWKS by URL across test instances.
+	const authorizationServer = "https://issuer-auth.example.test";
+	const baseURL = `${authorizationServer}/api/auth`;
+	const configuredIssuer = `${authorizationServer}/tenant/`;
+	const instance = await getTestInstance({
+		baseURL: authorizationServer,
+		advanced: { useSecureCookies: false },
+		plugins: [
+			jwt({ jwt: { issuer: configuredIssuer } }),
+			mcp({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resource: baseURL,
+				scopes: ["mcp:base"],
+				clientPrivileges: () => true,
+			}),
+		],
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	async function issueAccessToken() {
+		const { headers } = await instance.signInWithTestUser();
+		const client = await instance.auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_post",
+				redirect_uris: [REDIRECT_URI],
+				client_credentials_scopes: ["mcp:base"],
+			},
+		});
+		const tokenResponse = await instance.customFetchImpl(
+			`${baseURL}/oauth2/token`,
+			{
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: client.client_id,
+					client_secret: client.client_secret!,
+					scope: "mcp:base",
+					resource: baseURL,
+				}),
+			},
+		);
+		expect(tokenResponse.status).toBe(200);
+		const { access_token: accessToken } = await tokenResponse.json();
+		return accessToken as string;
+	}
+
+	async function callMcp(accessToken: string) {
+		vi.stubGlobal("fetch", instance.customFetchImpl);
+		const handler = vi.fn(() => Response.json({ ok: true }));
+		const response = await requireMcpAuth(
+			instance.auth,
+			handler,
+		)(
+			new Request(MCP_RESOURCE, {
+				headers: { Authorization: `Bearer ${accessToken}` },
+			}),
+		);
+		return { response, handler };
+	}
+
+	it("accepts a token from a provider with a custom jwt.issuer", async () => {
+		const accessToken = await issueAccessToken();
+		expect(decodeJwt(accessToken).iss).toBe(`${authorizationServer}/tenant`);
+
+		const { response, handler } = await callMcp(accessToken);
+
+		expect(response.status).toBe(200);
+		expect(handler).toHaveBeenCalledOnce();
+	});
+
+	it("accepts a token that carries jwt.issuer as configured", async () => {
+		const issued = decodeJwt(await issueAccessToken());
+		const { token } = await instance.auth.api.signJWT({
+			body: { payload: { ...issued, iss: configuredIssuer } },
+		});
+
+		const { response, handler } = await callMcp(token);
+
+		expect(response.status).toBe(200);
+		expect(handler).toHaveBeenCalledOnce();
+	});
+
+	it("accepts only an explicit issuer when one is set", async () => {
+		const accessToken = await issueAccessToken();
+		vi.stubGlobal("fetch", instance.customFetchImpl);
+		const handler = vi.fn(() => Response.json({ ok: true }));
+
+		const response = await requireMcpAuth(instance.auth, handler, {
+			issuer: configuredIssuer,
+		})(
+			new Request(MCP_RESOURCE, {
+				headers: { Authorization: `Bearer ${accessToken}` },
+			}),
+		);
+
+		expect(response.status).toBe(401);
+		expect(handler).not.toHaveBeenCalled();
+	});
+});
+
+/**
  * @see https://datatracker.ietf.org/doc/html/rfc9449#section-9
  */
 describe("requireMcpAuth DPoP nonces", async () => {

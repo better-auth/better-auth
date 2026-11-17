@@ -16,7 +16,8 @@ import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { compactVerify, createLocalJWKSet, decodeJwt } from "jose";
 import type { OAuthRedirectResult } from "./authorize";
-import { getAcceptedIssuers, getIssuer, handleRedirect } from "./authorize";
+import { handleRedirect } from "./authorize";
+import { getAcceptedIssuers, getIssuer } from "./issuer";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import {
 	decryptStoredClientSecret,
@@ -75,6 +76,8 @@ export interface SessionLogoutPlan {
 	accessTokenIds: string[];
 	refreshTokenIds: string[];
 	sessionId: string;
+	/** The `iss` of each Logout Token. */
+	issuer: string;
 	backchannelTargets: BackchannelLogoutTarget[];
 	/**
 	 * Each client's `frontchannel_logout_uri` with `iss` and `sid` appended,
@@ -251,6 +254,7 @@ async function prepareSessionLogoutPlan(
 			accessTokenIds: accessToRevokeIds,
 			refreshTokenIds: refreshToRevokeIds,
 			sessionId,
+			issuer,
 			backchannelTargets,
 			frontchannelLogoutUris,
 		};
@@ -340,7 +344,6 @@ async function deliverBackchannelLogoutTokens(
 ): Promise<void> {
 	const logger = ctx.context.logger;
 	const jwtPluginOptions = getJwtPlugin(ctx.context)?.options;
-	const iss = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + LOGOUT_TOKEN_LIFETIME_SECONDS;
 	// Resolve the signing key once and reuse it for every RP target. A custom
@@ -377,7 +380,7 @@ async function deliverBackchannelLogoutTokens(
 					jwtPluginOptions,
 					resolvedKey,
 					{
-						iss,
+						iss: plan.issuer,
 						aud: client.clientId,
 						sub,
 						sid: plan.sessionId,
@@ -909,7 +912,7 @@ async function verifyLogoutHint(
 
 		if (
 			typeof payload.iss !== "string" ||
-			!getAcceptedIssuers(ctx, opts).includes(payload.iss)
+			!getAcceptedIssuers(ctx.context, opts).includes(payload.iss)
 		) {
 			return null;
 		}

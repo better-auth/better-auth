@@ -1,5 +1,6 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
 import {
+	getAcceptedIssuers,
 	getLocalIntrospection,
 	getLocalJwksSource,
 } from "@better-auth/oauth-provider/internal";
@@ -19,8 +20,11 @@ export interface RequireMcpAuthOptions {
 	 */
 	resource?: string;
 	/**
-	 * Expected token issuer. Defaults to the server's resolved base URL. Override
-	 * when the JWT plugin is configured with a custom `jwt.issuer`.
+	 * Expected token issuer. Defaults to the OAuth provider's issuer, derived
+	 * from `jwt.issuer` when the JWT plugin sets it and otherwise from the
+	 * server's resolved base URL. The default also accepts that URL exactly as
+	 * configured, which tokens issued by earlier versions carry. A value set
+	 * here is the only issuer accepted.
 	 */
 	issuer?: string;
 	/**
@@ -137,11 +141,10 @@ export const requireMcpAuth = <
 		validateMcpResource(opts.resource);
 	}
 	return async (req: Request): Promise<Response> => {
-		// The provider stamps tokens with its resolved base URL (which includes
-		// the base path) as both issuer and default resource. Read that value from
-		// the auth context so the verified issuer and audience match what the
-		// provider issued. Override via `opts` for a custom `jwt.issuer`, a
-		// distinct resource, or a non-default JWKS location.
+		// The provider's resolved base URL (which includes the base path) is the
+		// default resource. Read it, and the issuer, from the auth context so the
+		// verified issuer and audience match what the provider issued. Override
+		// via `opts` for a distinct resource or a non-default JWKS location.
 		const authContext = await auth.$context;
 		const { baseURL, secret } = authContext;
 		if (!baseURL) {
@@ -156,7 +159,11 @@ export const requireMcpAuth = <
 				"requireMcpAuth requires dpop.nonce.secret when the auth context has no secret.",
 			);
 		}
-		const issuer = opts?.issuer ?? baseURL;
+		const issuer =
+			opts?.issuer ??
+			getAcceptedIssuers(
+				authContext as Parameters<typeof getAcceptedIssuers>[0],
+			);
 		const resource = opts?.resource ?? baseURL;
 		// The provider in this process checks the token against its own records,
 		// which accepts opaque tokens and rejects revoked ones, without a request

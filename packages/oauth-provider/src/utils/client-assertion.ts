@@ -15,9 +15,9 @@ import {
 	errors as joseErrors,
 	jwtVerify,
 } from "jose";
-import { getIssuer } from "../authorize";
 import { validatePublicClientJwks } from "../client-jwks";
 import { getClientDiscoveries } from "../extensions";
+import { getIssuer } from "../issuer";
 import { PUSHED_AUTHORIZATION_REQUEST_PATH } from "../par";
 import type {
 	ClientDiscovery,

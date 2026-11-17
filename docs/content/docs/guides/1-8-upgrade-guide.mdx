@@ -472,6 +472,23 @@ An assertion signed with a key missing from the cached key set now fails with `4
 
 **What to do:** tell the clients that rotate keys through a `jwks_uri` to keep it reachable, publish the new key, and wait 5 minutes, the cache lifetime, before they sign with it. A client that gets this error can also retry after 60 seconds. Clients with inline `jwks` are unaffected. See [Rotating `jwks_uri` keys](/docs/plugins/oauth-provider/clients#rotating-jwks_uri-keys).
 
+### Tokens carry the discovery issuer
+
+This applies if `jwt.issuer`, or your `baseURL` when you do not set `jwt.issuer`, has a trailing slash, an uppercase host, a default port such as `:443`, a query, or a fragment. An example is `baseURL: "https://example.com/api/auth/"`.
+
+Discovery already published the issuer normalized: without the trailing slash, query, fragment, and default port, and with a lowercase host. In 1.7, ID tokens, JWT access tokens, introspection responses, and back-channel logout tokens carried the URL as you configured it instead. A client that compared `iss` with the discovery `issuer`, as [OpenID Connect Discovery §4.3](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation) and [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) require, rejected them. These now carry the discovery issuer. In the example, `iss` changes from `https://example.com/api/auth/` to `https://example.com/api/auth`.
+
+* Introspection reports the new `iss` for every opaque access token and refresh token as soon as you upgrade, including tokens issued before.
+* JWT access tokens and ID tokens issued before the upgrade keep the old `iss` until they expire.
+* Better Auth's own checks accept both values: introspection, UserInfo, token exchange, the `id_token_hint` check at the end-session endpoint, and the defaults of the resource client and `requireMcpAuth`.
+* The resource client's `getProtectedResourceMetadata` now lists the discovery issuer in its default `authorization_servers` entry.
+
+Discovery and the authorization response `iss` parameter do not change.
+
+**What to do:** find every verifier that pins the configured value, such as an API that checks JWT access tokens with its own code or a relying party configured with a fixed issuer. Set it to the `issuer` from discovery. Until the JWT access tokens issued before the upgrade expire, accept both values if the verifier takes a list. A verifier that pins only the configured value rejects every new token.
+
+In Better Auth, an `issuer` you pass to the resource client's `verifyOptions` or to `requireMcpAuth` is the only value accepted. If it repeats the configured value, remove it to use the default, which accepts both.
+
 ### UserInfo errors follow RFC 6750
 
 `/oauth2/userinfo` now reports its errors the way [RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1) describes, as OpenID Connect requires:
@@ -630,6 +647,12 @@ When the OAuth provider runs in the same process, `requireMcpAuth` now checks ea
 * `verifyResourceRequest` has no `resourceMetadataMappings` option and never throws for a missing entry. Without `audience`, or when `audience` is not a URL, its challenges leave out `resource_metadata`.
 
 **What to do:** if you call `createResourceServerChallenge`, add a `resourceMetadataMappings` entry for each resource identifier that is not a URL. Clients and tests that compare the whole header value must expect the `DPoP` challenge too.
+
+### Verifiers expect the discovery issuer
+
+If `jwt.issuer`, or your `baseURL`, has a trailing slash, an uppercase host, or a default port, the `iss` of new tokens changes. A verifier that pins the old value must update. See [Tokens carry the discovery issuer](#tokens-carry-the-discovery-issuer) under the identity provider changes.
+
+Without an `issuer` option, `requireMcpAuth` now expects the provider's issuer, which follows `jwt.issuer`. Before, it expected the base URL, so with a custom `jwt.issuer` it rejected every token unless you passed `issuer`. You can remove an `issuer` option that repeats `jwt.issuer`.
 
 ### `authorization_details_types_supported` is a list
 
