@@ -2401,6 +2401,7 @@ describe("oauth authorize - requireOpenId", async () => {
 	);
 	const { headers } = await signInWithTestUser();
 	let clientId: string;
+	let consentClientId: string;
 
 	beforeAll(async () => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
@@ -2411,6 +2412,14 @@ describe("oauth authorize - requireOpenId", async () => {
 			},
 		});
 		clientId = oauthClient.client_id;
+		const consentClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [registeredUri],
+				skip_consent: false,
+			},
+		});
+		consentClientId = consentClient.client_id;
 	});
 
 	async function authorize(scope?: string) {
@@ -2476,6 +2485,66 @@ describe("oauth authorize - requireOpenId", async () => {
 		expect(location).toContain(`${authServerBaseUrl}/api/auth/error`);
 		expect(location).toContain("error=invalid_redirect");
 		expect(location).not.toContain("evil.example.com");
+	});
+
+	describe("consent", () => {
+		async function startConsent(scope: string) {
+			const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+			authUrl.searchParams.set("client_id", consentClientId);
+			authUrl.searchParams.set("redirect_uri", registeredUri);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("scope", scope);
+			authUrl.searchParams.set("state", "require-openid-consent");
+			authUrl.searchParams.set("code_challenge", generateRandomString(43));
+			authUrl.searchParams.set("code_challenge_method", "S256");
+
+			let location = "";
+			await client.$fetch(authUrl.toString(), {
+				headers,
+				redirect: "manual",
+				onResponse(context) {
+					location = context.response.headers.get("location") || "";
+				},
+			});
+			const consentUrl = new URL(location, authServerBaseUrl);
+			expect(consentUrl.pathname).toBe("/consent");
+			return consentUrl.searchParams.toString();
+		}
+
+		it("issues a code when the user accepts a scope that includes openid", async () => {
+			const oauthQuery = await startConsent("openid profile email");
+
+			const result = await auth.api.oauth2Consent({
+				headers: new Headers(headers),
+				body: {
+					accept: true,
+					scope: "openid profile",
+					oauth_query: oauthQuery,
+				},
+			});
+
+			expect(result.redirect).toBe(true);
+			expect(new URL(result.url).searchParams.get("code")).toBeTruthy();
+		});
+
+		it("redirects invalid_scope when the user accepts a scope without openid", async () => {
+			const oauthQuery = await startConsent("openid profile email");
+
+			const result = await auth.api.oauth2Consent({
+				headers: new Headers(headers),
+				body: {
+					accept: true,
+					scope: "profile email",
+					oauth_query: oauthQuery,
+				},
+			});
+
+			const location = new URL(result.url);
+			expect(`${location.origin}${location.pathname}`).toBe(registeredUri);
+			expect(location.searchParams.get("error")).toBe("invalid_scope");
+			expect(location.searchParams.get("state")).toBe("require-openid-consent");
+			expect(location.searchParams.get("code")).toBeNull();
+		});
 	});
 });
 
