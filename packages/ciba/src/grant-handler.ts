@@ -85,7 +85,10 @@ export const createCibaGrantHandler =
 		const authorizationDetails = readAuthorizationDetails(
 			request.authorizationDetails,
 		);
-		const actor = request.actor ? parseActor(request.actor) : undefined;
+		const actor =
+			request.actor === null || request.actor === undefined
+				? undefined
+				: parseActor(request.actor);
 		// The provider issues no refresh token with authorization details or an
 		// actor, so the returned scope leaves out `offline_access`.
 		const scopes = parseScopes(request.scope).filter(

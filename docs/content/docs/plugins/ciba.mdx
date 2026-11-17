@@ -280,22 +280,28 @@ To limit a client to some of the types, register it with `authorization_details_
 
 ## Issue delegated tokens
 
-Some clients act for the user instead of being the user's own app, such as an AI agent that books a trip after the user approves. Its access token should say both who the user is and who acts for them. RFC 8693 §4.1 calls this a delegated token: `sub` is the user, and the `act` claim names the actor. CIBA itself defines no actor, so the provider follows RFC 8693.
+Some clients act for the user instead of being the user's own app, such as an AI agent that books a trip after the user approves. Its access token should say both who the user is and who acts for them. RFC 8693 §4.1 defines the `act` claim for this: `sub` is the user, and `act` names the actor. CIBA itself defines no actor, so the provider follows RFC 8693.
 
 To issue delegated tokens, return the actor from `resolveActor`:
 
 ```ts title="auth.ts"
+const agentClientIds = new Set(["travel-agent"]);
+
 ciba({
   resultPage: "/ciba",
   sendNotification,
-  // The client is an agent that acts for the user it names.
-  resolveActor: ({ client }) => ({ sub: client.clientId, sub_profile: "service" }),
+  // Only these clients are agents that act for the user they name. Other
+  // clients get an ordinary token, with a refresh token.
+  resolveActor: ({ client }) =>
+    agentClientIds.has(client.clientId)
+      ? { sub: client.clientId, sub_profile: "service" }
+      : undefined,
 });
 ```
 
 `resolveActor` runs at `/oauth2/bc-authorize`, after the client authenticates and the `login_hint` resolves to a user. It receives `{ client, user, scopes }` and the endpoint context. The provider stores the actor with the request, so it does not change between the request and the poll. Then:
 
-1. `sendNotification` receives the actor as `actor`, and the consent page receives it as JSON in the `actor` query parameter. Show it, so the user knows who will hold the tokens.
+1. `sendNotification` receives the actor as `actor`, and the consent page receives it as JSON in the `actor` query parameter. Show it, so the user knows who will act for them.
 2. The access token carries the actor as `act`. A JWT access token has it in its payload. For an opaque access token, introspection returns it. The ID token is issued as usual: it names the user and has no `act`.
 3. The token response has no refresh token, even with `offline_access`, and the returned `scope` leaves out `offline_access`. A refreshed token would not carry `act`.
 
