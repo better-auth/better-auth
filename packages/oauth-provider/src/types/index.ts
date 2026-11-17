@@ -1533,8 +1533,8 @@ export interface OAuthOptions<
 	 * Matching reuse inside this interval is treated as refresh-response replay,
 	 * not refresh-token replay. Overlapping in-flight refresh requests with the
 	 * same token are included: the CAS loser waits for the winner's stored
-	 * replay instead of returning `invalid_grant`. Set to `0` to treat any
-	 * rotated refresh token reuse as replay.
+	 * replay, for at most 5 seconds, instead of returning `invalid_grant`.
+	 * Set to `0` to treat any rotated refresh token reuse as replay.
 	 *
 	 * @default 0
 	 */

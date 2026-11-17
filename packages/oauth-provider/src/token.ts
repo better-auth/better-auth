@@ -1625,7 +1625,17 @@ async function lookupRefreshTokenRotationReplay(
 	}
 }
 
+/** The first poll delay of a request waiting on a concurrent rotation. */
 const REFRESH_TOKEN_REPLAY_POLL_INTERVAL_MS = 25;
+/** Polling backs off by doubling the delay, up to this. */
+const REFRESH_TOKEN_REPLAY_MAX_POLL_INTERVAL_MS = 400;
+/**
+ * The longest a request waits for a concurrent rotation, whatever the reuse
+ * interval. `mcp()` sets the interval to 30 seconds, and a request that waits
+ * that long ties up a connection, so a rotation slower than this fails the
+ * duplicate with `invalid_grant`.
+ */
+const REFRESH_TOKEN_REPLAY_MAX_WAIT_MS = 5_000;
 
 const wait = (ms: number) =>
 	new Promise<void>((resolve) => {
@@ -1676,8 +1686,9 @@ function refreshTokenReplayWaitDeadline(
  *
  * The wait ends when the replay appears, the request is not pending
  * (including a rotation marked unavailable after issuance or replay storage
- * failed), or `rotationReplayExpiresAt` elapses — the reuse window, not a
- * shorter cap. Slow successful writes still occupy the full window.
+ * failed), or the shorter of `rotationReplayExpiresAt` and
+ * `REFRESH_TOKEN_REPLAY_MAX_WAIT_MS` elapses. The polls back off from 25 ms to
+ * 400 ms, and the last delay stops at that deadline.
  *
  * Mismatched replay requests fail immediately. Coordination is through the
  * adapter so overlapping grants on different instances can still recover.
@@ -1687,21 +1698,28 @@ async function waitForRefreshTokenRotationReplay(
 	refreshToken: OAuthRefreshToken<Scope[]> & { id: string },
 	request: RefreshTokenRotationReplayRequest,
 ) {
+	const cappedDeadline = Date.now() + REFRESH_TOKEN_REPLAY_MAX_WAIT_MS;
 	let latest = refreshToken;
 	let polled = false;
+	let pollInterval = REFRESH_TOKEN_REPLAY_POLL_INTERVAL_MS;
 	while (true) {
 		const lookup = await lookupRefreshTokenRotationReplay(ctx, latest, request);
 		if (lookup.status === "hit") {
 			return lookup.response;
 		}
-		if (
-			lookup.status !== "pending" ||
-			Date.now() >= refreshTokenReplayWaitDeadline(latest)
-		) {
+		const deadline = Math.min(
+			refreshTokenReplayWaitDeadline(latest),
+			cappedDeadline,
+		);
+		if (lookup.status !== "pending" || Date.now() >= deadline) {
 			return undefined;
 		}
 		if (polled) {
-			await wait(REFRESH_TOKEN_REPLAY_POLL_INTERVAL_MS);
+			await wait(Math.min(pollInterval, deadline - Date.now()));
+			pollInterval = Math.min(
+				pollInterval * 2,
+				REFRESH_TOKEN_REPLAY_MAX_POLL_INTERVAL_MS,
+			);
 		}
 		polled = true;
 		const next = await ctx.context.adapter.findOne<

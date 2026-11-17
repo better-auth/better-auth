@@ -3015,9 +3015,8 @@ describe("oauth token - refresh_token reuse interval", async () => {
 	});
 
 	/**
-	 * The reuse window, not a fixed 2s cap, is the wait deadline. A slow
-	 * winner still storing its replay must not be rejected while the interval
-	 * is active.
+	 * A slow winner still storing its replay is not rejected after a fixed two
+	 * seconds. The wait is capped at five seconds, whatever the reuse interval.
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/12087
 	 */
@@ -3088,6 +3087,97 @@ describe("oauth token - refresh_token reuse interval", async () => {
 				refresh_call: "1",
 			});
 		} finally {
+			update.mockRestore();
+			findOne.mockRestore();
+			released.resolve();
+		}
+	});
+
+	/**
+	 * `mcp()` sets the reuse interval to 30 seconds. A duplicate must not hold
+	 * its request open that long for a winner that stalls while storing its
+	 * replay.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("stops waiting for a stalled rotation after five seconds, whatever the reuse interval", async () => {
+		oauthClient = await createOAuthClient();
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const originalFindOne = context.adapter.findOne.bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const overlappingRead = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		let holdReplayStore = false;
+		const update = vi.spyOn(context.adapter, "update");
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		update.mockImplementation(async (...args) => {
+			const [params] = args;
+			if (
+				params.model === "oauthRefreshToken" &&
+				Object.prototype.hasOwnProperty.call(
+					params.update,
+					"rotationReplayResponse",
+				)
+			) {
+				holdReplayStore = true;
+				reached.resolve();
+				await released.promise;
+			}
+			return originalUpdate(...args);
+		});
+		findOne.mockImplementation(async (...args) => {
+			const result = await originalFindOne(...args);
+			if (
+				holdReplayStore &&
+				args[0].model === "oauthRefreshToken" &&
+				result &&
+				typeof result === "object" &&
+				"revoked" in result &&
+				result.revoked &&
+				!("rotationReplayResponse" in result && result.rotationReplayResponse)
+			) {
+				overlappingRead.resolve();
+			}
+			return result;
+		});
+
+		try {
+			const rotating = refresh(tokens.refresh_token!);
+			await reached.promise;
+			vi.useFakeTimers({ toFake: ["setTimeout", "Date"] });
+			const overlapping = refresh(tokens.refresh_token!);
+			await overlappingRead.promise;
+			await vi.advanceTimersByTimeAsync(4_900);
+			let settled = false;
+			void overlapping.finally(() => {
+				settled = true;
+			});
+			await vi.advanceTimersByTimeAsync(0);
+			expect(settled).toBe(false);
+
+			// The last poll delay must stop at the cap, not run past it.
+			await vi.advanceTimersByTimeAsync(100);
+			for (let turn = 0; turn < 100 && !settled; turn++) {
+				await new Promise<void>((resolve) => setImmediate(resolve));
+			}
+			expect(settled).toBe(true);
+			const second = await overlapping;
+
+			expect(second.error?.status).toBe(400);
+			expect(second.error).toMatchObject({ error: "invalid_grant" });
+
+			// The slow rotation still completes for the request that won it.
+			vi.useRealTimers();
+			released.resolve();
+			expect((await rotating).error).toBeNull();
+		} finally {
+			vi.useRealTimers();
 			update.mockRestore();
 			findOne.mockRestore();
 			released.resolve();
