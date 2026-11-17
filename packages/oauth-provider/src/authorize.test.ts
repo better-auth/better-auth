@@ -17,6 +17,7 @@ import {
 	postLoginClearedParam,
 	setSignedOAuthQueryParameterNames,
 	signedQueryIssuedAtParam,
+	toBase64Url,
 } from "./signed-query";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
@@ -167,6 +168,36 @@ describe("oauth signed query signatures", () => {
 		expect(
 			await verifyOAuthQueryParams(signedParams.toString(), "test-secret"),
 		).toBe(false);
+	});
+
+	/**
+	 * A `sig` in the base64url alphabet is unchanged by a url decode, so the
+	 * signed query still verifies when something in front of the auth server
+	 * decodes it once.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10427
+	 */
+	it("should verify signed params when the query is url-decoded once", async () => {
+		const signedParams = await createSignedParams("test-secret");
+		signedParams.set("sig", toBase64Url(signedParams.get("sig") ?? ""));
+		const decodedOnce = decodeURIComponent(signedParams.toString());
+
+		expect(await verifyOAuthQueryParams(decodedOnce, "test-secret")).toBe(true);
+	});
+
+	/**
+	 * Signed queries issued before the switch to base64url carry a standard
+	 * base64 `sig` and must keep verifying after an upgrade.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10427
+	 */
+	it("should verify signed params carrying a standard base64 signature", async () => {
+		const signedParams = await createSignedParams("test-secret");
+
+		expect(signedParams.get("sig")).toMatch(/=$/);
+		expect(
+			await verifyOAuthQueryParams(signedParams.toString(), "test-secret"),
+		).toBe(true);
 	});
 
 	it("should reject duplicate signature params", async () => {
