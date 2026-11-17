@@ -221,7 +221,8 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
-			// Signing — when set, overrides the JWT plugin's getLatestKey() default.
+			// Signing — when set, overrides `resourceDefaults` and the JWT plugin's
+			// primary key.
 			signingAlgorithm: {
 				type: "string",
 				required: false,

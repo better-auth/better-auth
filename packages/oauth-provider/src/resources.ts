@@ -62,6 +62,11 @@ export function isAccessTokenFormat(
 	return typeof value === "string" && ACCESS_TOKEN_FORMAT_SET.has(value);
 }
 
+/** @internal */
+export function isJwsAlgorithm(value: unknown): value is JWSAlgorithms {
+	return typeof value === "string" && JWS_ALGORITHM_SET.has(value);
+}
+
 /**
  * Upper bound on how many entries are accepted in a JWT's `aud` claim during
  * introspection / revocation validation. Without a cap, a hostile or replayed
@@ -465,15 +470,23 @@ export async function resolveResourcePolicy(
 				"multi-resource request has conflicting signingKeyId pins; a single JWS signature cannot satisfy multiple key ids",
 		});
 	}
-	const signingAlgorithm: JWSAlgorithms | null =
-		uniqueSigningAlgs.values().next().value ?? null;
-	const signingKeyId: string | null =
-		uniqueSigningKids.values().next().value ?? null;
+	// The defaults apply as a pair only when no requested resource pins
+	// either value, so a resource's `signingKeyId` is never combined with a
+	// default algorithm its key does not carry.
+	const hasResourceSigningPin =
+		uniqueSigningAlgs.size > 0 || uniqueSigningKids.size > 0;
+	const defaults = opts.resourceDefaults;
+	const signingAlgorithm: JWSAlgorithms | null = hasResourceSigningPin
+		? (uniqueSigningAlgs.values().next().value ?? null)
+		: (defaults?.signingAlgorithm ?? null);
+	const signingKeyId: string | null = hasResourceSigningPin
+		? (uniqueSigningKids.values().next().value ?? null)
+		: (defaults?.signingKeyId ?? null);
 
 	// RFC 8707 §2.2: one token cannot be both self-contained and a reference,
 	// so a request whose resources disagree on the format is refused. Without
 	// the JWT plugin every token is opaque, so the formats cannot disagree.
-	const defaultFormat = opts.resourceDefaults?.accessTokenFormat ?? "jwt";
+	const defaultFormat = defaults?.accessTokenFormat ?? "jwt";
 	const formats = new Set<AccessTokenFormat>(
 		resolved.map((row) =>
 			opts.disableJwtPlugin

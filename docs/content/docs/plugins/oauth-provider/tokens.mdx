@@ -77,18 +77,18 @@ oauthProvider({
 
 A string uses the plugin defaults. An object sets per-resource policy:
 
-| Field                           | Effect                                                                                              |
-| ------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `name`                          | Label for admin screens.                                                                            |
-| `allowedScopes`                 | Requested scopes are narrowed to this list. If none remain, the request fails with `invalid_scope`. |
-| `accessTokenTtl`                | Access token lifetime in seconds. Defaults to `accessTokenExpiresIn`.                               |
-| `refreshTokenTtl`               | Refresh token lifetime in seconds. Defaults to `refreshTokenExpiresIn`.                             |
-| `accessTokenFormat`             | `"jwt"` or `"opaque"`. Defaults to `resourceDefaults.accessTokenFormat`, then `"jwt"`.              |
-| `signingAlgorithm`              | Access token signing algorithm. When unset, the JWT plugin selects the signing key.                 |
-| `signingKeyId`                  | Key ID to sign this resource's access tokens with.                                                  |
-| `customClaims`                  | Claims added to every access token for this resource. Reserved JWT claims are stripped.             |
-| `dpopBoundAccessTokensRequired` | Issue only [DPoP](#dpop)-bound tokens for this resource.                                            |
-| `disabled`                      | Stop issuing tokens for this resource. Tokens already issued still verify until they expire.        |
+| Field                           | Effect                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `name`                          | Label for admin screens.                                                                                            |
+| `allowedScopes`                 | Requested scopes are narrowed to this list. If none remain, the request fails with `invalid_scope`.                 |
+| `accessTokenTtl`                | Access token lifetime in seconds. Defaults to `accessTokenExpiresIn`.                                               |
+| `refreshTokenTtl`               | Refresh token lifetime in seconds. Defaults to `refreshTokenExpiresIn`.                                             |
+| `accessTokenFormat`             | `"jwt"` or `"opaque"`. Defaults to `resourceDefaults.accessTokenFormat`, then `"jwt"`.                              |
+| `signingAlgorithm`              | JWS algorithm for this resource's access tokens. Defaults to `resourceDefaults`, then the JWT plugin's primary key. |
+| `signingKeyId`                  | Key ID to sign this resource's access tokens with. Defaults to `resourceDefaults`.                                  |
+| `customClaims`                  | Claims added to every access token for this resource. Reserved JWT claims are stripped.                             |
+| `dpopBoundAccessTokensRequired` | Issue only [DPoP](#dpop)-bound tokens for this resource.                                                            |
+| `disabled`                      | Stop issuing tokens for this resource. Tokens already issued still verify until they expire.                        |
 
 In a request for several resources, a `signingAlgorithm` or `signingKeyId` set on one of them applies to the whole token, and resources without one do not conflict with it. The request fails with `invalid_request` only when two resources set different values, because one token carries one signature. To fix it, set the same value on both resources, or leave it unset on one of them.
 
@@ -127,6 +127,31 @@ A request without a `resource` still gets an opaque token, because a JWT access 
 Startup seeding follows `resourceSeedMode`. With the default, `insertOnly`, adding `accessTokenFormat` to a resource that is already stored has no effect. Change the stored row with `adminUpdateOAuthResource`, or seed with `merge`.
 
 One token cannot be both a JWT and an opaque token. A request for several resources whose formats differ fails with `invalid_target` ([RFC 8707 §2.2](https://datatracker.ietf.org/doc/html/rfc8707#section-2.2)). The client must request them in separate token requests.
+
+### Access token signing
+
+By default, a resource's access tokens are signed with the JWT plugin's primary key, the same key as ID tokens. To sign them with a different key, set `signingAlgorithm` or `signingKeyId` in `resourceDefaults`. They apply to every resource that does not set its own:
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    keyPairConfig: { alg: "RS256" }, // ID tokens
+    keyPairConfigs: [{ alg: "EdDSA" }, { alg: "ES256" }],
+  },
+}),
+oauthProvider({
+  resourceDefaults: { signingAlgorithm: "EdDSA" },
+  resources: [
+    "https://api.example.com", // EdDSA JWTs
+    { identifier: "https://internal.example.com", accessTokenFormat: "opaque" },
+    { identifier: "https://payments.example.com", signingAlgorithm: "ES256" },
+  ],
+})
+```
+
+ID tokens keep the JWT plugin's primary key. The JWT plugin creates a key for an algorithm in `keyPairConfigs` the first time a token needs it. Any other `signingAlgorithm` fails at signing unless the JWKS already holds a key for it.
+
+A resource that sets `signingAlgorithm` or `signingKeyId` replaces both signing defaults, so a resource's key is never paired with a default algorithm that key does not use. Signing defaults need the JWT plugin, so setting them with `disableJwtPlugin: true` fails at startup.
 
 ### Manage resources at runtime
 
