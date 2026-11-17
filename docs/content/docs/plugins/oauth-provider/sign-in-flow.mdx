@@ -87,7 +87,7 @@ The client receives the error at its validated `redirect_uri`, with `error_descr
 
 A plugin registered as a [provider extension](/docs/plugins/oauth-provider/reference#provider-extensions) can set `beforeAuthorization` too. Extension hooks run first, in registration order, and then your own. Every hook runs unless one throws. A hook that throws ends the request even when another one asked for a sign-in.
 
-The hook also runs for codes a plugin endpoint issues with [`issueAuthorizationCode`](#issue-codes-from-your-own-endpoint), with `pushed: false`, so a plugin cannot skip your rules. There, a thrown OAuth error fails the call with that error. `{ prompt: "login" }` always fails it with `login_required`, even when the endpoint signed the user in during that request. At `/oauth2/authorize`, the hook runs again after sign-in and decides on the new session. A plugin endpoint gets no such second check, so a session it creates cannot satisfy the policy.
+The hook also runs for codes a plugin endpoint issues with [`issueAuthorizationCode`](#issue-codes-from-your-own-endpoint), with `pushed: false`, so a plugin cannot skip your rules. There, a thrown OAuth error fails the call with that error. `{ prompt: "login" }` always fails it with `login_required`, even when the endpoint signed the user in during that request. At `/oauth2/authorize`, the hook runs again after sign-in and decides on the new session. A plugin endpoint runs the hook once, with the session you pass, so a `{ prompt: "login" }` policy can never be satisfied there.
 
 The hook does not run for device codes, [CIBA](/docs/plugins/ciba) requests, or other extension interaction requests, which the provider's pages also approve.
 

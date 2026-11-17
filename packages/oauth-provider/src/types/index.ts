@@ -984,7 +984,7 @@ export interface OAuthBeforeAuthorizationInput {
 	 * client credentials or the `request_uri` itself. The client's default
 	 * scopes fill `scope` when the request named none.
 	 */
-	query: Omit<OAuthAuthorizationQuery, "request" | "request_uri">;
+	query: Omit<StoredAuthorizationQuery, "request" | "request_uri">;
 	/**
 	 * Whether this server's own `/oauth2/par` stored the request. A request
 	 * that `requestUriResolver` returns reports `false` on every visit, even
