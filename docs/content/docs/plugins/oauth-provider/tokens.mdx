@@ -526,7 +526,7 @@ To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's
 
 ### Grant revocation entries
 
-A grant is revoked when a client revokes a refresh token, replays a rotated refresh token, or reuses an authorization code. It is also revoked when the user deletes the [consent](#revoke-tokens-with-a-consent) it was issued under, or resets their [password](/docs/plugins/oauth-provider/openid-connect#password-reset). The provider then writes one entry for the grant to the [verification store](/docs/concepts/database#verification), whatever your options. The entry lasts `accessTokenExpiresIn`, plus one second.
+A grant is revoked when a client revokes a refresh token, replays a rotated refresh token, or reuses an authorization code. It is also revoked when the user deletes the [consent](#revoke-tokens-with-a-consent) it was issued under, or resets their [password](/docs/plugins/oauth-provider/openid-connect#password-reset) while `emailAndPassword.revokeSessionsOnPasswordReset` is on and `revokeGrantsOnPasswordReset` is not `false`. The provider then writes one entry for the grant to the [verification store](/docs/concepts/database#verification), whatever your options. The entry lasts `accessTokenExpiresIn`, plus one second.
 
 A refresh token issued before 1.8 gets a grant ID at its first refresh after the upgrade. Revoking it before then, or replaying a token that was rotated before the upgrade, writes no entry, so a request still issuing tokens for that grant isn't stopped.
 
@@ -567,7 +567,7 @@ Revoking a refresh token then also revokes the JWT access tokens of its grant, i
 * A refresh token that was already rotated is presented for revocation, or at the token endpoint outside the [`refreshTokenReuseInterval`](#refresh-tokens) window. A retry inside that window gets the earlier response back and revokes nothing.
 * An authorization code is reused by the client it was issued to, and the request passes the checks in [Authorization code reuse](#authorization-code-reuse). The code's grant is revoked, including a JWT access token issued for the code without a refresh token. This holds even when the reuse arrives while the first redemption is still issuing its tokens.
 * The user deletes the consent the grant was issued under, and the grant has a refresh token or a stored opaque access token that carries its ID. See [Revoke tokens with a consent](#revoke-tokens-with-a-consent).
-* The user resets their password with `emailAndPassword.revokeSessionsOnPasswordReset` on, and the grant has a refresh token or a stored opaque access token that carries its ID. See [Password reset](/docs/plugins/oauth-provider/openid-connect#password-reset).
+* The user resets their password with `emailAndPassword.revokeSessionsOnPasswordReset` on and `revokeGrantsOnPasswordReset` not `false`, and the grant has a refresh token or a stored opaque access token that carries its ID. See [Password reset](/docs/plugins/oauth-provider/openid-connect#password-reset).
 
 The grant revocation has these limits:
 

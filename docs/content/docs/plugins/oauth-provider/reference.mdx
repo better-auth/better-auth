@@ -284,7 +284,7 @@ Lets `/oauth2/revoke` revoke JWT access tokens by `jti`, and makes revoking a re
 
 `revokeGrantsOnPasswordReset` <span className="opacity-70">`boolean`</span>
 
-Revokes every access and refresh token a user holds when their password is reset, including `offline_access` grants that no session holds. It applies when `emailAndPassword.revokeSessionsOnPasswordReset` is on. Defaults to `true`. Set it to `false` to keep a user's tokens across a password reset. See [Password reset](/docs/plugins/oauth-provider/openid-connect#password-reset).
+Revokes the access and refresh tokens stored for a user when their password is reset, including `offline_access` grants that no session holds. It applies when `emailAndPassword.revokeSessionsOnPasswordReset` is on. JWT access tokens are revoked only with `revocableJwtAccessTokens`, and only when their grant has a stored refresh token or opaque access token. Defaults to `true`. Set it to `false` to keep a user's tokens across a password reset. The reset still ends the user's sessions, and so a JWT access token that carries their `sid`. See [Password reset](/docs/plugins/oauth-provider/openid-connect#password-reset).
 
 `dpop` <span className="opacity-70">`{ proofMaxAgeSeconds?, signingAlgorithms?, nonce? }`</span>
 

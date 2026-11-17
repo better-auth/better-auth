@@ -274,11 +274,11 @@ Revoking a refresh token at `/oauth2/revoke` now deletes every opaque access tok
 
 ### A password reset revokes the user's tokens
 
-When `emailAndPassword.revokeSessionsOnPasswordReset` is on, a password reset now also revokes every access and refresh token the user holds, including `offline_access` grants that no session holds. It runs for `/reset-password`, `/email-otp/reset-password`, and `/phone-number/reset-password`, and for a user with no live session. Before, an `offline_access` refresh token kept working after the reset.
+When `emailAndPassword.revokeSessionsOnPasswordReset` is on, a password reset now also revokes every access and refresh token stored for the user, including `offline_access` grants that no session holds. It runs for `/reset-password`, `/email-otp/reset-password`, and `/phone-number/reset-password`, and for a user with no live session. Before, an `offline_access` refresh token kept working after the reset.
 
 * A client that refreshes after a reset gets `400 invalid_grant` and must start a new authorization request.
 * Signing out and revoking all sessions still keep `offline_access` grants.
-* With `revocableJwtAccessTokens: true`, the JWT access tokens of those grants are revoked too. Otherwise they stay valid until they expire.
+* With `revocableJwtAccessTokens: true`, the JWT access tokens of those grants are revoked too. Otherwise they stay valid until they expire, or until the session they carry as `sid` ends, which the reset does. A JWT issued without a refresh token has no stored record, so only that session rule applies to it.
 * A reset on a deployment that leaves `revokeSessionsOnPasswordReset` off revokes nothing.
 
 **What to do:** if agents or other long-lived clients must survive a reset, set `revokeGrantsOnPasswordReset: false`. See [Password reset](/docs/plugins/oauth-provider/openid-connect#password-reset).
