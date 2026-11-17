@@ -446,6 +446,14 @@ export const memoryAdapter = (
 						if (!activeDb[model]) {
 							activeDb[model] = [];
 						}
+						if (
+							data.id !== undefined &&
+							activeDb[model].some((record: any) => record.id === data.id)
+						) {
+							throw new Error(
+								`Record with id ${data.id} already exists in ${model}`,
+							);
+						}
 						activeDb[model].push(data);
 						return data;
 					},

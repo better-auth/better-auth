@@ -573,3 +573,37 @@ it("gives overlapping transactions from two adapters on one db distinct serial i
 	expect(rowA.id).not.toBe(rowB.id);
 	expect(db.widget!.map((row) => row.name).sort()).toEqual(["a", "b"]);
 });
+
+it("throws an error when inserting a record with an existing id", async () => {
+	const { db, adapter } = setup();
+	await seedWidget(adapter, "w1", "first");
+
+	await expect(
+		adapter.create({
+			model: "widget",
+			data: { id: "w1", name: "second" },
+			forceAllowId: true,
+		}),
+	).rejects.toThrow(/already exists/i);
+
+	expect(db.widget?.filter((r) => r.id === "w1")).toHaveLength(1);
+	expect(db.widget?.[0]?.name).toBe("first");
+});
+
+it("throws an error when inserting a duplicate id inside a transaction", async () => {
+	const { db, adapter } = setup();
+	await seedWidget(adapter, "w1", "first");
+
+	await expect(
+		adapter.transaction(async (tx) => {
+			await tx.create({
+				model: "widget",
+				data: { id: "w1", name: "second" },
+				forceAllowId: true,
+			});
+		}),
+	).rejects.toThrow(/already exists/i);
+
+	expect(db.widget?.filter((r) => r.id === "w1")).toHaveLength(1);
+});
+
