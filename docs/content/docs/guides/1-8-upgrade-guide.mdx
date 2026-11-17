@@ -275,7 +275,7 @@ Revoking a refresh token at `/oauth2/revoke` now deletes every opaque access tok
 
 ### Overlapping refreshes get the same response
 
-With `refreshTokenReuseInterval` above `0`, a refresh that arrives while the same token's first refresh is still running now gets that refresh's response. Before, it failed with `400 invalid_grant`, and a client that sent two refreshes at once lost its session. The second request waits for the first to store its response, for at most 5 seconds, and fails with `invalid_grant` if none appears.
+With `refreshTokenReuseInterval` above `0`, a refresh that arrives while the same token's first refresh is still running now gets that refresh's response. Before, it failed with `400 invalid_grant`, and a client that sent two refreshes at once lost its session. The second request waits for the first to store its response, for at most 5 seconds, and fails with `invalid_grant` if none appears. A second request that differs from the first, in its client, scopes, resources, or DPoP key, fails with `invalid_grant` at once.
 
 * The default, `0`, is unchanged. Any reuse of a rotated token is still a replay that revokes the grant.
 * `mcp()` sets the interval to 30 seconds, so MCP clients get this behavior.
