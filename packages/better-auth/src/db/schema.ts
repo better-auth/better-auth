@@ -249,10 +249,9 @@ export function parseAdditionalUserInput(
 export function parseAccountInput(
 	options: BetterAuthOptions,
 	account: Partial<Account>,
-	action?: ("create" | "update") | undefined,
 ) {
 	const schema = getFields(options, "account", "input");
-	return parseInputData(account, { fields: schema, action });
+	return parseInputData(account, { fields: schema });
 }
 
 export function parseSessionInput(

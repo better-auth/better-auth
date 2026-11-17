@@ -3282,6 +3282,11 @@ describe("provider getAccountFields", async () => {
 			validator: { input: z.string().email() },
 			transform: { input: (value: unknown) => String(value).toLowerCase() },
 		},
+		prefixedField: {
+			type: "string",
+			required: false,
+			transform: { input: async (value: unknown) => `prefix:${String(value)}` },
+		},
 	} as const;
 
 	async function createInstance(
@@ -3795,6 +3800,20 @@ describe("provider getAccountFields", async () => {
 	});
 
 	describe("field validators", () => {
+		it("applies an async field transform once", async () => {
+			const { signInWithGoogle, googleAccounts } = await createInstance({
+				getAccountFields: vi.fn<GetAccountFields>(async () => ({
+					prefixedField: "value",
+				})),
+			});
+
+			await signInWithGoogle("oauth-test@test.com");
+
+			expect(await googleAccounts()).toMatchObject([
+				{ prefixedField: "prefix:value" },
+			]);
+		});
+
 		it("stores the value a field transform returns", async () => {
 			const { signInWithGoogle, googleAccounts } = await createInstance({
 				getAccountFields: vi.fn<GetAccountFields>(async () => ({

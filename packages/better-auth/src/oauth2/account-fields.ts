@@ -4,7 +4,7 @@ import type {
 	OAuth2UserInfo,
 	OAuthProvider,
 } from "@better-auth/core/oauth2";
-import { parseAccountInput } from "../db/schema";
+import { parseInputData } from "../db/schema";
 
 /**
  * Account columns Better Auth owns. A provider's `getAccountFields` can never
@@ -34,8 +34,8 @@ const RESERVED_ACCOUNT_FIELDS: ReadonlySet<string> = new Set([
  * The values come from the provider, so they follow the same rule as
  * `mapProfileToUser` values for user fields: a field marked `input: false`
  * stays server-owned and the provider cannot set it, and the remaining values
- * pass through the field's `validator.input` and `transform.input`. A value that
- * fails validation rejects the hook result with a `BAD_REQUEST` `APIError`.
+ * pass through the field's `validator.input`. The adapter applies
+ * `transform.input` when it writes the account. A value that fails validation rejects the hook result with a `BAD_REQUEST` `APIError`.
  */
 export async function resolveOAuthAccountFields(
 	c: GenericEndpointContext,
@@ -62,10 +62,17 @@ export async function resolveOAuthAccountFields(
 	if (accepted.length === 0) {
 		return undefined;
 	}
-	const parsed: Record<string, unknown> = parseAccountInput(
-		c.context.options,
+	// The adapter runs `transform.input` on every account write, so running it
+	// here too would transform the value twice.
+	const validationFields = Object.fromEntries(
+		Object.entries(declaredFields).map(([key, field]) => [
+			key,
+			{ ...field, transform: undefined },
+		]),
+	);
+	const parsed: Record<string, unknown> = parseInputData(
 		Object.fromEntries(accepted),
-		"update",
+		{ fields: validationFields, action: "update" },
 	);
 	return Object.keys(parsed).length > 0 ? parsed : undefined;
 }
