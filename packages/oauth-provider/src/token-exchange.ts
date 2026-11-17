@@ -6,6 +6,7 @@ import type { User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { getDpopProofJwt } from "./dpop";
 import { extendOAuthProvider } from "./extensions";
+import { getAcceptedIssuers } from "./issuer";
 import { resolveResourcePolicy } from "./resources";
 import { resolveIssuanceConfirmation, sameConfirmation } from "./token";
 import type {
@@ -226,31 +227,33 @@ function actorProfile(actor: OAuthTokenExchangeActor): string {
 	return actor.user ? "user" : "service";
 }
 
-// The value each `may_act` member this server can evaluate must equal.
+// Whether the actor matches each `may_act` member this server can evaluate.
 const MAY_ACT_MATCHERS: Record<
 	string,
-	(actor: OAuthTokenExchangeActor, issuer: string) => unknown
+	(actor: OAuthTokenExchangeActor, value: unknown, issuers: string[]) => boolean
 > = {
-	sub: (actor) => actor.sub,
-	sub_profile: actorProfile,
-	client_id: (actor) => actor.token.client_id,
-	iss: (_, issuer) => issuer,
+	sub: (actor, value) => actor.sub === value,
+	sub_profile: (actor, value) => actorProfile(actor) === value,
+	client_id: (actor, value) => actor.token.client_id === value,
+	iss: (_, value, issuers) =>
+		typeof value === "string" && issuers.includes(value),
 };
 
 /**
  * RFC 8693 §4.4: every `may_act` member must match the actor. A member this
- * server cannot evaluate fails closed.
+ * server cannot evaluate fails closed. `issuers` are the values that name this
+ * server, which issued the actor token.
  */
 function mayActAllows(
 	mayAct: unknown,
 	actor: OAuthTokenExchangeActor | undefined,
-	issuer: string,
+	issuers: string[],
 ): boolean {
 	if (!actor || !isRecord(mayAct)) return false;
 	return Object.entries(mayAct).every(
 		([member, value]) =>
 			Object.hasOwn(MAY_ACT_MATCHERS, member) &&
-			MAY_ACT_MATCHERS[member]!(actor, issuer) === value,
+			MAY_ACT_MATCHERS[member]!(actor, value, issuers),
 	);
 }
 
@@ -396,11 +399,7 @@ async function exchangeToken(
 	}
 	if (
 		subject.may_act !== undefined &&
-		!mayActAllows(
-			subject.may_act,
-			actor,
-			(subject.iss as string | undefined) ?? ctx.context.baseURL,
-		)
+		!mayActAllows(subject.may_act, actor, getAcceptedIssuers(ctx.context, opts))
 	) {
 		deny("the actor is not permitted by the subject token's may_act");
 	}

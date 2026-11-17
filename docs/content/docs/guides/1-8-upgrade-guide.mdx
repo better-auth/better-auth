@@ -480,7 +480,7 @@ Discovery already published the issuer normalized: without the trailing slash, q
 
 * Introspection reports the new `iss` for every opaque access token and refresh token as soon as you upgrade, including tokens issued before.
 * JWT access tokens and ID tokens issued before the upgrade keep the old `iss` until they expire.
-* Better Auth's own checks accept both values: introspection, UserInfo, token exchange, the `id_token_hint` check at the end-session endpoint, and the defaults of the resource client and `requireMcpAuth`.
+* Better Auth's own checks accept both values: introspection, UserInfo, token exchange and its `may_act` `iss` check, the `id_token_hint` check at the end-session endpoint, and the defaults of the resource client and `requireMcpAuth`. A `may_act` `iss` you set from the configured value in `customAccessTokenClaims` keeps working.
 * The resource client's `getProtectedResourceMetadata` now lists the discovery issuer in its default `authorization_servers` entry.
 
 Discovery and the authorization response `iss` parameter do not change.

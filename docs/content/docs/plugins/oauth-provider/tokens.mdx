@@ -1061,7 +1061,7 @@ Every member of `may_act` must match the actor:
 * `sub` must equal the actor's `act.sub`.
 * `sub_profile` must equal the actor's kind: `"service"` or `"user"`.
 * `client_id` must equal the actor token's client, which is the exchanging client.
-* `iss` must equal this server's issuer.
+* `iss` must equal this server's issuer: the discovery `issuer`, or the `jwt.issuer` or `baseURL` it comes from, as you configured it.
 
 In the example, `client_id` with `sub_profile: "service"` allows only the MCP server acting as itself, with its own `client_credentials` token. `client_id` alone also allows users whose actor tokens were issued to that client.
 
