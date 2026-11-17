@@ -13,7 +13,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cimd, createCimdClientDiscovery } from "./index";
-import type { CimdOptions } from "./types";
+import type { CimdOwnedResolverOptions } from "./types";
 
 const PKCE_VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 const PKCE_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
@@ -62,7 +62,9 @@ function withCode(message: string, code: string): Error {
 	return Object.assign(new Error(message), { code });
 }
 
-async function createAuthorizationServer(options: Partial<CimdOptions> = {}) {
+async function createAuthorizationServer(
+	options: Partial<CimdOwnedResolverOptions> = {},
+) {
 	instanceSequence += 1;
 	const baseURL = `http://localhost:${3700 + instanceSequence}`;
 	const transport = {
@@ -979,7 +981,9 @@ describe("CIMD metadataStaleIfError", () => {
  * @see https://github.com/better-auth/better-auth/issues/11875
  */
 describe("CIMD metadataStaleIfError for jwks_uri keys", () => {
-	async function createKeyClientServer(options: Partial<CimdOptions>) {
+	async function createKeyClientServer(
+		options: Partial<CimdOwnedResolverOptions>,
+	) {
 		const { privateKey, publicKey } = (await crypto.subtle.generateKey(
 			{
 				name: "RSASSA-PKCS1-v1_5",
