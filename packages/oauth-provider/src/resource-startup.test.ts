@@ -372,8 +372,10 @@ describe("resource seeding at startup", () => {
 		it("retries only the entries that failed, without rewriting finished ones", async () => {
 			const second = "https://other.example.com/mcp";
 			let creates = 0;
+			const reads: string[] = [];
 			const fault = {
 				current: ((operation) => {
+					if (operation === "findOne") reads.push(operation);
 					if (operation === "create" && ++creates === 2) {
 						throw new TypeError("fetch failed");
 					}
@@ -392,9 +394,12 @@ describe("resource seeding at startup", () => {
 			]);
 
 			database.oauthResource[0]!.name = "Edited by admin";
-			fault.current = null;
+			reads.length = 0;
 			await register();
 
+			// The finished entry is not read again: one read for the unfinished
+			// entry's seed and one for the lookup itself.
+			expect(reads).toHaveLength(2);
 			expect(database.oauthResource).toMatchObject([
 				{ identifier: resource, name: "Edited by admin" },
 				{ identifier: second, name: "Second from config" },
