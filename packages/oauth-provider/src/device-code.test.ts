@@ -1118,6 +1118,9 @@ describe("oauth-provider device-code grant", async () => {
 		expect(idToken.aud).toBe(clientId);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/12198
+	 */
 	it.each([
 		["approval", true],
 		["denial", false],
