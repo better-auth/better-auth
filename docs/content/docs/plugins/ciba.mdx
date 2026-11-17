@@ -411,7 +411,7 @@ await auth.api.completeCibaRequest({
 });
 ```
 
-`getCibaRequest` is server-only. It returns the same fields `sendNotification` receives, without `user` and `url`. It returns `null` in every case where `completeCibaRequest` would refuse: the request is unknown, already decided, or expired, or `userId` is not the user the `login_hint` named.
+`getCibaRequest` is server-only. It returns the same fields `sendNotification` receives, without `user` and `url`. It returns `null` when `completeCibaRequest` would refuse the request as unknown: the request is unknown, already decided, or expired, or `userId` is not the user the `login_hint` named. It also returns `null` when the client no longer exists.
 
 Your page must still do everything `completeCibaRequest` leaves to your app:
 
