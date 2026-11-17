@@ -239,3 +239,52 @@ describe("CIMD in-flight coalescing", () => {
 		expect(refetchHeaders.has("if-none-match")).toBe(false);
 	});
 });
+
+describe("CIMD resolution of a cached document", () => {
+	it("returns the stored client on a cache hit without rewriting it", async () => {
+		const clientId = "https://cache-hit-existing.example/client.json";
+		const onClientRefreshed = vi.fn();
+		const { discovery, fetchClientMetadataResource } = createDiscovery({
+			onClientRefreshed,
+		});
+		fetchClientMetadataResource.mockImplementation(async () =>
+			metadataResponse(clientId),
+		);
+		const request = await createRequestContext();
+		await discovery.resolve(request.ctx, clientId, null);
+		await request.context.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+			update: { name: "Edited out of band" },
+		});
+		const stored = await request.findClient(clientId);
+
+		const resolved = await discovery.resolve(request.ctx, clientId, stored);
+
+		expect(resolved).toBe(stored);
+		expect(onClientRefreshed).not.toHaveBeenCalled();
+		expect(fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+		expect((await request.findClient(clientId))?.name).toBe(
+			"Edited out of band",
+		);
+	});
+
+	it("runs the fetch policy once per fetch and not on a cache hit", async () => {
+		const clientId = "https://policy-once.example/client.json";
+		const isMetadataDocumentUrlAllowed = vi.fn(() => true);
+		const { discovery, fetchClientMetadataResource } = createDiscovery({
+			isMetadataDocumentUrlAllowed,
+		});
+		fetchClientMetadataResource.mockImplementation(async () =>
+			metadataResponse(clientId),
+		);
+		const request = await createRequestContext();
+
+		const created = await discovery.resolve(request.ctx, clientId, null);
+		expect(isMetadataDocumentUrlAllowed).toHaveBeenCalledTimes(1);
+
+		await discovery.resolve(request.ctx, clientId, created);
+		expect(isMetadataDocumentUrlAllowed).toHaveBeenCalledTimes(1);
+		expect(fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+	});
+});
