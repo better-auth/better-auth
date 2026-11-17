@@ -39,6 +39,17 @@ oauthProvider({
 })
 ```
 
+### Requests that omit `scope`
+
+When an authorization request leaves out `scope`, the provider applies a default, as [RFC 6749 §3.3](https://datatracker.ietf.org/doc/html/rfc6749#section-3.3) allows. The default depends on whether you set [`clientRegistrationDefaultScopes`](/docs/plugins/oauth-provider/clients#dynamic-client-registration):
+
+* **Set:** the request gets only the client's scopes that are also in that list. A scope you list in `clientRegistrationAllowedScopes` stays available to the client, but the client must ask for it by name.
+* **Not set:** the request gets every scope the client may request. That is the client's stored `scope`, or `scopes` when the client has none.
+
+A request that names `scope` is checked against the client's scopes and used as sent. The consent page, the authorization code, and the token's `scope` all carry the default.
+
+If the default list leaves out `openid`, the request is plain OAuth and the token response has no ID token. If no scope remains, the token has no scopes.
+
 ## Resources
 
 A resource is a protected API that your provider issues access tokens for. Its `identifier` is the `resource` parameter value from [RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2) and becomes the `aud` of a JWT access token.

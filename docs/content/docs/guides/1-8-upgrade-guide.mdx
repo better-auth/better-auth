@@ -353,6 +353,12 @@ To stop a request from carrying two values that different parts of the server re
 
 **What to do:** clients that send each parameter once need no change. If your client matches on the error code for a malformed `resource`, match `invalid_target`.
 
+### Authorization requests without `scope` use `clientRegistrationDefaultScopes`
+
+An authorization request that omits `scope` now gets only the client's scopes that are also in `clientRegistrationDefaultScopes`. Before, it got every scope the client may request, including scopes you added only through `clientRegistrationAllowedScopes`. When you do not set `clientRegistrationDefaultScopes`, nothing changes, and requests that send `scope` are unaffected.
+
+**What to do:** if you set `clientRegistrationDefaultScopes`, check that clients which send no `scope` still get the scopes they need. A default list without `openid` makes that request plain OAuth, so the client gets no ID token. See [Requests that omit `scope`](/docs/plugins/oauth-provider/tokens#requests-that-omit-scope).
+
 ### Client metadata updates
 
 * Updating a client with an empty `metadata` object now clears its stored metadata. Before, the old metadata stayed.
