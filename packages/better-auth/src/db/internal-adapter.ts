@@ -516,7 +516,22 @@ export const createInternalAdapter = (
 		},
 		deleteUser: async (userId: string) => {
 			const sessionReferences = await getActiveSessionReferences(userId);
-			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
+			// One transaction, so a failed user delete does not leave the user
+			// without its sessions and accounts. The cached sessions are revoked
+			// once it commits.
+			await runWithTransaction(adapter, async () => {
+				if (!secondaryStorage || options.session?.storeSessionInDatabase) {
+					await deleteManyWithHooks(
+						[
+							{
+								field: "userId",
+								value: userId,
+							},
+						],
+						"session",
+						undefined,
+					);
+				}
 				await deleteManyWithHooks(
 					[
 						{
@@ -524,34 +539,24 @@ export const createInternalAdapter = (
 							value: userId,
 						},
 					],
-					"session",
+					"account",
 					undefined,
 				);
-			}
-			await deleteManyWithHooks(
-				[
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-				"account",
-				undefined,
-			);
 
-			const deletedUser = await deleteWithHooks(
-				[
-					{
-						field: "id",
-						value: userId,
-					},
-				],
-				"user",
-				undefined,
-			);
-			if (deletedUser !== null) {
-				await queueCachedUserSessionDeletion(userId, sessionReferences);
-			}
+				const deletedUser = await deleteWithHooks(
+					[
+						{
+							field: "id",
+							value: userId,
+						},
+					],
+					"user",
+					undefined,
+				);
+				if (deletedUser !== null) {
+					await queueCachedUserSessionDeletion(userId, sessionReferences);
+				}
+			});
 		},
 		createSession: async (
 			userId: string,

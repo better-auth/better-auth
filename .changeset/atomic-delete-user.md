@@ -1,0 +1,5 @@
+---
+"better-auth": patch
+---
+
+Deleting a user no longer reports success while the user row is still there, or leaves the user without its sessions and accounts when the delete fails partway. The session, account and user deletes now run in one transaction where the database supports it, and a failed read before a delete fails the request instead of skipping the delete or its `delete.before` hooks.

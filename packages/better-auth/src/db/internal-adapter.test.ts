@@ -2780,3 +2780,134 @@ describe("internal adapter test", async () => {
 		});
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11667
+ */
+describe("deleteUser atomicity", () => {
+	type AdapterMethod = "findMany" | "delete";
+
+	/** A SQLite store with transactions whose adapter calls throw while `fail` says so. */
+	async function makeFailingAdapter() {
+		const database = new DatabaseSync(":memory:");
+		await (await getMigrations({ database })).runMigrations();
+		const db = new Kysely<Record<string, never>>({
+			dialect: new NodeSqliteDialect({ database }),
+		});
+		let fail: (method: AdapterMethod, model: string) => boolean = () => false;
+		const failing = <
+			A extends {
+				findMany: (...args: never[]) => unknown;
+				delete: (...args: never[]) => unknown;
+			},
+		>(
+			base: A,
+		): A => ({
+			...base,
+			findMany: (async (data: { model: string }) => {
+				if (fail("findMany", data.model)) {
+					throw new Error(`findMany ${data.model} failed`);
+				}
+				return (base.findMany as (data: unknown) => unknown)(data);
+			}) as unknown as A["findMany"],
+			delete: (async (data: { model: string }) => {
+				if (fail("delete", data.model)) {
+					throw new Error(`delete ${data.model} failed`);
+				}
+				return (base.delete as (data: unknown) => unknown)(data);
+			}) as unknown as A["delete"],
+		});
+		const { internalAdapter } = await init({
+			database: (options) => {
+				const base = kyselyAdapter(db, {
+					type: "sqlite",
+					transaction: true,
+				})(options);
+				return {
+					...failing(base),
+					transaction: (callback) =>
+						base.transaction((trx) => callback(failing(trx))),
+				};
+			},
+		});
+		const user = await internalAdapter.createUser(
+			{ email: "delete-me@example.com", name: "Delete Me" },
+			{ method: "test" },
+		);
+		await internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "credential",
+			accountId: user.id,
+		});
+		await internalAdapter.createSession(user.id);
+		const remaining = async () => ({
+			user: await internalAdapter.findUserById(user.id),
+			accounts: (await internalAdapter.findAccounts(user.id)).length,
+			sessions: (await internalAdapter.listSessions(user.id)).length,
+		});
+		return {
+			internalAdapter,
+			userId: user.id,
+			remaining,
+			failWhen: (next: typeof fail) => {
+				fail = next;
+			},
+		};
+	}
+
+	it("fails instead of skipping the user delete when the user cannot be read", async () => {
+		const { internalAdapter, userId, remaining, failWhen } =
+			await makeFailingAdapter();
+		failWhen((method, model) => method === "findMany" && model === "user");
+
+		await expect(internalAdapter.deleteUser(userId)).rejects.toThrow(
+			"findMany user failed",
+		);
+
+		failWhen(() => false);
+		const left = await remaining();
+		expect(left.user?.id).toBe(userId);
+		expect(left.accounts).toBe(1);
+		expect(left.sessions).toBe(1);
+	});
+
+	it("keeps the sessions and accounts when the user delete fails", async () => {
+		const { internalAdapter, userId, remaining, failWhen } =
+			await makeFailingAdapter();
+		failWhen((method, model) => method === "delete" && model === "user");
+
+		await expect(internalAdapter.deleteUser(userId)).rejects.toThrow(
+			"delete user failed",
+		);
+
+		failWhen(() => false);
+		const left = await remaining();
+		expect(left.user?.id).toBe(userId);
+		expect(left.accounts).toBe(1);
+		expect(left.sessions).toBe(1);
+	});
+
+	it("does not delete accounts without their delete hooks when they cannot be read", async () => {
+		const { internalAdapter, userId, remaining, failWhen } =
+			await makeFailingAdapter();
+		failWhen((method, model) => method === "findMany" && model === "account");
+
+		await expect(internalAdapter.deleteUser(userId)).rejects.toThrow(
+			"findMany account failed",
+		);
+
+		failWhen(() => false);
+		const left = await remaining();
+		expect(left.user?.id).toBe(userId);
+		expect(left.accounts).toBe(1);
+		expect(left.sessions).toBe(1);
+	});
+
+	it("still deletes the user, its accounts and its sessions", async () => {
+		const { internalAdapter, userId, remaining } = await makeFailingAdapter();
+
+		await internalAdapter.deleteUser(userId);
+
+		expect(await remaining()).toEqual({ user: null, accounts: 0, sessions: 0 });
+	});
+});

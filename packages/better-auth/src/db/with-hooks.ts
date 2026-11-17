@@ -262,6 +262,8 @@ export function getWithHooks(
 			| undefined,
 	) {
 		const context = tryGetCurrentAuthEndpointContext();
+		const shouldRunAdapterDelete =
+			!customDeleteFn || customDeleteFn.executeMainFn;
 		let entityToDelete: T | null = null;
 
 		try {
@@ -271,8 +273,13 @@ export function getWithHooks(
 				limit: 1,
 			});
 			entityToDelete = entities[0] || null;
-		} catch {
-			// If we can't find the entity, we'll still proceed with deletion
+		} catch (error) {
+			// The adapter delete only runs for a row the read found, so a failed
+			// read would skip it and report success. Only a custom delete that
+			// replaces the adapter delete can go on without the row.
+			if (shouldRunAdapterDelete) {
+				throw error;
+			}
 		}
 
 		if (entityToDelete) {
@@ -301,8 +308,6 @@ export function getWithHooks(
 			? await customDeleteFn.fn(where)
 			: null;
 
-		const shouldRunAdapterDelete =
-			!customDeleteFn || customDeleteFn.executeMainFn;
 		const deleted =
 			shouldRunAdapterDelete && entityToDelete
 				? await (await getCurrentAdapter(adapter)).delete({
@@ -346,6 +351,8 @@ export function getWithHooks(
 			| undefined,
 	) {
 		const context = tryGetCurrentAuthEndpointContext();
+		const shouldRunAdapterDelete =
+			!customDeleteFn || customDeleteFn.executeMainFn;
 		let entitiesToDelete: T[] = [];
 
 		try {
@@ -353,8 +360,13 @@ export function getWithHooks(
 				model,
 				where,
 			});
-		} catch {
-			// If we can't find the entities, we'll still proceed with deletion
+		} catch (error) {
+			// The adapter delete would remove the rows without running the
+			// `delete.before` hooks that can veto it. Only a custom delete that
+			// replaces the adapter delete can go on without the rows.
+			if (shouldRunAdapterDelete) {
+				throw error;
+			}
 		}
 
 		for (const entity of entitiesToDelete) {
@@ -383,13 +395,12 @@ export function getWithHooks(
 			? await customDeleteFn.fn(where)
 			: null;
 
-		const deleted =
-			!customDeleteFn || customDeleteFn.executeMainFn
-				? await (await getCurrentAdapter(adapter)).deleteMany({
-						model,
-						where,
-					})
-				: customDeleted;
+		const deleted = shouldRunAdapterDelete
+			? await (await getCurrentAdapter(adapter)).deleteMany({
+					model,
+					where,
+				})
+			: customDeleted;
 
 		for (const entity of entitiesToDelete) {
 			for (const { source, hooks } of hooksEntries) {
