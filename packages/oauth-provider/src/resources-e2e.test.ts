@@ -895,6 +895,7 @@ describe("resource policy downscopes token responses", () => {
 		expect(result.tokens?.data?.scope).toBe("profile email");
 		const decoded = decodeJwt(result.tokens!.data!.access_token!);
 		expect(decoded.aud).toEqual(expect.arrayContaining([first, second]));
+		expect((decoded as { scope?: string }).scope).toBe("profile email");
 	});
 });
 
