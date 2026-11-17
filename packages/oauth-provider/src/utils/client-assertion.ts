@@ -65,12 +65,16 @@ function getJwksCacheKey(client: SchemaClient<Scope[]>): string {
 }
 const ALGORITHMS_LIST: string[] = [...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS];
 
+// RFC 7519 §4.1.4 allows leeway "usually no more than a few minutes". Raising
+// this cap later is compatible; lowering it would not be.
+const MAX_ASSERTION_CLOCK_TOLERANCE_SECONDS = 60;
+
 function getAssertionClockTolerance(opts: OAuthOptions<Scope[]>): number {
 	const value = opts.assertionClockTolerance;
 	if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
 		return 0;
 	}
-	return value;
+	return Math.min(value, MAX_ASSERTION_CLOCK_TOLERANCE_SECONDS);
 }
 
 /**
@@ -337,7 +341,8 @@ async function refetchClientJwks(
  * - `aud` MUST include `expectedAudience` (RFC 7523 §3 rule 3),
  * - `exp` MUST be present, unexpired (within `assertionClockTolerance`), and
  *   at most `assertionMaxLifetime` seconds away (RFC 7523 §3 rule 4),
- * - `iat`, when present, MUST be within `assertionMaxLifetime`,
+ * - `iat`, when present, MUST be within `assertionMaxLifetime` (plus
+ *   `assertionClockTolerance`),
  * - `jti` MUST be present and single-use; this consumes a replay tombstone keyed
  *   by `` `${namespace}:${jti}` ``, inserted under the adapter's primary key so a
  *   replay across workers fails atomically.

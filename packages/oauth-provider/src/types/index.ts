@@ -785,12 +785,15 @@ export interface OAuthOptions<
 	 */
 	assertionMaxLifetime?: number;
 	/**
-	 * Seconds of clock skew allowed when verifying built-in
-	 * `private_key_jwt` assertions with `jwtVerify`.
+	 * Seconds of clock skew accepted on a `private_key_jwt` assertion's `nbf`,
+	 * `exp`, and `iat`, and added to how long its `jti` is remembered.
 	 *
-	 * Use this when an OAuth client (for example an MCP host) mints
-	 * assertions whose `nbf` is a few seconds ahead of this server.
-	 * `0` keeps the previous fail-closed check.
+	 * Set this when a client's clock runs a few seconds ahead of or behind this
+	 * server and its assertions fail with `client assertion signature
+	 * verification failed`. The default of `0` accepts no skew.
+	 *
+	 * Values above `60` are treated as `60`. Negative and non-finite values are
+	 * treated as `0`.
 	 *
 	 * @default 0
 	 */

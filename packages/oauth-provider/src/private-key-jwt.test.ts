@@ -705,9 +705,9 @@ describe("private_key_jwt authentication", async () => {
 	 * @see https://github.com/better-auth/better-auth/issues/12005
 	 */
 	it("rejects a not-before claim a few seconds in the future when clock tolerance is unset", async () => {
-		const now = Math.floor(Date.now() / 1000);
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
+		const now = Math.floor(Date.now() / 1000);
 		const assertion = await signAssertion({ nbf: now + 5 });
 
 		const result = await client.$fetch("/oauth2/token", {
@@ -881,6 +881,113 @@ describe("private_key_jwt authentication", async () => {
 					jti: crypto.randomUUID(),
 				},
 				expectedAudience: tokenEndpoint,
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description: "client assertion has expired",
+			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12005
+	 */
+	it("applies assertionClockTolerance to iat within the lifetime cap", async () => {
+		const assertionClockTolerance = 30;
+		const opts = {
+			loginPage: "/login",
+			consentPage: "/consent",
+			assertionClockTolerance,
+		} satisfies OAuthOptions<Scope[]>;
+		const instance = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [jwt(), oauthProvider(opts)],
+		});
+		const ctx = {
+			context: await instance.auth.$context,
+		} as GenericEndpointContext;
+		const now = Math.floor(Date.now() / 1000);
+		const consume = (iat: number) =>
+			consumeClientAssertion(ctx, opts, {
+				namespace: "private_key_jwt:clock-tolerance-iat-client",
+				payload: {
+					aud: tokenEndpoint,
+					exp: now + 60,
+					iat,
+					jti: crypto.randomUUID(),
+				},
+				expectedAudience: tokenEndpoint,
+			});
+
+		// 310 seconds old: past assertionMaxLifetime (300) but inside the tolerance.
+		await expect(consume(now - 310)).resolves.toBeUndefined();
+		await expect(consume(now - 400)).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description:
+					"client assertion iat is too far in the past (max 300s)",
+			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12005
+	 */
+	it("caps assertionClockTolerance at 60 seconds", async () => {
+		const clientId = "https://clock-tolerance-cap.example.com/client.json";
+		const jwksUri = "https://clock-tolerance-cap.example.com/jwks.json";
+		const clientDiscoveryId = "clock-tolerance-cap-discovery";
+		const keyId = "clock-tolerance-cap-key";
+		const keyPair = await generateKeyPair("RS256", { extractable: true });
+		const publicJwk = await exportJWK(keyPair.publicKey);
+		const provider = await createDiscoveredClientVerifier({
+			baseURL: "https://clock-tolerance-cap.example.com",
+			clientId,
+			clientDiscoveryId,
+			fetchClientMetadataResource: vi.fn().mockResolvedValue(
+				Response.json({
+					keys: [{ ...publicJwk, kid: keyId, alg: "RS256", use: "sig" }],
+				}),
+			),
+			jwksUri,
+			assertionClockTolerance: 3600,
+		});
+		const audience = "https://clock-tolerance-cap.example.com/oauth2/token";
+		const now = Math.floor(Date.now() / 1000);
+		const verify = async (nbf: number) =>
+			verifyClientAssertion(
+				provider.ctx,
+				provider.opts,
+				await signDiscoveredClientAssertion({
+					audience,
+					clientId,
+					key: keyPair.privateKey as CryptoKey,
+					keyId,
+					nbf,
+				}),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				audience,
+			);
+
+		await expect(verify(now + 50)).resolves.toMatchObject({ clientId });
+		await expect(verify(now + 120)).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description: "client assertion signature verification failed",
+			},
+		});
+
+		await expect(
+			consumeClientAssertion(provider.ctx, provider.opts, {
+				namespace: "private_key_jwt:clock-tolerance-cap-client",
+				payload: {
+					aud: audience,
+					exp: now - 120,
+					jti: crypto.randomUUID(),
+				},
+				expectedAudience: audience,
 			}),
 		).rejects.toMatchObject({
 			body: {
