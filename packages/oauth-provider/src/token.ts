@@ -637,24 +637,22 @@ function grantRevokedDuringIssuance() {
 }
 
 /**
- * Marks the grant revoked, then runs `deleteTokens`. A failed mark does not
- * stop the delete, and is rethrown after it, so the request fails rather than
- * leave the grant's JWT access tokens active unnoticed.
+ * Marks every grant revoked, then runs `deleteTokens`. A failed mark does not
+ * stop the delete, and the first one is rethrown after it, so the request
+ * fails rather than leave a grant's JWT access tokens active unnoticed.
  */
 async function revokeGrantTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	grant: { grantId?: string | null; clientId: string },
+	grants: readonly { grantId?: string | null; clientId: string }[],
 	deleteTokens: () => Promise<void>,
 ) {
-	let markFailure: { error: unknown } | undefined;
-	try {
-		await markGrantRevoked(ctx, opts, grant);
-	} catch (error) {
-		markFailure = { error };
-	}
+	const marks = await Promise.allSettled(
+		grants.map((grant) => markGrantRevoked(ctx, opts, grant)),
+	);
 	await deleteTokens();
-	if (markFailure) throw markFailure.error;
+	const failed = marks.find((mark) => mark.status === "rejected");
+	if (failed) throw failed.reason;
 }
 
 /**
@@ -692,7 +690,7 @@ export async function invalidateRefreshFamily(
 	await revokeGrantTokens(
 		ctx,
 		opts,
-		{ grantId: refreshToken.grantId, clientId },
+		[{ grantId: refreshToken.grantId, clientId }],
 		// On MySQL, the refresh-row delete can lose a deadlock to a concurrent
 		// access-token insert of the same pair, which holds a foreign-key lock
 		// on its refresh row. Every delete here is idempotent, so retry them
@@ -710,6 +708,98 @@ export async function invalidateRefreshFamily(
 				// Without a foreign key, an in-flight issuance can store an access
 				// token between the two deletes above. See `createOpaqueAccessToken`.
 				await deleteLinkedAccessTokens();
+			}),
+	);
+}
+
+const GRANT_ID_PAGE_SIZE = 100;
+
+/**
+ * The grant IDs stored on a user's tokens for one client and reference. It
+ * reads a page at a time, because `findMany` would cap the list at
+ * `defaultFindManyLimit` and leave a grant past the cap unmarked.
+ */
+async function findGrantIds(
+	ctx: GenericEndpointContext,
+	model: "oauthAccessToken" | "oauthRefreshToken",
+	where: { field: string; value: string | null }[],
+) {
+	const grantIds = new Set<string>();
+	for (let offset = 0; ; offset += GRANT_ID_PAGE_SIZE) {
+		const rows = await ctx.context.adapter.findMany<{
+			grantId?: string | null;
+		}>({
+			model,
+			where,
+			select: ["id", "grantId"],
+			limit: GRANT_ID_PAGE_SIZE,
+			offset,
+			sortBy: { field: "id", direction: "asc" },
+		});
+		for (const row of rows) if (row.grantId) grantIds.add(row.grantId);
+		if (rows.length < GRANT_ID_PAGE_SIZE) return grantIds;
+	}
+}
+
+/**
+ * Revokes the tokens issued under one consent: those stored for its client,
+ * user, and reference. The same user's tokens for the client under another
+ * reference stay valid.
+ *
+ * Each grant the tokens belong to is marked revoked before the tokens are
+ * deleted, so a rotation that is still storing its tokens fails with the
+ * mark, and the JWT access tokens of the grant are revoked with
+ * `revocableJwtAccessTokens`. A token stored without a grant ID, such as an
+ * opaque access token issued without a refresh token, is deleted by the
+ * consent's scope alone. A JWT access token issued without a refresh token has
+ * no stored row to find, so it stays valid until it expires.
+ *
+ * @internal
+ */
+export async function revokeConsentTokens(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	consent: { clientId: string; userId: string; referenceId?: string | null },
+) {
+	const { clientId, userId } = consent;
+	// A consent stored without a reference matches tokens whose reference is
+	// null or empty, as `findConsent` does.
+	const references = consent.referenceId ? [consent.referenceId] : [null, ""];
+	const scopes = references.map((referenceId) => [
+		{ field: "clientId", value: clientId },
+		{ field: "userId", value: userId },
+		{ field: "referenceId", value: referenceId },
+	]);
+	const grantIds = new Set<string>();
+	for (const where of scopes) {
+		for (const model of ["oauthRefreshToken", "oauthAccessToken"] as const) {
+			for (const grantId of await findGrantIds(ctx, model, where)) {
+				grantIds.add(grantId);
+			}
+		}
+	}
+	await revokeGrantTokens(
+		ctx,
+		opts,
+		[...grantIds].map((grantId) => ({ grantId, clientId })),
+		// See `invalidateRefreshFamily` for the retry and the second delete of
+		// access tokens.
+		() =>
+			retryIdempotent(async () => {
+				for (const where of scopes) {
+					await ctx.context.adapter.deleteMany({
+						model: "oauthAccessToken",
+						where,
+					});
+					await ctx.context.adapter.deleteMany({
+						model: "oauthRefreshToken",
+						where,
+					});
+					await ctx.context.adapter.deleteMany({
+						model: "oauthAccessToken",
+						where,
+					});
+				}
 			}),
 	);
 }
@@ -756,10 +846,12 @@ async function revokeTokensIssuedForAuthorizationCode(
 	await revokeGrantTokens(
 		ctx,
 		opts,
-		{
-			grantId: await authorizationCodeGrantId(authorizationCodeId),
-			clientId,
-		},
+		[
+			{
+				grantId: await authorizationCodeGrantId(authorizationCodeId),
+				clientId,
+			},
+		],
 		async () => {
 			await deleteIssuedTokens("oauthAccessToken");
 			await deleteIssuedTokens("oauthRefreshToken");

@@ -79,7 +79,8 @@ export const deleteOAuthConsent = (opts: OAuthOptions<Scope[]>) =>
 			}),
 			metadata: {
 				openapi: {
-					description: "Deletes consent granted to a client",
+					description:
+						"Deletes consent granted to a client and revokes the tokens issued under it",
 				},
 			},
 		},

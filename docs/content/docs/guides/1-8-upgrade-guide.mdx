@@ -272,6 +272,17 @@ Revoking a refresh token at `/oauth2/revoke` now deletes every opaque access tok
 * A refresh of the grant that is still issuing tokens when you revoke it now fails with `invalid_grant`, and the tokens it stored are deleted. This needs a refresh token issued or refreshed since you upgraded.
 * Each grant revocation now writes one row to the verification store, with or without `revocableJwtAccessTokens`. This includes revoking a refresh token, replaying one, and reusing an authorization code. Your `databaseHooks.verification` hooks see these rows. See [Grant revocation entries](/docs/plugins/oauth-provider/tokens#grant-revocation-entries).
 
+### Deleting a consent revokes its tokens
+
+`deleteOAuthConsent` now revokes the access and refresh tokens issued under the consent it deletes, scoped to that user, that client, and the consent's reference. Before, they stayed valid after the consent was gone, and a refresh token kept renewing itself indefinitely.
+
+* A client that refreshes under a deleted consent gets `400 invalid_grant` and must start a new authorization request.
+* Tokens the user holds for the same client under another consent reference stay valid.
+* JWT access tokens stay valid until they expire. With `revocableJwtAccessTokens: true`, those of a grant that has a refresh token are revoked too. A JWT issued without a refresh token is never revoked this way.
+* If the revocation fails, the call fails and the consent stays, so the user can delete it again.
+
+**What to do:** if a client relies on tokens that outlive a deleted consent, have it request authorization again. See [Revoke tokens with a consent](/docs/plugins/oauth-provider/tokens#revoke-tokens-with-a-consent).
+
 ### Authorization code reuse revokes tokens only for the issuing client
 
 The provider still rejects every reuse of an authorization code. To stop someone who holds a leaked code from revoking a client's tokens, a reuse now revokes the tokens issued from the code only when it comes from the client the code was issued to:

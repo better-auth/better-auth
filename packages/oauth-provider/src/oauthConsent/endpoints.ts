@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
+import { revokeConsentTokens } from "../token";
 import type { OAuthConsent, OAuthOptions, Scope } from "../types";
 import { getClient } from "../utils";
 
@@ -89,6 +90,13 @@ export async function deleteConsentEndpoint(
 	}
 	if (consent.userId !== session.user.id) throw new APIError("UNAUTHORIZED");
 
+	// Revoke first: a failed revocation leaves the consent in place, so the
+	// user can retry instead of keeping tokens with no consent to delete.
+	await revokeConsentTokens(ctx, opts, {
+		clientId: consent.clientId,
+		userId: consent.userId,
+		referenceId: consent.referenceId,
+	});
 	await ctx.context.adapter.delete({
 		model: "oauthConsent",
 		where: [

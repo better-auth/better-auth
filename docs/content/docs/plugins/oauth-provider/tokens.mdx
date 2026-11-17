@@ -128,7 +128,7 @@ All values are in seconds.
 | `codeExpiresIn`           | `600` (10 minutes)  | Authorization codes                     |
 | `assertionMaxLifetime`    | `300` (5 minutes)   | `private_key_jwt` client assertions     |
 
-A refresh token's lifetime restarts at each refresh: the replacement token gets a new `refreshTokenExpiresIn` window. A client that refreshes regularly therefore keeps its grant indefinitely. To end a grant, [revoke](#revocation) the refresh token. Deleting the user's [consent](/docs/plugins/oauth-provider/sign-in-flow#manage-consents) does not revoke tokens already issued.
+A refresh token's lifetime restarts at each refresh: the replacement token gets a new `refreshTokenExpiresIn` window. A client that refreshes regularly therefore keeps its grant indefinitely. To end a grant, [revoke](#revocation) the refresh token. Deleting the user's [consent](/docs/plugins/oauth-provider/sign-in-flow#manage-consents) also ends the grants issued under it. See [Revoke tokens with a consent](#revoke-tokens-with-a-consent).
 
 To shorten access tokens that carry high-privilege scopes, set `scopeExpirations`. A resource's `accessTokenTtl` and `refreshTokenTtl` can also shorten these lifetimes, but not extend them. When several limits apply, the earliest expiry wins. For example, with the config below, a token with both `read:payments` and `write:payments` expires after 5 minutes.
 
@@ -526,7 +526,7 @@ To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's
 
 ### Grant revocation entries
 
-A grant is revoked when a client revokes a refresh token, replays a rotated refresh token, or reuses an authorization code. The provider then writes one entry for the grant to the [verification store](/docs/concepts/database#verification), whatever your options. The entry lasts `accessTokenExpiresIn`, plus one second.
+A grant is revoked when a client revokes a refresh token, replays a rotated refresh token, or reuses an authorization code. It is also revoked when the user deletes the [consent](#revoke-tokens-with-a-consent) it was issued under. The provider then writes one entry for the grant to the [verification store](/docs/concepts/database#verification), whatever your options. The entry lasts `accessTokenExpiresIn`, plus one second.
 
 A refresh token issued before 1.8 gets a grant ID at its first refresh after the upgrade. Revoking it before then, or replaying a token that was rotated before the upgrade, writes no entry, so a request still issuing tokens for that grant isn't stopped.
 
@@ -566,6 +566,7 @@ Revoking a refresh token then also revokes the JWT access tokens of its grant, i
 
 * A refresh token that was already rotated is presented for revocation, or at the token endpoint outside the [`refreshTokenReuseInterval`](#refresh-tokens) window. A retry inside that window gets the earlier response back and revokes nothing.
 * An authorization code is reused by the client it was issued to, and the request passes the checks in [Authorization code reuse](#authorization-code-reuse). The code's grant is revoked, including a JWT access token issued for the code without a refresh token. This holds even when the reuse arrives while the first redemption is still issuing its tokens.
+* The user deletes the consent the grant was issued under, and the grant has a refresh token or a stored opaque access token that carries its ID. See [Revoke tokens with a consent](#revoke-tokens-with-a-consent).
 
 The grant revocation has these limits:
 
@@ -574,6 +575,17 @@ The grant revocation has these limits:
 * **Tokens from token exchange aren't covered.** A token that a client obtained by exchanging one of the grant's access tokens doesn't carry the grant's `grant_id`. It stays valid until it expires.
 * **Tokens from before you turned the option on aren't covered.** They carry no `grant_id`. JWT access tokens issued from then on carry it, including those issued by refreshing an earlier refresh token.
 * **Shortening the lifetime shortens the entry.** If you lower `accessTokenExpiresIn`, a token issued under the longer lifetime can outlive the entry for its grant.
+
+### Revoke tokens with a consent
+
+Deleting a consent through [`deleteOAuthConsent`](/docs/plugins/oauth-provider/sign-in-flow#manage-consents) revokes the tokens issued under it: the access and refresh tokens stored for that user, that client, and the consent's reference. Tokens of the same user and client under another reference stay valid, and so do tokens of other users and clients.
+
+* **Refresh tokens and their grants.** Each grant of the consent is [revoked](#grant-revocation-entries) before its tokens are deleted. A refresh of the grant that is still issuing tokens fails with `invalid_grant`. With [`revocableJwtAccessTokens`](#revoke-the-access-tokens-of-a-grant), the grant's JWT access tokens are revoked too.
+* **Opaque access tokens.** They are deleted, including one issued without a refresh token.
+* **JWT access tokens.** Without `revocableJwtAccessTokens`, they stay valid until they expire. A JWT issued without a refresh token has no stored record to find, so it also stays valid until it expires, or until the user's session ends when it carries a `sid`.
+* **Rows from before 1.8.** A refresh token stored without a grant ID is deleted by the consent's scope, but a refresh that was already issuing tokens for it isn't stopped.
+* **A redemption in flight.** An authorization code redemption that is issuing its tokens when the consent is deleted has stored nothing to revoke, so it can still finish, and the tokens it issues stay valid.
+* **A failed revocation keeps the consent.** The call fails and the consent stays in place, so the user can delete it again.
 
 ## Without the JWT plugin
 
