@@ -435,11 +435,13 @@ export interface IssueAuthorizationCodeParams {
 	 * Values your endpoint stores with the code and reads back on the token
 	 * request that redeems it, such as the ID of a record your endpoint keeps
 	 * for the flow. `customTokenResponseFields` receives them as
-	 * `verificationValue.serverContext`. Refresh requests do not receive them.
+	 * `verificationValue.serverContext`, and it is the only reader: a plugin has
+	 * no callback of its own for them. Refresh requests do not receive them.
 	 *
-	 * Only your server sets them: `/oauth2/authorize` never stores any, and the
-	 * provider never copies the client's request parameters into them. Set them
-	 * only from values your server determined. They are kept apart from the
+	 * Only your server sets them, as with `serverContext` on the OAuth state:
+	 * `/oauth2/authorize` never stores any, and the provider never copies the
+	 * client's request parameters into them. Set them only from values your
+	 * server determined. They are kept apart from the
 	 * fields the provider stores, so a key such as `userId` or `query` changes
 	 * nothing about the code or its tokens.
 	 *
