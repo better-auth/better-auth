@@ -62,6 +62,19 @@ function mergeTransactionInto(
 	const models = new Set([...Object.keys(base), ...Object.keys(clone)]);
 
 	for (const model of models) {
+		if (!(model in clone)) continue;
+		const baseById = indexById(base[model] ?? []);
+		const cloneById = indexById(clone[model] ?? []);
+		const liveRows = target[model] ?? [];
+		for (const liveRow of liveRows) {
+			const id = liveRow.id;
+			if (id !== undefined && !baseById.has(id) && cloneById.has(id)) {
+				throw new Error(`Record with id ${id} already exists in ${model}`);
+			}
+		}
+	}
+
+	for (const model of models) {
 		// A table present at start but absent after commit was dropped wholesale
 		// by the transaction; mirror that on the live db.
 		if (!(model in clone)) {
