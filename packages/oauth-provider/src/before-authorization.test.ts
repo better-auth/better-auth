@@ -408,4 +408,32 @@ describe("beforeAuthorization with issueAuthorizationCode", async () => {
 		expect(issued.error?.status).toBe(400);
 		expect((issued.error as { error?: string }).error).toBe("login_required");
 	});
+
+	it("passes the policy the max_age and prompt the client sent", async () => {
+		const seen: OAuthBeforeAuthorizationInput["query"][] = [];
+		policy = (input) => {
+			seen.push(input.query);
+			return undefined;
+		};
+		const issued = await client.$fetch<{ code: string }>(
+			"/test/sign-in-and-issue-code",
+			{
+				method: "POST",
+				headers,
+				body: {
+					response_type: "code",
+					client_id: oauthClient.client_id,
+					scope: "openid",
+					max_age: "300",
+					prompt: "login",
+					code_challenge: await generateCodeChallenge(generateRandomString(43)),
+					code_challenge_method: "S256",
+				},
+			},
+		);
+		expect(issued.error).toBeNull();
+		expect(seen).toHaveLength(1);
+		expect(seen[0]!.max_age).toBe(300);
+		expect(seen[0]!.prompt).toBe("login");
+	});
 });

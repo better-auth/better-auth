@@ -1549,6 +1549,9 @@ export async function issueAuthorizationCode(
 	const { client } = validation;
 	let query: StoredAuthorizationQuery = validation.query;
 	await bindDpopProof(query);
+	// The policy sees the request as validated, before the satisfied `prompt`
+	// and `max_age` are dropped from the stored copy.
+	const policyQuery = query;
 
 	const promptSet = query.prompt ? parsePrompt(query.prompt) : undefined;
 	if (
@@ -1588,7 +1591,7 @@ export async function issueAuthorizationCode(
 
 	const headers = ctx.request?.headers ?? ctx.headers ?? new Headers();
 	const policy = await evaluateBeforeAuthorization(opts, {
-		query,
+		query: policyQuery,
 		client,
 		session: params.session,
 		headers,
