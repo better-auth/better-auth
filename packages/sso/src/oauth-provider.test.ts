@@ -35,6 +35,7 @@ describe("SSO sign-in during an oauth-provider authorization", async () => {
 		);
 
 	let clientId = "";
+	let consentClientId = "";
 
 	const profile = {
 		sub: "sso-resume",
@@ -83,6 +84,15 @@ describe("SSO sign-in during an oauth-provider authorization", async () => {
 			},
 		});
 		clientId = oauthClient.client_id;
+		const consentClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectURI],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
+			},
+		});
+		consentClientId = consentClient.client_id;
 	});
 
 	afterAll(async () => {
@@ -90,10 +100,10 @@ describe("SSO sign-in during an oauth-provider authorization", async () => {
 		await idp.stop().catch(() => {});
 	});
 
-	it("resumes the authorization after a signed-out OIDC SSO login", async () => {
+	async function signInThroughSSO(authorizeClientId: string) {
 		const authorize = new URL(`${baseURL}/api/auth/oauth2/authorize`);
 		authorize.search = new URLSearchParams({
-			client_id: clientId,
+			client_id: authorizeClientId,
 			response_type: "code",
 			redirect_uri: redirectURI,
 			scope: "openid",
@@ -134,9 +144,20 @@ describe("SSO sign-in during an oauth-provider authorization", async () => {
 			},
 		});
 
-		const resumed = new URL(callbackLocation, baseURL);
+		return new URL(callbackLocation, baseURL);
+	}
+
+	it("resumes the authorization after a signed-out OIDC SSO login", async () => {
+		const resumed = await signInThroughSSO(clientId);
 		expect(`${resumed.origin}${resumed.pathname}`).toBe(redirectURI);
 		expect(resumed.searchParams.get("code")).toBeTruthy();
 		expect(resumed.searchParams.get("state")).toBe("client-state");
+	});
+
+	it("resumes the authorization at the consent page for a client that needs consent", async () => {
+		const resumed = await signInThroughSSO(consentClientId);
+		expect(resumed.pathname).toBe("/consent");
+		expect(resumed.searchParams.get("client_id")).toBe(consentClientId);
+		expect(resumed.searchParams.get("sig")).toBeTruthy();
 	});
 });
