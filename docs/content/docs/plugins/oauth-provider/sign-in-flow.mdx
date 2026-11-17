@@ -80,7 +80,17 @@ const client = await auth.api.getOAuthClientPublic({
 });
 ```
 
-For any client an administrator did not create, whoever registered it chose its name, logo, and links. That includes dynamically registered and CIMD clients, and clients any signed-in user created with `createOAuthClient` while [`clientPrivileges`](/docs/plugins/oauth-provider/clients#client-crud-privileges) is unset. So also show the host of the signed `redirect_uri`. Render `logo_uri`, `client_uri`, `tos_uri`, and `policy_uri` only when they start with `https:`. Then show the requested `scope` and `claims.userinfo` names, and call `oauth2.consent` with the user's choice.
+For any client an administrator did not create, whoever registered it chose its name, logo, and links. That includes dynamically registered and [CIMD](/docs/plugins/cimd) clients, and clients any signed-in user created with `createOAuthClient` while [`clientPrivileges`](/docs/plugins/oauth-provider/clients#client-crud-privileges) is unset. Treat `client_name`, `logo_uri`, `client_uri`, `tos_uri`, and `policy_uri` as claims the client makes about itself ([RFC 7591 §5](https://datatracker.ietf.org/doc/html/rfc7591#section-5)). A client can copy the name or logo of a well-known app, so none of them proves who the client is.
+
+On the consent page:
+
+* Show the host of the signed `redirect_uri`, so the user can see where the response goes.
+* When `client_id` is an HTTPS URL, as it is for a CIMD client, also show its host. The user can then check that the request comes from the application they expect ([CIMD draft-03 §10.6](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-10.6)).
+* Show `client_name` and `client_uri` as text the client supplied, for example "Acme Notes says it is acme.example", and do not use them to mark a client as verified. For a CIMD client, `client_uri` must share the `client_id` origin by default, which ties the link to that host but does not vouch for who runs it. Show a verified mark only for clients you reviewed yourself, such as those on your own allow list.
+* Render `tos_uri` and `policy_uri` as links only when they start with `https:`.
+* Do not put `logo_uri` in an `<img>` tag. Better Auth never fetches or proxies the logo, and a hotlinked image lets the client change it after review, serve it differently to the user than to you, and learn when the user opens the page. Either omit the logo or fetch it yourself, check that it is a valid image, and serve it from a server you trust, which is what [CIMD draft-03 §10.9](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-10.9) requires of a server that shows a CIMD client's logo.
+
+Then show the requested `scope` and `claims.userinfo` names, and call `oauth2.consent` with the user's choice.
 
 <APIMethod path="/oauth2/consent" method="POST" requireSession>
   ```ts
