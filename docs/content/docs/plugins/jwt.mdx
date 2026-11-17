@@ -243,7 +243,7 @@ betterAuth({
 })
 ```
 
-In 1.7, the provider's own endpoints recognize a JWT access token by its `azp` claim, not by its `typ` header. Introspection, UserInfo, and `requireMcpAuth` from the [MCP](/docs/plugins/mcp) plugin accept any JWT signed with these keys that carries `azp` and an accepted `aud`. A JWT that your code signs with `auth.api.signJWT` and that carries `azp` therefore works as an access token for that client, with the `scope` its payload names. Never sign a payload that carries `azp`, and remove `azp` from any payload built from input you did not write. The gap is closed in 1.8: introspection, UserInfo, and `requireMcpAuth` require `typ: "at+jwt"`.
+In 1.7, the provider's own endpoints recognize a JWT access token by its `azp` claim, not by its `typ` header. Introspection, UserInfo, and `requireMcpAuth` from the [MCP](/docs/plugins/mcp) plugin accept a JWT signed with these keys that carries `azp` and an accepted `aud`; UserInfo also requires the `openid` scope and a `sub` that names an existing user. A JWT that your code signs with `auth.api.signJWT` and that carries `azp` can therefore work as an access token for that client, with the `scope` its payload names. Never sign a payload that carries `azp`, and remove `azp` from any payload built from input you did not write. The gap is closed in 1.8: introspection, UserInfo, and `requireMcpAuth` require `typ: "at+jwt"`.
 
 ### Remote JWKS Url
 
