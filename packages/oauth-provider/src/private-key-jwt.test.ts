@@ -687,7 +687,11 @@ describe("private_key_jwt authentication", async () => {
 		});
 	});
 
+	// The next four tests pin the released status split: a failed signature or
+	// claim check is 401 with a Basic challenge, and a failure found while
+	// consuming the assertion (lifetime, jti, replay) is 400 with no challenge.
 	it("should reject expired assertion", async () => {
+		let responseHeaders: Headers | undefined;
 		const now = Math.floor(Date.now() / 1000);
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
@@ -706,13 +710,21 @@ describe("private_key_jwt authentication", async () => {
 				code_verifier: codeVerifier,
 			}),
 			headers: { "content-type": "application/x-www-form-urlencoded" },
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
 		});
 
-		expect(result.error?.status).toBeGreaterThanOrEqual(400);
-		expect(result.error?.status).toBeLessThan(500);
+		expect(result.error?.status).toBe(401);
+		expect(result.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client assertion signature verification failed",
+		});
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
 	});
 
 	it("should reject assertion with exp too far in the future", async () => {
+		let responseHeaders: Headers | undefined;
 		const now = Math.floor(Date.now() / 1000);
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
@@ -732,13 +744,22 @@ describe("private_key_jwt authentication", async () => {
 				code_verifier: codeVerifier,
 			}),
 			headers: { "content-type": "application/x-www-form-urlencoded" },
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
 		});
 
-		expect(result.error?.status).toBeGreaterThanOrEqual(400);
-		expect(result.error?.status).toBeLessThan(500);
+		expect(result.error?.status).toBe(400);
+		expect(result.error).toMatchObject({
+			error: "invalid_client",
+			error_description:
+				"client assertion exp is too far in the future (max 300s)",
+		});
+		expect(responseHeaders?.get("WWW-Authenticate")).toBeNull();
 	});
 
 	it("should reject assertion without jti", async () => {
+		let responseHeaders: Headers | undefined;
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
 		const assertion = await signAssertion({ omitJti: true });
@@ -756,13 +777,21 @@ describe("private_key_jwt authentication", async () => {
 				code_verifier: codeVerifier,
 			}),
 			headers: { "content-type": "application/x-www-form-urlencoded" },
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
 		});
 
-		expect(result.error?.status).toBeGreaterThanOrEqual(400);
-		expect(result.error?.status).toBeLessThan(500);
+		expect(result.error?.status).toBe(400);
+		expect(result.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client assertion must include jti claim",
+		});
+		expect(responseHeaders?.get("WWW-Authenticate")).toBeNull();
 	});
 
 	it("should reject reused jti (replay prevention)", async () => {
+		let responseHeaders: Headers | undefined;
 		const jti = crypto.randomUUID();
 
 		// First request should succeed
@@ -807,10 +836,17 @@ describe("private_key_jwt authentication", async () => {
 				code_verifier: cv2,
 			}),
 			headers: { "content-type": "application/x-www-form-urlencoded" },
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
 		});
 
-		expect(result2.error?.status).toBeGreaterThanOrEqual(400);
-		expect(result2.error?.status).toBeLessThan(500);
+		expect(result2.error?.status).toBe(400);
+		expect(result2.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client assertion jti has already been used",
+		});
+		expect(responseHeaders?.get("WWW-Authenticate")).toBeNull();
 	});
 
 	it("should reject concurrent reuse of the same jti", async () => {
