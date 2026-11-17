@@ -1685,3 +1685,39 @@ export function getAuthEndpointUrl(
 	while (end > 0 && baseURL[end - 1] === "/") end--;
 	return `${baseURL.slice(0, end)}${path}`;
 }
+
+/** `url` without its trailing slashes, which `baseURL` is allowed to carry. */
+export function trimTrailingSlashes(url: string): string {
+	let end = url.length;
+	// A loop, not `/\/+$/`, which backtracks quadratically on runs of slashes.
+	while (end > 0 && url[end - 1] === "/") end--;
+	return url.slice(0, end);
+}
+
+/**
+ * The same endpoint as `endpointUrl`, published under `advertisedBaseURL`
+ * instead of `baseURL`, for a server whose endpoints clients reach through
+ * another host. Returns `undefined` when the option is unset or when
+ * `endpointUrl` is not an endpoint of this server, so the result is never a
+ * URL this server does not serve.
+ *
+ * The endpoint's own path is preserved, so the result stays bound to that one
+ * endpoint: `/oauth2/revoke` never maps onto `/oauth2/token`.
+ */
+export function getAdvertisedEndpointUrl(
+	ctx: Pick<GenericEndpointContext, "context">,
+	opts: OAuthOptions<Scope[]>,
+	endpointUrl: string,
+): string | undefined {
+	if (!opts.advertisedBaseURL) return undefined;
+	const base = trimTrailingSlashes(ctx.context.baseURL);
+	// An empty `baseURL` has no endpoints to re-publish, and would otherwise
+	// make every URL match.
+	if (!base) return undefined;
+	if (endpointUrl !== base && !endpointUrl.startsWith(`${base}/`)) {
+		return undefined;
+	}
+	return `${trimTrailingSlashes(opts.advertisedBaseURL)}${endpointUrl.slice(
+		base.length,
+	)}`;
+}

@@ -194,6 +194,10 @@ The `aud` values accepted in client assertions, such as `private_key_jwt` assert
 
 `POST /oauth2/client/rotate-keys` is the exception. In either mode, the assertion's `aud` must include that endpoint's own URL, and may also name other values.
 
+`advertisedBaseURL` <span className="opacity-70">`string`</span>
+
+The base URL clients reach the endpoints at, when a gateway on another host forwards them to your app. Wherever an endpoint URL is an accepted `aud`, the same endpoint under this base is accepted too. Unset by default, and it does not widen the default `"issuer"` mode, which accepts no endpoint URL. See [A gateway on another host](/docs/plugins/oauth-provider/clients#a-gateway-on-another-host).
+
 `allowClientKeyRotation` <span className="opacity-70">`boolean`</span>
 
 Enables `POST /oauth2/client/rotate-keys`. Startup fails on the memory adapter or with `advanced.database.generateId: "serial"`, which cannot keep assertions single-use. Defaults to `false`. See [Rotating client keys](/docs/plugins/oauth-provider/clients#rotating-client-keys).

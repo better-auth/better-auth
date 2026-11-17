@@ -73,6 +73,7 @@ import {
 	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
+	trimTrailingSlashes,
 	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -126,6 +127,41 @@ const sessionLogoutPlansByContext = new WeakMap<
 	Map<string, SessionLogoutPlan>
 >();
 const signedQueryIssuedAtMsKey = "signedQueryIssuedAtMs";
+
+/**
+ * `advertisedBaseURL` only ever widens an accepted assertion audience, so a
+ * value that is not a usable base silently accepts nothing. Reject it at
+ * startup instead of leaving it to look like a client key problem.
+ *
+ * Audiences are built from the configured string, not from the parsed URL, so
+ * whatever the URL parser accepts but does not keep has to be rejected here.
+ * A bare `?` or `#` leaves `search` and `hash` empty, and surrounding
+ * whitespace or an embedded tab is stripped; each would pass a check made on
+ * the parsed URL and then build an audience no client can match. Comparing the
+ * configured string against the parsed `href` catches all of them at once.
+ */
+function assertValidAdvertisedBaseURL(advertisedBaseURL: string): void {
+	let parsed: URL | undefined;
+	try {
+		parsed = new URL(advertisedBaseURL);
+	} catch {
+		parsed = undefined;
+	}
+	if (
+		!parsed ||
+		(parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+		parsed.username ||
+		parsed.password ||
+		// `href` keeps a bare `?` or `#`, so these reject the component itself.
+		advertisedBaseURL.includes("?") ||
+		advertisedBaseURL.includes("#") ||
+		trimTrailingSlashes(advertisedBaseURL) !== trimTrailingSlashes(parsed.href)
+	) {
+		throw new BetterAuthError(
+			"`advertisedBaseURL` must be an absolute http(s) URL with no credentials, query, fragment, or surrounding whitespace",
+		);
+	}
+}
 
 function getServerContextSignedQueryIssuedAt(value: unknown) {
 	const issuedAtMs =
@@ -583,6 +619,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				throw new BetterAuthError(
 					"OAuth Provider requires `session.storeSessionInDatabase: true` when using secondaryStorage",
 				);
+			}
+
+			// A typo here would silently accept no extra audience at all, and the
+			// first sign of it would be a client's `invalid_client`. Fail now.
+			if (opts.advertisedBaseURL !== undefined) {
+				assertValidAdvertisedBaseURL(opts.advertisedBaseURL);
 			}
 
 			// A replayed rotation assertion would hand over a client's keys, so

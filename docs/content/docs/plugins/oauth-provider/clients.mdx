@@ -379,6 +379,29 @@ The same assertion audience applies at the token, introspection, revocation, and
 
 To keep accepting clients that sign for the URL of the endpoint they call while you move them to the issuer, set `assertionAudience: "issuer-or-endpoint"`. See [`assertionAudience`](/docs/plugins/oauth-provider/reference) for what it accepts and the protection it removes.
 
+### A gateway on another host
+
+The endpoint URLs an assertion may name are the ones Better Auth builds from `baseURL`. If a gateway on another host forwards the server-to-server endpoints to your app, so clients reach them somewhere other than `baseURL`, a client signing for the endpoint it actually calls is refused.
+
+Set `advertisedBaseURL` to the base the gateway publishes the endpoints under. Each endpoint's own URL under that base is then accepted wherever its `baseURL` URL is:
+
+```ts title="auth.ts"
+oauthProvider({
+  assertionAudience: "issuer-or-endpoint", // [!code highlight]
+  advertisedBaseURL: "https://mcp.example.com", // [!code highlight]
+});
+```
+
+With `baseURL: "https://app.example.com/api/auth"`, the token endpoint then accepts `https://app.example.com/api/auth/oauth2/token`, `https://mcp.example.com/oauth2/token`, and the issuer. The assertion stays bound to the one endpoint it names: one minted for `/oauth2/revoke` is still refused at `/oauth2/token`.
+
+<Callout type="warn">
+  `advertisedBaseURL` has no effect on its own. The default `assertionAudience: "issuer"` accepts no endpoint URL at all, so a client that signs for an endpoint needs `"issuer-or-endpoint"` as well, with the protection that removes. The exception is `POST /oauth2/client/rotate-keys`, which accepts its own URL in either mode and so honours the advertised base without it.
+</Callout>
+
+<Callout type="info">
+  This only widens the accepted assertion audience. Discovery still publishes the endpoints at `baseURL`, so the gateway decides what clients see.
+</Callout>
+
 ### Rotating client keys
 
 To let a client with inline `jwks` replace them without a user session, set `allowClientKeyRotation: true`. The client then calls `POST /oauth2/client/rotate-keys`. The request body holds `client_assertion`, `client_assertion_type`, and the complete new `jwks`. The assertion must be signed by a current key, and its `aud` must be the rotation endpoint URL.

@@ -45,6 +45,7 @@ function sign(clientId: string, key: TestKey, audience = rotateURL) {
 async function setup(
 	testWith: "sqlite" | "postgres" = "sqlite",
 	authBaseURL = baseURL,
+	advertisedBaseURL?: string,
 ) {
 	const trustedClients = new Set<string>();
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
@@ -58,6 +59,7 @@ async function setup(
 					consentPage: "/consent",
 					cachedTrustedClients: trustedClients,
 					allowClientKeyRotation: true,
+					...(advertisedBaseURL && { advertisedBaseURL }),
 				}),
 			],
 		},
@@ -484,4 +486,62 @@ function storageCases(env: Awaited<ReturnType<typeof setup>>) {
 
 describe("client key rotation storage (postgres)", async () => {
 	storageCases(await setup("postgres"));
+});
+
+/**
+ * Rotation authenticates with `endpointAudienceOnly`, which accepts the
+ * endpoint's own URL whatever `assertionAudience` is set to. So this is the one
+ * endpoint where `advertisedBaseURL` applies under the default issuer mode.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/12703
+ */
+describe("client key rotation behind a gateway on another host", async () => {
+	const advertisedBaseURL = "https://mcp.example.com";
+	const advertisedRotateURL = `${advertisedBaseURL}/oauth2/client/rotate-keys`;
+	const { createClient, rotate } = await setup(
+		"sqlite",
+		baseURL,
+		advertisedBaseURL,
+	);
+
+	it("rotates on an assertion for the advertised rotation endpoint", async () => {
+		const current = await createKey("current");
+		const next = await createKey("next");
+		const clientId = await createClient([current]);
+
+		const response = await rotate({
+			clientId,
+			signer: current,
+			next: [next],
+			audience: advertisedRotateURL,
+		});
+
+		expect(response.status).toBe(200);
+	});
+
+	it("still rotates on an assertion for the rotation endpoint under baseURL", async () => {
+		const current = await createKey("current");
+		const next = await createKey("next");
+		const clientId = await createClient([current]);
+
+		const response = await rotate({ clientId, signer: current, next: [next] });
+
+		expect(response.status).toBe(200);
+	});
+
+	it("refuses another endpoint under the advertised base", async () => {
+		const current = await createKey("current");
+		const next = await createKey("next");
+		const clientId = await createClient([current]);
+
+		const response = await rotate({
+			clientId,
+			signer: current,
+			next: [next],
+			audience: `${advertisedBaseURL}/oauth2/introspect`,
+		});
+
+		expect(response.status).toBe(401);
+		expect(response.body.error).toBe("invalid_client");
+	});
 });

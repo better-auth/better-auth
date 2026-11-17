@@ -113,6 +113,58 @@ describe("oauth - init", () => {
 		).resolves.not.toThrowError();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12703
+	 */
+	it.each([
+		["not a URL", "mcp.example.com"],
+		["a non-http scheme", "ftp://mcp.example.com"],
+		["embedded credentials", "https://user:pass@mcp.example.com"],
+		["a query", "https://mcp.example.com?x=1"],
+		["a fragment", "https://mcp.example.com#x"],
+		// The URL parser leaves `search` and `hash` empty for these, and strips
+		// whitespace and tabs, so each passes a check made on the parsed URL.
+		["a bare query marker", "https://mcp.example.com?"],
+		["a bare fragment marker", "https://mcp.example.com#"],
+		["surrounding whitespace", " https://mcp.example.com "],
+		["an embedded tab", "https://mcp.ex\tample.com"],
+	])("should fail when advertisedBaseURL has %s", async (_label, value) => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						advertisedBaseURL: value,
+					}),
+				],
+			}),
+		).rejects.toThrowError(
+			"`advertisedBaseURL` must be an absolute http(s) URL",
+		);
+	});
+
+	it.each([
+		["no path", "https://mcp.example.com"],
+		["a trailing slash", "https://mcp.example.com/"],
+		["a base path", "https://mcp.example.com/auth"],
+		["http", "http://localhost:3000"],
+	])("should pass with an advertisedBaseURL with %s", async (_label, value) => {
+		await expect(
+			getTestInstance({
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						advertisedBaseURL: value,
+					}),
+				],
+			}),
+		).resolves.not.toThrowError();
+	});
+
 	it("should fail with secondaryStorage when session config is omitted", async () => {
 		await expect(
 			getTestInstance({
