@@ -226,9 +226,9 @@ How seeding treats existing rows: skip them, update only the configured fields, 
 
 How long a finished seed is remembered. `"adapter"` (default) remembers it per database adapter. `"process"` remembers each seeded entry for the life of the process, for apps that build Better Auth per request, such as on Cloudflare Workers. Use `"process"` only when every instance in the process uses the same database.
 
-`resourceDefaults` <span className="opacity-70">`{ accessTokenFormat? }`</span>
+`resourceDefaults` <span className="opacity-70">`{ accessTokenFormat?, signingAlgorithm?, signingKeyId? }`</span>
 
-Access token format for every resource that does not set its own. `accessTokenFormat` is `"jwt"` or `"opaque"` and defaults to `"jwt"`. A JWT is issued only when the request names a resource and the JWT plugin is enabled. See [Access token format](/docs/plugins/oauth-provider/tokens#access-token-format).
+Access token format and signing for every resource that does not set its own. `accessTokenFormat` defaults to `"jwt"`, and a JWT is issued only when the request names a resource and the JWT plugin is enabled. The signing fields default to the JWT plugin's primary key, which ID tokens always use. A resource that sets either signing field replaces both defaults. See [Access token format](/docs/plugins/oauth-provider/tokens#access-token-format) and [Access token signing](/docs/plugins/oauth-provider/tokens#access-token-signing).
 
 `enforcePerClientResources` <span className="opacity-70">`boolean`</span>
 
