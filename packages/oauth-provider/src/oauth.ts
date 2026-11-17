@@ -145,6 +145,10 @@ function getServerContextSignedQueryIssuedAt(value: unknown) {
 	return new Date(issuedAtMs);
 }
 
+// Ten years. The retention windows derived from the bound become expiry dates,
+// which a larger value pushes beyond what a `Date` or a database column holds.
+const MAX_ACCESS_TOKEN_MAX_EXPIRES_IN = 10 * 365 * 24 * 60 * 60;
+
 /**
  * oAuth 2.1 provider plugin for Better Auth.
  *
@@ -152,10 +156,6 @@ function getServerContextSignedQueryIssuedAt(value: unknown) {
  * @param options - The options for the oAuth Provider plugin.
  * @returns A Better Auth plugin.
  */
-// Ten years. The retention windows derived from the bound become expiry dates,
-// which a larger value pushes beyond what a `Date` or a database column holds.
-const MAX_ACCESS_TOKEN_MAX_EXPIRES_IN = 10 * 365 * 24 * 60 * 60;
-
 export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	let clientRegistrationAllowedScopes = options.clientRegistrationAllowedScopes;
 	if (options.clientRegistrationDefaultScopes) {
