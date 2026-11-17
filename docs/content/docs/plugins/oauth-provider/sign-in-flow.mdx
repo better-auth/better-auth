@@ -452,7 +452,7 @@ To let users list and change their consents, use these endpoints. Each requires 
 | `updateOAuthConsent` | `/oauth2/update-consent` | `POST` | body `{ id, update: { scopes } }` |
 | `deleteOAuthConsent` | `/oauth2/delete-consent` | `POST` | body `{ id }`                     |
 
-Updated scopes must be allowed for the client. Deleting a consent makes the next authorization ask again, and revokes the access and refresh tokens issued under it. Tokens the user holds for the same client under another consent reference stay valid. See [Revoke tokens with a consent](/docs/plugins/oauth-provider/tokens#revoke-tokens-with-a-consent).
+Updated scopes must be allowed for the client. Deleting a consent makes the next authorization ask again, and revokes the refresh tokens and opaque access tokens issued under it. JWT access tokens stay valid until they expire, unless [`revocableJwtAccessTokens`](/docs/plugins/oauth-provider/tokens#revoke-the-access-tokens-of-a-grant) revokes them. Tokens the user holds for the same client under another consent reference stay valid. See [Revoke tokens with a consent](/docs/plugins/oauth-provider/tokens#revoke-tokens-with-a-consent).
 
 ```ts title="consents.ts"
 const { error } = await authClient.oauth2.updateConsent({

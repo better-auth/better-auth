@@ -278,7 +278,7 @@ Revoking a refresh token at `/oauth2/revoke` now deletes every opaque access tok
 
 * A client that refreshes under a deleted consent gets `400 invalid_grant` and must start a new authorization request.
 * Tokens the user holds for the same client under another consent reference stay valid.
-* JWT access tokens stay valid until they expire. With `revocableJwtAccessTokens: true`, those of a grant that has a refresh token are revoked too. A JWT issued without a refresh token is never revoked this way.
+* JWT access tokens stay valid until they expire. With `revocableJwtAccessTokens: true`, those of a grant that has a refresh token are revoked too. A JWT issued without a refresh token is never revoked this way, but one that carries a `sid` also becomes inactive when its session ends.
 * If the revocation fails, the call fails and the consent stays, so the user can delete it again.
 
 **What to do:** if a client relies on tokens that outlive a deleted consent, have it request authorization again. See [Revoke tokens with a consent](/docs/plugins/oauth-provider/tokens#revoke-tokens-with-a-consent).

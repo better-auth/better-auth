@@ -537,7 +537,7 @@ These entries are ordinary verification values:
 * **Your verification hooks see them.** `databaseHooks.verification` runs for each entry the provider writes. The identifier starts with `oauth-revoked-grant:`.
 * **Reads must see earlier writes.** If your verification store reads from a replica that lags behind writes, a request can miss an entry written moments earlier and keep its tokens.
 * **Secondary storage holds them if you use it.** The entries go there and expire on their own. If the storage drops an entry before it expires, a request that was issuing tokens when the grant was revoked can keep them.
-* **Writes are bounded by the rate limit.** Each grant revocation writes one entry. When rate limiting is enabled, which is the default in production, the [rate limits](/docs/plugins/oauth-provider/reference#rate-limits) bound how fast entries are written: 30 requests per 60 seconds for `/oauth2/revoke`, and 20 for `/oauth2/token`. If you turn rate limiting off, nothing bounds them.
+* **Writes are bounded by the rate limit.** Each grant revocation writes one entry. When rate limiting is enabled, which is the default in production, the [rate limits](/docs/plugins/oauth-provider/reference#rate-limits) bound how fast entries are written: 30 requests per 60 seconds for `/oauth2/revoke`, and 20 for `/oauth2/token`. If you turn rate limiting off, nothing bounds them. Deleting a consent through `deleteOAuthConsent` has no limit of its own and writes one entry for each grant of the consent.
 
 ### Revoke JWT access tokens
 
