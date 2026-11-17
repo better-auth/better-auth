@@ -4893,6 +4893,174 @@ describe("scope preservation through authorization code flow", async () => {
 	});
 });
 
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-3.3
+ */
+describe("authorization code without scopes", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const redirectUri = `${rpBaseUrl}/callback`;
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["openid", "profile", "members:write"],
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	async function createClient(
+		options: { skipConsent: boolean; scope?: string } = { skipConsent: true },
+	) {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: options.skipConsent,
+				scope: options.scope ?? "openid profile",
+			},
+		});
+		return oauthClient as typeof oauthClient & {
+			client_id: string;
+			client_secret: string;
+		};
+	}
+
+	async function authorize(clientId: string, scope?: string) {
+		const codeVerifier = generateRandomString(32);
+		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		const codeChallenge = base64url.encode(
+			new Uint8Array(
+				await crypto.subtle.digest(
+					"SHA-256",
+					new TextEncoder().encode(codeVerifier),
+				),
+			),
+		);
+		url.search = new URLSearchParams({
+			response_type: "code",
+			client_id: clientId,
+			redirect_uri: redirectUri,
+			state: "123",
+			code_challenge: codeChallenge,
+			code_challenge_method: "S256",
+			...(scope === undefined ? {} : { scope }),
+		}).toString();
+		let location = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		return { location, codeVerifier };
+	}
+
+	async function exchange(
+		oauthClient: { client_id: string; client_secret: string },
+		code: string,
+		codeVerifier: string,
+	) {
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+	}
+
+	it("exchanges a code issued for an empty scope parameter", async () => {
+		const oauthClient = await createClient();
+		const { location, codeVerifier } = await authorize(
+			oauthClient.client_id,
+			"",
+		);
+		expect(location).toContain("code=");
+		const code = new URL(location).searchParams.get("code")!;
+
+		const tokens = await exchange(oauthClient, code, codeVerifier);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeUndefined();
+		expect(tokens.data?.refresh_token).toBeUndefined();
+		expect(tokens.data?.scope).toBeFalsy();
+	});
+
+	it("exchanges a code issued for an empty scope parameter after consent", async () => {
+		const oauthClient = await createClient({ skipConsent: false });
+		const { location, codeVerifier } = await authorize(
+			oauthClient.client_id,
+			"",
+		);
+		expect(location).toContain("/consent");
+		const consentHeaders = new Headers(headers);
+		consentHeaders.set("accept", "application/json");
+		const consent = await client.$fetch<{ url: string }>("/oauth2/consent", {
+			method: "POST",
+			headers: consentHeaders,
+			body: {
+				accept: true,
+				oauth_query: new URL(location, authServerBaseUrl).search.slice(1),
+			},
+		});
+		expect(consent.error).toBeNull();
+		const code = new URL(consent.data!.url).searchParams.get("code")!;
+
+		const tokens = await exchange(oauthClient, code, codeVerifier);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.scope).toBeFalsy();
+	});
+
+	it("still rejects a code scope the client no longer allows", async () => {
+		const oauthClient = await createClient({
+			skipConsent: true,
+			scope: "openid members:write",
+		});
+		const { location, codeVerifier } = await authorize(
+			oauthClient.client_id,
+			"openid members:write",
+		);
+		expect(location).toContain("code=");
+		const code = new URL(location).searchParams.get("code")!;
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: oauthClient.client_id,
+				update: { scope: "openid profile" },
+			},
+		});
+
+		const tokens = await exchange(oauthClient, code, codeVerifier);
+		expect(tokens.data).toBeNull();
+		expect(tokens.error?.status).toBe(400);
+		expect(tokens.error).toMatchObject({
+			error: "invalid_scope",
+			error_description: "client does not allow scope members:write",
+		});
+	});
+});
+
 describe("at_hash in id tokens", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
