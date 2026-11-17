@@ -174,16 +174,43 @@ function revoke(
 	);
 }
 
-async function isActive({ client, oauthClient }: TestServer, token: string) {
+async function isActive(
+	{ client, oauthClient }: TestServer,
+	token: string,
+	caller: { client_id: string; client_secret?: string } = oauthClient,
+) {
 	const res = await client.oauth2.introspect(
 		{
-			client_id: oauthClient.client_id,
-			client_secret: oauthClient.client_secret,
+			client_id: caller.client_id,
+			client_secret: caller.client_secret,
 			token,
 		},
 		{ headers: formHeaders },
 	);
 	return res.data?.active;
+}
+
+/**
+ * Creates a client that serves the resource. It can introspect another
+ * client's tokens after that client is disabled or deleted, when the issuer
+ * can no longer authenticate.
+ */
+async function createResourceServer(server: TestServer) {
+	const resourceServer = await server.createClient();
+	const ctx = await server.auth.$context;
+	await ctx.adapter.create<{
+		clientId: string;
+		resourceId: string;
+		createdAt: Date;
+	}>({
+		model: "oauthClientResource",
+		data: {
+			clientId: resourceServer.client_id,
+			resourceId: resource,
+			createdAt: new Date(),
+		},
+	});
+	return resourceServer;
 }
 
 /** The events reported since the last call, without their endpoint context. */
@@ -510,6 +537,170 @@ describe("oauth-provider - onTokenRevoked after the session ends", () => {
 		expect((await revoke(server, refreshToken)).error).toBeNull();
 		expect(takeEvents(server)).toEqual([
 			{ ...event, reason: "revocation_request" },
+		]);
+	});
+});
+
+describe("oauth-provider - onTokenRevoked for causes it does not report", () => {
+	it("does not report a rotation, which keeps the grant", async () => {
+		const server = await setup();
+		const first = await authorize(server);
+
+		const rotated = await refresh(server, first.refresh_token!);
+		expect(rotated.error).toBeNull();
+		expect(rotated.data!.refresh_token).toEqual(expect.any(String));
+
+		expect(takeEvents(server)).toEqual([]);
+	});
+
+	it("does not report the tokens of a disabled client", async () => {
+		const server = await setup();
+		const resourceServer = await createResourceServer(server);
+		const tokens = await authorize(server);
+		expect(await isActive(server, tokens.access_token, resourceServer)).toBe(
+			true,
+		);
+		await server.auth.api.adminUpdateOAuthClient({
+			headers: server.headers,
+			body: {
+				client_id: server.oauthClient.client_id,
+				update: { disabled: true },
+			},
+		});
+
+		const disabled = await refresh(server, tokens.refresh_token!);
+		expect(disabled.error).toMatchObject({ error: "invalid_client" });
+		expect(await isActive(server, tokens.access_token, resourceServer)).toBe(
+			false,
+		);
+
+		expect(takeEvents(server)).toEqual([]);
+	});
+
+	it("does not report the tokens of a deleted client", async () => {
+		const server = await setup();
+		const resourceServer = await createResourceServer(server);
+		const tokens = await authorize(server);
+		expect(await isActive(server, tokens.access_token, resourceServer)).toBe(
+			true,
+		);
+		const ctx = await server.auth.$context;
+		await ctx.adapter.delete({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: server.oauthClient.client_id }],
+		});
+
+		const deleted = await refresh(server, tokens.refresh_token!);
+		expect(deleted.error).toMatchObject({ error: "invalid_client" });
+		expect(await isActive(server, tokens.access_token, resourceServer)).toBe(
+			false,
+		);
+
+		expect(takeEvents(server)).toEqual([]);
+	});
+
+	it("does not report the tokens of a deleted resource", async () => {
+		const server = await setup();
+		const tokens = await authorize(server, { offline: false });
+		expect(await isActive(server, tokens.access_token)).toBe(true);
+		const ctx = await server.auth.$context;
+		await ctx.adapter.delete({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: resource }],
+		});
+
+		expect(await isActive(server, tokens.access_token)).toBe(false);
+
+		expect(takeEvents(server)).toEqual([]);
+	});
+
+	it("does not report a deleted consent", async () => {
+		const server = await setup();
+		await authorize(server);
+		const ctx = await server.auth.$context;
+		const consent = await ctx.adapter.create<{ id: string }>({
+			model: "oauthConsent",
+			data: {
+				clientId: server.oauthClient.client_id,
+				userId: server.user.id,
+				scopes: ["openid"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		await server.auth.api.deleteOAuthConsent({
+			headers: server.headers,
+			body: { id: consent.id },
+		});
+
+		expect(takeEvents(server)).toEqual([]);
+	});
+
+	it("reports only the replayed refresh token's grant, though the user's other grants lose their refresh tokens", async () => {
+		const server = await setup();
+		const replayed = await authorize(server);
+		const other = await authorize(server);
+		const grantId = decodeJwt(replayed.access_token).grant_id;
+		expect(decodeJwt(other.access_token).grant_id).not.toBe(grantId);
+		expect((await refresh(server, replayed.refresh_token!)).error).toBeNull();
+
+		const reuse = await refresh(server, replayed.refresh_token!);
+		expect(reuse.error).toMatchObject({ error: "invalid_grant" });
+
+		expect(takeEvents(server)).toEqual([
+			{
+				type: "refresh_token",
+				reason: "reuse_detected",
+				clientId: server.oauthClient.client_id,
+				userId: server.user.id,
+				grantId,
+				expiresAt: expect.any(Date),
+			},
+		]);
+		expect(await isActive(server, other.access_token)).toBe(true);
+		expect((await refresh(server, other.refresh_token!)).error).toMatchObject({
+			error: "invalid_grant",
+		});
+	});
+
+	it("still reports a reused authorization code when deleting its tokens fails", async () => {
+		const server = await setup();
+		const { redeem } = await authorizeCode(server, { offline: false });
+		const first = await redeem();
+		const grantId = decodeJwt(first.data!.access_token).grant_id;
+		const ctx = await server.auth.$context;
+		const deleteMany = ctx.adapter.deleteMany.bind(ctx.adapter);
+		const failingCleanup = vi
+			.spyOn(ctx.adapter, "deleteMany")
+			.mockImplementation((args) =>
+				args.model === "oauthAccessToken"
+					? Promise.reject(new Error("cleanup failed"))
+					: deleteMany(args),
+			);
+		const logError = vi
+			.spyOn(ctx.logger, "error")
+			.mockImplementation(() => undefined);
+		try {
+			const reuse = await redeem();
+			expect(reuse.error).toMatchObject({ error: "invalid_grant" });
+			expect(logError).toHaveBeenCalledWith(
+				"authorization code replay cleanup failed",
+				expect.any(Error),
+			);
+		} finally {
+			failingCleanup.mockRestore();
+			logError.mockRestore();
+		}
+
+		expect(takeEvents(server)).toEqual([
+			{
+				type: "authorization_code",
+				reason: "reuse_detected",
+				clientId: server.oauthClient.client_id,
+				grantId,
+				expiresAt: expect.any(Date),
+			},
 		]);
 	});
 });
