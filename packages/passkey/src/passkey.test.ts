@@ -1948,3 +1948,107 @@ describe("passkey user verification policy", () => {
 		);
 	});
 });
+
+describe("passkey stored transports", () => {
+	afterEach(() => {
+		serverMocks.verifyAuthenticationResponse.mockReset();
+	});
+
+	async function setupWithStoredPasskey() {
+		const instance = await getTestInstance({
+			plugins: [passkey()],
+		});
+		const { headers, user } = await instance.signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		const context = await instance.auth.$context;
+		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "transports-passkey",
+				counter: 0,
+				deviceType: "multiDevice",
+				credentialID: "transports-credential-id",
+				createdAt: new Date(),
+				backedUp: true,
+				transports: "internal,hybrid",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+		return { ...instance, headers };
+	}
+
+	it("excludes stored passkeys with their transports when registering another", async () => {
+		const { auth, headers } = await setupWithStoredPasskey();
+		const options = await auth.api.generatePasskeyRegistrationOptions({
+			headers,
+		});
+
+		expect(options.excludeCredentials).toEqual([
+			{
+				id: "transports-credential-id",
+				type: "public-key",
+				transports: ["internal", "hybrid"],
+			},
+		]);
+		const algorithms = options.pubKeyCredParams.map((param) => param.alg);
+		expect(algorithms).toEqual(expect.arrayContaining([-7, -257]));
+	});
+
+	it("offers stored passkeys with their transports when signing in", async () => {
+		const { auth, headers } = await setupWithStoredPasskey();
+		const options = await auth.api.generatePasskeyAuthenticationOptions({
+			headers,
+		});
+
+		expect(options.allowCredentials).toEqual([
+			{
+				id: "transports-credential-id",
+				type: "public-key",
+				transports: ["internal", "hybrid"],
+			},
+		]);
+	});
+
+	it("verifies the assertion against the stored transports", async () => {
+		const { auth, client, cookieSetter, headers } =
+			await setupWithStoredPasskey();
+		await client.$fetch("/passkey/generate-authenticate-options", {
+			method: "GET",
+			headers,
+			onResponse: cookieSetter(headers),
+		});
+		serverMocks.verifyAuthenticationResponse.mockResolvedValue({
+			verified: true,
+			authenticationInfo: { newCounter: 1 },
+		});
+
+		await auth.api.verifyPasskeyAuthentication({
+			headers,
+			body: {
+				response: {
+					id: "transports-credential-id",
+					rawId: "transports-credential-id",
+					response: {
+						clientDataJSON: "mockClientDataJSON",
+						authenticatorData: "mockAuthenticatorData",
+						signature: "mockSignature",
+						userHandle: "mockUserHandle",
+					},
+					type: "public-key" as const,
+					clientExtensionResults: {},
+				},
+			},
+		});
+
+		expect(serverMocks.verifyAuthenticationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({
+				credential: expect.objectContaining({
+					id: "transports-credential-id",
+					transports: ["internal", "hybrid"],
+				}),
+			}),
+		);
+	});
+});
