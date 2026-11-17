@@ -142,6 +142,7 @@ async function revokeRefreshToken(
 		await invalidateRefreshFamily(ctx, opts, clientId, {
 			userId: refreshToken.userId,
 			grantId: current?.grantId,
+			authorizationCodeId: refreshToken.authorizationCodeId,
 		});
 		return;
 	}

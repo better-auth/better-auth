@@ -638,6 +638,52 @@ describe("ciba poll mode", () => {
 		);
 	});
 
+	/**
+	 * A CIBA grant has no authorization code, so only its grant ID tells the
+	 * replay teardown which tokens belong to it.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12154
+	 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+	 */
+	it("revokes only the CIBA grant whose rotated refresh token is replayed", async () => {
+		const client = await createClient(POLL, {
+			grant_types: [CIBA_GRANT_TYPE, "refresh_token"],
+		});
+		const issueGrant = async () => {
+			const { authReqId, url } = await start(
+				{ scope: "openid offline_access" },
+				client,
+			);
+			await approve(url);
+			return (await poll(authReqId, client)).body;
+		};
+		const refresh = (refreshToken: string) =>
+			customFetchImpl(`${baseURL}/api/auth/oauth2/token`, {
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					...clientAuthentication(client).headers,
+				},
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: refreshToken,
+				}).toString(),
+			}).then((r) => r.json());
+		const replayed = await issueGrant();
+		const other = await issueGrant();
+		expect(replayed.refresh_token).toEqual(expect.any(String));
+		expect(other.refresh_token).toEqual(expect.any(String));
+		const rotated = await refresh(replayed.refresh_token);
+		expect(rotated.error).toBeUndefined();
+
+		expect((await refresh(replayed.refresh_token)).error).toBe("invalid_grant");
+
+		expect((await introspect(rotated.access_token, client)).active).toBe(false);
+		expect((await refresh(rotated.refresh_token)).error).toBe("invalid_grant");
+		expect((await introspect(other.access_token, client)).active).toBe(true);
+		expect((await refresh(other.refresh_token)).error).toBeUndefined();
+	});
+
 	it("refuses a resource whose policy drops openid", async () => {
 		const res = await bcAuthorize({
 			scope: "openid profile",

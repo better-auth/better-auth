@@ -2217,6 +2217,65 @@ describe("oauth-provider device approval through the consent flow", async () => 
 		expect(refreshedIdToken.amr).toEqual(["pwd", "otp"]);
 	});
 
+	/**
+	 * A device grant has no authorization code, so only its grant ID tells the
+	 * replay teardown which tokens belong to it.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12154
+	 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+	 */
+	it("revokes only the device grant whose rotated refresh token is replayed", async () => {
+		resolveReference = () => "org_1";
+		const first = await startDevice();
+		await answerDeviceConsent(client, first.user_code, first.headers);
+		const replayed = await first.poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: first.device_code,
+		});
+		expect(replayed.error).toBeNull();
+
+		const second = await auth.api.deviceCode({
+			body: {
+				client_id: first.clientId,
+				scope: "openid offline_access",
+				resource,
+			},
+		});
+		await answerDeviceConsent(client, second.user_code, first.headers);
+		const other = await first.poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: second.device_code,
+		});
+		expect(other.error).toBeNull();
+
+		const rotated = await first.poll({
+			grant_type: "refresh_token",
+			refresh_token: replayed.data!.refresh_token!,
+		});
+		expect(rotated.error).toBeNull();
+		const replay = await first.poll({
+			grant_type: "refresh_token",
+			refresh_token: replayed.data!.refresh_token!,
+		});
+		expect((replay.error as TokenErrorBody | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const successor = await first.poll({
+			grant_type: "refresh_token",
+			refresh_token: rotated.data!.refresh_token!,
+		});
+		expect((successor.error as TokenErrorBody | null)?.error).toBe(
+			"invalid_grant",
+		);
+		const survivor = await first.poll({
+			grant_type: "refresh_token",
+			refresh_token: other.data!.refresh_token!,
+		});
+		expect(survivor.error).toBeNull();
+		expect(survivor.data?.refresh_token).toBeDefined();
+	});
+
 	it("runs post-login selection before consent", async () => {
 		resolveReference = () => "org_1";
 		needsSelection = true;
