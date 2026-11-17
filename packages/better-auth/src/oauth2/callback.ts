@@ -6,7 +6,13 @@ import { OAUTH_CALLBACK_ERROR_CODES } from "./errors";
 import { getOAuthCallbackPath } from "./utils";
 
 interface OAuthCallbackInput {
-	code: string;
+	/**
+	 * The authorization code. Only providers with `protocol: "openid2"` may
+	 * omit it, because they verify the callback request itself.
+	 */
+	code?: string | undefined;
+	/** The callback request. Passed on to providers with `protocol: "openid2"`. */
+	request?: Request | undefined;
 	codeVerifier: string;
 	iss?: string | undefined;
 	deviceId?: string | undefined;
@@ -51,15 +57,21 @@ export async function exchangeOAuthCallback(
 		return { error: OAUTH_CALLBACK_ERROR_CODES.NONCE_BINDING_MISSING };
 	}
 
+	const verifiesCallbackRequest = provider.protocol === "openid2";
+	if (!callback.code && !verifiesCallbackRequest) {
+		return { error: OAUTH_CALLBACK_ERROR_CODES.NO_CODE };
+	}
+
 	// A custom provider can throw before returning a promise, so await inside
 	// `try` to catch both.
 	let tokens: OAuth2Tokens | null;
 	try {
 		tokens = await provider.validateAuthorizationCode({
-			code: callback.code,
+			code: callback.code ?? "",
 			codeVerifier: callback.codeVerifier,
 			deviceId: callback.deviceId,
 			redirectURI: `${ctx.context.baseURL}${getOAuthCallbackPath(provider)}`,
+			...(verifiesCallbackRequest ? { request: callback.request } : {}),
 		});
 	} catch (error) {
 		ctx.context.logger.error("Failed to validate authorization code", error);

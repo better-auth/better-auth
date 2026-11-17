@@ -2532,10 +2532,12 @@ describe("oauth-proxy callback binding", () => {
 	async function completeProxiedCallback({
 		preview = createProvider(),
 		production = createProvider(),
+		code = "test",
 		query = "",
 	}: {
 		preview?: OAuthProvider;
 		production?: OAuthProvider;
+		code?: string | null;
 		query?: string;
 	} = {}) {
 		const productionInstance = await getTestInstance(
@@ -2563,7 +2565,7 @@ describe("oauth-proxy callback binding", () => {
 
 		const redirect: { location: string | null } = { location: null };
 		await productionInstance.client.$fetch(
-			`/callback/${providerId}?code=test&state=${state}${query}`,
+			`/callback/${providerId}?${code === null ? "" : `code=${code}&`}state=${state}${query}`,
 			{
 				onError(context) {
 					redirect.location = context.response.headers.get("location");
@@ -2605,6 +2607,41 @@ describe("oauth-proxy callback binding", () => {
 		expect(production.getUserInfo).toHaveBeenCalledWith(
 			expect.objectContaining({ expectedIdTokenNonce: issuedNonce }),
 		);
+	});
+
+	it("redirects with no_code when the proxied callback has no code", async () => {
+		const validateAuthorizationCode = vi.fn<
+			OAuthProvider["validateAuthorizationCode"]
+		>(async () => ({ accessToken: "test-access-token" }));
+
+		const location = await completeProxiedCallback({
+			production: createProvider({ validateAuthorizationCode }),
+			code: null,
+		});
+
+		expect(location.searchParams.get("error")).toBe("no_code");
+		expect(validateAuthorizationCode).not.toHaveBeenCalled();
+	});
+
+	it("exchanges the proxied code with the arguments it always received", async () => {
+		const validateAuthorizationCode = vi.fn<
+			OAuthProvider["validateAuthorizationCode"]
+		>(async () => ({ accessToken: "test-access-token" }));
+
+		await completeProxiedCallback({
+			production: createProvider({ validateAuthorizationCode }),
+			code: "proxied-code",
+		});
+
+		expect(validateAuthorizationCode).toHaveBeenCalledTimes(1);
+		const [args] = validateAuthorizationCode.mock.calls[0]!;
+		expect(Object.keys(args).sort()).toEqual([
+			"code",
+			"codeVerifier",
+			"deviceId",
+			"redirectURI",
+		]);
+		expect(args.code).toBe("proxied-code");
 	});
 
 	it("redirects with invalid_code when the code exchange throws synchronously", async () => {
