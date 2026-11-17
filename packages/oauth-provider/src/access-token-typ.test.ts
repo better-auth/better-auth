@@ -3,7 +3,8 @@ import { jwt, signJWT } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { JWTPayload } from "jose";
 import { decodeProtectedHeader } from "jose";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { oauthProviderResourceClient } from "./client-resource";
 import { oauthProvider } from "./oauth";
 
 const origin = "http://localhost:4124";
@@ -138,6 +139,67 @@ describe("JWT access tokens require typ at+jwt", async () => {
 		await expect(server.introspect(tokens.access_token)).resolves.toMatchObject(
 			{ active: true },
 		);
+	});
+});
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc9068#section-4
+ */
+describe("resource client signature check defaults to typ at+jwt", async () => {
+	const server = await setup();
+	const resourceClient = oauthProviderResourceClient(server.auth).getActions();
+	/** Verifies by signature against the provider's `/jwks`, as with `jwksUrl`. */
+	const verifyBySignature = (token: string, verifyOptions?: { typ?: string }) =>
+		resourceClient.verifyAccessTokenRequest(
+			{
+				authorizationHeader: `Bearer ${token}`,
+				method: "GET",
+				url: `${origin}/api/rpc/thing`,
+			},
+			{
+				verifyOptions: { audience: resource, ...verifyOptions },
+				jwksUrl: `${issuer}/jwks`,
+			},
+		);
+
+	beforeEach(() => {
+		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
+			server.auth.handler(new Request(input, init)),
+		);
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it.each([
+		["no typ", undefined],
+		["typ JWT", "JWT"],
+	])("rejects a JWT with %s", async (_name, typ) => {
+		const token = await server.sign(server.accessTokenShape(), typ);
+
+		await expect(verifyBySignature(token)).rejects.toMatchObject({
+			statusCode: 401,
+			body: { error: "invalid_token" },
+		});
+	});
+
+	it.each(["at+jwt", "application/at+jwt", "AT+JWT", "Application/AT+JWT"])(
+		"accepts typ %s as a media type",
+		async (typ) => {
+			const token = await server.sign(server.accessTokenShape(), typ);
+
+			await expect(verifyBySignature(token)).resolves.toMatchObject({
+				azp: server.client.client_id,
+			});
+		},
+	);
+
+	it("lets verifyOptions.typ accept another value", async () => {
+		const token = await server.sign(server.accessTokenShape(), "JWT");
+
+		await expect(
+			verifyBySignature(token, { typ: "JWT" }),
+		).resolves.toMatchObject({ azp: server.client.client_id });
 	});
 });
 

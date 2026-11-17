@@ -182,9 +182,10 @@ export const requireMcpAuth = <
 				introspect,
 				issuer,
 				audience: resource,
-				// Every access token the provider issues names its client in `azp`.
-				// Session JWTs signed with the same keys do not.
-				jwtVerifyOptions: { requiredClaims: ["azp"] },
+				// Every access token the provider issues names its client in `azp`
+				// and carries `typ: at+jwt` (RFC 9068 §4). Session JWTs signed with
+				// the same keys do neither.
+				jwtVerifyOptions: { requiredClaims: ["azp"], typ: "at+jwt" },
 				requiredScopes: opts?.requiredScopes,
 				challengeScopes: opts?.challengeScopes,
 				isScopeSatisfied: opts?.isScopeSatisfied,

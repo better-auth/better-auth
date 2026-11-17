@@ -997,6 +997,10 @@ describe("requireMcpAuth checks tokens against the provider's records", async ()
 	const origin = "https://records.example.test";
 	const baseURL = `${origin}/api/auth`;
 
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
 	async function createProvider(options: {
 		disableJwtPlugin?: boolean;
 		revocableJwtAccessTokens?: boolean;
@@ -1080,7 +1084,24 @@ describe("requireMcpAuth checks tokens against the provider's records", async ()
 			return token;
 		}
 
-		return { issueAccessToken, revoke, callMcp, signAppJwt };
+		/** Verifies by signature against `/jwks`, as with `jwksUrl`. */
+		const callMcpBySignature = (accessToken: string) =>
+			requireMcpAuth(instance.auth, () => Response.json({ ok: true }), {
+				jwksUrl: `${baseURL}/jwks`,
+			})(
+				new Request(`${origin}/mcp`, {
+					headers: { Authorization: `Bearer ${accessToken}` },
+				}),
+			);
+
+		return {
+			customFetchImpl: instance.customFetchImpl,
+			issueAccessToken,
+			revoke,
+			callMcp,
+			callMcpBySignature,
+			signAppJwt,
+		};
 	}
 
 	/**
@@ -1093,6 +1114,25 @@ describe("requireMcpAuth checks tokens against the provider's records", async ()
 		).toBe(200);
 
 		const response = await provider.callMcp(await provider.signAppJwt());
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toContain(
+			'error="invalid_token"',
+		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9068#section-4
+	 */
+	it("requires typ at+jwt when it verifies by signature", async () => {
+		const provider = await createProvider({});
+		vi.stubGlobal("fetch", provider.customFetchImpl);
+		const accessToken = await provider.issueAccessToken();
+		expect((await provider.callMcpBySignature(accessToken)).status).toBe(200);
+
+		const response = await provider.callMcpBySignature(
+			await provider.signAppJwt(),
+		);
 
 		expect(response.status).toBe(401);
 		expect(response.headers.get("WWW-Authenticate")).toContain(
