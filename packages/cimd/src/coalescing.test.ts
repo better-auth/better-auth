@@ -239,151 +239,298 @@ describe("CIMD in-flight coalescing", () => {
 		expect(refetchHeaders.has("if-none-match")).toBe(false);
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/12358
-	 */
-	it("does not serve a stored client from a refreshed document before the refresh is saved", async () => {
-		let now = 1_800_000_000_000;
-		vi.spyOn(Date, "now").mockImplementation(() => now);
-		const clientId = "https://refresh-ordering.example/client.json";
-		const { discovery, fetchClientMetadataResource } = createDiscovery();
-		const request = await createRequestContext();
-		fetchClientMetadataResource.mockImplementationOnce(async () =>
-			metadataResponse(clientId),
-		);
-		const stored = await discovery.resolve(request.ctx, clientId, null);
+	describe("requests that do not wait for each other's saves", () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12358
+		 */
+		it("does not hold a request for a joined request whose save never settles", async () => {
+			const clientId = "https://stuck-joiner.example/client.json";
+			const { discovery, fetchClientMetadataResource } = createDiscovery();
+			const response = deferred<Response>();
+			fetchClientMetadataResource.mockImplementationOnce(
+				() => response.promise,
+			);
+			fetchClientMetadataResource.mockImplementation(async () =>
+				metadataResponse(clientId, { "cache-control": "no-store" }),
+			);
+			const leader = await createRequestContext();
+			const joiner = await createRequestContext();
+			const later = await createRequestContext();
+			vi.spyOn(joiner.context.adapter, "transaction").mockImplementationOnce(
+				() => new Promise<never>(() => {}),
+			);
 
-		now += 120_000;
-		fetchClientMetadataResource.mockImplementationOnce(async () =>
-			Response.json(
-				{
-					client_id: clientId,
-					client_name: "Coalescing Client",
-					redirect_uris: ["http://127.0.0.1:5199/renamed"],
-					application_type: "native",
-					token_endpoint_auth_method: "none",
-					grant_types: ["authorization_code"],
-					response_types: ["code"],
-				},
-				{ headers: { "cache-control": "max-age=60" } },
-			),
-		);
-		const saveGate = deferred<void>();
-		const transaction = request.context.adapter.transaction.bind(
-			request.context.adapter,
-		);
-		vi.spyOn(request.context.adapter, "transaction").mockImplementationOnce(
-			async (callback) => {
-				await saveGate.promise;
-				return transaction(callback);
-			},
-		);
+			const leaderResolution = discovery.resolve(leader.ctx, clientId, null);
+			void discovery.resolve(joiner.ctx, clientId, null);
+			await vi.waitFor(() => {
+				expect(fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+			});
+			response.resolve(
+				metadataResponse(clientId, { "cache-control": "no-store" }),
+			);
 
-		const refresh = discovery.resolve(request.ctx, clientId, stored);
-		await vi.waitFor(() => {
+			await expect(leaderResolution).resolves.toMatchObject({ clientId });
+			await expect(
+				discovery.resolve(later.ctx, clientId, null),
+			).resolves.toMatchObject({ clientId });
 			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 		});
-		// Let the fetch finish so the refresh is waiting on its save.
-		await new Promise((resolve) => setTimeout(resolve, 10));
-		const concurrent = discovery.resolve(request.ctx, clientId, stored);
-		saveGate.resolve();
 
-		await expect(refresh).resolves.toMatchObject({
-			redirectUris: ["http://127.0.0.1:5199/renamed"],
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12358
+		 */
+		it("does not hold a request for the fetching request's save that never settles", async () => {
+			const clientId = "https://stuck-leader.example/client.json";
+			const { discovery, fetchClientMetadataResource } = createDiscovery();
+			const response = deferred<Response>();
+			fetchClientMetadataResource.mockImplementationOnce(
+				() => response.promise,
+			);
+			fetchClientMetadataResource.mockImplementation(async () =>
+				metadataResponse(clientId, { "cache-control": "no-store" }),
+			);
+			const leader = await createRequestContext();
+			const joiner = await createRequestContext();
+			const later = await createRequestContext();
+			vi.spyOn(leader.context.adapter, "transaction").mockImplementationOnce(
+				() => new Promise<never>(() => {}),
+			);
+
+			void discovery.resolve(leader.ctx, clientId, null);
+			const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
+			await vi.waitFor(() => {
+				expect(fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+			});
+			response.resolve(
+				metadataResponse(clientId, { "cache-control": "no-store" }),
+			);
+
+			await expect(joinerResolution).resolves.toMatchObject({ clientId });
+			await expect(
+				discovery.resolve(later.ctx, clientId, null),
+			).resolves.toMatchObject({ clientId });
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 		});
-		await expect(concurrent).resolves.toMatchObject({
-			redirectUris: ["http://127.0.0.1:5199/renamed"],
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12358
+		 */
+		it("leaves a joined request's pending save and later requests alone when the fetching request's save fails", async () => {
+			const clientId = "https://failed-leader.example/client.json";
+			const { discovery, fetchClientMetadataResource } = createDiscovery();
+			const response = deferred<Response>();
+			fetchClientMetadataResource.mockImplementationOnce(
+				() => response.promise,
+			);
+			fetchClientMetadataResource.mockImplementation(async () =>
+				metadataResponse(clientId),
+			);
+			const leader = await createRequestContext();
+			const joiner = await createRequestContext();
+			const later = await createRequestContext();
+			vi.spyOn(leader.context.adapter, "transaction").mockRejectedValueOnce(
+				new Error("forced client persistence failure"),
+			);
+			const saveGate = deferred<void>();
+			const transaction = joiner.context.adapter.transaction.bind(
+				joiner.context.adapter,
+			);
+			vi.spyOn(joiner.context.adapter, "transaction").mockImplementationOnce(
+				async (callback) => {
+					await saveGate.promise;
+					return transaction(callback);
+				},
+			);
+
+			const leaderResolution = discovery.resolve(leader.ctx, clientId, null);
+			const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
+			await vi.waitFor(() => {
+				expect(fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+			});
+			response.resolve(metadataResponse(clientId));
+			await expect(leaderResolution).rejects.toThrow(
+				"forced client persistence failure",
+			);
+
+			// The failed save dropped the document, so this request fetches again
+			// while the joined request is still saving.
+			await expect(
+				discovery.resolve(later.ctx, clientId, null),
+			).resolves.toMatchObject({ clientId });
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+
+			saveGate.resolve();
+			await expect(joinerResolution).resolves.toMatchObject({ clientId });
+			expect(await joiner.findClient(clientId)).toMatchObject({ clientId });
+		});
+
+		it("answers a request from the stored client while a refresh is still saving", async () => {
+			let now = 1_800_000_000_000;
+			vi.spyOn(Date, "now").mockImplementation(() => now);
+			const clientId = "https://refresh-in-progress.example/client.json";
+			const { discovery, fetchClientMetadataResource } = createDiscovery();
+			const request = await createRequestContext();
+			fetchClientMetadataResource.mockImplementationOnce(async () =>
+				metadataResponse(clientId),
+			);
+			const stored = await discovery.resolve(request.ctx, clientId, null);
+
+			now += 120_000;
+			fetchClientMetadataResource.mockImplementationOnce(async () =>
+				metadataResponse(clientId),
+			);
+			const saveGate = deferred<void>();
+			const transaction = request.context.adapter.transaction.bind(
+				request.context.adapter,
+			);
+			vi.spyOn(request.context.adapter, "transaction").mockImplementationOnce(
+				async (callback) => {
+					await saveGate.promise;
+					return transaction(callback);
+				},
+			);
+
+			const refresh = discovery.resolve(request.ctx, clientId, stored);
+			await vi.waitFor(() => {
+				expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+			});
+			// Let the fetch finish so the refresh is waiting on its save.
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			await expect(
+				discovery.resolve(request.ctx, clientId, stored),
+			).resolves.toBe(stored);
+			saveGate.resolve();
+			await expect(refresh).resolves.toMatchObject({ clientId });
+		});
+
+		/**
+		 * Two refreshes of one client can overlap when a document is not cacheable.
+		 * The resolver does not order their saves, and the next fetch stores the
+		 * document the origin serves then.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12358
+		 */
+		it("converges on the served document when two refreshes save out of order", async () => {
+			const clientId = "https://overlapping-refresh.example/client.json";
+			const names = ["Seed", "First", "Second", "Second"];
+			const { discovery, fetchClientMetadataResource } = createDiscovery();
+			fetchClientMetadataResource.mockImplementation(async () =>
+				Response.json(
+					{
+						client_id: clientId,
+						client_name: names.shift(),
+						redirect_uris: ["http://127.0.0.1:5199/callback"],
+						application_type: "native",
+						token_endpoint_auth_method: "none",
+						grant_types: ["authorization_code"],
+						response_types: ["code"],
+					},
+					{ headers: { "cache-control": "no-store" } },
+				),
+			);
+			const request = await createRequestContext();
+			const seeded = await discovery.resolve(request.ctx, clientId, null);
+			const saveGate = deferred<void>();
+			const transaction = request.context.adapter.transaction.bind(
+				request.context.adapter,
+			);
+			vi.spyOn(request.context.adapter, "transaction").mockImplementationOnce(
+				async (callback) => {
+					await saveGate.promise;
+					return transaction(callback);
+				},
+			);
+
+			const first = discovery.resolve(request.ctx, clientId, seeded);
+			await vi.waitFor(() => {
+				expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+			});
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			const second = await discovery.resolve(request.ctx, clientId, seeded);
+			saveGate.resolve();
+			const firstClient = await first;
+
+			expect(firstClient?.name).toBe("First");
+			expect(second?.name).toBe("Second");
+			const current = await request.findClient(clientId);
+			const converged = await discovery.resolve(request.ctx, clientId, current);
+			expect(converged?.name).toBe("Second");
+			expect((await request.findClient(clientId))?.name).toBe("Second");
 		});
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/12358
-	 */
-	it("holds the in-flight fetch until a joined request has saved its client", async () => {
-		const clientId = "https://joiner-order.example/client.json";
-		const { discovery, fetchClientMetadataResource } = createDiscovery();
-		const response = deferred<Response>();
-		fetchClientMetadataResource.mockImplementationOnce(() => response.promise);
-		const leader = await createRequestContext();
-		const joiner = await createRequestContext();
-		const saveGate = deferred<void>();
-		const transaction = joiner.context.adapter.transaction.bind(
-			joiner.context.adapter,
-		);
-		vi.spyOn(joiner.context.adapter, "transaction").mockImplementationOnce(
-			async (callback) => {
-				await saveGate.promise;
-				return transaction(callback);
-			},
-		);
-
-		const leaderResolution = discovery.resolve(leader.ctx, clientId, null);
-		const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
-		await vi.waitFor(() => {
-			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+	describe("a fetch that never settles", () => {
+		afterEach(() => {
+			vi.useRealTimers();
 		});
-		response.resolve(
-			metadataResponse(clientId, { "cache-control": "no-store" }),
-		);
 
-		// The joiner's save is still pending, so a later request must wait for
-		// it instead of starting a second fetch that could be saved first.
-		fetchClientMetadataResource.mockImplementation(async () =>
-			metadataResponse(clientId, { "cache-control": "no-store" }),
-		);
-		const later = discovery.resolve(joiner.ctx, clientId, null);
-		await new Promise((resolve) => setTimeout(resolve, 10));
-		expect(fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+		/**
+		 * A runtime that ends the request that started a fetch can leave the fetch
+		 * pending forever.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12358
+		 */
+		it("lets a joined request fetch for itself and returns the abandoned fetch's permit", async () => {
+			const clientId = "https://abandoned-fetch.example/client.json";
+			const { discovery, fetchClientMetadataResource } = createDiscovery({
+				metadataFetchPolicy: {
+					minimumFetchInterval: 0,
+					maximumConcurrentFetches: 1,
+				},
+			});
+			fetchClientMetadataResource.mockImplementationOnce(
+				() => new Promise<Response>(() => {}),
+			);
+			fetchClientMetadataResource.mockImplementation(async () =>
+				metadataResponse(clientId),
+			);
+			const leader = await createRequestContext();
+			const joiner = await createRequestContext();
+			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
-		saveGate.resolve();
-		await expect(leaderResolution).resolves.toMatchObject({ clientId });
-		await expect(joinerResolution).resolves.toMatchObject({ clientId });
-		await expect(later).resolves.toMatchObject({ clientId });
-	});
-
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/12358
-	 */
-	it("does not publish a document that a joined request failed to save", async () => {
-		const clientId = "https://joiner-failure.example/client.json";
-		const { discovery, fetchClientMetadataResource } = createDiscovery();
-		const response = deferred<Response>();
-		fetchClientMetadataResource.mockImplementationOnce(() => response.promise);
-		const leader = await createRequestContext();
-		const joiner = await createRequestContext();
-		const saveGate = deferred<void>();
-		const transaction = leader.context.adapter.transaction.bind(
-			leader.context.adapter,
-		);
-		vi.spyOn(leader.context.adapter, "transaction").mockImplementationOnce(
-			async (callback) => {
-				await saveGate.promise;
-				return transaction(callback);
-			},
-		);
-		vi.spyOn(joiner.context.adapter, "transaction").mockRejectedValueOnce(
-			new Error("forced client persistence failure"),
-		);
-
-		const leaderResolution = discovery.resolve(leader.ctx, clientId, null);
-		const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
-		await vi.waitFor(() => {
+			void discovery.resolve(leader.ctx, clientId, null);
+			await vi.advanceTimersByTimeAsync(0);
 			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(1);
-		});
-		response.resolve(metadataResponse(clientId));
-		await expect(joinerResolution).rejects.toThrow(
-			"forced client persistence failure",
-		);
-		saveGate.resolve();
-		await expect(leaderResolution).resolves.toMatchObject({ clientId });
+			const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
+			await vi.advanceTimersByTimeAsync(9_999);
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(1);
+			await vi.advanceTimersByTimeAsync(1);
 
-		fetchClientMetadataResource.mockImplementationOnce(async () =>
-			metadataResponse(clientId),
-		);
-		await expect(
-			discovery.resolve(joiner.ctx, clientId, null),
-		).resolves.toMatchObject({ clientId });
-		expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+			await expect(joinerResolution).resolves.toMatchObject({ clientId });
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+			expect(await joiner.findClient(clientId)).toMatchObject({ clientId });
+			await expect(
+				discovery.resolve(joiner.ctx, clientId, null),
+			).resolves.toMatchObject({ clientId });
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+		});
+
+		it("lets a later request fetch after a joined request gave up", async () => {
+			const clientId = "https://abandoned-then-later.example/client.json";
+			const { discovery, fetchClientMetadataResource } = createDiscovery();
+			fetchClientMetadataResource.mockImplementationOnce(
+				() => new Promise<Response>(() => {}),
+			);
+			fetchClientMetadataResource.mockImplementation(async () =>
+				metadataResponse(clientId, { "cache-control": "no-store" }),
+			);
+			const leader = await createRequestContext();
+			const joiner = await createRequestContext();
+			const later = await createRequestContext();
+			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+			void discovery.resolve(leader.ctx, clientId, null);
+			await vi.advanceTimersByTimeAsync(0);
+			const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
+			await vi.advanceTimersByTimeAsync(10_000);
+			await joinerResolution;
+
+			await expect(
+				discovery.resolve(later.ctx, clientId, null),
+			).resolves.toMatchObject({ clientId });
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
+		});
 	});
 });
 

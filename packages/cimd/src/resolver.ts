@@ -10,6 +10,7 @@ import { toExpJWT } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { MetadataDocumentResponseCacheHeaders } from "./client-store";
 import {
+	FETCH_TIMEOUT_MS,
 	fetchClientMetadataDocument,
 	persistMetadataDocumentClient,
 } from "./client-store";
@@ -17,6 +18,9 @@ import type { CimdOptions } from "./types";
 import { isCimdClientIdUrlCandidate } from "./validate-metadata-document";
 
 const FETCH_BUDGET_WINDOW_MS = 60_000;
+// A request that joins a fetch stops waiting for it after twice the fetch
+// timeout, which the request that started the fetch enforces itself.
+const JOINED_FETCH_WAIT_MS = FETCH_TIMEOUT_MS * 2;
 const DEFAULT_METADATA_FETCH_POLICY = {
 	minimumFetchInterval: 1,
 	maximumConcurrentFetches: 16,
@@ -42,6 +46,11 @@ interface CimdMetadataCacheEntry {
 interface FetchedMetadata {
 	metadata: OAuthClientMetadata;
 	nextEntry: CimdMetadataCacheEntry | null;
+}
+
+interface InFlightMetadataFetch {
+	fetched: Promise<FetchedMetadata>;
+	releasePermit: () => void;
 }
 
 interface ResolvedMetadataFetchPolicy {
@@ -312,13 +321,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 	}
 	const fetchPolicy = resolveMetadataFetchPolicy(cimdOptions);
 	const metadataCache = new Map<string, CimdMetadataCacheEntry>();
-	const inFlightMetadataByClientId = new Map<
-		string,
-		{
-			fetched: Promise<FetchedMetadata>;
-			joinerSaves: Set<Promise<unknown>>;
-		}
-	>();
+	const inFlightMetadataByClientId = new Map<string, InFlightMetadataFetch>();
 	const lastFetchStartAtMsByClientId = new Map<string, number>();
 	const fetchStateByOrigin = new Map<string, OriginFetchState>();
 	const globalFetchStartTimesMs: number[] = [];
@@ -486,6 +489,33 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		lastFetchStartAtMsByClientId.set(clientId, nowMs);
 	};
 
+	// A fetch started by a request that the runtime then ends never settles, and
+	// its permit is never released. A request that joined it stops waiting, drops
+	// the abandoned fetch, and returns its permit, so later requests fetch again.
+	const joinFetch = async (
+		clientId: string,
+		inFlight: InFlightMetadataFetch,
+	): Promise<FetchedMetadata | undefined> => {
+		let giveUp: (value: undefined) => void = () => {};
+		const gaveUp = new Promise<undefined>((resolve) => {
+			giveUp = resolve;
+		});
+		const timer = setTimeout(giveUp, JOINED_FETCH_WAIT_MS);
+		let fetched: FetchedMetadata | undefined;
+		try {
+			fetched = await Promise.race([inFlight.fetched, gaveUp]);
+		} finally {
+			clearTimeout(timer);
+		}
+		if (fetched === undefined) {
+			if (inFlightMetadataByClientId.get(clientId) === inFlight) {
+				inFlightMetadataByClientId.delete(clientId);
+			}
+			inFlight.releasePermit();
+		}
+		return fetched;
+	};
+
 	return async (ctx, clientId, existingClient) => {
 		if (!isCimdClientIdUrlCandidate(clientId)) {
 			return null;
@@ -512,7 +542,14 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			);
 		}
 
-		const persistFetchedMetadata = async (metadata: OAuthClientMetadata) => {
+		// Each request saves the fetched document with its own context, and no
+		// request waits for another request's save. A request that ends mid-save
+		// could leave that save pending forever, and a runtime that bounds I/O to
+		// the request that started it cannot await the save from another request.
+		const persistFetchedMetadata = async ({
+			metadata,
+			nextEntry,
+		}: FetchedMetadata) => {
 			try {
 				return await persistMetadataDocumentClient(
 					ctx,
@@ -523,18 +560,19 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 					existingClient ?? undefined,
 				);
 			} catch (error) {
-				metadataCache.delete(clientId);
+				if (nextEntry && metadataCache.get(clientId) === nextEntry) {
+					metadataCache.delete(clientId);
+				}
 				recordFailedFetch(clientId);
 				throw error;
 			}
 		};
 
-		const inFlightMetadata = inFlightMetadataByClientId.get(clientId);
-		if (inFlightMetadata !== undefined) {
-			const { metadata } = await inFlightMetadata.fetched;
-			const joinerSave = persistFetchedMetadata(metadata);
-			inFlightMetadata.joinerSaves.add(joinerSave);
-			return joinerSave;
+		let sharedFetch = inFlightMetadataByClientId.get(clientId);
+		while (sharedFetch) {
+			const fetched = await joinFetch(clientId, sharedFetch);
+			if (fetched) return persistFetchedMetadata(fetched);
+			sharedFetch = inFlightMetadataByClientId.get(clientId);
 		}
 
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
@@ -561,7 +599,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				fetched.status === "modified"
 					? fetched.metadata
 					: (cachedEntry as CimdMetadataCacheEntry).metadata;
-
 			const cacheHeaders =
 				fetched.status === "modified"
 					? fetched.cacheHeaders
@@ -569,62 +606,39 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 							(cachedEntry as CimdMetadataCacheEntry).responseCacheHeaders,
 							fetched.cacheHeaders,
 						);
-			return {
+			const nextEntry = createCacheEntry(
 				metadata,
-				nextEntry: createCacheEntry(
-					metadata,
-					cacheHeaders,
-					metadataRevalidationInterval,
-					Date.now(),
-				),
-			};
+				cacheHeaders,
+				metadataRevalidationInterval,
+				Date.now(),
+			);
+			if (nextEntry) {
+				storeCacheEntry(clientId, nextEntry);
+			} else {
+				metadataCache.delete(clientId);
+			}
+			// Successful fetches are governed by HTTP freshness and origin/global
+			// budgets. Keep the per-client interval only as failed-fetch backoff.
+			lastFetchStartAtMsByClientId.delete(clientId);
+			return { metadata, nextEntry };
 		})();
-		const inFlightEntry = {
+		const inFlight = {
 			fetched: metadataFetch,
-			joinerSaves: new Set<Promise<unknown>>(),
+			releasePermit: releaseMetadataFetchPermit,
 		};
-		inFlightMetadataByClientId.set(clientId, inFlightEntry);
-		// The in-flight entry stays until this request and every request that
-		// joined it have saved the client, and this request has published the
-		// fetched document. No other request starts a fetch, reads a fresh cache
-		// entry ahead of the saved client, or saves an older document after a
-		// newer one.
+		inFlightMetadataByClientId.set(clientId, inFlight);
+		let fetchedMetadata: FetchedMetadata;
 		try {
-			let fetchedMetadata: FetchedMetadata;
-			try {
-				fetchedMetadata = await metadataFetch;
-			} catch (error) {
-				recordFailedFetch(clientId);
-				throw error;
-			} finally {
-				releaseMetadataFetchPermit();
-			}
-			const { metadata, nextEntry } = fetchedMetadata;
-			const storedClient = await persistFetchedMetadata(metadata);
-			let joinerFailed = false;
-			while (inFlightEntry.joinerSaves.size > 0) {
-				const pending = [...inFlightEntry.joinerSaves];
-				inFlightEntry.joinerSaves.clear();
-				const results = await Promise.allSettled(pending);
-				joinerFailed ||= results.some((result) => result.status === "rejected");
-			}
-			// A joined request that failed to save has already dropped the cached
-			// document and recorded the retry delay; publishing would undo both.
-			if (!joinerFailed) {
-				if (nextEntry) {
-					storeCacheEntry(clientId, nextEntry);
-				} else {
-					metadataCache.delete(clientId);
-				}
-				// Successful fetches are governed by HTTP freshness and origin/global
-				// budgets. Keep the per-client interval only as failed-fetch backoff.
-				lastFetchStartAtMsByClientId.delete(clientId);
-			}
-			return storedClient;
+			fetchedMetadata = await metadataFetch;
+		} catch (error) {
+			recordFailedFetch(clientId);
+			throw error;
 		} finally {
-			if (inFlightMetadataByClientId.get(clientId) === inFlightEntry) {
+			if (inFlightMetadataByClientId.get(clientId) === inFlight) {
 				inFlightMetadataByClientId.delete(clientId);
 			}
+			releaseMetadataFetchPermit();
 		}
+		return persistFetchedMetadata(fetchedMetadata);
 	};
 }
