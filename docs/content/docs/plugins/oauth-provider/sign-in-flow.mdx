@@ -237,9 +237,11 @@ oauthProvider({
 })
 ```
 
-Only your server sets `serverContext`. A code from `/oauth2/authorize` has none, and the provider never copies the client's request parameters into it. Set it only from values your server determined, so the callback can trust what it reads. The provider keeps the values apart from the fields it stores with the code. A key such as `userId` or `query` changes nothing about the code or the tokens it issues.
+Only your server sets `serverContext`, with the same guarantee as the `serverContext` on [Better Auth's OAuth state](/docs/concepts/oauth#passing-server-trusted-data): a request cannot set it. A code from `/oauth2/authorize` has none, and the provider never copies the client's request parameters into it. Set it only from values your server determined, so the callback can trust what it reads. The provider keeps the values apart from the fields it stores with the code. A key such as `userId` or `query` changes nothing about the code or the tokens it issues.
 
 The callback runs for every code a client redeems, whichever endpoint issued it. When more than one endpoint sets `serverContext`, nest each endpoint's values under its own key, so the callback reads only the values that endpoint stored. A plugin that other apps install should use its plugin ID as the key, as in `serverContext: { "my-plugin": { signInId } }`.
+
+Your app's `customTokenResponseFields` is the only reader of `serverContext`. A plugin has no callback of its own for it, so the plugin must document its key, and the app reads that key in `customTokenResponseFields` and returns the fields to add.
 
 The value must be a JSON object. The callback reads it back in its JSON form. For example, a `Date` inside it arrives as a string. Any other value fails with a 500 `server_error`, and no code is issued. The provider stores the values as plain JSON with the code. Store a reference, such as a record ID, rather than a secret or personal data. Refresh requests do not receive the values.
 
