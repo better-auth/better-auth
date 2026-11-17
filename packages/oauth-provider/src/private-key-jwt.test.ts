@@ -864,7 +864,7 @@ describe("private_key_jwt authentication", async () => {
 			},
 			expectedAudience: tokenEndpoint,
 		});
-		const rows = await ctx.context.adapter.findMany({
+		const rows = await ctx.context.adapter.findMany<{ expiresAt: Date }>({
 			model: "oauthClientAssertion",
 		});
 		expect(rows).toHaveLength(1);
