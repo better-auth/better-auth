@@ -551,8 +551,9 @@ export interface OAuthOptions<
 	 * Once the client and `redirect_uri` are validated, a request without
 	 * `openid`, including one with no `scope` parameter at all, is redirected to
 	 * the `redirect_uri` with `invalid_scope`. Without this option, a request
-	 * without `openid` is served as plain OAuth and a request with no `scope`
-	 * falls back to the client's registered `scopes`, then to the provider's
+	 * without `openid` is served as plain OAuth, unless it carries the OpenID
+	 * Connect `claims` parameter, which is rejected without `openid`. A request
+	 * with no `scope` falls back to the client's registered `scopes`, then to the provider's
 	 * `scopes`.
 	 *
 	 * The option does not apply to a device authorization request at
