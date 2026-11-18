@@ -267,6 +267,26 @@ export const createInternalAdapter = (
 		);
 	}
 
+	// The cached copies are revoked as soon as the rows end, before the
+	// delete.after hooks run, so a failing hook cannot leave them valid.
+	async function deleteSessionRows(
+		userId: string,
+		onRowsDeleted: () => Promise<void>,
+	) {
+		await deleteManyWithHooks([{ field: "userId", value: userId }], "session", {
+			fn: async (where) => {
+				const currentAdapter = await getCurrentAdapter(adapter);
+				const deleted = await currentAdapter.deleteMany({
+					model: "session",
+					where,
+				});
+				await onRowsDeleted();
+				return deleted;
+			},
+			executeMainFn: false,
+		});
+	}
+
 	async function withVerificationConsumeLock<T>(
 		key: string,
 		fn: () => Promise<T>,
@@ -1052,20 +1072,7 @@ export const createInternalAdapter = (
 				);
 				return;
 			}
-			await deleteManyWithHooks(
-				[{ field: "userId", value: userId }],
-				"session",
-				{
-					fn: async (where) => {
-						const deleted = await (await getCurrentAdapter(adapter)).deleteMany(
-							{ model: "session", where },
-						);
-						await revokeCachedSessions();
-						return deleted;
-					},
-					executeMainFn: false,
-				},
-			);
+			await deleteSessionRows(userId, revokeCachedSessions);
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
