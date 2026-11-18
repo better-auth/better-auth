@@ -125,6 +125,21 @@ describe("pure getAsyncLocalStorage", () => {
 			expect(second).toBe("second");
 			expect(left).toBeUndefined();
 		});
+
+		it("keeps a reused store for the run that is still active", async () => {
+			const { getAsyncLocalStorage } = await import("./pure.index");
+			const Storage = await getAsyncLocalStorage();
+			const storage = new Storage<string>();
+			const read = (store: string, delay: number) =>
+				storage.run(store, async () => {
+					await new Promise((resolve) => setTimeout(resolve, delay));
+					return storage.getStore();
+				});
+			await expect(
+				Promise.all([read("same", 0), read("other", 30), read("same", 10)]),
+			).resolves.toEqual(["same", "other", "same"]);
+			expect(storage.getStore()).toBeUndefined();
+		});
 	});
 
 	/**

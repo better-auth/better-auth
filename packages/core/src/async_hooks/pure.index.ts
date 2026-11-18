@@ -1,19 +1,29 @@
 import type { AsyncLocalStorage } from "node:async_hooks";
 import { getBuiltinAsyncLocalStorage } from "./builtin";
 
+type Frame<T> = {
+	store: T;
+	parent: Frame<T> | undefined;
+	settled: boolean;
+};
+
 /**
  * Due to the lack of AsyncLocalStorage in some environments (like Convex),
  *
  * We assume serverless functions are short-lived and single-threaded, so we can use a simple polyfill.
  */
 class AsyncLocalStoragePolyfill<T> {
-	#stores: T[] = [];
+	#current: Frame<T> | undefined;
 
 	run(store: T, fn: () => unknown): unknown {
-		this.#stores.push(store);
-		// Runs can settle out of order, so remove this run's store, not the last one.
+		const frame = { store, parent: this.#current, settled: false };
+		this.#current = frame;
+		// Runs can settle out of order, so step back only past settled runs.
 		const leave = () => {
-			this.#stores.splice(this.#stores.lastIndexOf(store), 1);
+			frame.settled = true;
+			while (this.#current?.settled) {
+				this.#current = this.#current.parent;
+			}
 		};
 		try {
 			const result = fn();
@@ -29,7 +39,7 @@ class AsyncLocalStoragePolyfill<T> {
 	}
 
 	getStore(): T | undefined {
-		return this.#stores.at(-1);
+		return this.#current?.store;
 	}
 }
 
