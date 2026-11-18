@@ -8,6 +8,7 @@ import { LEVEL_0_ACR } from "./authentication-context";
 import { validateIssuerUrl } from "./authorize";
 import {
 	applyOAuthProviderMetadataExtensions,
+	assertAdvertisedAuthMethodsSupported,
 	getClientDiscoveries,
 	getSupportedAuthMethods,
 	getSupportedGrantTypes,
@@ -129,6 +130,7 @@ function buildAuthServerMetadata(
 	// `advertisedMetadata.token_endpoint_auth_methods_supported` overrides the
 	// derivation, so a provider with protected DCR can still advertise that its
 	// token endpoint accepts public clients.
+	assertAdvertisedAuthMethodsSupported(opts);
 	const advertisedAuthMethods =
 		opts.advertisedMetadata?.token_endpoint_auth_methods_supported;
 	const publicClientSupported = advertisedAuthMethods

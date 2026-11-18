@@ -8,6 +8,7 @@ import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-resource";
+import { extendOAuthProvider } from "./extensions";
 import {
 	oauthProviderAuthServerMetadata,
 	oauthProviderOpenIdConfigMetadata,
@@ -255,7 +256,44 @@ describe("oauth metadata", async () => {
 			]);
 		});
 
-		it("should reject a method the server does not support at startup", () => {
+		it("should reject a method the server does not support when building metadata", async () => {
+			const { auth } = await createTestInstance({
+				oauthProviderConfig: {
+					advertisedMetadata: {
+						token_endpoint_auth_methods_supported: [
+							"none",
+							"client_secret_jwt",
+						],
+					},
+				},
+			});
+
+			await expect(auth.api.getOpenIdConfig()).rejects.toThrowError(
+				"advertisedMetadata.token_endpoint_auth_methods_supported client_secret_jwt is not a supported token endpoint auth method",
+			);
+		});
+
+		it("should reject an empty list at startup", () => {
+			expect(() =>
+				getTestInstance({
+					baseURL: authServerBaseUrl,
+					plugins: [
+						oauthProvider({
+							loginPage: "/login",
+							consentPage: "/consent",
+							advertisedMetadata: {
+								token_endpoint_auth_methods_supported: [],
+							},
+						}),
+						jwt(),
+					],
+				}),
+			).toThrowError(
+				"advertisedMetadata.token_endpoint_auth_methods_supported cannot be empty",
+			);
+		});
+
+		it("should reject duplicate methods at startup", () => {
 			expect(() =>
 				getTestInstance({
 					baseURL: authServerBaseUrl,
@@ -266,7 +304,8 @@ describe("oauth metadata", async () => {
 							advertisedMetadata: {
 								token_endpoint_auth_methods_supported: [
 									"none",
-									"client_secret_jwt",
+									"client_secret_basic",
+									"none",
 								],
 							},
 						}),
@@ -274,8 +313,43 @@ describe("oauth metadata", async () => {
 					],
 				}),
 			).toThrowError(
-				"advertisedMetadata.token_endpoint_auth_methods_supported client_secret_jwt is not a supported token endpoint auth method",
+				"advertisedMetadata.token_endpoint_auth_methods_supported lists none more than once",
 			);
+		});
+
+		it("should accept a method registered by another plugin through extendOAuthProvider", async () => {
+			const { auth } = await getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						advertisedMetadata: {
+							token_endpoint_auth_methods_supported: ["none", "attest_jwt"],
+						},
+					}),
+					jwt(),
+					{
+						id: "attest-plugin",
+						init(ctx) {
+							extendOAuthProvider(ctx, {
+								clientAuthentication: {
+									attest_jwt: {
+										assertionTypes: ["urn:example:params:oauth:attest"],
+										authenticate: async () => ({ clientId: "client" }),
+									},
+								},
+							});
+						},
+					},
+				],
+			});
+
+			const metadata = await auth.api.getOpenIdConfig();
+			expect(metadata?.token_endpoint_auth_methods_supported).toEqual([
+				"none",
+				"attest_jwt",
+			]);
 		});
 
 		it("should accept a method contributed by an extension", async () => {

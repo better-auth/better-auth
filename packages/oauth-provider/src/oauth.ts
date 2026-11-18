@@ -21,7 +21,7 @@ import { claimsRequestParameterSchema } from "./claims-request";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import {
-	getSupportedAuthMethods,
+	validateAdvertisedAuthMethodsShape,
 	validateOAuthProviderExtensions,
 } from "./extensions";
 import { introspectEndpoint } from "./introspect";
@@ -236,17 +236,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	};
 	validateOAuthProviderExtensions(opts.extensions);
 
-	const supportedAuthMethods = new Set(
-		getSupportedAuthMethods(opts, { includeNone: true }),
+	validateAdvertisedAuthMethodsShape(
+		opts.advertisedMetadata?.token_endpoint_auth_methods_supported,
 	);
-	for (const method of options.advertisedMetadata
-		?.token_endpoint_auth_methods_supported ?? []) {
-		if (!supportedAuthMethods.has(method)) {
-			throw new BetterAuthError(
-				`advertisedMetadata.token_endpoint_auth_methods_supported ${method} is not a supported token endpoint auth method`,
-			);
-		}
-	}
 
 	// Validate pairwiseSecret minimum length
 	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
