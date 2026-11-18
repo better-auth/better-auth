@@ -12,7 +12,7 @@ import { getTestInstance } from "better-auth/test";
 import type { APIError } from "better-call";
 import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
@@ -710,6 +710,46 @@ describe("oauth userinfo", async () => {
 		});
 		expect(userinfo.data?.email).toBeUndefined();
 		expect(userinfo.data?.email_verified).toBeUndefined();
+	});
+
+	/**
+	 * The default schema makes `user.name` NOT NULL, so a missing name only
+	 * reaches the provider from a store that allows it. The lookup is stubbed to
+	 * return that row.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11193
+	 */
+	it("omits the name claims instead of failing when the user has no name", async () => {
+		const ctx = await auth.$context;
+		const tokens = await getTokens({
+			scopes: ["openid", "profile"],
+		});
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const findUserById = ctx.internalAdapter.findUserById;
+		const spy = vi
+			.spyOn(ctx.internalAdapter, "findUserById")
+			.mockImplementation(async (userId) => {
+				const found = await findUserById(userId);
+				return found && { ...found, name: null as unknown as string };
+			});
+		try {
+			const userinfo = await client.$fetch<Record<string, string>>(
+				"/oauth2/userinfo",
+				{
+					headers: {
+						authorization: tokens.data?.access_token ?? "",
+					},
+				},
+			);
+			expect(userinfo.error).toBeNull();
+			expect(userinfo.data?.sub).toBe(user.id);
+			expect(userinfo.data).not.toHaveProperty("name");
+			expect(userinfo.data).not.toHaveProperty("given_name");
+			expect(userinfo.data).not.toHaveProperty("family_name");
+		} finally {
+			spy.mockRestore();
+		}
 	});
 
 	it("should pass provide scoped user information - email only", async () => {
