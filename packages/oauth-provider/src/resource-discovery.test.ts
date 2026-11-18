@@ -798,7 +798,7 @@ describe("canonical client metadata document registration", () => {
 			where: [{ field: "clientId", value: clientId }],
 		});
 		expect(stored?.name ?? null).toBeNull();
-		expect(stored?.postLogoutRedirectUris ?? []).toEqual([]);
+		expect(stored?.postLogoutRedirectUris).toEqual([]);
 		expect(stored?.dpopBoundAccessTokens ?? null).toBeNull();
 	});
 

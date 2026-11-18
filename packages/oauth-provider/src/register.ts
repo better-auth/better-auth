@@ -30,6 +30,7 @@ import {
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import { assertResourcePrivileges } from "./oauthResource/privileges";
 import { getResource } from "./resources";
+import { schema as oauthProviderSchema } from "./schema";
 import type {
 	ClientRegistrationRequest,
 	OAuthClientAdministrativeResponse,
@@ -155,6 +156,19 @@ const METADATA_DOCUMENT_CLIENT_FIELDS = [
 	"postLogoutRedirectUris",
 	"dpopBoundAccessTokens",
 ] as const satisfies readonly (keyof SchemaClient<Scope[]>)[];
+
+/**
+ * The value a refresh stores for a document field the document omits. Some
+ * adapters store a list field in a non-nullable array column, so a list is
+ * cleared to an empty list instead of `null`.
+ */
+function clearedDocumentFieldValue(
+	field: (typeof METADATA_DOCUMENT_CLIENT_FIELDS)[number],
+): [] | null {
+	return oauthProviderSchema.oauthClient.fields[field].type === "string[]"
+		? []
+		: null;
+}
 
 function isCustomSchemeWithHost(redirectUri: string): boolean {
 	const url = new URL(redirectUri);
@@ -1039,7 +1053,7 @@ async function persistOAuthClientRegistration(
 				const omittedDocumentFields = Object.fromEntries(
 					METADATA_DOCUMENT_CLIENT_FIELDS.map((field) => [
 						field,
-						refreshed[field] ?? null,
+						refreshed[field] ?? clearedDocumentFieldValue(field),
 					]),
 				);
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({

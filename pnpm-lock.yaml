@@ -683,9 +683,15 @@ importers:
 
   e2e/adapter/test/adapter-factory:
     devDependencies:
+      '@better-auth/cimd':
+        specifier: workspace:*
+        version: link:../../../../packages/cimd
       '@better-auth/core':
         specifier: workspace:*
         version: link:../../../../packages/core
+      '@better-auth/oauth-provider':
+        specifier: workspace:*
+        version: link:../../../../packages/oauth-provider
       '@better-auth/scim':
         specifier: workspace:*
         version: link:../../../../packages/scim
@@ -788,9 +794,15 @@ importers:
 
   e2e/adapter/test/prisma-adapter:
     devDependencies:
+      '@better-auth/cimd':
+        specifier: workspace:*
+        version: link:../../../../packages/cimd
       '@better-auth/core':
         specifier: workspace:*
         version: link:../../../../packages/core
+      '@better-auth/oauth-provider':
+        specifier: workspace:*
+        version: link:../../../../packages/oauth-provider
       '@better-auth/prisma-adapter':
         specifier: workspace:*
         version: link:../../../../packages/prisma-adapter

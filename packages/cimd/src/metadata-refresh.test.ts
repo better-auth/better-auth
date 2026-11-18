@@ -203,9 +203,7 @@ describe("CIMD - refresh stores what the current document lists", async () => {
 
 		documents.set(clientId, document);
 		expect(await confirmedLogoutLocation(clientId, signedOut)).toBeNull();
-		expect((await readClient(clientId))?.postLogoutRedirectUris ?? []).toEqual(
-			[],
-		);
+		expect((await readClient(clientId))?.postLogoutRedirectUris).toEqual([]);
 	});
 
 	it("authenticates only with the jwks_uri keys after the document moves its keys there", async () => {
@@ -331,8 +329,8 @@ describe("CIMD - refresh stores what the current document lists", async () => {
 		] as const) {
 			expect(refreshed?.[field] ?? null, field).toBeNull();
 		}
-		expect(refreshed?.contacts ?? []).toEqual([]);
-		expect(refreshed?.postLogoutRedirectUris ?? []).toEqual([]);
+		expect(refreshed?.contacts).toEqual([]);
+		expect(refreshed?.postLogoutRedirectUris).toEqual([]);
 		expect(refreshed?.subjectType).toBe("pairwise");
 	});
 });

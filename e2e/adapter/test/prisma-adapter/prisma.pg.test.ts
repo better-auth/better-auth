@@ -10,6 +10,7 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
+import { cimdRefreshTestSuite } from "../adapter-factory/cimd-refresh-test-suite";
 import { scimHttpTestSuite } from "../adapter-factory/scim-http-test-suite";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
@@ -51,6 +52,7 @@ const { execute } = await testAdapter({
 			token: "prisma-postgres-scim-token",
 			testId: "prisma-postgres",
 		}),
+		cimdRefreshTestSuite(),
 	],
 	onFinish: async () => {},
 	prefixTests: "pg",
