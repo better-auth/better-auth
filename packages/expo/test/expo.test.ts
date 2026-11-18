@@ -1123,6 +1123,90 @@ describe("expo with cookieCache", async () => {
 	});
 });
 
+describe("expo session reads", async () => {
+	const storage = new Map<string, string>();
+
+	const { auth, client, testUser } = await getTestInstance(
+		{
+			session: {
+				expiresIn: 5,
+				cookieCache: {
+					enabled: true,
+					maxAge: 1,
+				},
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [
+					expoClient({
+						storage: {
+							getItem: (key) => storage.get(key) || null,
+							setItem: async (key, value) => storage.set(key, value),
+							getItemAsync: async (key) => storage.get(key) || null,
+							setItemAsync: async (key, value) => {
+								storage.set(key, value);
+							},
+						},
+					}),
+				],
+			},
+		},
+	);
+
+	const countSignals = () => {
+		let signals = 0;
+		client.$store.listen("$sessionSignal", () => {
+			signals++;
+		});
+		const initial = signals;
+		return () => signals - initial;
+	};
+
+	let userId = "";
+	beforeAll(async () => {
+		vi.useFakeTimers();
+		const { data } = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		userId = data?.user.id ?? "";
+		await vi.advanceTimersByTimeAsync(100);
+	});
+	afterAll(() => {
+		vi.useRealTimers();
+	});
+
+	it("does not notify the session signal when a read only renews the cookie cache", async () => {
+		vi.advanceTimersByTime(1000);
+		const signals = countSignals();
+
+		const { data } = await client.getSession();
+		expect(data?.user.email).toBe(testUser.email);
+		expect(signals()).toBe(0);
+	});
+
+	it("notifies the session signal when a read finds the stored session revoked", async () => {
+		const { data } = await client.getSession();
+		const session = client.$store.atoms.session!;
+		session.set({
+			...session.get(),
+			data,
+			isPending: false,
+			isRefetching: false,
+		});
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteUserSessions(userId);
+		// Let the cookie cache expire so the read checks the database.
+		vi.advanceTimersByTime(1500);
+		const signals = countSignals();
+
+		const { data: revoked } = await client.getSession();
+		expect(revoked).toBeNull();
+		expect(signals()).toBe(1);
+	});
+});
+
 describe("expo with cookie storeStateStrategy", async () => {
 	const storage = new Map<string, string>();
 
