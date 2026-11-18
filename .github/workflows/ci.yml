@@ -175,6 +175,9 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      - name: Expose Node version to Turbo
+        run: echo "NODE_VERSION=$(node --version)" >> "$GITHUB_ENV"
+
       - name: Test release tooling
         if: matrix.node-version == '24.x'
         run: pnpm --filter @better-auth/release-tooling test
