@@ -56,7 +56,7 @@ description: Kakao provider setup and usage.
     ```
 
     <Callout type="info">
-      For users who do not provide an email address, see [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
+      If Kakao returns no email, for example when `account_email` is not requested or the user does not consent, sign-in fails with `email_not_found`. Provide a fallback with `mapProfileToUser` as shown in [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
     </Callout>
   </Step>
 
