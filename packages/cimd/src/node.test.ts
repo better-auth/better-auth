@@ -209,7 +209,10 @@ describe("Node CIMD metadata transport", () => {
 			expect(mocks.lookup).toHaveBeenCalledTimes(16);
 			await expect(
 				fetchClientMetadataResource("https://client.example.com/client.json"),
-			).rejects.toThrow("metadata DNS lookup limit exceeded");
+			).rejects.toMatchObject({
+				message: "metadata DNS lookup limit exceeded",
+				code: "ERR_CIMD_DNS_LOOKUP_LIMIT",
+			});
 			expect(mocks.lookup).toHaveBeenCalledTimes(16);
 			mockHttpsResponse();
 			await expect(

@@ -25,7 +25,13 @@ function lookupWithAbort(
 	signal: AbortSignal | undefined,
 ): Promise<LookupAddress[]> {
 	if (outstandingDNSLookups >= MAX_OUTSTANDING_DNS_LOOKUPS) {
-		return Promise.reject(new TypeError("metadata DNS lookup limit exceeded"));
+		// The code marks a local capacity limit, so callers can tell it apart from
+		// a refusal of the host.
+		return Promise.reject(
+			Object.assign(new TypeError("metadata DNS lookup limit exceeded"), {
+				code: "ERR_CIMD_DNS_LOOKUP_LIMIT",
+			}),
+		);
 	}
 	outstandingDNSLookups += 1;
 	let lookupPromise: Promise<LookupAddress[]>;
