@@ -159,6 +159,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
+      - name: Reset Docker Containers
+        run: docker compose down --volumes --remove-orphans
+
+      - name: Start Docker Containers
+        id: docker
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
+        background: true
+
       - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
         with:
           node-version: ${{ matrix.node-version }}
@@ -170,13 +180,8 @@ jobs:
       - name: Rebuild native bindings for matrix node
         run: pnpm -r rebuild better-sqlite3
 
-      - name: Reset Docker Containers
-        run: docker compose down --volumes --remove-orphans
-
-      - name: Start Docker Containers
-        run: |
-          read -r -a compose_services <<< "$COMPOSE_SERVICES"
-          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
+      - name: Wait for Docker
+        wait: docker
 
       - name: Test
         run: pnpm coverage

@@ -7,6 +7,14 @@ paths:
       # actionlint: https://github.com/rhysd/actionlint/issues/693
       - 'unexpected key "background" for step to run shell command'
       - 'step must run script with "run" section or run action with "uses" section'
+  .github/workflows/e2e.yml:
+    ignore:
+      # GitHub supports parallel steps (background, wait, wait-all), but actionlint does not yet.
+      #
+      # GitHub: https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsbackground
+      # actionlint: https://github.com/rhysd/actionlint/issues/693
+      - 'unexpected key "background" for step to run shell command'
+      - 'step must run script with "run" section or run action with "uses" section'
   .github/workflows/release.yml:
     ignore:
       # GitHub supports job.workflow_* for reusable workflow identity, but actionlint does not yet recognize these fields.
