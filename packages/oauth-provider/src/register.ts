@@ -1280,25 +1280,26 @@ function isUniqueConstraintError(
 		message?: unknown;
 		cause?: unknown;
 	};
-	const code = String(
-		candidate.code ??
-			candidate.errcode ??
-			candidate.errno ??
-			candidate.number ??
-			"",
-	);
+	const identifiers = [
+		candidate.code,
+		candidate.errcode,
+		candidate.errno,
+		candidate.number,
+	];
 	if (
-		[
-			"1062",
-			"11000",
-			"2067",
-			"23505",
-			"2601",
-			"2627",
-			"ER_DUP_ENTRY",
-			"P2002",
-			"SQLITE_CONSTRAINT_UNIQUE",
-		].includes(code)
+		identifiers.some((identifier) =>
+			[
+				"1062",
+				"11000",
+				"2067",
+				"23505",
+				"2601",
+				"2627",
+				"ER_DUP_ENTRY",
+				"P2002",
+				"SQLITE_CONSTRAINT_UNIQUE",
+			].includes(String(identifier)),
+		)
 	) {
 		return true;
 	}

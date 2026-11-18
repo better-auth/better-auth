@@ -787,10 +787,12 @@ describe("canonical client metadata document registration", () => {
 		expect(converged.client.name).toBe("Concurrent Writer");
 	});
 
-	it("converges a stale fixed-ID creator after a Drizzle-wrapped unique constraint error (error.cause)", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12357
+	 */
+	it("converges a stale fixed-ID creator after an ORM-wrapped unique constraint error (error.cause)", async () => {
 		const instance = await boot();
-		const clientId =
-			"https://client.example.com/drizzle-wrapped-collision.json";
+		const clientId = "https://client.example.com/wrapped-collision.json";
 		const endpointContext = {
 			context: instance.ctx,
 		} as unknown as GenericEndpointContext;
@@ -805,7 +807,7 @@ describe("canonical client metadata document registration", () => {
 			},
 		});
 
-		const drizzleWrappedError = Object.assign(
+		const wrappedUniqueError = Object.assign(
 			new Error(
 				'Failed query: insert into "oauth_client" ("client_id", ...) values (...) params: [...]',
 			),
@@ -829,7 +831,7 @@ describe("canonical client metadata document registration", () => {
 						transactionAdapter.create.bind(transactionAdapter);
 					vi.spyOn(transactionAdapter, "create").mockImplementation(
 						async (data) => {
-							if (data.model === "oauthClient") throw drizzleWrappedError;
+							if (data.model === "oauthClient") throw wrappedUniqueError;
 							return originalCreate(data);
 						},
 					);
@@ -845,28 +847,37 @@ describe("canonical client metadata document registration", () => {
 				clientDiscoveryId: "test-client-discovery",
 				metadata: {
 					client_id: clientId,
-					client_name: "Concurrent Drizzle Writer",
+					client_name: "Concurrent Wrapped Writer",
 					redirect_uris: ["https://client.example.com/callback"],
 					token_endpoint_auth_method: "none",
 				},
 			},
 		);
 		expect(converged.created).toBe(false);
-		expect(converged.client.name).toBe("Concurrent Drizzle Writer");
+		expect(converged.client.name).toBe("Concurrent Wrapped Writer");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12357
+	 */
 	it.each([
-		{ label: "SQL Server duplicate key (2601)", err: { number: 2601 } },
-		{ label: "SQL Server unique constraint (2627)", err: { number: 2627 } },
+		{
+			label: "SQL Server duplicate key (2601)",
+			err: { code: "EREQUEST", number: 2601 },
+		},
+		{
+			label: "SQL Server unique constraint (2627)",
+			err: { code: "EREQUEST", number: 2627 },
+		},
 		{
 			label: "SQLite extended unique constraint (2067)",
-			err: { errno: 2067 },
+			err: { code: "ERR_SQLITE_ERROR", errcode: 2067 },
 		},
 	])(
 		"converges after a driver-specific unique error ($label)",
 		async ({ err }) => {
 			const instance = await boot();
-			const clientId = `https://client.example.com/unique-code-${err.number ?? err.errno}.json`;
+			const clientId = `https://client.example.com/unique-code-${err.number ?? err.errcode}.json`;
 			const endpointContext = {
 				context: instance.ctx,
 			} as unknown as GenericEndpointContext;
@@ -923,9 +934,12 @@ describe("canonical client metadata document registration", () => {
 		},
 	);
 
-	it("preserves a Drizzle-wrapped non-unique database error without retrying", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12357
+	 */
+	it("preserves an ORM-wrapped non-unique database error without retrying", async () => {
 		const instance = await boot();
-		const clientId = "https://client.example.com/drizzle-non-unique-error.json";
+		const clientId = "https://client.example.com/wrapped-non-unique-error.json";
 		const endpointContext = {
 			context: instance.ctx,
 		} as unknown as GenericEndpointContext;
@@ -996,14 +1010,17 @@ describe("canonical client metadata document registration", () => {
 		expect(transactionCount).toBe(1);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12357
+	 */
 	it("rethrows safely when error.cause has a circular reference", async () => {
 		const instance = await boot();
-		const clientId = "https://client.example.com/drizzle-circular-error.json";
+		const clientId = "https://client.example.com/circular-cause-error.json";
 		const endpointContext = {
 			context: instance.ctx,
 		} as unknown as GenericEndpointContext;
 
-		const circularError: any = new Error("Circular error without unique match");
+		const circularError = new Error("Circular error without unique match");
 		circularError.cause = circularError;
 
 		const originalTransaction = instance.ctx.adapter.transaction.bind(
@@ -1069,9 +1086,9 @@ describe("canonical client metadata document registration", () => {
 					const originalCreate =
 						transactionAdapter.create.bind(transactionAdapter);
 					vi.spyOn(transactionAdapter, "create").mockImplementation(
-						async (data) => {
-							if (data.model === "oauthClient") throw collisionCause;
-							return originalCreate(data);
+						async (input) => {
+							if (input.model === "oauthClient") throw collisionCause;
+							return originalCreate(input);
 						},
 					);
 					return callback(transactionAdapter);
@@ -1309,10 +1326,13 @@ describe("canonical client metadata document registration", () => {
 		expect(links.map((link) => link.resourceId)).toEqual([resource]);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12357
+	 */
 	it("converges a metadata refresh when the raced link-row error is wrapped in error.cause", async () => {
-		const resource = "https://api.example.com/drizzle-link-race";
+		const resource = "https://api.example.com/wrapped-link-race";
 		const instance = await boot({ resources: [resource] }, true);
-		const clientId = "https://client.example.com/drizzle-link-race.json";
+		const clientId = "https://client.example.com/wrapped-link-race.json";
 		const endpointContext = {
 			context: instance.ctx,
 		} as unknown as GenericEndpointContext;
@@ -1332,7 +1352,7 @@ describe("canonical client metadata document registration", () => {
 		);
 		instance.opts.clientRegistrationDefaultResources = [resource];
 
-		const drizzleLinkError = Object.assign(
+		const wrappedLinkError = Object.assign(
 			new Error(
 				'Failed query: insert into "oauth_client_resource" (...) values (...) params: [...]',
 			),
@@ -1361,7 +1381,7 @@ describe("canonical client metadata document registration", () => {
 						vi.spyOn(transactionAdapter, "create").mockImplementation(
 							async (input) => {
 								if (input.model === "oauthClientResource") {
-									throw drizzleLinkError;
+									throw wrappedLinkError;
 								}
 								return originalCreate(input);
 							},
@@ -1391,7 +1411,7 @@ describe("canonical client metadata document registration", () => {
 				existingClient: created.client,
 				metadata: {
 					client_id: clientId,
-					client_name: "After Drizzle Link Race",
+					client_name: "After Wrapped Link Race",
 					redirect_uris: ["https://client.example.com/callback"],
 					token_endpoint_auth_method: "none",
 				},
@@ -1400,7 +1420,7 @@ describe("canonical client metadata document registration", () => {
 
 		expect(transactionAttempts).toBe(2);
 		expect(refreshed.created).toBe(false);
-		expect(refreshed.client.name).toBe("After Drizzle Link Race");
+		expect(refreshed.client.name).toBe("After Wrapped Link Race");
 		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
 			model: "oauthClientResource",
 			where: [{ field: "clientId", value: clientId }],
