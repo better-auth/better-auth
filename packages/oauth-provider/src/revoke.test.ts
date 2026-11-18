@@ -11,6 +11,7 @@ import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
+import { getStoredToken } from "./utils";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 
@@ -223,7 +224,7 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
-	it("should fail with token_type_hint access_token and sent refresh_token", async () => {
+	it("should revoke refresh token when sent with token_type_hint access_token (RFC 7009 §2.1 fallback)", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(
 			{
@@ -239,7 +240,27 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.error?.status).toBe(400);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+
+		// Verify that the refresh token was actually revoked in the database
+		const context = await auth.$context;
+		const refreshRow = await context.adapter.findOne<{ revoked?: Date | null }>(
+			{
+				model: "oauthRefreshToken",
+				where: [
+					{
+						field: "token",
+						value: await getStoredToken(
+							undefined,
+							tokens.data?.refresh_token!,
+							"refresh_token",
+						),
+					},
+				],
+			},
+		);
+		expect(refreshRow?.revoked).toBeDefined();
 	});
 
 	it("should pass verification with token_type_hint refresh_token and sent refresh_token", async () => {
@@ -262,7 +283,7 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
-	it("should fail verification with token_type_hint refresh_token and sent access_token", async () => {
+	it("should revoke access token when sent with token_type_hint refresh_token (RFC 7009 §2.1 fallback)", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(
 			{
@@ -278,7 +299,25 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.error?.status).toBe(400);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+
+		// Verify that the opaque access token was deleted from the database
+		const context = await auth.$context;
+		const accessRow = await context.adapter.findOne({
+			model: "oauthAccessToken",
+			where: [
+				{
+					field: "token",
+					value: await getStoredToken(
+						undefined,
+						tokens.data?.access_token!,
+						"access_token",
+					),
+				},
+			],
+		});
+		expect(accessRow).toBeNull();
 	});
 
 	it("reports unsupported_token_type for a jwt access_token without token_type_hint", async () => {

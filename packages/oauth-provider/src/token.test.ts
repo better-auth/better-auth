@@ -1851,7 +1851,7 @@ describe("oauth token - refresh_token", async () => {
 			}
 		});
 
-		it("fails the revoke closed when the rotation wins", async () => {
+		it("returns 200 for the losing revoke and still tears down the family", async () => {
 			const parentToken = await issueParentRefreshToken();
 			const cas = await holdNextRefreshTokenCas();
 			try {
@@ -1863,13 +1863,9 @@ describe("oauth token - refresh_token", async () => {
 
 				expect(rotated.error).toBeNull();
 				expect(rotated.data?.refresh_token).toBeDefined();
-				// Known bug: RFC 7009 §2.2 expects 200 for an already-invalid token,
-				// but the endpoint's invalid-token catch never matches. Flip this
-				// to 200 when that is fixed; the family teardown below must stay.
-				expect(revoked.error).toMatchObject({
-					status: 400,
-					error: "invalid_request",
-				});
+				// RFC 7009 §2.2 expects 200 for an already-invalid token.
+				// The family teardown below must stay.
+				expect(revoked.error).toBeNull();
 				// The losing revoke tears down the family, including the new token.
 				expect(
 					(await refresh(rotated.data!.refresh_token!)).error,
