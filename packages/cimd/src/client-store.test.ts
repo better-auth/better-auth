@@ -49,6 +49,35 @@ describe("fetchClientMetadataDocument", () => {
 		expect(vi.getTimerCount()).toBe(0);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11609
+	 */
+	it.each([
+		["a non-200 status", 404, "application/json"],
+		["a non-JSON content type", 200, "text/html"],
+	])(
+		"aborts the transport request after refusing %s without reading the body",
+		async (_case, status, contentType) => {
+			let signal: AbortSignal | undefined;
+			const result = fetchClientMetadataDocument(
+				{} as unknown as GenericEndpointContext,
+				CLIENT_ID_URL,
+				{
+					fetchClientMetadataResource: async (_input, init) => {
+						signal = init?.signal ?? undefined;
+						return new Response(new ReadableStream<Uint8Array>(), {
+							status,
+							headers: { "content-type": contentType },
+						});
+					},
+				},
+			);
+
+			await expect(result).rejects.toBeInstanceOf(APIError);
+			expect(signal?.aborted).toBe(true);
+		},
+	);
+
 	it("maps response stream failures to invalid_client", async () => {
 		vi.useFakeTimers();
 		const result = fetchClientMetadataDocument(
