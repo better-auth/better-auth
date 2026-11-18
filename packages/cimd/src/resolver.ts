@@ -12,6 +12,7 @@ import type { MetadataDocumentResponseCacheHeaders } from "./client-store";
 import {
 	FETCH_TIMEOUT_MS,
 	fetchClientMetadataDocument,
+	isMetadataFetchCapacityRefusal,
 	persistMetadataDocumentClient,
 } from "./client-store";
 import type { CimdOptions } from "./types";
@@ -669,7 +670,12 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			return inFlight.isDiscarded() ? undefined : fetched;
 		} catch (error) {
 			if (inFlight.isDiscarded()) return undefined;
-			recordFailedFetch(clientId);
+			if (isMetadataFetchCapacityRefusal(error)) {
+				// Nothing reached the host, so the refusal starts no backoff.
+				lastFetchStartAtMsByClientId.delete(clientId);
+			} else {
+				recordFailedFetch(clientId);
+			}
 			throw error;
 		} finally {
 			if (inFlightMetadataByClientId.get(clientId) === inFlight) {

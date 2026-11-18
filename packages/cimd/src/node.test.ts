@@ -327,6 +327,82 @@ describe("Node CIMD metadata transport", () => {
 
 			resolveStalledLookup?.([{ address: "93.184.216.34", family: 4 }]);
 		});
+
+		it("answers a fetch refused at the lookup limit as temporarily unavailable without pacing the client", async () => {
+			const baseURL = "http://localhost:3472";
+			const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+				baseURL,
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						scopes: ["openid"],
+					}),
+					cimd({ fetchClientMetadataResource }),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+			const clientId = "https://healthy.example.com/client.json";
+			const authorize = () =>
+				customFetchImpl(
+					`${baseURL}/api/auth/oauth2/authorize?${new URLSearchParams({
+						client_id: clientId,
+						response_type: "code",
+						redirect_uri: "http://127.0.0.1:5199/callback",
+						scope: "openid",
+						code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+						code_challenge_method: "S256",
+					})}`,
+					{ headers },
+				);
+			const resolveLookups: Array<
+				(addresses: { address: string; family: number }[]) => void
+			> = [];
+			mocks.lookup.mockReset();
+			mocks.lookup.mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						resolveLookups.push(resolve);
+					}),
+			);
+			for (let i = 0; i < 16; i++) {
+				const controller = new AbortController();
+				const pending = fetchClientMetadataResource(
+					"https://stalled.example.com/client.json",
+					{ signal: controller.signal },
+				);
+				controller.abort(new Error("deadline exceeded"));
+				await expect(pending).rejects.toThrow("deadline exceeded");
+			}
+
+			const refused = await authorize();
+			expect(refused.status).toBe(429);
+			expect(await refused.json()).toMatchObject({
+				error: "temporarily_unavailable",
+				error_description: "metadata DNS lookup capacity exceeded",
+			});
+			expect(mocks.lookup).toHaveBeenCalledTimes(16);
+
+			for (const resolve of resolveLookups) {
+				resolve([{ address: "93.184.216.34", family: 4 }]);
+			}
+			await new Promise((resolve) => setImmediate(resolve));
+			mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+			mockHttpsResponse({
+				body: JSON.stringify({
+					client_id: clientId,
+					client_name: "Healthy Client",
+					redirect_uris: ["http://127.0.0.1:5199/callback"],
+					application_type: "native",
+					token_endpoint_auth_method: "none",
+				}),
+			});
+
+			const healthy = await authorize();
+			expect(healthy.headers.get("location")).toContain("/consent");
+			expect(mocks.lookup).toHaveBeenCalledTimes(17);
+		});
 	});
 
 	it("rejects private DNS answers before opening a connection", async () => {
