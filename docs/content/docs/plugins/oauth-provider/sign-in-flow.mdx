@@ -279,9 +279,9 @@ When the user accepts, Better Auth stores a consent for that user, client, and [
 * The resources the request names are added. The page cannot decline a resource.
 * Everything else stays, including what the user approved on an earlier page that this page did not offer.
 
-A client cannot shrink a stored consent by asking for less. For example, the user approves `openid offline_access` for one device, and then `openid` for a second device of the same client. The consent keeps both scopes. Only the user takes access back: by leaving a scope or claim out on the consent page, by narrowing the consent with `updateOAuthConsent`, or by deleting it. See [Manage consents](#manage-consents).
+A client cannot shrink a stored consent by asking for less. For example, the user approves `openid offline_access` for one device, and then `openid` for a second device of the same client. The consent keeps both scopes. Only the user takes access back: by declining a scope or claim that the consent page offers, by narrowing the consent with `updateOAuthConsent`, or by deleting it. See [Manage consents](#manage-consents).
 
-For an authorization request, the consent page shows again only when the stored consent does not cover it, or when it sends `prompt=consent`. Device approvals and CIBA requests show it every time. When two acceptances for the same client and reference arrive at the same moment, the stored consent keeps what each one added.
+For an authorization request, the consent page shows again only when the stored consent does not cover it, or when the request sends `prompt=consent`. With `prompt=none`, a request the stored consent does not cover gets `consent_required` instead. A client with `skip_consent` skips the page unless the request sends `prompt=consent`. Device approvals and CIBA approvals from the link show the page every time. When two acceptances for the same client and reference arrive at the same moment, the stored consent keeps what each one added.
 
 ## Sign-up account screen
 
@@ -465,11 +465,13 @@ To let users list and change their consents, use these endpoints. Each requires 
 | `updateOAuthConsent` | `/oauth2/update-consent` | `POST` | body `{ id, update: { scopes } }` |
 | `deleteOAuthConsent` | `/oauth2/delete-consent` | `POST` | body `{ id }`                     |
 
-Two first acceptances at the same moment can each store a row for the same client and consent reference. These endpoints treat such rows as one consent. `getOAuthConsent` and `updateOAuthConsent` return the oldest row with the scopes, resources, and UserInfo claims of all of them, so its `id` can differ from the one you sent. `deleteOAuthConsent` deletes all of them. `getOAuthConsents` lists each row until the next write merges them.
+Two first acceptances at the same moment can each store a row for the same client and consent reference. These endpoints treat such rows as one consent. `getOAuthConsents` lists them once. `getOAuthConsent` and `updateOAuthConsent` return the oldest row with the scopes, resources, and UserInfo claims of all of them, so its `id` can differ from the one you sent. `deleteOAuthConsent` deletes all of them.
 
-`updateOAuthConsent` replaces the consent's scopes with the ones you send, which must be allowed for the client. A later request for a removed scope shows the consent page again. Narrowing does not revoke tokens already issued: they keep their scopes until they expire or are revoked. To cut a client off, delete the consent.
+`updateOAuthConsent` replaces the consent's scopes with the ones you send, which must be allowed for the client. A later request for a removed scope shows the consent page again. Narrowing does not revoke tokens already issued: they keep their scopes until they expire or are revoked. To revoke the tokens issued under a consent, delete it.
 
-Deleting a consent makes the next authorization ask again, and revokes the refresh tokens and opaque access tokens issued under it. JWT access tokens stay valid until they expire, unless [`revocableJwtAccessTokens`](/docs/plugins/oauth-provider/tokens#revoke-the-access-tokens-of-a-grant) revokes them. Tokens the user holds for the same client under another consent reference stay valid. See [Revoke tokens with a consent](/docs/plugins/oauth-provider/tokens#revoke-tokens-with-a-consent).
+Deleting a consent revokes the refresh tokens and opaque access tokens issued under it. JWT access tokens stay valid until they expire, unless [`revocableJwtAccessTokens`](/docs/plugins/oauth-provider/tokens#revoke-the-access-tokens-of-a-grant) revokes them. Tokens the user holds for the same client under another consent reference stay valid. See [Revoke tokens with a consent](/docs/plugins/oauth-provider/tokens#revoke-tokens-with-a-consent).
+
+After the user deletes a consent, the client's next authorization request under that consent reference shows the consent page again. With `prompt=none`, it gets `consent_required` instead. A client with `skip_consent` is not asked, so it can still get new tokens. To stop such a client, disable or delete it.
 
 ```ts title="consents.ts"
 const { error } = await authClient.oauth2.updateConsent({
