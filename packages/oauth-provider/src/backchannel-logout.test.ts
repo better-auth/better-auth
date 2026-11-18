@@ -664,7 +664,7 @@ describe("oauth back-channel logout", async () => {
 		// Cloudflare Workers only accepts "follow" and "manual".
 		const routedFetch = globalThis.fetch;
 		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
-			if (init?.redirect === "error") {
+			if (init?.redirect !== "manual") {
 				return Promise.reject(new TypeError("Invalid redirect value"));
 			}
 			return routedFetch(input, init);
