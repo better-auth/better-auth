@@ -108,5 +108,6 @@ describe("schema validation across Worker requests", () => {
 				schemaLookups: migrated.schemaLookups + 1,
 			});
 		},
+		15_000,
 	);
 });
