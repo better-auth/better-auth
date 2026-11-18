@@ -1,0 +1,5 @@
+---
+"better-auth": patch
+---
+
+Fix the username plugin answering `/sign-up/email` and `/update-user` with a 500 when the request has no body. It now gets the same 400 as without the plugin.
