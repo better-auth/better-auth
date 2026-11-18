@@ -154,6 +154,28 @@ export interface CimdOptions {
 		context: GenericEndpointContext,
 	) => boolean | Promise<boolean>;
 	/**
+	 * Allows a client's `jwks_uri` on an origin that is neither a trusted
+	 * origin nor the `client_id` URL's origin. Return `true` to allow it.
+	 *
+	 * By default such a `jwks_uri` is rejected. This is consulted only for
+	 * that case, when the document is registered or refreshed and before each
+	 * client assertion is verified. `false`, a throw, or a rejection keeps the
+	 * rejection. HTTPS, public-host, credential, and fragment checks still
+	 * apply first, and the keys are fetched through
+	 * `fetchClientMetadataResource`.
+	 *
+	 * `jwks_uri` fetches are not gated by `isMetadataDocumentUrlAllowed` or
+	 * `metadataFetchPolicy`, so the origin rule is what bounds where a
+	 * document can make the server send requests. Match the client and key
+	 * origins together rather than allowing a key origin for every client.
+	 *
+	 * @default always reject
+	 */
+	isCrossOriginJwksUriAllowed?: (
+		input: { clientId: string; jwksUri: string },
+		context: GenericEndpointContext,
+	) => boolean | Promise<boolean>;
+	/**
 	 * Called after a client is created from a metadata document for the
 	 * first time. Use this to assign local trust, emit an audit event, or
 	 * perform other post-creation processing. Better Auth does not fetch or

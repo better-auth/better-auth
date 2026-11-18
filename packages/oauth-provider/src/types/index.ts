@@ -125,6 +125,21 @@ export interface ClientDiscovery {
 	 */
 	fetchClientMetadataResource?: ClientMetadataResourceFetch;
 	/**
+	 * Allows a client owned by this discovery to use a `jwks_uri` whose origin
+	 * is neither a trusted origin nor the `client_id` URL's origin, which the
+	 * provider rejects by default.
+	 *
+	 * Consulted only for such a `jwks_uri`, when the client is registered or
+	 * refreshed and before each of its client assertions is verified. Only a
+	 * resolved `true` allows it; `false`, a throw, or a rejection keeps the
+	 * rejection. Every other `jwks_uri` check still applies first, and the keys
+	 * are still fetched through {@link fetchClientMetadataResource}.
+	 */
+	isCrossOriginJwksUriAllowed?: (
+		input: { clientId: string; jwksUri: string },
+		context: GenericEndpointContext,
+	) => Awaitable<boolean>;
+	/**
 	 * Fields merged into `/.well-known/oauth-authorization-server` and
 	 * `/.well-known/openid-configuration` responses. Useful for advertising
 	 * RFC-registered discovery flags like
