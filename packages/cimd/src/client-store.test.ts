@@ -91,7 +91,7 @@ describe("fetchClientMetadataDocument", () => {
 			{
 				// Cloudflare Workers only accepts "follow" and "manual".
 				fetchClientMetadataResource: async (_input, init) => {
-					if (init?.redirect === "error") {
+					if (init?.redirect !== "manual") {
 						throw new TypeError("Invalid redirect value");
 					}
 					return Response.json({
