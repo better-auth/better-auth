@@ -222,9 +222,9 @@ A denial is final: the client's next poll returns `access_denied`, and the link 
 When the user accepts the consent page, the approval adds to their [stored consent](/docs/plugins/oauth-provider/sign-in-flow#stored-consent) for the client, as it does for an authorization request. The approved request then follows that consent until the client redeems it:
 
 * If the user [deletes the consent](/docs/plugins/oauth-provider/sign-in-flow#manage-consents), or narrows it below the approved scopes and resources, the client's poll fails with `invalid_grant`. The request stays approved.
-* A consent given again for the same client, scopes, resources, and reference makes the request redeemable again until it expires.
+* A consent given again for the same client, scopes, resources, and reference makes the request redeemable again until it expires. The link records one decision, so that consent comes from another request, such as an authorization request of the same client.
 * Requests of a client with `skip_consent` are not checked.
-* A request you approve with [`completeCibaRequest`](#decide-from-your-own-app) stores no consent, so it is not checked.
+* A request your app approves with [`completeCibaRequest`](#decide-from-your-own-app) stores no consent, so it is not checked. This holds for every approval your app reports this way, including one from its own approval page.
 
 ## Request a stronger sign-in
 
@@ -528,16 +528,16 @@ The backchannel endpoint returns these [CIBA §13](https://openid.net/specs/open
 
 The token poll returns:
 
-| Error                           | Meaning                                                                                                                                                                                                 |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `authorization_pending`         | The user has not decided yet. Keep polling.                                                                                                                                                             |
-| `slow_down`                     | Polling faster than `interval`. Wait at least 5 more seconds between polls.                                                                                                                             |
-| `access_denied`                 | The user denied the request.                                                                                                                                                                            |
-| `expired_token`                 | The request expired before the user decided. Once a later request has cleared it, the poll returns `invalid_grant` instead.                                                                             |
-| `invalid_grant`                 | The `auth_req_id` is unknown, belongs to another client, or was already used. Also returned when the user deleted or narrowed the consent that a link approval stored. The request then stays approved. |
-| `invalid_target`                | The poll's `resource` was not approved for this request. The request stays approved.                                                                                                                    |
-| `invalid_scope`                 | The client no longer allows an approved scope, or a requested resource no longer allows `openid`. The request stays approved.                                                                           |
-| `invalid_authorization_details` | The poll sent `authorization_details`. The request stays approved.                                                                                                                                      |
+| Error                           | Meaning                                                                                                                                                                                                                                       |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `authorization_pending`         | The user has not decided yet. Keep polling.                                                                                                                                                                                                   |
+| `slow_down`                     | Polling faster than `interval`. Wait at least 5 more seconds between polls.                                                                                                                                                                   |
+| `access_denied`                 | The user denied the request.                                                                                                                                                                                                                  |
+| `expired_token`                 | The request expired before the user decided. Once a later request has cleared it, the poll returns `invalid_grant` instead.                                                                                                                   |
+| `invalid_grant`                 | The `auth_req_id` is unknown, belongs to another client, or was already used. Also returned when the user deleted or narrowed the consent that a link approval stored, unless the client has `skip_consent`. The request then stays approved. |
+| `invalid_target`                | The poll's `resource` was not approved for this request. The request stays approved.                                                                                                                                                          |
+| `invalid_scope`                 | The client no longer allows an approved scope, or a requested resource no longer allows `openid`. The request stays approved.                                                                                                                 |
+| `invalid_authorization_details` | The poll sent `authorization_details`. The request stays approved.                                                                                                                                                                            |
 | `server_error`                  | The stored actor no longer has the `act` shape. The request stays approved.                                                   |
 
 ## Schema
