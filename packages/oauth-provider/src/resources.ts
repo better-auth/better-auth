@@ -529,9 +529,19 @@ async function assertClientLinkedToResources(
 	if (resources.length === 0) return;
 	const modelName =
 		opts.schema?.oauthClientResource?.modelName ?? "oauthClientResource";
+	// Bound the lookup to the requested resource ids. findMany defaults to
+	// defaultFindManyLimit (100), so loading every link for the client misses
+	// later rows once a client has more than 100 resources.
+	const requestedIdentifiers = [
+		...new Set(resources.map((resource) => resource.identifier)),
+	];
 	const links = await ctx.context.adapter.findMany<OAuthClientResource>({
 		model: modelName,
-		where: [{ field: "clientId", value: clientId }],
+		where: [
+			{ field: "clientId", value: clientId },
+			{ field: "resourceId", operator: "in", value: requestedIdentifiers },
+		],
+		limit: requestedIdentifiers.length,
 	});
 	const linkedSet = new Set(links?.map((l) => l.resourceId) ?? []);
 	const unlinked = resources.filter(
