@@ -314,7 +314,7 @@ A client that authenticates with `private_key_jwt` and a `jwks_uri` also needs i
 
 * The bound counts from the last successful key fetch, which is kept in memory, instead of the stored client's `updatedAt`. Keys are not stored in the database, so after a restart the keys must be fetched before the client can authenticate.
 * Key fetches are outside `metadataFetchPolicy`, so its limits neither refuse them nor let stale keys stand in.
-* The last failure of each `jwks_uri` is recorded in each server process, in at most 500 records shared by transient and terminal failures. A terminal failure that stops stale serving holds until a key fetch that started after it succeeds. When the oldest record is dropped and it is a terminal failure, its cached keys are dropped too.
+* The last failure of each `jwks_uri` is recorded in each server process, in at most 500 records shared by transient and terminal failures. A terminal failure that stops stale serving holds until a key fetch that started after the failed one succeeds. A failure of a fetch that started before the cached keys were fetched is ignored. When the oldest record is dropped and it is a terminal failure, its cached keys are dropped too.
 
 Keys published inline in the document's `jwks` are stored with the client and are not affected.
 

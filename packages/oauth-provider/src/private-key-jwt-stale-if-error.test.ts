@@ -349,6 +349,39 @@ describe("jwksStaleIfError on a client discovery", () => {
 		});
 	});
 
+	it("ignores a terminal failure of an older fetch of the keys that ends after a newer fetch succeeded", async () => {
+		const verifier = await createVerifier({ jwksStaleIfError: 3_600 });
+		vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+		const serveKeys = verifier.keys.answer;
+		await verifier.verify();
+
+		vi.setSystemTime(START_MS + MINUTE_MS);
+		let releaseOlderFetch!: () => void;
+		const olderFetchHeld = new Promise<void>((resolve) => {
+			releaseOlderFetch = resolve;
+		});
+		verifier.keys.answer = async () => {
+			await olderFetchHeld;
+			return new Response(null, { status: 404 });
+		};
+		const olderAssertion = verifier.verify("rotated-key");
+		void olderAssertion.catch(() => {});
+		await vi.waitFor(() => expect(verifier.transport).toHaveBeenCalledTimes(2));
+		verifier.keys.answer = serveKeys;
+		await expect(verifier.verify("rotated-key")).rejects.toMatchObject({
+			body: { error: "invalid_client" },
+		});
+		expect(verifier.transport).toHaveBeenCalledTimes(3);
+		releaseOlderFetch();
+		await olderAssertion.catch(() => {});
+
+		vi.setSystemTime(START_MS + 17 * MINUTE_MS);
+		verifier.keys.answer = () => new Response(null, { status: 503 });
+		await expect(verifier.verify()).resolves.toMatchObject({
+			clientId: verifier.clientId,
+		});
+	});
+
 	describe("a transport's DNS lookup limit refusal", () => {
 		const dnsLookupLimit = () => {
 			throw Object.assign(new TypeError("metadata DNS lookup limit exceeded"), {

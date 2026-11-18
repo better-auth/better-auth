@@ -60,7 +60,7 @@ type JwksCache = {
 	 * until a fetch succeeds. Evicting a terminal failure also evicts its key
 	 * set, so an eviction cannot resume serving stale keys.
 	 */
-	failures: Map<string, JwksFetchFailure & { recordedAtSequence: number }>;
+	failures: Map<string, JwksFetchFailure & { sequence: number }>;
 	/** Sequence the next fetch takes. */
 	nextSequence: number;
 };
@@ -152,21 +152,23 @@ function toJwksFetchFailure(error: unknown): JwksFetchFailure | null {
 		: { transient: false };
 }
 
+/** Records how the fetch with sequence `sequence` failed. */
 function recordJwksFetchFailure(
 	cache: JwksCache,
 	cacheKey: string,
 	failure: JwksFetchFailure | null,
+	sequence: number,
 ): void {
 	if (!failure) return;
+	// A fetch that started before the cached set's fetch says nothing about it.
+	const cached = cache.sets.get(cacheKey);
+	if (cached && cached.sequence > sequence) return;
 	// A terminal failure holds until a fetch succeeds.
 	if (failure.transient && cache.failures.get(cacheKey)?.transient === false) {
 		return;
 	}
 	cache.failures.delete(cacheKey);
-	cache.failures.set(cacheKey, {
-		...failure,
-		recordedAtSequence: cache.nextSequence,
-	});
+	cache.failures.set(cacheKey, { ...failure, sequence });
 	if (cache.failures.size > JWKS_CACHE_MAX_ENTRIES) {
 		const oldest = cache.failures.keys().next().value;
 		if (oldest !== undefined) {
@@ -209,14 +211,21 @@ function isFetching(fetch: JwksFetch | undefined, now: number): boolean {
  * wait, since the request that started a fetch may end before it settles.
  * A caller whose joined fetch throws or returns an invalid key set makes one
  * fetch of its own, as it would without sharing, so a failure that is not its
- * own does not fail it.
+ * own does not fail it. With `recordsFailures`, the failure of the fetch that
+ * answers the caller is recorded with that fetch's sequence.
  */
 async function loadJwks(
 	cache: JwksCache,
 	cacheKey: string,
 	jwksUri: string,
 	fetchClientMetadataResource: ClientMetadataResourceFetch | undefined,
-	canJoin: (fetch: JwksFetch) => boolean = () => true,
+	{
+		canJoin = () => true,
+		recordsFailures = false,
+	}: {
+		canJoin?: (fetch: JwksFetch) => boolean;
+		recordsFailures?: boolean;
+	} = {},
 ): Promise<FetchedJwksResult> {
 	const start = (joinable: (fetch: JwksFetch) => boolean) => {
 		const now = Date.now();
@@ -237,9 +246,9 @@ async function loadJwks(
 			promise: fetchJwksFromUri(jwksUri, fetchClientMetadataResource)
 				.then((result): FetchedJwksResult => {
 					if (!result.valid) return result;
-					// A fetch that started before a failure was recorded cannot clear it.
+					// A fetch that started before the failed fetch cannot clear its failure.
 					const failure = cache.failures.get(cacheKey);
-					if (!failure || sequence >= failure.recordedAtSequence) {
+					if (!failure || sequence > failure.sequence) {
 						cache.failures.delete(cacheKey);
 					}
 					// A newer fetch may have stored its set while this one ran; answer
@@ -288,14 +297,37 @@ async function loadJwks(
 		}
 	};
 
+	const answer = async (fetch: JwksFetch): Promise<FetchedJwksResult> => {
+		if (!recordsFailures) return settle(fetch);
+		try {
+			const result = await settle(fetch);
+			if (!result.valid) {
+				recordJwksFetchFailure(
+					cache,
+					cacheKey,
+					{ transient: false },
+					fetch.sequence,
+				);
+			}
+			return result;
+		} catch (error) {
+			recordJwksFetchFailure(
+				cache,
+				cacheKey,
+				toJwksFetchFailure(error),
+				fetch.sequence,
+			);
+			throw error;
+		}
+	};
+
 	const first = start(canJoin);
+	if (!first.joined) return answer(first.fetch);
 	try {
 		const result = await settle(first.fetch);
-		if (result.valid || !first.joined) return result;
-	} catch (error) {
-		if (!first.joined) throw error;
-	}
-	return settle(
+		if (result.valid) return result;
+	} catch {}
+	return answer(
 		start((fetch) => fetch !== first.fetch && canJoin(fetch)).fetch,
 	);
 }
@@ -599,11 +631,9 @@ async function fetchClientJwks(
 			cacheKey,
 			client.jwksUri,
 			discovery?.fetchClientMetadataResource,
+			{ recordsFailures: staleIfErrorMs > 0 },
 		);
 	} catch (error) {
-		if (staleIfErrorMs > 0) {
-			recordJwksFetchFailure(cache, cacheKey, toJwksFetchFailure(error));
-		}
 		if (cached && now - cached.fetchedAt < staleLimitMs) {
 			return cached.jwks;
 		}
@@ -626,12 +656,7 @@ async function fetchClientJwks(
 		}
 		throw createClientJwksFetchError();
 	}
-	if (!result.valid) {
-		if (staleIfErrorMs > 0) {
-			recordJwksFetchFailure(cache, cacheKey, { transient: false });
-		}
-		throw createClientJwksFetchError();
-	}
+	if (!result.valid) throw createClientJwksFetchError();
 	return result.jwks;
 }
 
@@ -657,26 +682,19 @@ async function refetchClientJwks(
 	if (client.clientDiscoveryId && !discovery?.fetchClientMetadataResource) {
 		return null;
 	}
-	const cacheKey = getJwksCacheKey(client);
-	const cache = getJwksCache(opts);
-	const recordsFailures = getJwksStaleIfErrorMs(discovery) > 0;
 	try {
 		const result = await loadJwks(
-			cache,
-			cacheKey,
+			getJwksCache(opts),
+			getJwksCacheKey(client),
 			client.jwksUri,
 			discovery?.fetchClientMetadataResource,
-			(fetch) => fetch.sequence >= requestedSequence,
+			{
+				canJoin: (fetch) => fetch.sequence >= requestedSequence,
+				recordsFailures: getJwksStaleIfErrorMs(discovery) > 0,
+			},
 		);
-		if (result.valid) return result.jwks;
-		if (recordsFailures) {
-			recordJwksFetchFailure(cache, cacheKey, { transient: false });
-		}
-		return null;
-	} catch (error) {
-		if (recordsFailures) {
-			recordJwksFetchFailure(cache, cacheKey, toJwksFetchFailure(error));
-		}
+		return result.valid ? result.jwks : null;
+	} catch {
 		return null;
 	}
 }
