@@ -73,111 +73,136 @@ afterEach(async () => {
 	mocks.request.mockReset();
 });
 
+async function createRegistrar() {
+	const instance = await getTestInstance({
+		baseURL: "http://localhost:3791",
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["openid"],
+			}),
+		],
+	});
+	const ctx = {
+		context: await instance.auth.$context,
+	} as unknown as GenericEndpointContext;
+	return async (name: string) => {
+		const clientId = `https://${name}.example.com/client.json`;
+		const discovery = createCimdClientDiscovery({
+			fetchClientMetadataResource,
+			metadataRevalidationInterval: 0,
+			metadataFetchPolicy: { minimumFetchInterval: 0 },
+			metadataStaleIfError: "1h",
+		});
+		mocks.lookup.mockResolvedValue(PUBLIC_ADDRESSES);
+		answerRequests(
+			respondWith(
+				200,
+				JSON.stringify({
+					client_id: clientId,
+					client_name: name,
+					redirect_uris: ["http://127.0.0.1:5199/callback"],
+					application_type: "native",
+					token_endpoint_auth_method: "none",
+				}),
+			),
+		);
+		const stored = (await discovery.resolve(
+			ctx,
+			clientId,
+			null,
+		)) as SchemaClient<Scope[]>;
+		return {
+			stored,
+			resolve: () => discovery.resolve(ctx, clientId, stored),
+		};
+	};
+}
+
+/** Leaves 16 abandoned lookups outstanding, the Node transport's limit. */
+async function fillDnsLookupLimit() {
+	mocks.lookup.mockImplementation(stalledLookup);
+	for (let attempt = 0; attempt < 16; attempt += 1) {
+		const controller = new AbortController();
+		const filler = Promise.resolve(
+			fetchClientMetadataResource("https://filler.example.com/client.json", {
+				signal: controller.signal,
+			}),
+		);
+		controller.abort(new Error("filler aborted"));
+		await filler.catch(() => {});
+	}
+	await expect(
+		fetchClientMetadataResource("https://filler.example.com/client.json"),
+	).rejects.toMatchObject({ code: "ERR_CIMD_DNS_LOOKUP_LIMIT" });
+}
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/11875
  */
 describe("CIMD metadataStaleIfError with the Node transport", () => {
-	it("serves the stored client only after the transport's transient and local capacity failures", async () => {
-		const instance = await getTestInstance({
-			baseURL: "http://localhost:3791",
-			plugins: [
-				jwt(),
-				oauthProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-					scopes: ["openid"],
-				}),
-			],
-		});
-		const ctx = {
-			context: await instance.auth.$context,
-		} as unknown as GenericEndpointContext;
-		const register = async (name: string) => {
-			const clientId = `https://${name}.example.com/client.json`;
-			const discovery = createCimdClientDiscovery({
-				fetchClientMetadataResource,
-				metadataRevalidationInterval: 0,
-				metadataFetchPolicy: { minimumFetchInterval: 0 },
-				metadataStaleIfError: "1h",
-			});
-			mocks.lookup.mockResolvedValue(PUBLIC_ADDRESSES);
-			answerRequests(
-				respondWith(
-					200,
-					JSON.stringify({
-						client_id: clientId,
-						client_name: name,
-						redirect_uris: ["http://127.0.0.1:5199/callback"],
-						application_type: "native",
-						token_endpoint_auth_method: "none",
-					}),
-				),
-			);
-			const stored = (await discovery.resolve(
-				ctx,
-				clientId,
-				null,
-			)) as SchemaClient<Scope[]>;
-			return {
-				stored,
-				resolve: () => discovery.resolve(ctx, clientId, stored),
-			};
-		};
-		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
-
-		const abortedLookup = await register("aborted-lookup");
+	it("serves the stored client when the fetch timeout aborts a stalled DNS lookup", async () => {
+		const register = await createRegistrar();
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		const client = await register("aborted-lookup");
 		mocks.lookup.mockImplementation(stalledLookup);
-		const pending = abortedLookup.resolve();
-		await vi.advanceTimersByTimeAsync(5_000);
-		await expect(pending).resolves.toBe(abortedLookup.stored);
 
-		const upgrade = await register("upgrade");
+		const pending = client.resolve();
+		await vi.advanceTimersByTimeAsync(5_000);
+
+		await expect(pending).resolves.toBe(client.stored);
+	});
+
+	it("keeps today's error for a protocol upgrade response", async () => {
+		const client = await (await createRegistrar())("upgrade");
 		answerRequests((request) => {
 			request.emit("upgrade", { destroy() {} }, { destroy() {} });
 		});
-		await expect(upgrade.resolve()).rejects.toMatchObject({
+
+		await expect(client.resolve()).rejects.toMatchObject({
 			body: { error_description: FETCH_FAILURE_DESCRIPTION },
 		});
+	});
 
-		const closed = await register("closed");
+	it("keeps today's error for a connection that closes before a response", async () => {
+		const client = await (await createRegistrar())("closed");
 		answerRequests((request) => {
 			request.emit("close");
 		});
-		await expect(closed.resolve()).rejects.toMatchObject({
+
+		await expect(client.resolve()).rejects.toMatchObject({
 			body: { error_description: FETCH_FAILURE_DESCRIPTION },
 		});
+	});
 
-		const capped = await register("capped");
-		const cappedAfterOutage = await register("capped-after-outage");
-		answerRequests(respondWith(503));
-		await expect(cappedAfterOutage.resolve()).resolves.toBe(
-			cappedAfterOutage.stored,
-		);
-		mocks.lookup.mockImplementation(stalledLookup);
-		for (let attempt = 0; attempt < 16; attempt += 1) {
-			const controller = new AbortController();
-			const filler = Promise.resolve(
-				fetchClientMetadataResource("https://filler.example.com/client.json", {
-					signal: controller.signal,
-				}),
-			);
-			controller.abort(new Error("filler aborted"));
-			await filler.catch(() => {});
-		}
-		await expect(
-			fetchClientMetadataResource("https://filler.example.com/client.json"),
-		).rejects.toMatchObject({ code: "ERR_CIMD_DNS_LOOKUP_LIMIT" });
+	it("answers temporarily_unavailable at the DNS lookup limit when no transient failure preceded it", async () => {
+		const client = await (await createRegistrar())("capped");
+		await fillDnsLookupLimit();
 
-		await expect(capped.resolve()).rejects.toMatchObject({
+		await expect(client.resolve()).rejects.toMatchObject({
 			status: "TOO_MANY_REQUESTS",
 			body: {
 				error: "temporarily_unavailable",
 				error_description: "metadata DNS lookup capacity exceeded",
 			},
 		});
+	});
+
+	it("serves the stored client at the DNS lookup limit within 5 minutes of a transient failure", async () => {
+		const register = await createRegistrar();
+		vi.useFakeTimers({ toFake: ["Date"] });
+		const client = await register("capped-after-outage");
+		answerRequests(respondWith(503));
+		await expect(client.resolve()).resolves.toBe(client.stored);
+		await fillDnsLookupLimit();
+
+		// A minute on, the stored client is no longer served without a fetch,
+		// so this resolution reaches the transport's limit.
+		const lookups = mocks.lookup.mock.calls.length;
 		vi.setSystemTime(Date.now() + 60_000);
-		await expect(cappedAfterOutage.resolve()).resolves.toBe(
-			cappedAfterOutage.stored,
-		);
+		await expect(client.resolve()).resolves.toBe(client.stored);
+		expect(mocks.lookup).toHaveBeenCalledTimes(lookups);
 	});
 });
