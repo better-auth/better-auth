@@ -495,13 +495,17 @@ jwt({
 
 This applies if a resource has an empty `allowedScopes`, whether you wrote `allowedScopes: []` or an adapter that cannot store `null` read the value back as `[]`. In 1.7, an empty list was an allowlist with no entries, so every token request for that resource failed with `invalid_scope`. In 1.8, an omitted `allowedScopes`, `null`, and `[]` all allow every requested scope, and `[]` is rejected as input:
 
-* A stored `[]` row now allows every requested scope. Existing rows are not rewritten, and no database migration is needed.
+* A stored `[]` row now allows every requested scope. Existing rows are not rewritten, and no schema migration is needed. The data change below is still yours to make.
 * A `resources` entry with `allowedScopes: []` makes `oauthProvider()` throw at startup.
 * `adminCreateOAuthResource` and `adminUpdateOAuthResource` reject `allowedScopes: []` with `400`. Omit the field, or pass `null`, to allow every requested scope.
 * The admin endpoints return `null` for a resource with no restriction, including a stored `[]`. Before, they returned the stored value.
 * A new resource you create or seed without `allowedScopes`, and a row re-seeded in `overwrite` mode without it, is stored as `[]`. The `merge` and `insertOnly` seed modes leave an existing row's list unchanged. This lets adapters that cannot store `null`, such as Prisma on PostgreSQL, CockroachDB, or MongoDB, persist it. You no longer need to declare `allowedScopes` on every resource, including the one `mcp()` adds. Code that reads the `oauthResource` table directly must treat `null` and `[]` alike.
 
-**What to do:** if you relied on an empty list to block a resource, set `disabled: true` on it before you upgrade, and remove the empty `allowedScopes` from your config. Token requests for a disabled resource fail with `invalid_target`. Use `adminUpdateOAuthResource` for a row that already exists. A `disabled: true` in your `resources` config reaches an existing row only with `resourceSeedMode: "merge"` or `"overwrite"`.
+**What to do:** before the first 1.8 process starts, find the stored resources whose `allowedScopes` is empty, and set `disabled: true` on each one that relied on denying every scope, or give it real scopes. In 1.8, `adminListOAuthResources` and `adminGetOAuthResource` return `null` for a stored `[]`, so you cannot find these rows afterwards. List them with the 1.7 `adminListOAuthResources` endpoint or a direct database query. Also remove the empty `allowedScopes` from your config. Use `adminUpdateOAuthResource` for a row that already exists. A `disabled: true` in your `resources` config reaches an existing row only with `resourceSeedMode: "merge"` or `"overwrite"`.
+
+`disabled: true` is the supported way to refuse a resource. A token request for a disabled resource fails with `invalid_target`, whatever scopes it asks for, and no new token is issued for it. Tokens already issued for the resource keep working until they expire.
+
+Until every instance runs 1.8, a deployment that mixes 1.7 and 1.8 processes reads the same row differently. A stored `[]` denies every scope on 1.7 and allows every scope on 1.8. A resource that a 1.8 process creates, seeds, or resets without scopes is stored as `[]`, so a 1.7 process denies it. Set `disabled: true` first, because both versions refuse a disabled resource.
 
 ```ts title="block-resource.ts"
 await auth.api.adminUpdateOAuthResource({
