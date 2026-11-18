@@ -23,7 +23,7 @@ export const SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT =
 	"SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT";
 
 const SCIM_MANAGED_HASH_VERSION = "v1";
-const SCIM_MANAGED_DEFAULT_EVENT_LIMIT = 10;
+const SCIM_MANAGED_DEFAULT_EVENT_LIMIT = 100;
 const SCIM_MANAGED_MAX_EVENT_LIMIT = 100;
 const SCIM_MANAGED_DEFAULT_MAX_ACTIVE_CREDENTIALS = 5;
 const SCIM_MANAGED_DEFAULT_LAST_USED_WRITE_INTERVAL_SECONDS = 300;
@@ -76,7 +76,7 @@ const listManagedConnectionEventsBodySchema =
 			.optional()
 			.default(SCIM_MANAGED_DEFAULT_EVENT_LIMIT),
 		offset: z.number().int().min(0).optional().default(0),
-		sortDirection: z.enum(["asc", "desc"]).optional().default("desc"),
+		sortDirection: z.enum(["asc", "desc"]).optional(),
 	});
 const rotateManagedCredentialBodySchema = z.object({
 	connectionId: connectionIdSchema,
@@ -1090,15 +1090,20 @@ export function createSCIMManagedConnectionEndpoints(
 						where: [...where],
 						limit,
 						offset,
-						sortBy: { field: "sequence", direction: sortDirection },
+						sortBy: {
+							field: "sequence",
+							direction: sortDirection ?? "desc",
+						},
 					}),
 					database.count({
 						model: "scimManagedConnectionEvent",
 						where: [...where],
 					}),
 				]);
+				const orderedEvents =
+					sortDirection == null ? [...events].reverse() : events;
 				return ctx.json({
-					events: events.map(
+					events: orderedEvents.map(
 						(event): SCIMManagedConnectionEvent => ({
 							sequence: event.sequence,
 							type: event.type,

@@ -144,7 +144,7 @@ async function createPaginatedManagedConnectionEventsFixture(
 	});
 	if (!connection) throw new Error("Expected managed connection row");
 	const createdAt = new Date("2026-01-01T00:00:00.000Z");
-	for (let sequence = 3; sequence <= 14; sequence++) {
+	for (let sequence = 3; sequence <= 102; sequence++) {
 		await instance.db.create({
 			model: "scimManagedConnectionEvent",
 			data: {
@@ -162,7 +162,7 @@ async function createPaginatedManagedConnectionEventsFixture(
 		instance,
 		connectionId: created.connection.connectionId,
 		provisioningDomainId: "organization-acme",
-		totalEvents: 14,
+		totalEvents: 102,
 	};
 }
 
@@ -301,17 +301,25 @@ describe("SCIM managed connections", () => {
 			body: {
 				connectionId,
 				provisioningDomainId,
-				offset: 10,
+				offset: 100,
 			},
 		});
-		const ascendingPage =
-			await instance.auth.api.listSCIMManagedConnectionEvents({
-				body: {
-					connectionId,
-					provisioningDomainId,
-					sortDirection: "asc",
-				},
-			});
+		const newestPage = await instance.auth.api.listSCIMManagedConnectionEvents({
+			body: {
+				connectionId,
+				provisioningDomainId,
+				limit: 10,
+				sortDirection: "desc",
+			},
+		});
+		const oldestPage = await instance.auth.api.listSCIMManagedConnectionEvents({
+			body: {
+				connectionId,
+				provisioningDomainId,
+				limit: 10,
+				sortDirection: "asc",
+			},
+		});
 		const beyondLastPage =
 			await instance.auth.api.listSCIMManagedConnectionEvents({
 				body: {
@@ -322,17 +330,18 @@ describe("SCIM managed connections", () => {
 			});
 
 		expect(firstPage).toMatchObject({
-			limit: 10,
+			limit: 100,
 			offset: 0,
 			total: totalEvents,
 		});
-		expect(firstPage.events.map((event) => event.sequence)).toEqual([
-			14, 13, 12, 11, 10, 9, 8, 7, 6, 5,
+		expect(firstPage.events.map((event) => event.sequence)).toEqual(
+			Array.from({ length: 100 }, (_, index) => index + 3),
+		);
+		expect(secondPage.events.map((event) => event.sequence)).toEqual([1, 2]);
+		expect(newestPage.events.map((event) => event.sequence)).toEqual([
+			102, 101, 100, 99, 98, 97, 96, 95, 94, 93,
 		]);
-		expect(secondPage.events.map((event) => event.sequence)).toEqual([
-			4, 3, 2, 1,
-		]);
-		expect(ascendingPage.events.map((event) => event.sequence)).toEqual([
+		expect(oldestPage.events.map((event) => event.sequence)).toEqual([
 			1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 		]);
 		expect(beyondLastPage.events).toEqual([]);
@@ -809,10 +818,10 @@ describe("SCIM managed connections", () => {
 		expect(oldAfterRevoke.status).toBe(401);
 		expect(newAfterRevoke.status).toBe(200);
 		expect(events.events.map((event) => event.type)).toEqual([
-			"credential.revoked",
-			"credential.rotated",
-			"credential.issued",
 			"connection.created",
+			"credential.issued",
+			"credential.rotated",
+			"credential.revoked",
 		]);
 	});
 
@@ -879,10 +888,10 @@ describe("SCIM managed connections", () => {
 		expect(repeated.connection).toEqual(first.connection);
 		expect(rejected.status).toBe(401);
 		expect(events.events.map((event) => event.type)).toEqual([
-			"connection.decommissioned",
-			"connection.decommissioning",
-			"credential.issued",
 			"connection.created",
+			"credential.issued",
+			"connection.decommissioning",
+			"connection.decommissioned",
 		]);
 		expect(binding).toMatchObject({
 			connectionId: created.connection.connectionId,

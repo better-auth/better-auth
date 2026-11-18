@@ -131,7 +131,6 @@ export async function POST(
 			body: {
 				connectionId: created.connection.connectionId,
 				provisioningDomainId,
-				limit: 100,
 			},
 		});
 		const connection = await createSCIMDemoConnectionResponse(context.adapter, {
