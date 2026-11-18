@@ -18,11 +18,6 @@ description: Kakao provider setup and usage.
 
     To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
-    <Callout type="info">
-      * The default scopes are `account_email`, `profile_image`, and `profile_nickname`.
-      * Retrieving `account_email` is available for **Biz Apps** and **test apps**. For more details, refer to the [Kakao Login utilization documentation](https://developers.kakao.com/docs/en/kakaologin/utilize#scope-user).
-    </Callout>
-
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
 
@@ -35,37 +30,12 @@ description: Kakao provider setup and usage.
         }
     })
     ```
-
-    <Callout type="info">
-      If your app can't configure `account_email`, Kakao rejects the default scopes with `KOE205`. Set `disableDefaultScope` to `true` and list the scopes you still need under `scope`.
-    </Callout>
-
-    ```ts title="auth.ts"
-    import { betterAuth } from "better-auth"
-
-    export const auth = betterAuth({
-        socialProviders: {
-            kakao: {
-                clientId: process.env.KAKAO_CLIENT_ID as string,
-                clientSecret: process.env.KAKAO_CLIENT_SECRET as string,
-                disableDefaultScope: true,
-                scope: ["profile_image", "profile_nickname"],
-            },
-        }
-    })
-    ```
-
-    <Callout type="info">
-      If Kakao returns no email, for example when `account_email` is not requested or the user does not consent, sign-in fails with `email_not_found`. Provide a fallback with `mapProfileToUser` as shown in [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
-    </Callout>
   </Step>
 
   <Step>
     ### Sign In with Kakao
 
-    To sign in with Kakao, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
-
-    * `provider`: The provider to use. It should be set to `kakao`.
+    To sign in with Kakao, you can use the `signIn.social` function provided by the client.
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
@@ -73,9 +43,42 @@ description: Kakao provider setup and usage.
 
     const signIn = async () => {
         const data = await authClient.signIn.social({
-            provider: "kakao"
+            provider: "kakao" // [!code highlight]
         })
     }
     ```
   </Step>
 </Steps>
+
+## Options
+
+### Scopes
+
+The default scopes are `account_email`, `profile_image`, and `profile_nickname`. Retrieving `account_email` is available for **Biz Apps** and **test apps**. For more details, refer to the [Kakao Login utilization documentation](https://developers.kakao.com/docs/en/kakaologin/utilize#scope-user).
+
+If your app can't configure `account_email`, set `disableDefaultScope` to `true` and list the scopes you still need under `scope`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        kakao: {
+            clientId: process.env.KAKAO_CLIENT_ID as string,
+            clientSecret: process.env.KAKAO_CLIENT_SECRET as string,
+            disableDefaultScope: true, // [!code highlight]
+            scope: ["profile_image", "profile_nickname"], // [!code highlight]
+        },
+    }
+})
+```
+
+## Troubleshooting
+
+### `KOE205` error
+
+Kakao returns `KOE205` when the authorization request includes a scope that isn't enabled for your app. Enable the scope in the Kakao Developers console, or change the requested scopes as shown in [Scopes](#scopes).
+
+### `email_not_found` error
+
+Kakao returns no email when `account_email` isn't requested or the user doesn't grant it. Add a fallback with `mapProfileToUser` as shown in [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
