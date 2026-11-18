@@ -356,7 +356,7 @@ Redeeming an approved OAuth device code at `/oauth2/token` now needs a stored co
 * Approving another device of the same client under the same consent reference adds to that consent and leaves the first device's code valid. The first device's poll fails only if the user declined one of its scopes on the other device's consent page. An approval under another consent reference leaves the first device's consent unchanged.
 * If the user deletes the consent and then approves the same access again for the same client and consent reference, the code is valid again.
 * Device codes redeemed while the client is configured with `skip_consent` bypass this check, even if a stored consent exists.
-* CIBA requests are not checked. One that the user approved before deleting the consent can still be redeemed until it expires.
+* A CIBA request the user approved from the link is checked the same way. One approved with `completeCibaRequest` stores no consent and is not checked.
 
 **What to do:** devices that poll until the user decides redeem the code right after approval and need no change. See [Approve the device](/docs/plugins/device-authorization#approve-the-device).
 

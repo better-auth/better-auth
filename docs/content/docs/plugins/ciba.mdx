@@ -217,6 +217,15 @@ To approve only through your own page or app instead, see [Approve only in your 
 
 A denial is final: the client's next poll returns `access_denied`, and the link stops working. The ID token's `auth_time` is the creation time of the approving user's session, and its `acr` and `amr` are what the provider's [`authenticationContext.resolve`](/docs/plugins/oauth-provider/openid-connect#authentication-context) returned for that session.
 
+### Approvals follow the consent
+
+When the user accepts the consent page, the approval adds to their [stored consent](/docs/plugins/oauth-provider/sign-in-flow#stored-consent) for the client, as it does for an authorization request. The approved request then follows that consent until the client redeems it:
+
+* If the user [deletes the consent](/docs/plugins/oauth-provider/sign-in-flow#manage-consents), or narrows it below the approved scopes and resources, the client's poll fails with `invalid_grant`. The request stays approved.
+* A consent given again for the same client, scopes, resources, and reference makes the request redeemable again until it expires.
+* Requests of a client with `skip_consent` are not checked.
+* A request you approve with [`completeCibaRequest`](#decide-from-your-own-app) stores no consent, so it is not checked.
+
 ## Request a stronger sign-in
 
 A client can ask for a stronger sign-in with `acr_values`, a space-separated list of ACR values in order of preference (CIBA §7.1). The request is voluntary. The provider accepts values it does not support, and the user can still approve with a weaker sign-in.
@@ -351,7 +360,7 @@ await auth.api.completeCibaRequest({
 
 The provider records the decision only when `userId` is the user the `login_hint` named and the request is still pending. Otherwise, it returns `invalid_request` and changes nothing. Without `acr`, the ID token claims `"0"`. State an `acr` when `"0"` is not in the provider's [`authenticationContext.acrValuesSupported`](/docs/plugins/oauth-provider/openid-connect#authentication-context). The approved scopes must be among the requested ones and include `openid`. A ping client is called back as it is after a decision from the link.
 
-This call skips the provider's sign-in, post-login, and consent pages. It does not run `postLogin.consentReferenceId`. Tokens issued for a request you decide this way carry no `referenceId`. Your app is responsible for:
+This call skips the provider's sign-in, post-login, and consent pages. It does not run `postLogin.consentReferenceId`. Tokens issued for a request you decide this way carry no `referenceId`. The call also stores no consent, and the poll does not check one. A request you approve this way can still be redeemed after the user deletes a consent for the client. Your app is responsible for:
 
 * authenticating the user before it reports a decision,
 * showing the client, the scopes, the binding message, and any actor before the user approves, and
@@ -519,16 +528,16 @@ The backchannel endpoint returns these [CIBA §13](https://openid.net/specs/open
 
 The token poll returns:
 
-| Error                           | Meaning                                                                                                                       |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `authorization_pending`         | The user has not decided yet. Keep polling.                                                                                   |
-| `slow_down`                     | Polling faster than `interval`. Wait at least 5 more seconds between polls.                                                   |
-| `access_denied`                 | The user denied the request.                                                                                                  |
-| `expired_token`                 | The request expired before the user decided. Once a later request has cleared it, the poll returns `invalid_grant` instead.   |
-| `invalid_grant`                 | The `auth_req_id` is unknown, belongs to another client, or was already used.                                                 |
-| `invalid_target`                | The poll's `resource` was not approved for this request. The request stays approved.                                          |
-| `invalid_scope`                 | The client no longer allows an approved scope, or a requested resource no longer allows `openid`. The request stays approved. |
-| `invalid_authorization_details` | The poll sent `authorization_details`. The request stays approved.                                                            |
+| Error                           | Meaning                                                                                                                                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `authorization_pending`         | The user has not decided yet. Keep polling.                                                                                                                                                             |
+| `slow_down`                     | Polling faster than `interval`. Wait at least 5 more seconds between polls.                                                                                                                             |
+| `access_denied`                 | The user denied the request.                                                                                                                                                                            |
+| `expired_token`                 | The request expired before the user decided. Once a later request has cleared it, the poll returns `invalid_grant` instead.                                                                             |
+| `invalid_grant`                 | The `auth_req_id` is unknown, belongs to another client, or was already used. Also returned when the user deleted or narrowed the consent that a link approval stored. The request then stays approved. |
+| `invalid_target`                | The poll's `resource` was not approved for this request. The request stays approved.                                                                                                                    |
+| `invalid_scope`                 | The client no longer allows an approved scope, or a requested resource no longer allows `openid`. The request stays approved.                                                                           |
+| `invalid_authorization_details` | The poll sent `authorization_details`. The request stays approved.                                                                                                                                      |
 | `server_error`                  | The stored actor no longer has the `act` shape. The request stays approved.                                                   |
 
 ## Schema
@@ -551,6 +560,7 @@ The plugin adds one model, `cibaRequest`:
 | `encryptedClientNotificationToken` | string    | Ping mode only: the client's `client_notification_token`, encrypted with the server secret.                                                                              |
 | `encryptedAuthReqId`               | string    | Ping mode only: the `auth_req_id`, encrypted with the server secret, because the callback carries the raw value.                                                         |
 | `referenceId`                      | string    | The consent reference recorded on approval, such as an organization.                                                                                                     |
+| `approvedViaConsent`               | boolean   | Set when the user approved from the link, which stored a consent. Redeeming such a request checks that consent. Unset for `completeCibaRequest`.                         |
 | `authTime`                         | date      | Creation time of the approving session, or the `authTime` passed to `completeCibaRequest`, issued as `auth_time`.                                                        |
 | `acr`                              | string    | The `acr` the approval established, issued in the ID token.                                                                                                              |
 | `amr`                              | string\[] | The `amr` the approval established, issued in the ID token.                                                                                                              |
