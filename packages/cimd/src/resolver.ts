@@ -670,16 +670,21 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			}
 		};
 
+		// A request resolves again only after a fetch it waited on was retired. A
+		// fresh cache entry found then came from a later fetch, so the stored
+		// client the request started with can be older than it.
+		let resolvingAgain = false;
 		while (true) {
 			const cachedEntry = readCacheEntry(clientId);
 			if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
-				if (existingClient) return existingClient;
+				if (existingClient && !resolvingAgain) return existingClient;
 				return persistMetadataDocumentClient(
 					ctx,
 					clientId,
 					cachedEntry.metadata,
 					cimdOptions,
 					oauthOptions,
+					existingClient ?? undefined,
 				);
 			}
 
@@ -692,6 +697,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			// the stored client behind a fresh cache entry that later requests trust,
 			// so this request resolves again instead.
 			if (fetched && !fetched.retired) return persistFetchedMetadata(fetched);
+			resolvingAgain = true;
 		}
 	};
 }

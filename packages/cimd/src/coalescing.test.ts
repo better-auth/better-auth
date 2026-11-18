@@ -602,6 +602,60 @@ describe("CIMD in-flight coalescing", () => {
 			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 		});
 
+		/**
+		 * A request whose fetch was retired resolves again and can find the
+		 * replacement's fresh cache entry. The stored client it started with is
+		 * then older than that entry.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12358
+		 */
+		it("saves the replacement's cached document for a request whose fetch was retired", async () => {
+			const clientId = "https://abandoned-stored-client.example/client.json";
+			const leaderPolicy = deferred<boolean>();
+			const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
+			isMetadataDocumentUrlAllowed
+				.mockImplementationOnce(async () => true)
+				.mockImplementationOnce(() => leaderPolicy.promise);
+			const { discovery, fetchClientMetadataResource } = createDiscovery({
+				isMetadataDocumentUrlAllowed,
+			});
+			fetchClientMetadataResource
+				.mockImplementationOnce(async () =>
+					metadataResponse(clientId, { "cache-control": "no-store" }, "Old"),
+				)
+				// The replacement fetches while the leader is still in its policy check.
+				.mockImplementationOnce(async () =>
+					namedMetadataResponse(clientId, "New"),
+				)
+				.mockImplementationOnce(async () =>
+					namedMetadataResponse(clientId, "Old"),
+				);
+			const request = await createRequestContext();
+			await discovery.resolve(request.ctx, clientId, null);
+			const storedBeforeRefresh = await request.findClient(clientId);
+			expect(storedBeforeRefresh?.name).toBe("Old");
+			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+			const leaderResolution = discovery.resolve(
+				request.ctx,
+				clientId,
+				storedBeforeRefresh,
+			);
+			await vi.advanceTimersByTimeAsync(0);
+			const joinerResolution = discovery.resolve(
+				request.ctx,
+				clientId,
+				storedBeforeRefresh,
+			);
+			await vi.advanceTimersByTimeAsync(10_000);
+			await expect(joinerResolution).resolves.toMatchObject({ name: "New" });
+
+			leaderPolicy.resolve(true);
+			await expect(leaderResolution).resolves.toMatchObject({ name: "New" });
+			expect((await request.findClient(clientId))?.name).toBe("New");
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
+		});
+
 		it("does not let an abandoned fetch that fails later pace the fetch that replaced it", async () => {
 			const clientId = "https://abandoned-failure.example/client.json";
 			let failLeaderPolicy!: (error: Error) => void;
