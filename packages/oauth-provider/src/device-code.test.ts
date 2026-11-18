@@ -2603,7 +2603,7 @@ describe("oauth-provider device approval through the consent flow", async () => 
 			});
 		});
 
-		it("redeems a device code after its consent was deleted and given again for the same request", async () => {
+		it("redeems a device code after its consent was deleted and given again through another request", async () => {
 			resolveReference = () => "org_1";
 			const device = await approveDevice();
 			await deleteStoredConsent(device, "org_1");

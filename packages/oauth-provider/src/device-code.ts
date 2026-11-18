@@ -185,8 +185,9 @@ async function exchangeOAuthDeviceCode(
 			if (!record.userId) {
 				tokenError("BAD_REQUEST", "invalid_grant", "invalid device code");
 			}
-			// Same for a consent deleted or narrowed since approval: giving it again
-			// for the same request makes the code redeemable.
+			// Same for a consent deleted or narrowed since approval: approving that
+			// access again for the same client and consent reference makes the code
+			// redeemable.
 			await assertConsentStillCovers(ctx, authorization.client, {
 				userId: record.userId,
 				referenceId: record.referenceId ?? undefined,

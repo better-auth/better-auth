@@ -1825,9 +1825,9 @@ export async function updateConsent(
  * An approved authorization code or device code follows its consent. Redeeming
  * it needs a stored consent that still covers what the user approved, so one
  * approved before the user deleted or narrowed their consent mints nothing. A
- * consent deleted and given again for the same request leaves it valid, because
- * the user approved the same client and scopes again. A client that skips
- * consent is not checked.
+ * consent given again for the same client, consent reference, and access
+ * leaves it valid, because the user approved that access again. A client that
+ * skips consent is not checked.
  *
  * @internal
  */
