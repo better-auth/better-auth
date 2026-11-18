@@ -451,6 +451,8 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		if (inFlightMetadataByClientId.get(clientId) === inFlight) {
 			inFlightMetadataByClientId.delete(clientId);
 			lastFetchStartAtMsByClientId.delete(clientId);
+			// A retired fetch that never settles never reaches its own cleanup.
+			fetchStartMarkByClientId.delete(clientId);
 		}
 		inFlight.abandon();
 	};
