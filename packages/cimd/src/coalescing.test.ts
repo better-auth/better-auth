@@ -630,29 +630,27 @@ describe("CIMD in-flight coalescing", () => {
 				.mockImplementationOnce(async () =>
 					namedMetadataResponse(clientId, "Old"),
 				);
-			const request = await createRequestContext();
-			await discovery.resolve(request.ctx, clientId, null);
-			const storedBeforeRefresh = await request.findClient(clientId);
+			const leader = await createRequestContext();
+			const joiner = await createRequestContext();
+			await discovery.resolve(leader.ctx, clientId, null);
+			const storedBeforeRefresh = await leader.findClient(clientId);
 			expect(storedBeforeRefresh?.name).toBe("Old");
 			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
 			const leaderResolution = discovery.resolve(
-				request.ctx,
+				leader.ctx,
 				clientId,
 				storedBeforeRefresh,
 			);
 			await vi.advanceTimersByTimeAsync(0);
-			const joinerResolution = discovery.resolve(
-				request.ctx,
-				clientId,
-				storedBeforeRefresh,
-			);
+			const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
 			await vi.advanceTimersByTimeAsync(10_000);
 			await expect(joinerResolution).resolves.toMatchObject({ name: "New" });
+			expect((await leader.findClient(clientId))?.name).toBe("Old");
 
 			leaderPolicy.resolve(true);
 			await expect(leaderResolution).resolves.toMatchObject({ name: "New" });
-			expect((await request.findClient(clientId))?.name).toBe("New");
+			expect((await leader.findClient(clientId))?.name).toBe("New");
 			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
 		});
 
