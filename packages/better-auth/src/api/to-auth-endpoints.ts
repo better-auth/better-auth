@@ -17,6 +17,7 @@ import {
 	resolveRequestContext,
 } from "../context/helpers";
 import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
+import { readActorSession } from "./as-user";
 import { dispatchAuthEndpoint, getOperationId } from "./dispatch";
 
 type UserInputContext = Partial<
@@ -96,10 +97,12 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
 					? await resolveDynamicContext(rawContext, context)
 					: rawContext;
+				const actor = readActorSession(context?.context);
 
 				return dispatchAuthEndpoint(endpoint, {
 					...context,
-					context: authContext,
+					headers: context?.headers ?? (actor ? new Headers() : undefined),
+					context: actor ? { ...authContext, session: actor } : authContext,
 					operationId,
 					asResponse: context?.asResponse ?? isRequestLike(context?.request),
 				});
