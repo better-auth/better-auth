@@ -449,6 +449,9 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		clientId: string,
 		nowMs: number,
 	): (() => void) => {
+		// Retiring first also frees the client and origin records that fetches
+		// past their lease hold, before the capacity checks below count them.
+		retireFetchesPastLease(nowMs);
 		const lastFetchStartAtMs = lastFetchStartAtMsByClientId.get(clientId);
 		if (
 			fetchPolicy.minimumFetchIntervalMs > 0 &&
@@ -465,13 +468,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		const originState = readOrCreateOriginFetchState(origin, nowMs);
 
 		pruneFetchStartTimesMs(globalFetchStartTimesMs, nowMs);
-		if (
-			activeFetchCount >= fetchPolicy.maximumConcurrentFetches ||
-			originState.activeFetchCount >=
-				fetchPolicy.maximumConcurrentFetchesPerOrigin
-		) {
-			retireFetchesPastLease(nowMs);
-		}
 		if (activeFetchCount >= fetchPolicy.maximumConcurrentFetches) {
 			throw createMetadataFetchUnavailableError(
 				"global metadata fetch concurrency limit exceeded",

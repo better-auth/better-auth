@@ -836,6 +836,42 @@ describe("CIMD in-flight coalescing", () => {
 				expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
 			},
 		);
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12358
+		 */
+		it("lets another client reclaim the slot of a fetch past its lease when client fetch state is full", async () => {
+			const stuckClientId = "https://full-client-state.example/stuck.json";
+			const otherClientId = "https://full-client-state.example/other.json";
+			const { discovery, fetchClientMetadataResource } = createDiscovery({
+				maxCacheEntries: 1,
+			});
+			fetchClientMetadataResource.mockImplementationOnce(
+				() => new Promise<Response>(() => {}),
+			);
+			fetchClientMetadataResource.mockImplementation(async (input) =>
+				metadataResponse(String(input)),
+			);
+			const stuck = await createRequestContext();
+			const other = await createRequestContext();
+			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+
+			void discovery.resolve(stuck.ctx, stuckClientId, null);
+			await vi.advanceTimersByTimeAsync(9_999);
+			await expect(
+				discovery.resolve(other.ctx, otherClientId, null),
+			).rejects.toMatchObject({
+				body: {
+					error: "temporarily_unavailable",
+					error_description: "metadata fetch client state is at capacity",
+				},
+			});
+
+			await vi.advanceTimersByTimeAsync(1);
+			await expect(
+				discovery.resolve(other.ctx, otherClientId, null),
+			).resolves.toMatchObject({ clientId: otherClientId });
+		});
 	});
 });
 
