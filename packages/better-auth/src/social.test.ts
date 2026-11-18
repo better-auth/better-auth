@@ -1633,6 +1633,140 @@ describe("Multi-client ID support — other widened providers", () => {
 	);
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12293
+ */
+describe("Kakao Provider — id_token sign-in", async () => {
+	const kakaoKeyPair = await generateKeyPair("RS256");
+	const kakaoJwk = await exportJWK(kakaoKeyPair.publicKey);
+	const kakaoKid = "test-kakao-kid";
+	kakaoJwk.kid = kakaoKid;
+	kakaoJwk.alg = "RS256";
+	kakaoJwk.use = "sig";
+
+	const restApiKey = "kakao-rest-api-key";
+	const nativeAppKey = "kakao-native-app-key";
+	const kakaoUserId = "4012345678";
+	const email = "kakao-user@example.com";
+	const kakaoConfig = {
+		clientId: [restApiKey, nativeAppKey],
+		clientSecret: "kakao-secret",
+	};
+
+	// Tokens from Kakao's native SDKs carry the native app key as `aud`.
+	const signIdToken = () =>
+		new SignJWT({
+			nickname: "Kakao User",
+			picture: "https://example.com/kakao-thumbnail.jpg",
+			email,
+		})
+			.setProtectedHeader({ alg: "RS256", kid: kakaoKid })
+			.setIssuedAt()
+			.setIssuer("https://kauth.kakao.com")
+			.setAudience(nativeAppKey)
+			.setSubject(kakaoUserId)
+			.setExpirationTime("1h")
+			.sign(kakaoKeyPair.privateKey);
+
+	beforeAll(() => {
+		mswServer.use(
+			http.get("https://kauth.kakao.com/.well-known/jwks.json", async () =>
+				HttpResponse.json({ keys: [kakaoJwk] }),
+			),
+		);
+	});
+
+	it("creates an unverified user whose account ID is the Kakao user ID", async () => {
+		const { client, auth } = await getTestInstance(
+			{ socialProviders: { kakao: kakaoConfig } },
+			{ disableTestUser: true },
+		);
+		const idToken = await signIdToken();
+
+		const res = await client.signIn.social({
+			provider: "kakao",
+			idToken: { token: idToken },
+		});
+
+		expect(res.data?.redirect).toBe(false);
+		const data = res.data as {
+			user: { id: string; email: string; emailVerified: boolean };
+		};
+		expect(data.user.email).toBe(email);
+		// The ID token carries no email verification status.
+		expect(data.user.emailVerified).toBe(false);
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(data.user.id);
+		expect(accounts).toEqual([
+			expect.objectContaining({ providerId: "kakao", accountId: kakaoUserId }),
+		]);
+	});
+
+	it("does not link to an existing user with the same email", async () => {
+		const { client, auth } = await getTestInstance(
+			{
+				socialProviders: { kakao: kakaoConfig },
+				emailAndPassword: { enabled: true },
+			},
+			{ disableTestUser: true },
+		);
+		await auth.api.signUpEmail({
+			body: { email, password: "kakao-password-1", name: "Local User" },
+		});
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.updateUserByEmail(email, { emailVerified: true });
+		const idToken = await signIdToken();
+
+		const res = await client.signIn.social({
+			provider: "kakao",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(401);
+		expect(res.error?.code).toBe("OAUTH_LINK_ERROR");
+	});
+
+	it("links to an existing user with the same email when Kakao is trusted", async () => {
+		const { client, auth } = await getTestInstance(
+			{
+				socialProviders: { kakao: kakaoConfig },
+				emailAndPassword: { enabled: true },
+				account: { accountLinking: { trustedProviders: ["kakao"] } },
+			},
+			{ disableTestUser: true },
+		);
+		const { user } = await auth.api.signUpEmail({
+			body: { email, password: "kakao-password-1", name: "Local User" },
+		});
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.updateUserByEmail(email, { emailVerified: true });
+		const idToken = await signIdToken();
+
+		const res = await client.signIn.social({
+			provider: "kakao",
+			idToken: { token: idToken },
+		});
+
+		const data = res.data as { user: { id: string } };
+		expect(data.user.id).toBe(user.id);
+	});
+
+	it("uses the REST API key for the redirect flow", async () => {
+		const { client } = await getTestInstance(
+			{ socialProviders: { kakao: kakaoConfig } },
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "kakao",
+			callbackURL: "/callback",
+		});
+
+		expect(res.data?.url).toContain(`client_id=${restApiKey}`);
+		expect(res.data?.url).not.toContain(nativeAppKey);
+	});
+});
+
 describe("Apple Provider", async () => {
 	it("should not use email as fallback for name when name is not provided", async () => {
 		const appleProfile = {
