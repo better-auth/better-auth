@@ -122,6 +122,24 @@ export interface KakaoOptions extends ProviderOptions<KakaoProfile> {
 
 export const kakao = (options: KakaoOptions) => {
 	const tokenEndpoint = "https://kauth.kakao.com/oauth/token";
+
+	const getUserInfoFromProfile = async (profile: KakaoProfile) => {
+		const userMap = await options.mapProfileToUser?.(profile);
+		const account = profile.kakao_account || {};
+		const kakaoProfile = account.profile || {};
+		const user = {
+			name: kakaoProfile.nickname || account.name || "",
+			email: account.email,
+			image: kakaoProfile.profile_image_url || kakaoProfile.thumbnail_image_url,
+			emailVerified: !!account.is_email_valid && !!account.is_email_verified,
+			...userMap,
+		};
+		return {
+			user,
+			data: profile,
+		};
+	};
+
 	return {
 		id: "kakao",
 		name: "Kakao",
@@ -187,9 +205,10 @@ export const kakao = (options: KakaoOptions) => {
 				return options.getUserInfo({ idToken });
 			}
 			const claims = decodeJwt<KakaoIdTokenPayload>(idToken);
-			const profile: KakaoProfile = {
+			return getUserInfoFromProfile({
 				// Same value as `id` from /v2/user/me, so both flows resolve to the same account.
 				id: Number(claims.sub),
+				// The ID token carries no email verification status.
 				kakao_account: {
 					email: claims.email,
 					profile: {
@@ -197,19 +216,7 @@ export const kakao = (options: KakaoOptions) => {
 						thumbnail_image_url: claims.picture,
 					},
 				},
-			};
-			const userMap = await options.mapProfileToUser?.(profile);
-			return {
-				user: {
-					name: claims.nickname || "",
-					email: claims.email,
-					image: claims.picture,
-					// The ID token carries no email verification status.
-					emailVerified: false,
-					...userMap,
-				},
-				data: profile,
-			};
+			});
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
@@ -226,21 +233,7 @@ export const kakao = (options: KakaoOptions) => {
 			if (error || !profile) {
 				return null;
 			}
-			const userMap = await options.mapProfileToUser?.(profile);
-			const account = profile.kakao_account || {};
-			const kakaoProfile = account.profile || {};
-			const user = {
-				name: kakaoProfile.nickname || account.name || "",
-				email: account.email,
-				image:
-					kakaoProfile.profile_image_url || kakaoProfile.thumbnail_image_url,
-				emailVerified: !!account.is_email_valid && !!account.is_email_verified,
-				...userMap,
-			};
-			return {
-				user,
-				data: profile,
-			};
+			return getUserInfoFromProfile(profile);
 		},
 		options,
 	} satisfies OAuthProvider<KakaoProfile>;
