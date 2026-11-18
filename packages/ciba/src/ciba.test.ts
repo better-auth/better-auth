@@ -1195,6 +1195,42 @@ describe("ciba approvals follow their consent", () => {
 		expect((await findStoredRequest(authReqId))?.status).toBe("approved");
 	});
 
+	it("redeems both link approvals when a narrower approval follows a wider one", async () => {
+		const client = await createClient(POLL);
+		const wide = await start({ scope: "openid profile" }, client);
+		await approve(wide.url);
+		const narrow = await start({ scope: "openid" }, client);
+		await approve(narrow.url);
+
+		const wideIssued = await poll(wide.authReqId, client);
+		expect(wideIssued.status).toBe(200);
+		expect(wideIssued.body.scope).toBe("openid profile");
+		const narrowIssued = await poll(narrow.authReqId, client);
+		expect(narrowIssued.status).toBe(200);
+		expect(narrowIssued.body.scope).toBe("openid");
+	});
+
+	it("rejects an earlier link approval once a later approval declines a scope it needs, and keeps the request", async () => {
+		const client = await createClient(POLL);
+		const first = await start({ scope: "openid profile" }, client);
+		await approve(first.url);
+		const second = await start({ scope: "openid profile" }, client);
+		const consent = await openLink(second.url);
+		await answerConsent(consent, true, headers, "openid");
+
+		expect(await poll(first.authReqId, client)).toMatchObject({
+			status: 400,
+			body: {
+				error: "invalid_grant",
+				error_description: "consent no longer covers this authorization",
+			},
+		});
+		expect((await findStoredRequest(first.authReqId))?.status).toBe("approved");
+		const issued = await poll(second.authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.scope).toBe("openid");
+	});
+
 	it("redeems a link approval after the consent is given again for the same request", async () => {
 		const client = await createClient(POLL);
 		const first = await start({}, client);
