@@ -59,15 +59,16 @@ import {
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
-	findActiveSessionId,
 	getAuthEndpointUrl,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
 	isInvalidJwtError,
 	isPKCERequired,
+	isSessionBoundRefreshToken,
 	normalizeTimestampValue,
 	parseClientMetadata,
+	resolveRefreshTokenSession,
 	resolveSessionAuthTime,
 	resolveSubjectIdentifier,
 	storeToken,
@@ -2080,6 +2081,17 @@ async function handleRefreshTokenGrant(
 
 	validateClientScopes(client, requestedScopes ?? scopes);
 
+	// A session-bound refresh token is never rotated, so presenting one that was
+	// revoked at sign-out is not replay and must not tear down the client's
+	// other grants.
+	const session = await resolveRefreshTokenSession(ctx, refreshToken);
+	if (session.ended) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
+
 	if (refreshToken.revoked) {
 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
 			const replayRequest = await resolveRefreshTokenRotationReplayRequest(
@@ -2112,6 +2124,19 @@ async function handleRefreshTokenGrant(
 		});
 	}
 
+	// Narrowing away `offline_access` asks for a session-bound grant, which
+	// cannot start once the session has ended. Refuse before rotation so the
+	// presented `offline_access` token stays usable.
+	if (
+		!session.sessionId &&
+		isSessionBoundRefreshToken(refreshToken, requestedScopes ?? scopes)
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
+
 	const user = await ctx.context.internalAdapter.findUserById(
 		refreshToken.userId,
 	);
@@ -2135,7 +2160,7 @@ async function handleRefreshTokenGrant(
 		grantType: "refresh_token",
 		referenceId: refreshToken.referenceId,
 		authorizationCodeId: refreshToken.authorizationCodeId,
-		sessionId: await findActiveSessionId(ctx, refreshToken.sessionId),
+		sessionId: session.sessionId,
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,
