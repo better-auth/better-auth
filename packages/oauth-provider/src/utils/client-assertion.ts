@@ -65,6 +65,19 @@ function getJwksCache(opts: OAuthOptions<Scope[]>): JwksCache {
 	return cache;
 }
 
+// Map iterates in insertion order, so re-inserting an entry on each read and
+// write keeps the least recently used key set first in line for eviction.
+function readJwksCache(
+	cache: JwksCache,
+	cacheKey: string,
+): JwksCacheEntry | undefined {
+	const entry = cache.sets.get(cacheKey);
+	if (!entry) return undefined;
+	cache.sets.delete(cacheKey);
+	cache.sets.set(cacheKey, entry);
+	return entry;
+}
+
 function setJwksCache(
 	cache: JwksCache,
 	cacheKey: string,
@@ -74,11 +87,11 @@ function setJwksCache(
 ): JSONWebKeySet {
 	const current = cache.sets.get(cacheKey);
 	if (current && current.sequence > sequence) return current.jwks;
+	cache.sets.delete(cacheKey);
 	cache.sets.set(cacheKey, { jwks, fetchedAt, sequence });
 	if (cache.sets.size > JWKS_CACHE_MAX_ENTRIES) {
-		// Evict oldest entry (Map iterates in insertion order)
-		const oldest = cache.sets.keys().next().value;
-		if (oldest !== undefined) cache.sets.delete(oldest);
+		const leastRecentlyUsed = cache.sets.keys().next().value;
+		if (leastRecentlyUsed !== undefined) cache.sets.delete(leastRecentlyUsed);
 	}
 	return jwks;
 }
@@ -389,7 +402,7 @@ async function fetchClientJwks(
 	const now = Date.now();
 	const cacheKey = getJwksCacheKey(client);
 	const cache = getJwksCache(opts);
-	const cached = cache.sets.get(cacheKey);
+	const cached = readJwksCache(cache, cacheKey);
 	if (cached && now - cached.fetchedAt < JWKS_CACHE_TTL_MS) {
 		return cached.jwks;
 	}

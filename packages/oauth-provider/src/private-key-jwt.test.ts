@@ -780,6 +780,179 @@ describe("private_key_jwt authentication", async () => {
 		expect(oldestFetches).toHaveLength(1);
 	});
 
+	describe("jwks_uri key set cache bound", () => {
+		async function setup(clientCount: number) {
+			const origin = "https://lru-provider.example.com";
+			const tokenUrl = `${origin}/api/auth/oauth2/token`;
+			const clientIdAt = (index: number) =>
+				`https://lru-${index}.example.com/client.json`;
+			const jwksUriAt = (index: number) =>
+				`https://lru-${index}.example.com/jwks.json`;
+			const [keyPair, rotatedKeyPair] = await Promise.all([
+				generateKeyPair("ES256", { extractable: true }),
+				generateKeyPair("ES256", { extractable: true }),
+			]);
+			const [publicJwk, rotatedPublicJwk] = await Promise.all([
+				exportJWK(keyPair.publicKey),
+				exportJWK(rotatedKeyPair.publicKey),
+			]);
+			const rotated = new Set<string>();
+			const held = new Map<string, Promise<void>>();
+			const transport = vi.fn(async (url: string | URL | Request) => {
+				const jwksUri = String(url);
+				const hold = held.get(jwksUri);
+				held.delete(jwksUri);
+				await hold;
+				const keys: JWK[] = [{ ...publicJwk, kid: "k", alg: "ES256" }];
+				if (rotated.has(jwksUri)) {
+					keys.push({ ...rotatedPublicJwk, kid: "rotated", alg: "ES256" });
+				}
+				return Response.json({ keys });
+			});
+			const instance = await getTestInstance({
+				baseURL: origin,
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						extensions: [
+							{
+								clientDiscovery: {
+									id: "lru-discovery",
+									matches: (candidateClientId: string) =>
+										candidateClientId.startsWith("https://lru-"),
+									resolve: (
+										_ctx: GenericEndpointContext,
+										_clientId: string,
+										existingClient: SchemaClient<Scope[]> | null,
+									) => existingClient,
+									fetchClientMetadataResource: transport,
+								},
+							},
+						],
+					}),
+				],
+			});
+			const context = await instance.auth.$context;
+			for (let index = 0; index < clientCount; index++) {
+				await context.adapter.create<SchemaClient<Scope[]>>({
+					model: "oauthClient",
+					data: {
+						clientId: clientIdAt(index),
+						clientDiscoveryId: "lru-discovery",
+						name: "Discovered private_key_jwt client",
+						redirectUris: ["https://client.example.com/callback"],
+						tokenEndpointAuthMethod: "private_key_jwt",
+						applicationType: "web",
+						grantTypes: ["client_credentials"],
+						responseTypes: [],
+						clientCredentialsScopes: ["read"],
+						jwksUri: jwksUriAt(index),
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				});
+			}
+			const requestToken = async (
+				index: number,
+				options?: { rotatedKey?: boolean },
+			) => {
+				const clientId = clientIdAt(index);
+				const now = Math.floor(Date.now() / 1000);
+				const assertion = await new SignJWT({})
+					.setProtectedHeader({
+						alg: "ES256",
+						kid: options?.rotatedKey ? "rotated" : "k",
+					})
+					.setIssuer(clientId)
+					.setSubject(clientId)
+					.setAudience(tokenUrl)
+					.setIssuedAt(now)
+					.setExpirationTime(now + 120)
+					.setJti(crypto.randomUUID())
+					.sign(
+						options?.rotatedKey
+							? rotatedKeyPair.privateKey
+							: keyPair.privateKey,
+					);
+				const response = await instance.auth.handler(
+					new Request(tokenUrl, {
+						method: "POST",
+						headers: { "content-type": "application/x-www-form-urlencoded" },
+						body: new URLSearchParams({
+							grant_type: "client_credentials",
+							client_id: clientId,
+							client_assertion_type: CLIENT_ASSERTION_TYPE,
+							client_assertion: assertion,
+						}),
+					}),
+				);
+				expect(response.status).toBe(200);
+			};
+			const requestTokens = async (from: number, to: number) => {
+				for (let index = from; index < to; index++) {
+					await requestToken(index);
+				}
+			};
+			return {
+				requestToken,
+				requestTokens,
+				fetchesFor: (index: number) =>
+					transport.mock.calls.filter(
+						([url]) => String(url) === jwksUriAt(index),
+					).length,
+				rotateKey: (index: number) => rotated.add(jwksUriAt(index)),
+				holdNextFetch: (index: number) => {
+					let release!: () => void;
+					held.set(
+						jwksUriAt(index),
+						new Promise<void>((resolve) => {
+							release = resolve;
+						}),
+					);
+					return release;
+				},
+			};
+		}
+
+		it("keeps an in-use key set cached when new clients fill the cache", async () => {
+			const fixture = await setup(501);
+			// Fill the cache to its limit; client 0's key set is the first stored.
+			await fixture.requestTokens(0, 500);
+			await fixture.requestToken(0);
+			expect(fixture.fetchesFor(0)).toBe(1);
+
+			// A new client overflows the cache, which must evict a set nobody used
+			// since it was stored rather than client 0's.
+			await fixture.requestToken(500);
+			await fixture.requestToken(0);
+			expect(fixture.fetchesFor(0)).toBe(1);
+			await fixture.requestToken(1);
+			expect(fixture.fetchesFor(1)).toBe(2);
+		});
+
+		it("treats a refetched key set as just used when other sets were stored during the refetch", async () => {
+			const fixture = await setup(1000);
+			await fixture.requestTokens(0, 500);
+
+			fixture.rotateKey(0);
+			const release = fixture.holdNextFetch(0);
+			const rotation = fixture.requestToken(0, { rotatedKey: true });
+			await vi.waitFor(() => expect(fixture.fetchesFor(0)).toBe(2));
+			// Stored while client 0's refetch is in flight, so ahead of its result.
+			await fixture.requestTokens(500, 510);
+			release();
+			await rotation;
+
+			// 490 new sets evict the 489 stored before client 0's assertion arrived,
+			// then one more.
+			await fixture.requestTokens(510, 1000);
+			await fixture.requestToken(0, { rotatedKey: true });
+			expect(fixture.fetchesFor(0)).toBe(2);
+		});
+	});
+
 	it.each([
 		{
 			name: "bare-array",
