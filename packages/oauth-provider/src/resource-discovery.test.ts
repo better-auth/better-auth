@@ -862,15 +862,15 @@ describe("canonical client metadata document registration", () => {
 	 */
 	it.each([
 		{
-			label: "SQL Server duplicate key (2601)",
+			label: "duplicate key number 2601 beside a generic code",
 			err: { code: "EREQUEST", number: 2601 },
 		},
 		{
-			label: "SQL Server unique constraint (2627)",
+			label: "unique constraint number 2627 beside a generic code",
 			err: { code: "EREQUEST", number: 2627 },
 		},
 		{
-			label: "SQLite extended unique constraint (2067)",
+			label: "extended unique constraint errcode 2067 beside a generic code",
 			err: { code: "ERR_SQLITE_ERROR", errcode: 2067 },
 		},
 	])(
