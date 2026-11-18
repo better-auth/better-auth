@@ -194,6 +194,8 @@ The `aud` values accepted in client assertions, such as `private_key_jwt` assert
 * `"issuer"`: the assertion's `aud` must be the provider's issuer and nothing else, as [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) and [§5](https://www.rfc-editor.org/rfc/rfc10070#section-5) require. An `aud` list that also names another value is rejected.
 * `"issuer-or-endpoint"`: the behavior before 1.8. The assertion's `aud` must include the URL of the endpoint called, the issuer, or, at `/oauth2/par`, the token endpoint URL.
 
+At `/oauth2/bc-authorize`, which the [CIBA plugin](/docs/plugins/ciba) serves, `"issuer"` accepts the issuer, and `"issuer-or-endpoint"` accepts the issuer or the `/oauth2/bc-authorize` URL. Neither accepts the token endpoint URL there. The `"issuer"` default follows RFC 10070 and deliberately departs from CIBA Core §7.1, which says a provider must also accept its token endpoint URL and its backchannel authentication endpoint URL as audiences.
+
 `"issuer-or-endpoint"` is a transitional setting for clients that still sign for an endpoint URL. It is weaker: a client that signs for an endpoint URL can be tricked into signing an assertion that a malicious server replays here. Move your clients to the issuer, then remove the setting.
 
 `POST /oauth2/client/rotate-keys` is the exception. In either mode, the assertion's `aud` must include that endpoint's own URL, and may also name other values.
