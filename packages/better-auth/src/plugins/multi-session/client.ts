@@ -13,7 +13,10 @@ export const multiSessionClient = () => {
 		atomListeners: [
 			{
 				matcher(path) {
-					return path === "/multi-session/set-active";
+					return (
+						path === "/multi-session/set-active" ||
+						path === "/multi-session/revoke"
+					);
 				},
 				signal: "$sessionSignal",
 			},

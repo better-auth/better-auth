@@ -7,5 +7,11 @@ export const magicLinkClient = () => {
 		id: "magic-link",
 		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<typeof magicLink>,
+		atomListeners: [
+			{
+				matcher: (path) => path === "/magic-link/verify",
+				signal: "$sessionSignal",
+			},
+		],
 	} satisfies BetterAuthClientPlugin;
 };

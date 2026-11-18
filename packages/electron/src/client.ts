@@ -149,7 +149,7 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 
 								if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
 									setEncrypted(cookieName, toSetCookie);
-									store?.notify("$sessionSignal");
+									void store?.notify("$sessionSignal");
 								} else {
 									setEncrypted(cookieName, toSetCookie);
 								}

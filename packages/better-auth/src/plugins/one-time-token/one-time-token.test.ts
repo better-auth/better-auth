@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { Window } from "happy-dom";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { isAPIError } from "../../utils/is-api-error";
 import { oneTimeToken } from ".";
@@ -388,6 +389,44 @@ describe("One-time token", async () => {
 			const ottHeader = response.headers.get("set-ott");
 			expect(ottHeader).toBeDefined();
 			expect(ottHeader).toHaveLength(32);
+		});
+	});
+});
+
+describe("one-time token session refresh", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("loads the session once a verified token signs the client in", async () => {
+		const { client, runWithUser, testUser, sessionSetter } =
+			await getTestInstance(
+				{ plugins: [oneTimeToken()] },
+				{ clientOptions: { plugins: [oneTimeTokenClient()] } },
+			);
+		const window = new Window({ url: "http://localhost:3000" });
+		vi.stubGlobal("window", window);
+		vi.stubGlobal("document", window.document);
+		vi.stubGlobal("navigator", window.navigator);
+
+		await runWithUser(testUser.email, testUser.password, async (headers) => {
+			const { token } = await client.oneTimeToken.generate({
+				fetchOptions: { throw: true },
+			});
+			headers.delete("cookie");
+			const session = client.$store.atoms.session!;
+			onTestFinished(session.subscribe(() => {}));
+			await vi.waitFor(() => {
+				expect(session.get().isPending).toBe(false);
+			});
+			expect(session.get().data).toBeNull();
+
+			await client.oneTimeToken.verify({
+				token,
+				fetchOptions: { onSuccess: sessionSetter(headers) },
+			});
+
+			expect(session.get().data?.user.email).toBe(testUser.email);
 		});
 	});
 });

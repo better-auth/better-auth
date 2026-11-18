@@ -1071,3 +1071,12 @@ describe("magic link with ObjectId primary keys", () => {
 		expect(result.user.emailVerified).toBe(true);
 	});
 });
+
+it("marks magic link verification as a session change", () => {
+	const listener = magicLinkClient().atomListeners.find(
+		({ signal }) => signal === "$sessionSignal",
+	);
+	expect(listener?.matcher("/magic-link/verify")).toBe(true);
+	// Requesting a link signs nobody in yet.
+	expect(listener?.matcher("/sign-in/magic-link")).toBe(false);
+});

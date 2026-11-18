@@ -105,7 +105,12 @@ export const getPasskeyActions = (
 				throw: false,
 			});
 			$listPasskeys.set(Math.random());
-			$store.notify("$sessionSignal");
+			if (
+				verified.data &&
+				!(options?.disableSignal ?? opts?.fetchOptions?.disableSignal)
+			) {
+				await $store.notify("$sessionSignal");
+			}
 
 			if (opts?.returnWebAuthnResponse) {
 				return {
@@ -235,8 +240,11 @@ export const getPasskeyActions = (
 				return verified;
 			}
 			$listPasskeys.set(Math.random());
-			if (verified.data.session) {
-				$store.notify("$sessionSignal");
+			if (
+				verified.data.session &&
+				!(fetchOpts?.disableSignal ?? opts?.fetchOptions?.disableSignal)
+			) {
+				await $store.notify("$sessionSignal");
 			}
 			if (opts?.returnWebAuthnResponse) {
 				return {

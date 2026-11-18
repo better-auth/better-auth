@@ -11,5 +11,11 @@ export const siweClient = () => {
 			"/siwe/nonce": "POST",
 			"/siwe/get-nonce": "POST",
 		},
+		atomListeners: [
+			{
+				matcher: (path) => path === "/siwe/verify",
+				signal: "$sessionSignal",
+			},
+		],
 	} satisfies BetterAuthClientPlugin;
 };

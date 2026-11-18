@@ -23,7 +23,10 @@ type InferableServerPlugin = {
 };
 
 export interface ClientStore {
-	notify: (signal: string) => void;
+	/**
+	 * Resolves once the atoms bound to the signal reflect the change.
+	 */
+	notify: (signal: string) => Promise<void>;
 	listen: (signal: string, listener: () => void) => void;
 	atoms: Record<string, WritableAtom<any>>;
 }

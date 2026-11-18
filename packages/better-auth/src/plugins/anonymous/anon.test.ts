@@ -1,5 +1,6 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
+import { Window } from "happy-dom";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { OAuth2Server } from "oauth2-mock-server";
@@ -10,6 +11,7 @@ import {
 	describe,
 	expect,
 	it,
+	onTestFinished,
 	vi,
 } from "vitest";
 import * as apiModule from "../../api";
@@ -840,5 +842,40 @@ describe("anonymous sign-in origin validation", async () => {
 		const response = await signIn();
 
 		expect(response.status).toBe(200);
+	});
+});
+
+describe("anonymous session refresh", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("clears the session once the anonymous user is deleted", async () => {
+		const { client, runWithUser, testUser, sessionSetter } =
+			await getTestInstance(
+				{ plugins: [anonymous()] },
+				{ clientOptions: { plugins: [anonymousClient()] } },
+			);
+		const window = new Window({ url: "http://localhost:3000" });
+		vi.stubGlobal("window", window);
+		vi.stubGlobal("document", window.document);
+		vi.stubGlobal("navigator", window.navigator);
+
+		await runWithUser(testUser.email, testUser.password, async (headers) => {
+			headers.delete("cookie");
+			await client.signIn.anonymous({
+				fetchOptions: { onSuccess: sessionSetter(headers) },
+			});
+			const session = client.$store.atoms.session!;
+			onTestFinished(session.subscribe(() => {}));
+			await vi.waitFor(() => {
+				expect(session.get().data).not.toBeNull();
+			});
+
+			const result = await client.deleteAnonymousUser();
+
+			expect(result.error).toBeNull();
+			expect(session.get().data).toBeNull();
+		});
 	});
 });
