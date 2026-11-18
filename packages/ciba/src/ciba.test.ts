@@ -1231,7 +1231,7 @@ describe("ciba approvals follow their consent", () => {
 		expect(issued.body.scope).toBe("openid");
 	});
 
-	it("redeems a link approval after the consent is given again for the same request", async () => {
+	it("redeems a link approval after another request gives the consent again", async () => {
 		const client = await createClient(POLL);
 		const first = await start({}, client);
 		await approve(first.url);
