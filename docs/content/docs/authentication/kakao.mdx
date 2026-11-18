@@ -50,7 +50,9 @@ description: Kakao provider setup and usage.
   </Step>
 </Steps>
 
-## Sign In with Kakao using ID Token
+## Usage
+
+### Sign In with Kakao using ID Token
 
 If your app signs in with Kakao's native SDKs (Android, iOS, or Flutter), you can pass the ID token to `signIn.social` to sign in without redirection.
 
@@ -82,19 +84,15 @@ const data = await authClient.signIn.social({
 })
 ```
 
-<Callout>
-  The user is created from the ID token claims (`sub`, `nickname`, `picture`, and `email`). The ID token has no email verification status, so `emailVerified` is `false`.
-
-  The ID token includes `email` only when the user consents to `account_email`. Without it, sign-in fails with `USER_EMAIL_NOT_FOUND`. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the `mapProfileToUser` fallback.
-</Callout>
-
-To receive an ID token in the redirect flow as well, add `openid` with the `scope` option.
+The user is created from the ID token claims (`sub`, `nickname`, `picture`, and `email`). The ID token has no email verification status, so `emailVerified` is `false`, and an existing user with the same email is linked only when Kakao is one of the [trusted providers](/docs/concepts/users-accounts#forced-linking).
 
 ## Options
 
 ### Scopes
 
 The default scopes are `account_email`, `profile_image`, and `profile_nickname`. Retrieving `account_email` is available for **Biz Apps** and **test apps**. For more details, refer to the [Kakao Login utilization documentation](https://developers.kakao.com/docs/en/kakaologin/utilize#scope-user).
+
+If OpenID Connect is enabled for your app, add `openid` to `scope` to receive an ID token in the redirect flow as well.
 
 If your app can't configure `account_email`, set `disableDefaultScope` to `true` and list the scopes you still need under `scope`.
 
@@ -121,4 +119,4 @@ Kakao returns `KOE205` when the authorization request includes a scope that isn'
 
 ### `email_not_found` error
 
-Kakao returns no email when `account_email` isn't requested or the user doesn't grant it. Add a fallback with `mapProfileToUser` as shown in [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
+Kakao returns no email when `account_email` isn't requested or the user doesn't grant it. Sign-in with an ID token fails with `USER_EMAIL_NOT_FOUND` for the same reason. Add a fallback with `mapProfileToUser` as shown in [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
