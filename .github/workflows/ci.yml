@@ -55,44 +55,46 @@ jobs:
           fi
 
       - name: Build
+        id: build
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
         run: pnpm build
+        background: true
 
-      - name: Lint
-        run: pnpm biome ci --error-on-warnings
+      - parallel:
+          - name: Lint
+            run: pnpm biome ci --error-on-warnings
 
-      - name: Lint Dependencies
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-        run: pnpm lint:dependencies
+          - name: Lint Dependencies
+            run: pnpm lint:dependencies
 
-      - name: Lint Packages
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-        run: pnpm lint:packages
+          - name: Lint Spell
+            run: pnpm lint:spell
 
-      - name: Lint Spell
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-        run: pnpm lint:spell
+          - name: Lint Format
+            run: pnpm format:check
 
-      - name: Lint Format
-        run: pnpm format:check
+      - name: Wait for build
+        wait: build
 
-      - name: Lint Types
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-        run: pnpm lint:types
+      - parallel:
+          - name: Lint Packages
+            env:
+              TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+              TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+            run: pnpm lint:packages
 
-      # Versioned docs content comes from other branches, so check its icons against this registry.
-      - name: Lint Docs Sidebar Icons
-        run: pnpm --filter docs validate:sidebar-icons
+          - name: Lint Types
+            env:
+              TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+              TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+            run: pnpm lint:types
+
+          # Versioned docs content comes from other branches, so check its icons against this registry.
+          # Keep this off the first parallel group: sync-versions writes docs while biome/cspell/remark read them.
+          - name: Lint Docs Sidebar Icons
+            run: pnpm --filter docs validate:sidebar-icons
 
   typecheck:
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
