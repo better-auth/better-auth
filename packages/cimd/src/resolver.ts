@@ -52,8 +52,6 @@ interface CimdMetadataCacheEntry {
 interface FetchedMetadata {
 	metadata: OAuthClientMetadata;
 	nextEntry: CimdMetadataCacheEntry | null;
-	/** The fetch was retired before it finished, so it did not cache its document. */
-	retired: boolean;
 }
 
 interface InFlightMetadataFetch {
@@ -61,6 +59,13 @@ interface InFlightMetadataFetch {
 	startedAtMs: number;
 	/** Retires the fetch and returns its permit. Calling it again does nothing. */
 	abandon: () => void;
+	/**
+	 * Whether the fetch was retired and its outcome is not used. A retired
+	 * fetch's document may be older than the document of the fetch that
+	 * replaced it, so nobody saves it, and its failure is not reported. A fetch
+	 * retired by the lease with no replacement is used when it answers late.
+	 */
+	isDiscarded: () => boolean;
 }
 
 interface ResolvedMetadataFetchPolicy {
@@ -332,6 +337,10 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 	const fetchPolicy = resolveMetadataFetchPolicy(cimdOptions);
 	const metadataCache = new Map<string, CimdMetadataCacheEntry>();
 	const inFlightMetadataByClientId = new Map<string, InFlightMetadataFetch>();
+	// The latest fetch the lease retired for a client, until it settles or a
+	// newer fetch for that client starts. Only this fetch may be used late, and
+	// an evicted marker makes the late document unusable, which is safe.
+	const leaseRetiredFetchByClientId = new Map<string, InFlightMetadataFetch>();
 	const lastFetchStartAtMsByClientId = new Map<string, number>();
 	const fetchStateByOrigin = new Map<string, OriginFetchState>();
 	const globalFetchStartTimesMs: number[] = [];
@@ -426,9 +435,10 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 
 	// A fetch started by a request that the runtime then ends never settles, and
 	// its permit is never released. Retiring it removes it from the in-flight
-	// map and returns its pacing record and permit. It can no longer publish or
-	// record a failure, and the requests that wait on it re-enter resolution
-	// instead of saving its document, so later requests fetch again.
+	// map and returns its pacing record and permit. It can no longer record a
+	// failure, and the requests that wait on it re-enter resolution instead of
+	// using its outcome, so later requests fetch again. Only a fetch the lease
+	// retired can still publish its document, while nothing has replaced it.
 	const retireFetch = (clientId: string, inFlight: InFlightMetadataFetch) => {
 		if (inFlightMetadataByClientId.get(clientId) === inFlight) {
 			inFlightMetadataByClientId.delete(clientId);
@@ -439,9 +449,15 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 
 	const retireFetchesPastLease = (nowMs: number) => {
 		for (const [clientId, inFlight] of inFlightMetadataByClientId) {
-			if (nowMs - inFlight.startedAtMs >= FETCH_PERMIT_LEASE_MS) {
-				retireFetch(clientId, inFlight);
+			if (nowMs - inFlight.startedAtMs < FETCH_PERMIT_LEASE_MS) continue;
+			retireFetch(clientId, inFlight);
+			leaseRetiredFetchByClientId.delete(clientId);
+			while (leaseRetiredFetchByClientId.size >= maxCacheEntries) {
+				const oldestClientId = leaseRetiredFetchByClientId.keys().next().value;
+				if (typeof oldestClientId !== "string") break;
+				leaseRetiredFetchByClientId.delete(oldestClientId);
 			}
+			leaseRetiredFetchByClientId.set(clientId, inFlight);
 		}
 	};
 
@@ -525,6 +541,8 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		lastFetchStartAtMsByClientId.set(clientId, nowMs);
 	};
 
+	// Resolves to `undefined` when the request stopped waiting or the fetch's
+	// outcome, a document or a failure, is not used.
 	const joinFetch = async (
 		clientId: string,
 		inFlight: InFlightMetadataFetch,
@@ -537,24 +555,34 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		let fetched: FetchedMetadata | undefined;
 		try {
 			fetched = await Promise.race([inFlight.fetched, gaveUp]);
+		} catch (error) {
+			if (inFlight.isDiscarded()) return undefined;
+			throw error;
 		} finally {
 			clearTimeout(timer);
 		}
-		if (fetched === undefined) retireFetch(clientId, inFlight);
-		return fetched;
+		if (fetched === undefined) {
+			retireFetch(clientId, inFlight);
+			return undefined;
+		}
+		return inFlight.isDiscarded() ? undefined : fetched;
 	};
 
+	// Resolves to `undefined` when the fetch was retired before it settled and
+	// its outcome, a document or a failure, is not used.
 	const startFetch = async (
 		ctx: GenericEndpointContext,
 		clientId: string,
 		cachedEntry: CimdMetadataCacheEntry | undefined,
-	): Promise<FetchedMetadata> => {
+	): Promise<FetchedMetadata | undefined> => {
 		const startedAtMs = Date.now();
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(
 			clientId,
 			startedAtMs,
 		);
 		let abandoned = false;
+		let acceptedLate = false;
+		let startedFetch: InFlightMetadataFetch | undefined;
 		const metadataFetch = (async (): Promise<FetchedMetadata> => {
 			const fetched = await fetchClientMetadataDocument(
 				ctx,
@@ -591,9 +619,21 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				metadataRevalidationInterval,
 				Date.now(),
 			);
-			// A retired fetch leaves the cache and pacing to the fetch that replaced it.
-			const retired = abandoned;
-			if (!retired) {
+			// A retired fetch leaves the cache and pacing to the fetch that replaced
+			// it. When the lease retired it and no fetch for the client started
+			// since, its document is the newest there is, so it is used instead of
+			// spending another fetch on the same document. The marker records the
+			// replacement directly, because a document that cannot be cached leaves
+			// no cache entry to compare.
+			if (
+				abandoned &&
+				leaseRetiredFetchByClientId.get(clientId) === startedFetch &&
+				!inFlightMetadataByClientId.has(clientId) &&
+				metadataCache.get(clientId) === cachedEntry
+			) {
+				acceptedLate = true;
+			}
+			if (!abandoned || acceptedLate) {
 				if (nextEntry) {
 					storeCacheEntry(clientId, nextEntry);
 				} else {
@@ -603,7 +643,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				// budgets. Keep the per-client interval only as failed-fetch backoff.
 				lastFetchStartAtMsByClientId.delete(clientId);
 			}
-			return { metadata, nextEntry, retired };
+			return { metadata, nextEntry };
 		})();
 		const inFlight: InFlightMetadataFetch = {
 			fetched: metadataFetch,
@@ -612,16 +652,24 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				abandoned = true;
 				releaseMetadataFetchPermit();
 			},
+			isDiscarded: () => abandoned && !acceptedLate,
 		};
+		startedFetch = inFlight;
+		leaseRetiredFetchByClientId.delete(clientId);
 		inFlightMetadataByClientId.set(clientId, inFlight);
 		try {
-			return await metadataFetch;
+			const fetched = await metadataFetch;
+			return inFlight.isDiscarded() ? undefined : fetched;
 		} catch (error) {
-			if (!abandoned) recordFailedFetch(clientId);
+			if (inFlight.isDiscarded()) return undefined;
+			recordFailedFetch(clientId);
 			throw error;
 		} finally {
 			if (inFlightMetadataByClientId.get(clientId) === inFlight) {
 				inFlightMetadataByClientId.delete(clientId);
+			}
+			if (leaseRetiredFetchByClientId.get(clientId) === inFlight) {
+				leaseRetiredFetchByClientId.delete(clientId);
 			}
 			releaseMetadataFetchPermit();
 		}
@@ -688,7 +736,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				return persistFetchedMetadata({
 					metadata: cachedEntry.metadata,
 					nextEntry: cachedEntry,
-					retired: false,
 				});
 			}
 
@@ -696,11 +743,11 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			const fetched = sharedFetch
 				? await joinFetch(clientId, sharedFetch)
 				: await startFetch(ctx, clientId, cachedEntry);
-			// Only a fetch that cached its document saves it. A retired fetch's
-			// document can be older than its replacement's, and saving it would put
-			// the stored client behind a fresh cache entry that later requests trust,
-			// so this request resolves again instead.
-			if (fetched && !fetched.retired) return persistFetchedMetadata(fetched);
+			// Only a fetch whose outcome is used saves its document. A retired
+			// fetch's document can be older than its replacement's, and saving it
+			// would put the stored client behind a fresh cache entry that later
+			// requests trust, so this request resolves again instead.
+			if (fetched) return persistFetchedMetadata(fetched);
 			resolvingAgain = true;
 		}
 	};

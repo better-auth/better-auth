@@ -746,12 +746,147 @@ describe("CIMD in-flight coalescing", () => {
 			// The abandoned fetch's pacing record is gone, so the replacement ran.
 			await expect(joinerResolution).resolves.toMatchObject({ clientId });
 
+			// The retired fetch's failure is not reported: the request that started
+			// it resolves again and fetches, which the failure's pacing would refuse.
 			failLeaderPolicy(new Error("policy service failed"));
-			await expect(leaderResolution).rejects.toThrow("policy service failed");
+			await expect(leaderResolution).resolves.toMatchObject({ clientId });
 			await expect(
 				discovery.resolve(later.ctx, clientId, null),
 			).resolves.toMatchObject({ clientId });
-			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
+		});
+
+		/**
+		 * A fetch past its lease is retired when a request for another client
+		 * needs its slot. A late answer is still the newest document when no
+		 * fetch for that client started after it was retired.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12358
+		 */
+		describe("a fetch whose lease ran out", () => {
+			it("uses its late document when no newer fetch for the client started", async () => {
+				const clientId = "https://lease-late.example/client.json";
+				const otherClientId = "https://lease-late-other.example/client.json";
+				const leaderPolicy = deferred<boolean>();
+				const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
+				isMetadataDocumentUrlAllowed.mockImplementationOnce(
+					() => leaderPolicy.promise,
+				);
+				const { discovery, fetchClientMetadataResource } = createDiscovery({
+					isMetadataDocumentUrlAllowed,
+					metadataFetchPolicy: {
+						minimumFetchInterval: 0,
+						maximumConcurrentFetches: 1,
+					},
+				});
+				fetchClientMetadataResource.mockImplementation(async (input) =>
+					namedMetadataResponse(String(input), "Late"),
+				);
+				const leader = await createRequestContext();
+				const other = await createRequestContext();
+				vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+
+				const leaderResolution = discovery.resolve(leader.ctx, clientId, null);
+				await vi.advanceTimersByTimeAsync(10_000);
+				await expect(
+					discovery.resolve(other.ctx, otherClientId, null),
+				).resolves.toMatchObject({ clientId: otherClientId });
+
+				leaderPolicy.resolve(true);
+				await expect(leaderResolution).resolves.toMatchObject({
+					name: "Late",
+				});
+				expect((await leader.findClient(clientId))?.name).toBe("Late");
+				await expect(
+					discovery.resolve(other.ctx, clientId, null),
+				).resolves.toMatchObject({ name: "Late" });
+				expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+			});
+
+			it("does not use its late document once a newer fetch for the client started", async () => {
+				const clientId = "https://lease-replaced.example/client.json";
+				const otherClientId =
+					"https://lease-replaced-other.example/client.json";
+				const leaderPolicy = deferred<boolean>();
+				const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
+				isMetadataDocumentUrlAllowed.mockImplementationOnce(
+					() => leaderPolicy.promise,
+				);
+				const { discovery, fetchClientMetadataResource } = createDiscovery({
+					isMetadataDocumentUrlAllowed,
+					metadataFetchPolicy: {
+						minimumFetchInterval: 0,
+						maximumConcurrentFetches: 1,
+					},
+				});
+				const names = ["Replacement", "Retired", "Replacement"];
+				fetchClientMetadataResource.mockImplementation(async (input) =>
+					String(input) === clientId
+						? metadataResponse(
+								clientId,
+								{ "cache-control": "no-store" },
+								names.shift(),
+							)
+						: metadataResponse(String(input)),
+				);
+				const leader = await createRequestContext();
+				const later = await createRequestContext();
+				vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+
+				const leaderResolution = discovery.resolve(leader.ctx, clientId, null);
+				await vi.advanceTimersByTimeAsync(10_000);
+				await discovery.resolve(later.ctx, otherClientId, null);
+				// The replacement cannot be cached, so it leaves no entry to compare.
+				await expect(
+					discovery.resolve(later.ctx, clientId, null),
+				).resolves.toMatchObject({ name: "Replacement" });
+
+				leaderPolicy.resolve(true);
+				await expect(leaderResolution).resolves.toMatchObject({
+					name: "Replacement",
+				});
+				expect((await leader.findClient(clientId))?.name).toBe("Replacement");
+			});
+
+			it("does not report its failure to a request that joined it", async () => {
+				const clientId = "https://lease-failure.example/client.json";
+				const otherClientId = "https://lease-failure-other.example/client.json";
+				let failLeaderPolicy!: (error: Error) => void;
+				const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
+				isMetadataDocumentUrlAllowed.mockImplementationOnce(
+					() =>
+						new Promise<boolean>((_resolve, reject) => {
+							failLeaderPolicy = reject;
+						}),
+				);
+				const { discovery, fetchClientMetadataResource } = createDiscovery({
+					isMetadataDocumentUrlAllowed,
+					metadataFetchPolicy: {
+						minimumFetchInterval: 0,
+						maximumConcurrentFetches: 1,
+					},
+				});
+				fetchClientMetadataResource.mockImplementation(async (input) =>
+					metadataResponse(String(input)),
+				);
+				const leader = await createRequestContext();
+				const joiner = await createRequestContext();
+				const other = await createRequestContext();
+				vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+
+				const leaderResolution = discovery.resolve(leader.ctx, clientId, null);
+				await vi.advanceTimersByTimeAsync(5_000);
+				const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
+				await vi.advanceTimersByTimeAsync(5_000);
+				// The lease runs out while the joined request still waits.
+				await discovery.resolve(other.ctx, otherClientId, null);
+
+				failLeaderPolicy(new Error("policy service failed"));
+				await expect(joinerResolution).resolves.toMatchObject({ clientId });
+				await expect(leaderResolution).resolves.toMatchObject({ clientId });
+				expect(await joiner.findClient(clientId)).toMatchObject({ clientId });
+				expect(await leader.findClient(clientId)).toMatchObject({ clientId });
+			});
 		});
 
 		it("lets a later request fetch after a joined request gave up", async () => {
