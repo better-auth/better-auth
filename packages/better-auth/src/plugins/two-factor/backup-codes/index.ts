@@ -1,3 +1,4 @@
+import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -40,6 +41,20 @@ export interface BackupCodeOptions {
 	 * An optional custom function to generate backup codes
 	 */
 	customBackupCodesGenerate?: (() => string[]) | undefined;
+	/**
+	 * Custom verification for backup codes. Return `true` for a valid consumed code,
+	 * `false` for an invalid code, or `undefined` to use built-in verification.
+	 */
+	verify?:
+		| ((
+				data: {
+					code: string;
+					user: UserWithTwoFactor;
+					twoFactor: TwoFactorTable;
+				},
+				ctx: GenericEndpointContext,
+		  ) => Awaitable<boolean | undefined>)
+		| undefined;
 	/**
 	 * How to store the backup codes in the database, whether encrypted or plain.
 	 */
@@ -352,20 +367,27 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						: null;
 					let validate: Awaited<ReturnType<typeof verifyBackupCode>>;
 					try {
-						validate = await verifyBackupCode(
-							{
-								backupCodes: twoFactor.backupCodes,
-								code: ctx.body.code,
-							},
-							ctx.context.secretConfig,
-							opts,
+						const result = await opts.verify?.(
+							{ code: ctx.body.code, user, twoFactor },
+							ctx,
 						);
+						validate =
+							result === undefined
+								? await verifyBackupCode(
+										{
+											backupCodes: twoFactor.backupCodes,
+											code: ctx.body.code,
+										},
+										ctx.context.secretConfig,
+										opts,
+									)
+								: { status: result === true, updated: null };
 					} catch (error) {
 						// A server error before the code is checked must not spend the slot.
 						await attempt?.restore();
 						throw error;
 					}
-					if (!validate.status || !validate.updated) {
+					if (!validate.status) {
 						await attempt?.recordFailure();
 						if (isSignIn) {
 							await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
@@ -375,33 +397,35 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						);
 					}
-					const updatedBackupCodes = await encodeBackupCodes(
-						validate.updated,
-						ctx.context.secretConfig,
-						opts,
-					);
+					if (validate.updated) {
+						const updatedBackupCodes = await encodeBackupCodes(
+							validate.updated,
+							ctx.context.secretConfig,
+							opts,
+						);
 
-					const updated = await ctx.context.adapter.incrementOne({
-						model: twoFactorTable,
-						where: [
-							{
-								field: "id",
-								value: twoFactor.id,
+						const updated = await ctx.context.adapter.incrementOne({
+							model: twoFactorTable,
+							where: [
+								{
+									field: "id",
+									value: twoFactor.id,
+								},
+								{
+									field: "backupCodes",
+									value: twoFactor.backupCodes,
+								},
+							],
+							increment: {},
+							set: {
+								backupCodes: updatedBackupCodes,
 							},
-							{
-								field: "backupCodes",
-								value: twoFactor.backupCodes,
-							},
-						],
-						increment: {},
-						set: {
-							backupCodes: updatedBackupCodes,
-						},
-					});
-					if (!updated) {
-						throw APIError.fromStatus("CONFLICT", {
-							message: "Failed to verify backup code. Please try again.",
 						});
+						if (!updated) {
+							throw APIError.fromStatus("CONFLICT", {
+								message: "Failed to verify backup code. Please try again.",
+							});
+						}
 					}
 
 					if (isSignIn) {
