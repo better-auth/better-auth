@@ -605,11 +605,13 @@ describe("private_key_jwt authentication", async () => {
 			const fixture = await setup("share-stale-finish");
 			await fixture.verify("old", fixture.oldKey);
 			const fetchJwks = fixture.transport.getMockImplementation()!;
-			let calls = 0;
-			fixture.transport.mockImplementation(async (...args) => {
-				const delay = ++calls === 1 ? 150 : 10;
+			let releaseOlderFetch!: () => void;
+			const olderFetchHeld = new Promise<void>((resolve) => {
+				releaseOlderFetch = resolve;
+			});
+			fixture.transport.mockImplementationOnce(async (...args) => {
 				const response = await fetchJwks(...args);
-				await new Promise((resolve) => setTimeout(resolve, delay));
+				await olderFetchHeld;
 				return response;
 			});
 
@@ -621,14 +623,18 @@ describe("private_key_jwt authentication", async () => {
 				fixture.verifyAssertion(first),
 				fixture.verifyAssertion(second),
 			]);
-			await vi.waitFor(() => expect(calls).toBe(1));
+			await vi.waitFor(() =>
+				expect(fixture.transport).toHaveBeenCalledTimes(2),
+			);
 			fixture.publishNewKey();
 			await expect(
 				fixture.verify("new", fixture.newKey),
 			).resolves.toMatchObject({ clientId: fixture.clientId });
+			releaseOlderFetch();
 
 			const results = await slowResults;
 			expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
 		});
 
 		it("lets a joiner make its own fetch when the shared fetch returns an invalid key set", async () => {
