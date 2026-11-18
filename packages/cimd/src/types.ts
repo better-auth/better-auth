@@ -143,6 +143,11 @@ export interface CimdOptions {
 	 * substitute for the required transport's resolve-once and connection-
 	 * pinning guarantees; resolving here would introduce a TOCTOU boundary.
 	 *
+	 * It runs for each request that needs the document fetched, including
+	 * requests that would join another request's in-flight fetch, before any
+	 * fetch budget is consumed. Fresh cache hits skip it. Keep it cheap, or cache
+	 * its decisions, if it consults an external service.
+	 *
 	 * @default always allow
 	 */
 	isMetadataDocumentUrlAllowed?: (
