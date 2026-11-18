@@ -43,7 +43,6 @@ describe("client declaration emit", () => {
 			declaration: true,
 			emitDeclarationOnly: true,
 			noEmit: false,
-			customConditions: ["dev-source"],
 		};
 
 		fs.writeFileSync(
