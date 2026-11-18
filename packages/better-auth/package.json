@@ -537,7 +537,7 @@
     "botid": "^1.5.10",
     "happy-dom": "^21.0.4",
     "msw": "^2.14.6",
-    "next": "^16.4.2",
+    "next": "^16.4.5",
     "oauth2-mock-server": "^9.0.0",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
