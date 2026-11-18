@@ -637,6 +637,25 @@ describe("oauth-provider - a stored consent keeps earlier approvals", async () =
 		expect(again.consentQuery).toBeDefined();
 	});
 
+	it("fails rather than loop when a duplicate row cannot be consumed", async () => {
+		await storeConsentRow(["openid", "email"], new Date(1_000_000));
+		await storeConsentRow(["profile"], new Date(2_000_000));
+		const pending = await openConsent({ scope: "openid offline_access" });
+		// A store whose consume never finds the row a read still returns, as
+		// with a custom adapter whose guard never matches.
+		const consume = adapter.consumeOne.bind(adapter);
+		const spy = vi.spyOn(adapter, "consumeOne");
+		spy.mockImplementation(async (args) =>
+			args.model === "oauthConsent" ? null : consume(args),
+		);
+
+		await expect(pending.approve()).rejects.toMatchObject({ status: 503 });
+		expect(
+			spy.mock.calls.filter(([args]) => args.model === "oauthConsent"),
+		).toHaveLength(5);
+		spy.mockRestore();
+	});
+
 	it("fails rather than write a consent without the timestamp guard", async () => {
 		await approve({ scope: "openid" });
 		const pending = await openConsent({ scope: "openid profile" });

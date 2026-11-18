@@ -1725,6 +1725,13 @@ export async function deleteConsent(
 
 const CONSENT_WRITE_ATTEMPTS = 5;
 
+function consentContention() {
+	return new APIError("SERVICE_UNAVAILABLE", {
+		error: "temporarily_unavailable",
+		error_description: "consent changed while saving, try again",
+	});
+}
+
 /**
  * Changes the consent of a user, client, and reference, and returns the row
  * written, or `null` when none is stored.
@@ -1742,7 +1749,8 @@ const CONSENT_WRITE_ATTEMPTS = 5;
  * runs again on the newer consent, so concurrent writes do not lose each
  * other's changes. Whole seconds stay exact on stores that drop milliseconds.
  * Every write carries the guard. After `CONSENT_WRITE_ATTEMPTS` misses, the
- * change fails.
+ * change fails, and so does a read that still finds other rows after that
+ * many passes.
  *
  * The write that lands first did not see the rows this one consumed, and may
  * have removed what they held. A missed write therefore drops those values
@@ -1767,7 +1775,8 @@ export async function updateConsent(
 		const [stored, ...duplicates] = await findConsentRows(ctx, key);
 		if (!stored) return null;
 		const consumed: OAuthConsent<Scope[]>[] = [];
-		for (let pending = duplicates; pending.length; ) {
+		for (let pass = 1, pending = duplicates; pending.length; pass++) {
+			if (pass > CONSENT_WRITE_ATTEMPTS) throw consentContention();
 			for (const duplicate of pending) {
 				const row = await ctx.context.adapter.consumeOne<OAuthConsent<Scope[]>>(
 					{
@@ -1808,12 +1817,7 @@ export async function updateConsent(
 			},
 		});
 		if (written) return written;
-		if (attempt >= CONSENT_WRITE_ATTEMPTS) {
-			throw new APIError("SERVICE_UNAVAILABLE", {
-				error: "temporarily_unavailable",
-				error_description: "consent changed while saving, try again",
-			});
-		}
+		if (attempt >= CONSENT_WRITE_ATTEMPTS) throw consentContention();
 	}
 }
 
