@@ -2251,7 +2251,7 @@ kBGIJYs=
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/11207
 		 */
-		it("accepts an optimistic guarded update when an additional field has an output transform", async () => {
+		it("rejects an optimistic guarded update when an additional field defines an output transform", async () => {
 			const options = {
 				guardProviderMutation() {},
 				schema: {
@@ -2284,28 +2284,34 @@ kBGIJYs=
 			const context = await auth.$context;
 			disableNativeTransactions(context.adapter);
 
-			const updated = await auth.api.updateSSOProvider({
+			// The read hands back the transformed value, so the compare-and-swap
+			// cannot state what the column stores. Refuse the mutation instead of
+			// letting a concurrent write to that column go undetected.
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: "transformed-update",
+						domain: "updated.example.com",
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "NOT_IMPLEMENTED",
 				body: {
-					providerId: "transformed-update",
-					domain: "updated.example.com",
+					code: "SSO_PROVIDER_TRANSFORMED_FIELD_REQUIRES_NATIVE_TRANSACTIONS",
 				},
-				headers,
 			});
-
-			// A field-level transform makes the read value differ from the stored
-			// column, so it must stay out of the compare-and-swap predicates.
-			expect(updated.domain).toBe("updated.example.com");
-			expect((updated as { externalId?: string }).externalId).toBe("SUBJECT-1");
-			expect(
-				data.ssoProvider.find((row) => row.providerId === "transformed-update")
-					?.externalId,
-			).toBe("subject-1");
+			const provider = data.ssoProvider.find(
+				(row) => row.providerId === "transformed-update",
+			);
+			expect(provider?.domain).toBe("example.com");
+			expect(provider?.externalId).toBe("subject-1");
 		});
 
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/11207
 		 */
-		it("accepts an optimistic guarded no-op update when an additional field has an output transform", async () => {
+		it("rejects an optimistic guarded delete when an additional field defines an output transform", async () => {
 			const options = {
 				guardProviderMutation() {},
 				schema: {
@@ -2315,8 +2321,6 @@ kBGIJYs=
 								type: "string",
 								required: false,
 								transform: {
-									// Read-only transform: the stored column keeps the raw
-									// value while the adapter hands back upper-case text.
 									output: (value) =>
 										typeof value === "string" ? value.toUpperCase() : value,
 								},
@@ -2332,46 +2336,92 @@ kBGIJYs=
 				password: "password123",
 				name: "Owner",
 			});
-			await registerSAMLProvider(headers, "transformed-noop", undefined, {
+			await registerSAMLProvider(headers, "transformed-delete", undefined, {
 				externalId: "subject-1",
 			});
-			const provider = data.ssoProvider.find(
-				(row) => row.providerId === "transformed-noop",
-			)!;
 			const context = await auth.$context;
 			disableNativeTransactions(context.adapter);
-			const updateMany = context.adapter.updateMany.bind(context.adapter);
-			context.adapter.updateMany = (async (input) => {
-				if (input.model === "ssoProvider") {
-					const current = await context.adapter.findOne<
-						Record<string, unknown>
-					>({
-						model: "ssoProvider",
-						where: [{ field: "id", value: provider.id }],
-					});
-					if (
-						current &&
-						Object.entries(input.update).every(
-							([field, value]) => current[field] === value,
-						)
-					) {
-						// MongoDB reports modifiedCount, so an unchanged write returns 0.
-						return 0;
-					}
-				}
-				return updateMany(input);
-			}) as typeof context.adapter.updateMany;
 
-			const updated = await auth.api.updateSSOProvider({
+			await expect(
+				auth.api.deleteSSOProvider({
+					body: { providerId: "transformed-delete" },
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "NOT_IMPLEMENTED",
 				body: {
-					providerId: "transformed-noop",
-					domain: "example.com",
+					code: "SSO_PROVIDER_TRANSFORMED_FIELD_REQUIRES_NATIVE_TRANSACTIONS",
 				},
-				headers,
+			});
+			expect(
+				data.ssoProvider.some((row) => row.providerId === "transformed-delete"),
+			).toBe(true);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
+		it("fences an additional field that defines only an input transform", async () => {
+			const options = {
+				guardProviderMutation() {},
+				schema: {
+					ssoProvider: {
+						additionalFields: {
+							externalId: {
+								type: "string",
+								required: false,
+								transform: {
+									// The column stores the lowered value and reads it back
+									// unchanged, so the guard snapshot holds the stored value.
+									input: (value) =>
+										typeof value === "string" ? value.toLowerCase() : value,
+								},
+							},
+						},
+					},
+				},
+			} satisfies SSOOptions;
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, options);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "input-transform-fence", undefined, {
+				externalId: "Subject-1",
+			});
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+			interceptSSOProviderMutationWrite(context.adapter, async () => {
+				await context.adapter.update({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: "input-transform-fence" }],
+					update: { externalId: "subject-2" },
+				});
 			});
 
-			expect(updated.domain).toBe("example.com");
-			expect((updated as { externalId?: string }).externalId).toBe("SUBJECT-1");
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: "input-transform-fence",
+						domain: "updated.example.com",
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "CONFLICT",
+				body: {
+					code: "SSO_PROVIDER_CHANGED",
+				},
+			});
+			const provider = data.ssoProvider.find(
+				(row) => row.providerId === "input-transform-fence",
+			);
+			// A field that only transforms writes reads back raw, so it must fence
+			// the snapshot; excluding it would lose this concurrent write.
+			expect(provider?.externalId).toBe("subject-2");
+			expect(provider?.domain).toBe("example.com");
 		});
 
 		/**

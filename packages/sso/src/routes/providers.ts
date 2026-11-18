@@ -388,18 +388,41 @@ function getProviderSnapshotFields(
  * The adapter replays date, boolean and JSON coercions when it builds a where
  * clause, but it does not replay a field-level `transform`: reads apply
  * `transform.output` and writes apply `transform.input`, while predicates use
- * the value as given. Fencing a transformed field would therefore make a
- * legitimate update fail to match its own row, so those fields stay out of the
- * fence.
+ * the value as given. A field that defines `transform.output` therefore reads
+ * back a value the column does not store, and fencing it would make a
+ * legitimate update fail to match its own row. A field that only defines
+ * `transform.input` is read back raw, so the snapshot holds the stored value and
+ * the field stays in the fence.
  */
 function isFenceableSnapshotField(
 	field: string,
 	attribute: DBFieldAttribute | undefined,
 ): boolean {
 	if (field === "id") return true;
-	return Boolean(
-		attribute && !attribute.transform?.input && !attribute.transform?.output,
-	);
+	return Boolean(attribute && !attribute.transform?.output);
+}
+
+/**
+ * The first snapshot column whose stored value cannot be recovered from the
+ * adapter's read, because the field defines `transform.output`.
+ *
+ * Such a column cannot be fenced: the guard evaluates the transformed value
+ * while the compare-and-swap would need the raw one. Accepting the mutation
+ * anyway would let a concurrent write to that column go undetected, so
+ * optimistic mode refuses the provider instead of promising a fence it cannot
+ * enforce.
+ */
+function getUnfenceableSnapshotField(
+	provider: SSOProviderRecord,
+	fields: ProviderSnapshotFields,
+): string | undefined {
+	const names = new Set<string>(PROVIDER_MUTATION_SNAPSHOT_FIELDS);
+	for (const field of Object.keys(provider)) names.add(field);
+	for (const field of names) {
+		if (field === "id") continue;
+		if (fields[field]?.transform?.output) return field;
+	}
+	return undefined;
 }
 
 function isPlainSnapshotObject(
@@ -436,10 +459,10 @@ function isProviderUpdateNoOp(
 ): boolean {
 	const current = provider as Record<string, unknown>;
 	return Object.entries(update).every(([field, value]) => {
-		// A transformed field cannot be compared without running the adapter's
-		// transforms: the update carries the input value while the snapshot
-		// carries the output value. Treat it as unchanged; the snapshot read
-		// that follows still fences every raw column.
+		// A field with an output transform cannot be compared: the update carries
+		// the input value while the snapshot carries the transformed read value.
+		// Optimistic mutations reject such providers before reaching this point,
+		// so only treat the field as unchanged as a last resort.
 		if (!isFenceableSnapshotField(field, fields[field])) return true;
 		// SQL reads return `null` for an unset nullable column, while Mongo and
 		// the memory adapter omit it. Both spellings fence the same state.
@@ -498,9 +521,13 @@ function getProviderMutationWriteWhere(
 	for (const [field, value] of Object.entries(update)) {
 		if (field === "id" || field === "providerId") continue;
 		if (value === undefined || !isSnapshotScalar(value)) continue;
-		// The update carries the input value, so a transformed field cannot be
-		// matched against the stored column.
-		if (!isFenceableSnapshotField(field, fields[field])) continue;
+		// A field the adapter does not declare has no column to compare, and a
+		// field that transforms stores `transform.input(value)`, so the update
+		// value cannot be matched against the column whenever it transforms
+		// either way.
+		const attribute = fields[field];
+		if (!attribute) continue;
+		if (attribute.transform?.input || attribute.transform?.output) continue;
 		where.push({ field, value });
 	}
 	return where;
@@ -1247,6 +1274,21 @@ export const updateSSOProvider = (options: SSOOptions) => {
 				}
 
 				if (mutationMode === "optimistic") {
+					// A column that defines an output transform cannot be fenced:
+					// the guard evaluates the transformed read value, while the
+					// compare-and-swap would need the stored one. Refuse the provider
+					// rather than letting a concurrent write to that column pass
+					// unnoticed.
+					const unfenceableField = getUnfenceableSnapshotField(
+						existingProvider,
+						providerFields,
+					);
+					if (unfenceableField) {
+						throw new APIError("NOT_IMPLEMENTED", {
+							code: "SSO_PROVIDER_TRANSFORMED_FIELD_REQUIRES_NATIVE_TRANSACTIONS",
+							message: `SSO provider field "${unfenceableField}" defines an output transform that an equality fence cannot compare, so updating it requires a database adapter with native transaction support`,
+						});
+					}
 					// Equality predicates can only fence scalar columns. Refuse to
 					// write a non-scalar additional field, because a concurrent change
 					// to that field would not participate in the compare-and-swap.
@@ -1408,6 +1450,19 @@ export const deleteSSOProvider = (options?: SSOOptions) => {
 					ctx.context.logger,
 				);
 				if (mutationMode === "optimistic") {
+					// A column with an output transform cannot be fenced, so a
+					// concurrent change to it would go undetected. Refuse the deletion
+					// instead of removing a row the fence cannot verify.
+					const unfenceableField = getUnfenceableSnapshotField(
+						existingProvider,
+						providerFields,
+					);
+					if (unfenceableField) {
+						throw new APIError("NOT_IMPLEMENTED", {
+							code: "SSO_PROVIDER_TRANSFORMED_FIELD_REQUIRES_NATIVE_TRANSACTIONS",
+							message: `SSO provider field "${unfenceableField}" defines an output transform that an equality fence cannot compare, so deleting it requires a database adapter with native transaction support`,
+						});
+					}
 					// Account cleanup cannot be atomic with provider deletion without
 					// a native transaction, and a failed cleanup would leave accounts
 					// usable by a later provider that reuses this providerId.
