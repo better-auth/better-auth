@@ -1157,7 +1157,9 @@ describe("oauth token - refresh_token", async () => {
 			expect((response.error as { error?: string })?.error).toBe(
 				"invalid_client",
 			);
-			expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+			expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+				'Basic realm="oauth"',
+			);
 		});
 	});
 
@@ -2637,7 +2639,9 @@ describe("oauth token - client_credentials", async () => {
 		expect((response.error as { error?: string })?.error).toBe(
 			"invalid_client",
 		);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("challenges client_secret_basic authentication without a secret", async () => {
@@ -2665,7 +2669,9 @@ describe("oauth token - client_credentials", async () => {
 		expect((response.error as { error?: string })?.error).toBe(
 			"invalid_client",
 		);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("challenges an unknown client_secret_basic client", async () => {
@@ -2689,7 +2695,9 @@ describe("oauth token - client_credentials", async () => {
 		expect((response.error as { error?: string })?.error).toBe(
 			"invalid_client",
 		);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("should match created client scopes", async ({ expect }) => {
@@ -3468,7 +3476,7 @@ describe("oauth token - config", async () => {
 			error: "invalid_client",
 		});
 		expect(basic.status).toBe(401);
-		expect(basic.headers.get("WWW-Authenticate")).toBe("Basic");
+		expect(basic.headers.get("WWW-Authenticate")).toBe('Basic realm="oauth"');
 		await expect(post.json()).resolves.toMatchObject({
 			error: "invalid_client",
 		});

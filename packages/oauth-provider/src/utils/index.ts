@@ -721,6 +721,14 @@ export async function normalizeClientAuthenticationParameters(
 }
 
 /**
+ * The `WWW-Authenticate` challenge for a failed `Basic` client authentication.
+ * RFC 7617 §2 requires the `realm` parameter, and RFC 6749 §5.2 requires the
+ * challenge on a 401 `invalid_client` for a client that authenticated through
+ * the `Authorization` header.
+ */
+export const BASIC_CHALLENGE = 'Basic realm="oauth"';
+
+/**
  * Headers for a response that carries an authentication challenge.
  * `WWW-Authenticate` is not a CORS-safelisted response header, so browsers
  * hide it from cross-origin clients, such as a browser MCP client registering
@@ -747,7 +755,7 @@ function basicToClientCredentials(authorization: string) {
 				error_description: "invalid authorization header format",
 				error: "invalid_client",
 			},
-			challengeHeaders("Basic"),
+			challengeHeaders(BASIC_CHALLENGE),
 		);
 	}
 }
@@ -811,7 +819,7 @@ function throwInvalidClient(
 		authentication?.method === "client_secret_basic";
 	const challengeScheme =
 		authentication?.scheme ??
-		(attemptedBasicAuthentication ? "Basic" : undefined);
+		(attemptedBasicAuthentication ? BASIC_CHALLENGE : undefined);
 	throw new APIError(
 		challengeScheme ? "UNAUTHORIZED" : "BAD_REQUEST",
 		{

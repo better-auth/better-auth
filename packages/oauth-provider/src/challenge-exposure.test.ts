@@ -98,4 +98,25 @@ describe("challenges expose WWW-Authenticate", async () => {
 			"WWW-Authenticate",
 		);
 	});
+
+	/**
+	 * @see https://www.rfc-editor.org/rfc/rfc7617#section-2
+	 * @see https://www.rfc-editor.org/rfc/rfc6749#section-5.2
+	 */
+	it.each([
+		["a malformed Basic header", "Basic %%%", 'Basic realm="oauth"'],
+		[
+			"an unknown Basic client",
+			`Basic ${btoa("unknown-client:secret")}`,
+			'Basic realm="oauth"',
+		],
+		["another scheme", "Digest username=client", "Digest"],
+	])(
+		"challenges %s with the scheme the client used",
+		async (_, authorization, challenge) => {
+			const response = await token(authorization);
+			expect(response.status).toBe(401);
+			expect(response.headers.get("WWW-Authenticate")).toBe(challenge);
+		},
+	);
 });
