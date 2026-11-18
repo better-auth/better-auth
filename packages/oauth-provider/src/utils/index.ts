@@ -1603,31 +1603,53 @@ export async function findConsent(
 	);
 }
 
+type ConsentKey = {
+	clientId: string;
+	userId: string;
+	referenceId?: string | null;
+};
+
+/** The stored `referenceId` values that mean this reference. */
+function consentReferenceValues(referenceId: string | null | undefined) {
+	return referenceId ? [referenceId] : [null, ""];
+}
+
+const CONSENT_PAGE_SIZE = 100;
+
 /**
  * Finds every consent row of a user and client stored for exactly this
  * reference, oldest first. Without a reference, only rows stored without one
  * (missing, null, or empty) match. The schema does not make the user, client,
  * and reference unique, so two first approvals at the same moment can each
- * create a row.
- *
- * @internal
+ * create a row. It reads a page at a time, because `findMany` would cap the
+ * rows at `defaultFindManyLimit`.
  */
-export async function findConsentRows(
+async function findConsentRows(
 	ctx: GenericEndpointContext,
-	consent: { clientId: string; userId: string; referenceId?: string | null },
+	key: ConsentKey,
 ): Promise<OAuthConsent<Scope[]>[]> {
-	const findByReference = (value: string | null) =>
-		ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
-			model: "oauthConsent",
-			where: [
-				{ field: "clientId", value: consent.clientId },
-				{ field: "userId", value: consent.userId },
-				{ field: "referenceId", value },
-			],
-		});
-	const rows = consent.referenceId
-		? await findByReference(consent.referenceId)
-		: (await Promise.all([findByReference(null), findByReference("")])).flat();
+	const rows = new Map<string, OAuthConsent<Scope[]>>();
+	for (const referenceId of consentReferenceValues(key.referenceId)) {
+		for (let offset = 0; ; offset += CONSENT_PAGE_SIZE) {
+			const page = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
+				model: "oauthConsent",
+				where: [
+					{ field: "clientId", value: key.clientId },
+					{ field: "userId", value: key.userId },
+					{ field: "referenceId", value: referenceId },
+				],
+				limit: CONSENT_PAGE_SIZE,
+				offset,
+				sortBy: { field: "id", direction: "asc" },
+			});
+			for (const row of page) rows.set(row.id, row);
+			if (page.length < CONSENT_PAGE_SIZE) break;
+		}
+	}
+	return sortConsentRows([...rows.values()]);
+}
+
+function sortConsentRows(rows: OAuthConsent<Scope[]>[]) {
 	const createdAt = (row: OAuthConsent<Scope[]>) =>
 		normalizeTimestampValue(row.createdAt)?.getTime() ?? 0;
 	return rows.sort(
@@ -1639,8 +1661,6 @@ export async function findConsentRows(
  * Reads the rows of one user, client, and reference as one consent: the oldest
  * row, holding the scopes, resources, and UserInfo claims of all of them. Each
  * row records approvals the user gave and did not take back.
- *
- * @internal
  */
 function mergeConsentRows(
 	rows: readonly OAuthConsent<Scope[]>[],
@@ -1660,25 +1680,74 @@ function mergeConsentRows(
 	};
 }
 
+/**
+ * Reads a user's consent rows as consents: the rows of one client and
+ * reference become one, as `findConsent` reads them. The list keeps the order
+ * of each consent's first row.
+ *
+ * @internal
+ */
+export function mergeConsentsByReference(
+	rows: readonly OAuthConsent<Scope[]>[],
+): OAuthConsent<Scope[]>[] {
+	const consents = new Map<string, OAuthConsent<Scope[]>[]>();
+	for (const row of rows) {
+		const key = JSON.stringify([row.clientId, row.referenceId || null]);
+		const group = consents.get(key);
+		if (group) group.push(row);
+		else consents.set(key, [row]);
+	}
+	return [...consents.values()].map(
+		(group) => mergeConsentRows(sortConsentRows(group))!,
+	);
+}
+
+/**
+ * Deletes every row of a user's consent for one client and reference.
+ *
+ * @internal
+ */
+export async function deleteConsent(
+	ctx: GenericEndpointContext,
+	key: ConsentKey,
+) {
+	for (const referenceId of consentReferenceValues(key.referenceId)) {
+		await ctx.context.adapter.deleteMany({
+			model: "oauthConsent",
+			where: [
+				{ field: "clientId", value: key.clientId },
+				{ field: "userId", value: key.userId },
+				{ field: "referenceId", value: referenceId },
+			],
+		});
+	}
+}
+
 const CONSENT_WRITE_ATTEMPTS = 5;
 
 /**
  * Changes the consent of a user, client, and reference, and returns the row
- * written, or `null` when none is stored. Several rows for the reference are
- * first merged into the oldest and the others deleted, and only then is
- * `change` applied: a value it removes could otherwise come back from a
- * duplicate that a concurrent write reads before the delete.
+ * written, or `null` when none is stored.
+ *
+ * The oldest row holds the consent. Every other row of the reference is
+ * consumed first, and what it held is written into the oldest together with
+ * `change`. Only the write that consumed a row carries its values, so a row
+ * that another write read before it was consumed cannot bring back a value
+ * that `change` removed.
  *
  * The write is guarded by the `updatedAt` it read, and moves it to a later
  * whole second. If another write lands first, the guard misses and `change`
  * runs again on the newer consent, so concurrent writes do not lose each
  * other's changes. Whole seconds stay exact on stores that drop milliseconds.
+ * Every write carries the guard. After `CONSENT_WRITE_ATTEMPTS` misses, the
+ * change fails, and the approvals of rows it consumed are lost, so the user is
+ * asked again rather than granted more.
  *
  * @internal
  */
 export async function updateConsent(
 	ctx: GenericEndpointContext,
-	key: { clientId: string; userId: string; referenceId?: string | null },
+	key: ConsentKey,
 	change: (
 		consent: OAuthConsent<Scope[]>,
 	) => Partial<
@@ -1688,32 +1757,30 @@ export async function updateConsent(
 		>
 	>,
 ): Promise<OAuthConsent<Scope[]> | null> {
-	let missed: OAuthConsent<Scope[]> | undefined;
+	const consumed: OAuthConsent<Scope[]>[] = [];
 	for (let attempt = 1; ; attempt++) {
-		const rows = await findConsentRows(ctx, key);
-		const consent = mergeConsentRows(rows);
-		if (!consent) return null;
-		const updatedAt = normalizeTimestampValue(consent.updatedAt)?.getTime();
-		// Every consent write moves `updatedAt`. If it has not moved since the
-		// guard missed, no write raced this one: the store keeps a value the
-		// guard cannot match exactly, so this attempt writes without it.
-		const guarded =
-			missed?.id !== consent.id ||
-			normalizeTimestampValue(missed.updatedAt)?.getTime() !== updatedAt;
+		const [stored, ...duplicates] = await findConsentRows(ctx, key);
+		if (!stored) return null;
+		for (const duplicate of duplicates) {
+			const row = await ctx.context.adapter.consumeOne<OAuthConsent<Scope[]>>({
+				model: "oauthConsent",
+				where: [{ field: "id", value: duplicate.id }],
+			});
+			if (row) consumed.push(row);
+		}
+		const consent = mergeConsentRows([stored, ...consumed])!;
+		const changed = { ...consent, ...change(consent) };
+		const updatedAt = normalizeTimestampValue(stored.updatedAt)?.getTime();
 		const now = Math.floor(Date.now() / 1000);
 		const after =
 			updatedAt === undefined ? now : Math.floor(updatedAt / 1000) + 1;
-		const folding = rows.length > 1;
-		const changed = folding ? consent : { ...consent, ...change(consent) };
 		const written = await ctx.context.adapter.incrementOne<
 			OAuthConsent<Scope[]>
 		>({
 			model: "oauthConsent",
 			where: [
-				{ field: "id", value: consent.id },
-				...(guarded
-					? [{ field: "updatedAt", value: consent.updatedAt ?? null }]
-					: []),
+				{ field: "id", value: stored.id },
+				{ field: "updatedAt", value: stored.updatedAt ?? null },
 			],
 			increment: {},
 			set: {
@@ -1725,17 +1792,7 @@ export async function updateConsent(
 				updatedAt: new Date(Math.max(now, after) * 1000),
 			},
 		});
-		if (written) {
-			for (const duplicate of rows.slice(1)) {
-				await ctx.context.adapter.delete({
-					model: "oauthConsent",
-					where: [{ field: "id", value: duplicate.id }],
-				});
-			}
-			if (!folding) return written;
-		} else {
-			missed = consent;
-		}
+		if (written) return written;
 		if (attempt >= CONSENT_WRITE_ATTEMPTS) {
 			throw new APIError("SERVICE_UNAVAILABLE", {
 				error: "temporarily_unavailable",

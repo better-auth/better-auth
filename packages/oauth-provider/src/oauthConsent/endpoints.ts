@@ -3,9 +3,10 @@ import { APIError, getSessionFromCtx } from "better-auth/api";
 import { revokeConsentTokens } from "../token";
 import type { OAuthConsent, OAuthOptions, Scope } from "../types";
 import {
+	deleteConsent,
 	findConsent,
-	findConsentRows,
 	getClient,
+	mergeConsentsByReference,
 	updateConsent,
 } from "../utils";
 
@@ -67,7 +68,7 @@ export async function getConsentsEndpoint(
 	const session = await getSessionFromCtx(ctx);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
-	return await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
+	const rows = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
 		model: "oauthConsent",
 		where: [
 			{
@@ -76,6 +77,7 @@ export async function getConsentsEndpoint(
 			},
 		],
 	});
+	return mergeConsentsByReference(rows);
 }
 
 export async function deleteConsentEndpoint(
@@ -110,12 +112,7 @@ export async function deleteConsentEndpoint(
 		referenceId: consent.referenceId,
 	});
 	// Another row stored for the same reference would keep the consent.
-	for (const row of await findConsentRows(ctx, consent)) {
-		await ctx.context.adapter.delete({
-			model: "oauthConsent",
-			where: [{ field: "id", value: row.id }],
-		});
-	}
+	await deleteConsent(ctx, consent);
 }
 
 export async function updateConsentEndpoint(

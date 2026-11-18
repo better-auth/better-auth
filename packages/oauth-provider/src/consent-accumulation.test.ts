@@ -35,7 +35,10 @@ interface PendingCode {
  * A stored consent is what the user approved for a client under one reference
  * and did not take back. An approval adds to it, and only the user removes
  * from it: by declining an offered scope or claim, by narrowing it, or by
- * deleting it.
+ * deleting it. Redemption checks read it, so it must keep what the user
+ * approved for pending codes.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11318
  */
 describe("oauth-provider - a stored consent keeps earlier approvals", async () => {
 	// The reference the next authorization request stores its consent under.
@@ -193,7 +196,11 @@ describe("oauth-provider - a stored consent keeps earlier approvals", async () =
 		return rows[0]!;
 	}
 
-	function storeConsentRow(scopes: string[], createdAt: Date) {
+	function storeConsentRow(
+		scopes: string[],
+		createdAt: Date,
+		referenceId?: string,
+	) {
 		return adapter.create<OAuthConsent<Scope[]>>({
 			model: "oauthConsent",
 			data: {
@@ -202,6 +209,7 @@ describe("oauth-provider - a stored consent keeps earlier approvals", async () =
 				scopes,
 				createdAt,
 				updatedAt: createdAt,
+				...(referenceId === undefined ? {} : { referenceId }),
 			},
 		});
 	}
@@ -387,14 +395,14 @@ describe("oauth-provider - a stored consent keeps earlier approvals", async () =
 
 		// The other approval runs while the declining one removes a duplicate,
 		// so it reads the duplicate that still holds `profile`.
-		const remove = adapter.delete.bind(adapter);
+		const consume = adapter.consumeOne.bind(adapter);
 		let raced = false;
-		vi.spyOn(adapter, "delete").mockImplementation(async (args) => {
+		vi.spyOn(adapter, "consumeOne").mockImplementation(async (args) => {
 			if (args.model === "oauthConsent" && !raced) {
 				raced = true;
 				await adding.approve();
 			}
-			return remove(args);
+			return consume(args);
 		});
 		await declining.approve({ scope: "openid" });
 
@@ -403,56 +411,170 @@ describe("oauth-provider - a stored consent keeps earlier approvals", async () =
 		expect([...scopes].sort()).toEqual(["email", "offline_access", "openid"]);
 	});
 
-	it("reads, updates, and deletes every row stored for the same reference", async () => {
-		const older = await storeConsentRow(["openid"], new Date(1_000_000));
-		const newer = await storeConsentRow(["profile"], new Date(2_000_000));
-
-		const read = await client.oauth2.getConsent(
-			{ query: { id: newer.id } },
-			{ headers },
-		);
-		expect(read.data).toMatchObject({
-			id: older.id,
-			scopes: ["openid", "profile"],
+	it("does not bring back a declined scope from a duplicate read before the decline", async () => {
+		// Rows without a reference are read twice: those stored with `null`, and
+		// those stored with "". The duplicate is read first.
+		await storeConsentRow(["openid", "email"], new Date(1_000_000), "");
+		await storeConsentRow(["profile"], new Date(2_000_000));
+		const declining = await openConsent({
+			scope: "openid profile",
+			prompt: "consent",
 		});
+		const adding = await openConsent({ scope: "openid offline_access" });
 
+		// The other approval reads the duplicate before the declining one
+		// removes it, and reads the oldest row after the decline is written.
+		const findMany = adapter.findMany.bind(adapter);
+		let duplicateRead!: () => void;
+		const readDuplicate = new Promise<void>((resolve) => {
+			duplicateRead = resolve;
+		});
+		let releaseOldest!: () => void;
+		const oldestHeld = new Promise<void>((resolve) => {
+			releaseOldest = resolve;
+		});
+		const reads = { duplicate: 0, oldest: 0 };
+		vi.spyOn(adapter, "findMany").mockImplementation(async (args) => {
+			const reference =
+				args.model === "oauthConsent"
+					? args.where?.find(({ field }) => field === "referenceId")?.value
+					: undefined;
+			if (reference === "" && reads.oldest++ === 0) await oldestHeld;
+			const rows = await findMany(args);
+			if (reference === null && reads.duplicate++ === 0) duplicateRead();
+			return rows;
+		});
+		const added = adding.approve();
+		await readDuplicate;
+		await declining.approve({ scope: "openid" });
+		releaseOldest();
+		await added;
+
+		expect(await findConsentRows()).toHaveLength(0);
+		const { scopes } = await findStoredConsent("");
+		expect([...scopes].sort()).toEqual(["email", "offline_access", "openid"]);
+	});
+
+	it.each([
+		{ name: "no reference", older: undefined, newer: "", other: "org_b" },
+		{ name: "a reference", older: "org_a", newer: "org_a", other: undefined },
+	])(
+		"reads, updates, and deletes every row stored for $name",
+		async ({
+			older: olderReference,
+			newer: newerReference,
+			other: otherReference,
+		}) => {
+			const older = await storeConsentRow(
+				["openid"],
+				new Date(1_000_000),
+				olderReference,
+			);
+			const newer = await storeConsentRow(
+				["profile"],
+				new Date(2_000_000),
+				newerReference,
+			);
+			const other = await storeConsentRow(
+				["email"],
+				new Date(1_500_000),
+				otherReference,
+			);
+
+			const read = await client.oauth2.getConsent(
+				{ query: { id: newer.id } },
+				{ headers },
+			);
+			expect(read.data).toMatchObject({
+				id: older.id,
+				scopes: ["openid", "profile"],
+			});
+			const listed = await client.oauth2.getConsents({
+				fetchOptions: { headers },
+			});
+			const consents = listed.data
+				?.filter(({ clientId }) => clientId === oauthClient.client_id)
+				.map(({ id, scopes }) => ({ id, scopes }));
+			expect(consents).toHaveLength(2);
+			expect(consents).toEqual(
+				expect.arrayContaining([
+					{ id: older.id, scopes: ["openid", "profile"] },
+					{ id: other.id, scopes: ["email"] },
+				]),
+			);
+
+			const updated = await client.oauth2.updateConsent(
+				{ id: newer.id, update: { scopes: ["openid", "email"] } },
+				{ headers },
+			);
+			expect(updated.error).toBeNull();
+			const consent = await findStoredConsent(olderReference);
+			expect(consent).toMatchObject({
+				id: older.id,
+				scopes: ["openid", "email"],
+			});
+			expect(await findConsentRows(newerReference)).toHaveLength(
+				newerReference === olderReference ? 1 : 0,
+			);
+
+			await storeConsentRow(["profile"], new Date(3_000_000), newerReference);
+			const deleted = await client.oauth2.deleteConsent(
+				{ id: consent.id },
+				{ headers },
+			);
+			expect(deleted.error).toBeNull();
+			expect(await findConsentRows(olderReference)).toHaveLength(0);
+			expect(await findConsentRows(newerReference)).toHaveLength(0);
+			expect(await findStoredConsent(otherReference)).toMatchObject({
+				id: other.id,
+				scopes: ["email"],
+			});
+		},
+	);
+
+	it("reads and narrows every row of a consent past one page of rows", async () => {
+		state.referenceId = "org_a";
+		// More rows than one `findMany` page, with the newest holding `profile`.
+		for (let row = 0; row <= 100; row++) {
+			await storeConsentRow(
+				row === 100 ? ["profile"] : ["openid"],
+				new Date(1_000_000 + row * 1000),
+				"org_a",
+			);
+		}
+		const covered = await startAuthorization({ scope: "openid profile" });
+		expect(covered.code).toBeTruthy();
+
+		const [first] = await findConsentRows("org_a");
 		const updated = await client.oauth2.updateConsent(
-			{ id: older.id, update: { scopes: ["openid", "email"] } },
+			{ id: first!.id, update: { scopes: ["openid"] } },
 			{ headers },
 		);
 		expect(updated.error).toBeNull();
-		const consent = await findStoredConsent();
-		expect(consent).toMatchObject({
-			id: older.id,
-			scopes: ["openid", "email"],
-		});
-
-		await storeConsentRow(["profile"], new Date(3_000_000));
-		const deleted = await client.oauth2.deleteConsent(
-			{ id: consent.id },
-			{ headers },
-		);
-		expect(deleted.error).toBeNull();
-		expect(await findConsentRows()).toHaveLength(0);
+		expect((await findStoredConsent("org_a")).scopes).toEqual(["openid"]);
+		const again = await startAuthorization({ scope: "openid profile" });
+		expect(again.consentQuery).toBeDefined();
 	});
 
-	it("writes without the timestamp guard when it cannot match the stored row", async () => {
+	it("fails rather than write a consent without the timestamp guard", async () => {
 		await approve({ scope: "openid" });
+		const pending = await openConsent({ scope: "openid profile" });
 		const incrementOne = adapter.incrementOne.bind(adapter);
 		const spy = vi.spyOn(adapter, "incrementOne");
-		// A guard that misses while no other write moves `updatedAt`.
+		// A guard that keeps missing, as when other writes keep landing first.
 		spy.mockImplementation(async (args) =>
-			args.model === "oauthConsent" &&
-			args.where.some(({ field }) => field === "updatedAt")
-				? null
-				: incrementOne(args),
+			args.model === "oauthConsent" ? null : incrementOne(args),
 		);
 
-		await approve({ scope: "openid profile" });
-		expect((await findStoredConsent()).scopes).toEqual(["openid", "profile"]);
+		await expect(pending.approve()).rejects.toMatchObject({ status: 503 });
 		const consentWrites = spy.mock.calls.filter(
 			([args]) => args.model === "oauthConsent",
 		);
-		expect(consentWrites).toHaveLength(2);
+		expect(consentWrites).toHaveLength(5);
+		for (const [args] of consentWrites) {
+			expect(args.where.map(({ field }) => field)).toContain("updatedAt");
+		}
+		spy.mockRestore();
+		expect((await findStoredConsent()).scopes).toEqual(["openid"]);
 	});
 });

@@ -2290,6 +2290,9 @@ describe("oauth-provider device approval through the consent flow", async () => 
 		expect(stored?.scopes).toEqual([]);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11318
+	 */
 	it("keeps the scopes of an earlier device when another device of the client is approved for fewer", async () => {
 		resolveReference = () => "org_1";
 		const first = await startDevice();
