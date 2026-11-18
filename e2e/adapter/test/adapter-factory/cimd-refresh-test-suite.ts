@@ -16,6 +16,20 @@ function requestUrl(input: RequestInfo | URL): string {
 			: input.url;
 }
 
+async function generatePublicJwk(kid: string) {
+	const { publicKey } = (await crypto.subtle.generateKey(
+		{ name: "ECDSA", namedCurve: "P-256" },
+		true,
+		["sign", "verify"],
+	)) as CryptoKeyPair;
+	return {
+		...(await crypto.subtle.exportKey("jwk", publicKey)),
+		kid,
+		alg: "ES256",
+		use: "sig",
+	};
+}
+
 /**
  * A metadata refresh must store a dropped list field in a form every adapter
  * accepts and reads back the way it reads a client registered without it.
@@ -126,6 +140,39 @@ export function cimdRefreshTestSuite() {
 						expect(refreshed?.postLogoutRedirectUris ?? []).toEqual([]);
 					},
 				},
+				"clears response types when a refreshed metadata document drops the authorization code grant":
+					{
+						migrateBetterAuth: cimdBetterAuthOptions,
+						async test() {
+							const { resolvePublicClient, readClient } = await setup();
+							const clientId =
+								"https://service-client.example.com/client-metadata.json";
+							const document = {
+								client_id: clientId,
+								client_name: "Service Client",
+								token_endpoint_auth_method: "private_key_jwt",
+								jwks: { keys: [await generatePublicJwk("service-key")] },
+							};
+							documents.set(clientId, {
+								...document,
+								redirect_uris: ["https://service-client.example.com/callback"],
+								grant_types: ["authorization_code", "client_credentials"],
+							});
+							await resolvePublicClient(clientId);
+							expect((await readClient(clientId))?.responseTypes).toEqual([
+								"code",
+							]);
+
+							documents.set(clientId, {
+								...document,
+								grant_types: ["client_credentials"],
+							});
+							await resolvePublicClient(clientId);
+							const refreshed = await readClient(clientId);
+							expect(refreshed?.grantTypes).toEqual(["client_credentials"]);
+							expect(refreshed?.responseTypes ?? []).toEqual([]);
+						},
+					},
 			};
 		},
 	)();

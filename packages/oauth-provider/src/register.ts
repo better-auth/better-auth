@@ -154,6 +154,7 @@ const METADATA_DOCUMENT_CLIENT_FIELDS = [
 	"softwareVersion",
 	"softwareStatement",
 	"postLogoutRedirectUris",
+	"responseTypes",
 	"dpopBoundAccessTokens",
 ] as const satisfies readonly (keyof SchemaClient<Scope[]>)[];
 

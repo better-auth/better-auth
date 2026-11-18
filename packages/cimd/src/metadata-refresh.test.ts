@@ -266,6 +266,42 @@ describe("CIMD - refresh stores what the current document lists", async () => {
 		expect((await readClient(clientId))?.subjectType).toBe("pairwise");
 	});
 
+	it("clears response types when a refreshed document drops the authorization code grant", async () => {
+		const clientId = "https://service-client.example.com/client-metadata.json";
+		const redirectUri = "https://service-client.example.com/callback";
+		const key = await generateSigningKey("service-client-key");
+		const document = {
+			client_id: clientId,
+			client_name: "Service Client",
+			token_endpoint_auth_method: "private_key_jwt",
+			jwks: { keys: [key.publicJwk] },
+		};
+		documents.set(clientId, {
+			...document,
+			redirect_uris: [redirectUri],
+			grant_types: ["authorization_code", "client_credentials"],
+		});
+		await resolveClient(clientId);
+		expect((await readClient(clientId))?.responseTypes).toEqual(["code"]);
+
+		documents.set(clientId, {
+			...document,
+			grant_types: ["client_credentials"],
+		});
+		const authorizeUrl = new URL(`${baseURL}/api/auth/oauth2/authorize`);
+		authorizeUrl.searchParams.set("client_id", clientId);
+		authorizeUrl.searchParams.set("response_type", "code");
+		authorizeUrl.searchParams.set("redirect_uri", redirectUri);
+		const authorize = await auth.handler(
+			new Request(authorizeUrl, { headers }),
+		);
+		const location = new URL(authorize.headers.get("location") ?? "", baseURL);
+		expect(location.searchParams.get("error")).toBe("unauthorized_client");
+		const refreshed = await readClient(clientId);
+		expect(refreshed?.grantTypes).toEqual(["client_credentials"]);
+		expect(refreshed?.responseTypes).toEqual([]);
+	});
+
 	it("writes the same values when the refreshed document still lists every field", async () => {
 		const clientId = "https://full-client.example.com/client-metadata.json";
 		documents.set(
