@@ -1,6 +1,10 @@
 import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
+import { oauthProvider } from "@better-auth/oauth-provider";
+import { jwt } from "better-auth/plugins/jwt";
+import { getTestInstance } from "better-auth/test";
 import { describe, expect, it, vi } from "vitest";
+import { cimd } from "./index";
 
 const mocks = vi.hoisted(() => ({
 	lookup: vi.fn(),
@@ -245,6 +249,80 @@ describe("Node CIMD metadata transport", () => {
 			expect(addListener).toHaveBeenCalledWith("abort", removed, {
 				once: true,
 			});
+		});
+
+		it("frees the plugin's fetch slot when its deadline aborts a stalled lookup", async () => {
+			const baseURL = "http://localhost:3471";
+			const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+				baseURL,
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						scopes: ["openid"],
+					}),
+					cimd({
+						fetchClientMetadataResource,
+						metadataFetchPolicy: {
+							maximumConcurrentFetches: 1,
+							minimumFetchInterval: 0,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+			const authorize = (clientId: string) =>
+				customFetchImpl(
+					`${baseURL}/api/auth/oauth2/authorize?${new URLSearchParams({
+						client_id: clientId,
+						response_type: "code",
+						redirect_uri: "http://127.0.0.1:5199/callback",
+						scope: "openid",
+						code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+						code_challenge_method: "S256",
+					})}`,
+					{ headers },
+				);
+			let resolveStalledLookup:
+				| ((addresses: { address: string; family: number }[]) => void)
+				| undefined;
+			mocks.lookup.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveStalledLookup = resolve;
+					}),
+			);
+			const healthyClientId = "https://healthy.example.com/client.json";
+			mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+			mockHttpsResponse({
+				body: JSON.stringify({
+					client_id: healthyClientId,
+					client_name: "Healthy Client",
+					redirect_uris: ["http://127.0.0.1:5199/callback"],
+					application_type: "native",
+					token_endpoint_auth_method: "none",
+				}),
+			});
+
+			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+			try {
+				const stalled = authorize("https://stalled.example.com/client.json");
+				await vi.waitFor(() => expect(mocks.lookup).toHaveBeenCalledTimes(1));
+				await vi.advanceTimersByTimeAsync(5_000);
+				const stalledResponse = await stalled;
+				expect(stalledResponse.status).toBeGreaterThanOrEqual(400);
+				expect(JSON.stringify(await stalledResponse.json())).toContain(
+					"timed out",
+				);
+			} finally {
+				vi.useRealTimers();
+			}
+
+			const healthy = await authorize(healthyClientId);
+			expect(healthy.headers.get("location")).toContain("/consent");
+
+			resolveStalledLookup?.([{ address: "93.184.216.34", family: 4 }]);
 		});
 	});
 
