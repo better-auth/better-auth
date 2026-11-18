@@ -35,6 +35,9 @@ const MAX_METADATA_STALE_IF_ERROR_MS = 24 * 60 * 60 * 1000;
 // document is fetched at most this often, so an outage does not spend the
 // origin's fetch budget.
 const STALE_CLIENT_REFETCH_INTERVAL_MS = 60_000;
+// How recent a transient failure must be for the stored client to stand in
+// when a local fetch limit refuses the fetch instead.
+const STALE_CLIENT_REFUSAL_WINDOW_MS = 5 * 60_000;
 const DEFAULT_METADATA_FETCH_POLICY = {
 	minimumFetchInterval: 1,
 	maximumConcurrentFetches: 16,
@@ -412,6 +415,12 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		string,
 		{ failedAtMs: number; reason: string }
 	>();
+	// Clients whose fetch failed with a failure that is not transient since their
+	// last successful fetch. Their stored client is not served stale. Evicting a
+	// record moves the watermark, and stored clients last validated before it
+	// are not served stale either, so an eviction cannot resume stale serving.
+	const terminalFailureClientIds = new Set<string>();
+	let terminalFailureEvictedAtMs = Number.NEGATIVE_INFINITY;
 	const inFlightMetadataByClientId = new Map<string, InFlightMetadataFetch>();
 	// The latest fetch the lease retired for a client, until it settles or a
 	// newer fetch for that client starts. Only this fetch may be used late, and
@@ -440,20 +449,36 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		metadataCache.set(clientId, entry);
 	};
 
-	const recordFetchOutcome = (clientId: string, failure?: unknown) => {
+	const recordFetchSuccess = (clientId: string) => {
 		transientFailureByClientId.delete(clientId);
-		if (staleIfErrorMs === null || !isTransientMetadataFetchFailure(failure)) {
+		terminalFailureClientIds.delete(clientId);
+	};
+
+	const recordFetchFailure = (clientId: string, failure: unknown) => {
+		if (staleIfErrorMs === null || isMetadataFetchCapacityRefusal(failure)) {
 			return;
 		}
-		while (transientFailureByClientId.size >= maxCacheEntries) {
-			const oldestClientId = transientFailureByClientId.keys().next().value;
-			if (typeof oldestClientId !== "string") break;
-			transientFailureByClientId.delete(oldestClientId);
+		transientFailureByClientId.delete(clientId);
+		if (isTransientMetadataFetchFailure(failure)) {
+			while (transientFailureByClientId.size >= maxCacheEntries) {
+				const oldestClientId = transientFailureByClientId.keys().next().value;
+				if (typeof oldestClientId !== "string") break;
+				transientFailureByClientId.delete(oldestClientId);
+			}
+			transientFailureByClientId.set(clientId, {
+				failedAtMs: Date.now(),
+				reason: describeFetchFailure(failure),
+			});
+			return;
 		}
-		transientFailureByClientId.set(clientId, {
-			failedAtMs: Date.now(),
-			reason: describeFetchFailure(failure),
-		});
+		terminalFailureClientIds.delete(clientId);
+		while (terminalFailureClientIds.size >= maxCacheEntries) {
+			const oldestClientId = terminalFailureClientIds.values().next().value;
+			if (typeof oldestClientId !== "string") break;
+			terminalFailureClientIds.delete(oldestClientId);
+			terminalFailureEvictedAtMs = Date.now();
+		}
+		terminalFailureClientIds.add(clientId);
 	};
 
 	const ensureClientFetchStateCapacity = (clientId: string, nowMs: number) => {
@@ -750,7 +775,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				// Successful fetches are governed by HTTP freshness and origin/global
 				// budgets. Keep the per-client interval only as failed-fetch backoff.
 				lastFetchStartAtMsByClientId.delete(clientId);
-				recordFetchOutcome(clientId);
+				recordFetchSuccess(clientId);
 			}
 			return { metadata, nextEntry };
 		})();
@@ -784,7 +809,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			} else {
 				recordFailedFetch(clientId);
 			}
-			recordFetchOutcome(clientId, error);
+			recordFetchFailure(clientId, error);
 			throw error;
 		} finally {
 			if (inFlightMetadataByClientId.get(clientId) === inFlight) {
@@ -851,11 +876,18 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		};
 
 		// CIMD draft-03 §6.1: a transient failure should not invalidate a
-		// client's established trust. Only the stored row stands in, never an
-		// instance's cached document, so every instance answers alike.
+		// client's established trust, and a terminal one may. Only the stored row
+		// stands in, never an instance's cached document.
 		const storedClientWithinStaleBound = () => {
-			if (!existingClient?.updatedAt || staleIfErrorMs === null) return null;
+			if (
+				!existingClient?.updatedAt ||
+				staleIfErrorMs === null ||
+				terminalFailureClientIds.has(clientId)
+			) {
+				return null;
+			}
 			const validatedAtMs = new Date(existingClient.updatedAt).getTime();
+			if (validatedAtMs <= terminalFailureEvictedAtMs) return null;
 			return Date.now() - validatedAtMs <= staleIfErrorMs
 				? existingClient
 				: null;
@@ -912,9 +944,18 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				if (storedClient && isTransientMetadataFetchFailure(error)) {
 					return serveStoredClient(storedClient, describeFetchFailure(error));
 				}
-				// The fetch limits refused a client already being served stale.
+				// A local limit refused a fetch for a client already being served
+				// stale. The refusal says nothing about the document, so only a recent
+				// transient failure lets the stored client stand in.
 				const lastFailure = transientFailureByClientId.get(clientId);
-				if (storedClient && lastFailure && isMetadataFetchRefusal(error)) {
+				if (
+					storedClient &&
+					lastFailure &&
+					Date.now() - lastFailure.failedAtMs <=
+						STALE_CLIENT_REFUSAL_WINDOW_MS &&
+					(isMetadataFetchRefusal(error) ||
+						isMetadataFetchCapacityRefusal(error))
+				) {
 					return serveStoredClient(storedClient, lastFailure.reason);
 				}
 				throw error;

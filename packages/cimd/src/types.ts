@@ -107,19 +107,26 @@ export interface CimdOptions {
 	 * because of a transient failure, for up to this long after the client was
 	 * last validated (its `updatedAt`). A transient failure is the plugin's
 	 * 5-second fetch timeout, a connection failure such as a reset or refused
-	 * connection, or an HTTP 5xx response. Every other failure still rejects
-	 * the request. While a client is served this way, its document is fetched
-	 * again at most once a minute.
+	 * connection, or an HTTP 500, 502, 503, or 504 response. Every other
+	 * failure still rejects the request, and also stops this plugin instance
+	 * from serving the stored client until a refresh succeeds. While a client
+	 * is served this way, its document is fetched again at most once a minute.
+	 *
+	 * This is an operator trust policy modeled on RFC 5861 stale-if-error, and
+	 * applies whatever cache directives the document was served with: the
+	 * stored client is a registration, not a cached HTTP response (CIMD
+	 * draft-03 §6.1).
 	 *
 	 * A client that authenticates with `private_key_jwt` and a `jwks_uri` also
-	 * keeps its cached keys for the same time when refreshing them fails
-	 * transiently. Keys are cached in memory, so after a restart they must be
-	 * fetched before they can be used.
+	 * keeps its cached keys for up to this long after they were last fetched
+	 * when refreshing them fails transiently. Keys are cached in memory, so
+	 * after a restart they must be fetched before they can be used.
 	 *
 	 * Accepts a number of seconds or a duration string (e.g. `"6h"`), at most
 	 * 24 hours. Unset, every refresh failure rejects the request.
 	 *
 	 * @see https://www.rfc-editor.org/rfc/rfc5861#section-4
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1
 	 */
 	metadataStaleIfError?: number | string;
 	/**

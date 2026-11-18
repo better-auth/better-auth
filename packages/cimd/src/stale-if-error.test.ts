@@ -182,11 +182,11 @@ describe("CIMD metadataStaleIfError", () => {
 			answer: (_url: string, init?: RequestInit) => untilAborted(init),
 			reason: "Metadata document fetch timed out after 5000ms",
 		},
-		{
-			failure: "HTTP 503",
-			answer: () => new Response("unavailable", { status: 503 }),
-			reason: "Metadata document fetch returned HTTP 503",
-		},
+		...[500, 502, 503, 504].map((status) => ({
+			failure: `HTTP ${status}`,
+			answer: () => new Response("unavailable", { status }),
+			reason: `Metadata document fetch returned HTTP ${status}`,
+		})),
 		{
 			failure: "a reset connection",
 			answer: () => {
@@ -300,6 +300,11 @@ describe("CIMD metadataStaleIfError", () => {
 			answer: () => new Response(null, { status: 404 }),
 			description: "Metadata document fetch returned HTTP 404",
 		},
+		...[501, 505, 507].map((status) => ({
+			failure: `HTTP ${status}`,
+			answer: () => new Response(null, { status }),
+			description: `Metadata document fetch returned HTTP ${status}`,
+		})),
 		{
 			failure: "HTTP 429",
 			answer: () => new Response(null, { status: 429 }),
@@ -473,6 +478,138 @@ describe("CIMD metadataStaleIfError", () => {
 		expect(location.errorDescription).toBe(
 			"metadata fetch rate limit exceeded for client origin",
 		);
+	});
+
+	it("keeps temporarily_unavailable for a fetch limit refusal more than 5 minutes after the last transient failure", async () => {
+		const server = await createAuthorizationServer({
+			metadataStaleIfError: "1h",
+			metadataFetchPolicy: { minimumFetchInterval: 600 },
+		});
+		vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+		await server.authorize();
+		server.transport.answer = () => new Response(null, { status: 503 });
+		expect((await server.authorize()).pathname).toBe("/consent");
+
+		for (const elapsedMs of [60_000, 300_000]) {
+			vi.setSystemTime(START_MS + elapsedMs);
+			expect((await server.authorize()).pathname).toBe("/consent");
+		}
+		expect(server.metadataFetchCount()).toBe(2);
+
+		vi.setSystemTime(START_MS + 301_000);
+		const location = await server.authorize();
+		expect(location.error).toBe("temporarily_unavailable");
+		expect(location.errorDescription).toBe(
+			"metadata document fetch is within the per-client minimum interval",
+		);
+	});
+
+	/**
+	 * CIMD draft-03 §6.1 keeps trust only through transient failures. An owner
+	 * can remove the document to revoke the client.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1
+	 */
+	it("stops serving the stored client after a terminal failure until a fetch succeeds", async () => {
+		const server = await createAuthorizationServer({
+			metadataStaleIfError: "1h",
+			metadataFetchPolicy: { minimumFetchInterval: 120 },
+		});
+		vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+		await server.authorize();
+		server.transport.answer = () => new Response(null, { status: 503 });
+		expect((await server.authorize()).pathname).toBe("/consent");
+
+		vi.setSystemTime(START_MS + 120_000);
+		server.transport.answer = () => new Response(null, { status: 404 });
+		expect((await server.authorize()).errorDescription).toBe(
+			"Metadata document fetch returned HTTP 404",
+		);
+
+		vi.setSystemTime(START_MS + 240_000);
+		server.transport.answer = () => new Response(null, { status: 503 });
+		expect((await server.authorize()).errorDescription).toBe(
+			"Metadata document fetch returned HTTP 503",
+		);
+		vi.setSystemTime(START_MS + 300_000);
+		expect((await server.authorize()).error).toBe("temporarily_unavailable");
+		expect(server.metadataFetchCount()).toBe(4);
+
+		vi.setSystemTime(START_MS + 360_000);
+		server.transport.answer = () => Response.json(clientDocument());
+		expect((await server.authorize()).pathname).toBe("/consent");
+		vi.setSystemTime(START_MS + 480_000);
+		server.transport.answer = () => new Response(null, { status: 503 });
+		expect((await server.authorize()).pathname).toBe("/consent");
+		expect(server.metadataFetchCount()).toBe(6);
+	});
+
+	it("does not serve a stored client validated before a terminal failure record was evicted", async () => {
+		const request = await getTestInstance({
+			baseURL: `http://localhost:${3700 + ++instanceSequence}`,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid"],
+				}),
+			],
+		});
+		const context = await request.auth.$context;
+		const ctx = { context } as unknown as GenericEndpointContext;
+		// One origin, because `maxCacheEntries` also bounds the origin records.
+		const firstClientId = "https://evicted.example.com/first.json";
+		const secondClientId = "https://evicted.example.com/second.json";
+		let status = 200;
+		const discovery = createCimdClientDiscovery({
+			maxCacheEntries: 1,
+			metadataRevalidationInterval: 0,
+			metadataFetchPolicy: { minimumFetchInterval: 0 },
+			metadataStaleIfError: "1h",
+			fetchClientMetadataResource: async (input) =>
+				status === 200
+					? Response.json(clientDocument({ client_id: String(input) }))
+					: new Response(null, { status }),
+		});
+		const first = await discovery.resolve(ctx, firstClientId, null);
+		const second = await discovery.resolve(ctx, secondClientId, null);
+
+		status = 404;
+		await expect(
+			discovery.resolve(ctx, firstClientId, first),
+		).rejects.toMatchObject({ body: { error: "invalid_client" } });
+		await expect(
+			discovery.resolve(ctx, secondClientId, second),
+		).rejects.toMatchObject({ body: { error: "invalid_client" } });
+
+		status = 503;
+		await expect(
+			discovery.resolve(ctx, firstClientId, first),
+		).rejects.toMatchObject({
+			body: { error_description: "Metadata document fetch returned HTTP 503" },
+		});
+	});
+
+	/**
+	 * The stored client is a registration, not a cached HTTP response, so the
+	 * document's cache directives do not limit it.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1
+	 */
+	it("serves the stored client of a document sent with no-store", async () => {
+		const server = await createAuthorizationServer({
+			metadataStaleIfError: "1h",
+		});
+		server.transport.answer = () =>
+			Response.json(clientDocument(), {
+				headers: { "cache-control": "no-store, must-revalidate" },
+			});
+		expect((await server.authorize()).pathname).toBe("/consent");
+		server.transport.answer = () => new Response(null, { status: 503 });
+
+		expect((await server.authorize()).pathname).toBe("/consent");
+		expect(server.metadataFetchCount()).toBe(2);
 	});
 
 	/**

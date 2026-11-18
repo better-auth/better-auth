@@ -8,6 +8,8 @@ import type {
 } from "@better-auth/oauth-provider";
 import {
 	isAbortedBySignal,
+	isLocalCapacityRefusal,
+	isTransientHttpStatus,
 	isTransientNetworkError,
 	registerClientMetadataDocument,
 } from "@better-auth/oauth-provider/internal";
@@ -53,10 +55,30 @@ function invalidClient(description: string): APIError {
 	});
 }
 
-// The code the Node transport sets when it refuses a fetch at its limit on
-// outstanding DNS lookups. The refusal says nothing about the host.
-const DNS_LOOKUP_LIMIT_ERROR_CODE = "ERR_CIMD_DNS_LOOKUP_LIMIT";
+// Fetch failures that a later fetch can get past: the fetch timeout, a
+// connection failure, or HTTP 500, 502, 503, or 504. They answer with the same
+// error as any other failure, so the classification is kept beside the error
+// instead.
+const transientMetadataFetchFailures = new WeakSet<object>();
 const metadataFetchCapacityRefusals = new WeakSet<object>();
+
+function transientInvalidClient(description: string): APIError {
+	const error = invalidClient(description);
+	transientMetadataFetchFailures.add(error);
+	return error;
+}
+
+/**
+ * Whether a metadata document fetch failed transiently: it timed out, its
+ * connection failed, or the server answered with HTTP 500, 502, 503, or 504.
+ */
+export function isTransientMetadataFetchFailure(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		transientMetadataFetchFailures.has(error)
+	);
+}
 
 /**
  * Whether the transport refused a metadata document fetch at a local capacity
@@ -77,29 +99,6 @@ function metadataFetchCapacityRefusal(): APIError {
 	});
 	metadataFetchCapacityRefusals.add(error);
 	return error;
-}
-
-// Fetch failures that a later fetch can get past: the fetch timeout, a
-// connection failure, or HTTP 5xx. They answer with the same error as any other
-// failure, so the classification is kept beside the error instead.
-const transientMetadataFetchFailures = new WeakSet<object>();
-
-function transientInvalidClient(description: string): APIError {
-	const error = invalidClient(description);
-	transientMetadataFetchFailures.add(error);
-	return error;
-}
-
-/**
- * Whether a metadata document fetch failed transiently: it timed out, its
- * connection failed, or the server answered with HTTP 5xx.
- */
-export function isTransientMetadataFetchFailure(error: unknown): boolean {
-	return (
-		typeof error === "object" &&
-		error !== null &&
-		transientMetadataFetchFailures.has(error)
-	);
 }
 
 function tooLargeError(): APIError {
@@ -227,13 +226,7 @@ export async function fetchClientMetadataDocument(
 				signal: controller.signal,
 			});
 		} catch (error) {
-			if (
-				typeof error === "object" &&
-				error !== null &&
-				(error as { code?: unknown }).code === DNS_LOOKUP_LIMIT_ERROR_CODE
-			) {
-				throw metadataFetchCapacityRefusal();
-			}
+			if (isLocalCapacityRefusal(error)) throw metadataFetchCapacityRefusal();
 			const description = didTimeOut
 				? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`
 				: FETCH_FAILURE_DESCRIPTION;
@@ -241,9 +234,8 @@ export async function fetchClientMetadataDocument(
 			const transient =
 				(didTimeOut && isAbortedBySignal(error, controller.signal)) ||
 				isTransientNetworkError(error);
-			throw transient
-				? transientInvalidClient(description)
-				: invalidClient(description);
+			if (transient) throw transientInvalidClient(description);
+			throw invalidClient(description);
 		}
 		if (response.redirected) {
 			throw invalidClient("Metadata document fetch must not follow redirects");
@@ -260,7 +252,7 @@ export async function fetchClientMetadataDocument(
 		}
 		if (response.status !== 200) {
 			const description = `Metadata document fetch returned HTTP ${response.status}`;
-			throw response.status >= 500 && response.status <= 599
+			throw isTransientHttpStatus(response.status)
 				? transientInvalidClient(description)
 				: invalidClient(description);
 		}

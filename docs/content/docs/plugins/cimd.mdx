@@ -265,7 +265,7 @@ Refresh remains fail closed unless `metadataStaleIfError` applies, as described 
 
 By default, a failed refresh rejects the request, even when Better Auth has a stored client that it validated earlier. A short outage at the client's metadata host then stops every known client of that host from signing users in. CIMD draft-03 §6.1 says a transient failure, such as a network error or timeout, should not invalidate a client's established trust.
 
-To keep known clients working through short outages, set `metadataStaleIfError`, following the stale-if-error semantics of RFC 5861 §4:
+To keep known clients working through short outages, set `metadataStaleIfError`, an option modeled on the stale-if-error extension of RFC 5861 §4:
 
 ```ts title="auth.ts"
 cimd({
@@ -277,27 +277,46 @@ cimd({
 A failed refresh then serves the stored client when all of these hold:
 
 * The database has a stored client for the `client_id`.
-* The refresh failed transiently: the plugin's 5-second fetch timeout fired, the connection failed with one of the codes below, or the server answered with HTTP 5xx.
+* The refresh failed transiently: the plugin's 5-second fetch timeout fired, the connection failed with one of the codes below, or the server answered with HTTP 500, 502, 503, or 504.
 * The stored client's `updatedAt` is no older than `metadataStaleIfError`.
+* Since its last successful refresh, no refresh of the document on this instance failed in a way that is not transient.
 
-Better Auth logs a warning with the `client_id` and the failure. It returns the stored client unchanged, and writes nothing to the database or the metadata cache. Every instance reads the same stored row, so the behavior is the same across instances and after a restart.
+This is an operator trust policy, not HTTP caching. It applies whatever cache directives the document was served with, including `no-store` and `must-revalidate`, because the stored client is an authorization server registration rather than a cached response, and draft-03 §6.1 states its rule about transient failures for that trust.
+
+Better Auth logs a warning with the `client_id` and the failure. It returns the stored client unchanged, and writes nothing to the database or the metadata cache.
 
 A connection failure counts when the transport's error, or an error in its `cause` chain, has one of these codes: `EAI_AGAIN`, `ECONNRESET`, `ECONNREFUSED`, `ETIMEDOUT`, `EHOSTUNREACH`, `ENETUNREACH`, `EPIPE`, `UND_ERR_CONNECT_TIMEOUT`, `UND_ERR_HEADERS_TIMEOUT`, `UND_ERR_BODY_TIMEOUT`, or `UND_ERR_SOCKET`. Every other failure still rejects the request with the same error as without the option:
 
 * A host name that does not resolve (`ENOTFOUND`).
-* Any HTTP 4xx response, including 429, and any redirect.
+* Any HTTP 4xx response, including 429, any other HTTP 5xx response, such as 501 or 505, and any redirect.
 * A wrong content type, an oversized body, invalid JSON, or a document that fails validation.
 * A `client_id` URL that fails validation or that `isMetadataDocumentUrlAllowed` refuses.
 * A refusal by the transport, such as an address that is not public-routable, even when it arrives after the timeout fired.
+* A response that the Node transport cannot use, such as a protocol upgrade or a connection that closes before a response.
 * Any other error from the transport, including errors from a custom transport that carry none of the codes above.
+
+Such a failure also stops this instance from serving the stored client until a refresh succeeds, as draft-03 §6.1 allows for failures that are not transient. A client's owner who removes the document to revoke the client then does not see it served again when the host later times out. The record is kept in memory: another instance that did not see the failure, or this instance after a restart, can still serve the stored client during a later transient failure. The records are bounded by `maxCacheEntries`. When the oldest is dropped, this instance stops serving every stored client last validated before then until it is refreshed.
+
+Two refusals are local limits rather than failures of the client's host. They neither count as transient failures nor stop stale serving:
+
+* A `metadataFetchPolicy` limit, which answers `temporarily_unavailable`.
+* The Node transport's limit on outstanding DNS lookups, or any transport error with the code `ERR_CIMD_DNS_LOOKUP_LIMIT`.
+
+When one of them refuses the fetch for a client whose last transient failure was at most 5 minutes ago, the request gets the stored client. Otherwise it gets the same error as without the option.
 
 While Better Auth serves a stored client, it does not see changes to the client's document. If the client's owner changes its redirect URIs or keys, or the domain changes hands, the stored values stay in use until a refresh succeeds or the bound passes. Choose the shortest bound that covers the outages you expect to ride out.
 
-The bound counts from the last successful validation, and a failed refresh does not extend it. An administrator's change to the client through the OAuth client endpoints also updates `updatedAt`, so it restarts the bound. `metadataRevalidationInterval` sets how often a stored client is refreshed while it is in use, and `metadataStaleIfError` sets how long it can be used once refreshes fail. A client that has had no requests for longer than `metadataStaleIfError` was not refreshed in that time, so the first request during an outage fails for it.
+The bound counts from the last successful validation, and a failed refresh does not extend it. An administrator's change to the client through the OAuth client endpoints, including an edit of its `client_credentials_scopes`, also updates `updatedAt`, so it restarts the bound. `metadataRevalidationInterval` sets how often a stored client is refreshed while it is in use, and `metadataStaleIfError` sets how long it can be used once refreshes fail. A client that has had no requests for longer than `metadataStaleIfError` was not refreshed in that time, so the first request during an outage fails for it.
 
-While a client is served this way, Better Auth fetches its document at most once a minute. Requests in between get the stored client without a fetch, so an outage does not use up the origin's fetch budget. When a `metadataFetchPolicy` limit refuses that fetch, the request also gets the stored client instead of `temporarily_unavailable`. The first successful fetch saves the document and ends this mode.
+While a client is served this way, Better Auth fetches its document at most once a minute. Requests in between get the stored client without a fetch, so an outage does not use up the origin's fetch budget. The first successful fetch saves the document and ends this mode.
 
-A client that authenticates with `private_key_jwt` and a `jwks_uri` also needs its keys at the token endpoint, and its key host often fails together with its metadata host. Better Auth caches fetched keys in memory for 5 minutes. Without this option, it keeps using cached keys for up to 10 minutes after the last successful fetch when fetching new keys fails. With `metadataStaleIfError`, it keeps using them for up to the bound when the key fetch fails transiently, under the same rules as the metadata document. Keys are not stored in the database, so after a restart the keys must be fetched before the client can authenticate. Keys published inline in the document's `jwks` are stored with the client and are not affected.
+A client that authenticates with `private_key_jwt` and a `jwks_uri` also needs its keys at the token endpoint, and its key host often fails together with its metadata host. Better Auth caches fetched keys in memory for 5 minutes. Without this option, it keeps using cached keys for up to 10 minutes after the last successful fetch when fetching new keys fails. With `metadataStaleIfError`, it keeps using them after those 10 minutes when the key fetch fails transiently, and fetches them again at most once a minute while it does. The transient failures, the failures that stop stale serving, and the 5-minute rule for the DNS lookup limit are the same as for the document. Three things differ:
+
+* The bound counts from the last successful key fetch, which is kept in memory, instead of the stored client's `updatedAt`. Keys are not stored in the database, so after a restart the keys must be fetched before the client can authenticate.
+* Key fetches are outside `metadataFetchPolicy`, so its limits neither refuse them nor let stale keys stand in.
+* A failure that stops stale serving is recorded for the `jwks_uri` in each server process. When the oldest of 500 records is dropped, its cached keys are dropped too.
+
+Keys published inline in the document's `jwks` are stored with the client and are not affected.
 
 ## Security boundary
 
