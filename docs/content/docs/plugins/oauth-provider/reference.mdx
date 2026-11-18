@@ -171,6 +171,10 @@ Resources a registration may request. Each must be in `resources`. When both res
 
 Maximum lifetime in seconds of a `private_key_jwt` assertion. Defaults to `300`. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).
 
+`assertionClockTolerance` <span className="opacity-70">`number`</span>
+
+Seconds of clock skew accepted on the `nbf`, `exp`, and `iat` of a `private_key_jwt` assertion. Defaults to `0`, which accepts no skew. Values above `60` are treated as `60`, and negative or non-finite values are treated as `0`. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).
+
 `allowClientKeyRotation` <span className="opacity-70">`boolean`</span>
 
 Enables `POST /oauth2/client/rotate-keys`. Startup fails on the memory adapter or with `advanced.database.generateId: "serial"`, which cannot keep assertions single-use. Defaults to `false`. See [Rotating client keys](/docs/plugins/oauth-provider/clients#rotating-client-keys).
