@@ -10,7 +10,7 @@ import {
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
 
 const BODY_FORBIDDEN_RESPONSE_STATUSES = new Set([204, 205, 304]);
-// `dns.lookup` uses the shared libuv thread pool and cannot be cancelled. Keep
+// `dns.lookup` runs on Node's shared thread pool and cannot be cancelled. Keep
 // abandoned lookups in this count until they actually settle.
 const MAX_OUTSTANDING_DNS_LOOKUPS = 16;
 let outstandingDNSLookups = 0;
