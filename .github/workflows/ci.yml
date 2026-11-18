@@ -66,9 +66,6 @@ jobs:
           - name: Lint
             run: pnpm biome ci --error-on-warnings
 
-          - name: Lint Dependencies
-            run: pnpm lint:dependencies
-
           - name: Lint Spell
             run: pnpm lint:spell
 
@@ -79,6 +76,10 @@ jobs:
         wait: build
 
       - parallel:
+          # The dependency check needs built workspace package exports.
+          - name: Lint Dependencies
+            run: pnpm lint:dependencies
+
           - name: Lint Packages
             env:
               TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
