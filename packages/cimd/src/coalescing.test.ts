@@ -1096,60 +1096,105 @@ describe("CIMD resolution of a cached document", () => {
 
 	it("saves a newer cached document again when an older save lands after it", async () => {
 		vi.useFakeTimers({ toFake: ["Date"] });
-		const clientId = "https://out-of-order-saves.example/client.json";
-		const { discovery, fetchClientMetadataResource } = createDiscovery();
-		const shortLived = (clientName: string) =>
-			metadataResponse(clientId, { "cache-control": "max-age=1" }, clientName);
-		const request = await createRequestContext();
-		fetchClientMetadataResource.mockResolvedValueOnce(shortLived("v0"));
-		await discovery.resolve(request.ctx, clientId, null);
-		vi.setSystemTime(Date.now() + 1_100);
+		try {
+			const clientId = "https://out-of-order-saves.example/client.json";
+			const { discovery, fetchClientMetadataResource } = createDiscovery();
+			const shortLived = (clientName: string) =>
+				metadataResponse(
+					clientId,
+					{ "cache-control": "max-age=1" },
+					clientName,
+				);
+			const request = await createRequestContext();
+			fetchClientMetadataResource.mockResolvedValueOnce(shortLived("v0"));
+			await discovery.resolve(request.ctx, clientId, null);
+			vi.setSystemTime(Date.now() + 1_100);
 
-		const transaction = request.context.adapter.transaction.bind(
-			request.context.adapter,
+			const transaction = request.context.adapter.transaction.bind(
+				request.context.adapter,
+			);
+			const olderSaveHeld = deferred<void>();
+			let holding = false;
+			vi.spyOn(request.context.adapter, "transaction").mockImplementation(
+				async (callback) => {
+					if (!holding) {
+						holding = true;
+						await olderSaveHeld.promise;
+					}
+					return transaction(callback as never);
+				},
+			);
+			fetchClientMetadataResource.mockResolvedValueOnce(shortLived("v1"));
+			const olderSave = discovery.resolve(
+				request.ctx,
+				clientId,
+				await request.findClient(clientId),
+			);
+			await vi.waitFor(() => expect(holding).toBe(true));
+			vi.setSystemTime(Date.now() + 1_100);
+
+			fetchClientMetadataResource.mockResolvedValueOnce(
+				namedMetadataResponse(clientId, "v2"),
+			);
+			await discovery.resolve(
+				request.ctx,
+				clientId,
+				await request.findClient(clientId),
+			);
+			olderSaveHeld.resolve();
+			await olderSave;
+			expect((await request.findClient(clientId))?.name).toBe("v1");
+
+			const resolved = await discovery.resolve(
+				request.ctx,
+				clientId,
+				await request.findClient(clientId),
+			);
+
+			expect(resolved?.name).toBe("v2");
+			expect((await request.findClient(clientId))?.name).toBe("v2");
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("drops a cached document whose first save fails while the fetching request is still saving", async () => {
+		const clientId = "https://failed-first-save.example/client.json";
+		const { discovery, fetchClientMetadataResource } = createDiscovery();
+		fetchClientMetadataResource.mockImplementation(async () =>
+			metadataResponse(clientId),
 		);
-		const olderSaveHeld = deferred<void>();
+		const fetching = await createRequestContext();
+		const other = await createRequestContext();
+		const transaction = fetching.context.adapter.transaction.bind(
+			fetching.context.adapter,
+		);
+		const fetchingSaveHeld = deferred<void>();
 		let holding = false;
-		vi.spyOn(request.context.adapter, "transaction").mockImplementation(
+		vi.spyOn(fetching.context.adapter, "transaction").mockImplementation(
 			async (callback) => {
-				if (!holding) {
-					holding = true;
-					await olderSaveHeld.promise;
-				}
+				holding = true;
+				await fetchingSaveHeld.promise;
 				return transaction(callback as never);
 			},
 		);
-		fetchClientMetadataResource.mockResolvedValueOnce(shortLived("v1"));
-		const olderSave = discovery.resolve(
-			request.ctx,
-			clientId,
-			await request.findClient(clientId),
-		);
+		const fetchingResolution = discovery.resolve(fetching.ctx, clientId, null);
 		await vi.waitFor(() => expect(holding).toBe(true));
-		vi.setSystemTime(Date.now() + 1_100);
 
-		fetchClientMetadataResource.mockResolvedValueOnce(
-			namedMetadataResponse(clientId, "v2"),
+		vi.spyOn(other.context.adapter, "transaction").mockRejectedValueOnce(
+			new Error("forced client persistence failure"),
 		);
-		await discovery.resolve(
-			request.ctx,
-			clientId,
-			await request.findClient(clientId),
+		await expect(discovery.resolve(other.ctx, clientId, null)).rejects.toThrow(
+			"forced client persistence failure",
 		);
-		olderSaveHeld.resolve();
-		await olderSave;
-		expect((await request.findClient(clientId))?.name).toBe("v1");
+		await expect(
+			discovery.resolve(other.ctx, clientId, null),
+		).resolves.toMatchObject({ clientId });
+		expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 
-		const resolved = await discovery.resolve(
-			request.ctx,
-			clientId,
-			await request.findClient(clientId),
-		);
-
-		expect(resolved?.name).toBe("v2");
-		expect((await request.findClient(clientId))?.name).toBe("v2");
-		expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
-		vi.useRealTimers();
+		fetchingSaveHeld.resolve();
+		await expect(fetchingResolution).resolves.toMatchObject({ clientId });
 	});
 
 	it("runs the fetch policy once per fetch and not on a cache hit", async () => {
