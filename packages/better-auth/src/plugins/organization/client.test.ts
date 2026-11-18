@@ -137,3 +137,338 @@ it("refreshes the active organization after sign-in sets it in a session hook", 
 		});
 	});
 });
+
+describe("active organization during an auth change", () => {
+	type OrganizationState = {
+		isPending: boolean;
+		isRefetching: boolean;
+		id: string | undefined;
+	};
+
+	function deferred() {
+		let resolve!: () => void;
+		const promise = new Promise<void>((done) => {
+			resolve = done;
+		});
+		return {
+			promise,
+			resolve,
+		};
+	}
+
+	// Yields a full task, so a request that does not wait for the caller runs first.
+	const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve));
+
+	const test = it
+		.extend("window", { auto: true }, ({}, { onCleanup }) => {
+			const previousWindow = global.window;
+			global.window = {} as Window & typeof globalThis;
+			onCleanup(() => {
+				global.window = previousWindow;
+			});
+		})
+		.extend("signedIn", true)
+		.extend("instance", async ({ signedIn }, { onCleanup }) => {
+			// The client keeps its own cookie jar, so a test controls when the
+			// credentials from a sign-in become visible to later requests.
+			const jar = new Headers();
+			let activeOrganizationId: string | undefined;
+			let beforeOrganizationResponse = async () => {};
+			const instance = await getTestInstance(
+				{
+					plugins: [organization()],
+					databaseHooks: {
+						session: {
+							create: {
+								before: async (session) => ({
+									data: {
+										...session,
+										activeOrganizationId,
+									},
+								}),
+							},
+						},
+					},
+				},
+				{
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							{
+								id: "cookie-jar",
+								fetchPlugins: [
+									{
+										id: "cookie-jar",
+										name: "cookie-jar",
+										hooks: {
+											onRequest(context) {
+												const cookie = jar.get("cookie");
+												if (cookie) context.headers.set("cookie", cookie);
+												return context;
+											},
+											async onResponse(context) {
+												if (
+													!context.request.url
+														.toString()
+														.includes("/organization/get-full-organization")
+												)
+													return;
+												await beforeOrganizationResponse();
+											},
+										},
+									},
+								],
+							},
+						],
+					},
+				},
+			);
+			const { headers } = await instance.signInWithTestUser();
+			const setCookie = instance.sessionSetter(jar);
+			const { client, testUser } = instance;
+			const signIn = () =>
+				client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+					fetchOptions: {
+						onSuccess: setCookie,
+					},
+				});
+			if (signedIn) {
+				await signIn();
+				// Like an app, read the session somewhere so it is known signed in.
+				const session = client.$store.atoms.session!;
+				onCleanup(session.subscribe(() => {}));
+				await expect.poll(() => session.get().data).not.toBeNull();
+			}
+			const activeOrganization = client.$store.atoms.activeOrganization!;
+			return {
+				client,
+				testUser,
+				setCookie,
+				signIn,
+				activeOrganization,
+				current(): OrganizationState {
+					const state = activeOrganization.get();
+					return {
+						isPending: state.isPending,
+						isRefetching: state.isRefetching,
+						id: state.data?.id,
+					};
+				},
+				async createOrganization(slug: string) {
+					const created = await instance.auth.api.createOrganization({
+						body: {
+							name: slug,
+							slug,
+							keepCurrentActiveOrganization: true,
+						},
+						headers,
+					});
+					if (!created) throw new Error("Organization was not created");
+					return created;
+				},
+				// Sessions created from now on start with this active organization.
+				activateOnSignIn(id: string) {
+					activeOrganizationId = id;
+				},
+				beforeOrganizationResponse(next: typeof beforeOrganizationResponse) {
+					beforeOrganizationResponse = next;
+				},
+			};
+		})
+		// Every active organization state after the initial load, while a
+		// component reads it.
+		.extend("states", async ({ instance }, { onCleanup }) => {
+			const loaded: OrganizationState[] = [];
+			const unsubscribe = instance.activeOrganization.subscribe(() => {
+				loaded.push(instance.current());
+			});
+			await expect
+				.poll(() => loaded.at(-1))
+				.toMatchObject({
+					isPending: false,
+					isRefetching: false,
+				});
+			const states: OrganizationState[] = [];
+			const unlisten = instance.activeOrganization.listen(() => {
+				states.push(instance.current());
+			});
+			onCleanup(() => {
+				unlisten();
+				unsubscribe();
+			});
+			return states;
+		});
+
+	const loaded = (id: string | undefined): OrganizationState => ({
+		isPending: false,
+		isRefetching: false,
+		id,
+	});
+
+	test("reports a refetch of a missing organization through isRefetching only", async ({
+		instance: { activeOrganization },
+		states,
+	}) => {
+		await activeOrganization.get().refetch();
+
+		expect(states).toContainEqual({
+			isPending: false,
+			isRefetching: true,
+			id: undefined,
+		});
+		expect(states).not.toContainEqual(
+			expect.objectContaining({ isPending: true }),
+		);
+	});
+
+	test("stays settled through a data-only organization call", async ({
+		instance: { client },
+		states,
+	}) => {
+		await client.organization.list();
+
+		expect(states).not.toContainEqual(
+			expect.objectContaining({ isPending: true }),
+		);
+	});
+
+	test("stays settled when the user is updated without an organization", async ({
+		instance: { client },
+		states,
+	}) => {
+		const result = await client.updateUser({ name: "Renamed" });
+
+		expect(result.error).toBeNull();
+		expect(states).not.toContainEqual(
+			expect.objectContaining({ isPending: true }),
+		);
+	});
+
+	test("resolves setActive with the organization loaded", async ({
+		instance: { client, current, createOrganization },
+		states,
+	}) => {
+		const target = await createOrganization("target");
+
+		await client.organization.setActive({ organizationId: target.id });
+
+		expect(current()).toEqual(loaded(target.id));
+		expect(states).not.toContainEqual(
+			expect.objectContaining({ isPending: true }),
+		);
+	});
+
+	test("waits for a request that replaced the setActive refetch", async ({
+		instance: {
+			client,
+			current,
+			activeOrganization,
+			createOrganization,
+			beforeOrganizationResponse,
+		},
+		states,
+	}) => {
+		const target = await createOrganization("target");
+		let replaced = false;
+		beforeOrganizationResponse(async () => {
+			if (replaced) {
+				// Let the replaced request finish first.
+				await nextTask();
+				return;
+			}
+			replaced = true;
+			void activeOrganization.get().refetch();
+		});
+
+		await client.organization.setActive({ organizationId: target.id });
+
+		expect(current()).toEqual(loaded(target.id));
+		expect(states).not.toContainEqual(
+			expect.objectContaining({ isPending: true }),
+		);
+	});
+
+	describe("on sign-in", () => {
+		test.override("signedIn", false);
+
+		test("resolves with the organization loaded", async ({
+			instance: {
+				client,
+				testUser,
+				setCookie,
+				current,
+				activeOrganization,
+				createOrganization,
+				activateOnSignIn,
+			},
+			states,
+		}) => {
+			const workspace = await createOrganization("workspace");
+			activateOnSignIn(workspace.id);
+
+			let refetched: OrganizationState | undefined;
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: {
+					async onSuccess(context) {
+						// A read sent before the credentials are stored.
+						await activeOrganization.get().refetch();
+						refetched = current();
+						setCookie(context);
+					},
+				},
+			});
+
+			expect(refetched).toMatchObject({
+				isPending: true,
+				id: undefined,
+			});
+			expect(current()).toEqual(loaded(workspace.id));
+			// A settled missing organization would bounce guarded pages.
+			expect(states).not.toContainEqual(loaded(undefined));
+		});
+
+		test("resolves overlapping sign-ins with the organization loaded", async ({
+			instance: {
+				client,
+				testUser,
+				setCookie,
+				signIn,
+				current,
+				createOrganization,
+				activateOnSignIn,
+			},
+			states,
+		}) => {
+			const workspace = await createOrganization("workspace");
+			activateOnSignIn(workspace.id);
+			const entered = deferred();
+			const released = deferred();
+			const first = client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: {
+					async onSuccess(context) {
+						entered.resolve();
+						await released.promise;
+						setCookie(context);
+					},
+				},
+			});
+			await entered.promise;
+
+			await signIn();
+			const afterSecond = current();
+			released.resolve();
+			const result = await first;
+
+			expect(afterSecond).toEqual(loaded(workspace.id));
+			expect(result.error).toBeNull();
+			expect(current()).toEqual(loaded(workspace.id));
+			expect(states).not.toContainEqual(loaded(undefined));
+		});
+	});
+});
