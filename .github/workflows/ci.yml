@@ -125,11 +125,12 @@ jobs:
       - name: Build package declarations
         run: pnpm build
 
-      - name: Typecheck workspace consumers
-        run: pnpm typecheck:consumers
+      - parallel:
+          - name: Typecheck workspace consumers
+            run: pnpm typecheck:consumers
 
-      - name: Typecheck dist declarations
-        run: pnpm typecheck:dist
+          - name: Typecheck dist declarations
+            run: pnpm typecheck:dist
 
   test:
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
