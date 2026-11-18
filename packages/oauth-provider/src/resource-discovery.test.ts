@@ -752,6 +752,56 @@ describe("canonical client metadata document registration", () => {
 		expect(links.map((link) => link.resourceId)).toEqual([resource]);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6
+	 */
+	it("clears the fields a refreshed document drops for any client discovery", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/dropped-fields.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const document = {
+			client_id: clientId,
+			redirect_uris: ["https://client.example.com/callback"],
+			token_endpoint_auth_method: "none" as const,
+		};
+		const created = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					...document,
+					client_name: "Listed Client",
+					post_logout_redirect_uris: ["https://client.example.com/signed-out"],
+					dpop_bound_access_tokens: true,
+				},
+			},
+		);
+		expect(created.client).toMatchObject({
+			name: "Listed Client",
+			postLogoutRedirectUris: ["https://client.example.com/signed-out"],
+			dpopBoundAccessTokens: true,
+		});
+
+		await registerClientMetadataDocument(endpointContext, instance.opts, {
+			clientId,
+			clientDiscoveryId: "test-client-discovery",
+			existingClient: created.client,
+			metadata: document,
+		});
+
+		const stored = await instance.ctx.adapter.findOne<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(stored?.name ?? null).toBeNull();
+		expect(stored?.postLogoutRedirectUris ?? []).toEqual([]);
+		expect(stored?.dpopBoundAccessTokens ?? null).toBeNull();
+	});
+
 	it("converges a stale fixed-ID creator after a unique-constraint race", async () => {
 		const instance = await boot();
 		const clientId = "https://client.example.com/concurrent.json";
