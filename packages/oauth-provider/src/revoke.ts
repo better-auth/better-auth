@@ -205,15 +205,15 @@ async function revokeRefreshToken(
 			error: "invalid_request",
 		});
 	}
+	if (!refreshToken.clientId || refreshToken.clientId !== clientId) {
+		return null;
+	}
 	if (refreshToken.revoked) {
 		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
 		throw new APIError("BAD_REQUEST", {
 			error_description: "refresh token revoked",
 			error: "invalid_request",
 		});
-	}
-	if (!refreshToken.clientId || refreshToken.clientId !== clientId) {
-		return null;
 	}
 
 	const iat = Math.floor(Date.now() / 1000);
