@@ -172,12 +172,14 @@ Claims follow the granted [scopes](https://openid.net/specs/openid-connect-core-
 | `profile` | `name`, `picture`, `given_name`, `family_name` |
 | `email`   | `email`, `email_verified`                      |
 
+A claim without a value is left out of the response, as [OpenID Connect Core §5.3.2](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse) recommends. A user whose `name` or `image` is an empty string gets no `name` or `picture`.
+
 Better Auth returns a claim from the table above even when its scope was not granted, if all of these are true:
 
 * The client requests the claim through the [`claims.userinfo` parameter](https://openid.net/specs/openid-connect-core-1_0.html#IndividualClaimsRequests).
 * The claim appears in `claims_supported`.
 * Your [consent page](/docs/plugins/oauth-provider/sign-in-flow#consent-page) did not remove the claim. It removes one when it passes a `claims` object to `oauth2.consent` that leaves the claim out.
-* The user has a value for the claim. Better Auth omits missing values instead of returning `null`.
+* The user has a value for the claim. Better Auth omits missing values instead of returning `null`, and omits empty `name` and `picture` values instead of returning an empty string.
 * The access token is opaque. With a JWT access token, UserInfo returns only the claims its scopes cover.
 
 Better Auth does not fill in other requested names, such as `locale`. To return one on request, list it in `advertisedMetadata.claims_supported` together with the defaults you still want, as in [Discovery metadata](#discovery-metadata). Then read `requestedClaims` in `customUserInfoClaims`, described below.

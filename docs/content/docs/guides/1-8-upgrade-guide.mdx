@@ -380,6 +380,12 @@ oauthProvider({
 });
 ```
 
+### Empty `name` and `picture` are left out of UserInfo
+
+`/oauth2/userinfo` now leaves out the standard `name` and `picture` claims when the user's `name` or `image` is an empty string. [OpenID Connect Core §5.3.2](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse) says a claim that is not returned should be omitted, not sent as `null` or an empty string. Before, a user with `name: ""` got `"name": ""`. A value that holds only whitespace is returned as before. `customUserInfoClaims` can still set these claims to an empty string, and `email` and `email_verified` are unchanged.
+
+**What to do:** a client that reads `name: ""` now sees the key absent. Check for a missing `name` or `picture` instead of an empty string, for example `userinfo.name ?? userinfo.email`.
+
 ### Extension and API authors
 
 This applies if you build on `extendOAuthProvider()`, call the provider API from your own endpoints, or implement it yourself:
