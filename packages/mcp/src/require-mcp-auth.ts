@@ -95,8 +95,9 @@ function getProviderNonceExpiresIn(
 
 /**
  * Protects an MCP server route handler. Checks the bearer access token against
- * the OAuth provider's records in-process (JWT or opaque; revoked tokens,
- * ended sessions, and disabled clients fail), verifies issuer, audience, and
+ * the OAuth provider's records in-process (JWT or opaque; ended sessions,
+ * disabled clients, and revoked opaque tokens fail, and so do revoked JWTs
+ * with `revocableJwtAccessTokens`), verifies issuer, audience, and
  * expiry, and forwards the token's claims to the handler. Their `sub` is the
  * subject the token carries; a pairwise client's opaque token gets its
  * pairwise subject.
