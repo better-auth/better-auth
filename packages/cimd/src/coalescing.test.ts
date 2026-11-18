@@ -374,44 +374,53 @@ describe("CIMD in-flight coalescing", () => {
 			expect(await joiner.findClient(clientId)).toMatchObject({ clientId });
 		});
 
-		it("answers a request from the stored client while a refresh is still saving", async () => {
+		/**
+		 * The fetched document is cached before any request saves it, and a cache
+		 * hit returns the stored client. A runtime that ends the fetching request
+		 * mid-save would otherwise leave the older stored client in use for the
+		 * cache lifetime.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12358
+		 */
+		it("saves a refreshed document for a later request when the fetching request's save never settles", async () => {
 			let now = 1_800_000_000_000;
 			vi.spyOn(Date, "now").mockImplementation(() => now);
 			const clientId = "https://refresh-in-progress.example/client.json";
-			const { discovery, fetchClientMetadataResource } = createDiscovery();
+			const onClientRefreshed = vi.fn();
+			const { discovery, fetchClientMetadataResource } = createDiscovery({
+				onClientRefreshed,
+			});
 			const request = await createRequestContext();
-			fetchClientMetadataResource.mockImplementationOnce(async () =>
-				metadataResponse(clientId),
-			);
+			fetchClientMetadataResource
+				.mockImplementationOnce(async () =>
+					namedMetadataResponse(clientId, "Old"),
+				)
+				.mockImplementationOnce(async () =>
+					namedMetadataResponse(clientId, "New"),
+				);
 			const stored = await discovery.resolve(request.ctx, clientId, null);
 
 			now += 120_000;
-			fetchClientMetadataResource.mockImplementationOnce(async () =>
-				metadataResponse(clientId),
-			);
-			const saveGate = deferred<void>();
-			const transaction = request.context.adapter.transaction.bind(
-				request.context.adapter,
-			);
 			vi.spyOn(request.context.adapter, "transaction").mockImplementationOnce(
-				async (callback) => {
-					await saveGate.promise;
-					return transaction(callback);
-				},
+				() => new Promise<never>(() => {}),
 			);
-
-			const refresh = discovery.resolve(request.ctx, clientId, stored);
+			void discovery.resolve(request.ctx, clientId, stored);
 			await vi.waitFor(() => {
 				expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 			});
-			// Let the fetch finish so the refresh is waiting on its save.
+			// Let the fetch finish so the refresh is stuck in its save.
 			await new Promise((resolve) => setTimeout(resolve, 10));
 
 			await expect(
 				discovery.resolve(request.ctx, clientId, stored),
-			).resolves.toBe(stored);
-			saveGate.resolve();
-			await expect(refresh).resolves.toMatchObject({ clientId });
+			).resolves.toMatchObject({ name: "New" });
+			const saved = await request.findClient(clientId);
+			expect(saved?.name).toBe("New");
+			await expect(
+				discovery.resolve(request.ctx, clientId, saved),
+			).resolves.toBe(saved);
+			expect(onClientRefreshed).toHaveBeenCalledTimes(1);
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 		});
 
 		/**
@@ -801,6 +810,52 @@ describe("CIMD in-flight coalescing", () => {
 					discovery.resolve(other.ctx, clientId, null),
 				).resolves.toMatchObject({ name: "Late" });
 				expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+			});
+
+			it("saves its late document for a later request when the request that started it never finishes saving", async () => {
+				const clientId = "https://lease-late-unsaved.example/client.json";
+				const otherClientId =
+					"https://lease-late-unsaved-other.example/client.json";
+				const leaderPolicy = deferred<boolean>();
+				const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
+				isMetadataDocumentUrlAllowed
+					.mockImplementationOnce(async () => true)
+					.mockImplementationOnce(() => leaderPolicy.promise);
+				const { discovery, fetchClientMetadataResource } = createDiscovery({
+					isMetadataDocumentUrlAllowed,
+					metadataFetchPolicy: {
+						minimumFetchInterval: 0,
+						maximumConcurrentFetches: 1,
+					},
+				});
+				fetchClientMetadataResource
+					.mockImplementationOnce(async () =>
+						metadataResponse(clientId, { "cache-control": "no-store" }, "Old"),
+					)
+					.mockImplementation(async (input) =>
+						namedMetadataResponse(String(input), "Late"),
+					);
+				const leader = await createRequestContext();
+				const other = await createRequestContext();
+				await discovery.resolve(leader.ctx, clientId, null);
+				const storedBeforeRefresh = await leader.findClient(clientId);
+				expect(storedBeforeRefresh?.name).toBe("Old");
+				vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+
+				void discovery.resolve(leader.ctx, clientId, storedBeforeRefresh);
+				await vi.advanceTimersByTimeAsync(10_000);
+				await discovery.resolve(other.ctx, otherClientId, null);
+				vi.spyOn(leader.context.adapter, "transaction").mockImplementationOnce(
+					() => new Promise<never>(() => {}),
+				);
+				leaderPolicy.resolve(true);
+				await vi.advanceTimersByTimeAsync(0);
+
+				await expect(
+					discovery.resolve(leader.ctx, clientId, storedBeforeRefresh),
+				).resolves.toMatchObject({ name: "Late" });
+				expect((await leader.findClient(clientId))?.name).toBe("Late");
+				expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
 			});
 
 			it("does not use its late document once a newer fetch for the client started", async () => {

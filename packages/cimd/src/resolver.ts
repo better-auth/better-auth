@@ -47,6 +47,12 @@ interface CimdMetadataCacheEntry {
 	etag?: string;
 	lastModified?: string;
 	responseCacheHeaders: MetadataDocumentResponseCacheHeaders;
+	/**
+	 * Whether a request has saved this document. The entry is cached before any
+	 * request saves it, and a request that ends mid-save leaves it unsaved, so a
+	 * cache hit returns the stored client unchanged only once this is set.
+	 */
+	saved: boolean;
 }
 
 interface FetchedMetadata {
@@ -316,6 +322,7 @@ function createCacheEntry(
 		etag: cacheHeaders.etag,
 		lastModified: cacheHeaders.lastModified,
 		responseCacheHeaders: cacheHeaders,
+		saved: false,
 	};
 }
 
@@ -697,7 +704,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			nextEntry,
 		}: FetchedMetadata) => {
 			try {
-				return await persistMetadataDocumentClient(
+				const storedClient = await persistMetadataDocumentClient(
 					ctx,
 					clientId,
 					metadata,
@@ -705,6 +712,8 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 					oauthOptions,
 					existingClient ?? undefined,
 				);
+				if (nextEntry) nextEntry.saved = true;
+				return storedClient;
 			} catch (error) {
 				if (nextEntry && metadataCache.get(clientId) === nextEntry) {
 					metadataCache.delete(clientId);
@@ -722,17 +731,20 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			const cachedEntry = readCacheEntry(clientId);
 			if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
 				if (!existingClient) {
-					return persistMetadataDocumentClient(
+					const createdClient = await persistMetadataDocumentClient(
 						ctx,
 						clientId,
 						cachedEntry.metadata,
 						cimdOptions,
 						oauthOptions,
 					);
+					cachedEntry.saved = true;
+					return createdClient;
 				}
-				if (!resolvingAgain) return existingClient;
-				// Later cache hits return the older stored client, so a failed save
-				// must not leave this entry behind.
+				if (cachedEntry.saved && !resolvingAgain) return existingClient;
+				// The stored client can be older than this entry. Later cache hits
+				// return it once the entry is saved, so a failed save must not leave
+				// this entry behind.
 				return persistFetchedMetadata({
 					metadata: cachedEntry.metadata,
 					nextEntry: cachedEntry,
