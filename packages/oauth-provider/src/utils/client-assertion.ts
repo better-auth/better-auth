@@ -60,7 +60,7 @@ type JwksCache = {
 	 * until a fetch succeeds. Evicting a terminal failure also evicts its key
 	 * set, so an eviction cannot resume serving stale keys.
 	 */
-	failures: Map<string, JwksFetchFailure>;
+	failures: Map<string, JwksFetchFailure & { recordedAtSequence: number }>;
 	/** Sequence the next fetch takes. */
 	nextSequence: number;
 };
@@ -163,7 +163,10 @@ function recordJwksFetchFailure(
 		return;
 	}
 	cache.failures.delete(cacheKey);
-	cache.failures.set(cacheKey, failure);
+	cache.failures.set(cacheKey, {
+		...failure,
+		recordedAtSequence: cache.nextSequence,
+	});
 	if (cache.failures.size > JWKS_CACHE_MAX_ENTRIES) {
 		const oldest = cache.failures.keys().next().value;
 		if (oldest !== undefined) {
@@ -234,7 +237,11 @@ async function loadJwks(
 			promise: fetchJwksFromUri(jwksUri, fetchClientMetadataResource)
 				.then((result): FetchedJwksResult => {
 					if (!result.valid) return result;
-					cache.failures.delete(cacheKey);
+					// A fetch that started before a failure was recorded cannot clear it.
+					const failure = cache.failures.get(cacheKey);
+					if (!failure || sequence >= failure.recordedAtSequence) {
+						cache.failures.delete(cacheKey);
+					}
 					// A newer fetch may have stored its set while this one ran; answer
 					// with that one rather than the older set.
 					return {

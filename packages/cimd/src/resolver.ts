@@ -415,11 +415,13 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		string,
 		{ failedAtMs: number; reason: string }
 	>();
-	// Clients whose fetch failed with a failure that is not transient since their
-	// last successful fetch. Their stored client is not served stale. Evicting a
-	// record moves the watermark, and stored clients last validated before it
-	// are not served stale either, so an eviction cannot resume stale serving.
-	const terminalFailureClientIds = new Set<string>();
+	// When a client that had a stored client within the stale bound last failed
+	// with a failure that is not transient, since its last successful fetch.
+	// Its stored client is not served stale. A record older than the bound can
+	// no longer block anything and is pruned first; evicting a newer record
+	// moves the watermark, and stored clients last validated before it are not
+	// served stale either, so an eviction cannot resume stale serving.
+	const terminalFailureAtMsByClientId = new Map<string, number>();
 	let terminalFailureEvictedAtMs = Number.NEGATIVE_INFINITY;
 	const inFlightMetadataByClientId = new Map<string, InFlightMetadataFetch>();
 	// The latest fetch the lease retired for a client, until it settles or a
@@ -451,7 +453,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 
 	const recordFetchSuccess = (clientId: string) => {
 		transientFailureByClientId.delete(clientId);
-		terminalFailureClientIds.delete(clientId);
+		terminalFailureAtMsByClientId.delete(clientId);
 	};
 
 	const recordFetchFailure = (clientId: string, failure: unknown) => {
@@ -469,16 +471,32 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				failedAtMs: Date.now(),
 				reason: describeFetchFailure(failure),
 			});
-			return;
 		}
-		terminalFailureClientIds.delete(clientId);
-		while (terminalFailureClientIds.size >= maxCacheEntries) {
-			const oldestClientId = terminalFailureClientIds.values().next().value;
+	};
+
+	// Recorded only by a request whose stored client is within the stale
+	// bound, the only case a record can block, so failures for client IDs with
+	// no servable stored client cannot fill the records.
+	const recordTerminalFailure = (clientId: string) => {
+		if (staleIfErrorMs === null) return;
+		const nowMs = Date.now();
+		terminalFailureAtMsByClientId.delete(clientId);
+		if (terminalFailureAtMsByClientId.size >= maxCacheEntries) {
+			for (const [
+				candidateClientId,
+				failedAtMs,
+			] of terminalFailureAtMsByClientId) {
+				if (nowMs - failedAtMs <= staleIfErrorMs) break;
+				terminalFailureAtMsByClientId.delete(candidateClientId);
+			}
+		}
+		while (terminalFailureAtMsByClientId.size >= maxCacheEntries) {
+			const oldestClientId = terminalFailureAtMsByClientId.keys().next().value;
 			if (typeof oldestClientId !== "string") break;
-			terminalFailureClientIds.delete(oldestClientId);
-			terminalFailureEvictedAtMs = Date.now();
+			terminalFailureAtMsByClientId.delete(oldestClientId);
+			terminalFailureEvictedAtMs = nowMs;
 		}
-		terminalFailureClientIds.add(clientId);
+		terminalFailureAtMsByClientId.set(clientId, nowMs);
 	};
 
 	const ensureClientFetchStateCapacity = (clientId: string, nowMs: number) => {
@@ -882,7 +900,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			if (
 				!existingClient?.updatedAt ||
 				staleIfErrorMs === null ||
-				terminalFailureClientIds.has(clientId)
+				terminalFailureAtMsByClientId.has(clientId)
 			) {
 				return null;
 			}
@@ -943,6 +961,13 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				const storedClient = storedClientWithinStaleBound();
 				if (storedClient && isTransientMetadataFetchFailure(error)) {
 					return serveStoredClient(storedClient, describeFetchFailure(error));
+				}
+				if (
+					storedClient &&
+					!isMetadataFetchRefusal(error) &&
+					!isMetadataFetchCapacityRefusal(error)
+				) {
+					recordTerminalFailure(clientId);
 				}
 				// A local limit refused a fetch for a client already being served
 				// stale. The refusal says nothing about the document, so only a recent

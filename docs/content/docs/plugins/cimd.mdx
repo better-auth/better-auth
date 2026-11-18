@@ -295,7 +295,7 @@ A connection failure counts when the transport's error, or an error in its `caus
 * A response that the Node transport cannot use, such as a protocol upgrade or a connection that closes before a response.
 * Any other error from the transport, including errors from a custom transport that carry none of the codes above.
 
-Such a failure also stops this instance from serving the stored client until a refresh succeeds, as draft-03 §6.1 allows for failures that are not transient. A client's owner who removes the document to revoke the client then does not see it served again when the host later times out. The record is kept in memory: another instance that did not see the failure, or this instance after a restart, can still serve the stored client during a later transient failure. The records are bounded by `maxCacheEntries`. When the oldest is dropped, this instance stops serving every stored client last validated before then until it is refreshed.
+Such a failure also stops this instance from serving the stored client until a refresh succeeds, as draft-03 §6.1 allows for failures that are not transient. A client's owner who removes the document to revoke the client then does not see it served again when the host later times out. The record is kept in memory: another instance that did not see the failure, or this instance after a restart, can still serve the stored client during a later transient failure. A failure is recorded only for a request whose stored client could otherwise be served, so failures for client IDs without one cannot fill the records. The records are bounded by `maxCacheEntries`. A record older than `metadataStaleIfError` is dropped first, since it can no longer block anything; when a newer one is dropped, this instance stops serving every stored client last validated before then until it is refreshed.
 
 Two refusals are local limits rather than failures of the client's host. They neither count as transient failures nor stop stale serving:
 
@@ -314,7 +314,7 @@ A client that authenticates with `private_key_jwt` and a `jwks_uri` also needs i
 
 * The bound counts from the last successful key fetch, which is kept in memory, instead of the stored client's `updatedAt`. Keys are not stored in the database, so after a restart the keys must be fetched before the client can authenticate.
 * Key fetches are outside `metadataFetchPolicy`, so its limits neither refuse them nor let stale keys stand in.
-* A failure that stops stale serving is recorded for the `jwks_uri` in each server process. When the oldest of 500 records is dropped, its cached keys are dropped too.
+* The last failure of each `jwks_uri` is recorded in each server process, in at most 500 records shared by transient and terminal failures. A terminal failure that stops stale serving holds until a key fetch that started after it succeeds. When the oldest record is dropped and it is a terminal failure, its cached keys are dropped too.
 
 Keys published inline in the document's `jwks` are stored with the client and are not affected.
 

@@ -591,6 +591,51 @@ describe("CIMD metadataStaleIfError", () => {
 		});
 	});
 
+	it("keeps serving a stored client when other client IDs with no stored client fail", async () => {
+		const request = await getTestInstance({
+			baseURL: `http://localhost:${3700 + ++instanceSequence}`,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid"],
+				}),
+			],
+		});
+		const context = await request.auth.$context;
+		const ctx = { context } as unknown as GenericEndpointContext;
+		// One origin, because `maxCacheEntries` also bounds the origin records.
+		const storedClientId = "https://flooded.example.com/stored.json";
+		let status = 200;
+		const discovery = createCimdClientDiscovery({
+			maxCacheEntries: 1,
+			metadataRevalidationInterval: 0,
+			metadataFetchPolicy: { minimumFetchInterval: 0 },
+			metadataStaleIfError: "1h",
+			fetchClientMetadataResource: async (input) =>
+				status === 200
+					? Response.json(clientDocument({ client_id: String(input) }))
+					: new Response(null, { status }),
+		});
+		const stored = await discovery.resolve(ctx, storedClientId, null);
+
+		status = 404;
+		for (const unknownClientId of [
+			"https://flooded.example.com/unknown-1.json",
+			"https://flooded.example.com/unknown-2.json",
+		]) {
+			await expect(
+				discovery.resolve(ctx, unknownClientId, null),
+			).rejects.toMatchObject({ body: { error: "invalid_client" } });
+		}
+
+		status = 503;
+		await expect(
+			discovery.resolve(ctx, storedClientId, stored),
+		).resolves.toMatchObject({ clientId: storedClientId });
+	});
+
 	/**
 	 * The stored client is a registration, not a cached HTTP response, so the
 	 * document's cache directives do not limit it.

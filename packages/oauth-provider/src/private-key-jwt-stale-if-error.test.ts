@@ -88,12 +88,12 @@ async function createVerifier(
 			updatedAt: new Date(),
 		},
 	});
-	const verify = async () =>
+	const verify = async (kid = "stale-key") =>
 		verifyClientAssertion(
 			{ context } as unknown as GenericEndpointContext,
 			opts,
 			await new SignJWT({})
-				.setProtectedHeader({ alg: "RS256", kid: "stale-key" })
+				.setProtectedHeader({ alg: "RS256", kid })
 				.setIssuer(clientId)
 				.setSubject(clientId)
 				.setAudience(audience)
@@ -314,6 +314,39 @@ describe("jwksStaleIfError on a client discovery", () => {
 		vi.setSystemTime(START_MS + 24 * MINUTE_MS);
 		verifier.keys.answer = unavailable;
 		await expect(verifier.verify()).resolves.toBeDefined();
+	});
+
+	it("keeps a terminal failure when an older fetch of the keys succeeds after it", async () => {
+		const verifier = await createVerifier({ jwksStaleIfError: 3_600 });
+		vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+		const serveKeys = verifier.keys.answer;
+		await verifier.verify();
+
+		vi.setSystemTime(START_MS + MINUTE_MS);
+		let releaseOlderFetch!: () => void;
+		const olderFetchHeld = new Promise<void>((resolve) => {
+			releaseOlderFetch = resolve;
+		});
+		verifier.keys.answer = async () => {
+			await olderFetchHeld;
+			return serveKeys();
+		};
+		const olderAssertion = verifier.verify("rotated-key");
+		void olderAssertion.catch(() => {});
+		await vi.waitFor(() => expect(verifier.transport).toHaveBeenCalledTimes(2));
+		verifier.keys.answer = () => new Response(null, { status: 404 });
+		await expect(verifier.verify("rotated-key")).rejects.toMatchObject({
+			body: { error: "invalid_client" },
+		});
+		expect(verifier.transport).toHaveBeenCalledTimes(3);
+		releaseOlderFetch();
+		await olderAssertion.catch(() => {});
+
+		vi.setSystemTime(START_MS + 17 * MINUTE_MS);
+		verifier.keys.answer = () => new Response(null, { status: 503 });
+		await expect(verifier.verify()).rejects.toMatchObject({
+			body: { error_description: "failed to fetch client JWKS" },
+		});
 	});
 
 	describe("a transport's DNS lookup limit refusal", () => {
