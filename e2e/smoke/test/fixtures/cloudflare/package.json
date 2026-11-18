@@ -8,7 +8,7 @@
     "@better-auth/scim": "workspace:*",
     "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*",
-    "hono": "^4.13.7"
+    "hono": "^4.13.16"
   },
   "devDependencies": {
     "kysely-029": "npm:kysely@0.29.6",
