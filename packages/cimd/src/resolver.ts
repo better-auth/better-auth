@@ -699,6 +699,15 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		// request waits for another request's save. A request that ends mid-save
 		// could leave that save pending forever, and a runtime that bounds I/O to
 		// the request that started it cannot await the save from another request.
+		// Saves are not ordered across requests, so a save that lands after a
+		// newer document was cached may have overwritten that document's save.
+		// The newer entry is then saved again on its next cache hit.
+		const markSaved = (entry: CimdMetadataCacheEntry | null) => {
+			if (entry) entry.saved = true;
+			const current = metadataCache.get(clientId);
+			if (current && current !== entry) current.saved = false;
+		};
+
 		const persistFetchedMetadata = async ({
 			metadata,
 			nextEntry,
@@ -712,7 +721,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 					oauthOptions,
 					existingClient ?? undefined,
 				);
-				if (nextEntry) nextEntry.saved = true;
+				markSaved(nextEntry);
 				return storedClient;
 			} catch (error) {
 				if (nextEntry && metadataCache.get(clientId) === nextEntry) {
@@ -738,7 +747,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 						cimdOptions,
 						oauthOptions,
 					);
-					cachedEntry.saved = true;
+					markSaved(cachedEntry);
 					return createdClient;
 				}
 				if (cachedEntry.saved && !resolvingAgain) return existingClient;
