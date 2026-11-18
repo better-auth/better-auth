@@ -122,9 +122,15 @@ export const oauthProviderResourceClient = <
 		const authServerBaseUrl = await getAuthServerBaseUrl();
 		const audience = opts?.verifyOptions?.audience ?? authServerBaseUrl;
 		const configuredIssuer = await getConfiguredIssuer();
+		// With `opts.jwksUrl`, the keys come from a remote server and RFC 9068 §4
+		// requires an exact `iss` match, so only the normalized issuer is accepted.
 		const issuer =
 			opts?.verifyOptions?.issuer ??
-			(configuredIssuer ? getIssuerForms(configuredIssuer) : undefined);
+			(configuredIssuer
+				? opts?.jwksUrl
+					? validateIssuerUrl(configuredIssuer)
+					: getIssuerForms(configuredIssuer)
+				: undefined);
 		if (!audience) {
 			throw Error("please define opts.verifyOptions.audience");
 		}

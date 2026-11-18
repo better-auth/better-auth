@@ -49,10 +49,30 @@ export function getIssuer(
 }
 
 /**
+ * The issuer identifier the provider stamps on its tokens and publishes in
+ * discovery, read from the auth context. Use it as the single expected `iss`
+ * of a verifier that fetches keys from a remote authorization server, where
+ * RFC 9068 §4 requires an exact match. In-process checks use
+ * {@link getAcceptedIssuers} instead.
+ *
+ * @internal
+ */
+export function getDiscoveryIssuer(
+	context: AuthContext,
+	opts:
+		| Pick<OAuthOptions<Scope[]>, "disableJwtPlugin">
+		| undefined = getOAuthProviderPlugin(context)?.options,
+): string {
+	return validateIssuerUrl(getConfiguredIssuer(context, opts));
+}
+
+/**
  * The `iss` values to accept in tokens from an issuer configured as
  * `configuredIssuer`: the normalized issuer, and the configured value when it
  * differs. Tokens issued by earlier versions carry the configured value, and
- * both strings come from the server's own configuration.
+ * both strings come from the server's own configuration. Use it only for
+ * checks that run in the process holding that configuration: a verifier that
+ * trusts a remote `jwksUrl` must expect the normalized issuer alone.
  */
 export function getIssuerForms(configuredIssuer: string): string[] {
 	const issuer = validateIssuerUrl(configuredIssuer);

@@ -779,6 +779,62 @@ describe("requireMcpAuth default issuer", async () => {
 		expect(handler).toHaveBeenCalledOnce();
 	});
 
+	describe("with a remote jwksUrl", () => {
+		const jwksUrl = `${baseURL}/jwks`;
+
+		async function callRemote(
+			accessToken: string,
+			issuer?: string,
+		): Promise<{ response: Response; handler: ReturnType<typeof vi.fn> }> {
+			vi.stubGlobal("fetch", instance.customFetchImpl);
+			const handler = vi.fn(() => Response.json({ ok: true }));
+			const response = await requireMcpAuth(instance.auth, handler, {
+				jwksUrl,
+				issuer,
+			})(
+				new Request(MCP_RESOURCE, {
+					headers: { Authorization: `Bearer ${accessToken}` },
+				}),
+			);
+			return { response, handler };
+		}
+
+		async function signWithConfiguredIssuer() {
+			const issued = decodeJwt(await issueAccessToken());
+			const context = await instance.auth.$context;
+			return signJWT({ context } as GenericEndpointContext, {
+				payload: { ...issued, iss: configuredIssuer },
+				header: { typ: "at+jwt" },
+			});
+		}
+
+		it("accepts the discovery issuer", async () => {
+			const { response, handler } = await callRemote(await issueAccessToken());
+
+			expect(response.status).toBe(200);
+			expect(handler).toHaveBeenCalledOnce();
+		});
+
+		it("rejects a token that carries jwt.issuer as configured", async () => {
+			const { response, handler } = await callRemote(
+				await signWithConfiguredIssuer(),
+			);
+
+			expect(response.status).toBe(401);
+			expect(handler).not.toHaveBeenCalled();
+		});
+
+		it("accepts the issuer you pass, whatever its form", async () => {
+			const { response, handler } = await callRemote(
+				await signWithConfiguredIssuer(),
+				configuredIssuer,
+			);
+
+			expect(response.status).toBe(200);
+			expect(handler).toHaveBeenCalledOnce();
+		});
+	});
+
 	it("accepts only an explicit issuer when one is set", async () => {
 		const accessToken = await issueAccessToken();
 		vi.stubGlobal("fetch", instance.customFetchImpl);

@@ -1,6 +1,7 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
 import {
 	getAcceptedIssuers,
+	getDiscoveryIssuer,
 	getLocalIntrospection,
 	getLocalJwksSource,
 } from "@better-auth/oauth-provider/internal";
@@ -22,9 +23,11 @@ export interface RequireMcpAuthOptions {
 	/**
 	 * Expected token issuer. Defaults to the OAuth provider's issuer, derived
 	 * from `jwt.issuer` when the JWT plugin sets it and otherwise from the
-	 * server's resolved base URL. The default also accepts that URL exactly as
-	 * configured, which tokens issued by earlier versions carry. A value set
-	 * here is the only issuer accepted.
+	 * server's resolved base URL. Verification against keys from this process
+	 * also accepts that URL exactly as configured, which tokens issued by earlier
+	 * versions carry. With `jwksUrl` set, the default is the normalized issuer
+	 * alone, since RFC 9068 §4 requires an exact match. A value set here is the
+	 * only issuer accepted.
 	 */
 	issuer?: string;
 	/**
@@ -159,11 +162,17 @@ export const requireMcpAuth = <
 				"requireMcpAuth requires dpop.nonce.secret when the auth context has no secret.",
 			);
 		}
+		// A remote `jwksUrl` is verified against the single discovery issuer, as
+		// RFC 9068 §4 requires an exact match. The in-process checks also accept
+		// the issuer as configured, which tokens issued by earlier versions carry.
+		const issuerContext = authContext as Parameters<
+			typeof getAcceptedIssuers
+		>[0];
 		const issuer =
 			opts?.issuer ??
-			getAcceptedIssuers(
-				authContext as Parameters<typeof getAcceptedIssuers>[0],
-			);
+			(opts?.jwksUrl
+				? getDiscoveryIssuer(issuerContext)
+				: getAcceptedIssuers(issuerContext));
 		const resource = opts?.resource ?? baseURL;
 		// The provider in this process checks the token against its own records,
 		// which accepts opaque tokens and rejects revoked ones, without a request

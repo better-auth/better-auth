@@ -452,4 +452,40 @@ describe("issuer with a trailing-slash baseURL", async () => {
 			await resourceClient.getProtectedResourceMetadata({ resource }),
 		).toMatchObject({ authorization_servers: [metadata.issuer] });
 	});
+
+	it("expects the discovery issuer alone when keys come from a remote jwksUrl", async () => {
+		const { tokens } = await issueTokens({ resource });
+		const configuredIssuerToken = await withConfiguredIssuer(
+			tokens.access_token,
+		);
+		const jwksUrl = `${metadata.issuer}/jwks`;
+		const networkFetch = globalThis.fetch.bind(globalThis);
+		vi.stubGlobal(
+			"fetch",
+			async (input: RequestInfo | URL, init?: RequestInit) =>
+				(input instanceof Request ? input.url : String(input)) === jwksUrl
+					? customFetchImpl(input, init)
+					: networkFetch(input, init),
+		);
+		const resourceClient = oauthProviderResourceClient(auth).getActions();
+
+		await expect(
+			resourceClient.verifyBearerToken(tokens.access_token, {
+				jwksUrl,
+				verifyOptions: { audience: resource },
+			}),
+		).resolves.toMatchObject({ azp: expect.any(String) });
+		await expect(
+			resourceClient.verifyBearerToken(configuredIssuerToken, {
+				jwksUrl,
+				verifyOptions: { audience: resource },
+			}),
+		).rejects.toThrow();
+		await expect(
+			resourceClient.verifyBearerToken(configuredIssuerToken, {
+				jwksUrl,
+				verifyOptions: { audience: resource, issuer: configuredIssuer },
+			}),
+		).resolves.toMatchObject({ azp: expect.any(String) });
+	});
 });
