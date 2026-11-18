@@ -311,7 +311,7 @@ Redeeming an authorization code at `/oauth2/token` now needs a stored consent th
 Redeeming an approved OAuth device code at `/oauth2/token` now needs a stored consent that still covers the scopes and resources the user approved. Before, an approved code stayed valid for its full lifetime, 30 minutes by default, after the user deleted or narrowed the consent it was approved under.
 
 * A poll after the user deleted the consent, or narrowed it below what they approved, fails with `400 invalid_grant`. The device must start a new device authorization request.
-* Every device approval replaces the consent for that client and reference. If the user approves a second device of the same client with fewer scopes before the first device redeems its code, the first device's poll fails with `400 invalid_grant`.
+* Approving another device of the same client adds to the consent and leaves the first device's code valid. The first device's poll fails only if the user declined one of its scopes on the other device's consent page.
 * A consent that was deleted and then given again for the same request leaves the code valid.
 * Device codes redeemed while the client is configured with `skip_consent` bypass this check, even if a stored consent exists.
 * CIBA requests are not checked. One the user approved before deleting the consent can still be redeemed until it expires.
