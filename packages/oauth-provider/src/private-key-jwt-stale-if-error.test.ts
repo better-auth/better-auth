@@ -131,6 +131,16 @@ const transientFailures: { failure: string; answer: KeyAnswer }[] = [
 			});
 		},
 	},
+	{
+		failure: "a reset connection wrapped ten times",
+		answer: () => {
+			let error = withCode("socket hang up", "ECONNRESET");
+			for (let wrapper = 0; wrapper < 10; wrapper += 1) {
+				error = new TypeError("fetch failed", { cause: error });
+			}
+			throw error;
+		},
+	},
 ];
 
 const terminalFailures: { failure: string; answer: KeyAnswer }[] = [
@@ -168,6 +178,15 @@ const terminalFailures: { failure: string; answer: KeyAnswer }[] = [
 		failure: "an error a custom transport did not mark",
 		answer: () => {
 			throw new Error("custom transport failure");
+		},
+	},
+	{
+		failure: "an error whose cause chain loops",
+		answer: () => {
+			const inner = new Error("inner failure");
+			const outer = new Error("outer failure", { cause: inner });
+			inner.cause = outer;
+			throw outer;
 		},
 	},
 ];

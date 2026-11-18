@@ -34,17 +34,17 @@ const TRANSIENT_HTTP_STATUSES = new Set([500, 502, 503, 504]);
  */
 const LOCAL_CAPACITY_ERROR_CODES = new Set(["ERR_CIMD_DNS_LOOKUP_LIMIT"]);
 
-const MAX_CAUSE_DEPTH = 8;
-
 function someErrorInCauseChain(
 	error: unknown,
 	predicate: (candidate: object) => boolean,
 ): boolean {
 	const seen = new Set<unknown>();
 	let candidate = error;
-	for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
-		if (typeof candidate !== "object" || candidate === null) return false;
-		if (seen.has(candidate)) return false;
+	while (
+		typeof candidate === "object" &&
+		candidate !== null &&
+		!seen.has(candidate)
+	) {
 		seen.add(candidate);
 		if (predicate(candidate)) return true;
 		candidate = (candidate as { cause?: unknown }).cause;
