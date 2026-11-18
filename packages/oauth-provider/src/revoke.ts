@@ -206,7 +206,11 @@ async function revokeRefreshToken(
 		});
 	}
 	if (refreshToken.revoked) {
-		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+		// Only the owner can replay a token. A token from another client must not
+		// delete the presenting client's own grants.
+		if (refreshToken.clientId === clientId) {
+			await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+		}
 		throw new APIError("BAD_REQUEST", {
 			error_description: "refresh token revoked",
 			error: "invalid_request",
