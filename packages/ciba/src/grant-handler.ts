@@ -1,5 +1,6 @@
 import type { OAuthExtensionGrantHandler } from "@better-auth/oauth-provider";
 import {
+	assertConsentStillCovers,
 	parseScopes,
 	resolveResourcePolicy,
 	toResourceList,
@@ -130,6 +131,18 @@ export const createCibaGrantHandler =
 				CIBA_ERROR_CODES.USER_NOT_FOUND.message,
 				"INTERNAL_SERVER_ERROR",
 			);
+		}
+		// A link approval stored a consent, so it follows that consent as an
+		// approved device code does. `completeCibaRequest` stores none.
+		if (request.approvedViaConsent) {
+			await assertConsentStillCovers(ctx, client, {
+				userId: request.userId,
+				referenceId: request.referenceId ?? undefined,
+				scopes: parseScopes(request.scope),
+				// Every approved resource, not the narrowed poll.
+				resources: approvedResources,
+				userInfoClaims: [],
+			});
 		}
 		// A rejected DPoP proof also refuses here, before the claim.
 		const binding = await provider.resolveConfirmation({

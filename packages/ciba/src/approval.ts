@@ -155,6 +155,7 @@ export function cibaApprovalRequest(
 							status: "approved",
 							scope,
 							referenceId: approval.referenceId ?? null,
+							approvedViaConsent: true,
 							authTime: new Date(approval.authTime),
 							acr: approval.acr ?? null,
 							amr: approval.amr ?? null,

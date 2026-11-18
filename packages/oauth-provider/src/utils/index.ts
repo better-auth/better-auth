@@ -1825,12 +1825,12 @@ export async function updateConsent(
 }
 
 /**
- * An approved authorization code or device code follows its consent. Redeeming
- * it needs a stored consent that still covers what the user approved, so one
- * approved before the user deleted or narrowed their consent mints nothing. A
- * consent given again for the same client, consent reference, and access
- * leaves it valid, because the user approved that access again. A client that
- * skips consent is not checked.
+ * An authorization code, device code, or other request the user approved on
+ * the consent page follows its consent. Redeeming it needs a stored consent
+ * that still covers what the user approved, so one approved before the user
+ * deleted or narrowed their consent mints nothing. A consent given again for
+ * the same client, consent reference, and access leaves it valid, because the
+ * user approved that access again. A client that skips consent is not checked.
  *
  * @internal
  */

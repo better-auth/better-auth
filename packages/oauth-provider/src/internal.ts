@@ -25,6 +25,7 @@ export {
 } from "./register";
 export { resolveResourcePolicy } from "./resources";
 export {
+	assertConsentStillCovers,
 	getAuthEndpointUrl,
 	getLocalJwksSource,
 	parseClientMetadata,
