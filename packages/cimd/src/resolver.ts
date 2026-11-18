@@ -889,6 +889,15 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 					metadataCache.delete(clientId);
 				}
 				recordFailedFetch(clientId);
+				// The provider refused the newest document, a terminal failure. A
+				// storage failure says nothing about the document.
+				if (
+					isAPIError(error) &&
+					error.status === "BAD_REQUEST" &&
+					storedClientWithinStaleBound()
+				) {
+					recordTerminalFailure(clientId);
+				}
 				throw error;
 			}
 		};

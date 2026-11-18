@@ -290,6 +290,7 @@ A connection failure counts when the transport's error, or an error in its `caus
 * A host name that does not resolve (`ENOTFOUND`).
 * Any HTTP 4xx response, including 429, any other HTTP 5xx response, such as 501 or 505, and any redirect.
 * A wrong content type, an oversized body, invalid JSON, or a document that fails validation.
+* A document that the OAuth provider refuses to save, such as one with a `jwks_uri` on an origin it does not allow. A database error while saving is not one of these: that request fails, but stale serving continues.
 * A `client_id` URL that fails validation or that `isMetadataDocumentUrlAllowed` refuses.
 * A refusal by the transport, such as an address that is not public-routable, even when it arrives after the timeout fired.
 * A response that the Node transport cannot use, such as a protocol upgrade or a connection that closes before a response.

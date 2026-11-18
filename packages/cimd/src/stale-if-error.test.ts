@@ -544,6 +544,41 @@ describe("CIMD metadataStaleIfError", () => {
 		expect(server.metadataFetchCount()).toBe(6);
 	});
 
+	it("stops serving the stored client after the provider refuses its refreshed document", async () => {
+		const server = await createAuthorizationServer({
+			metadataStaleIfError: "1h",
+		});
+		await server.authorize();
+		server.transport.answer = () =>
+			Response.json(
+				clientDocument({
+					token_endpoint_auth_method: "private_key_jwt",
+					jwks_uri: "https://keys.example/jwks.json",
+				}),
+			);
+		expect((await server.authorize()).error).toBe("invalid_client_metadata");
+
+		server.transport.answer = () => new Response(null, { status: 503 });
+		expect((await server.authorize()).errorDescription).toBe(
+			"Metadata document fetch returned HTTP 503",
+		);
+	});
+
+	it("keeps serving the stored client after a refreshed document fails to save to the database", async () => {
+		const server = await createAuthorizationServer({
+			metadataStaleIfError: "1h",
+		});
+		await server.authorize();
+		const transaction = vi
+			.spyOn(server.context.adapter, "transaction")
+			.mockRejectedValueOnce(new Error("database unavailable"));
+		await expect(server.authorize()).rejects.toThrow();
+		expect(transaction).toHaveBeenCalled();
+
+		server.transport.answer = () => new Response(null, { status: 503 });
+		expect((await server.authorize()).pathname).toBe("/consent");
+	});
+
 	it("does not serve a stored client validated before a terminal failure record was evicted", async () => {
 		const request = await getTestInstance({
 			baseURL: `http://localhost:${3700 + ++instanceSequence}`,
