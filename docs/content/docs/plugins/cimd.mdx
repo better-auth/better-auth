@@ -300,7 +300,7 @@ Such a failure also stops this instance from serving the stored client until a r
 Two refusals are local limits rather than failures of the client's host. They neither count as transient failures nor stop stale serving:
 
 * A `metadataFetchPolicy` limit, which answers `temporarily_unavailable`.
-* The Node transport's limit on outstanding DNS lookups, or any transport error with the code `ERR_CIMD_DNS_LOOKUP_LIMIT`.
+* The Node transport's limit on outstanding DNS lookups, or any transport error with the code `ERR_CIMD_DNS_LOOKUP_LIMIT`, which also answers `temporarily_unavailable`.
 
 When one of them refuses the fetch for a client whose last transient failure was at most 5 minutes ago, the request gets the stored client. Otherwise it gets the same error as without the option.
 

@@ -169,7 +169,11 @@ describe("CIMD metadataStaleIfError with the Node transport", () => {
 		).rejects.toMatchObject({ code: "ERR_CIMD_DNS_LOOKUP_LIMIT" });
 
 		await expect(capped.resolve()).rejects.toMatchObject({
-			body: { error_description: FETCH_FAILURE_DESCRIPTION },
+			status: "TOO_MANY_REQUESTS",
+			body: {
+				error: "temporarily_unavailable",
+				error_description: "metadata DNS lookup capacity exceeded",
+			},
 		});
 		vi.setSystemTime(Date.now() + 60_000);
 		await expect(cappedAfterOutage.resolve()).resolves.toBe(
