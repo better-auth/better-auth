@@ -1,5 +1,31 @@
 # @better-auth/expo
 
+## 1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `@better-auth/expo` now uses the `better-call` copy that `better-auth` installs instead of installing its own, so an Expo app no longer gets a second `better-call` copy.
+
+## 1.7.23
+
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+## 1.7.20
+
+## 1.7.19
+
+### Patch Changes
+
+- [#12368](https://github.com/better-auth/better-auth/pull/12368) [`339414f`](https://github.com/better-auth/better-auth/commit/339414f9b9af88f96de089eac17f0e130d98809d) Thanks [@bytaesu](https://github.com/bytaesu)! - The Expo authorization proxy no longer logs a provider configuration error on every OAuth sign-in when a social provider is set up for ID token sign-in only, such as Apple without a client secret.
+
 ## 1.7.18
 
 ## 1.7.17

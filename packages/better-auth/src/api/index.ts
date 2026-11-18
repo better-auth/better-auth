@@ -420,6 +420,7 @@ export {
 } from "@better-auth/core/api";
 export { APIError } from "@better-auth/core/error";
 export { getIP } from "@better-auth/core/utils/ip";
+export { generateGenericState, parseGenericState } from "../state";
 export { isAPIError } from "../utils/is-api-error";
 export { type DispatchContext, dispatchAuthEndpoint } from "./dispatch";
 export * from "./middlewares";

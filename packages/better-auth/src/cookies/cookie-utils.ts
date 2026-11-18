@@ -110,7 +110,7 @@ export function parseSetCookieHeader(
 		const attrObj: CookieAttributes = { value: decodedValue };
 
 		attributes.forEach((attribute) => {
-			const [attrName, ...attrValueParts] = attribute!.split("=");
+			const [attrName, ...attrValueParts] = attribute.split("=");
 			const attrValue = attrValueParts.join("=");
 
 			const normalizedAttrName = attrName!.trim().toLowerCase();

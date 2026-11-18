@@ -1,12 +1,13 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
+import { isAPIError } from "better-auth/api";
 import {
 	getJwks,
 	stripAccessTokenAuthorizationScheme,
 } from "better-auth/oauth2";
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
-import type { JSONWebKeySet, JWTPayload } from "jose";
+import type { JWTPayload } from "jose";
 import { createLocalJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
 import {
@@ -25,9 +26,12 @@ import type {
 	Scope,
 } from "./types";
 import {
+	challengeHeaders,
 	destructureCredentials,
 	extractClientCredentials,
+	getAuthEndpointUrl,
 	getClient,
+	getJwksSource,
 	getJwtPlugin,
 	getStoredToken,
 	isInvalidJwtError,
@@ -128,8 +132,7 @@ async function validateJwtAccessToken(
 			error: "invalid_request",
 		});
 	}
-	const jwtPlugin = getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin.options;
+	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 	const baseURL = ctx.context.baseURL ?? "";
 	const userInfoAud = `${baseURL}/oauth2/userinfo`;
 	const expectedIssuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
@@ -141,14 +144,7 @@ async function validateJwtAccessToken(
 	try {
 		// Do NOT pass `audience` to jose's verifier. Verify signature + issuer
 		// here, then validate `aud` manually against the resource model below.
-		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
-			? jwtPluginOptions.jwks.remoteUrl
-			: async (): Promise<JSONWebKeySet | undefined> => {
-					const jwksRes = await jwtPlugin.endpoints.getJwks(ctx);
-					// @ts-expect-error response is a JSONWebKeySet but within the response field
-					return jwksRes?.response as JSONWebKeySet | undefined;
-				};
-		const jwks = await getJwks(token, { jwksFetch, jwksCacheKey: jwtPlugin });
+		const jwks = await getJwks(token, getJwksSource(ctx));
 		const verified = await jwtVerify<JWTPayload & { azp?: string }>(
 			token,
 			createLocalJWKSet(jwks),
@@ -525,9 +521,7 @@ function createInvalidAccessTokenError() {
 			error_description: INVALID_ACCESS_TOKEN_ERROR_DESCRIPTION,
 			error: "invalid_token",
 		},
-		{
-			"WWW-Authenticate": INVALID_ACCESS_TOKEN_WWW_AUTHENTICATE,
-		},
+		challengeHeaders(INVALID_ACCESS_TOKEN_WWW_AUTHENTICATE),
 	);
 }
 
@@ -553,7 +547,7 @@ async function resolveAccessTokenValidation(
 		const payload = await validateJwtAccessToken(ctx, opts, token, clientId);
 		return { payload, requestedUserInfoClaims: [] };
 	} catch (err) {
-		if (err instanceof APIError) {
+		if (isAPIError(err)) {
 			// continue
 		} else if (err instanceof Error) {
 			throw err;
@@ -564,7 +558,7 @@ async function resolveAccessTokenValidation(
 	try {
 		return await validateOpaqueAccessToken(ctx, opts, token, clientId);
 	} catch (err) {
-		if (err instanceof APIError) {
+		if (isAPIError(err)) {
 			// nothing
 		} else if (err instanceof Error) {
 			throw err;
@@ -684,7 +678,7 @@ export async function introspectEndpoint(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/introspect`,
+		getAuthEndpointUrl(ctx, "/oauth2/introspect"),
 	);
 	const {
 		clientId: client_id,
@@ -694,10 +688,14 @@ export async function introspectEndpoint(
 	} = destructureCredentials(credentials);
 
 	if (!client_id || (!client_secret && !preVerified)) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "missing required credentials",
-			error: "invalid_client",
-		});
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				error_description: "missing required credentials",
+				error: "invalid_client",
+			},
+			challengeHeaders("Basic"),
+		);
 	}
 
 	// Check token
@@ -734,7 +732,7 @@ export async function introspectEndpoint(
 				);
 				return resolveIntrospectionSub(ctx, opts, payload, client);
 			} catch (error) {
-				if (error instanceof APIError) {
+				if (isAPIError(error)) {
 					if (token_type_hint === "access_token") {
 						throw error;
 					} // else continue
@@ -757,7 +755,7 @@ export async function introspectEndpoint(
 				);
 				return resolveIntrospectionSub(ctx, opts, payload, client);
 			} catch (error) {
-				if (error instanceof APIError) {
+				if (isAPIError(error)) {
 					if (token_type_hint === "refresh_token") {
 						throw error;
 					} // else continue
@@ -774,7 +772,7 @@ export async function introspectEndpoint(
 			error: "invalid_request",
 		});
 	} catch (error) {
-		if (error instanceof APIError) {
+		if (isAPIError(error)) {
 			if (isInactiveTokenError(error)) {
 				return {
 					active: false,

@@ -280,6 +280,11 @@ export interface OAuthProviderApi {
 	/**
 	 * Validates an access token for a protected resource and throws the OAuth
 	 * bearer challenge when the token is inactive or unknown.
+	 *
+	 * Checks the token, not the request: a DPoP-bound token returns `cnf.jkt`
+	 * without a proof check. Call `enforceDpopBinding` from `better-auth/oauth2`
+	 * with a shared replay store, as the UserInfo endpoint does, and reject a
+	 * DPoP-bound token when there is no HTTP request (RFC 9449 §6.2, §7.1).
 	 */
 	requireActiveAccessToken: (
 		token: string,
@@ -424,7 +429,8 @@ export interface OAuthUserInfoExtensionInput {
  *   would otherwise be silently unreachable.
  * - Additive kinds (`metadata`, `claims`) never override authorization-server
  *   core; a key already owned by the provider is kept, and a key two extensions
- *   both contribute resolves to the first-registered extension.
+ *   both contribute resolves to the first-registered extension, with a
+ *   logged warning.
  */
 export interface OAuthProviderExtension {
 	/**
@@ -569,6 +575,33 @@ export interface OAuthOptions<
 		registeredUris: readonly string[],
 		defaultResult: boolean,
 	) => Awaitable<boolean>;
+	/**
+	 * Allows `http:` redirect URIs that the default policy rejects.
+	 *
+	 * By default, `http:` redirect and post-logout redirect URIs are accepted
+	 * only on loopback hosts, and web clients cannot use loopback hosts at all.
+	 * When the default policy rejects an `http:` URI, this callback decides:
+	 * return `true` to accept it. It applies to client registration and
+	 * updates, the authorize endpoint, and the end-session endpoint. A callback
+	 * that throws rejects the URI, and URIs with credentials are always
+	 * rejected. Web clients on loopback hosts must match the registered port.
+	 *
+	 * Use it for deployments served over plain HTTP on a private network, or
+	 * for web clients on `localhost` during development. Plain HTTP exposes
+	 * authorization codes to anyone on the network path, so accept only origins
+	 * you control.
+	 *
+	 * @example
+	 * ```ts
+	 * oauthProvider({
+	 *   allowInsecureRedirectUri: (url) => url.origin === "http://192.168.1.50:8000",
+	 * })
+	 * ```
+	 *
+	 * @param url - The parsed `http:` redirect URI
+	 * @returns `true` to accept the URI
+	 */
+	allowInsecureRedirectUri?: (url: URL) => boolean;
 	/**
 	 * Protected resources the AS issues access tokens for. Promotes the
 	 * resource model into a first-class persisted entity with per-resource
@@ -769,6 +802,7 @@ export interface OAuthOptions<
 	/**
 	 * Allows /oauth2/public-client-prelogin endpoint to be
 	 * requestable prior to login via a valid oauth_query.
+	 * The requested `client_id` must match the signed query's.
 	 */
 	allowPublicClientPrelogin?: boolean;
 	/**
@@ -1898,8 +1932,11 @@ export interface SchemaClient<
 	referenceId?: string;
 	/**
 	 * Additional metadata about the client.
+	 *
+	 * Written as an object. Rows stored by earlier versions may hold a JSON
+	 * string, which is still read.
 	 */
-	metadata?: string; // in JSON format
+	metadata?: Record<string, unknown> | string;
 }
 
 export interface OAuthOpaqueAccessToken<

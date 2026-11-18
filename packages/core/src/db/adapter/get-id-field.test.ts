@@ -241,6 +241,33 @@ describe("encodeDeterministicId", () => {
 		},
 	);
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12071
+	 */
+	describe("with ObjectId id columns", () => {
+		const encode = (usesObjectIdKey?: (model: string) => boolean) =>
+			encodeDeterministicId(
+				digest(1),
+				{ advanced: { database: { generateId: false } } },
+				{ adapter: { options: { usesObjectIdKey } }, model: "verification" },
+			);
+
+		it("encodes ObjectId hex when the adapter reports an ObjectId column", () => {
+			expect(encode((model) => model === "verification")).toBe(
+				"1f262d343b424950575e656c",
+			);
+		});
+
+		it.each([
+			["another model's column", (model: string) => model === "user"],
+			["an adapter without column metadata", undefined],
+		])("keeps the base64url id for %s", (_, usesObjectIdKey) => {
+			expect(encode(usesObjectIdKey)).toBe(
+				encodeDeterministicId(digest(1), {}),
+			);
+		});
+	});
+
 	it("formats a uuid when ids are uuids", () => {
 		const id = encodeDeterministicId(digest(1), {
 			advanced: { database: { generateId: "uuid" } },

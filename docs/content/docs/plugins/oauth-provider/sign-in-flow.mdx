@@ -107,7 +107,7 @@ For any client an administrator did not create, whoever registered it chose its 
 
 The response is `{ redirect: true, url }`. By default, the auth client sends the browser to `url`. If you call the endpoint another way, send the browser to `url` yourself.
 
-With `accept: false`, the user returns to the client with `access_denied`, and any consent given earlier stays unchanged. To remove consent, see [Manage consents](#manage-consents).
+With `accept: false`, the user returns to the client with `access_denied`, and any consent given earlier stays unchanged. This redirect happens only while the client is enabled and the `redirect_uri` is still valid for it. If the client was disabled or deleted, or the `redirect_uri` no longer passes redirect URI validation, the `url` points to the server error page instead. Validation fails when the URI was removed from the client's registration under the default policy, or when `allowInsecureRedirectUri` or `validateRedirectUri` no longer accepts it. To remove consent, see [Manage consents](#manage-consents).
 
 ## Sign-up account screen
 
@@ -164,7 +164,7 @@ await authClient.oauth2.continue({ selected: true });
 To add a step after sign-in and before consent, such as picking an organization, set `postLogin` with a `page` and these callbacks:
 
 * `shouldRedirect` receives `headers`, `user`, `session`, `scopes`, and `isContinuation`. It returns `true` to redirect to `page`.
-* `consentReferenceId` receives `user`, `session`, and `scopes`. It returns the user's choice, such as an organization ID. Better Auth stores consent separately for each reference. When `consentReferenceId` returns `undefined` or an empty string, the consent given without a reference applies.
+* `consentReferenceId` receives `user`, `session`, and `scopes`. Until the user accepts, `scopes` holds the requested scopes. Once the user accepts, it holds the scopes they accepted. `consentReferenceId` returns the user's choice, such as an organization ID. Better Auth stores consent separately for each reference. When `consentReferenceId` returns `undefined` or an empty string, the consent given without a reference applies.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -194,7 +194,7 @@ If some scopes need a reference, throw an `APIError` from `consentReferenceId` w
 
 ## Continue endpoint
 
-To resume authorization from an account page, call this endpoint with the flag that matches the page. Better Auth runs the authorize steps again and responds with `{ redirect: true, url }`. The `url` can be another account page, the consent page, or the client's `redirect_uri`. By default, the auth client sends the browser there.
+To resume authorization from an account page, call this endpoint with the flag that matches the page. Better Auth runs the authorize steps again and responds with `{ redirect: true, url }`. The `url` can be another account page, the consent page, or the client's `redirect_uri`. By default, the auth client sends the browser there. Account selection does not run again: it runs only on the request to `/oauth2/authorize` itself.
 
 Without a flag or the signed query, the call returns a 400 `invalid_request` error. Call it from the page that Better Auth redirected to, where the URL still carries the signed query. Without `oauthProviderClient`, send that query as `oauth_query`.
 

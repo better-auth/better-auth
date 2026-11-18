@@ -5,6 +5,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type {
@@ -654,8 +655,14 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				ctx,
 				resp?.response?.clientDataJSON,
 			);
-			if (expectedOrigin.length === 0) {
+			if (!expectedOrigin) {
 				throw expectedOriginUnavailable(ctx);
+			}
+			if (expectedOrigin.length === 0) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+				);
 			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
@@ -858,7 +865,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					status: 200,
 				});
 			} catch (e) {
-				if (e instanceof APIError) throw e;
+				if (isAPIError(e)) throw e;
 				ctx.context.logger.error("Failed to verify registration", e);
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
@@ -918,8 +925,14 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				ctx,
 				resp?.response?.clientDataJSON,
 			);
-			if (expectedOrigin.length === 0) {
+			if (!expectedOrigin) {
 				throw expectedOriginUnavailable(ctx);
+			}
+			if (expectedOrigin.length === 0) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
+				);
 			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
@@ -1049,7 +1062,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					},
 				);
 			} catch (e) {
-				if (e instanceof APIError) throw e;
+				if (isAPIError(e)) throw e;
 				ctx.context.logger.error("Failed to verify authentication", e);
 				throw APIError.from(
 					"BAD_REQUEST",

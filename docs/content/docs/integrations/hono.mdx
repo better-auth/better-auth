@@ -58,14 +58,7 @@ If you're using another runtime, keep your existing entry point and add the same
 
 #### Cloudflare Workers
 
-Better Auth uses `AsyncLocalStorage`. Add the [`nodejs_compat` compatibility flag](https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag) to your Wrangler configuration:
-
-```jsonc title="wrangler.jsonc"
-{
-  // Use "nodejs_als" instead if you only need AsyncLocalStorage.
-  "compatibility_flags": ["nodejs_compat"],
-}
-```
+See the [Cloudflare guide](/docs/guides/cloudflare) for the Workers configuration Better Auth needs.
 
 ## CORS
 

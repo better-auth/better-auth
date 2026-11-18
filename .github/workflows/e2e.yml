@@ -43,26 +43,31 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - name: Reset Docker Containers
+        run: docker compose down --volumes --remove-orphans
+
+      - name: Start Docker Containers
+        id: docker
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
+        background: true
+
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
         with:
           node-version: ${{ matrix.node-version }}
 
       - name: Build
         run: pnpm build
 
-      - name: Reset Docker Containers
-        run: docker compose down --volumes --remove-orphans
-
-      - name: Start Docker Containers
-        run: |
-          read -r -a compose_services <<< "$COMPOSE_SERVICES"
-          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
-
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: 2.6.4
+
+      - name: Wait for Docker
+        wait: docker
 
       - name: Smoke
         timeout-minutes: 10
@@ -100,7 +105,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - name: Reset Docker Containers
+        run: docker compose down --volumes --remove-orphans
+
+      - name: Start Docker Containers
+        id: docker
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
+        background: true
+
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
 
       - name: Install Next.js demo
         run: pnpm --dir demo/nextjs install --frozen-lockfile
@@ -108,13 +123,8 @@ jobs:
       - name: Install Playwright Browsers
         uses: ./.github/actions/setup-playwright
 
-      - name: Reset Docker Containers
-        run: docker compose down --volumes --remove-orphans
-
-      - name: Start Docker Containers
-        run: |
-          read -r -a compose_services <<< "$COMPOSE_SERVICES"
-          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
+      - name: Wait for Docker
+        wait: docker
 
       - name: Integration
         run: pnpm e2e:integration --filter=./e2e/integration
@@ -192,15 +202,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
-
       - name: Reset Docker Containers
         run: docker compose down --volumes --remove-orphans
 
-      - name: Build Adapter Dependencies
-        run: pnpm exec turbo run build --filter="$FILTER..."
-
       - name: Start Docker Containers
+        id: docker
         if: matrix.compose_services != ''
         run: |
           read -r -a compose_services <<< "$COMPOSE_SERVICES"
@@ -220,6 +226,16 @@ jobs:
               echo "::warning::Container cleanup failed; retrying startup with remaining resources."
             fi
           done
+        background: true
+
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
+
+      - name: Build Adapter Dependencies
+        run: pnpm exec turbo run build --filter="$FILTER..."
+
+      # wait cannot take if:, so wait-all covers cells with and without compose services.
+      - name: Wait for Docker
+        wait-all:
 
       - name: Adapter Integration
         run: pnpm e2e:integration --filter="$FILTER"

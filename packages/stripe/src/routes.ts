@@ -1,7 +1,6 @@
-import { createAuthEndpoint } from "@better-auth/core/api";
+import { createAuthEndpoint, HIDE_METADATA } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import type { GenericEndpointContext, User } from "better-auth";
-import { HIDE_METADATA } from "better-auth";
 import { getSessionFromCtx, originCheck } from "better-auth/api";
 import type { Organization } from "better-auth/plugins/organization";
 import { defu } from "defu";

@@ -65,6 +65,48 @@ Without transactions, an earlier write may remain if a later write fails. When y
 
 For MongoDB, we don't need to generate or migrate the schema.
 
+### Indexes
+
+The adapter creates the indexes that SQL databases get from migrations:
+
+* A unique index for every field marked `unique`, such as `user.email` and `session.token`. This index stops concurrent requests from creating two users with the same email.
+* An index for every field marked `index`.
+
+The adapter starts building these indexes when your auth instance creates the adapter. Requests don't wait for the build. Uniqueness is enforced once the build finishes. Index names follow the SQL migrations, for example `user_email_uidx` and `session_userId_idx`.
+
+An optional unique field gets a partial index, so many documents can leave it unset or `null`. Table-level `indexes` declared by plugins are created before the first write to their collection. The adapter skips:
+
+* JSON and array fields.
+* Fields already covered by a single-field table index. For a `unique` field, that table index must also be unique.
+* Tables with `disableMigrations`.
+
+If the adapter cannot create a field index, it logs an error that names the index and the reason. It keeps serving requests without that index, and it never changes your data to make a build succeed. The most common reasons:
+
+* **The collection already contains duplicate values.** Uniqueness is not enforced for that field until you remove the duplicates. Until then, every start runs the build again, and the build scans the whole collection. To fix it:
+
+  1. Find the duplicates with a read-only query. Use the collection and field from the log message:
+
+     ```ts
+     const duplicates = await db
+       .collection("user")
+       .aggregate([
+         { $match: { email: { $ne: null } } },
+         { $group: { _id: "$email", ids: { $push: "$_id" }, count: { $sum: 1 } } },
+         { $match: { count: { $gt: 1 } } },
+       ])
+       .toArray();
+     ```
+
+  2. For each value, decide which user to keep. The duplicates can belong to different sign-ups, so check `emailVerified` and the linked accounts first.
+
+  3. For each user you remove, also delete or move its `session` and `account` documents, whose `userId` is the removed user's id. MongoDB does not delete them for you.
+
+  4. Restart your application to build the index.
+* **The database user cannot create indexes.** Grant it the `createIndex` action, or create equivalent indexes yourself. The adapter accepts an equivalent index under any name.
+* **Another index uses the same key or name with different options.** Drop that index, then restart your application.
+
+After a network error or a replica set election, the adapter tries again on a later request.
+
 ## Joins
 
 Database joins are useful when Better-Auth needs to fetch related data from multiple tables in a single query.

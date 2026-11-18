@@ -247,12 +247,15 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	authentication?: ("basic" | "post") | undefined;
 	/**
-	 * Custom headers to include in the discovery request.
+	 * Custom headers to include in the discovery request, and in the JWKS request when
+	 * `jwks_uri` has the same origin as `discoveryUrl`. When set, discovery follows
+	 * redirects only within that origin and fails on a redirect to another origin.
 	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
 	 */
 	discoveryHeaders?: Record<string, string> | undefined;
 	/**
-	 * Custom headers to include in the authorization request.
+	 * Custom headers to include in token endpoint requests: the authorization
+	 * code exchange and token refresh.
 	 * Useful for providers like Qonto that require specific headers (e.g., X-Qonto-Staging-Token for local development).
 	 */
 	authorizationHeaders?: Record<string, string> | undefined;

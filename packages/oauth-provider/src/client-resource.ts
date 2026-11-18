@@ -17,12 +17,16 @@ import { APIError } from "better-call";
 import type { JWTPayload, JWTVerifyOptions } from "jose";
 import { createResourceServerChallenge } from "./resource-challenge";
 import type { ResourceServerMetadata } from "./types/oauth";
-import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
+import {
+	getJwtPlugin,
+	getLocalJwksSource,
+	getOAuthProviderPlugin,
+} from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 type ResourceClientAuth = {
 	options: BetterAuthOptions;
-	$context: Promise<unknown>;
+	$context: Promise<{ baseURL: string }>;
 };
 
 export const oauthProviderResourceClient = <
@@ -57,15 +61,14 @@ export const oauthProviderResourceClient = <
 		}
 		return jwtPlugin?.options;
 	};
-	const authServerBaseUrl =
-		typeof auth?.options.baseURL === "string"
-			? auth.options.baseURL
-			: undefined;
+	// The resolved base URL includes `basePath`, matching the `iss` the provider signs.
+	// Empty for a dynamic `baseURL`, which only resolves per request.
+	const getAuthServerBaseUrl = async () =>
+		(auth && (await auth.$context).baseURL) || undefined;
 	const getAuthorizationServer = async (): Promise<string | undefined> => {
 		const jwtPluginOptions = await getJwtPluginOptions();
-		return jwtPluginOptions?.jwt?.issuer ?? authServerBaseUrl;
+		return jwtPluginOptions?.jwt?.issuer ?? (await getAuthServerBaseUrl());
 	};
-	const authServerBasePath = auth?.options.basePath;
 	const resolveVerifyAccessTokenOptions = async (
 		opts:
 			| (VerifyAccessTokenAuthOpts & {
@@ -76,6 +79,7 @@ export const oauthProviderResourceClient = <
 			| undefined,
 	): Promise<VerifyAccessTokenRequestOptions> => {
 		const jwtPluginOptions = await getJwtPluginOptions();
+		const authServerBaseUrl = await getAuthServerBaseUrl();
 		const audience = opts?.verifyOptions?.audience ?? authServerBaseUrl;
 		const issuer =
 			opts?.verifyOptions?.issuer ??
@@ -91,15 +95,24 @@ export const oauthProviderResourceClient = <
 			opts?.jwksUrl ??
 			jwtPluginOptions?.jwks?.remoteUrl ??
 			(authServerBaseUrl
-				? `${authServerBaseUrl + (authServerBasePath ?? "")}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`
+				? `${authServerBaseUrl}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`
 				: undefined);
+		// An auth instance in this process serves its keys without a request to
+		// its own `/jwks`, which some runtimes block.
+		const localJwks =
+			auth && jwtPlugin && !opts?.jwksUrl
+				? getLocalJwksSource(
+						(await auth.$context) as Parameters<typeof getLocalJwksSource>[0],
+					)
+				: undefined;
 		const introspectUrl =
 			opts?.remoteVerify?.introspectUrl ??
 			(authServerBaseUrl
-				? `${authServerBaseUrl}${authServerBasePath ?? ""}/oauth2/introspect`
+				? `${authServerBaseUrl}/oauth2/introspect`
 				: undefined);
 		return {
 			...opts,
+			...localJwks,
 			jwksUrl,
 			verifyOptions: {
 				...opts?.verifyOptions,
@@ -204,6 +217,7 @@ export const oauthProviderResourceClient = <
 							verifyOptions.verifyOptions.audience,
 							{
 								resourceMetadataMappings: opts?.resourceMetadataMappings,
+								request,
 								dpopSigningAlgorithms:
 									opts?.dpop?.signingAlgorithms ?? DPOP_SIGNING_ALGORITHMS,
 							},
@@ -230,7 +244,8 @@ export const oauthProviderResourceClient = <
 						  }
 						| undefined,
 				): Promise<ResourceServerMetadata> => {
-					const resource = overrides?.resource ?? authServerBaseUrl;
+					const resource =
+						overrides?.resource ?? (await getAuthServerBaseUrl());
 					const oauthProviderOptions = (await getOauthProviderPlugin())
 						?.options;
 					if (!resource) {

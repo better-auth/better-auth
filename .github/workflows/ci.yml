@@ -40,7 +40,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
 
       - name: Reject stale release merge groups
         if: github.event_name == 'merge_group'
@@ -55,40 +55,46 @@ jobs:
           fi
 
       - name: Build
+        id: build
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
         run: pnpm build
+        background: true
 
-      - name: Lint
-        run: pnpm biome ci --error-on-warnings
+      - parallel:
+          - name: Lint
+            run: pnpm biome ci --error-on-warnings
 
-      - name: Lint Dependencies
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-        run: pnpm lint:dependencies
+          - name: Lint Dependencies
+            run: pnpm lint:dependencies
 
-      - name: Lint Packages
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-        run: pnpm lint:packages
+          - name: Lint Spell
+            run: pnpm lint:spell
 
-      - name: Lint Spell
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-        run: pnpm lint:spell
+          - name: Lint Format
+            run: pnpm format:check
 
-      - name: Lint Format
-        run: pnpm format:check
+      - name: Wait for build
+        wait: build
 
-      - name: Lint Types
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-        run: pnpm lint:types
+      - parallel:
+          - name: Lint Packages
+            env:
+              TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+              TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+            run: pnpm lint:packages
+
+          - name: Lint Types
+            env:
+              TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+              TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+            run: pnpm lint:types
+
+          # Versioned docs content comes from other branches, so check its icons against this registry.
+          # Keep this off the first parallel group: sync-versions writes docs while biome/cspell/remark read them.
+          - name: Lint Docs Sidebar Icons
+            run: pnpm --filter docs validate:sidebar-icons
 
   typecheck:
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
@@ -111,7 +117,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
 
       - name: Typecheck
         run: pnpm typecheck
@@ -119,11 +125,12 @@ jobs:
       - name: Build package declarations
         run: pnpm build
 
-      - name: Typecheck workspace consumers
-        run: pnpm typecheck:consumers
+      - parallel:
+          - name: Typecheck workspace consumers
+            run: pnpm typecheck:consumers
 
-      - name: Typecheck dist declarations
-        run: pnpm typecheck:dist
+          - name: Typecheck dist declarations
+            run: pnpm typecheck:dist
 
   test:
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
@@ -153,7 +160,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - name: Reset Docker Containers
+        run: docker compose down --volumes --remove-orphans
+
+      - name: Start Docker Containers
+        id: docker
+        run: |
+          read -r -a compose_services <<< "$COMPOSE_SERVICES"
+          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
+        background: true
+
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
         with:
           node-version: ${{ matrix.node-version }}
 
@@ -164,13 +181,8 @@ jobs:
       - name: Rebuild native bindings for matrix node
         run: pnpm -r rebuild better-sqlite3
 
-      - name: Reset Docker Containers
-        run: docker compose down --volumes --remove-orphans
-
-      - name: Start Docker Containers
-        run: |
-          read -r -a compose_services <<< "$COMPOSE_SERVICES"
-          docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
+      - name: Wait for Docker
+        wait: docker
 
       - name: Test
         run: pnpm coverage

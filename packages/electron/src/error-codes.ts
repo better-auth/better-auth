@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "better-auth";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const ELECTRON_ERROR_CODES = defineErrorCodes({
 	INVALID_CLIENT_ID: "Invalid client ID",

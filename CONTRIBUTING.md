@@ -231,6 +231,8 @@ A good description:
 - Be clear and concise.
 - Explain what changed, not a commit-style prefix (e.g. `fix:`, `feat:`).
 - Describe the symptom users see, not the internal cause.
+- Cover one user-visible change. If your PR fixes several things, add one
+  changeset for each.
 
 If you're not sure whether your change needs one, a maintainer will handle
 it before merge.

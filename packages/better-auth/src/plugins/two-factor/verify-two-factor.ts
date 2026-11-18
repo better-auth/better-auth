@@ -51,7 +51,10 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			await ctx.context.internalAdapter.findVerificationValue(
 				signedTwoFactorCookie,
 			);
-		if (!verificationToken) {
+		if (
+			!verificationToken ||
+			!(new Date(verificationToken.expiresAt).getTime() > Date.now())
+		) {
 			throw APIError.from(
 				"UNAUTHORIZED",
 				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,

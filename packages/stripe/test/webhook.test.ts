@@ -2130,6 +2130,78 @@ describe("stripe webhook", () => {
 			expect(data).toEqual({ success: true });
 		});
 
+		test("should warn and skip a subscription update without a local subscription", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const mockEvent = createSubscriptionEvent(
+				"customer.subscription.updated",
+				{
+					id: "sub_test_unknown",
+					customer: "cus_test_unknown",
+					items: {
+						object: "list",
+						data: [
+							createSubscriptionItem({
+								price: createPrice({
+									id: TEST_PRICES.starter,
+								}),
+							}),
+						],
+						has_more: false,
+						url: "/v1/subscription_items",
+					},
+				},
+			);
+			const onSubscriptionUpdate = vi.fn();
+			const log = vi.fn();
+
+			const { auth: testAuth } = await getTestInstance(
+				{
+					database: memory,
+					logger: {
+						log,
+					},
+					plugins: [
+						stripe({
+							...stripeOptions,
+							stripeClient: {
+								...stripeOptions.stripeClient,
+								webhooks: {
+									constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
+								},
+							} as unknown as Stripe,
+							subscription: {
+								...stripeOptions.subscription,
+								onSubscriptionUpdate,
+							},
+						}),
+					],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const response = await testAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: {
+						"stripe-signature": "test_signature",
+					},
+					body: JSON.stringify(mockEvent),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+			expect(onSubscriptionUpdate).not.toHaveBeenCalled();
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				"Stripe webhook warning: No subscription found for customerId: cus_test_unknown",
+			);
+			expect(log).not.toHaveBeenCalledWith("error", expect.anything());
+		});
+
 		test("should call constructEventAsync with exactly 3 required parameters", async ({
 			memory,
 			stripeOptions,

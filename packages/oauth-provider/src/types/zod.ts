@@ -1,4 +1,7 @@
-import { SafeUrlSchema } from "@better-auth/core/utils/redirect-uri";
+import {
+	RedirectUriSyntaxSchema,
+	SafeUrlSchema,
+} from "@better-auth/core/utils/redirect-uri";
 import * as z from "zod";
 import {
 	claimsRequestInputSchema,
@@ -9,7 +12,7 @@ import {
  * Re-exported from `@better-auth/core` so every OAuth provider plugin shares one
  * redirect-URI scheme policy. See `@better-auth/core/utils/redirect-uri`.
  */
-export { SafeUrlSchema };
+export { RedirectUriSyntaxSchema, SafeUrlSchema };
 
 const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
 
@@ -122,7 +125,7 @@ export const authorizationQuerySchema = z
 			.optional(),
 		request: z.string().optional(),
 		request_uri: z.string().optional(),
-		redirect_uri: SafeUrlSchema.optional(),
+		redirect_uri: RedirectUriSyntaxSchema.optional(),
 		scope: z.string().optional(),
 		state: z.string().optional(),
 		client_id: z.string().min(1, "client_id is required"),
@@ -154,7 +157,7 @@ export const authorizationQuerySchema = z
 // conditional match; forcing it here would reject valid headless codes as
 // "malformed verification value".
 const storedAuthorizationQuerySchema = authorizationQuerySchema.extend({
-	redirect_uri: SafeUrlSchema.optional(),
+	redirect_uri: RedirectUriSyntaxSchema.optional(),
 	claims: claimsRequestParameterSchema.optional(),
 });
 
@@ -189,7 +192,7 @@ export const verificationValueSchema = z
  * @see https://datatracker.ietf.org/doc/html/rfc7591#section-2
  */
 export const clientRegistrationRequestSchema = z.object({
-	redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+	redirect_uris: z.array(RedirectUriSyntaxSchema).min(1).optional(),
 	scope: z.string().optional(),
 	client_name: z
 		.string()
@@ -203,7 +206,7 @@ export const clientRegistrationRequestSchema = z.object({
 	software_id: z.string().optional(),
 	software_version: z.string().optional(),
 	software_statement: z.string().optional(),
-	post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+	post_logout_redirect_uris: z.array(RedirectUriSyntaxSchema).min(1).optional(),
 	backchannel_logout_uri: SafeUrlSchema.optional(),
 	backchannel_logout_session_required: z.boolean().optional(),
 	token_endpoint_auth_method: z.string().trim().min(1).optional(),

@@ -254,35 +254,30 @@ describe("schema check timing", () => {
 		});
 	});
 
-	it("reports drift during initialization without an auth request", async ({
-		onTestFinished,
-	}) => {
+	it("reports drift to the first auth request", async ({ onTestFinished }) => {
 		const database = createDatabase(ACCOUNT_TABLE_WITH_ISSUER);
 		onTestFinished(() => database.close());
 		const log = vi.fn();
 		const { auth } = createAuth(database, { logger: { log } });
 
-		await vi.waitFor(() => {
-			expect(log).toHaveBeenCalledWith(
-				"error",
-				new SchemaMismatchError(
-					[
-						{
-							kind: "unexpected-required-column",
-							table: "account",
-							column: "issuer",
-						},
-					],
-					"database",
-				).message,
-			);
-		});
+		await expect(
+			auth.api.getSession({ headers: new Headers() }),
+		).rejects.toThrow(
+			new SchemaMismatchError(
+				[
+					{
+						kind: "unexpected-required-column",
+						table: "account",
+						column: "issuer",
+					},
+				],
+				"database",
+			).message,
+		);
+		expect(log).not.toHaveBeenCalled();
 		expect(
 			database.prepare('select count(*) as count from "user"').get(),
 		).toMatchObject({ count: 0 });
-		await expect(
-			auth.api.getSession({ headers: new Headers() }),
-		).rejects.toThrow(SchemaMismatchError);
 	});
 
 	it("does not inspect the database when validation is disabled", async ({

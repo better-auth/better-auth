@@ -672,8 +672,8 @@ export function invalidateResourceCache(identifier?: string): void {
  *
  * Triggers the lazy seed via {@link seedResourcesOnce} on first call — the
  * retry path when the startup seed failed (database unreachable, or
- * migrations run after plugin init). The seed is idempotent and coalesced,
- * so the cost is paid only once per process.
+ * migrations run after plugin init). The seed is idempotent, so once one
+ * call completes, later calls skip it.
  *
  * Returns a defensive copy so callers can't mutate cached state.
  *
@@ -841,36 +841,24 @@ export function logStartupSeedFailure(ctx: AuthContext, error: unknown): void {
 	);
 }
 
-interface SeedState {
-	completed: boolean;
-	promise: Promise<void> | null;
-}
-
 /**
- * Lazy-seed state per adapter and plugin options. A module-level boolean would
+ * Plugin options whose seed completed, per adapter. A module-level boolean would
  * let one Better Auth instance suppress seeding for every later instance in the
  * same process. Endpoint `AuthContext` objects are not guaranteed to be stable
  * across requests, so the adapter identifies the backing store, and the options
  * object separates instances that share an adapter but configure different
  * `resources`.
  */
-let seedStates = new WeakMap<object, WeakMap<object, SeedState>>();
+let seededOptions = new WeakMap<object, WeakSet<object>>();
 
-function getSeedState(
-	ctx: AuthContext,
-	opts: OAuthOptions<Scope[]>,
-): SeedState {
+function getSeededOptions(ctx: AuthContext): WeakSet<object> {
 	const adapterKey = ctx.adapter as object;
-	let byOptions = seedStates.get(adapterKey);
-	if (!byOptions) {
-		byOptions = new WeakMap<object, SeedState>();
-		seedStates.set(adapterKey, byOptions);
+	let seeded = seededOptions.get(adapterKey);
+	if (!seeded) {
+		seeded = new WeakSet<object>();
+		seededOptions.set(adapterKey, seeded);
 	}
-	const existing = byOptions.get(opts);
-	if (existing) return existing;
-	const created: SeedState = { completed: false, promise: null };
-	byOptions.set(opts, created);
-	return created;
+	return seeded;
 }
 
 /**
@@ -880,7 +868,7 @@ function getSeedState(
  * @internal
  */
 export function resetSeedStateForTests(): void {
-	seedStates = new WeakMap<object, WeakMap<object, SeedState>>();
+	seededOptions = new WeakMap<object, WeakSet<object>>();
 }
 
 /**
@@ -903,8 +891,8 @@ export function resetSeedStateForTests(): void {
  * the other re-reads the row and treats the failed insert as a no-op.
  *
  * Throws on storage errors, including a missing table. Callers go through
- * {@link seedResourcesOnce}, which resets so the next resource access
- * retries (e.g. after migrations run).
+ * {@link seedResourcesOnce}, which stays incomplete after a failure so the
+ * next resource access retries (e.g. after migrations run).
  *
  * Idempotent: safe to call multiple times.
  *
@@ -913,6 +901,7 @@ export function resetSeedStateForTests(): void {
 export async function seedResources(
 	ctx: AuthContext,
 	opts: OAuthOptions<Scope[]>,
+	isComplete?: () => boolean,
 ): Promise<void> {
 	const inputs = collectResourceInputs(opts);
 	if (inputs.length === 0) return;
@@ -978,6 +967,9 @@ export async function seedResources(
 		// Reached for existing rows, and for a row a concurrent boot inserted,
 		// so `merge` and `overwrite` still apply this config.
 		if (mode === "insertOnly") continue;
+		// Skip once another seed in this process has finished, so a late write
+		// does not undo an edit made since then.
+		if (isComplete?.()) return;
 
 		await ctx.adapter.update({
 			model: modelName,
@@ -988,10 +980,11 @@ export async function seedResources(
 }
 
 /**
- * Idempotent, coalesced wrapper around {@link seedResources}, called from
- * plugin `init` and from every resource lookup. The first call runs the
- * seed, concurrent calls await the same promise, and calls after a success
- * are no-ops. A failure resets the state so the next call retries.
+ * Idempotent wrapper around {@link seedResources}, called from plugin `init`
+ * and from every resource lookup. Each call runs its own seed until one
+ * completes, because on Workers a pending seed started by a request that has
+ * ended never settles. The seed tolerates a row a concurrent call inserted.
+ * A failure leaves the state incomplete, so the next call retries.
  *
  * @internal
  */
@@ -999,22 +992,10 @@ export async function seedResourcesOnce(
 	ctx: AuthContext,
 	opts: OAuthOptions<Scope[]>,
 ): Promise<void> {
-	// Explicit boolean / null comparisons keep Biome's `noMisusedPromises`
-	// rule happy — these are flag variables, not Promise checks.
-	const state = getSeedState(ctx, opts);
-	if (state.completed === true) return;
-	if (state.promise !== null) return state.promise;
-	state.promise = seedResources(ctx, opts)
-		.then(() => {
-			state.completed = true;
-		})
-		.catch((err) => {
-			// Reset so a later call can retry — transient errors shouldn't
-			// permanently disable seeding for the process.
-			state.promise = null;
-			throw err;
-		});
-	return state.promise;
+	const seeded = getSeededOptions(ctx);
+	if (seeded.has(opts)) return;
+	await seedResources(ctx, opts, () => seeded.has(opts));
+	seeded.add(opts);
 }
 
 /**

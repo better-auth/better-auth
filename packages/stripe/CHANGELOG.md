@@ -1,5 +1,33 @@
 # @better-auth/stripe
 
+## 1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+- [#12503](https://github.com/better-auth/better-auth/pull/12503) [`87ede79`](https://github.com/better-auth/better-auth/commit/87ede7984d4df152ae3c0f5a58a2d08299b24281) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed errors from hooks and endpoints turning into generic 500 responses or skipping their error handling in the OAuth provider, Client ID Metadata Document, passkey, SSO, SCIM, and Stripe plugins when the app installs more than one copy of `better-call`.
+
+## 1.7.23
+
+## 1.7.22
+
+### Patch Changes
+
+- [#12473](https://github.com/better-auth/better-auth/pull/12473) [`f6487ed`](https://github.com/better-auth/better-auth/commit/f6487eddd799de2758420621ddf5d248f30aa3f3) Thanks [@bytaesu](https://github.com/bytaesu)! - A `customer.subscription.updated` webhook for a customer with no local subscription now logs a clear warning instead of failing with a `TypeError`.
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+## 1.7.20
+
+## 1.7.19
+
 ## 1.7.18
 
 ## 1.7.17

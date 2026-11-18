@@ -83,11 +83,15 @@ export function mergeScopes(
 }
 
 /**
- * Reads a provider's email verification claim. Only boolean `true` or the
- * exact string `"true"`, which some providers send, counts as verified.
+ * Reads a boolean that some providers send as a string.
+ *
+ * Accepts `true`, `false` and their exact string forms. Any other value
+ * returns `undefined`, so the caller decides how to treat it.
  */
-export function parseProviderEmailVerified(value: unknown): boolean {
-	return value === true || value === "true";
+export function parseStringBoolean(value: unknown): boolean | undefined {
+	if (value === true || value === "true") return true;
+	if (value === false || value === "false") return false;
+	return undefined;
 }
 
 /**

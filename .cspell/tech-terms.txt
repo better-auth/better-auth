@@ -9,6 +9,7 @@ seqno
 MyISAM
 attnum
 attrelid
+atttypid
 indisunique
 indisvalid
 indexrelid

@@ -16,6 +16,7 @@ import {
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import type { InternalLogger } from "@better-auth/core/env";
+import { isWorkerd } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { getIP } from "@better-auth/core/utils/ip";
@@ -50,6 +51,8 @@ type ActiveSessionReference = {
 	readonly expiresAt: number;
 };
 
+const VERIFICATION_CLEANUP_INTERVAL_MS = 60_000;
+
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -63,6 +66,7 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
+	let nextVerificationCleanupAt = 0;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	// With secondary storage, the database is the authoritative session store
 	// only when sessions are written to it and revoked rows are deleted.
@@ -157,6 +161,28 @@ export const createInternalAdapter = (
 			: [];
 	}
 
+	async function setActiveSessionReferences(
+		userId: string,
+		sessionReferences: readonly ActiveSessionReference[],
+		now: number,
+	) {
+		if (!secondaryStorage) return;
+		const sorted = [...sessionReferences].sort(
+			(a, b) => a.expiresAt - b.expiresAt,
+		);
+		// Secondary storage reads a zero ttl as no expiry, so drop the list instead.
+		const ttl = getTTLSeconds(sorted.at(-1)?.expiresAt ?? 0, now);
+		if (ttl > 0) {
+			await secondaryStorage.set(
+				`active-sessions-${userId}`,
+				JSON.stringify(sorted),
+				ttl,
+			);
+			return;
+		}
+		await secondaryStorage.delete(`active-sessions-${userId}`);
+	}
+
 	// The session index is a read-modify-write list, so concurrent writers can
 	// drop a token from it. Bulk revocation also records a cutoff, and sessions
 	// created before it count as revoked even when the index missed them.
@@ -209,24 +235,12 @@ export const createInternalAdapter = (
 			await secondaryStorage.delete(token);
 		}
 
-		const activeSessionsKey = `active-sessions-${userId}`;
 		const currentSessionReferences = await getActiveSessionReferences(userId);
 		const now = Date.now();
 		const remainingSessionReferences = currentSessionReferences.filter(
 			(session) => session.expiresAt > now && !deletedTokens.has(session.token),
 		);
-		remainingSessionReferences.sort((a, b) => a.expiresAt - b.expiresAt);
-		const furthestExpiration = remainingSessionReferences.at(-1)?.expiresAt;
-
-		if (furthestExpiration) {
-			await secondaryStorage.set(
-				activeSessionsKey,
-				JSON.stringify(remainingSessionReferences),
-				getTTLSeconds(furthestExpiration, now),
-			);
-			return;
-		}
-		await secondaryStorage.delete(activeSessionsKey);
+		await setActiveSessionReferences(userId, remainingSessionReferences, now);
 	}
 
 	async function queueCachedUserSessionDeletion(
@@ -257,6 +271,10 @@ export const createInternalAdapter = (
 		key: string,
 		fn: () => Promise<T>,
 	): Promise<T> {
+		// Workers never settle I/O of a request that has ended, so a lock held
+		// by that request would never be released. Callers race at the database
+		// instead, so a `delete.before` hook can run for one that loses.
+		if (isWorkerd()) return fn();
 		const previous = verificationConsumeLocks.get(key) ?? Promise.resolve();
 		let release!: () => void;
 		const current = new Promise<void>((resolve) => {
@@ -608,20 +626,11 @@ export const createInternalAdapter = (
 					);
 				}
 
-				const sorted = [
-					...list,
-					{ token: data.token, expiresAt: data.expiresAt.getTime() },
-				].sort((a, b) => a.expiresAt - b.expiresAt);
-				const furthestSessionExp =
-					sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
-				const furthestSessionTTL = getTTLSeconds(furthestSessionExp, now);
-				if (furthestSessionTTL > 0) {
-					await secondaryStorage.set(
-						`active-sessions-${userId}`,
-						JSON.stringify(sorted),
-						furthestSessionTTL,
-					);
-				}
+				await setActiveSessionReferences(
+					userId,
+					[...list, { token: data.token, expiresAt: data.expiresAt.getTime() }],
+					now,
+				);
 
 				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
 					model: "user",
@@ -918,20 +927,11 @@ export const createInternalAdapter = (
 										)
 										.concat([{ token: sessionToken, expiresAt: expiresMs }]);
 
-									const sorted = filtered.sort(
-										(a, b) => a.expiresAt - b.expiresAt,
+									await setActiveSessionReferences(
+										updatedSession.userId,
+										filtered,
+										now,
 									);
-									const furthestSessionExp = sorted.at(-1)?.expiresAt;
-
-									if (furthestSessionExp && furthestSessionExp > now) {
-										await secondaryStorage.set(
-											listKey,
-											JSON.stringify(sorted),
-											getTTLSeconds(furthestSessionExp, now),
-										);
-									} else {
-										await secondaryStorage.delete(listKey);
-									}
 								}
 
 								return updatedSession;
@@ -969,22 +969,7 @@ export const createInternalAdapter = (
 						const filtered = list.filter(
 							(session) => session.expiresAt > now && session.token !== token,
 						);
-						const sorted = filtered.sort((a, b) => a.expiresAt - b.expiresAt);
-						const furthestSessionExp = sorted.at(-1)?.expiresAt;
-
-						if (
-							filtered.length > 0 &&
-							furthestSessionExp &&
-							furthestSessionExp > Date.now()
-						) {
-							await secondaryStorage.set(
-								`active-sessions-${userId}`,
-								JSON.stringify(filtered),
-								getTTLSeconds(furthestSessionExp, now),
-							);
-						} else {
-							await secondaryStorage.delete(`active-sessions-${userId}`);
-						}
+						await setActiveSessionReferences(userId, filtered, now);
 					} else {
 						logger.error("Active sessions list not found in secondary storage");
 					}
@@ -1448,21 +1433,40 @@ export const createInternalAdapter = (
 				verification = await findByIdentifier(identifier);
 			}
 
-			if (!options.verification?.disableCleanup) {
+			const found = (verification[0] as Verification | undefined) ?? null;
+			const now = Date.now();
+			if (options.verification?.disableCleanup) {
+				return found;
+			}
+			if (now >= nextVerificationCleanupAt) {
+				nextVerificationCleanupAt = now + VERIFICATION_CLEANUP_INTERVAL_MS;
 				await deleteManyWithHooks(
 					[
 						{
 							field: "expiresAt",
-							value: new Date(),
+							value: new Date(now),
 							operator: "lt",
 						},
 					],
 					"verification",
 					undefined,
 				);
+			} else if (found && new Date(found.expiresAt).getTime() < now) {
+				// Not every reader checks `expiresAt`, so when a lookup finds an
+				// expired row, it deletes every expired row of that identifier
+				// and no later lookup returns one. The throttled sweep above only
+				// bounds table growth.
+				await deleteManyWithHooks(
+					[
+						{ field: "identifier", value: found.identifier },
+						{ field: "expiresAt", value: new Date(now), operator: "lt" },
+					],
+					"verification",
+					undefined,
+				);
 			}
 
-			return (verification[0] as Verification) || null;
+			return found;
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
 			const storageOption = getStorageOption(
@@ -1579,22 +1583,30 @@ export const createInternalAdapter = (
 
 							// FIXME(consume-identifier-atomic): add an adapter primitive that
 							// deletes all rows for an identifier and returns the latest row in
-							// one operation. Until then, consume the latest row as the race gate
-							// and invalidate stale rows inside the same transaction/local lock.
+							// one operation. Until then, invalidate stale rows first and consume
+							// the latest row as the race gate, so no stale row is left to consume
+							// when neither a transaction nor the local lock orders the callers.
 							return consumeOneWithHooks<Verification>(
 								"verification",
 								[{ field: "id", value: latest.id }],
 								async () => {
-									const row = await txAdapter.consumeOne<Verification>({
+									await txAdapter.deleteMany({
+										model: "verification",
+										where: [
+											...where,
+											{ field: "id", operator: "ne", value: latest.id },
+											// A row created after this read is not stale.
+											{
+												field: "createdAt",
+												operator: "lte",
+												value: latest.createdAt,
+											},
+										],
+									});
+									return txAdapter.consumeOne<Verification>({
 										model: "verification",
 										where: [{ field: "id", value: latest.id }],
 									});
-									if (!row) return null;
-									await txAdapter.deleteMany({
-										model: "verification",
-										where,
-									});
-									return row;
 								},
 								latest,
 							);
@@ -1659,6 +1671,7 @@ export const createInternalAdapter = (
 					),
 				),
 				options,
+				{ adapter, model: "verification" },
 			);
 			const storageOption = getStorageOption(
 				data.identifier,

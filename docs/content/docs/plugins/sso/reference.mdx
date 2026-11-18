@@ -307,7 +307,7 @@ Sends a PKCE challenge ([RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636
 
 `overrideUserInfo` <span className="opacity-70">`boolean`</span>
 
-Where the top-level `overrideUserInfo` is stored. Ignored at registration, where you set the top-level field. Set it here on update.
+The stored value that sign-in reads. Registration ignores a value sent here. Instead, it stores `true` when the top-level `overrideUserInfo` or `defaultOverrideUserInfo` is `true`, and `false` otherwise. To change it later, set it here on update.
 
 `mapping` <span className="opacity-70">`object`</span>
 

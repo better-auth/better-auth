@@ -3,9 +3,17 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { isLoopbackIP } from "@better-auth/core/utils/host";
-import { isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
-import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
+import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
+import {
+	INSECURE_REDIRECT_URI_MESSAGE,
+	isNativePrivateUseRedirectUri,
+} from "@better-auth/core/utils/redirect-uri";
+import {
+	APIError,
+	getSessionFromCtx,
+	isAPIError,
+	NO_STORE_HEADERS,
+} from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import { assertValidClientJwks } from "./client-jwks";
@@ -32,7 +40,13 @@ import type {
 	Scope,
 } from "./types";
 import type { GrantType, OAuthClient } from "./types/oauth";
-import { parseClientMetadata, storeClientSecret } from "./utils";
+import {
+	challengeHeaders,
+	isInsecureRedirectUriAllowed,
+	isRedirectUriTransportAllowed,
+	parseClientMetadata,
+	storeClientSecret,
+} from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
@@ -231,6 +245,7 @@ async function resolveClientRegistrationResources(
 function validateClientRedirectUri(
 	redirectUri: string,
 	applicationType: "web" | "native",
+	opts: OAuthOptions<Scope[]>,
 ) {
 	let url: URL;
 	try {
@@ -259,6 +274,7 @@ function validateClientRedirectUri(
 		isLoopbackIP(url.hostname) || url.hostname === "localhost";
 
 	if (applicationType === "web") {
+		if (isHttp && isInsecureRedirectUriAllowed(opts, url)) return;
 		if (!isHttps || isRedirectLoopback) {
 			invalidRedirectUri(
 				`web clients require https redirect URIs on non-loopback hosts: ${redirectUri}`,
@@ -276,12 +292,14 @@ function validateClientRedirectUri(
 		return;
 	}
 	if (isHttp) {
-		if (!isExactLoopbackHttpRedirectUri(redirectUri)) {
-			invalidRedirectUri(
-				`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
-			);
+		if (isExactLoopbackHttpRedirectUri(redirectUri)) return;
+		// Loopback hosts keep the exact-host rule; the callback covers other hosts.
+		if (!isLoopbackHost(url.host) && isInsecureRedirectUriAllowed(opts, url)) {
+			return;
 		}
-		return;
+		invalidRedirectUri(
+			`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
+		);
 	}
 
 	if (!isNativePrivateUseRedirectUri(url)) {
@@ -334,7 +352,7 @@ export async function registerEndpoint(
 				error_description: "Authentication required for client registration",
 			},
 			{
-				"WWW-Authenticate": "Bearer",
+				...challengeHeaders("Bearer"),
 				...NO_STORE_HEADERS,
 			},
 		);
@@ -471,7 +489,22 @@ export async function checkOAuthClient(
 			uri,
 			(applicationType as "web" | "native" | undefined) ??
 				(isClientMetadataDocument ? "native" : "web"),
+			opts,
 		);
+	}
+	for (const uri of clientWithDefaults.post_logout_redirect_uris ?? []) {
+		let url: URL | undefined;
+		try {
+			url = new URL(uri);
+		} catch {}
+		if (!url || url.username || url.password) {
+			invalidRedirectUri(
+				`post-logout redirect URI must be an absolute URI without credentials: ${uri}`,
+			);
+		}
+		if (!isRedirectUriTransportAllowed(opts, uri)) {
+			invalidRedirectUri(`${INSECURE_REDIRECT_URI_MESSAGE}: ${uri}`);
+		}
 	}
 
 	// Validate correlation between grant_types and response_types
@@ -663,7 +696,7 @@ export async function checkOAuthClient(
 					}
 				}
 			} catch (e) {
-				if (e instanceof APIError) throw e;
+				if (isAPIError(e)) throw e;
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_client_metadata",
 					error_description: "jwks_uri must be a valid URL",
@@ -1401,9 +1434,7 @@ export function oauthToSchema(
 		inputMetadata ?? {},
 	);
 	const metadata =
-		metadataObj && Object.keys(metadataObj).length
-			? JSON.stringify(metadataObj)
-			: undefined;
+		metadataObj && Object.keys(metadataObj).length ? metadataObj : undefined;
 
 	return {
 		// Important Fields

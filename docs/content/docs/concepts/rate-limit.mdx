@@ -134,8 +134,11 @@ Some requests have no valid address. For example, `X-Forwarded-For` can contain
 several addresses while `trustedProxies` is not set. These requests share one
 counter for each path, and Better Auth logs a warning the first time this happens.
 
-In development and test, Better Auth uses `127.0.0.1` instead. To turn off this rate
-limiter for HTTP requests, set `disableIpTracking: true`.
+In development and test, Better Auth uses `127.0.0.1` instead.
+
+Setting `advanced.ipAddress.disableIpTracking: true` turns off the rate limiter for
+every HTTP request, not only for requests without an address. Better Auth also stops
+recording the client address on new sessions.
 
 #### IPv6 Address Support
 

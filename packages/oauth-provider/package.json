@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/oauth-provider",
-  "version": "1.7.18",
+  "version": "1.7.25",
   "description": "An oauth provider plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -89,6 +89,6 @@
     "@better-auth/utils": "catalog:peer",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:^",
-    "better-call": "catalog:"
+    "better-call": "catalog:peer"
   }
 }

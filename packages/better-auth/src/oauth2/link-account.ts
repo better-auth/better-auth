@@ -8,7 +8,7 @@ import {
 } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
-import { mergeScopes } from "@better-auth/core/oauth2";
+import { mergeScopes, parseStringBoolean } from "@better-auth/core/oauth2";
 import { createEmailVerificationToken } from "../api";
 import { isStateful } from "../api/routes/session";
 import { setAccountCookie } from "../cookies/session-store";
@@ -17,7 +17,6 @@ import { derivePurposeKey } from "../crypto/purpose";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
 import type { StateData } from "../state";
 import type { Account, User } from "../types";
-import { toBoolean } from "../utils/boolean";
 import { isAPIError } from "../utils/is-api-error";
 import { assertValidUserInfo } from "../utils/validate-user-info";
 import { OAUTH_CALLBACK_ERROR_CODES, redirectOnError } from "./errors";
@@ -96,7 +95,7 @@ export async function linkOAuthAccount(
 	const { link, account, profile, scopes } = opts;
 	const userInfo = {
 		...opts.userInfo,
-		emailVerified: toBoolean(opts.userInfo.emailVerified),
+		emailVerified: parseStringBoolean(opts.userInfo.emailVerified) ?? false,
 	};
 	if (!(await isLinkSessionLive(c, link))) {
 		return linkOAuthAccountFailure(
@@ -217,7 +216,7 @@ export async function handleOAuthUserInfo(
 	const { account, callbackURL, disableSignUp, overrideUserInfo } = opts;
 	const userInfo = {
 		...opts.userInfo,
-		emailVerified: toBoolean(opts.userInfo.emailVerified),
+		emailVerified: parseStringBoolean(opts.userInfo.emailVerified) ?? false,
 	};
 	const source = opts.source ?? {
 		method: "oauth",
@@ -577,26 +576,33 @@ export async function handleOAuthUserInfo(
 				providerId: account.providerId,
 				accountId: account.accountId,
 			};
-			const { createdUser, createdAccount } = await runWithTransaction(
-				c.context.adapter,
-				async () => {
-					const createdUser = await c.context.internalAdapter.createUser(
-						{
-							name,
-							image,
-							...additionalUserFields,
-							email: userInfo.email.toLowerCase(),
-							emailVerified: userInfo.emailVerified,
-						},
-						source,
-					);
-					const createdAccount = await c.context.internalAdapter.createAccount({
-						...accountData,
-						userId: createdUser.id,
-					});
-					return { createdUser, createdAccount };
-				},
-			);
+			const created = await runWithTransaction(c.context.adapter, async () => {
+				const createdUser = await c.context.internalAdapter.createUser(
+					{
+						name,
+						image,
+						...additionalUserFields,
+						email: userInfo.email.toLowerCase(),
+						emailVerified: userInfo.emailVerified,
+					},
+					source,
+				);
+				// A `user.create.before` hook returning false aborts with null.
+				if (!createdUser) return null;
+				const createdAccount = await c.context.internalAdapter.createAccount({
+					...accountData,
+					userId: createdUser.id,
+				});
+				return { createdUser, createdAccount };
+			});
+			if (!created) {
+				return {
+					error: "unable to create user",
+					data: null,
+					isRegister: false,
+				};
+			}
+			const { createdUser, createdAccount } = created;
 			if (
 				requireExactAccountBinding &&
 				(createdAccount.accountId !== account.accountId ||

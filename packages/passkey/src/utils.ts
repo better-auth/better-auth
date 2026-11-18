@@ -2,7 +2,6 @@ import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
 } from "@better-auth/core";
-import { BetterAuthError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
 import type { PasskeyOptions } from "./types";
@@ -19,8 +18,14 @@ export function getRpID(options: PasskeyOptions, baseURL?: string | undefined) {
  * that is the `baseURL` origin plus the origin the credential reports when
  * `trustedOrigins` lists it exactly, which keeps a frontend on another origin
  * working. A wildcard entry does not count, since it also admits sibling hosts
- * that can produce assertions for the same `rpID`. Without a configured `baseURL` only the request URL is used, never
+ * that can produce assertions for the same `rpID`. When a wildcard allowed host
+ * covers the `rpID`, the request picks the `baseURL` host, so only the reported
+ * origin counts, and only when the resolved trusted origins list it exactly.
+ * Without a configured `baseURL` only the request URL is used, never
  * `x-forwarded-host`, which the client can set.
+ *
+ * @returns the expected origins, empty when the reported origin is not
+ * trusted, or `null` when no server-side origin is configured
  *
  * @see https://www.w3.org/TR/webauthn-3/#sctn-validating-origin
  */
@@ -28,23 +33,35 @@ export function getExpectedOrigins(
 	options: PasskeyOptions,
 	ctx: GenericEndpointContext,
 	clientDataJSON: unknown,
-) {
+): string[] | null {
 	if (options.origin) {
 		const configured = Array.isArray(options.origin)
 			? options.origin
 			: [options.origin];
-		return configured.filter((origin) => origin.length > 0);
+		return nonEmpty(configured.filter((origin) => origin.length > 0));
+	}
+	const reported = getReportedOrigin(clientDataJSON);
+	if (
+		"passkeyWildcardCoversRpID" in ctx.context &&
+		ctx.context.passkeyWildcardCoversRpID
+	) {
+		return reported && ctx.context.trustedOrigins.includes(reported)
+			? [reported]
+			: [];
 	}
 	const baseOrigins = getServerOrigins(ctx);
-	const reported = getReportedOrigin(clientDataJSON);
 	if (
 		!reported ||
 		baseOrigins.includes(reported) ||
 		!ctx.context.trustedOrigins.includes(reported)
 	) {
-		return baseOrigins;
+		return nonEmpty(baseOrigins);
 	}
 	return [...baseOrigins, reported];
+}
+
+function nonEmpty(origins: string[]) {
+	return origins.length > 0 ? origins : null;
 }
 
 function getServerOrigins(ctx: GenericEndpointContext) {
@@ -71,15 +88,15 @@ function getReportedOrigin(clientDataJSON: unknown): string | null {
  * and every sibling can produce assertions for it, so the request host cannot
  * stand in for the relying party's origin there.
  */
-export function assertOriginForWildcardHosts(
+export function wildcardHostCoversRpID(
 	options: PasskeyOptions,
 	baseURL: BetterAuthOptions["baseURL"],
 ) {
 	const rpID = options.rpID;
-	if (options.origin || !rpID || typeof baseURL !== "object") {
-		return;
+	if (!rpID || typeof baseURL !== "object") {
+		return false;
 	}
-	const coversRpID = baseURL.allowedHosts.some((pattern) => {
+	return baseURL.allowedHosts.some((pattern) => {
 		const hostname =
 			pattern.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").split(/[:/]/)[0] ?? "";
 		const wildcard = Math.max(
@@ -97,10 +114,4 @@ export function assertOriginForWildcardHosts(
 			rpID.endsWith(`.${suffix}`)
 		);
 	});
-	if (!coversRpID) {
-		return;
-	}
-	throw new BetterAuthError(
-		`Passkey \`origin\` must be set when a wildcard in \`baseURL.allowedHosts\` covers the passkey \`rpID\` "${rpID}".`,
-	);
 }

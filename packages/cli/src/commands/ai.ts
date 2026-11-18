@@ -201,11 +201,7 @@ async function setupMcp() {
 		`${chalk.cyan("GitHub")}  https://github.com/better-auth/agent-auth`,
 	]);
 
-	console.log(
-		chalk.green("\n✔ ") +
-			chalk.bold("Done! ") +
-			"Restart your AI tool to connect.\n",
-	);
+	finish(`${chalk.bold("Done! ")}Restart your AI tool to connect.`);
 }
 
 async function setupClaudeCode(args: string[]) {
@@ -430,11 +426,7 @@ async function setupCli() {
 		`${chalk.cyan("GitHub")}  https://github.com/better-auth/agent-auth`,
 	]);
 
-	console.log(
-		chalk.green("\n✔ ") +
-			chalk.bold("Ready. ") +
-			"Run auth-agent --help to see all commands.\n",
-	);
+	finish(`${chalk.bold("Ready. ")}Run auth-agent --help to see all commands.`);
 }
 
 // ── Server Setup ──────────────────────────────────
@@ -651,14 +643,23 @@ function showServerOutro() {
 		`  ${chalk.cyan("GitHub")}  https://github.com/better-auth/agent-auth`,
 	);
 
-	console.log(
-		chalk.green("\n✔ ") +
-			chalk.bold("Server scaffolded. ") +
-			"Follow the steps above to finish setup.\n",
+	finish(
+		`${chalk.bold("Server scaffolded. ")}Follow the steps above to finish setup.`,
 	);
 }
 
 // ── Helpers ───────────────────────────────────────
+
+// A failed step already set the exit code, so the outro must not claim success.
+function finish(summary: string) {
+	if (process.exitCode) {
+		console.log(
+			`${chalk.yellow("\n⚠ ")}${chalk.bold("Setup incomplete. ")}Finish the failed steps above manually.\n`,
+		);
+		return;
+	}
+	console.log(`${chalk.green("\n✔ ")}${summary}\n`);
+}
 
 async function offerSkillInstall(skillName: string) {
 	const { installSkill } = await ask({

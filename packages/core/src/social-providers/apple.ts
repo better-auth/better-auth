@@ -5,6 +5,7 @@ import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
+	parseStringBoolean,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -166,10 +167,7 @@ export const apple = (options: AppleOptions) => {
 				name = profile.name || "";
 			}
 
-			const emailVerified =
-				typeof profile.email_verified === "boolean"
-					? profile.email_verified
-					: profile.email_verified === "true";
+			const emailVerified = parseStringBoolean(profile.email_verified) ?? false;
 			const enrichedProfile = {
 				...profile,
 				name,

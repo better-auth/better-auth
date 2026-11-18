@@ -33,6 +33,7 @@ export type {
 	DpopBindingErrorCode,
 	DpopProofError,
 	DpopProofErrorCode,
+	DpopReplayAuthContext,
 	DpopReplayReservation,
 	DpopReplayReservations,
 	DpopReplayStore,
@@ -90,6 +91,7 @@ export {
 	getOAuth2Tokens,
 	getPrimaryClientId,
 	mergeScopes,
+	parseStringBoolean,
 } from "./utils";
 export {
 	authorizationCodeRequest,

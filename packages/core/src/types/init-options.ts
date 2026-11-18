@@ -476,12 +476,13 @@ export type BetterAuthAdvancedOptions = {
 				 */
 				joins?: boolean;
 				/**
-				 * Validate the schema during initialization and report problems
-				 * through the configured logger. Authentication requests await
-				 * the same check and fail when the schema does not match.
-				 * Kysely introspects the database; Drizzle and Prisma inspect
-				 * local schema metadata without opening a connection.
-				 * Set `false` to disable runtime schema validation.
+				 * Validate the schema when the auth instance is first used.
+				 * Requests and server API calls await the check and fail when the
+				 * schema does not match. Kysely introspects the database; Drizzle
+				 * and Prisma inspect local schema metadata without opening a
+				 * connection. Other adapters are not validated; unless this is
+				 * `false`, they log a skip message instead. Set `false` to disable
+				 * runtime schema validation and its skip message.
 				 *
 				 * @default true
 				 */
@@ -509,7 +510,7 @@ export type BetterAuthAdvancedOptions = {
 	 * or timing-attack mitigation) to run after the response is sent.
 	 *
 	 * Use `waitUntil` from `@vercel/functions` on Vercel,
-	 * or `ctx.waitUntil` on Cloudflare Workers.
+	 * or `waitUntil` from `cloudflare:workers` on Cloudflare Workers.
 	 *
 	 * @example
 	 * // Vercel
@@ -517,12 +518,9 @@ export type BetterAuthAdvancedOptions = {
 	 * advanced: { backgroundTasks: { handler: waitUntil } }
 	 *
 	 * @example
-	 * // Cloudflare Workers (with AsyncLocalStorage)
-	 * advanced: {
-	 *   backgroundTasks: {
-	 *     handler: (p) => execCtxStorage.getStore()?.waitUntil(p)
-	 *   }
-	 * }
+	 * // Cloudflare Workers
+	 * import { waitUntil } from "cloudflare:workers";
+	 * advanced: { backgroundTasks: { handler: waitUntil } }
 	 */
 	backgroundTasks?: {
 		handler: (promise: Promise<unknown>) => void;
