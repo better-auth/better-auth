@@ -1065,6 +1065,67 @@ describe("CIMD in-flight coalescing", () => {
 	});
 });
 
+describe("CIMD DNS lookup limit refusal", () => {
+	it("keeps the backoff a failed save recorded while the refused fetch was in flight", async () => {
+		const clientId = "https://capacity-backoff.example/client.json";
+		const { discovery, fetchClientMetadataResource } = createDiscovery({
+			metadataFetchPolicy: { minimumFetchInterval: 60 },
+		});
+		const refusedFetchHeld = deferred<void>();
+		fetchClientMetadataResource
+			.mockImplementationOnce(async () =>
+				metadataResponse(clientId, { "cache-control": "no-store" }),
+			)
+			.mockImplementationOnce(async () => {
+				await refusedFetchHeld.promise;
+				throw Object.assign(
+					new TypeError("metadata DNS lookup limit exceeded"),
+					{
+						code: "ERR_CIMD_DNS_LOOKUP_LIMIT",
+					},
+				);
+			});
+		const saving = await createRequestContext();
+		const refused = await createRequestContext();
+		const saveHeld = deferred<void>();
+		let holding = false;
+		vi.spyOn(saving.context.adapter, "transaction").mockImplementation(
+			async () => {
+				holding = true;
+				await saveHeld.promise;
+				throw new Error("forced client persistence failure");
+			},
+		);
+		const savingResolution = discovery.resolve(saving.ctx, clientId, null);
+		void Promise.resolve(savingResolution).catch(() => {});
+		await vi.waitFor(() => expect(holding).toBe(true));
+		const refusedResolution = discovery.resolve(refused.ctx, clientId, null);
+		void Promise.resolve(refusedResolution).catch(() => {});
+		await vi.waitFor(() =>
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2),
+		);
+
+		saveHeld.resolve();
+		await expect(savingResolution).rejects.toThrow(
+			"forced client persistence failure",
+		);
+		refusedFetchHeld.resolve();
+		await expect(refusedResolution).rejects.toMatchObject({
+			body: { error: "temporarily_unavailable" },
+		});
+
+		await expect(
+			discovery.resolve(refused.ctx, clientId, null),
+		).rejects.toMatchObject({
+			body: {
+				error_description:
+					"metadata document fetch is within the per-client minimum interval",
+			},
+		});
+		expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+	});
+});
+
 describe("CIMD resolution of a cached document", () => {
 	it("returns the stored client on a cache hit without rewriting it", async () => {
 		const clientId = "https://cache-hit-existing.example/client.json";

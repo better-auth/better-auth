@@ -535,8 +535,18 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		};
 	};
 
+	// The mark of each client's fetch in flight. A failed fetch or save writes a
+	// new mark, so a capacity refusal that ends later can tell that the pacing
+	// record is no longer its own.
+	const fetchStartMarkByClientId = new Map<string, number>();
+	let lastFetchStartMark = 0;
+
 	const recordFailedFetch = (clientId: string) => {
 		const nowMs = Date.now();
+		if (fetchStartMarkByClientId.has(clientId)) {
+			lastFetchStartMark += 1;
+			fetchStartMarkByClientId.set(clientId, lastFetchStartMark);
+		}
 		lastFetchStartAtMsByClientId.delete(clientId);
 		try {
 			ensureClientFetchStateCapacity(clientId, nowMs);
@@ -584,10 +594,14 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		cachedEntry: CimdMetadataCacheEntry | undefined,
 	): Promise<FetchedMetadata | undefined> => {
 		const startedAtMs = Date.now();
+		const previousFetchStartAtMs = lastFetchStartAtMsByClientId.get(clientId);
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(
 			clientId,
 			startedAtMs,
 		);
+		lastFetchStartMark += 1;
+		const startMark = lastFetchStartMark;
+		fetchStartMarkByClientId.set(clientId, startMark);
 		let abandoned = false;
 		let acceptedLate = false;
 		let startedFetch: InFlightMetadataFetch | undefined;
@@ -671,8 +685,15 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		} catch (error) {
 			if (inFlight.isDiscarded()) return undefined;
 			if (isMetadataFetchCapacityRefusal(error)) {
-				// Nothing reached the host, so the refusal starts no backoff.
-				lastFetchStartAtMsByClientId.delete(clientId);
+				// Nothing reached the host, so the refusal undoes only its own start
+				// mark. A record written since, such as a failed save's backoff, stays.
+				if (fetchStartMarkByClientId.get(clientId) === startMark) {
+					if (previousFetchStartAtMs === undefined) {
+						lastFetchStartAtMsByClientId.delete(clientId);
+					} else {
+						lastFetchStartAtMsByClientId.set(clientId, previousFetchStartAtMs);
+					}
+				}
 			} else {
 				recordFailedFetch(clientId);
 			}
@@ -683,6 +704,9 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			}
 			if (leaseRetiredFetchByClientId.get(clientId) === inFlight) {
 				leaseRetiredFetchByClientId.delete(clientId);
+			}
+			if (!inFlightMetadataByClientId.has(clientId)) {
+				fetchStartMarkByClientId.delete(clientId);
 			}
 			releaseMetadataFetchPermit();
 		}
