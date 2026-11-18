@@ -145,7 +145,10 @@ services:
       - mysql-prisma_data:/var/lib/mysql
 
   mssql:
-    image: mcr.microsoft.com/mssql/server:latest
+    # Pin off `:latest` (SQL Server 2025). 2025 images intermittently crash
+    # during startup (Reason 0x00000002) before accepting connections.
+    # @see https://github.com/microsoft/mssql-docker/issues/974
+    image: mcr.microsoft.com/mssql/server:2022-CU28-ubuntu-22.04@sha256:e10cd49443c94dbdcb7a050987db22ff4d8c87052ac53768abe1ed848d3fcef6
     container_name: mssql
     environment:
       MSSQL_SA_PASSWORD: "Password123!"
