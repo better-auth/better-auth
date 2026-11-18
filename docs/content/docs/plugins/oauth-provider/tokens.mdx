@@ -163,6 +163,8 @@ oauthProvider({
 })
 ```
 
+Introspection and revocation also pass values that are not refresh tokens to `decrypt`, such as an access token or an unknown string. For a value your format cannot decode, throw a JOSE error, as `compactDecrypt` does. The endpoint then treats the value as an unknown token. A key set failure (`JWKSTimeout`, `JWKSInvalid`, or `JWKSMultipleMatchingKeys`) and any other error are treated as a failure of `decrypt` and return a server error.
+
 ## PKCE
 
 PKCE ([RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636#section-1)) is **required** for every authorization code flow, and only the `S256` method is accepted. To let an admin-created confidential client skip PKCE, set `require_pkce: false` on it. That client then has no protection against intercepted or injected authorization codes beyond its secret and `state` ([RFC 9700 §2.1.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1.1)). Public clients cannot opt out. For dynamically registered confidential clients, set the default with `clientRegistrationRequirePKCE`.

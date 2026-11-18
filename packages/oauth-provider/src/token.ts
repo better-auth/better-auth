@@ -64,6 +64,7 @@ import {
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
+	isInvalidJwtError,
 	isPKCERequired,
 	normalizeTimestampValue,
 	parseClientMetadata,
@@ -461,10 +462,7 @@ async function encodeRefreshToken(
  *
  * @internal
  */
-export async function decodeRefreshToken(
-	opts: OAuthOptions<Scope[]>,
-	token: string,
-) {
+async function decodeRefreshToken(opts: OAuthOptions<Scope[]>, token: string) {
 	if (opts.prefix?.refreshToken) {
 		if (token.startsWith(opts.prefix.refreshToken)) {
 			token = token.replace(opts.prefix.refreshToken, "");
@@ -479,6 +477,33 @@ export async function decodeRefreshToken(
 	return opts.formatRefreshToken?.decrypt
 		? opts.formatRefreshToken?.decrypt(token)
 		: { token };
+}
+
+/**
+ * Decodes a value that may be another token type, as introspection and
+ * revocation search across types. A value `formatRefreshToken.decrypt` rejects
+ * with a JOSE error, such as `compactDecrypt` throws, is not a refresh token of
+ * this server, so it fails like an unknown token: a 400 `invalid_token`. Any
+ * other failure of the decoder, including a key set failure, is a server error
+ * and is not hidden.
+ *
+ * @internal
+ */
+export async function decodeRefreshTokenForLookup(
+	opts: OAuthOptions<Scope[]>,
+	token: string,
+) {
+	try {
+		return await decodeRefreshToken(opts, token);
+	} catch (error) {
+		if (isInvalidJwtError(error)) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "refresh token not found",
+				error: "invalid_token",
+			});
+		}
+		throw error;
+	}
 }
 
 async function createOpaqueAccessToken(

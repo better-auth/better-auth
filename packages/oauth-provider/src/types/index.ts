@@ -1188,6 +1188,14 @@ export interface OAuthOptions<
 		/**
 		 * Decodes the custom session token.
 		 *
+		 * Introspection and revocation also pass values that are not refresh
+		 * tokens, such as an access token or an unknown string. Throw a JOSE
+		 * error, as `compactDecrypt` does, for a value the format cannot decode.
+		 * The endpoint then treats it as an unknown token. A key set failure
+		 * (`JWKSTimeout`, `JWKSInvalid`, or `JWKSMultipleMatchingKeys`) and any
+		 * other error are treated as a failure of the decoder and return a
+		 * server error.
+		 *
 		 * @returns {string | undefined} sessionId - if returned,
 		 * should be same as the one received in `encode`.
 		 * There is an added benefit that updates to the session occur
