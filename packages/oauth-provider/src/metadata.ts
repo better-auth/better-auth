@@ -126,22 +126,23 @@ function buildAuthServerMetadata(
 	// Any contributed `clientDiscovery` implicitly produces public clients
 	// (CIMD, wallet attestation, etc.), so it flips `public_client_supported`
 	// and the advertised `"none"` auth method alongside unauthenticated DCR.
-	// `publicClientsSupported` decouples the ADVERTISEMENT of public-client
-	// support from how clients are registered: a provider with protected DCR
-	// still accepts public clients at the token endpoint, and must be able to
-	// say so.
-	const publicClientSupported =
-		opts.publicClientsSupported ??
-		(opts.allowUnauthenticatedClientRegistration ||
-			clientDiscoveries.length > 0);
+	// `advertisedMetadata.token_endpoint_auth_methods_supported` overrides the
+	// derivation, so a provider with protected DCR can still advertise that its
+	// token endpoint accepts public clients.
+	const advertisedAuthMethods =
+		opts.advertisedMetadata?.token_endpoint_auth_methods_supported;
+	const publicClientSupported = advertisedAuthMethods
+		? advertisedAuthMethods.includes("none")
+		: opts.allowUnauthenticatedClientRegistration ||
+			clientDiscoveries.length > 0;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
 		public_client_supported: publicClientSupported,
 		grant_types_supported: getSupportedGrantTypes(opts),
-		token_endpoint_auth_methods_supported: getSupportedAuthMethods(opts, {
-			includeNone: publicClientSupported,
-		}),
+		token_endpoint_auth_methods_supported:
+			advertisedAuthMethods ??
+			getSupportedAuthMethods(opts, { includeNone: publicClientSupported }),
 		endpoint_auth_methods_supported: getSupportedAuthMethods(opts),
 		jwt_disabled: opts.disableJwtPlugin,
 		dpop_signing_alg_values_supported: opts.dpop?.signingAlgorithms,

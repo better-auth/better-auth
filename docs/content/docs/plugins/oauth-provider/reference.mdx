@@ -77,9 +77,9 @@ Lets `/oauth2/public-client-prelogin` answer before sign-in when the request car
 
 Scopes clients may request. Without `openid`, the provider is OAuth only. Defaults to `["openid", "profile", "email", "offline_access"]`. See [Scopes](/docs/plugins/oauth-provider/tokens#scopes).
 
-`advertisedMetadata` <span className="opacity-70">`{ scopes_supported?, claims_supported? }`</span>
+`advertisedMetadata` <span className="opacity-70">`{ scopes_supported?, claims_supported?, token_endpoint_auth_methods_supported? }`</span>
 
-Overrides what discovery advertises. Every `scopes_supported` value must be in `scopes`. See [Discovery metadata](/docs/plugins/oauth-provider/openid-connect#discovery-metadata).
+Overrides what discovery advertises. Every `scopes_supported` value must be in `scopes`. `token_endpoint_auth_methods_supported` lists exactly the methods you set in both discovery documents, and every method must be one the server supports (`none`, the built-in confidential methods, or a method an extension contributes), or the plugin fails at startup. Unset, `none` is listed when `allowUnauthenticatedClientRegistration` is `true` or an extension contributes client discovery, such as the [CIMD plugin](/docs/plugins/cimd). These options change only what discovery advertises. They do not change which clients the token endpoint accepts, and they do not open `/oauth2/register`. See [Discovery metadata](/docs/plugins/oauth-provider/openid-connect#discovery-metadata).
 
 `customAccessTokenClaims` <span className="opacity-70">`(info) => Awaitable<Record<string, any>>`</span>
 
@@ -134,10 +134,6 @@ Enables `POST /oauth2/register`. Defaults to `false`. See [Dynamic client regist
 `allowUnauthenticatedClientRegistration` <span className="opacity-70">`boolean`</span>
 
 Accepts registration requests without a session. Defaults to `false`. Anyone on the internet can then register a client; read [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration) before you enable it.
-
-`publicClientsSupported` <span className="opacity-70">`boolean`</span>
-
-Controls whether discovery lists `none` in `token_endpoint_auth_methods_supported`. When unset, `none` is listed if `allowUnauthenticatedClientRegistration` is `true` or an extension contributes client discovery, such as the [CIMD plugin](/docs/plugins/cimd). Set it to `true` when you create public clients yourself and keep registration protected, so clients that read the list do not conclude that public clients are unsupported. Set it to `false` to leave `none` out. The option changes only what discovery advertises. It does not open `/oauth2/register` and does not change which clients the token endpoint accepts.
 
 `validateInitialAccessToken` <span className="opacity-70">`(context) => Awaitable<{ referenceId? } | false>`</span>
 
