@@ -142,6 +142,7 @@ describe("private_key_jwt authentication", async () => {
 		clientId?: string;
 		aud?: string | string[];
 		exp?: number;
+		nbf?: number;
 		jti?: string;
 		kid?: string;
 		key?: CryptoKey;
@@ -159,6 +160,10 @@ describe("private_key_jwt authentication", async () => {
 			.setAudience(overrides?.aud ?? customIssuer)
 			.setIssuedAt(now)
 			.setExpirationTime(overrides?.exp ?? now + 120);
+
+		if (overrides?.nbf !== undefined) {
+			builder.setNotBefore(overrides.nbf);
+		}
 
 		if (!overrides?.omitJti) {
 			builder.setJti(overrides?.jti ?? crypto.randomUUID());
@@ -231,10 +236,14 @@ describe("private_key_jwt authentication", async () => {
 		clientDiscoveryId: string;
 		fetchClientMetadataResource: ClientMetadataResourceFetch;
 		jwksUri: string;
+		assertionClockTolerance?: number;
 	}) {
 		const opts = {
 			loginPage: "/login",
 			consentPage: "/consent",
+			...(input.assertionClockTolerance != null
+				? { assertionClockTolerance: input.assertionClockTolerance }
+				: {}),
 			extensions: [
 				{
 					clientDiscovery: {
@@ -285,17 +294,22 @@ describe("private_key_jwt authentication", async () => {
 		clientId: string;
 		key: CryptoKey;
 		keyId: string;
+		nbf?: number;
+		exp?: number;
 	}) {
 		const now = Math.floor(Date.now() / 1000);
-		return new SignJWT({})
+		const builder = new SignJWT({})
 			.setProtectedHeader({ alg: "RS256", kid: input.keyId })
 			.setIssuer(input.clientId)
 			.setSubject(input.clientId)
 			.setAudience(input.audience)
 			.setIssuedAt(now)
-			.setExpirationTime(now + 120)
-			.setJti(crypto.randomUUID())
-			.sign(input.key);
+			.setExpirationTime(input.exp ?? now + 120)
+			.setJti(crypto.randomUUID());
+		if (input.nbf != null) {
+			builder.setNotBefore(input.nbf);
+		}
+		return builder.sign(input.key);
 	}
 
 	it("isolates discovery-owned JWKS caches between provider instances", async () => {
@@ -690,7 +704,315 @@ describe("private_key_jwt authentication", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12005
+	 */
+	it("rejects a not-before claim a few seconds in the future when clock tolerance is unset", async () => {
+		const codeVerifier = generateRandomString(32);
+		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
+		const now = Math.floor(Date.now() / 1000);
+		const assertion = await signAssertion({ nbf: now + 5 });
+
+		const result = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "authorization_code",
+				code,
+				redirect_uri: redirectUri,
+				client_id: assertionClient.client_id,
+				client_assertion_type:
+					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+				client_assertion: assertion,
+				code_verifier: codeVerifier,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+
+		expect(result.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client assertion signature verification failed",
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12005
+	 * @see https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.5
+	 */
+	it("accepts nbf within assertionClockTolerance and rejects nbf outside it", async () => {
+		const clientId = "https://clock-tolerance.example.com/client.json";
+		const jwksUri = "https://clock-tolerance.example.com/jwks.json";
+		const clientDiscoveryId = "clock-tolerance-discovery";
+		const keyId = "clock-tolerance-key";
+		const keyPair = await generateKeyPair("RS256", { extractable: true });
+		const publicJwk = await exportJWK(keyPair.publicKey);
+		const transport = vi.fn().mockResolvedValue(
+			Response.json({
+				keys: [{ ...publicJwk, kid: keyId, alg: "RS256", use: "sig" }],
+			}),
+		);
+		const provider = await createDiscoveredClientVerifier({
+			baseURL: "https://clock-tolerance.example.com",
+			clientId,
+			clientDiscoveryId,
+			fetchClientMetadataResource: transport,
+			jwksUri,
+			assertionClockTolerance: 30,
+		});
+		const endpoint = "https://clock-tolerance.example.com/oauth2/token";
+		const now = Math.floor(Date.now() / 1000);
+
+		await expect(
+			verifyClientAssertion(
+				provider.ctx,
+				provider.opts,
+				await signDiscoveredClientAssertion({
+					audience: provider.issuer,
+					clientId,
+					key: keyPair.privateKey as CryptoKey,
+					keyId,
+					nbf: now + 5,
+				}),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				endpoint,
+			),
+		).resolves.toMatchObject({ clientId });
+
+		await expect(
+			verifyClientAssertion(
+				provider.ctx,
+				provider.opts,
+				await signDiscoveredClientAssertion({
+					audience: provider.issuer,
+					clientId,
+					key: keyPair.privateKey as CryptoKey,
+					keyId,
+					nbf: now + 60,
+				}),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				endpoint,
+			),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description: "client assertion signature verification failed",
+			},
+		});
+
+		await expect(
+			verifyClientAssertion(
+				provider.ctx,
+				provider.opts,
+				await signDiscoveredClientAssertion({
+					audience: provider.issuer,
+					clientId,
+					key: keyPair.privateKey as CryptoKey,
+					keyId,
+					exp: now - 5,
+				}),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				endpoint,
+			),
+		).resolves.toMatchObject({ clientId });
+
+		await expect(
+			verifyClientAssertion(
+				provider.ctx,
+				provider.opts,
+				await signDiscoveredClientAssertion({
+					audience: provider.issuer,
+					clientId,
+					key: keyPair.privateKey as CryptoKey,
+					keyId,
+					exp: now - 60,
+				}),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				endpoint,
+			),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description: "client assertion signature verification failed",
+			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12005
+	 * @see https://datatracker.ietf.org/doc/html/rfc7523#section-3
+	 */
+	it("keeps the jti tombstone until exp plus assertionClockTolerance", async () => {
+		const assertionClockTolerance = 30;
+		const opts = {
+			loginPage: "/login",
+			consentPage: "/consent",
+			assertionClockTolerance,
+		} satisfies OAuthOptions<Scope[]>;
+		const instance = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [jwt(), oauthProvider(opts)],
+		});
+		const ctx = {
+			context: await instance.auth.$context,
+		} as GenericEndpointContext;
+		// The jwt plugin has no configured issuer, so the base URL is the issuer.
+		const issuer = ctx.context.baseURL;
+		const now = Math.floor(Date.now() / 1000);
+		const expWithin = now - 5;
+		await consumeClientAssertion(ctx, opts, {
+			namespace: "private_key_jwt:clock-tolerance-client",
+			payload: {
+				aud: issuer,
+				exp: expWithin,
+				jti: crypto.randomUUID(),
+			},
+			acceptedAudiences: [issuer],
+		});
+		const rows = await ctx.context.adapter.findMany<{ expiresAt: Date }>({
+			model: "oauthClientAssertion",
+		});
+		expect(rows).toHaveLength(1);
+		expect(new Date(rows[0]!.expiresAt).getTime()).toBe(
+			(expWithin + assertionClockTolerance) * 1000,
+		);
+
+		await expect(
+			consumeClientAssertion(ctx, opts, {
+				namespace: "private_key_jwt:clock-tolerance-client",
+				payload: {
+					aud: issuer,
+					exp: now - 60,
+					jti: crypto.randomUUID(),
+				},
+				acceptedAudiences: [issuer],
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description: "client assertion has expired",
+			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12005
+	 * @see https://datatracker.ietf.org/doc/html/rfc7523#section-3
+	 */
+	it("applies assertionClockTolerance to iat within the lifetime cap", async () => {
+		const assertionClockTolerance = 30;
+		const opts = {
+			loginPage: "/login",
+			consentPage: "/consent",
+			assertionClockTolerance,
+		} satisfies OAuthOptions<Scope[]>;
+		const instance = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [jwt(), oauthProvider(opts)],
+		});
+		const ctx = {
+			context: await instance.auth.$context,
+		} as GenericEndpointContext;
+		// The jwt plugin has no configured issuer, so the base URL is the issuer.
+		const issuer = ctx.context.baseURL;
+		const now = Math.floor(Date.now() / 1000);
+		const consume = (iat: number) =>
+			consumeClientAssertion(ctx, opts, {
+				namespace: "private_key_jwt:clock-tolerance-iat-client",
+				payload: {
+					aud: issuer,
+					exp: now + 60,
+					iat,
+					jti: crypto.randomUUID(),
+				},
+				acceptedAudiences: [issuer],
+			});
+
+		// 310 seconds old: past assertionMaxLifetime (300) but inside the tolerance.
+		await expect(consume(now - 310)).resolves.toBeUndefined();
+		await expect(consume(now - 400)).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description:
+					"client assertion iat is too far in the past (max 300s)",
+			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12005
+	 * @see https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4
+	 */
+	it("caps assertionClockTolerance at 60 seconds", async () => {
+		const clientId = "https://clock-tolerance-cap.example.com/client.json";
+		const jwksUri = "https://clock-tolerance-cap.example.com/jwks.json";
+		const clientDiscoveryId = "clock-tolerance-cap-discovery";
+		const keyId = "clock-tolerance-cap-key";
+		const keyPair = await generateKeyPair("RS256", { extractable: true });
+		const publicJwk = await exportJWK(keyPair.publicKey);
+		const provider = await createDiscoveredClientVerifier({
+			baseURL: "https://clock-tolerance-cap.example.com",
+			clientId,
+			clientDiscoveryId,
+			fetchClientMetadataResource: vi.fn().mockResolvedValue(
+				Response.json({
+					keys: [{ ...publicJwk, kid: keyId, alg: "RS256", use: "sig" }],
+				}),
+			),
+			jwksUri,
+			assertionClockTolerance: 3600,
+		});
+		const endpoint = "https://clock-tolerance-cap.example.com/oauth2/token";
+		const now = Math.floor(Date.now() / 1000);
+		const verify = async (nbf: number) =>
+			verifyClientAssertion(
+				provider.ctx,
+				provider.opts,
+				await signDiscoveredClientAssertion({
+					audience: provider.issuer,
+					clientId,
+					key: keyPair.privateKey as CryptoKey,
+					keyId,
+					nbf,
+				}),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				endpoint,
+			);
+
+		await expect(verify(now + 50)).resolves.toMatchObject({ clientId });
+		await expect(verify(now + 120)).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description: "client assertion signature verification failed",
+			},
+		});
+
+		await expect(
+			consumeClientAssertion(provider.ctx, provider.opts, {
+				namespace: "private_key_jwt:clock-tolerance-cap-client",
+				payload: {
+					aud: provider.issuer,
+					exp: now - 120,
+					jti: crypto.randomUUID(),
+				},
+				acceptedAudiences: [provider.issuer],
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description: "client assertion has expired",
+			},
+		});
+	});
+
+	// The next five tests pin the status split: a failed signature or JWT claim
+	// check is 401 with a Basic challenge, and a failure found while consuming
+	// the assertion (lifetime, jti, replay) is 400 with no challenge.
 	it("should reject expired assertion", async () => {
+		let responseHeaders: Headers | undefined;
 		const now = Math.floor(Date.now() / 1000);
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
@@ -709,13 +1031,54 @@ describe("private_key_jwt authentication", async () => {
 				code_verifier: codeVerifier,
 			}),
 			headers: { "content-type": "application/x-www-form-urlencoded" },
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
 		});
 
-		expect(result.error?.status).toBeGreaterThanOrEqual(400);
-		expect(result.error?.status).toBeLessThan(500);
+		expect(result.error?.status).toBe(401);
+		expect(result.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client assertion signature verification failed",
+		});
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+	});
+
+	it("should reject assertion that is not yet valid", async () => {
+		let responseHeaders: Headers | undefined;
+		const now = Math.floor(Date.now() / 1000);
+		const codeVerifier = generateRandomString(32);
+		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
+		const assertion = await signAssertion({ nbf: now + 3600 });
+
+		const result = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "authorization_code",
+				code,
+				redirect_uri: redirectUri,
+				client_id: assertionClient.client_id,
+				client_assertion_type:
+					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+				client_assertion: assertion,
+				code_verifier: codeVerifier,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
+		});
+
+		expect(result.error?.status).toBe(401);
+		expect(result.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client assertion signature verification failed",
+		});
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
 	});
 
 	it("should reject assertion with exp too far in the future", async () => {
+		let responseHeaders: Headers | undefined;
 		const now = Math.floor(Date.now() / 1000);
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
@@ -735,13 +1098,22 @@ describe("private_key_jwt authentication", async () => {
 				code_verifier: codeVerifier,
 			}),
 			headers: { "content-type": "application/x-www-form-urlencoded" },
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
 		});
 
-		expect(result.error?.status).toBeGreaterThanOrEqual(400);
-		expect(result.error?.status).toBeLessThan(500);
+		expect(result.error?.status).toBe(400);
+		expect(result.error).toMatchObject({
+			error: "invalid_client",
+			error_description:
+				"client assertion exp is too far in the future (max 300s)",
+		});
+		expect(responseHeaders?.get("WWW-Authenticate")).toBeNull();
 	});
 
 	it("should reject assertion without jti", async () => {
+		let responseHeaders: Headers | undefined;
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
 		const assertion = await signAssertion({ omitJti: true });
@@ -759,13 +1131,21 @@ describe("private_key_jwt authentication", async () => {
 				code_verifier: codeVerifier,
 			}),
 			headers: { "content-type": "application/x-www-form-urlencoded" },
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
 		});
 
-		expect(result.error?.status).toBeGreaterThanOrEqual(400);
-		expect(result.error?.status).toBeLessThan(500);
+		expect(result.error?.status).toBe(400);
+		expect(result.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client assertion must include jti claim",
+		});
+		expect(responseHeaders?.get("WWW-Authenticate")).toBeNull();
 	});
 
 	it("should reject reused jti (replay prevention)", async () => {
+		let responseHeaders: Headers | undefined;
 		const jti = crypto.randomUUID();
 
 		// First request should succeed
@@ -810,10 +1190,17 @@ describe("private_key_jwt authentication", async () => {
 				code_verifier: cv2,
 			}),
 			headers: { "content-type": "application/x-www-form-urlencoded" },
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
 		});
 
-		expect(result2.error?.status).toBeGreaterThanOrEqual(400);
-		expect(result2.error?.status).toBeLessThan(500);
+		expect(result2.error?.status).toBe(400);
+		expect(result2.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client assertion jti has already been used",
+		});
+		expect(responseHeaders?.get("WWW-Authenticate")).toBeNull();
 	});
 
 	it("should reject concurrent reuse of the same jti", async () => {

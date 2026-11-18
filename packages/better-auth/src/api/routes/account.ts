@@ -21,6 +21,7 @@ import {
 import { symmetricEncrypt } from "../../crypto";
 import { deriveEncryptionKey } from "../../crypto/purpose";
 import { parseAccountOutput } from "../../db/schema";
+import { resolveOAuthAccountFields } from "../../oauth2/account-fields";
 import { resolveOAuthAccountKeyForAPI } from "../../oauth2/account-key";
 import { missingEmailLogMessage } from "../../oauth2/errors";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
@@ -338,8 +339,15 @@ export const linkSocialAccount = createAuthEndpoint(
 				await c.context.internalAdapter.findAccountByKey(accountKey);
 
 			if (linkedAccount?.userId === session.user.id) {
+				const accountFields = await resolveOAuthAccountFields(
+					c,
+					provider,
+					oauthTokens,
+					linkingUserInfo.user,
+				);
 				const updateData = Object.fromEntries(
 					Object.entries({
+						...accountFields,
 						providerId: provider.id,
 						accessToken: await setTokenUtil(
 							c.body.idToken.accessToken,
@@ -400,8 +408,15 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
+			const accountFields = await resolveOAuthAccountFields(
+				c,
+				provider,
+				oauthTokens,
+				linkingUserInfo.user,
+			);
 			try {
 				await c.context.internalAdapter.createAccount({
+					...accountFields,
 					userId: session.user.id,
 					...accountKey,
 					accessToken: await setTokenUtil(

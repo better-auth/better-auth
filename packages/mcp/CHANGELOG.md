@@ -91,6 +91,17 @@
   - @better-auth/oauth-provider@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.26
+
+### Patch Changes
+
+- [#12624](https://github.com/better-auth/better-auth/pull/12624) [`7604fd4`](https://github.com/better-auth/better-auth/commit/7604fd45d8587699bdba74705a93e66a01ac4c6b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The OAuth provider and `requireMcpAuth` no longer cache keys returned by a custom JWT plugin `adapter.getJwks`, so keys it returns for one tenant or request can no longer verify a token presented in another. They now call it on every verification; cache inside the store if reads are expensive. The built-in database store is still cached.
+
+- [#12624](https://github.com/better-auth/better-auth/pull/12624) [`7604fd4`](https://github.com/better-auth/better-auth/commit/7604fd45d8587699bdba74705a93e66a01ac4c6b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A custom JWT plugin `adapter.getJwks` again receives the request being verified when the OAuth provider reads signing keys for introspection, revocation, or end-session, and when `requireMcpAuth` verifies a token. Since 1.7.25 it received only the auth context, without `request` or `headers`, so a key store that picks keys by the request's host or headers found none.
+
+- Updated dependencies [[`f242834`](https://github.com/better-auth/better-auth/commit/f2428340b9b58609401d3c4a06b0779684687248), [`d04ea26`](https://github.com/better-auth/better-auth/commit/d04ea262d2c39df5ef76d433dca6a44dfa84ed1e), [`7604fd4`](https://github.com/better-auth/better-auth/commit/7604fd45d8587699bdba74705a93e66a01ac4c6b), [`7604fd4`](https://github.com/better-auth/better-auth/commit/7604fd45d8587699bdba74705a93e66a01ac4c6b), [`eca5b9c`](https://github.com/better-auth/better-auth/commit/eca5b9cc02fe97d32de3130e31fec2bc17269335), [`1904081`](https://github.com/better-auth/better-auth/commit/1904081ba517707eeaa6a0a44c483102ca82c884), [`b9369e5`](https://github.com/better-auth/better-auth/commit/b9369e5c4756d3def4d0796d537b56c6975e4f1a), [`b0cda69`](https://github.com/better-auth/better-auth/commit/b0cda692bc85ce5425c2cbdb43fe26aeef307844)]:
+  - @better-auth/oauth-provider@1.7.26
+
 ## 1.7.25
 
 ### Patch Changes

@@ -28,6 +28,12 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.26
+
+### Patch Changes
+
+- [#10793](https://github.com/better-auth/better-auth/pull/10793) [`b835e55`](https://github.com/better-auth/better-auth/commit/b835e5554dab6e059d0680f8522ca4bcb9ba34c7) Thanks [@jonathansamines](https://github.com/jonathansamines)! - Add pagination to `listSCIMManagedConnectionEvents`. The endpoint now accepts optional `limit`, `offset`, and `sortDirection` body fields and returns `total` with the page. Calls that omit those fields still return the latest 100 events in ascending sequence order.
+
 ## 1.7.25
 
 ## 1.7.24

@@ -251,6 +251,31 @@ describe("mcp plugin", async () => {
 			});
 		});
 
+		/**
+		 * Released behavior: the document is served at the path with the trailing
+		 * slash removed, and its `resource` stays the configured identifier.
+		 * @see https://www.rfc-editor.org/rfc/rfc9728#section-3.3
+		 */
+		it("returns the configured identifier as resource when it ends in a slash", async () => {
+			const resourceServerBaseUrl = "http://localhost:3012";
+			const resource = `${resourceServerBaseUrl}/api/`;
+			const { customFetchImpl: slashFetch } = await getTestInstance({
+				baseURL: resourceServerBaseUrl,
+				plugins: [
+					jwt(),
+					mcp({ loginPage: "/login", consentPage: "/consent", resource }),
+				],
+			});
+
+			const response = await slashFetch(
+				`${resourceServerBaseUrl}/.well-known/oauth-protected-resource/api`,
+				{ method: "GET" },
+			);
+			expect(response.status).toBe(200);
+			const metadata = (await response.json()) as { resource: string };
+			expect(metadata.resource).toBe(resource);
+		});
+
 		it("answers HEAD with metadata headers and an empty body", async () => {
 			const response = await customFetchImpl(
 				`${authServerBaseUrl}/.well-known/oauth-protected-resource`,

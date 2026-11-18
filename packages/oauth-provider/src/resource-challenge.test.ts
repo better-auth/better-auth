@@ -56,6 +56,25 @@ describe("resource server challenge", () => {
 		);
 	});
 
+	/**
+	 * Released behavior: a trailing path slash is removed before the well-known
+	 * path is inserted, so both slash forms of an identifier share one URL.
+	 * The `Bearer` and `DPoP` challenges carry the same pointer.
+	 * @see https://www.rfc-editor.org/rfc/rfc9728#section-3.1
+	 * @see https://www.rfc-editor.org/rfc/rfc9449#section-7.1
+	 */
+	it("removes a trailing path slash when deriving the metadata URL", () => {
+		const withSlash = new Headers(catchChallenge("https://h/api/").headers);
+		const withoutSlash = new Headers(catchChallenge("https://h/api").headers);
+
+		expect(withSlash.get("WWW-Authenticate")).toBe(
+			'Bearer resource_metadata="https://h/.well-known/oauth-protected-resource/api", DPoP resource_metadata="https://h/.well-known/oauth-protected-resource/api", algs="EdDSA ES256 ES512 PS256 RS256"',
+		);
+		expect(withoutSlash.get("WWW-Authenticate")).toBe(
+			withSlash.get("WWW-Authenticate"),
+		);
+	});
+
 	it("emits one resource_metadata challenge per protected resource", () => {
 		const error = catchChallenge([
 			"https://api.example.com/calendar/",

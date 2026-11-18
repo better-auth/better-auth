@@ -76,6 +76,7 @@ import {
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
+	findActiveSessionId,
 	getAuthEndpointUrl,
 	getClient,
 	getJwtPlugin,
@@ -903,7 +904,10 @@ async function createRefreshToken(
 	const token = opts.generateRefreshToken
 		? await opts.generateRefreshToken()
 		: generateRandomString(32, "A-Z", "a-z");
-	const sessionId = payload?.sid as string | undefined;
+	// A rotated token stays bound to its parent's session after that session
+	// ends, so deleting the session still revokes it. Only the `sid` claim drops.
+	const sessionId =
+		originalRefresh?.sessionId ?? (payload?.sid as string | undefined);
 	const storedToken = await storeToken(
 		opts.storeTokens,
 		token,
@@ -2531,7 +2535,7 @@ async function handleRefreshTokenGrant(
 		grantType: "refresh_token",
 		referenceId: refreshToken.referenceId,
 		authorizationCodeId: refreshToken.authorizationCodeId,
-		sessionId: refreshToken.sessionId,
+		sessionId: await findActiveSessionId(ctx, refreshToken.sessionId),
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,
