@@ -1642,7 +1642,7 @@ export async function findConsentRows(
  *
  * @internal
  */
-export function mergeConsentRows(
+function mergeConsentRows(
 	rows: readonly OAuthConsent<Scope[]>[],
 ): OAuthConsent<Scope[]> | null {
 	const [oldest, ...others] = rows;
@@ -1665,7 +1665,9 @@ const CONSENT_WRITE_ATTEMPTS = 5;
 /**
  * Changes the consent of a user, client, and reference, and returns the row
  * written, or `null` when none is stored. Several rows for the reference are
- * merged into the oldest, and the others are deleted.
+ * first merged into the oldest and the others deleted, and only then is
+ * `change` applied: a value it removes could otherwise come back from a
+ * duplicate that a concurrent write reads before the delete.
  *
  * The write is guarded by the `updatedAt` it read, and moves it to a later
  * whole second. If another write lands first, the guard misses and `change`
@@ -1701,7 +1703,8 @@ export async function updateConsent(
 		const now = Math.floor(Date.now() / 1000);
 		const after =
 			updatedAt === undefined ? now : Math.floor(updatedAt / 1000) + 1;
-		const changed = { ...consent, ...change(consent) };
+		const folding = rows.length > 1;
+		const changed = folding ? consent : { ...consent, ...change(consent) };
 		const written = await ctx.context.adapter.incrementOne<
 			OAuthConsent<Scope[]>
 		>({
@@ -1729,7 +1732,9 @@ export async function updateConsent(
 					where: [{ field: "id", value: duplicate.id }],
 				});
 			}
-			return written;
+			if (!folding) return written;
+		} else {
+			missed = consent;
 		}
 		if (attempt >= CONSENT_WRITE_ATTEMPTS) {
 			throw new APIError("SERVICE_UNAVAILABLE", {
@@ -1737,7 +1742,6 @@ export async function updateConsent(
 				error_description: "consent changed while saving, try again",
 			});
 		}
-		missed = consent;
 	}
 }
 

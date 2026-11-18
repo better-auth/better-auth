@@ -2,7 +2,12 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { revokeConsentTokens } from "../token";
 import type { OAuthConsent, OAuthOptions, Scope } from "../types";
-import { findConsentRows, getClient, updateConsent } from "../utils";
+import {
+	findConsent,
+	findConsentRows,
+	getClient,
+	updateConsent,
+} from "../utils";
 
 async function getConsent(
 	ctx: GenericEndpointContext & { query: { id: string } },
@@ -45,7 +50,14 @@ export async function getConsentEndpoint(
 	if (consent.userId !== session.user.id) {
 		throw new APIError("UNAUTHORIZED");
 	}
-	return consent;
+	return (
+		(await findConsent(
+			ctx,
+			consent.clientId,
+			consent.userId,
+			consent.referenceId || undefined,
+		)) ?? consent
+	);
 }
 
 export async function getConsentsEndpoint(

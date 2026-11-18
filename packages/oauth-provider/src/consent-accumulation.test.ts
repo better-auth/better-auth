@@ -376,9 +376,45 @@ describe("oauth-provider - a stored consent keeps earlier approvals", async () =
 		]);
 	});
 
-	it("updates and deletes every row stored for the same reference", async () => {
-		const older = await storeConsentRow(["openid"], new Date(1_000_000));
+	it("does not bring back a declined scope from a row another approval reads", async () => {
+		await storeConsentRow(["openid", "email"], new Date(1_000_000));
 		await storeConsentRow(["profile"], new Date(2_000_000));
+		const declining = await openConsent({
+			scope: "openid profile",
+			prompt: "consent",
+		});
+		const adding = await openConsent({ scope: "openid offline_access" });
+
+		// The other approval runs while the declining one removes a duplicate,
+		// so it reads the duplicate that still holds `profile`.
+		const remove = adapter.delete.bind(adapter);
+		let raced = false;
+		vi.spyOn(adapter, "delete").mockImplementation(async (args) => {
+			if (args.model === "oauthConsent" && !raced) {
+				raced = true;
+				await adding.approve();
+			}
+			return remove(args);
+		});
+		await declining.approve({ scope: "openid" });
+
+		expect(raced).toBe(true);
+		const { scopes } = await findStoredConsent();
+		expect([...scopes].sort()).toEqual(["email", "offline_access", "openid"]);
+	});
+
+	it("reads, updates, and deletes every row stored for the same reference", async () => {
+		const older = await storeConsentRow(["openid"], new Date(1_000_000));
+		const newer = await storeConsentRow(["profile"], new Date(2_000_000));
+
+		const read = await client.oauth2.getConsent(
+			{ query: { id: newer.id } },
+			{ headers },
+		);
+		expect(read.data).toMatchObject({
+			id: older.id,
+			scopes: ["openid", "profile"],
+		});
 
 		const updated = await client.oauth2.updateConsent(
 			{ id: older.id, update: { scopes: ["openid", "email"] } },

@@ -290,6 +290,7 @@ Accepting the consent page now adds to the user's stored consent for the client 
 * A scope or UserInfo claim that the consent page offered and the user left out is still removed.
 * The consent page shows less often. A request for access that the user approved earlier, but left out of a later approval, no longer shows it. With `prompt=none`, such a request now gets a code instead of `consent_required`.
 * `getOAuthConsent` and `getOAuthConsents` return everything the user approved and did not take back, not only the last approval.
+* Two first acceptances at the same moment can each store a row for the same client and consent reference. Better Auth reads such rows as one consent and merges them into the oldest on the next write. `getOAuthConsent` and `updateOAuthConsent` return that oldest row, whose `id` can differ from the one you sent, and `deleteOAuthConsent` deletes every row of the consent.
 * No schema change or migration is needed. An existing consent holds its last approval, and grows from the next one.
 
 **What to do:** nothing, unless you relied on a narrower approval taking back earlier access. To narrow a consent, call `updateOAuthConsent`. To cut a client off, call `deleteOAuthConsent`, which also revokes its tokens. See [Stored consent](/docs/plugins/oauth-provider/sign-in-flow#stored-consent).
