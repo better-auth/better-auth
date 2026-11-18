@@ -1740,8 +1740,12 @@ const CONSENT_WRITE_ATTEMPTS = 5;
  * runs again on the newer consent, so concurrent writes do not lose each
  * other's changes. Whole seconds stay exact on stores that drop milliseconds.
  * Every write carries the guard. After `CONSENT_WRITE_ATTEMPTS` misses, the
- * change fails, and the approvals of rows it consumed are lost, so the user is
- * asked again rather than granted more.
+ * change fails.
+ *
+ * The write that lands first did not see the rows this one consumed, and may
+ * have removed what they held. A missed write therefore drops those values
+ * instead of carrying them into the newer consent: the user is asked again
+ * for them rather than granted what they took back.
  *
  * @internal
  */
@@ -1757,10 +1761,10 @@ export async function updateConsent(
 		>
 	>,
 ): Promise<OAuthConsent<Scope[]> | null> {
-	const consumed: OAuthConsent<Scope[]>[] = [];
 	for (let attempt = 1; ; attempt++) {
 		const [stored, ...duplicates] = await findConsentRows(ctx, key);
 		if (!stored) return null;
+		const consumed: OAuthConsent<Scope[]>[] = [];
 		for (const duplicate of duplicates) {
 			const row = await ctx.context.adapter.consumeOne<OAuthConsent<Scope[]>>({
 				model: "oauthConsent",

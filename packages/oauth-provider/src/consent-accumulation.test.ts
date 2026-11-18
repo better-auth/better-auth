@@ -455,6 +455,40 @@ describe("oauth-provider - a stored consent keeps earlier approvals", async () =
 		expect([...scopes].sort()).toEqual(["email", "offline_access", "openid"]);
 	});
 
+	it("does not bring back a duplicate's scope that a narrowing removed while the duplicate was merged", async () => {
+		const older = await storeConsentRow(
+			["openid", "profile"],
+			new Date(1_000_000),
+		);
+		await storeConsentRow(["email"], new Date(2_000_000));
+		const adding = await openConsent({
+			scope: "openid offline_access",
+			prompt: "consent",
+		});
+
+		// The user narrows the consent after the approval consumed the duplicate
+		// and before the approval writes, so the narrowing never sees `email`.
+		const consume = adapter.consumeOne.bind(adapter);
+		let narrowed = false;
+		vi.spyOn(adapter, "consumeOne").mockImplementation(async (args) => {
+			const row = await consume(args);
+			if (args.model === "oauthConsent" && !narrowed) {
+				narrowed = true;
+				const updated = await client.oauth2.updateConsent(
+					{ id: older.id, update: { scopes: ["openid"] } },
+					{ headers },
+				);
+				expect(updated.error).toBeNull();
+			}
+			return row;
+		});
+		await adding.approve();
+
+		expect(narrowed).toBe(true);
+		const { scopes } = await findStoredConsent();
+		expect([...scopes].sort()).toEqual(["offline_access", "openid"]);
+	});
+
 	it.each([
 		{ name: "no reference", older: undefined, newer: "", other: "org_b" },
 		{ name: "a reference", older: "org_a", newer: "org_a", other: undefined },
