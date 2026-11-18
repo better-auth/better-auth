@@ -57,7 +57,11 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 			);
 		}
 	}
-	const pinnedAddress = addresses[0] as (typeof addresses)[number];
+	// Every answer is public-routable, so preferring IPv4 keeps the SSRF
+	// guarantee while avoiding failures on hosts without IPv6 egress.
+	const pinnedAddress =
+		addresses.find(({ family }) => family === 4) ??
+		(addresses[0] as (typeof addresses)[number]);
 
 	const headers = Object.fromEntries(webRequest.headers.entries());
 	headers.host = url.host;

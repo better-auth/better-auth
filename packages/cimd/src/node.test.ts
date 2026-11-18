@@ -163,6 +163,58 @@ describe("Node CIMD metadata transport", () => {
 		expect(pinnedAddress).toBe("93.184.216.34");
 	});
 
+	it("pins the IPv4 address when DNS returns IPv6 first", async () => {
+		mocks.lookup.mockResolvedValue([
+			{ address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+			{ address: "93.184.216.34", family: 4 },
+		]);
+		const pinned: Array<{ address: string; family: number }[]> = [];
+		mocks.request.mockImplementationOnce(
+			(
+				_url: URL,
+				options: {
+					lookup: (
+						hostname: string,
+						options: { all: boolean },
+						callback: (
+							error: Error | null,
+							addresses: { address: string; family: number }[],
+						) => void,
+					) => void;
+				},
+				onResponse: (response: Readable) => void,
+			) => {
+				const request = new EventEmitter() as EventEmitter & {
+					end: () => void;
+					destroy: () => void;
+				};
+				request.end = () => {
+					options.lookup("client.example.com", { all: true }, (_error, all) => {
+						pinned.push(all);
+						const response = Readable.from([Buffer.from("ok")]) as Readable & {
+							headers: Record<string, string>;
+							statusCode: number;
+							statusMessage: string;
+						};
+						response.headers = {};
+						response.statusCode = 200;
+						response.statusMessage = "OK";
+						onResponse(response);
+					});
+				};
+				request.destroy = () => {};
+				return request;
+			},
+		);
+
+		const response = await fetchClientMetadataResource(
+			"https://client.example.com/client.json",
+		);
+
+		expect(await response.text()).toBe("ok");
+		expect(pinned).toEqual([[{ address: "93.184.216.34", family: 4 }]]);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10810
 	 */
