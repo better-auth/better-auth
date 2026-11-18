@@ -122,6 +122,15 @@ const client = await auth.api.adminCreateOAuthClient({
 
 The client must authenticate at both `/oauth2/bc-authorize` and `/oauth2/token` (CIBA §7.1), so clients registered with `token_endpoint_auth_method: "none"` cannot use CIBA. An agent or CLI that cannot keep a client secret can authenticate with `private_key_jwt` instead.
 
+A `private_key_jwt` assertion must name the provider's issuer as its only `aud` value. This follows [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) and deliberately departs from CIBA §7.1, which says an OpenID provider must also accept its token endpoint URL and its backchannel authentication endpoint URL as audiences. At `/oauth2/bc-authorize`, the `assertionAudience` option sets what the provider accepts:
+
+| `assertionAudience`    | Accepted `aud` at `/oauth2/bc-authorize`     |
+| ---------------------- | -------------------------------------------- |
+| `"issuer"` (default)   | The issuer                                   |
+| `"issuer-or-endpoint"` | The issuer or the `/oauth2/bc-authorize` URL |
+
+The token endpoint URL is not accepted at `/oauth2/bc-authorize` in either mode, so `"issuer-or-endpoint"` does not make the provider accept every audience CIBA §7.1 lists. A client that signs for the token endpoint URL must sign for the issuer instead. See [`assertionAudience`](/docs/plugins/oauth-provider/reference).
+
 If anyone can register a client, any client can name any user. Set `resolveUser` to accept only identifiers the requesting client was already given, such as the `sub` from its earlier ID tokens, so a client cannot prompt or look up users it does not know:
 
 ```ts title="auth.ts"
