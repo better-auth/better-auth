@@ -205,6 +205,8 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 						: (Readable.toWeb(
 								response,
 							) as unknown as ReadableStream<Uint8Array>);
+				// Node releases the socket only once the response is consumed.
+				if (body === null) response.resume();
 				// Response throws on an out-of-range status or invalid reason phrase,
 				// and a throw from this listener would escape the promise.
 				try {

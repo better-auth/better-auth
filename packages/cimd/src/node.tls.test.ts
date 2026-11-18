@@ -121,6 +121,34 @@ describe("Node CIMD metadata transport over TLS to an IP literal", () => {
 		await serverSocketClosed;
 	}, 3_000);
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11609
+	 */
+	it.each([
+		["GET", "304 Not Modified"],
+		["HEAD", "200 OK"],
+	])(
+		"releases the connection after a bodyless %s %s response",
+		async (method, statusLine) => {
+			let serverSocketClosed: Promise<void> | undefined;
+			const origin = await serve("127.0.0.1", ["127.0.0.1"], (req) => {
+				serverSocketClosed = new Promise((resolve) => {
+					req.socket.once("close", () => resolve());
+				});
+				req.socket.write(`HTTP/1.1 ${statusLine}\r\ncontent-length: 0\r\n\r\n`);
+			});
+
+			const response = await fetchClientMetadataResource(
+				`https://127.0.0.1:${origin.port}/client.json`,
+				{ method },
+			);
+
+			expect(response.body).toBeNull();
+			await serverSocketClosed;
+		},
+		3_000,
+	);
+
 	it("rejects a certificate that does not name the IP address", async () => {
 		const origin = await serve("127.0.0.1", ["127.0.0.2"]);
 
