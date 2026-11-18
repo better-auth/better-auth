@@ -1285,6 +1285,21 @@ async function createUserTokens(
 		clientAllowsGrant(client, "refresh_token") &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
+	// A refresh that drops `offline_access`, whether the client narrowed the
+	// scope or a resource policy filtered it, asks for a session-bound grant,
+	// which cannot start once the session has ended. Refuse before rotation so
+	// the presented `offline_access` token stays usable.
+	if (
+		isRefreshToken &&
+		existingRefreshToken &&
+		!sessionId &&
+		isSessionBoundRefreshToken(existingRefreshToken, effectiveScopes)
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
 	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
 	const isIdToken = user && effectiveScopes.includes("openid");
 	const metadata = parseClientMetadata(client.metadata);
@@ -2118,19 +2133,6 @@ async function handleRefreshTokenGrant(
 			});
 		}
 		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
-		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid refresh token",
-			error: "invalid_grant",
-		});
-	}
-
-	// Narrowing away `offline_access` asks for a session-bound grant, which
-	// cannot start once the session has ended. Refuse before rotation so the
-	// presented `offline_access` token stays usable.
-	if (
-		!session.sessionId &&
-		isSessionBoundRefreshToken(refreshToken, requestedScopes ?? scopes)
-	) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",

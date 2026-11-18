@@ -2220,6 +2220,30 @@ describe("oauth token - refresh_token", async () => {
 				expect(refreshed.error).toBeNull();
 				expect(refreshed.data?.scope).toContain("offline_access");
 			});
+
+			it("refuses a refresh whose resource policy drops offline_access once the session ended, keeping the presented token", async () => {
+				const { sessionId, tokens } = await signInAndAuthorize();
+				await expireSession(sessionId);
+				const context = await authorizationServer.$context;
+				const setAllowedScopes = (allowedScopes: string[] | null) =>
+					context.adapter.update({
+						model: "oauthResource",
+						where: [{ field: "identifier", value: validResource }],
+						update: { allowedScopes },
+					});
+
+				await setAllowedScopes(["openid", "profile"]);
+				try {
+					const filtered = await refresh(tokens.refresh_token!);
+					expect(filtered.error).toMatchObject({ error: "invalid_grant" });
+				} finally {
+					await setAllowedScopes(null);
+				}
+
+				const refreshed = await refresh(tokens.refresh_token!);
+				expect(refreshed.error).toBeNull();
+				expect(refreshed.data?.scope).toContain("offline_access");
+			});
 		});
 	});
 });
