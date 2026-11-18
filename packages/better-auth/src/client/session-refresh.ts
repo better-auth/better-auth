@@ -1,6 +1,7 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { WritableAtom } from "nanostores";
 import { getGlobalBroadcastChannel } from "./broadcast-channel";
+import { isServer } from "./environment";
 import { getGlobalFocusManager } from "./focus-manager";
 import { getGlobalOnlineManager } from "./online-manager";
 
@@ -141,7 +142,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 		setupSignalSubscription();
 		// SSR never unmounts, so timers and process-wide listeners would pile up per request.
-		if (typeof window === "undefined") return;
+		if (isServer()) return;
 
 		setupPolling();
 		setupBroadcast();
