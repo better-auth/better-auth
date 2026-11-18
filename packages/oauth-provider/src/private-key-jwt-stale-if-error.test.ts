@@ -119,10 +119,10 @@ function untilAborted(init?: RequestInit): Promise<Response> {
 
 const transientFailures: { failure: string; answer: KeyAnswer }[] = [
 	{ failure: "the fetch timeout", answer: untilAborted },
-	{
-		failure: "HTTP 503",
-		answer: () => new Response(null, { status: 503 }),
-	},
+	...[500, 502, 503, 504].map((status) => ({
+		failure: `HTTP ${status}`,
+		answer: () => new Response(null, { status }),
+	})),
 	{
 		failure: "a reset connection",
 		answer: () => {
@@ -138,6 +138,10 @@ const terminalFailures: { failure: string; answer: KeyAnswer }[] = [
 		failure: "HTTP 404",
 		answer: () => new Response(null, { status: 404 }),
 	},
+	...[501, 505].map((status) => ({
+		failure: `HTTP ${status}`,
+		answer: () => new Response(null, { status }),
+	})),
 	{
 		failure: "a redirect",
 		answer: () =>
@@ -253,6 +257,128 @@ describe("jwksStaleIfError on a client discovery", () => {
 		vi.setSystemTime(START_MS + 11 * MINUTE_MS);
 		verifier.keys.answer = () => new Response(null, { status: 503 });
 
+		await expect(verifier.verify()).rejects.toMatchObject({
+			body: { error_description: "failed to fetch client JWKS" },
+		});
+	});
+
+	it("fetches the keys at most once a minute while serving them past twice the cache lifetime", async () => {
+		const verifier = await createVerifier({ jwksStaleIfError: 3_600 });
+		vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+		await verifier.verify();
+		verifier.keys.answer = () => new Response(null, { status: 503 });
+
+		for (const elapsedMs of [11 * MINUTE_MS, 11 * MINUTE_MS + 59_999]) {
+			vi.setSystemTime(START_MS + elapsedMs);
+			await expect(verifier.verify()).resolves.toMatchObject({
+				clientId: verifier.clientId,
+			});
+		}
+		expect(verifier.transport).toHaveBeenCalledTimes(2);
+
+		vi.setSystemTime(START_MS + 12 * MINUTE_MS);
+		await expect(verifier.verify()).resolves.toMatchObject({
+			clientId: verifier.clientId,
+		});
+		expect(verifier.transport).toHaveBeenCalledTimes(3);
+	});
+
+	/**
+	 * A client owner can remove the key set to revoke its keys.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1
+	 */
+	it("stops serving cached keys past twice the cache lifetime after a terminal failure until a fetch succeeds", async () => {
+		const verifier = await createVerifier({ jwksStaleIfError: 3_600 });
+		vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+		const serveKeys = verifier.keys.answer;
+		await verifier.verify();
+		const unavailable = () => new Response(null, { status: 503 });
+
+		vi.setSystemTime(START_MS + 11 * MINUTE_MS);
+		verifier.keys.answer = unavailable;
+		await expect(verifier.verify()).resolves.toBeDefined();
+		vi.setSystemTime(START_MS + 12 * MINUTE_MS);
+		verifier.keys.answer = () => new Response(null, { status: 404 });
+		await expect(verifier.verify()).rejects.toMatchObject({
+			body: { error_description: "failed to fetch client JWKS" },
+		});
+		vi.setSystemTime(START_MS + 13 * MINUTE_MS);
+		verifier.keys.answer = unavailable;
+		await expect(verifier.verify()).rejects.toMatchObject({
+			body: { error_description: "failed to fetch client JWKS" },
+		});
+
+		verifier.keys.answer = serveKeys;
+		await expect(verifier.verify()).resolves.toBeDefined();
+		vi.setSystemTime(START_MS + 24 * MINUTE_MS);
+		verifier.keys.answer = unavailable;
+		await expect(verifier.verify()).resolves.toBeDefined();
+	});
+
+	describe("a transport's DNS lookup limit refusal", () => {
+		const dnsLookupLimit = () => {
+			throw Object.assign(new TypeError("metadata DNS lookup limit exceeded"), {
+				code: "ERR_CIMD_DNS_LOOKUP_LIMIT",
+			});
+		};
+
+		it("serves cached keys past twice the cache lifetime within 5 minutes of a transient failure", async () => {
+			const verifier = await createVerifier({ jwksStaleIfError: 3_600 });
+			vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+			await verifier.verify();
+			vi.setSystemTime(START_MS + 11 * MINUTE_MS);
+			verifier.keys.answer = () => new Response(null, { status: 503 });
+			await expect(verifier.verify()).resolves.toBeDefined();
+
+			verifier.keys.answer = dnsLookupLimit;
+			vi.setSystemTime(START_MS + 16 * MINUTE_MS);
+			await expect(verifier.verify()).resolves.toBeDefined();
+			vi.setSystemTime(START_MS + 16 * MINUTE_MS + 1_000);
+			await expect(verifier.verify()).rejects.toMatchObject({
+				body: { error_description: "failed to fetch client JWKS" },
+			});
+			expect(verifier.transport).toHaveBeenCalledTimes(4);
+		});
+
+		it("rejects past twice the cache lifetime without a transient failure before it", async () => {
+			const verifier = await createVerifier({ jwksStaleIfError: 3_600 });
+			vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+			await verifier.verify();
+			vi.setSystemTime(START_MS + 11 * MINUTE_MS);
+			verifier.keys.answer = dnsLookupLimit;
+
+			await expect(verifier.verify()).rejects.toMatchObject({
+				body: { error_description: "failed to fetch client JWKS" },
+			});
+		});
+	});
+
+	it.each([Number.POSITIVE_INFINITY, Number.NaN, -1])(
+		"adds no stale key window for jwksStaleIfError %s",
+		async (jwksStaleIfError) => {
+			const verifier = await createVerifier({ jwksStaleIfError });
+			vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+			await verifier.verify();
+
+			vi.setSystemTime(START_MS + 11 * MINUTE_MS);
+			verifier.keys.answer = () => new Response(null, { status: 503 });
+
+			await expect(verifier.verify()).rejects.toMatchObject({
+				body: { error_description: "failed to fetch client JWKS" },
+			});
+		},
+	);
+
+	it("caps jwksStaleIfError at 24 hours", async () => {
+		const verifier = await createVerifier({ jwksStaleIfError: 48 * 3_600 });
+		vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+		await verifier.verify();
+		verifier.keys.answer = () => new Response(null, { status: 503 });
+
+		vi.setSystemTime(START_MS + 24 * 60 * MINUTE_MS);
+		await expect(verifier.verify()).resolves.toBeDefined();
+		vi.setSystemTime(START_MS + 24 * 60 * MINUTE_MS + MINUTE_MS);
 		await expect(verifier.verify()).rejects.toMatchObject({
 			body: { error_description: "failed to fetch client JWKS" },
 		});

@@ -27,6 +27,8 @@ import type {
 import { challengeHeaders, getAuthEndpointUrl, getClient } from "./index";
 import {
 	isAbortedBySignal,
+	isLocalCapacityRefusal,
+	isTransientHttpStatus,
 	isTransientNetworkError,
 } from "./transient-fetch-failure";
 
@@ -44,11 +46,21 @@ type JwksFetch = {
 	/** Start order of this fetch; finer than `startedAt`, which ties within a millisecond. */
 	sequence: number;
 };
+/** How the last failed fetch of a `jwks_uri` failed, since its last success. */
+type JwksFetchFailure =
+	| { transient: true; failedAt: number; reason: string }
+	| { transient: false };
 type JwksCache = {
-	/** Last valid key set per `jwks_uri`; only this map is bounded. */
+	/** Last valid key set per `jwks_uri`. */
 	sets: Map<string, JwksCacheEntry>;
 	/** Fetch in flight per `jwks_uri`, kept apart so failures never evict a set. */
 	fetches: Map<string, JwksFetch>;
+	/**
+	 * Last failure per `jwks_uri` of a discovery that sets `jwksStaleIfError`,
+	 * until a fetch succeeds. Evicting a terminal failure also evicts its key
+	 * set, so an eviction cannot resume serving stale keys.
+	 */
+	failures: Map<string, JwksFetchFailure>;
 	/** Sequence the next fetch takes. */
 	nextSequence: number;
 };
@@ -60,9 +72,17 @@ const JWKS_CACHE_MAX_ENTRIES = 500;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
 const MAX_JWKS_RESPONSE_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
+const MAX_JWKS_STALE_IF_ERROR_SECONDS = 24 * 60 * 60;
+// Past the grace period, keys served stale are fetched again at most this
+// often, so an outage does not send every assertion to the key host.
+const JWKS_STALE_REFETCH_INTERVAL_MS = 60_000;
+// How recent a transient failure must be for stale keys to stand in when the
+// transport refuses the fetch at a local capacity limit instead.
+const JWKS_STALE_REFUSAL_WINDOW_MS = 5 * 60_000;
 
 // Key fetch failures that a later fetch can get past: a timeout, a connection
-// failure, or HTTP 5xx. Only these may extend a discovery's stale key window.
+// failure, or HTTP 500, 502, 503, or 504. Only these may extend a discovery's
+// stale key window.
 const transientJwksFetchFailures = new WeakSet<Error>();
 
 function createTransientJwksFetchFailure(
@@ -92,7 +112,12 @@ function classifyJwksTransportError(
 function getJwksCache(opts: OAuthOptions<Scope[]>): JwksCache {
 	let cache = jwksCaches.get(opts);
 	if (!cache) {
-		cache = { sets: new Map(), fetches: new Map(), nextSequence: 0 };
+		cache = {
+			sets: new Map(),
+			fetches: new Map(),
+			failures: new Map(),
+			nextSequence: 0,
+		};
 		jwksCaches.set(opts, cache);
 	}
 	return cache;
@@ -109,6 +134,45 @@ function readJwksCache(
 	cache.sets.delete(cacheKey);
 	cache.sets.set(cacheKey, entry);
 	return entry;
+}
+
+function getJwksStaleIfErrorMs(discovery: ClientDiscovery | undefined): number {
+	const seconds = discovery?.jwksStaleIfError;
+	if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0) {
+		return 0;
+	}
+	return Math.min(seconds, MAX_JWKS_STALE_IF_ERROR_SECONDS) * 1000;
+}
+
+/** `null` for a local capacity refusal, which says nothing about the host. */
+function toJwksFetchFailure(error: unknown): JwksFetchFailure | null {
+	if (isLocalCapacityRefusal(error)) return null;
+	return isTransientJwksFetchFailure(error)
+		? { transient: true, failedAt: Date.now(), reason: error.message }
+		: { transient: false };
+}
+
+function recordJwksFetchFailure(
+	cache: JwksCache,
+	cacheKey: string,
+	failure: JwksFetchFailure | null,
+): void {
+	if (!failure) return;
+	// A terminal failure holds until a fetch succeeds.
+	if (failure.transient && cache.failures.get(cacheKey)?.transient === false) {
+		return;
+	}
+	cache.failures.delete(cacheKey);
+	cache.failures.set(cacheKey, failure);
+	if (cache.failures.size > JWKS_CACHE_MAX_ENTRIES) {
+		const oldest = cache.failures.keys().next().value;
+		if (oldest !== undefined) {
+			if (cache.failures.get(oldest)?.transient === false) {
+				cache.sets.delete(oldest);
+			}
+			cache.failures.delete(oldest);
+		}
+	}
 }
 
 function setJwksCache(
@@ -170,6 +234,7 @@ async function loadJwks(
 			promise: fetchJwksFromUri(jwksUri, fetchClientMetadataResource)
 				.then((result): FetchedJwksResult => {
 					if (!result.valid) return result;
+					cache.failures.delete(cacheKey);
 					// A newer fetch may have stored its set while this one ran; answer
 					// with that one rather than the older set.
 					return {
@@ -415,7 +480,7 @@ async function fetchJwksFromUri(
 		if (response.redirected) {
 			throw new Error("JWKS fetch redirected");
 		}
-		if (response.status >= 500 && response.status <= 599) {
+		if (isTransientHttpStatus(response.status)) {
 			throw createTransientJwksFetchFailure(
 				`JWKS fetch returned ${response.status}`,
 			);
@@ -497,6 +562,29 @@ async function fetchClientJwks(
 		return cached.jwks;
 	}
 
+	// Return stale cache on transient failures, but only within a grace period.
+	// After 2x the TTL, stale keys are no longer trusted (prevents accepting
+	// revoked keys indefinitely when the JWKS endpoint is down) unless the
+	// discovery's `jwksStaleIfError` window still covers them.
+	const staleLimitMs = JWKS_CACHE_TTL_MS * 2;
+	const staleIfErrorMs = getJwksStaleIfErrorMs(discovery);
+	const serveStaleKeys = (keys: JwksCacheEntry, reason: string) => {
+		ctx.context.logger.warn(
+			`oauth-provider is verifying client ${client.clientId} with cached keys from ${client.jwksUri} because refreshing them failed: ${reason}`,
+		);
+		return keys.jwks;
+	};
+	const lastFailure = cache.failures.get(cacheKey);
+	if (
+		cached &&
+		lastFailure?.transient &&
+		now - cached.fetchedAt >= staleLimitMs &&
+		now - cached.fetchedAt <= staleIfErrorMs &&
+		now - lastFailure.failedAt < JWKS_STALE_REFETCH_INTERVAL_MS
+	) {
+		return serveStaleKeys(cached, lastFailure.reason);
+	}
+
 	let result: FetchedJwksResult;
 	try {
 		result = await loadJwks(
@@ -506,28 +594,37 @@ async function fetchClientJwks(
 			discovery?.fetchClientMetadataResource,
 		);
 	} catch (error) {
-		// Return stale cache on transient failures, but only within a grace period.
-		// After 2x the TTL, stale keys are no longer trusted (prevents accepting
-		// revoked keys indefinitely when the JWKS endpoint is down).
-		const staleLimitMs = JWKS_CACHE_TTL_MS * 2;
+		if (staleIfErrorMs > 0) {
+			recordJwksFetchFailure(cache, cacheKey, toJwksFetchFailure(error));
+		}
 		if (cached && now - cached.fetchedAt < staleLimitMs) {
 			return cached.jwks;
 		}
-		const staleIfErrorSeconds = discovery?.jwksStaleIfError;
+		const failedAt = Date.now();
 		if (
 			cached &&
-			staleIfErrorSeconds !== undefined &&
-			isTransientJwksFetchFailure(error) &&
-			Date.now() - cached.fetchedAt <= staleIfErrorSeconds * 1000
+			cache.failures.get(cacheKey)?.transient !== false &&
+			failedAt - cached.fetchedAt <= staleIfErrorMs
 		) {
-			ctx.context.logger.warn(
-				`oauth-provider is verifying client ${client.clientId} with cached keys from ${client.jwksUri} because refreshing them failed: ${error.message}`,
-			);
-			return cached.jwks;
+			if (isTransientJwksFetchFailure(error)) {
+				return serveStaleKeys(cached, error.message);
+			}
+			if (
+				isLocalCapacityRefusal(error) &&
+				lastFailure?.transient &&
+				failedAt - lastFailure.failedAt <= JWKS_STALE_REFUSAL_WINDOW_MS
+			) {
+				return serveStaleKeys(cached, lastFailure.reason);
+			}
 		}
 		throw createClientJwksFetchError();
 	}
-	if (!result.valid) throw createClientJwksFetchError();
+	if (!result.valid) {
+		if (staleIfErrorMs > 0) {
+			recordJwksFetchFailure(cache, cacheKey, { transient: false });
+		}
+		throw createClientJwksFetchError();
+	}
 	return result.jwks;
 }
 
@@ -554,16 +651,25 @@ async function refetchClientJwks(
 		return null;
 	}
 	const cacheKey = getJwksCacheKey(client);
+	const cache = getJwksCache(opts);
+	const recordsFailures = getJwksStaleIfErrorMs(discovery) > 0;
 	try {
 		const result = await loadJwks(
-			getJwksCache(opts),
+			cache,
 			cacheKey,
 			client.jwksUri,
 			discovery?.fetchClientMetadataResource,
 			(fetch) => fetch.sequence >= requestedSequence,
 		);
-		return result.valid ? result.jwks : null;
-	} catch {
+		if (result.valid) return result.jwks;
+		if (recordsFailures) {
+			recordJwksFetchFailure(cache, cacheKey, { transient: false });
+		}
+		return null;
+	} catch (error) {
+		if (recordsFailures) {
+			recordJwksFetchFailure(cache, cacheKey, toJwksFetchFailure(error));
+		}
 		return null;
 	}
 }

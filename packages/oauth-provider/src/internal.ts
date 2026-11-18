@@ -19,5 +19,7 @@ export {
 export { getLocalJwksSource } from "./utils";
 export {
 	isAbortedBySignal,
+	isLocalCapacityRefusal,
+	isTransientHttpStatus,
 	isTransientNetworkError,
 } from "./utils/transient-fetch-failure";

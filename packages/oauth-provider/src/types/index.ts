@@ -143,12 +143,18 @@ export interface ClientDiscovery {
 	 * Seconds after its last successful fetch that a cached `jwks_uri` key set
 	 * of a client owned by this discovery keeps verifying client assertions
 	 * when a refetch fails transiently: the fetch times out, the connection
-	 * fails, or the server answers with HTTP 5xx. Any other failure, and any
-	 * failure once this time has passed, rejects the assertion.
+	 * fails, or the server answers with HTTP 500, 502, 503, or 504. Any other
+	 * failure, and any failure once this time has passed, rejects the
+	 * assertion. Any other failure also stops this server process from serving
+	 * the stale keys until a fetch succeeds.
 	 *
 	 * Without it, cached keys are served when a refetch fails for up to twice
 	 * the 5-minute key cache lifetime. A shorter value does not shorten that
-	 * window.
+	 * window. Past that window, stale keys are fetched again at most once a
+	 * minute, and assertions in between use them without a fetch.
+	 *
+	 * Non-finite and negative values add no time. Values above 24 hours are
+	 * capped at 24 hours.
 	 *
 	 * @see https://www.rfc-editor.org/rfc/rfc5861#section-4
 	 */
