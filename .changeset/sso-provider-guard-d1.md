@@ -7,3 +7,5 @@ Allow `guardProviderMutation` to protect SSO provider updates and deletions on a
 Operations that depend on serializing account linking remain unavailable without native transactions: identity-boundary changes return `501` with `SSO_PROVIDER_IDENTITY_CHANGE_REQUIRES_NATIVE_TRANSACTIONS`, and deleting a provider with linked accounts returns `501` with `SSO_PROVIDER_DELETE_WITH_LINKED_ACCOUNTS_REQUIRES_NATIVE_TRANSACTIONS`. Updating a non-scalar additional field returns `501` with `SSO_PROVIDER_NON_SCALAR_UPDATE_REQUIRES_NATIVE_TRANSACTIONS`, because optimistic equality predicates only fence scalar columns.
 
 In optimistic mode, guards run without a transaction, so keep them read-only: writes made by a guard are not rolled back when the request returns `409` with `SSO_PROVIDER_CHANGED`.
+
+The snapshot fence compares the values the adapter returned with the stored row. Additional fields that define a `transform` therefore stay out of the equality predicates instead of making every update report `409`, and an optional column the row does not carry is fenced as `null`, so a concurrent write that sets it is still detected.

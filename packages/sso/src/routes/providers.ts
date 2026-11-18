@@ -374,6 +374,34 @@ function isSnapshotScalar(
 	);
 }
 
+type ProviderSnapshotFields = Record<string, DBFieldAttribute>;
+
+function getProviderSnapshotFields(
+	context: AuthContext,
+): ProviderSnapshotFields {
+	return context.tables.ssoProvider?.fields ?? {};
+}
+
+/**
+ * Whether a value read from the adapter is the value stored in the column.
+ *
+ * The adapter replays date, boolean and JSON coercions when it builds a where
+ * clause, but it does not replay a field-level `transform`: reads apply
+ * `transform.output` and writes apply `transform.input`, while predicates use
+ * the value as given. Fencing a transformed field would therefore make a
+ * legitimate update fail to match its own row, so those fields stay out of the
+ * fence.
+ */
+function isFenceableSnapshotField(
+	field: string,
+	attribute: DBFieldAttribute | undefined,
+): boolean {
+	if (field === "id") return true;
+	return Boolean(
+		attribute && !attribute.transform?.input && !attribute.transform?.output,
+	);
+}
+
 function isPlainSnapshotObject(
 	value: unknown,
 ): value is Record<string, unknown> {
@@ -404,32 +432,51 @@ function snapshotValuesEqual(a: unknown, b: unknown): boolean {
 function isProviderUpdateNoOp(
 	provider: SSOProviderRecord,
 	update: Partial<SSOProviderRecord>,
+	fields: ProviderSnapshotFields,
 ): boolean {
 	const current = provider as Record<string, unknown>;
-	return Object.entries(update).every(([field, value]) =>
-		snapshotValuesEqual(current[field], value),
-	);
+	return Object.entries(update).every(([field, value]) => {
+		// A transformed field cannot be compared without running the adapter's
+		// transforms: the update carries the input value while the snapshot
+		// carries the output value. Treat it as unchanged; the snapshot read
+		// that follows still fences every raw column.
+		if (!isFenceableSnapshotField(field, fields[field])) return true;
+		// SQL reads return `null` for an unset nullable column, while Mongo and
+		// the memory adapter omit it. Both spellings fence the same state.
+		return snapshotValuesEqual(current[field] ?? null, value ?? null);
+	});
 }
 
 /**
  * Predicates that fence an optimistic provider mutation against concurrent
- * changes to the exact row the guard evaluated. Only scalar columns can be
- * expressed as equality predicates; `oidcConfig` and `samlConfig` are stored
- * as strings, so they participate in the fence. The adapters Better Auth ships
- * evaluate the predicate and the write atomically and report a zero-row write
- * as `null`, which makes the guarded write a compare-and-swap.
+ * changes to the exact row the guard evaluated. Only scalar columns whose
+ * stored value equals the value the adapter read can be expressed as equality
+ * predicates; `oidcConfig` and `samlConfig` are stored as strings, so they
+ * participate in the fence. Optional columns that the row does not carry are
+ * fenced as `null`, because every adapter treats a missing and a null column
+ * as the same state. The adapters Better Auth ships evaluate the predicate and
+ * the write atomically and report a zero-row write as `null`, which makes the
+ * guarded write a compare-and-swap.
  */
 function getProviderMutationSnapshotWhere(
 	provider: SSOProviderRecord,
+	fields: ProviderSnapshotFields,
 ): Where[] {
-	const fields = new Set<string>(PROVIDER_MUTATION_SNAPSHOT_FIELDS);
-	for (const field of Object.keys(provider)) {
-		if (isSnapshotScalar(provider[field])) fields.add(field);
-	}
+	const names = new Set<string>(PROVIDER_MUTATION_SNAPSHOT_FIELDS);
+	for (const field of Object.keys(provider)) names.add(field);
 	const where: Where[] = [];
-	for (const field of fields) {
+	for (const field of names) {
+		const attribute = fields[field];
+		if (!isFenceableSnapshotField(field, attribute)) continue;
 		const value = provider[field];
-		if (value === undefined || !isSnapshotScalar(value)) continue;
+		if (value === undefined) {
+			// A concurrent write that sets a previously-absent optional column
+			// must invalidate the snapshot instead of going unnoticed.
+			if (!attribute || attribute.required === true) continue;
+			where.push({ field, value: null });
+			continue;
+		}
+		if (!isSnapshotScalar(value)) continue;
 		where.push({ field, value });
 	}
 	return where;
@@ -442,19 +489,18 @@ function getProviderMutationSnapshotWhere(
 function getProviderMutationWriteWhere(
 	provider: SSOProviderRecord,
 	update: Partial<SSOProviderRecord>,
+	fields: ProviderSnapshotFields,
 ): Where[] {
 	const where: Where[] = [
 		{ field: "id", value: provider.id },
 		{ field: "providerId", value: provider.providerId },
 	];
-	const current = provider as Record<string, unknown>;
 	for (const [field, value] of Object.entries(update)) {
 		if (field === "id" || field === "providerId") continue;
 		if (value === undefined || !isSnapshotScalar(value)) continue;
-		// Optional model fields (for example domainVerified when domain
-		// verification is disabled) are absent from the row and must not be
-		// used as predicates.
-		if (current[field] === undefined) continue;
+		// The update carries the input value, so a transformed field cannot be
+		// matched against the stored column.
+		if (!isFenceableSnapshotField(field, fields[field])) continue;
 		where.push({ field, value });
 	}
 	return where;
@@ -1016,6 +1062,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 
 			const performProviderUpdate = async () => {
 				const database = await getCurrentAdapter(ctx.context.adapter);
+				const providerFields = getProviderSnapshotFields(ctx.context);
 				const existingProvider = await readProviderForMutation(
 					ctx,
 					{ id: authorizedProvider.id, providerId },
@@ -1219,7 +1266,10 @@ export const updateSSOProvider = (options: SSOOptions) => {
 					// `update` without rewriting the snapshot predicate.
 					const updatedCount = await database.updateMany({
 						model: "ssoProvider",
-						where: getProviderMutationSnapshotWhere(existingProvider),
+						where: getProviderMutationSnapshotWhere(
+							existingProvider,
+							providerFields,
+						),
 						update: updateData,
 					});
 					if (updatedCount === 0) {
@@ -1228,7 +1278,13 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						// proposed values already equal the approved snapshot; a
 						// concurrent change that later restores the same values must not
 						// make an unsaved update look successful.
-						if (!isProviderUpdateNoOp(existingProvider, updateData)) {
+						if (
+							!isProviderUpdateNoOp(
+								existingProvider,
+								updateData,
+								providerFields,
+							)
+						) {
 							throw providerMutationConflict();
 						}
 						// The write was a true no-op, but a concurrent request may
@@ -1236,7 +1292,10 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						const unchangedProvider = await database.findOne<SSOProviderRecord>(
 							{
 								model: "ssoProvider",
-								where: getProviderMutationSnapshotWhere(existingProvider),
+								where: getProviderMutationSnapshotWhere(
+									existingProvider,
+									providerFields,
+								),
 							},
 						);
 						if (!unchangedProvider) throw providerMutationConflict();
@@ -1250,7 +1309,11 @@ export const updateSSOProvider = (options: SSOOptions) => {
 					// reporting a conflict after the commit.
 					const writtenProvider = await database.findOne<SSOProviderRecord>({
 						model: "ssoProvider",
-						where: getProviderMutationWriteWhere(existingProvider, updateData),
+						where: getProviderMutationWriteWhere(
+							existingProvider,
+							updateData,
+							providerFields,
+						),
 					});
 					return writtenProvider ?? { ...existingProvider, ...updateData };
 				}
@@ -1326,6 +1389,7 @@ export const deleteSSOProvider = (options?: SSOOptions) => {
 
 			const performProviderDelete = async () => {
 				const database = await getCurrentAdapter(ctx.context.adapter);
+				const providerFields = getProviderSnapshotFields(ctx.context);
 				const existingProvider = await readProviderForMutation(
 					ctx,
 					{ id: authorizedProvider.id, providerId },
@@ -1365,7 +1429,10 @@ export const deleteSSOProvider = (options?: SSOOptions) => {
 					// immutable provider-instance account bindings or a transaction.
 					const deleted = await database.deleteMany({
 						model: "ssoProvider",
-						where: getProviderMutationSnapshotWhere(existingProvider),
+						where: getProviderMutationSnapshotWhere(
+							existingProvider,
+							providerFields,
+						),
 					});
 					if (deleted !== 1) throw providerMutationConflict();
 					return;

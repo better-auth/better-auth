@@ -2251,6 +2251,177 @@ kBGIJYs=
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/11207
 		 */
+		it("accepts an optimistic guarded update when an additional field has an output transform", async () => {
+			const options = {
+				guardProviderMutation() {},
+				schema: {
+					ssoProvider: {
+						additionalFields: {
+							externalId: {
+								type: "string",
+								required: false,
+								transform: {
+									// Read-only transform: the stored column keeps the raw
+									// value while the adapter hands back upper-case text.
+									output: (value) =>
+										typeof value === "string" ? value.toUpperCase() : value,
+								},
+							},
+						},
+					},
+				},
+			} satisfies SSOOptions;
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, options);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "transformed-update", undefined, {
+				externalId: "subject-1",
+			});
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "transformed-update",
+					domain: "updated.example.com",
+				},
+				headers,
+			});
+
+			// A field-level transform makes the read value differ from the stored
+			// column, so it must stay out of the compare-and-swap predicates.
+			expect(updated.domain).toBe("updated.example.com");
+			expect((updated as { externalId?: string }).externalId).toBe("SUBJECT-1");
+			expect(
+				data.ssoProvider.find((row) => row.providerId === "transformed-update")
+					?.externalId,
+			).toBe("subject-1");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
+		it("accepts an optimistic guarded no-op update when an additional field has an output transform", async () => {
+			const options = {
+				guardProviderMutation() {},
+				schema: {
+					ssoProvider: {
+						additionalFields: {
+							externalId: {
+								type: "string",
+								required: false,
+								transform: {
+									// Read-only transform: the stored column keeps the raw
+									// value while the adapter hands back upper-case text.
+									output: (value) =>
+										typeof value === "string" ? value.toUpperCase() : value,
+								},
+							},
+						},
+					},
+				},
+			} satisfies SSOOptions;
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, options);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "transformed-noop", undefined, {
+				externalId: "subject-1",
+			});
+			const provider = data.ssoProvider.find(
+				(row) => row.providerId === "transformed-noop",
+			)!;
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+			const updateMany = context.adapter.updateMany.bind(context.adapter);
+			context.adapter.updateMany = (async (input) => {
+				if (input.model === "ssoProvider") {
+					const current = await context.adapter.findOne<
+						Record<string, unknown>
+					>({
+						model: "ssoProvider",
+						where: [{ field: "id", value: provider.id }],
+					});
+					if (
+						current &&
+						Object.entries(input.update).every(
+							([field, value]) => current[field] === value,
+						)
+					) {
+						// MongoDB reports modifiedCount, so an unchanged write returns 0.
+						return 0;
+					}
+				}
+				return updateMany(input);
+			}) as typeof context.adapter.updateMany;
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "transformed-noop",
+					domain: "example.com",
+				},
+				headers,
+			});
+
+			expect(updated.domain).toBe("example.com");
+			expect((updated as { externalId?: string }).externalId).toBe("SUBJECT-1");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
+		it("rejects an optimistic guarded update when a concurrent write sets an absent optional field", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, { guardProviderMutation() {} });
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "unset-field-contended");
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+			interceptSSOProviderMutationWrite(context.adapter, async () => {
+				await context.adapter.update({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: "unset-field-contended" }],
+					update: { organizationId: "concurrent-org" },
+				});
+			});
+
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: "unset-field-contended",
+						domain: "updated.example.com",
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "CONFLICT",
+				body: {
+					code: "SSO_PROVIDER_CHANGED",
+				},
+			});
+			const provider = data.ssoProvider.find(
+				(row) => row.providerId === "unset-field-contended",
+			);
+			// An optional column that the row did not carry must still fence the
+			// snapshot, otherwise this concurrent write would be lost.
+			expect(provider?.organizationId).toBe("concurrent-org");
+			expect(provider?.domain).toBe("example.com");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
 		it("rejects an optimistic guarded update that changes the identity boundary", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider, data } =
 				createTestAuth(false, false, { guardProviderMutation() {} });
