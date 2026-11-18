@@ -161,7 +161,7 @@ export const cimdOptionsType = {
 		type: "({ clientId, jwksUri }, context) => boolean | Promise<boolean>",
 		default: "always reject",
 		description:
-			"Allows a jwks_uri that is on neither the client_id origin nor a trusted origin. Called only for such a jwks_uri, at registration, on refresh, and before each client assertion. Only a resolved true allows it. See Key set origin.",
+			"Allows a jwks_uri that is on neither the client_id origin nor a trusted origin. Called only for such a jwks_uri: at registration, on refresh, when an administrator updates the client, and before each client assertion. Only a resolved true allows it. See Key set origin.",
 	},
 	onClientCreated: {
 		type: "(event: CimdClientCreatedEvent) => void | Promise<void>",
