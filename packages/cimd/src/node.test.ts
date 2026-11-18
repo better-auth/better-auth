@@ -183,6 +183,15 @@ describe("Node CIMD metadata transport", () => {
 		expect(await response.text()).toBe("ok");
 	});
 
+	it("rejects a hostname that resolves to an IPv4-translated loopback address", async () => {
+		mocks.lookup.mockResolvedValue([{ address: "::ffff:0:7f00:1", family: 6 }]);
+
+		await expect(
+			fetchClientMetadataResource("https://client.example.com/client.json"),
+		).rejects.toThrow("public-routable");
+		expect(mocks.request).not.toHaveBeenCalled();
+	});
+
 	it("returns redirect responses without following them", async () => {
 		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 		mockHttpsResponse({
