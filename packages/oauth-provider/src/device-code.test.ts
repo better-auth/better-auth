@@ -2290,6 +2290,39 @@ describe("oauth-provider device approval through the consent flow", async () => 
 		expect(stored?.scopes).toEqual([]);
 	});
 
+	it("keeps the scopes of an earlier device when another device of the client is approved for fewer", async () => {
+		resolveReference = () => "org_1";
+		const first = await startDevice();
+		await answerDeviceConsent(client, first.user_code, first.headers);
+		const second = await auth.api.deviceCode({
+			body: { client_id: first.clientId, scope: "openid", resource },
+		});
+		await answerDeviceConsent(client, second.user_code, first.headers);
+
+		const stored = await db.findMany<{ scopes: string[] }>({
+			model: "oauthConsent",
+			where: [
+				{ field: "clientId", value: first.clientId },
+				{ field: "userId", value: first.user.id },
+			],
+		});
+		expect(stored.map(({ scopes }) => scopes)).toEqual([
+			["openid", "offline_access"],
+		]);
+		const firstTokens = await first.poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: first.device_code,
+		});
+		expect(firstTokens.error).toBeNull();
+		expect(firstTokens.data?.refresh_token).toBeDefined();
+		const secondTokens = await first.poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: second.device_code,
+		});
+		expect(secondTokens.error).toBeNull();
+		expect(secondTokens.data?.scope).toBe("openid");
+	});
+
 	/**
 	 * @see https://datatracker.ietf.org/doc/html/rfc8628#section-5.4
 	 */

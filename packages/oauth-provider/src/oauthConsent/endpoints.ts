@@ -2,7 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { revokeConsentTokens } from "../token";
 import type { OAuthConsent, OAuthOptions, Scope } from "../types";
-import { getClient } from "../utils";
+import { findConsentRows, getClient, updateConsent } from "../utils";
 
 async function getConsent(
 	ctx: GenericEndpointContext & { query: { id: string } },
@@ -97,15 +97,13 @@ export async function deleteConsentEndpoint(
 		userId: consent.userId,
 		referenceId: consent.referenceId,
 	});
-	await ctx.context.adapter.delete({
-		model: "oauthConsent",
-		where: [
-			{
-				field: "id",
-				value: id,
-			},
-		],
-	});
+	// Another row stored for the same reference would keep the consent.
+	for (const row of await findConsentRows(ctx, consent)) {
+		await ctx.context.adapter.delete({
+			model: "oauthConsent",
+			where: [{ field: "id", value: row.id }],
+		});
+	}
 }
 
 export async function updateConsentEndpoint(
@@ -153,18 +151,6 @@ export async function updateConsentEndpoint(
 		});
 	}
 
-	const iat = Math.floor(Date.now() / 1000);
-	return await ctx.context.adapter.update<OAuthConsent<Scope[]>>({
-		model: "oauthConsent",
-		where: [
-			{
-				field: "id",
-				value: id,
-			},
-		],
-		update: {
-			...updates,
-			updatedAt: new Date(iat * 1000),
-		},
-	});
+	// Narrowing leaves issued tokens valid; deleting the consent revokes them.
+	return await updateConsent(ctx, consent, () => (scopes ? { scopes } : {}));
 }

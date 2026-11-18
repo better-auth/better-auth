@@ -452,7 +452,7 @@ Server method: `getOAuthConsents`. Auth: session.
 
 `/oauth2/update-consent` <span className="opacity-70">POST</span>
 
-Server method: `updateOAuthConsent`. Auth: session.
+Server method: `updateOAuthConsent`. Auth: session. Replaces the consent's scopes and leaves the tokens issued under it valid. See [Manage consents](/docs/plugins/oauth-provider/sign-in-flow#manage-consents).
 
 `/oauth2/delete-consent` <span className="opacity-70">POST</span>
 
@@ -951,6 +951,8 @@ export const oauthAccessTokenTableFields = [
 ### OAuth Consent
 
 Table Name: `oauthConsent`
+
+Holds what a user approved for a client under one consent reference. See [Stored consent](/docs/plugins/oauth-provider/sign-in-flow#stored-consent).
 
 export const oauthConsentTableFields = [
   { name: "id", type: "string", description: "Database ID of the consent", isPrimaryKey: true },

@@ -270,6 +270,19 @@ The response is `{ redirect: true, url }`. By default, the auth client sends the
 
 With `accept: false`, the user returns to the client with `access_denied`, and any consent given earlier stays unchanged. This redirect happens only while the client is enabled and the `redirect_uri` is still valid for it. If the client was disabled or deleted, or the `redirect_uri` no longer passes redirect URI validation, the `url` points to the server error page instead. Validation fails when the URI was removed from the client's registration under the default policy, or when `allowInsecureRedirectUri` or `validateRedirectUri` no longer accepts it. When the user denies a device approval, the user returns to the device verification page instead of the client. When the user denies a CIBA request, the user goes to `resultPage`. Both URLs carry `status=denied`. To remove consent, see [Manage consents](#manage-consents).
 
+### Stored consent
+
+When the user accepts, Better Auth stores a consent for that user, client, and [consent reference](#post-login-screen). A stored consent holds the scopes, resources, and UserInfo claims that the user approved for the client and did not take back. Each acceptance updates it:
+
+* The scopes and UserInfo claims the user accepts are added.
+* The scopes and UserInfo claims the page offered and the user left out are removed.
+* The resources the request names are added. The page cannot decline a resource.
+* Everything else stays, including what the user approved on an earlier page that this page did not offer.
+
+A client cannot shrink a stored consent by asking for less. For example, the user approves `openid offline_access` for one device, and then `openid` for a second device of the same client. The consent keeps both scopes. Only the user takes access back: by leaving a scope or claim out on the consent page, by narrowing the consent with `updateOAuthConsent`, or by deleting it. See [Manage consents](#manage-consents).
+
+The consent page shows again only for a request that the stored consent does not cover, or one that sends `prompt=consent`. When two acceptances for the same client and reference arrive at the same moment, the stored consent keeps what each one added.
+
 ## Sign-up account screen
 
 To send `prompt=create` requests ([OpenID Connect Prompt Create](https://openid.net/specs/openid-connect-prompt-create-1_0.html)) to a separate sign-up page, set `signup.page`. Without it, Better Auth redirects to `loginPage`.
@@ -452,7 +465,9 @@ To let users list and change their consents, use these endpoints. Each requires 
 | `updateOAuthConsent` | `/oauth2/update-consent` | `POST` | body `{ id, update: { scopes } }` |
 | `deleteOAuthConsent` | `/oauth2/delete-consent` | `POST` | body `{ id }`                     |
 
-Updated scopes must be allowed for the client. Deleting a consent makes the next authorization ask again, and revokes the refresh tokens and opaque access tokens issued under it. JWT access tokens stay valid until they expire, unless [`revocableJwtAccessTokens`](/docs/plugins/oauth-provider/tokens#revoke-the-access-tokens-of-a-grant) revokes them. Tokens the user holds for the same client under another consent reference stay valid. See [Revoke tokens with a consent](/docs/plugins/oauth-provider/tokens#revoke-tokens-with-a-consent).
+`updateOAuthConsent` replaces the consent's scopes with the ones you send, which must be allowed for the client. A later request for a removed scope shows the consent page again. Narrowing does not revoke tokens already issued: they keep their scopes until they expire or are revoked. To cut a client off, delete the consent.
+
+Deleting a consent makes the next authorization ask again, and revokes the refresh tokens and opaque access tokens issued under it. JWT access tokens stay valid until they expire, unless [`revocableJwtAccessTokens`](/docs/plugins/oauth-provider/tokens#revoke-the-access-tokens-of-a-grant) revokes them. Tokens the user holds for the same client under another consent reference stay valid. See [Revoke tokens with a consent](/docs/plugins/oauth-provider/tokens#revoke-tokens-with-a-consent).
 
 ```ts title="consents.ts"
 const { error } = await authClient.oauth2.updateConsent({

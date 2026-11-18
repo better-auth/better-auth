@@ -283,6 +283,17 @@ Revoking a refresh token at `/oauth2/revoke` now deletes every opaque access tok
 
 **What to do:** if a client relies on tokens that outlive a deleted consent, have it request authorization again. See [Revoke tokens with a consent](/docs/plugins/oauth-provider/tokens#revoke-tokens-with-a-consent).
 
+### Consent approvals add to the stored consent
+
+Accepting the consent page now adds to the user's stored consent for the client and consent reference. Before, each acceptance replaced it, so approving fewer scopes, another resource, or other UserInfo claims dropped what the user had approved earlier.
+
+* A scope or UserInfo claim that the consent page offered and the user left out is still removed.
+* The consent page shows less often. A request for access that the user approved earlier, but left out of a later approval, no longer shows it. With `prompt=none`, such a request now gets a code instead of `consent_required`.
+* `getOAuthConsent` and `getOAuthConsents` return everything the user approved and did not take back, not only the last approval.
+* No schema change or migration is needed. An existing consent holds its last approval, and grows from the next one.
+
+**What to do:** nothing, unless you relied on a narrower approval taking back earlier access. To narrow a consent, call `updateOAuthConsent`. To cut a client off, call `deleteOAuthConsent`, which also revokes its tokens. See [Stored consent](/docs/plugins/oauth-provider/sign-in-flow#stored-consent).
+
 ### Authorization code reuse revokes tokens only for the issuing client
 
 The provider still rejects every reuse of an authorization code. To stop someone who holds a leaked code from revoking a client's tokens, a reuse now revokes the tokens issued from the code only when it comes from the client the code was issued to:
