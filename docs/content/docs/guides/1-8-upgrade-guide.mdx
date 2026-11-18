@@ -299,8 +299,8 @@ Accepting the consent page now adds to the user's stored consent for the client 
 
 Redeeming an authorization code at `/oauth2/token` now needs a stored consent that still covers the code's scopes, resources, and UserInfo claims. Before, a code stayed valid for its full lifetime, 10 minutes by default, after the user deleted or narrowed the consent it was issued under.
 
-* A redemption after the user deleted the consent, or narrowed it below what the code authorizes, fails with `400 invalid_grant`. The client must start a new authorization request.
-* A consent that was deleted and then given again for the same request leaves the code valid.
+* A redemption after the user deleted the consent, or narrowed it below what the code authorizes, fails with `400 invalid_grant`. Unless the user approves that access again, the client must start a new authorization request.
+* If the user deletes the consent and then approves the same access again for the same client and consent reference, the code is valid again.
 * Codes redeemed while the client is configured with `skip_consent` bypass this check, even if a stored consent exists.
 * A redemption that passed the check just before the user deleted the consent can still finish, and the tokens it issues stay valid.
 

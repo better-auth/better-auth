@@ -2835,7 +2835,7 @@ describe("oauth authorize - pending authorization codes follow their consent", a
 		expectInvalidGrant(await exchange(pending), "consent revoked");
 	});
 
-	it("redeems a pending code after the consent was deleted and given again for the same request", async () => {
+	it("redeems a pending code after the consent was deleted and given again through another request", async () => {
 		const pending = await authorizeAndConsent("consent-code-regranted-a");
 		await deleteStoredConsent((await findStoredConsent())!.id);
 		const fresh = await authorizeAndConsent("consent-code-regranted-b");
