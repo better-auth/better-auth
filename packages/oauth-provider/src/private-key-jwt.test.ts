@@ -736,7 +736,7 @@ describe("private_key_jwt authentication", async () => {
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12005
-	 * @see https://www.rfc-editor.org/rfc/rfc10070#section-4
+	 * @see https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.5
 	 */
 	it("accepts nbf within assertionClockTolerance and rejects nbf outside it", async () => {
 		const clientId = "https://clock-tolerance.example.com/client.json";
@@ -842,7 +842,7 @@ describe("private_key_jwt authentication", async () => {
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12005
-	 * @see https://www.rfc-editor.org/rfc/rfc10070#section-4
+	 * @see https://datatracker.ietf.org/doc/html/rfc7523#section-3
 	 */
 	it("keeps the jti tombstone until exp plus assertionClockTolerance", async () => {
 		const assertionClockTolerance = 30;
@@ -899,7 +899,7 @@ describe("private_key_jwt authentication", async () => {
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12005
-	 * @see https://www.rfc-editor.org/rfc/rfc10070#section-4
+	 * @see https://datatracker.ietf.org/doc/html/rfc7523#section-3
 	 */
 	it("applies assertionClockTolerance to iat within the lifetime cap", async () => {
 		const assertionClockTolerance = 30;
@@ -943,7 +943,7 @@ describe("private_key_jwt authentication", async () => {
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12005
-	 * @see https://www.rfc-editor.org/rfc/rfc10070#section-4
+	 * @see https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4
 	 */
 	it("caps assertionClockTolerance at 60 seconds", async () => {
 		const clientId = "https://clock-tolerance-cap.example.com/client.json";

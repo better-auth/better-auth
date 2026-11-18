@@ -193,6 +193,7 @@ The `aud` values accepted in client assertions, such as `private_key_jwt` assert
 `"issuer-or-endpoint"` is a transitional setting for clients that still sign for an endpoint URL. It is weaker: a client that signs for an endpoint URL can be tricked into signing an assertion that a malicious server replays here. Move your clients to the issuer, then remove the setting.
 
 `POST /oauth2/client/rotate-keys` is the exception. In either mode, the assertion's `aud` must include that endpoint's own URL, and may also name other values.
+
 `assertionClockTolerance` <span className="opacity-70">`number`</span>
 
 Seconds of clock skew accepted on the `nbf`, `exp`, and `iat` of a `private_key_jwt` assertion. Defaults to `0`, which accepts no skew. Values above `60` are treated as `60`, and negative or non-finite values are treated as `0`. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).
