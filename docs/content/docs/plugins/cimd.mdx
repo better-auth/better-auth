@@ -7,7 +7,7 @@ description: Discover OAuth clients from HTTPS metadata documents.
 
 `OAuth2` `MCP`
 
-The [Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02) lets an OAuth client identify itself without registering first. The client's `client_id` is the exact HTTPS URL of a metadata document it hosts. Better Auth validates the document and persists the client through the OAuth Provider's canonical registration path.
+The [Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02) lets an OAuth client identify itself without registering first. The client's `client_id` is the exact HTTPS URL of a metadata document it hosts. Better Auth validates the document and persists the client through the OAuth Provider's canonical registration path. Validation follows draft-02; where [draft-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03) changed a rule, this page cites the draft-03 section it follows.
 
 MCP 2026-07-28 normatively references CIMD draft-00. Use `metadataProfile: "mcp-2026-07-28"` when composing `cimd()` with `mcp()`. This explicit profile adds MCP's required `client_name` and `redirect_uris` fields without imposing those draft-00 restrictions on generic draft-02 clients.
 
@@ -247,4 +247,5 @@ oauthProvider({
 
 * [OAuth Provider plugin](./oauth-provider)
 * [IETF Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02)
+* [IETF Client ID Metadata Document draft-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)
 * [MCP authorization spec: draft-00 CIMD profile](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents)
