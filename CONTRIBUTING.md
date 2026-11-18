@@ -99,15 +99,23 @@ SQL Server 2025 volume cannot block startup. Recreate only that volume if MSSQL 
 fails to start. This deletes local MSSQL test data:
 
 ```bash
+project=$(docker compose config | awk '$1=="name:" { print $2; exit }')
 docker compose rm -sf mssql
-docker volume rm $(docker volume ls -q --filter name=mssql_2022_data)
+volume=$(docker volume ls -q \
+  --filter "label=com.docker.compose.project=${project}" \
+  --filter "label=com.docker.compose.volume=mssql_2022_data")
+[ -n "$volume" ] && docker volume rm "$volume"
 docker compose up -d mssql
 ```
 
 To reclaim disk from an unused 2025 volume (`mssql_data`):
 
 ```bash
-docker volume rm $(docker volume ls -q --filter name=mssql_data)
+project=$(docker compose config | awk '$1=="name:" { print $2; exit }')
+volume=$(docker volume ls -q \
+  --filter "label=com.docker.compose.project=${project}" \
+  --filter "label=com.docker.compose.volume=mssql_data")
+[ -n "$volume" ] && docker volume rm "$volume"
 ```
 
 ### E2E Tests
