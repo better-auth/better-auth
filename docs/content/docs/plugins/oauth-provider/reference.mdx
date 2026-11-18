@@ -342,7 +342,7 @@ The provider also serves both well-known documents at their issuer-relative path
 
 Errors use the [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) format. The built-in grants authenticate the client before they look up the grant, so an unknown `client_id` returns `invalid_client`, not `invalid_grant`.
 
-Every 401 from an endpoint that authenticates a client or an access token carries a `WWW-Authenticate` challenge, as [RFC 9110 §15.5.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2) requires. A client-authentication failure that the endpoint reports as 401 carries a `Basic` challenge. If the client sent an `Authorization` header with another scheme, the challenge names that scheme instead. When `allowUnauthenticatedClientRegistration` is off, client registration without a session or an initial access token returns 401 with a bare `Bearer` challenge.
+Every 401 from an endpoint that authenticates a client or an access token carries a `WWW-Authenticate` challenge, as [RFC 9110 §15.5.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2) requires. A client-authentication failure that the endpoint reports as 401 carries a `Basic` challenge with a `realm`, as in `WWW-Authenticate: Basic realm="oauth"` ([RFC 7617 §2](https://www.rfc-editor.org/rfc/rfc7617#section-2)). If the client sent an `Authorization` header with another scheme, the challenge names that scheme instead. When `allowUnauthenticatedClientRegistration` is off, client registration without a session or an initial access token returns 401 with a bare `Bearer` challenge.
 
 The token endpoint reports most client-authentication failures as 400 with no challenge, as [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) allows. It returns 401 with a challenge when the client authenticated through the `Authorization` header, and for some other failures, such as a `private_key_jwt` assertion that fails signature or claim verification.
 
@@ -352,7 +352,7 @@ The response also lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, s
 | ------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `invalid_request`        | 400    | A required request field is missing or malformed.                                                                                        |
 | `invalid_client`         | 400    | Client authentication failed, or the client used a method other than its registered `token_endpoint_auth_method`.                        |
-| `invalid_client`         | 401    | `client_secret_basic` authentication failed. The response carries a `WWW-Authenticate: Basic` challenge.                                 |
+| `invalid_client`         | 401    | `client_secret_basic` authentication failed. The response carries a `WWW-Authenticate: Basic realm="oauth"` challenge.                   |
 | `invalid_grant`          | 400    | The code, refresh token, or PKCE verifier is invalid, expired, or issued to another client.                                              |
 | `invalid_user`           | 400    | The user who approved an authorization code was deleted before the code was exchanged.                                                   |
 | `unauthorized_client`    | 400    | The client is not registered for the grant, a public client used `client_credentials`, or the client has no `client_credentials` scopes. |

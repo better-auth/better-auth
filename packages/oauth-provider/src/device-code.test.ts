@@ -208,7 +208,7 @@ describe("oauth-provider device-code composition", () => {
 		expect(getUnauthorizedResponse(composedDocument)).toMatchObject({
 			headers: {
 				"WWW-Authenticate": {
-					schema: { type: "string", example: "Basic" },
+					schema: { type: "string", example: 'Basic realm="oauth"' },
 				},
 			},
 			content: {
@@ -1199,7 +1199,9 @@ describe("oauth-provider device-code grant", async () => {
 
 		expect(response.error?.status).toBe(401);
 		expect((response.error as TokenErrorBody)?.error).toBe("invalid_client");
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	/**
