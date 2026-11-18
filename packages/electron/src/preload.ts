@@ -86,6 +86,11 @@ function exposeBridges<O extends ElectronClientOptions>(
 		contextBridge.exposeInMainWorld(key, value);
 	}
 
+	// Only renderers receive `online` events, so relay reconnects to the main process.
+	window.addEventListener("online", () => {
+		ipcRenderer.send(`${prefix}online`);
+	});
+
 	return {} as {
 		$InferBridges: typeof bridges;
 	};
