@@ -223,6 +223,33 @@ describe("Node CIMD metadata transport", () => {
 		expect(await response.text()).toBe("ok");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12224
+	 */
+	it("hands Node every validated address when it requests all addresses", async () => {
+		const addresses = [
+			{ address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+			{ address: "93.184.216.34", family: 4 },
+		];
+		mocks.lookup.mockResolvedValue(addresses);
+		let lookupResult: string | MockLookupAddress[] | undefined;
+		mockHttpsResponse({
+			body: "ok",
+			lookupOptions: { all: true },
+			onLookup: (result) => {
+				lookupResult = result;
+			},
+		});
+
+		const response = await fetchClientMetadataResource(
+			"https://client.example.com/client.json",
+		);
+
+		expect(await response.text()).toBe("ok");
+		expect(lookupResult).toEqual(addresses);
+		expect(mocks.lookup).toHaveBeenCalledTimes(1);
+	});
+
 	it("rejects a hostname that resolves to an IPv4-translated loopback address", async () => {
 		mocks.lookup.mockResolvedValue([{ address: "::ffff:0:7f00:1", family: 6 }]);
 
