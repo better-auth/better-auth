@@ -3,8 +3,8 @@ import { getBuiltinAsyncLocalStorage } from "./builtin";
 
 type Frame<T> = {
 	store: T;
-	parent: Frame<T> | undefined;
-	settled: boolean;
+	parent?: Frame<T>;
+	child?: Frame<T>;
 };
 
 /**
@@ -16,14 +16,22 @@ class AsyncLocalStoragePolyfill<T> {
 	#current: Frame<T> | undefined;
 
 	run(store: T, fn: () => unknown): unknown {
-		const frame = { store, parent: this.#current, settled: false };
+		const frame: Frame<T> = { store, parent: this.#current };
+		if (this.#current) {
+			this.#current.child = frame;
+		}
 		this.#current = frame;
-		// Runs can settle out of order, so step back only past settled runs.
+		// Runs can settle out of order, so unlink this run's frame wherever it is.
 		const leave = () => {
-			frame.settled = true;
-			while (this.#current?.settled) {
-				this.#current = this.#current.parent;
+			const { parent, child } = frame;
+			if (parent) {
+				parent.child = child;
 			}
+			if (child) {
+				child.parent = parent;
+				return;
+			}
+			this.#current = parent;
 		};
 		try {
 			const result = fn();
