@@ -70,7 +70,7 @@
       "outputs": []
     },
     "test": {
-      "dependsOn": ["^build", "build"],
+      "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "vitest.config.*",
@@ -86,7 +86,7 @@
       "cache": true
     },
     "coverage": {
-      "dependsOn": ["^build", "build"],
+      "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "vitest.config.*",

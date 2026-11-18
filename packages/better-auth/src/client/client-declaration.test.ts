@@ -7,7 +7,21 @@ import { describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
 
-describe("client declaration emit", () => {
+const publishedReactTypes = path.resolve(
+	import.meta.dirname,
+	"../../dist/client/react/index.d.mts",
+);
+const hasPublishedReactTypes = fs.existsSync(publishedReactTypes);
+
+if (process.env.CI && !hasPublishedReactTypes) {
+	throw new Error(
+		`Published types missing at "${publishedReactTypes}". This suite typechecks against dist and must not skip on CI.`,
+	);
+}
+
+// Local `vitest` without a prior build can skip. CI never skips: missing
+// types throw above, and `packages/better-auth/turbo.json` waits on `build`.
+describe.skipIf(!hasPublishedReactTypes)("client declaration emit", () => {
 	const createCompositeProject = (): { dir: string; cleanup: () => void } => {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ba-client-dts-"));
 		const betterAuthDir = path.resolve(import.meta.dirname, "../..");
