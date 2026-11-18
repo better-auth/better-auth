@@ -25,6 +25,10 @@ import type {
 	Scope,
 } from "../types";
 import { challengeHeaders, getAuthEndpointUrl, getClient } from "./index";
+import {
+	isAbortedBySignal,
+	isTransientNetworkError,
+} from "./transient-fetch-failure";
 
 type FetchedJwksResult =
 	| { valid: true; jwks: JSONWebKeySet }
@@ -56,6 +60,34 @@ const JWKS_CACHE_MAX_ENTRIES = 500;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
 const MAX_JWKS_RESPONSE_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
+
+// Key fetch failures that a later fetch can get past: a timeout, a connection
+// failure, or HTTP 5xx. Only these may extend a discovery's stale key window.
+const transientJwksFetchFailures = new WeakSet<Error>();
+
+function createTransientJwksFetchFailure(
+	message: string,
+	cause?: unknown,
+): Error {
+	const failure = new Error(message, { cause });
+	transientJwksFetchFailures.add(failure);
+	return failure;
+}
+
+function isTransientJwksFetchFailure(error: unknown): error is Error {
+	return error instanceof Error && transientJwksFetchFailures.has(error);
+}
+
+function classifyJwksTransportError(
+	error: unknown,
+	signal: AbortSignal,
+): unknown {
+	if (!isAbortedBySignal(error, signal) && !isTransientNetworkError(error)) {
+		return error;
+	}
+	const reason = error instanceof Error ? error.message : String(error);
+	return createTransientJwksFetchFailure(`JWKS fetch failed: ${reason}`, error);
+}
 
 function getJwksCache(opts: OAuthOptions<Scope[]>): JwksCache {
 	let cache = jwksCaches.get(opts);
@@ -167,7 +199,8 @@ async function loadJwks(
 				fetch.promise,
 				new Promise<never>((_, reject) => {
 					timeout = setTimeout(
-						() => reject(new Error("JWKS fetch timed out")),
+						() =>
+							reject(createTransientJwksFetchFailure("JWKS fetch timed out")),
 						Math.max(0, fetch.startedAt + JWKS_FETCH_TIMEOUT_MS - Date.now()),
 					);
 				}),
@@ -368,14 +401,24 @@ async function fetchJwksFromUri(
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), JWKS_FETCH_TIMEOUT_MS);
 	try {
-		const response = await fetchClientMetadataResource(jwksUri, {
-			signal: controller.signal,
-			headers: { accept: "application/json" },
-			// Not "error": Workers rejects it. The status check refuses 3xx and opaque redirects.
-			redirect: "manual",
-		});
+		let response: Response;
+		try {
+			response = await fetchClientMetadataResource(jwksUri, {
+				signal: controller.signal,
+				headers: { accept: "application/json" },
+				// Not "error": Workers rejects it. The status check refuses 3xx and opaque redirects.
+				redirect: "manual",
+			});
+		} catch (error) {
+			throw classifyJwksTransportError(error, controller.signal);
+		}
 		if (response.redirected) {
 			throw new Error("JWKS fetch redirected");
+		}
+		if (response.status >= 500 && response.status <= 599) {
+			throw createTransientJwksFetchFailure(
+				`JWKS fetch returned ${response.status}`,
+			);
 		}
 		if (response.status !== 200) {
 			throw new Error(`JWKS fetch returned ${response.status}`);
@@ -384,7 +427,12 @@ async function fetchJwksFromUri(
 		if (!contentType || !JSON_CONTENT_TYPE.test(contentType)) {
 			throw new Error("JWKS response must use a JSON media type");
 		}
-		const responseBody = await readBoundedResponseBody(response);
+		let responseBody: string;
+		try {
+			responseBody = await readBoundedResponseBody(response);
+		} catch (error) {
+			throw classifyJwksTransportError(error, controller.signal);
+		}
 		let parsedBody: unknown;
 		try {
 			parsedBody = JSON.parse(responseBody);
@@ -457,12 +505,24 @@ async function fetchClientJwks(
 			client.jwksUri,
 			discovery?.fetchClientMetadataResource,
 		);
-	} catch {
+	} catch (error) {
 		// Return stale cache on transient failures, but only within a grace period.
 		// After 2x the TTL, stale keys are no longer trusted (prevents accepting
 		// revoked keys indefinitely when the JWKS endpoint is down).
 		const staleLimitMs = JWKS_CACHE_TTL_MS * 2;
 		if (cached && now - cached.fetchedAt < staleLimitMs) {
+			return cached.jwks;
+		}
+		const staleIfErrorSeconds = discovery?.jwksStaleIfError;
+		if (
+			cached &&
+			staleIfErrorSeconds !== undefined &&
+			isTransientJwksFetchFailure(error) &&
+			Date.now() - cached.fetchedAt <= staleIfErrorSeconds * 1000
+		) {
+			ctx.context.logger.warn(
+				`oauth-provider is verifying client ${client.clientId} with cached keys from ${client.jwksUri} because refreshing them failed: ${error.message}`,
+			);
 			return cached.jwks;
 		}
 		throw createClientJwksFetchError();

@@ -140,6 +140,20 @@ export interface ClientDiscovery {
 		context: GenericEndpointContext,
 	) => Awaitable<boolean>;
 	/**
+	 * Seconds after its last successful fetch that a cached `jwks_uri` key set
+	 * of a client owned by this discovery keeps verifying client assertions
+	 * when a refetch fails transiently: the fetch times out, the connection
+	 * fails, or the server answers with HTTP 5xx. Any other failure, and any
+	 * failure once this time has passed, rejects the assertion.
+	 *
+	 * Without it, cached keys are served when a refetch fails for up to twice
+	 * the 5-minute key cache lifetime. A shorter value does not shorten that
+	 * window.
+	 *
+	 * @see https://www.rfc-editor.org/rfc/rfc5861#section-4
+	 */
+	jwksStaleIfError?: number;
+	/**
 	 * Fields merged into `/.well-known/oauth-authorization-server` and
 	 * `/.well-known/openid-configuration` responses. Useful for advertising
 	 * RFC-registered discovery flags like

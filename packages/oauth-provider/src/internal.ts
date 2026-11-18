@@ -17,3 +17,7 @@ export {
 	registerClientMetadataDocument,
 } from "./register";
 export { getLocalJwksSource } from "./utils";
+export {
+	isAbortedBySignal,
+	isTransientNetworkError,
+} from "./utils/transient-fetch-failure";
