@@ -57,13 +57,15 @@ const storageAdapter = (storage: Storage, sessionKeys: Set<string>) => {
 			if (!safeStorage.isEncryptionAvailable()) {
 				if (sessionKeys.has(name)) {
 					memory.set(name, value);
+					return true;
 				}
-				return;
+				return false;
 			}
 			try {
 				storage.setItem(name, base64.encode(safeStorage.encryptString(value)));
+				return true;
 			} catch {
-				return;
+				return false;
 			}
 		},
 	};
@@ -87,6 +89,14 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 		opts.storage,
 		new Set([cookieName, localCacheName]),
 	);
+	let localCache: string | undefined;
+	// Session refreshes repeat the same payload, so skip rewriting it to storage.
+	const writeLocalCache = (value: string) => {
+		if (value === localCache) return;
+		if (setEncrypted(localCacheName, value)) {
+			localCache = value;
+		}
+	};
 	// A session read carries the session itself, so it signals a refetch only
 	// when it finds no session while the store still shows one. The store
 	// applies the result of its own fetch.
@@ -102,7 +112,7 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 			error: null,
 			isPending: false,
 		});
-		setEncrypted(localCacheName, "{}");
+		writeLocalCache("{}");
 	};
 
 	if (
@@ -193,7 +203,7 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 								store?.notify("$sessionSignal");
 							}
 							if (!opts.disableCache) {
-								setEncrypted(localCacheName, JSON.stringify(context.data));
+								writeLocalCache(JSON.stringify(context.data));
 							}
 						}
 						if (context.request.url.toString().includes("/sign-out")) {

@@ -248,6 +248,49 @@ describe("Electron", () => {
 			await readClient.$fetch("/get-session-history");
 			expect(signals()).toBe(1);
 		});
+
+		it("writes the local session cache only when the session changes", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			const readClient = await signUp("read-local-cache@test.com");
+			const setItem = vi.spyOn(options.storage, "setItem");
+			onTestFinished(() => setItem.mockRestore());
+
+			await readClient.getSession();
+			await readClient.getSession();
+			await readClient.getSession();
+			const cacheWrites = setItem.mock.calls.filter(
+				([key]) => key === "better-auth.local_cache",
+			);
+			expect(cacheWrites).toHaveLength(1);
+		});
+
+		it("rewrites the local session cache after a failed write", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			const readClient = await signUp("read-local-cache-retry@test.com");
+			const writeItem = options.storage.setItem.bind(options.storage);
+			let failNextCacheWrite = true;
+			const setItem = vi
+				.spyOn(options.storage, "setItem")
+				.mockImplementation((key, value) => {
+					if (key === "better-auth.local_cache" && failNextCacheWrite) {
+						failNextCacheWrite = false;
+						throw new Error("disk full");
+					}
+					writeItem(key, value);
+				});
+			onTestFinished(() => setItem.mockRestore());
+
+			await readClient.getSession();
+			await readClient.getSession();
+			const cacheWrites = setItem.mock.calls.filter(
+				([key]) => key === "better-auth.local_cache",
+			);
+			expect(cacheWrites).toHaveLength(2);
+		});
 	});
 
 	it("should throw error when making requests outside the main process", async ({
