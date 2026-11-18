@@ -110,6 +110,7 @@ export const kakao = (options: KakaoOptions) => {
 		createAuthorizationURL({
 			state,
 			scopes,
+			codeVerifier,
 			redirectURI,
 			loginHint,
 			additionalParams,
@@ -125,14 +126,16 @@ export const kakao = (options: KakaoOptions) => {
 				authorizationEndpoint: "https://kauth.kakao.com/oauth/authorize",
 				scopes: _scopes,
 				state,
+				codeVerifier,
 				redirectURI,
 				loginHint,
 				additionalParams,
 			});
 		},
-		validateAuthorizationCode: async ({ code, redirectURI }) => {
+		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
+				codeVerifier,
 				redirectURI,
 				options,
 				tokenEndpoint,
