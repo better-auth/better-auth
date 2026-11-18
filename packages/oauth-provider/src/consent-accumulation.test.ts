@@ -200,6 +200,7 @@ describe("oauth-provider - a stored consent keeps earlier approvals", async () =
 		scopes: string[],
 		createdAt: Date,
 		referenceId?: string,
+		id?: string,
 	) {
 		return adapter.create<OAuthConsent<Scope[]>>({
 			model: "oauthConsent",
@@ -210,7 +211,9 @@ describe("oauth-provider - a stored consent keeps earlier approvals", async () =
 				createdAt,
 				updatedAt: createdAt,
 				...(referenceId === undefined ? {} : { referenceId }),
+				...(id === undefined ? {} : { id }),
 			},
+			forceAllowId: id !== undefined,
 		});
 	}
 
@@ -584,6 +587,50 @@ describe("oauth-provider - a stored consent keeps earlier approvals", async () =
 			{ id: first!.id, update: { scopes: ["openid"] } },
 			{ headers },
 		);
+		expect(updated.error).toBeNull();
+		expect((await findStoredConsent("org_a")).scopes).toEqual(["openid"]);
+		const again = await startAuthorization({ scope: "openid profile" });
+		expect(again.consentQuery).toBeDefined();
+	});
+
+	it("narrows a row that a paged read missed", async () => {
+		state.referenceId = "org_a";
+		// Rows page by ID, so the newest row, holding `profile`, is the only one
+		// on the second page.
+		const ids = Array.from(
+			{ length: 101 },
+			(_, row) => `consent-${String(row).padStart(3, "0")}`,
+		);
+		for (const [row, id] of ids.entries()) {
+			await storeConsentRow(
+				row === 100 ? ["profile"] : ["openid"],
+				new Date(1_000_000 + row * 1000),
+				"org_a",
+				id,
+			);
+		}
+
+		// Another request removes a row of the first page before the narrowing
+		// reads the second, so the newest row moves to the first page and the
+		// read misses it.
+		const findMany = adapter.findMany.bind(adapter);
+		let removed = false;
+		vi.spyOn(adapter, "findMany").mockImplementation(async (args) => {
+			if (args.model === "oauthConsent" && args.offset === 100 && !removed) {
+				removed = true;
+				await adapter.delete({
+					model: "oauthConsent",
+					where: [{ field: "id", value: ids[50]! }],
+				});
+			}
+			return findMany(args);
+		});
+		const updated = await client.oauth2.updateConsent(
+			{ id: ids[0]!, update: { scopes: ["openid"] } },
+			{ headers },
+		);
+
+		expect(removed).toBe(true);
 		expect(updated.error).toBeNull();
 		expect((await findStoredConsent("org_a")).scopes).toEqual(["openid"]);
 		const again = await startAuthorization({ scope: "openid profile" });

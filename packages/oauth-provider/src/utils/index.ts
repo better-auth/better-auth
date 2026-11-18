@@ -1733,7 +1733,9 @@ const CONSENT_WRITE_ATTEMPTS = 5;
  * consumed first, and what it held is written into the oldest together with
  * `change`. Only the write that consumed a row carries its values, so a row
  * that another write read before it was consumed cannot bring back a value
- * that `change` removed.
+ * that `change` removed. A read that pages can miss a row when another request
+ * removes one between pages, so the rows are read again until no other row is
+ * left: a row left in place would bring back what `change` removed.
  *
  * The write is guarded by the `updatedAt` it read, and moves it to a later
  * whole second. If another write lands first, the guard misses and `change`
@@ -1765,12 +1767,21 @@ export async function updateConsent(
 		const [stored, ...duplicates] = await findConsentRows(ctx, key);
 		if (!stored) return null;
 		const consumed: OAuthConsent<Scope[]>[] = [];
-		for (const duplicate of duplicates) {
-			const row = await ctx.context.adapter.consumeOne<OAuthConsent<Scope[]>>({
-				model: "oauthConsent",
-				where: [{ field: "id", value: duplicate.id }],
-			});
-			if (row) consumed.push(row);
+		for (let pending = duplicates; pending.length; ) {
+			for (const duplicate of pending) {
+				const row = await ctx.context.adapter.consumeOne<OAuthConsent<Scope[]>>(
+					{
+						model: "oauthConsent",
+						where: [{ field: "id", value: duplicate.id }],
+					},
+				);
+				if (row) consumed.push(row);
+			}
+			const rows = await findConsentRows(ctx, key);
+			// Without the stored row, the write misses its guard and starts over.
+			pending = rows.some(({ id }) => id === stored.id)
+				? rows.filter(({ id }) => id !== stored.id)
+				: [];
 		}
 		const consent = mergeConsentRows([stored, ...consumed])!;
 		const changed = { ...consent, ...change(consent) };
