@@ -480,15 +480,15 @@ Discovery already published the issuer normalized: without the trailing slash, q
 
 * Introspection reports the new `iss` for every opaque access token and refresh token as soon as you upgrade, including tokens issued before.
 * JWT access tokens and ID tokens issued before the upgrade keep the old `iss` until they expire.
-* Better Auth's own checks that run in the same process accept both values: introspection, UserInfo, token exchange and its `may_act` `iss` check, the `id_token_hint` check at the end-session endpoint, and the defaults of the resource client and `requireMcpAuth` when they read keys from the auth instance. A `may_act` `iss` you set from the configured value in `customAccessTokenClaims` keeps working. This acceptance has no end date.
-* The resource client and `requireMcpAuth` expect the discovery issuer alone when you pass `jwksUrl` and no `issuer`. A resource server that verifies against a remote authorization server must match `iss` exactly ([RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4)), so it rejects JWT access tokens issued before the upgrade that carry the configured form.
+* Better Auth's own checks that run in the same process accept both values: introspection, UserInfo, token exchange and its `may_act` `iss` check, the `id_token_hint` check at the end-session endpoint, and the defaults of the resource client and `requireMcpAuth` when they read this server's keys or records in-process. A `may_act` `iss` you set from the configured value in `customAccessTokenClaims` keeps working. This acceptance has no end date.
+* Remote verification is exact. The resource client and `requireMcpAuth` expect the discovery issuer alone when they check a signature against keys fetched from a URL and you pass no `issuer`. That covers `jwksUrl`, and the JWT plugin's `jwks.remoteUrl` when nothing else checks the token in-process: always for the resource client, and for `requireMcpAuth` when no OAuth provider runs in the same process. A resource server that verifies against a remote authorization server must match `iss` exactly ([RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4)), so it rejects JWT access tokens issued before the upgrade that carry the configured form.
 * The resource client's `getProtectedResourceMetadata` now lists the discovery issuer in its default `authorization_servers` entry.
 
 Discovery and the authorization response `iss` parameter do not change.
 
 **What to do:** find every verifier that pins the configured value, such as an API that checks JWT access tokens with its own code or a relying party configured with a fixed issuer. Set it to the `issuer` from discovery. Until the JWT access tokens issued before the upgrade expire, accept both values if the verifier takes a list. A verifier that pins only the configured value rejects every new token.
 
-In Better Auth, an `issuer` you pass to the resource client's `verifyOptions` or to `requireMcpAuth` is the only value accepted. If it repeats the configured value, remove it to use the default. The default accepts both values when keys come from the auth instance, and only the discovery issuer when you pass `jwksUrl`. To keep accepting tokens issued before the upgrade at a remote resource server until they expire, pass both values as a list in the resource client's `verifyOptions.issuer`. `requireMcpAuth` takes a single `issuer`, so it rejects those tokens until they expire.
+In Better Auth, an `issuer` you pass to the resource client's `verifyOptions` or to `requireMcpAuth` is the only value accepted. If it repeats the configured value, remove it to use the default. The default accepts both values for in-process verification, and only the discovery issuer for remote verification. To keep accepting tokens issued before the upgrade at a remote resource server until they expire, pass both values as a list in the resource client's `verifyOptions.issuer`. `requireMcpAuth` takes a single `issuer`, so it rejects those tokens until they expire.
 
 ### UserInfo errors follow RFC 6750
 
@@ -653,7 +653,7 @@ When the OAuth provider runs in the same process, `requireMcpAuth` now checks ea
 
 If `jwt.issuer`, or your `baseURL`, has a trailing slash, an uppercase host, or a default port, the `iss` of new tokens changes. A verifier that pins the old value must update. See [Tokens carry the discovery issuer](#tokens-carry-the-discovery-issuer) under the identity provider changes.
 
-Without an `issuer` option, `requireMcpAuth` now expects the provider's issuer, which follows `jwt.issuer`. Before, it expected the base URL, so with a custom `jwt.issuer` it rejected every token unless you passed `issuer`. You can remove an `issuer` option that repeats `jwt.issuer`. With a `jwksUrl` and no `issuer`, it expects the discovery issuer alone, and a token that carries the issuer as configured is rejected.
+Without an `issuer` option, `requireMcpAuth` now expects the provider's issuer, which follows `jwt.issuer`. Before, it expected the base URL, so with a custom `jwt.issuer` it rejected every token unless you passed `issuer`. You can remove an `issuer` option that repeats `jwt.issuer`. When it checks a signature against keys fetched from a URL, which is a `jwksUrl` or the JWT plugin's `jwks.remoteUrl` with no OAuth provider in the same process, and you pass no `issuer`, it expects the discovery issuer alone, and a token that carries the issuer as configured is rejected.
 
 ### `authorization_details_types_supported` is a list
 

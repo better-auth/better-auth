@@ -40,30 +40,21 @@ function getConfiguredIssuer(
 /**
  * Gets the issuer identifier. Discovery, the authorization response `iss`
  * parameter, and every token and introspection response carry this value.
+ *
+ * Also the single expected `iss` of a verifier that trusts keys fetched from
+ * a remote URL, where RFC 9068 §4 requires an exact match. A verifier that
+ * reads this server's own state in the same process uses
+ * {@link getAcceptedIssuers} instead. Outside an endpoint, pass the auth
+ * context as `{ context }`. `opts` defaults to the OAuth provider's options
+ * in that context.
  */
 export function getIssuer(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
-): string {
-	return validateIssuerUrl(getConfiguredIssuer(ctx.context, opts));
-}
-
-/**
- * The issuer identifier the provider stamps on its tokens and publishes in
- * discovery, read from the auth context. Use it as the single expected `iss`
- * of a verifier that fetches keys from a remote authorization server, where
- * RFC 9068 §4 requires an exact match. In-process checks use
- * {@link getAcceptedIssuers} instead.
- *
- * @internal
- */
-export function getDiscoveryIssuer(
-	context: AuthContext,
+	ctx: Pick<GenericEndpointContext, "context">,
 	opts:
 		| Pick<OAuthOptions<Scope[]>, "disableJwtPlugin">
-		| undefined = getOAuthProviderPlugin(context)?.options,
+		| undefined = getOAuthProviderPlugin(ctx.context)?.options,
 ): string {
-	return validateIssuerUrl(getConfiguredIssuer(context, opts));
+	return validateIssuerUrl(getConfiguredIssuer(ctx.context, opts));
 }
 
 /**

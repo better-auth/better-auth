@@ -73,7 +73,7 @@ describe("requireMcpAuth", () => {
 			}),
 			expect.objectContaining({
 				verifyOptions: expect.objectContaining({
-					issuer: ["https://app.example.com/api/auth"],
+					issuer: "https://app.example.com/api/auth",
 					audience: "https://app.example.com/api/auth",
 				}),
 				jwksUrl: "https://app.example.com/api/auth/jwks",

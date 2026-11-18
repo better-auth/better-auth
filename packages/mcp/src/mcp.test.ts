@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createResourceServerChallenge } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
@@ -1165,6 +1165,174 @@ describe("requireMcpAuth co-located with the authorization server", async () => 
 
 		expect(keyFetch).toHaveBeenCalled();
 		expect(requestUrl(keyFetch.mock.calls[0]![0]).href).toBe(remoteUrl);
+	});
+});
+
+/**
+ * With the JWT plugin's `jwks.remoteUrl` and no `jwksUrl` option, keys are
+ * fetched over HTTP. A provider in this process still checks the token against
+ * its own records and accepts the issuer as configured. Without one, only the
+ * signature is checked against the fetched keys, which is a remote check and
+ * expects the discovery issuer alone.
+ * @see https://www.rfc-editor.org/rfc/rfc9068#section-4
+ */
+describe("requireMcpAuth with the JWT plugin's jwks.remoteUrl", async () => {
+	const authorizationServer = "https://remote-keys-auth.example.test";
+	const baseURL = `${authorizationServer}/api/auth`;
+	const configuredIssuer = `${authorizationServer}/tenant/`;
+	const remoteUrl = "https://keys.remote-keys.example.test/jwks";
+	type TestInstance = { auth: Parameters<typeof requireMcpAuth>[0] };
+	const getContext = async (instance: TestInstance) =>
+		(await instance.auth.$context) as unknown as AuthContext;
+	const jwtPlugin = () =>
+		jwt({
+			jwt: { issuer: configuredIssuer },
+			jwks: { remoteUrl, keyPairConfig: { alg: "EdDSA" } },
+		});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	/** Serves the instance's public keys at `remoteUrl`, as a key host would. */
+	function stubKeyHost(instance: TestInstance) {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => {
+				const { adapter } = await getContext(instance);
+				const rows = await adapter.findMany<Jwk>({ model: "jwks" });
+				return Response.json({
+					keys: rows.map((row) => ({
+						...JSON.parse(row.publicKey),
+						alg: "EdDSA",
+						kid: row.id,
+					})),
+				});
+			}),
+		);
+	}
+
+	async function signToken(instance: TestInstance, iss: string) {
+		const context = await getContext(instance);
+		return signJWT({ context } as GenericEndpointContext, {
+			payload: {
+				iss,
+				aud: baseURL,
+				azp: "client",
+				sub: "user",
+				scope: "mcp:base",
+				exp: Math.floor(Date.now() / 1000) + 300,
+			},
+			header: { typ: "at+jwt" },
+		});
+	}
+
+	async function callMcp(instance: TestInstance, accessToken: string) {
+		const handler = vi.fn(() => Response.json({ ok: true }));
+		const response = await requireMcpAuth(
+			instance.auth,
+			handler,
+		)(
+			new Request(`${authorizationServer}/mcp`, {
+				headers: { Authorization: `Bearer ${accessToken}` },
+			}),
+		);
+		return { response, handler };
+	}
+
+	describe("without an OAuth provider in this process", async () => {
+		const instance = await getTestInstance({
+			baseURL: authorizationServer,
+			advanced: { useSecureCookies: false },
+			plugins: [jwtPlugin()],
+		});
+		const { headers } = await instance.signInWithTestUser();
+		await instance.auth.api.getToken({ headers });
+
+		it("accepts the discovery issuer", async () => {
+			stubKeyHost(instance);
+			const { response, handler } = await callMcp(
+				instance,
+				await signToken(instance, `${authorizationServer}/tenant`),
+			);
+
+			expect(response.status).toBe(200);
+			expect(handler).toHaveBeenCalledOnce();
+		});
+
+		it("rejects a token that carries jwt.issuer as configured", async () => {
+			stubKeyHost(instance);
+			const { response, handler } = await callMcp(
+				instance,
+				await signToken(instance, configuredIssuer),
+			);
+
+			expect(response.status).toBe(401);
+			expect(handler).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("with the OAuth provider in this process", async () => {
+		const instance = await getTestInstance({
+			baseURL: authorizationServer,
+			advanced: { useSecureCookies: false },
+			plugins: [
+				jwtPlugin(),
+				mcp({
+					loginPage: "/login",
+					consentPage: "/consent",
+					resource: baseURL,
+					scopes: ["mcp:base"],
+					clientPrivileges: () => true,
+				}),
+			],
+		});
+		const { headers } = await instance.signInWithTestUser();
+		await instance.auth.api.getToken({ headers });
+
+		async function issueAccessToken() {
+			const client = await instance.auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					grant_types: ["client_credentials"],
+					token_endpoint_auth_method: "client_secret_post",
+					redirect_uris: [REDIRECT_URI],
+					client_credentials_scopes: ["mcp:base"],
+				},
+			});
+			const tokenResponse = await instance.customFetchImpl(
+				`${baseURL}/oauth2/token`,
+				{
+					method: "POST",
+					headers: { "content-type": "application/x-www-form-urlencoded" },
+					body: new URLSearchParams({
+						grant_type: "client_credentials",
+						client_id: client.client_id,
+						client_secret: client.client_secret!,
+						scope: "mcp:base",
+						resource: baseURL,
+					}),
+				},
+			);
+			expect(tokenResponse.status).toBe(200);
+			const { access_token: accessToken } = await tokenResponse.json();
+			return accessToken as string;
+		}
+
+		it("accepts a token that carries jwt.issuer as configured", async () => {
+			const issued = decodeJwt(await issueAccessToken());
+			const context = await instance.auth.$context;
+			const token = await signJWT({ context } as GenericEndpointContext, {
+				payload: { ...issued, iss: configuredIssuer },
+				header: { typ: "at+jwt" },
+			});
+			stubKeyHost(instance);
+
+			const { response, handler } = await callMcp(instance, token);
+
+			expect(response.status).toBe(200);
+			expect(handler).toHaveBeenCalledOnce();
+		});
 	});
 });
 

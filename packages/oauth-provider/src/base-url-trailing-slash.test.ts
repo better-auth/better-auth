@@ -489,3 +489,88 @@ describe("issuer with a trailing-slash baseURL", async () => {
 		).resolves.toMatchObject({ azp: expect.any(String) });
 	});
 });
+
+/**
+ * With the JWT plugin's `jwks.remoteUrl`, the resource client fetches keys over
+ * HTTP and checks the signature alone, a remote check that expects the
+ * discovery issuer.
+ * @see https://www.rfc-editor.org/rfc/rfc9068#section-4
+ */
+describe("resource client with the JWT plugin's jwks.remoteUrl", async () => {
+	const resource = "https://api.example.com";
+	const configuredIssuer = "http://localhost:3000/api/auth/";
+	const remoteUrl = "https://keys.example.com/jwks";
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL: configuredIssuer,
+		plugins: [
+			jwt({ jwks: { remoteUrl, keyPairConfig: { alg: "EdDSA" } } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [resource],
+			}),
+		],
+	});
+	const context = await auth.$context;
+	const { headers } = await signInWithTestUser();
+	await auth.api.getToken({ headers });
+
+	const signToken = (iss: string) =>
+		signJWT({ context } as GenericEndpointContext, {
+			payload: {
+				iss,
+				aud: resource,
+				azp: "client",
+				sub: "user",
+				exp: Math.floor(Date.now() / 1000) + 300,
+			},
+			header: { typ: "at+jwt" },
+		});
+
+	beforeEach(() => {
+		const networkFetch = globalThis.fetch.bind(globalThis);
+		vi.stubGlobal(
+			"fetch",
+			async (input: RequestInfo | URL, init?: RequestInit) => {
+				const url = input instanceof Request ? input.url : String(input);
+				if (url !== remoteUrl) return networkFetch(input, init);
+				const rows = await context.adapter.findMany<{
+					id: string;
+					publicKey: string;
+				}>({ model: "jwks" });
+				return Response.json({
+					keys: rows.map((row) => ({
+						...JSON.parse(row.publicKey),
+						alg: "EdDSA",
+						kid: row.id,
+					})),
+				});
+			},
+		);
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("expects the discovery issuer alone", async () => {
+		const resourceClient = oauthProviderResourceClient(auth).getActions();
+		const discoveryToken = await signToken("http://localhost:3000/api/auth");
+		const configuredToken = await signToken(configuredIssuer);
+
+		await expect(
+			resourceClient.verifyBearerToken(discoveryToken, {
+				verifyOptions: { audience: resource },
+			}),
+		).resolves.toMatchObject({ azp: "client" });
+		await expect(
+			resourceClient.verifyBearerToken(configuredToken, {
+				verifyOptions: { audience: resource },
+			}),
+		).rejects.toThrow();
+		await expect(
+			resourceClient.verifyBearerToken(configuredToken, {
+				verifyOptions: { audience: resource, issuer: configuredIssuer },
+			}),
+		).resolves.toMatchObject({ azp: "client" });
+	});
+});

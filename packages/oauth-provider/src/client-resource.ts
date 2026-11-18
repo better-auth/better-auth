@@ -122,14 +122,24 @@ export const oauthProviderResourceClient = <
 		const authServerBaseUrl = await getAuthServerBaseUrl();
 		const audience = opts?.verifyOptions?.audience ?? authServerBaseUrl;
 		const configuredIssuer = await getConfiguredIssuer();
-		// With `opts.jwksUrl`, the keys come from a remote server and RFC 9068 §4
-		// requires an exact `iss` match, so only the normalized issuer is accepted.
+		// An auth instance in this process serves its keys without a request to
+		// its own `/jwks`, which some runtimes block.
+		const localJwks =
+			auth && jwtPlugin && !opts?.jwksUrl
+				? getLocalJwksSource(
+						(await auth.$context) as Parameters<typeof getLocalJwksSource>[0],
+					)
+				: undefined;
+		// Keys read from the auth instance in-process also accept the issuer as
+		// configured. Keys fetched from a URL, which is `opts.jwksUrl` or the JWT
+		// plugin's `jwks.remoteUrl`, are a remote check: RFC 9068 §4 requires an
+		// exact `iss` match, so only the normalized issuer is accepted.
 		const issuer =
 			opts?.verifyOptions?.issuer ??
 			(configuredIssuer
-				? opts?.jwksUrl
-					? validateIssuerUrl(configuredIssuer)
-					: getIssuerForms(configuredIssuer)
+				? localJwks
+					? getIssuerForms(configuredIssuer)
+					: validateIssuerUrl(configuredIssuer)
 				: undefined);
 		if (!audience) {
 			throw Error("please define opts.verifyOptions.audience");
@@ -143,14 +153,6 @@ export const oauthProviderResourceClient = <
 			(authServerBaseUrl
 				? `${authServerBaseUrl}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`
 				: undefined);
-		// An auth instance in this process serves its keys without a request to
-		// its own `/jwks`, which some runtimes block.
-		const localJwks =
-			auth && jwtPlugin && !opts?.jwksUrl
-				? getLocalJwksSource(
-						(await auth.$context) as Parameters<typeof getLocalJwksSource>[0],
-					)
-				: undefined;
 		const introspectUrl =
 			opts?.remoteVerify?.introspectUrl ??
 			(authServerBaseUrl

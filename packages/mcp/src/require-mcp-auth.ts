@@ -1,7 +1,7 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
+import { getIssuer } from "@better-auth/oauth-provider";
 import {
 	getAcceptedIssuers,
-	getDiscoveryIssuer,
 	getLocalIntrospection,
 	getLocalJwksSource,
 } from "@better-auth/oauth-provider/internal";
@@ -23,11 +23,13 @@ export interface RequireMcpAuthOptions {
 	/**
 	 * Expected token issuer. Defaults to the OAuth provider's issuer, derived
 	 * from `jwt.issuer` when the JWT plugin sets it and otherwise from the
-	 * server's resolved base URL. Verification against keys from this process
-	 * also accepts that URL exactly as configured, which tokens issued by earlier
-	 * versions carry. With `jwksUrl` set, the default is the normalized issuer
-	 * alone, since RFC 9068 §4 requires an exact match. A value set here is the
-	 * only issuer accepted.
+	 * server's resolved base URL. Verification that reads this server's records
+	 * or keys in-process also accepts that URL exactly as configured, which
+	 * tokens issued by earlier versions carry. Verification against keys fetched
+	 * from a URL, which is `jwksUrl` or the JWT plugin's `jwks.remoteUrl` when no
+	 * OAuth provider runs in this process, expects the normalized issuer alone,
+	 * since RFC 9068 §4 requires an exact match. A value set here is the only
+	 * issuer accepted.
 	 */
 	issuer?: string;
 	/**
@@ -162,18 +164,6 @@ export const requireMcpAuth = <
 				"requireMcpAuth requires dpop.nonce.secret when the auth context has no secret.",
 			);
 		}
-		// A remote `jwksUrl` is verified against the single discovery issuer, as
-		// RFC 9068 §4 requires an exact match. The in-process checks also accept
-		// the issuer as configured, which tokens issued by earlier versions carry.
-		const issuerContext = authContext as Parameters<
-			typeof getAcceptedIssuers
-		>[0];
-		const issuer =
-			opts?.issuer ??
-			(opts?.jwksUrl
-				? getDiscoveryIssuer(issuerContext)
-				: getAcceptedIssuers(issuerContext));
-		const resource = opts?.resource ?? baseURL;
 		// The provider in this process checks the token against its own records,
 		// which accepts opaque tokens and rejects revoked ones, without a request
 		// to its own endpoints.
@@ -194,6 +184,20 @@ export const requireMcpAuth = <
 						authContext as Parameters<typeof getLocalJwksSource>[0],
 						req,
 					);
+		// Checks that read this server's records or keys in-process also accept
+		// the issuer as configured, which tokens issued by earlier versions carry.
+		// A signature check against keys fetched from a URL (`jwksUrl`, or the JWT
+		// plugin's `jwks.remoteUrl` with no provider in this process) is a remote
+		// check, and RFC 9068 §4 requires an exact match with the discovery issuer.
+		const issuerContext = authContext as Parameters<
+			typeof getIssuer
+		>[0]["context"];
+		const issuer =
+			opts?.issuer ??
+			(introspect || localJwks
+				? getAcceptedIssuers(issuerContext)
+				: getIssuer({ context: issuerContext }));
+		const resource = opts?.resource ?? baseURL;
 		// The JWT plugin disables its `/jwks` endpoint when keys are published at
 		// `jwks.remoteUrl`.
 		const jwksUrl =
