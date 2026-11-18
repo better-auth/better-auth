@@ -6,7 +6,11 @@ import type {
 	SchemaClient,
 	Scope,
 } from "@better-auth/oauth-provider";
-import { registerClientMetadataDocument } from "@better-auth/oauth-provider/internal";
+import {
+	isAbortedBySignal,
+	isTransientNetworkError,
+	registerClientMetadataDocument,
+} from "@better-auth/oauth-provider/internal";
 import { APIError } from "better-call";
 import type { CimdOptions } from "./types";
 import {
@@ -73,6 +77,29 @@ function metadataFetchCapacityRefusal(): APIError {
 	});
 	metadataFetchCapacityRefusals.add(error);
 	return error;
+}
+
+// Fetch failures that a later fetch can get past: the fetch timeout, a
+// connection failure, or HTTP 5xx. They answer with the same error as any other
+// failure, so the classification is kept beside the error instead.
+const transientMetadataFetchFailures = new WeakSet<object>();
+
+function transientInvalidClient(description: string): APIError {
+	const error = invalidClient(description);
+	transientMetadataFetchFailures.add(error);
+	return error;
+}
+
+/**
+ * Whether a metadata document fetch failed transiently: it timed out, its
+ * connection failed, or the server answered with HTTP 5xx.
+ */
+export function isTransientMetadataFetchFailure(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		transientMetadataFetchFailures.has(error)
+	);
 }
 
 function tooLargeError(): APIError {
@@ -207,11 +234,16 @@ export async function fetchClientMetadataDocument(
 			) {
 				throw metadataFetchCapacityRefusal();
 			}
-			throw invalidClient(
-				didTimeOut
-					? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`
-					: FETCH_FAILURE_DESCRIPTION,
-			);
+			const description = didTimeOut
+				? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`
+				: FETCH_FAILURE_DESCRIPTION;
+			// A refusal that arrives after the timeout fired is still a refusal.
+			const transient =
+				(didTimeOut && isAbortedBySignal(error, controller.signal)) ||
+				isTransientNetworkError(error);
+			throw transient
+				? transientInvalidClient(description)
+				: invalidClient(description);
 		}
 		if (response.redirected) {
 			throw invalidClient("Metadata document fetch must not follow redirects");
@@ -227,9 +259,10 @@ export async function fetchClientMetadataDocument(
 			return { status: "not-modified", cacheHeaders };
 		}
 		if (response.status !== 200) {
-			throw invalidClient(
-				`Metadata document fetch returned HTTP ${response.status}`,
-			);
+			const description = `Metadata document fetch returned HTTP ${response.status}`;
+			throw response.status >= 500 && response.status <= 599
+				? transientInvalidClient(description)
+				: invalidClient(description);
 		}
 
 		const contentType = response.headers.get("content-type") ?? "";
@@ -260,12 +293,15 @@ export async function fetchClientMetadataDocument(
 			);
 		} catch (error) {
 			if (didTimeOut) {
-				throw invalidClient(
-					`Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`,
-				);
+				const description = `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`;
+				throw isAPIError(error)
+					? invalidClient(description)
+					: transientInvalidClient(description);
 			}
 			if (isAPIError(error)) throw error;
-			throw invalidClient(FETCH_FAILURE_DESCRIPTION);
+			throw isTransientNetworkError(error)
+				? transientInvalidClient(FETCH_FAILURE_DESCRIPTION)
+				: invalidClient(FETCH_FAILURE_DESCRIPTION);
 		}
 		let rawMetadata: unknown;
 		try {

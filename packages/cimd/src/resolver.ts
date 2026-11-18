@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type {
 	OAuthClientMetadata,
 	OAuthOptions,
@@ -13,6 +14,7 @@ import {
 	FETCH_TIMEOUT_MS,
 	fetchClientMetadataDocument,
 	isMetadataFetchCapacityRefusal,
+	isTransientMetadataFetchFailure,
 	persistMetadataDocumentClient,
 } from "./client-store";
 import type { CimdOptions } from "./types";
@@ -28,6 +30,11 @@ const JOINED_FETCH_WAIT_MS = FETCH_TIMEOUT_MS * 2;
 // fetch's own request or a request for the same client can otherwise return
 // the permit, so a fetch whose request the runtime ended would hold it forever.
 const FETCH_PERMIT_LEASE_MS = JOINED_FETCH_WAIT_MS;
+const MAX_METADATA_STALE_IF_ERROR_MS = 24 * 60 * 60 * 1000;
+// While a stored client stands in for a document that failed to refresh, the
+// document is fetched at most this often, so an outage does not spend the
+// origin's fetch budget.
+const STALE_CLIENT_REFETCH_INTERVAL_MS = 60_000;
 const DEFAULT_METADATA_FETCH_POLICY = {
 	minimumFetchInterval: 1,
 	maximumConcurrentFetches: 16,
@@ -95,11 +102,62 @@ function invalidClient(description: string): APIError {
 	});
 }
 
+const metadataFetchRefusals = new WeakSet<object>();
+
 function createMetadataFetchUnavailableError(description: string): APIError {
-	return new APIError("TOO_MANY_REQUESTS", {
+	const error = new APIError("TOO_MANY_REQUESTS", {
 		error: "temporarily_unavailable",
 		error_description: description,
 	});
+	metadataFetchRefusals.add(error);
+	return error;
+}
+
+function isMetadataFetchRefusal(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		metadataFetchRefusals.has(error)
+	);
+}
+
+function describeFetchFailure(error: unknown): string {
+	const description = isAPIError(error)
+		? error.body?.error_description
+		: undefined;
+	if (typeof description === "string") return description;
+	return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Validate `metadataStaleIfError` and return it in milliseconds, or `null`
+ * when it is unset.
+ */
+export function resolveMetadataStaleIfErrorMs(
+	value: number | string | undefined,
+): number | null {
+	if (value === undefined) return null;
+	let durationMs: number;
+	if (typeof value === "number") {
+		durationMs = value * 1000;
+	} else {
+		try {
+			const nowSeconds = Math.floor(Date.now() / 1000);
+			durationMs = (toExpJWT(value, nowSeconds) - nowSeconds) * 1000;
+		} catch {
+			durationMs = Number.NaN;
+		}
+	}
+	if (
+		!Number.isFinite(durationMs) ||
+		durationMs < 0 ||
+		durationMs > MAX_METADATA_STALE_IF_ERROR_MS
+	) {
+		throw new BetterAuthError(
+			"cimd metadataStaleIfError must be a non-negative number of seconds or duration string of at most 24 hours",
+		);
+	}
+	return durationMs;
 }
 
 function parseDurationMs(value: number | string, optionName: string): number {
@@ -343,7 +401,17 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		);
 	}
 	const fetchPolicy = resolveMetadataFetchPolicy(cimdOptions);
+	const staleIfErrorMs = resolveMetadataStaleIfErrorMs(
+		cimdOptions.metadataStaleIfError,
+	);
 	const metadataCache = new Map<string, CimdMetadataCacheEntry>();
+	// Clients whose last fetch failed transiently, kept only while
+	// `metadataStaleIfError` is set. An evicted record makes the next request
+	// fetch, which is safe.
+	const transientFailureByClientId = new Map<
+		string,
+		{ failedAtMs: number; reason: string }
+	>();
 	const inFlightMetadataByClientId = new Map<string, InFlightMetadataFetch>();
 	// The latest fetch the lease retired for a client, until it settles or a
 	// newer fetch for that client starts. Only this fetch may be used late, and
@@ -370,6 +438,22 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			metadataCache.delete(leastRecentlyUsedClientId);
 		}
 		metadataCache.set(clientId, entry);
+	};
+
+	const recordFetchOutcome = (clientId: string, failure?: unknown) => {
+		transientFailureByClientId.delete(clientId);
+		if (staleIfErrorMs === null || !isTransientMetadataFetchFailure(failure)) {
+			return;
+		}
+		while (transientFailureByClientId.size >= maxCacheEntries) {
+			const oldestClientId = transientFailureByClientId.keys().next().value;
+			if (typeof oldestClientId !== "string") break;
+			transientFailureByClientId.delete(oldestClientId);
+		}
+		transientFailureByClientId.set(clientId, {
+			failedAtMs: Date.now(),
+			reason: describeFetchFailure(failure),
+		});
 	};
 
 	const ensureClientFetchStateCapacity = (clientId: string, nowMs: number) => {
@@ -666,6 +750,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				// Successful fetches are governed by HTTP freshness and origin/global
 				// budgets. Keep the per-client interval only as failed-fetch backoff.
 				lastFetchStartAtMsByClientId.delete(clientId);
+				recordFetchOutcome(clientId);
 			}
 			return { metadata, nextEntry };
 		})();
@@ -699,6 +784,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			} else {
 				recordFailedFetch(clientId);
 			}
+			recordFetchOutcome(clientId, error);
 			throw error;
 		} finally {
 			if (inFlightMetadataByClientId.get(clientId) === inFlight) {
@@ -764,6 +850,26 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			}
 		};
 
+		// CIMD draft-03 §6.1: a transient failure should not invalidate a
+		// client's established trust. Only the stored row stands in, never an
+		// instance's cached document, so every instance answers alike.
+		const storedClientWithinStaleBound = () => {
+			if (!existingClient?.updatedAt || staleIfErrorMs === null) return null;
+			const validatedAtMs = new Date(existingClient.updatedAt).getTime();
+			return Date.now() - validatedAtMs <= staleIfErrorMs
+				? existingClient
+				: null;
+		};
+		const serveStoredClient = (
+			storedClient: SchemaClient<Scope[]>,
+			reason: string,
+		) => {
+			ctx.context.logger.warn(
+				`cimd is serving the stored client ${clientId} because its metadata document could not be refreshed: ${reason}`,
+			);
+			return storedClient;
+		};
+
 		// A request resolves again only after a fetch it waited on was retired. A
 		// fresh cache entry found then came from a later fetch, so the stored
 		// client the request started with can be older than it.
@@ -783,10 +889,36 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				});
 			}
 
+			const transientFailure = transientFailureByClientId.get(clientId);
+			if (
+				transientFailure &&
+				Date.now() - transientFailure.failedAtMs <
+					STALE_CLIENT_REFETCH_INTERVAL_MS
+			) {
+				const storedClient = storedClientWithinStaleBound();
+				if (storedClient) {
+					return serveStoredClient(storedClient, transientFailure.reason);
+				}
+			}
+
 			const sharedFetch = inFlightMetadataByClientId.get(clientId);
-			const fetched = sharedFetch
-				? await joinFetch(clientId, sharedFetch)
-				: await startFetch(ctx, clientId, cachedEntry);
+			let fetched: FetchedMetadata | undefined;
+			try {
+				fetched = sharedFetch
+					? await joinFetch(clientId, sharedFetch)
+					: await startFetch(ctx, clientId, cachedEntry);
+			} catch (error) {
+				const storedClient = storedClientWithinStaleBound();
+				if (storedClient && isTransientMetadataFetchFailure(error)) {
+					return serveStoredClient(storedClient, describeFetchFailure(error));
+				}
+				// The fetch limits refused a client already being served stale.
+				const lastFailure = transientFailureByClientId.get(clientId);
+				if (storedClient && lastFailure && isMetadataFetchRefusal(error)) {
+					return serveStoredClient(storedClient, lastFailure.reason);
+				}
+				throw error;
+			}
 			// Only a fetch whose outcome is used saves its document. A retired
 			// fetch's document can be older than its replacement's, and saving it
 			// would put the stored client behind a fresh cache entry that later
