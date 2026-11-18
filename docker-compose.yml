@@ -156,7 +156,8 @@ services:
     ports:
       - "1433:1433"
     volumes:
-      - mssql_data:/var/opt/mssql
+      # Separate from mssql_data so leftover SQL Server 2025 files cannot block 2022.
+      - mssql_2022_data:/var/opt/mssql
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'Password123!' -Q 'SELECT 1' -b -o /dev/null"]
       interval: 1s
@@ -171,7 +172,7 @@ volumes:
   postgres-kysely_data:
   postgres-prisma_data:
   mysql_data:
-  mssql_data:
+  mssql_2022_data:
   mysql-kysely_data:
   mysql-prisma_data:
   postgres-kysely2_data:

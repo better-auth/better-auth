@@ -94,6 +94,22 @@ Adapter tests require Docker containers. Start them before running adapter tests
 docker compose up -d
 ```
 
+MSSQL is pinned to SQL Server 2022 and uses the `mssql_2022_data` volume so a leftover
+SQL Server 2025 volume cannot block startup. Recreate only that volume if MSSQL still
+fails to start. This deletes local MSSQL test data:
+
+```bash
+docker compose rm -sf mssql
+docker volume rm $(docker volume ls -q --filter name=mssql_2022_data)
+docker compose up -d mssql
+```
+
+To reclaim disk from an unused 2025 volume (`mssql_data`):
+
+```bash
+docker volume rm $(docker volume ls -q --filter name=mssql_data)
+```
+
 ### E2E Tests
 
 End-to-end tests live in `e2e/` and are split into three suites: smoke, adapter,
