@@ -482,6 +482,24 @@ export interface StripeOptions {
 							ctx: GenericEndpointContext,
 					  ) => Promise<void>)
 					| undefined;
+				/**
+				 * Customize how organization members are counted for
+				 * auto-managed subscription seats.
+				 *
+				 * Return the effective billable member count. The value must be a
+				 * positive integer because Stripe subscription item quantities must
+				 * be at least 1. If not provided, all organization members are counted.
+				 *
+				 * Call `getDefaultCount` to compare against Better Auth's default
+				 * member count. It is resolved lazily and memoized, so custom filters
+				 * that do their own count query don't pay for the default count too.
+				 */
+				countActiveMembers?:
+					| ((data: {
+							organizationId: string;
+							getDefaultCount: () => Promise<number>;
+					  }) => number | Promise<number>)
+					| undefined;
 		  }
 		| undefined;
 	/**
