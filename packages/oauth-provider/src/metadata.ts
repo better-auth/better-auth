@@ -199,17 +199,11 @@ export function oidcServerMetadata(
 			? ["public", "pairwise"]
 			: ["public"],
 		acr_values_supported: getAcrValuesSupported(opts),
-		id_token_signing_alg_values_supported: (() => {
-			if (opts.disableJwtPlugin) return ["HS256" as const];
-			// Advertise every algorithm the plugin can sign with: the primary
-			// keyPairConfig.alg plus every alg declared in keyPairConfigs[]
-			// (lazy-minted on demand for per-resource signing pins).
-			// Deduplicated so overlapping declarations don't produce repeats.
-			const primary = jwtPluginOptions?.jwks?.keyPairConfig?.alg ?? "EdDSA";
-			const extras =
-				jwtPluginOptions?.jwks?.keyPairConfigs?.map((c) => c.alg) ?? [];
-			return Array.from(new Set<JWSAlgorithms>([primary, ...extras]));
-		})(),
+		// ID tokens are always signed with the primary key. Algorithms declared
+		// only in keyPairConfigs[] sign per-resource access tokens, not ID tokens.
+		id_token_signing_alg_values_supported: opts.disableJwtPlugin
+			? ["HS256"]
+			: [jwtPluginOptions?.jwks?.keyPairConfig?.alg ?? "EdDSA"],
 		end_session_endpoint: getAuthEndpointUrl(ctx, "/oauth2/end-session"),
 		request_parameter_supported: false,
 		request_uri_parameter_supported: false,
