@@ -126,11 +126,14 @@ export interface CimdOptions {
 	 * Pass an empty array to disable origin binding (not recommended for
 	 * production).
 	 *
-	 * `redirect_uris` and `client_uri` are excluded by default while
-	 * `post_logout_redirect_uris` remains origin-bound: exact redirect URI
-	 * matching remains mandatory at authorization time, and CIMD forbids
-	 * requiring `client_uri` to share an origin with `client_id` or
-	 * `redirect_uris`.
+	 * Only `post_logout_redirect_uris` is origin-bound by default.
+	 * `redirect_uris` is excluded because exact redirect URI matching remains
+	 * mandatory at authorization time. The informative URIs `client_uri`,
+	 * `logo_uri`, `tos_uri`, and `policy_uri` are never origin-bound by
+	 * default; they must still be credential-free HTTP(S) URLs on a public
+	 * host. CIMD draft-03 §4.4 forbids requiring `client_uri` to share an
+	 * origin with `client_id` or `redirect_uris`, so listing `client_uri` here
+	 * is the operator's own policy and contradicts the draft.
 	 *
 	 * @default ["post_logout_redirect_uris"]
 	 */
