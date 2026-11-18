@@ -67,6 +67,18 @@ function getJwksCacheKey(client: SchemaClient<Scope[]>): string {
 }
 const ALGORITHMS_LIST: string[] = [...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS];
 
+// RFC 7519 §4.1.4 allows leeway "usually no more than a few minutes". Raising
+// this cap later is compatible; lowering it would not be.
+const MAX_ASSERTION_CLOCK_TOLERANCE_SECONDS = 60;
+
+function getAssertionClockTolerance(opts: OAuthOptions<Scope[]>): number {
+	const value = opts.assertionClockTolerance;
+	if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+		return 0;
+	}
+	return Math.min(value, MAX_ASSERTION_CLOCK_TOLERANCE_SECONDS);
+}
+
 /**
  * SSRF gate for user-supplied server-side fetch targets (`jwks_uri`,
  * `backchannel_logout_uri`): returns true when the host is NOT publicly
@@ -383,9 +395,11 @@ type ClientAssertionAudienceParams =
  *   default `assertionAudience: "issuer"`, every `aud` value must be accepted,
  *   so the issuer is the sole audience (RFC 10070 §4). With
  *   `"issuer-or-endpoint"`, one accepted value is enough.
- * - `exp` MUST be present, unexpired, and at most `assertionMaxLifetime`
- *   seconds away (RFC 7523 §3 rule 4),
- * - `iat`, when present, MUST be within `assertionMaxLifetime`,
+ * - `exp` MUST be present, unexpired (within `assertionClockTolerance`), and
+ *   at most `assertionMaxLifetime` plus `assertionClockTolerance` seconds away
+ *   (RFC 7523 §3 rule 4),
+ * - `iat`, when present, MUST be within `assertionMaxLifetime` (plus
+ *   `assertionClockTolerance`),
  * - `jti` MUST be present and single-use; this consumes a replay tombstone keyed
  *   by `` `${namespace}:${jti}` ``, inserted under the adapter's primary key so a
  *   replay across workers fails atomically.
@@ -490,6 +504,7 @@ async function consumeAssertion(
 	}
 
 	const maxLifetime = opts.assertionMaxLifetime ?? 300;
+	const clockTolerance = getAssertionClockTolerance(opts);
 	const now = Math.floor(Date.now() / 1000);
 	if (typeof payload.exp !== "number") {
 		throw new APIError("BAD_REQUEST", {
@@ -499,20 +514,23 @@ async function consumeAssertion(
 	}
 	// An extension strategy relies on this; the built-in path has jose reject
 	// expiry before this runs.
-	if (payload.exp <= now) {
+	if (payload.exp <= now - clockTolerance) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "client assertion has expired",
 			error: "invalid_client",
 		});
 	}
 	// Cap the window so exp cannot outlive the jti tombstone.
-	if (payload.exp - now > maxLifetime) {
+	if (payload.exp - now > maxLifetime + clockTolerance) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `client assertion exp is too far in the future (max ${maxLifetime}s)`,
 			error: "invalid_client",
 		});
 	}
-	if (typeof payload.iat === "number" && now - payload.iat > maxLifetime) {
+	if (
+		typeof payload.iat === "number" &&
+		now - payload.iat > maxLifetime + clockTolerance
+	) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: `client assertion iat is too far in the past (max ${maxLifetime}s)`,
 			error: "invalid_client",
@@ -544,7 +562,7 @@ async function consumeAssertion(
 			model: "oauthClientAssertion",
 			data: {
 				id: jtiId,
-				expiresAt: new Date(payload.exp * 1000),
+				expiresAt: new Date((payload.exp + clockTolerance) * 1000),
 			},
 			forceAllowId: true,
 		});
@@ -685,6 +703,7 @@ export async function verifyClientAssertion(
 		subject: clientId,
 		audience: acceptedAudiences,
 		algorithms: ALGORITHMS_LIST,
+		clockTolerance: getAssertionClockTolerance(opts),
 	};
 
 	// NOTE: We do NOT use jose's maxTokenAge option because it bounds (now - iat),

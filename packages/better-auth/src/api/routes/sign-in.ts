@@ -12,6 +12,7 @@ import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
+import { resolveOAuthAccountFields } from "../../oauth2/account-fields";
 import {
 	resolveOAuthAccountKeyForAPI,
 	toOAuthProfileRecord,
@@ -329,6 +330,12 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					userInfo.data,
 				);
 				const providerProfile = toOAuthProfileRecord(userInfo.data);
+				const accountFields = await resolveOAuthAccountFields(
+					c,
+					provider,
+					oauthTokens,
+					userInfo.user,
+				);
 				const data = await handleOAuthUserInfo(c, {
 					userInfo: {
 						...userInfo.user,
@@ -343,6 +350,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						accessToken: c.body.idToken.accessToken,
 						idToken: token,
 					},
+					accountFields,
 					callbackURL: c.body.callbackURL,
 					disableSignUp:
 						(provider.disableImplicitSignUp && !c.body.requestSignUp) ||

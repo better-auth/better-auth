@@ -794,7 +794,7 @@ export interface OAuthClaimExtensionInput {
 	 * Session the tokens are issued for, when one is available. Best-effort:
 	 * set on the session-backed grants (authorization_code, refresh_token),
 	 * undefined otherwise (client_credentials, introspection, or a session that
-	 * was deleted or unlinked). Treat as possibly undefined.
+	 * has expired, was deleted, or was unlinked). Treat as possibly undefined.
 	 */
 	sessionId?: string;
 	resources?: string[];
@@ -1388,6 +1388,20 @@ export interface OAuthOptions<
 	 */
 	assertionAudience?: "issuer" | "issuer-or-endpoint";
 	/**
+	 * Seconds of clock skew accepted on a `private_key_jwt` assertion's `nbf`,
+	 * `exp`, and `iat`, and added to how long its `jti` is remembered.
+	 *
+	 * Set this when a client's clock runs a few seconds ahead of or behind this
+	 * server and its assertions fail with `client assertion signature
+	 * verification failed`. The default of `0` accepts no skew.
+	 *
+	 * Values above `60` are treated as `60`. Negative and non-finite values are
+	 * treated as `0`.
+	 *
+	 * @default 0
+	 */
+	assertionClockTolerance?: number;
+	/**
 	 * Lets a confidential `private_key_jwt` client replace its own inline `jwks`
 	 * at `POST /oauth2/client/rotate-keys`, authenticated by a client assertion
 	 * signed with one of its current keys. No user session is involved.
@@ -1815,6 +1829,14 @@ export interface OAuthOptions<
 		encrypt: (token: string, sessionId?: string) => Awaitable<string>;
 		/**
 		 * Decodes the custom session token.
+		 *
+		 * Introspection and revocation also pass values that are not refresh
+		 * tokens, such as an access token or an unknown string. For a value the
+		 * format cannot decode, throw an `APIError` with status 400 or a JOSE
+		 * error, as `compactDecrypt` does. The endpoint then treats it as an
+		 * unknown token. A key set failure (`JWKSTimeout`, `JWKSInvalid`, or
+		 * `JWKSMultipleMatchingKeys`) and any other error are treated as a
+		 * failure of the decoder and return a server error.
 		 *
 		 * @returns {string | undefined} sessionId - if returned,
 		 * should be same as the one received in `encode`.

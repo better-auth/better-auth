@@ -143,11 +143,12 @@ export async function findRefreshToken(
 			: { token: value };
 	} catch (error) {
 		// A `decrypt` that rejects the format, with a 400 or a JOSE error such as
-		// `compactDecrypt` throws, means this is not a refresh token. Any other
-		// failure is real.
+		// `compactDecrypt` throws, means this is not a refresh token. A key-set
+		// failure and any other error are real.
 		if (
 			(isAPIError(error) && error.statusCode === 400) ||
-			error instanceof joseErrors.JOSEError
+			(error instanceof joseErrors.JOSEError &&
+				!jwksInfrastructureErrorCodes.has(error.code))
 		) {
 			return null;
 		}

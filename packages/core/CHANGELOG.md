@@ -150,6 +150,26 @@
 
 ## 1.8.0-beta.0
 
+## 1.7.26
+
+### Patch Changes
+
+- [#12620](https://github.com/better-auth/better-auth/pull/12620) [`ddcb9a2`](https://github.com/better-auth/better-auth/commit/ddcb9a25e32ced7ba7528d6a2ca04e9705c51a61) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Authorization URLs now keep empty segments of the authorization endpoint's query, such as a trailing or doubled `&`. The rest of the endpoint's query is sent as published, except for the parameters Better Auth sets, which still replace the endpoint's own values.
+
+- [#12315](https://github.com/better-auth/better-auth/pull/12315) [`836b13e`](https://github.com/better-auth/better-auth/commit/836b13e6d5bebf6b1fec37eab69714c0009943bb) Thanks [@honuuk](https://github.com/honuuk)! - Kakao sign-in now uses PKCE, sending `code_challenge` in the authorization request and `code_verifier` in the token request.
+
+- [#12625](https://github.com/better-auth/better-auth/pull/12625) [`54c1b69`](https://github.com/better-auth/better-auth/commit/54c1b693c64f85ba602584d2f6524fca961fb4e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A DPoP proof's replay reservation now lasts one second past the proof's accepted window. Before, the reservation could expire up to a second before the proof stopped being accepted, so a proof could be reused once in that last second. This affects the in-memory, database, and secondary-storage replay stores.
+
+- [#12692](https://github.com/better-auth/better-auth/pull/12692) [`cbbfab2`](https://github.com/better-auth/better-auth/commit/cbbfab2ad3d331fbdc0ce82bf3ef57b691820f6d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The shared host classifier now treats an IPv6 address as public only inside global unicast `2000::/3`, with the exception of the well-known NAT64 block `64:ff9b::/96`, which is public when the IPv4 address it embeds is public. Addresses inside `2000::/3` keep their class. Addresses outside both that used to classify as public, such as `200::1`, `4000::1`, `8000::1`, `100:0:0:1::1`, and the IPv4-translated `::ffff:0:7f00:1`, now classify as reserved, so `isPublicRoutableHost` rejects them. Loopback, unspecified, link-local, unique local, multicast, and IPv4-mapped addresses keep their existing kinds.
+
+- [#12692](https://github.com/better-auth/better-auth/pull/12692) [`cbbfab2`](https://github.com/better-auth/better-auth/commit/cbbfab2ad3d331fbdc0ce82bf3ef57b691820f6d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The shared host classifier now treats a well-known NAT64 address (`64:ff9b::/96`) as public when the IPv4 address it embeds is public, and as reserved otherwise, as it already does for 6to4. Addresses in this block were always reserved, so on a network with a DNS64 resolver, names with only an A record failed the outbound checks in SSO discovery, CIMD metadata fetches, and client registration. A NAT64 address that embeds a loopback, private, or other non-public IPv4 is still rejected.
+
+- [#12692](https://github.com/better-auth/better-auth/pull/12692) [`cbbfab2`](https://github.com/better-auth/better-auth/commit/cbbfab2ad3d331fbdc0ce82bf3ef57b691820f6d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - IPv6 addresses with a dotted IPv4 tail, such as `::ffff:808:127.0.0.1`, are no longer misread as IPv4-mapped. The host classifier now rejects them as reserved, and IP normalization and CIDR matching expand the tail into two hex groups.
+
+- [#12734](https://github.com/better-auth/better-auth/pull/12734) [`ae6584c`](https://github.com/better-auth/better-auth/commit/ae6584c7da944b1bd2f103b322d82784a1f7117c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Social providers accept a `getAccountFields` option that stores your own values on the provider account. Return values for the fields you declare in `account.additionalFields`, and Better Auth saves them when the account is created, linked, or updated at sign-in. The option does nothing when you leave it unset, and it cannot replace the provider ID, account ID, or tokens.
+
+- [#12316](https://github.com/better-auth/better-auth/pull/12316) [`de4ccfd`](https://github.com/better-auth/better-auth/commit/de4ccfd082c9cd419fd8434444c7e3500d49c503) Thanks [@honuuk](https://github.com/honuuk)! - Kakao now supports ID token sign-in, so ID tokens from Kakao's native SDKs can be passed to `signIn.social`. `clientId` also accepts an array to include the native app key.
+
 ## 1.7.25
 
 ### Patch Changes

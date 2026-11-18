@@ -193,6 +193,9 @@ The `aud` values accepted in client assertions, such as `private_key_jwt` assert
 `"issuer-or-endpoint"` is a transitional setting for clients that still sign for an endpoint URL. It is weaker: a client that signs for an endpoint URL can be tricked into signing an assertion that a malicious server replays here. Move your clients to the issuer, then remove the setting.
 
 `POST /oauth2/client/rotate-keys` is the exception. In either mode, the assertion's `aud` must include that endpoint's own URL, and may also name other values.
+`assertionClockTolerance` <span className="opacity-70">`number`</span>
+
+Seconds of clock skew accepted on the `nbf`, `exp`, and `iat` of a `private_key_jwt` assertion. Defaults to `0`, which accepts no skew. Values above `60` are treated as `60`, and negative or non-finite values are treated as `0`. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).
 
 `allowClientKeyRotation` <span className="opacity-70">`boolean`</span>
 
@@ -489,7 +492,7 @@ Errors use the [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#se
 
 Every 401 from an endpoint that authenticates a client or an access token carries a `WWW-Authenticate` challenge, as [RFC 9110 §15.5.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2) requires. A client-authentication failure that the endpoint reports as 401 carries a `Basic` challenge. If the client sent an `Authorization` header with another scheme, the challenge names that scheme instead. When `allowUnauthenticatedClientRegistration` is off, client registration without a session or an initial access token returns 401 with a bare `Bearer` challenge.
 
-The token endpoint reports most client-authentication failures as 400 with no challenge, as [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) allows. It returns 401 with a challenge when the client authenticated through the `Authorization` header, and for some other failures, such as a `private_key_jwt` assertion that fails signature or claim verification.
+The token endpoint reports most client-authentication failures as 400 with no challenge, as [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) allows. It returns 401 with a challenge when the client authenticated through the `Authorization` header, and for a `private_key_jwt` assertion from a registered client that fails the JWT library's verification: signature, issuer, subject, audience, expiry, or not-before. Other assertion failures stay 400 with no challenge, such as an unsupported `client_assertion_type` or signing algorithm, a malformed assertion, a `client_id` that does not match the assertion, a client that is unknown, disabled, or not registered for `private_key_jwt`, client keys that are missing or cannot be fetched, a missing `exp`, an `iat` that is too old, an `exp` further out than `assertionMaxLifetime`, a missing `jti`, and a `jti` that was already used. Every one of them returns the `invalid_client` error code.
 
 The response also lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, so a browser client on another origin can read the challenge. Names that a hook already exposed stay in the list.
 
@@ -506,7 +509,7 @@ Returned in any of these cases:
 
 `invalid_client` <span className="opacity-70">401</span>
 
-Returned when `client_secret_basic` authentication fails. The response carries a `WWW-Authenticate: Basic` challenge.
+Returned when `client_secret_basic` authentication fails or a `private_key_jwt` assertion fails verification. The response carries a `WWW-Authenticate` challenge.
 
 `invalid_grant` <span className="opacity-70">400</span>
 

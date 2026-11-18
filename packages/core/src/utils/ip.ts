@@ -94,10 +94,27 @@ function extractIPv4FromMapped(ipv6: string): string | null {
 }
 
 /**
+ * Rewrites a trailing dotted IPv4 (`::ffff:808:127.0.0.1`) as two hex groups
+ * (`::ffff:808:7f00:1`), so every group counts as 16 bits.
+ */
+function replaceDottedIPv4Tail(ipv6: string): string {
+	const tailStart = ipv6.lastIndexOf(":") + 1;
+	const tail = ipv6.slice(tailStart);
+	if (!isIPv4(tail)) {
+		return ipv6;
+	}
+	const [a = 0, b = 0, c = 0, d = 0] = tail.split(".").map(Number);
+	const high = ((a << 8) | b).toString(16);
+	const low = ((c << 8) | d).toString(16);
+	return `${ipv6.slice(0, tailStart)}${high}:${low}`;
+}
+
+/**
  * Expands a compressed IPv6 address to full form
  * e.g., "2001:db8::1" -> ["2001", "0db8", "0000", "0000", "0000", "0000", "0000", "0001"]
  */
-function expandIPv6(ipv6: string): string[] {
+function expandIPv6(input: string): string[] {
+	const ipv6 = replaceDottedIPv4Tail(input);
 	// Handle :: notation (zero compression)
 	if (ipv6.includes("::")) {
 		const sides = ipv6.split("::");

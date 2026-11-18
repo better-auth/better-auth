@@ -356,6 +356,7 @@ export const auth = betterAuth({
 * `redirectURI`: Custom redirect URI for the OAuth callback (optional)
 * `scope`: Additional OAuth scopes to request (optional)
 * `mapProfileToUser`: Custom function to map the provider profile to a user (optional)
+* `getAccountFields`: Custom function that returns values for the fields you declare in `account.additionalFields`. Better Auth stores them on the provider account when it creates or links it, and updates them on sign-in while `account.updateAccountOnSignIn` is not `false` (optional)
 * `disableSignUp`: Disable sign up for new users (optional)
 * `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
 * `overrideUserInfoOnSignIn`: Override user info with provider user info on sign in (optional)

@@ -3,6 +3,7 @@ import { appendQueryParams } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
+import { resolveOAuthAccountFields } from "../../oauth2/account-fields";
 import { exchangeOAuthCallback } from "../../oauth2/callback";
 import {
 	missingEmailLogMessage,
@@ -188,12 +189,30 @@ export const callbackOAuth = createAuthEndpoint(
 			...tokens,
 			scope: tokens.scopes?.join(","),
 		};
+		let accountFields: Awaited<ReturnType<typeof resolveOAuthAccountFields>>;
+		try {
+			accountFields = await resolveOAuthAccountFields(
+				c,
+				provider,
+				tokens,
+				userInfo,
+			);
+		} catch (e) {
+			if (isAPIError(e) && e.body?.code) {
+				return redirectOnError(e.body.code, e.body.message);
+			}
+			c.context.logger.error("getAccountFields failed", e);
+			return redirectOnError(
+				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
+			);
+		}
 
 		if (link) {
 			const linkResult = await linkOAuthAccount(c, {
 				link,
 				userInfo,
 				account: accountData,
+				accountFields,
 				profile: providerProfile,
 				scopes: tokens.scopes,
 			});
@@ -217,6 +236,7 @@ export const callbackOAuth = createAuthEndpoint(
 					name: userInfo.name || "",
 				},
 				account: accountData,
+				accountFields,
 				callbackURL,
 				disableSignUp:
 					(provider.disableImplicitSignUp && !requestSignUp) ||
