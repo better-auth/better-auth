@@ -654,6 +654,68 @@ describe("CIMD in-flight coalescing", () => {
 			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
 		});
 
+		/**
+		 * The stored client the request started with is older than the cached
+		 * entry, and a cache hit returns the stored client, so the entry must not
+		 * outlive a failed save.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12358
+		 */
+		it("drops the replacement's cached document when saving it after a retired fetch fails", async () => {
+			const clientId = "https://abandoned-failed-save.example/client.json";
+			const leaderPolicy = deferred<boolean>();
+			const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
+			isMetadataDocumentUrlAllowed
+				.mockImplementationOnce(async () => true)
+				.mockImplementationOnce(() => leaderPolicy.promise);
+			const { discovery, fetchClientMetadataResource } = createDiscovery({
+				isMetadataDocumentUrlAllowed,
+			});
+			fetchClientMetadataResource
+				.mockImplementationOnce(async () =>
+					metadataResponse(clientId, { "cache-control": "no-store" }, "Old"),
+				)
+				.mockImplementationOnce(async () =>
+					namedMetadataResponse(clientId, "New"),
+				)
+				.mockImplementationOnce(async () =>
+					namedMetadataResponse(clientId, "Old"),
+				)
+				.mockImplementationOnce(async () =>
+					namedMetadataResponse(clientId, "New"),
+				);
+			const leader = await createRequestContext();
+			const joiner = await createRequestContext();
+			await discovery.resolve(leader.ctx, clientId, null);
+			const storedBeforeRefresh = await leader.findClient(clientId);
+			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+			const leaderResolution = discovery.resolve(
+				leader.ctx,
+				clientId,
+				storedBeforeRefresh,
+			);
+			void Promise.resolve(leaderResolution).catch(() => {});
+			await vi.advanceTimersByTimeAsync(0);
+			const joinerResolution = discovery.resolve(joiner.ctx, clientId, null);
+			await vi.advanceTimersByTimeAsync(10_000);
+			await expect(joinerResolution).resolves.toMatchObject({ name: "New" });
+
+			vi.spyOn(leader.context.adapter, "transaction").mockRejectedValueOnce(
+				new Error("forced client persistence failure"),
+			);
+			leaderPolicy.resolve(true);
+			await expect(leaderResolution).rejects.toThrow(
+				"forced client persistence failure",
+			);
+
+			await expect(
+				discovery.resolve(leader.ctx, clientId, storedBeforeRefresh),
+			).resolves.toMatchObject({ name: "New" });
+			expect((await leader.findClient(clientId))?.name).toBe("New");
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(4);
+		});
+
 		it("does not let an abandoned fetch that fails later pace the fetch that replaced it", async () => {
 			const clientId = "https://abandoned-failure.example/client.json";
 			let failLeaderPolicy!: (error: Error) => void;

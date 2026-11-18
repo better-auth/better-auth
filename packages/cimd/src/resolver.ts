@@ -677,15 +677,23 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		while (true) {
 			const cachedEntry = readCacheEntry(clientId);
 			if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
-				if (existingClient && !resolvingAgain) return existingClient;
-				return persistMetadataDocumentClient(
-					ctx,
-					clientId,
-					cachedEntry.metadata,
-					cimdOptions,
-					oauthOptions,
-					existingClient ?? undefined,
-				);
+				if (!existingClient) {
+					return persistMetadataDocumentClient(
+						ctx,
+						clientId,
+						cachedEntry.metadata,
+						cimdOptions,
+						oauthOptions,
+					);
+				}
+				if (!resolvingAgain) return existingClient;
+				// Later cache hits return the older stored client, so a failed save
+				// must not leave this entry behind.
+				return persistFetchedMetadata({
+					metadata: cachedEntry.metadata,
+					nextEntry: cachedEntry,
+					retired: false,
+				});
 			}
 
 			const sharedFetch = inFlightMetadataByClientId.get(clientId);
