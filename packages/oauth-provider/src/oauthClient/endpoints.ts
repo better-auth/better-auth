@@ -308,6 +308,8 @@ export async function updateClientEndpoint(
 		}
 	}
 
+	// A discovered client is checked against the rules it registered under, so
+	// its jwks_uri may stay on its client_id origin or one its discovery allows.
 	await checkOAuthClient(
 		{
 			...schemaToOAuth(client),
@@ -316,6 +318,10 @@ export async function updateClientEndpoint(
 		opts,
 		{
 			ctx,
+			registrationSource: client.clientDiscoveryId
+				? "clientMetadataDocument"
+				: undefined,
+			clientDiscoveryId: client.clientDiscoveryId ?? undefined,
 		},
 	);
 

@@ -233,6 +233,7 @@ Better Auth calls `isCrossOriginJwksUriAllowed` only for a `jwks_uri` that the d
 
 * when the document is first registered
 * each time the document is refreshed
+* when an administrator updates the client, such as setting its `client_credentials_scopes`
 * before each client assertion is verified, so keep it fast
 
 Only a resolved `true` allows the key set. `false`, a thrown error, or a rejected promise keeps the rejection with the same error. The other `jwks_uri` checks still run first: HTTPS, no credentials, no fragment, and a public host. The keys are still fetched through `fetchClientMetadataResource`.
