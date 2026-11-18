@@ -113,12 +113,53 @@ Not built in:
 
     The OpenID configuration is served only when `scopes` includes `openid`, which it does by default. Without a custom issuer, the issuer path is your `basePath`, such as `/api/auth`.
 
-    ```ts title="app/.well-known/oauth-authorization-server/api/auth/route.ts"
-    import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
-    import { auth } from "@/lib/auth";
+    Each helper returns a handler that takes a `Request` and resolves to a `Response`. In frameworks built on the Fetch API, use it as the `GET` handler or call it with the incoming request. Node.js frameworks such as Express wrap it with `toNodeHandler`. With the default `/api/auth` base path, the root RFC 8414 route looks like this:
 
-    export const GET = oauthProviderAuthServerMetadata(auth);
-    ```
+    <Tabs items={["Next.js", "Hono", "Express"]}>
+      <Tab value="Next.js">
+        ```ts title="app/.well-known/oauth-authorization-server/api/auth/route.ts"
+        import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
+        import { auth } from "@/lib/auth";
+
+        export const GET = oauthProviderAuthServerMetadata(auth);
+        ```
+      </Tab>
+
+      <Tab value="Hono">
+        ```ts title="src/index.ts"
+        import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
+        import { Hono } from "hono";
+        import { auth } from "./auth";
+
+        const app = new Hono();
+        const authServerMetadata = oauthProviderAuthServerMetadata(auth);
+
+        app.get("/.well-known/oauth-authorization-server/api/auth", (c) =>
+          authServerMetadata(c.req.raw),
+        );
+
+        export default app;
+        ```
+      </Tab>
+
+      <Tab value="Express">
+        ```ts title="server.ts"
+        import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
+        import { toNodeHandler } from "better-auth/node";
+        import express from "express";
+        import { auth } from "./auth";
+
+        const app = express();
+
+        app.get(
+          "/.well-known/oauth-authorization-server/api/auth",
+          toNodeHandler(oauthProviderAuthServerMetadata(auth)),
+        );
+
+        app.listen(3000);
+        ```
+      </Tab>
+    </Tabs>
 
     <Callout type="info">
       If a browser-based client fetches your metadata from another origin, enable CORS on these routes. The metadata is public, so `oauthProviderAuthServerMetadata(auth, { headers: { "Access-Control-Allow-Origin": "*" } })` is fine. Do not allow credentials.
