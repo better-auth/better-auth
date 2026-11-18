@@ -1,18 +1,10 @@
 import type { AsyncLocalStorage } from "node:async_hooks";
+import { getBuiltinAsyncLocalStorage } from "./builtin";
 
 export type { AsyncLocalStorage };
 
 let cachedAsyncLocalStorageConstructor: typeof AsyncLocalStorage | undefined;
 let availabilityWarningLogged = false;
-
-function getBuiltinAsyncLocalStorage() {
-	try {
-		return globalThis.process?.getBuiltinModule?.("node:async_hooks")
-			?.AsyncLocalStorage;
-	} catch {
-		return undefined;
-	}
-}
 
 export async function getAsyncLocalStorage(): Promise<
 	typeof AsyncLocalStorage
