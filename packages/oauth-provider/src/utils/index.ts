@@ -1822,6 +1822,55 @@ export async function updateConsent(
 }
 
 /**
+ * An approved authorization code or device code follows its consent. Redeeming
+ * it needs a stored consent that still covers what the user approved, so one
+ * approved before the user deleted or narrowed their consent mints nothing. A
+ * consent deleted and given again for the same request leaves it valid, because
+ * the user approved the same client and scopes again. A client that skips
+ * consent is not checked.
+ *
+ * @internal
+ */
+export async function assertConsentStillCovers(
+	ctx: GenericEndpointContext,
+	client: Pick<SchemaClient<Scope[]>, "clientId" | "skipConsent">,
+	approved: {
+		userId: string;
+		referenceId?: string;
+		scopes: readonly string[];
+		resources: readonly string[];
+		userInfoClaims: readonly string[];
+	},
+) {
+	if (client.skipConsent) return;
+	const consent = await findConsent(
+		ctx,
+		client.clientId,
+		approved.userId,
+		approved.referenceId,
+	);
+	if (!consent) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "consent revoked",
+			error: "invalid_grant",
+		});
+	}
+	if (
+		!consentCovers(
+			consent,
+			approved.scopes,
+			approved.resources,
+			approved.userInfoClaims,
+		)
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "consent no longer covers this authorization",
+			error: "invalid_grant",
+		});
+	}
+}
+
+/**
  * Converts URLSearchParams to a plain object, preserving
  * multi-valued keys as arrays instead of discarding duplicates.
  */

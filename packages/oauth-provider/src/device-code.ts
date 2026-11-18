@@ -28,6 +28,7 @@ import type {
 import type { Confirmation } from "./types/oauth";
 import { ResourceUriSchema } from "./types/zod";
 import {
+	assertConsentStillCovers,
 	getAuthEndpointUrl,
 	getClient,
 	getOAuthProviderPlugin,
@@ -180,6 +181,19 @@ async function exchangeOAuthDeviceCode(
 				resource: resources,
 				clientId: authorization.client.clientId,
 				requestedScopes: authorization.scopes,
+			});
+			if (!record.userId) {
+				tokenError("BAD_REQUEST", "invalid_grant", "invalid device code");
+			}
+			// Same for a consent deleted or narrowed since approval: giving it again
+			// for the same request makes the code redeemable.
+			await assertConsentStillCovers(ctx, authorization.client, {
+				userId: record.userId,
+				referenceId: record.referenceId ?? undefined,
+				scopes: authorization.scopes,
+				// Every approved resource, not the narrowed poll.
+				resources: record.resources ?? [],
+				userInfoClaims: [],
 			});
 			// Same for a rejected DPoP proof: the client can retry with a valid one.
 			// A sender constraint the client-authentication strategy proved takes

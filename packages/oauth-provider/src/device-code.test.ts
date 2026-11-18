@@ -1537,11 +1537,9 @@ describe("oauth-provider device-code grant", async () => {
 	it("preserves an approved code when user lookup fails before OAuth issuance", async () => {
 		const clientId = await createDeviceClient();
 		const deviceCode = await approvedDeviceCode(clientId);
-		await db.update({
-			model: "deviceCode",
-			where: [{ field: "deviceCode", value: deviceCode }],
-			update: { userId: "missing-user" },
-		});
+		// The user's consent still exists, so the user lookup is what fails.
+		const context = await auth.$context;
+		vi.spyOn(context.internalAdapter, "findUserById").mockResolvedValue(null);
 
 		const response = await pollToken({
 			grant_type: DEVICE_CODE_GRANT_TYPE,
@@ -2065,35 +2063,38 @@ describe("oauth-provider device approval through the consent flow", async () => 
 	const resolveAuthenticationContext =
 		vi.fn<() => OAuthAuthenticationContext | undefined>();
 	const { auth, client, db, signInWithTestUser, signInWithUser } =
-		await getTestInstance({
-			baseURL,
-			plugins: [
-				jwt({ jwt: { issuer: baseURL } }),
-				oauthProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-					resources: [resource],
-					enforcePerClientResources: false,
-					scopes: ["openid", "offline_access"],
-					postLogin: {
-						page: "/select-organization",
-						shouldRedirect: () => needsSelection,
-						consentReferenceId,
-					},
-					customAccessTokenClaims: ({ referenceId }) => ({
-						[referenceClaim]: referenceId,
+		await getTestInstance(
+			{
+				baseURL,
+				plugins: [
+					jwt({ jwt: { issuer: baseURL } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						resources: [resource],
+						enforcePerClientResources: false,
+						scopes: ["openid", "offline_access"],
+						postLogin: {
+							page: "/select-organization",
+							shouldRedirect: () => needsSelection,
+							consentReferenceId,
+						},
+						customAccessTokenClaims: ({ referenceId }) => ({
+							[referenceClaim]: referenceId,
+						}),
+						authenticationContext: {
+							acrValuesSupported: ["0", mfaAcr],
+							resolve: resolveAuthenticationContext,
+						},
 					}),
-					authenticationContext: {
-						acrValuesSupported: ["0", mfaAcr],
-						resolve: resolveAuthenticationContext,
-					},
-				}),
-				oauthDeviceAuthorization({
-					interval: "1s",
-					validateClient: (clientId) => clientId === firstPartyClientId,
-				}),
-			],
-		});
+					oauthDeviceAuthorization({
+						interval: "1s",
+						validateClient: (clientId) => clientId === firstPartyClientId,
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [oauthProviderClient()] } },
+		);
 
 	async function startDevice(clientBody: Record<string, unknown> = {}) {
 		const { headers, user } = await signInWithTestUser();
@@ -2496,6 +2497,150 @@ describe("oauth-provider device approval through the consent flow", async () => 
 		});
 		expect(tokens.data?.scope).toBe("openid");
 		expect(tokens.data?.refresh_token).toBeUndefined();
+	});
+
+	/**
+	 * An approved device code follows its consent, as a pending authorization
+	 * code does: redeeming it needs a stored consent that still covers what the
+	 * user approved.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11318
+	 */
+	describe("approved device codes follow their consent", () => {
+		type Device = Awaited<ReturnType<typeof startDevice>>;
+
+		async function approveDevice(
+			clientBody: Record<string, unknown> = {},
+		): Promise<Device> {
+			const device = await startDevice(clientBody);
+			await answerDeviceConsent(client, device.user_code, device.headers);
+			return device;
+		}
+
+		/** Approves another device code of the same client for the same user. */
+		async function approveAgain(device: Device) {
+			const { user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: device.clientId,
+					scope: "openid offline_access",
+					resource,
+				},
+			});
+			await answerDeviceConsent(client, user_code, device.headers);
+		}
+
+		function findStoredConsent(device: Device, referenceId: string) {
+			return db.findOne<{ id: string; scopes: string[] }>({
+				model: "oauthConsent",
+				where: [
+					{ field: "clientId", value: device.clientId },
+					{ field: "userId", value: device.user.id },
+					{ field: "referenceId", value: referenceId },
+				],
+			});
+		}
+
+		async function deleteStoredConsent(device: Device, referenceId: string) {
+			const consent = await findStoredConsent(device, referenceId);
+			expect(consent?.id).toBeTruthy();
+			const deleted = await client.oauth2.deleteConsent(
+				{ id: consent!.id },
+				{ headers: device.headers },
+			);
+			expect(deleted.error).toBeNull();
+		}
+
+		function redeem(device: Device) {
+			return device.poll({
+				grant_type: DEVICE_CODE_GRANT_TYPE,
+				device_code: device.device_code,
+			});
+		}
+
+		it("rejects a device code whose consent was deleted after approval", async () => {
+			resolveReference = () => "org_1";
+			const device = await approveDevice();
+			await deleteStoredConsent(device, "org_1");
+
+			const polled = await redeem(device);
+			expect(polled.data?.access_token).toBeUndefined();
+			expect(polled.error).toMatchObject({
+				status: 400,
+				error: "invalid_grant",
+				error_description: "consent revoked",
+			});
+			const where = [
+				{ field: "clientId", value: device.clientId },
+				{ field: "userId", value: device.user.id },
+			];
+			expect(await db.count({ model: "oauthAccessToken", where })).toBe(0);
+			expect(await db.count({ model: "oauthRefreshToken", where })).toBe(0);
+		});
+
+		it("rejects a device code after its consent is narrowed to drop a scope", async () => {
+			resolveReference = () => "org_1";
+			const device = await approveDevice();
+			const consent = await findStoredConsent(device, "org_1");
+			expect(consent?.scopes).toEqual(["openid", "offline_access"]);
+			await db.update({
+				model: "oauthConsent",
+				where: [{ field: "id", value: consent!.id }],
+				update: { scopes: ["openid"] },
+			});
+
+			const polled = await redeem(device);
+			expect(polled.data?.access_token).toBeUndefined();
+			expect(polled.error).toMatchObject({
+				status: 400,
+				error: "invalid_grant",
+				error_description: "consent no longer covers this authorization",
+			});
+		});
+
+		it("redeems a device code after its consent was deleted and given again for the same request", async () => {
+			resolveReference = () => "org_1";
+			const device = await approveDevice();
+			await deleteStoredConsent(device, "org_1");
+			const revoked = await redeem(device);
+			expect(revoked.error).toMatchObject({
+				error: "invalid_grant",
+				error_description: "consent revoked",
+			});
+
+			await approveAgain(device);
+			expect(await findStoredConsent(device, "org_1")).not.toBeNull();
+			// Wait out the polling interval the rejected poll started.
+			await new Promise((resolve) => setTimeout(resolve, 1_100));
+
+			const tokens = await redeem(device);
+			expect(tokens.error).toBeNull();
+			expect(tokens.data?.access_token).toBeDefined();
+			expect(tokens.data?.refresh_token).toBeDefined();
+		});
+
+		it("redeems a device code when the user deletes a consent under another reference", async () => {
+			resolveReference = () => "org_1";
+			const device = await approveDevice();
+			resolveReference = () => "org_2";
+			await approveAgain(device);
+			await deleteStoredConsent(device, "org_2");
+
+			const tokens = await redeem(device);
+			expect(tokens.error).toBeNull();
+			expect(decodeJwt(tokens.data!.access_token)).toMatchObject({
+				reference_id: "org_1",
+			});
+		});
+
+		it("does not check the consent of a client that skips consent", async () => {
+			resolveReference = () => "org_1";
+			const device = await approveDevice({ skip_consent: true });
+			await deleteStoredConsent(device, "org_1");
+
+			const tokens = await redeem(device);
+			expect(tokens.error).toBeNull();
+			expect(tokens.data?.access_token).toBeDefined();
+		});
 	});
 
 	it("leaves the code pending when the reference cannot be resolved", async () => {
