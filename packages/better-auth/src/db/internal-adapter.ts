@@ -537,15 +537,8 @@ export const createInternalAdapter = (
 		deleteUser: async (userId: string) => {
 			const sessionReferences = await getActiveSessionReferences(userId);
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-				await deleteManyWithHooks(
-					[
-						{
-							field: "userId",
-							value: userId,
-						},
-					],
-					"session",
-					undefined,
+				await deleteSessionRows(userId, () =>
+					queueCachedUserSessionDeletion(userId, sessionReferences),
 				);
 			}
 			await deleteManyWithHooks(

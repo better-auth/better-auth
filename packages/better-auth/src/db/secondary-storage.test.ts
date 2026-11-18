@@ -1144,3 +1144,102 @@ describe("secondary storage - bulk revocation during a pending delete hook", () 
 		});
 	});
 });
+
+describe("secondary storage - revocation when an earlier after hook throws", () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it.for([true, false])(
+		"revokes the cached sessions on password reset when a verification delete.after hook throws (storeSessionInDatabase: %s)",
+		async (storeSessionInDatabase) => {
+			const store = new Map<string, string>();
+			let resetToken = "";
+			let throwNextAfterHook = false;
+			const { client, testUser, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: createStringSecondaryStorage(store),
+				session: { storeSessionInDatabase },
+				verification: { storeInDatabase: true },
+				emailAndPassword: {
+					enabled: true,
+					revokeSessionsOnPasswordReset: true,
+					async sendResetPassword({ token }) {
+						resetToken = token;
+					},
+				},
+				databaseHooks: {
+					verification: {
+						delete: {
+							async after() {
+								if (!throwNextAfterHook) return;
+								throwNextAfterHook = false;
+								throw new Error("verification delete.after hook failed");
+							},
+						},
+					},
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			await client.requestPasswordReset({
+				email: testUser.email,
+				redirectTo: "http://localhost:3000",
+			});
+			vi.setSystemTime(Date.now() + 1000);
+
+			throwNextAfterHook = true;
+			const reset = await client.resetPassword({
+				newPassword: "new-password-1234",
+				token: resetToken,
+			});
+			expect(reset.error).not.toBeNull();
+
+			const session = await client.getSession({
+				query: { disableCookieCache: true },
+				fetchOptions: { headers },
+			});
+			expect(session.data).toBeNull();
+		},
+	);
+
+	it("revokes the cached sessions on user deletion when a session delete.after hook throws", async () => {
+		const store = new Map<string, string>();
+		let throwNextAfterHook = false;
+		const { client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: { storeSessionInDatabase: true },
+			user: { deleteUser: { enabled: true } },
+			databaseHooks: {
+				session: {
+					delete: {
+						async after() {
+							if (!throwNextAfterHook) return;
+							throwNextAfterHook = false;
+							throw new Error("session delete.after hook failed");
+						},
+					},
+				},
+			},
+		});
+		const other = await signInWithTestUser();
+		const { headers } = await signInWithTestUser();
+		vi.setSystemTime(Date.now() + 1000);
+
+		throwNextAfterHook = true;
+		const deleted = await client.deleteUser({
+			fetchOptions: { headers },
+		});
+		expect(deleted.error).not.toBeNull();
+
+		for (const signedIn of [headers, other.headers]) {
+			const session = await client.getSession({
+				query: { disableCookieCache: true },
+				fetchOptions: { headers: signedIn },
+			});
+			expect(session.data).toBeNull();
+		}
+	});
+});
