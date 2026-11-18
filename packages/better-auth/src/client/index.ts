@@ -11,11 +11,13 @@ export {
 	type FocusListener,
 	type FocusManager,
 	kFocusManager,
+	setFocusManager,
 } from "./focus-manager";
 export {
 	kOnlineManager,
 	type OnlineListener,
 	type OnlineManager,
+	setOnlineManager,
 } from "./online-manager";
 export * from "./parser";
 export * from "./query";
