@@ -2,4 +2,4 @@
 "@better-auth/cimd": patch
 ---
 
-Honor the caller's AbortSignal while awaiting DNS resolution in the Node CIMD transport: a stalled resolver no longer defeats the request deadline. `dns.lookup` cannot be cancelled, so an aborted call leaves one bounded lookup outstanding per request which settles in the background and is discarded; abort listeners are cleaned up once resolution wins the race.
+The Node transport from `@better-auth/cimd/node` now stops waiting for DNS as soon as the request's abort signal fires, so a resolver that never answers no longer holds a client metadata or JWKS fetch past the plugin's five-second timeout. A lookup the resolver has already started keeps running after the abort; at most 16 can be outstanding per process, and while 16 are, fetches to hostnames fail immediately instead of starting more.
