@@ -10,7 +10,7 @@ import type {
 	OAuthProvider,
 	ProviderOptions,
 } from "../oauth2";
-import { CLIENT_ASSERTION_TYPE } from "../oauth2";
+import { CLIENT_ASSERTION_TYPE, generateCodeChallenge } from "../oauth2";
 import { cognito } from "./cognito";
 import { discord } from "./discord";
 import { socialProviders } from "./index";
@@ -303,6 +303,43 @@ describe("kakao provider", () => {
 			loginHint: "user@example.com",
 		});
 		expect(url.searchParams.get("login_hint")).toBe("user@example.com");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12294
+	 */
+	describe("PKCE", () => {
+		it("adds the S256 code challenge to the authorization URL", async () => {
+			const provider = kakao({ ...credentials });
+			const url = await provider.createAuthorizationURL(baseInput);
+			expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+			expect(url.searchParams.get("code_challenge")).toBe(
+				await generateCodeChallenge(baseVerifier),
+			);
+		});
+
+		it("sends the code verifier in the token request", async () => {
+			mockedBetterFetch.mockResolvedValueOnce({
+				data: {
+					access_token: "access-token",
+					refresh_token: "refresh-token",
+					token_type: "bearer",
+					expires_in: 21599,
+				},
+				error: null,
+			});
+
+			const provider = kakao({ ...credentials });
+			await provider.validateAuthorizationCode({
+				code: "auth-code",
+				codeVerifier: baseVerifier,
+				redirectURI: baseCallback,
+			});
+
+			const [, init] = mockedBetterFetch.mock.calls[0] ?? [];
+			const body = init?.body as URLSearchParams;
+			expect(body.get("code_verifier")).toBe(baseVerifier);
+		});
 	});
 });
 
