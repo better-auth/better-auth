@@ -674,4 +674,24 @@ describe("Node CIMD metadata transport", () => {
 			).rejects.toThrow(TypeError);
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11609
+	 */
+	it("rejects when the request closes without a response or an error", async () => {
+		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+		mocks.request.mockImplementation(() => {
+			const request = new EventEmitter() as EventEmitter & {
+				end: () => void;
+			};
+			request.end = () => {
+				setImmediate(() => request.emit("close"));
+			};
+			return request;
+		});
+
+		await expect(
+			fetchClientMetadataResource("https://client.example.com/client.json"),
+		).rejects.toThrow("closed before a response");
+	}, 2_000);
 });

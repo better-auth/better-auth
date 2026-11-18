@@ -55,8 +55,12 @@ function handler(req: IncomingMessage, res: ServerResponse) {
 	res.end(JSON.stringify({ ok: true }));
 }
 
-async function serve(hostname: string, domains: string[]) {
-	server = await listen(handler, {
+async function serve(
+	hostname: string,
+	domains: string[],
+	onRequest: typeof handler = handler,
+) {
+	server = await listen(onRequest, {
 		hostname,
 		https: { domains },
 		port: { random: true },
@@ -93,6 +97,29 @@ describe("Node CIMD metadata transport over TLS to an IP literal", () => {
 			]);
 		},
 	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11609
+	 */
+	it("rejects a protocol upgrade the request did not ask for", async () => {
+		let serverSocketClosed: Promise<void> | undefined;
+		const origin = await serve("127.0.0.1", ["127.0.0.1"], (req) => {
+			serverSocketClosed = new Promise((resolve) => {
+				req.socket.once("close", () => resolve());
+			});
+			req.socket.write(
+				"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: example\r\n\r\n",
+			);
+		});
+
+		await expect(
+			fetchClientMetadataResource(
+				`https://127.0.0.1:${origin.port}/client.json`,
+				{ signal: AbortSignal.timeout(1_000) },
+			),
+		).rejects.toThrow("protocol upgrade");
+		await serverSocketClosed;
+	}, 3_000);
 
 	it("rejects a certificate that does not name the IP address", async () => {
 		const origin = await serve("127.0.0.1", ["127.0.0.2"]);

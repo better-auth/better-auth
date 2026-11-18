@@ -222,6 +222,17 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 			},
 		);
 		request.once("error", reject);
+		// Without an upgrade listener, Node destroys the socket after a 101 and
+		// emits neither a response nor an error, and the abort signal can no
+		// longer settle the request.
+		request.once("upgrade", (response, socket) => {
+			response.destroy();
+			socket.destroy();
+			reject(new TypeError("metadata server answered with a protocol upgrade"));
+		});
+		request.once("close", () => {
+			reject(new TypeError("metadata request closed before a response"));
+		});
 		request.end();
 	});
 };
