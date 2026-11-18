@@ -102,6 +102,7 @@ export function getSessionAtom(
 
 	let flight: SessionFlight | undefined;
 	let freshUntil = 0;
+	let lastFetchedAt = 0;
 	let sessionRevision = 0;
 	$signal.listen(() => {
 		sessionRevision++;
@@ -246,12 +247,26 @@ export function getSessionAtom(
 		const settleFlight = (outcome: SessionFetchOutcome) => {
 			if (flight !== request) return;
 			flight = undefined;
+			if (outcome === "fresh" || outcome === "stale") {
+				lastFetchedAt = Date.now();
+			}
 			if (outcome === "fresh" && request.revision === sessionRevision) {
 				freshUntil = getFreshUntil();
 			}
 		};
 		void request.promise.then(settleFlight, () => settleFlight("failed"));
 		return request.promise.then(() => undefined);
+	};
+
+	const revalidateSession = (maxAge: number): Promise<void> => {
+		// A pending request answers the event, unless it fails.
+		if (flight) {
+			return flight.promise.then((outcome) => {
+				if (outcome === "failed") return fetchSession();
+			});
+		}
+		if (Date.now() - lastFetchedAt < maxAge) return Promise.resolve();
+		return fetchSession();
 	};
 
 	const fetchSessionOnMount = (): Promise<void> => {
@@ -277,6 +292,7 @@ export function getSessionAtom(
 
 		const refreshManager = createSessionRefreshManager({
 			fetchSession,
+			revalidateSession,
 			shouldPollSession: () => session.value.data != null,
 			sessionSignal: $signal,
 			options,

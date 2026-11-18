@@ -14,6 +14,12 @@ const FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
 
 export interface SessionRefreshOptions {
 	fetchSession: () => Promise<void>;
+	/**
+	 * Fetches unless a request is pending or one succeeded within `maxAge`
+	 * milliseconds, and retries once when the pending request fails. Focus and
+	 * reconnect refetches use it so they skip a session that was just loaded.
+	 */
+	revalidateSession?: (maxAge: number) => Promise<void>;
 	shouldPollSession?: () => boolean;
 	sessionSignal: WritableAtom<boolean>;
 	options?: BetterAuthClientOptions | undefined;
@@ -35,6 +41,7 @@ interface SessionRefreshState {
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 	const {
 		fetchSession,
+		revalidateSession,
 		shouldPollSession = () => true,
 		sessionSignal,
 		options = {},
@@ -72,6 +79,11 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		if (event?.event === "poll") {
 			state.lastSessionRequest = now();
 			void fetchSession();
+			return;
+		}
+
+		if (event?.event === "visibilitychange" && revalidateSession) {
+			void revalidateSession(FOCUS_REFETCH_RATE_LIMIT_SECONDS * 1000);
 			return;
 		}
 

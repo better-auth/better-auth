@@ -921,11 +921,118 @@ describe("useAuthQuery - error handling", () => {
 		const initialData = session().data;
 		expect(fetchCallCount).toBe(1);
 
+		// Focus right after the initial fetch falls inside the refetch cooldown.
+		await vi.advanceTimersByTimeAsync(5_000);
 		getGlobalFocusManager().setFocused(true);
 		await vi.runAllTimersAsync();
 
 		// Only 2 fetches: initial + focus refetch (no double-fetch)
 		expect(fetchCallCount).toBe(2);
 		expect(session().data).toBe(initialData);
+	});
+
+	describe("focus refetch cooldown", () => {
+		const createCountingFetch = (outcomes: Array<"ok" | "fail">) => {
+			let calls = 0;
+			const $fetch = createFetch({
+				baseURL: "http://localhost:3000",
+				customFetchImpl: async () => {
+					const outcome = outcomes[calls] ?? "ok";
+					calls++;
+					if (outcome === "fail") throw new TypeError("Failed to fetch");
+					return new Response(
+						JSON.stringify({
+							user: { id: "1", email: "test@test.com" },
+							session: { id: "session-1" },
+						}),
+					);
+				},
+			});
+			return {
+				$fetch,
+				calls: () => calls,
+			};
+		};
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9613
+		 */
+		it("should skip a focus refetch right after a successful session fetch", async () => {
+			const { $fetch, calls } = createCountingFetch([]);
+			const { $sessionSignal, session } = getSessionAtom($fetch);
+			const unsubscribe = session.listen(() => {});
+			await vi.advanceTimersByTimeAsync(0);
+			expect(calls()).toBe(1);
+
+			getGlobalFocusManager().setFocused(true);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(calls()).toBe(1);
+
+			await vi.advanceTimersByTimeAsync(5_000);
+			getGlobalFocusManager().setFocused(true);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(calls()).toBe(2);
+
+			await vi.advanceTimersByTimeAsync(5_000);
+			$sessionSignal.set(!$sessionSignal.get());
+			await vi.advanceTimersByTimeAsync(0);
+			expect(calls()).toBe(3);
+
+			getGlobalFocusManager().setFocused(true);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(calls()).toBe(3);
+			unsubscribe();
+		});
+
+		it("should refetch on focus right after a failed session fetch", async () => {
+			const { $fetch, calls } = createCountingFetch(["fail"]);
+			const { session } = getSessionAtom($fetch);
+			const unsubscribe = session.listen(() => {});
+			await vi.advanceTimersByTimeAsync(0);
+			expect(session.get().error).not.toBeNull();
+
+			getGlobalFocusManager().setFocused(true);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(calls()).toBe(2);
+			expect(session.get().data?.user.email).toBe("test@test.com");
+			unsubscribe();
+		});
+
+		it("should wait for a pending session fetch on focus and retry it once if it fails", async () => {
+			let rejectPending: ((error: Error) => void) | undefined;
+			let calls = 0;
+			const $fetch = createFetch({
+				baseURL: "http://localhost:3000",
+				customFetchImpl: async () => {
+					calls++;
+					if (calls === 1) {
+						return new Promise<Response>((_, reject) => {
+							rejectPending = reject;
+						});
+					}
+					return new Response(
+						JSON.stringify({
+							user: { id: "1", email: "test@test.com" },
+							session: { id: "session-1" },
+						}),
+					);
+				},
+			});
+			const { session } = getSessionAtom($fetch);
+			const unsubscribe = session.listen(() => {});
+			await vi.advanceTimersByTimeAsync(0);
+			expect(calls).toBe(1);
+
+			getGlobalFocusManager().setFocused(true);
+			getGlobalFocusManager().setFocused(true);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(calls).toBe(1);
+
+			rejectPending?.(new TypeError("Failed to fetch"));
+			await vi.advanceTimersByTimeAsync(0);
+			expect(calls).toBe(2);
+			expect(session.get().data?.user.email).toBe("test@test.com");
+			unsubscribe();
+		});
 	});
 });
