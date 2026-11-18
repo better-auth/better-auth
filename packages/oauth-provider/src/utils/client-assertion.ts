@@ -24,7 +24,12 @@ import type {
 	SchemaClient,
 	Scope,
 } from "../types";
-import { challengeHeaders, getAuthEndpointUrl, getClient } from "./index";
+import {
+	BASIC_CHALLENGE,
+	challengeHeaders,
+	getAuthEndpointUrl,
+	getClient,
+} from "./index";
 import {
 	isLocalCapacityRefusal,
 	isTransientAbort,
@@ -1015,7 +1020,7 @@ export async function verifyClientAssertion(
 								"client assertion signature verification failed",
 							error: "invalid_client",
 						},
-						challengeHeaders("Basic"),
+						challengeHeaders(BASIC_CHALLENGE),
 					);
 				}
 			} else {
@@ -1025,7 +1030,7 @@ export async function verifyClientAssertion(
 						error_description: "client assertion signature verification failed",
 						error: "invalid_client",
 					},
-					challengeHeaders("Basic"),
+					challengeHeaders(BASIC_CHALLENGE),
 				);
 			}
 		} else {
@@ -1035,7 +1040,7 @@ export async function verifyClientAssertion(
 					error_description: "client assertion signature verification failed",
 					error: "invalid_client",
 				},
-				challengeHeaders("Basic"),
+				challengeHeaders(BASIC_CHALLENGE),
 			);
 		}
 	}

@@ -26,6 +26,7 @@ import type {
 	Scope,
 } from "./types";
 import {
+	BASIC_CHALLENGE,
 	challengeHeaders,
 	destructureCredentials,
 	extractClientCredentials,
@@ -677,7 +678,7 @@ export async function introspectEndpoint(
 				error_description: "missing required credentials",
 				error: "invalid_client",
 			},
-			challengeHeaders("Basic"),
+			challengeHeaders(BASIC_CHALLENGE),
 		);
 	}
 

@@ -1269,7 +1269,9 @@ describe("private_key_jwt authentication", async () => {
 
 		expect(result.error?.status).toBe(401);
 		expect(result.error).toMatchObject({ error: "invalid_client" });
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 		expect(responseHeaders?.get("Access-Control-Expose-Headers")).toBe(
 			"WWW-Authenticate",
 		);
