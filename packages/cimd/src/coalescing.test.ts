@@ -24,11 +24,12 @@ function deferred<T>() {
 function metadataResponse(
 	clientId: string,
 	headers: Record<string, string> = { "cache-control": "max-age=60" },
+	clientName = "Coalescing Client",
 ) {
 	return Response.json(
 		{
 			client_id: clientId,
-			client_name: "Coalescing Client",
+			client_name: clientName,
 			redirect_uris: ["http://127.0.0.1:5199/callback"],
 			application_type: "native",
 			token_endpoint_auth_method: "none",
@@ -36,6 +37,15 @@ function metadataResponse(
 			response_types: ["code"],
 		},
 		{ headers },
+	);
+}
+
+/** A cacheable document whose client name tells fetches apart. */
+function namedMetadataResponse(clientId: string, clientName: string) {
+	return metadataResponse(
+		clientId,
+		{ "cache-control": "max-age=60" },
+		clientName,
 	);
 }
 
@@ -516,22 +526,9 @@ describe("CIMD in-flight coalescing", () => {
 			const { discovery, fetchClientMetadataResource } = createDiscovery({
 				isMetadataDocumentUrlAllowed,
 			});
-			const documentNamed = (name: string) =>
-				Response.json(
-					{
-						client_id: clientId,
-						client_name: name,
-						redirect_uris: ["http://127.0.0.1:5199/callback"],
-						application_type: "native",
-						token_endpoint_auth_method: "none",
-						grant_types: ["authorization_code"],
-						response_types: ["code"],
-					},
-					{ headers: { "cache-control": "max-age=60" } },
-				);
 			const names = ["Replacement", "Abandoned"];
 			fetchClientMetadataResource.mockImplementation(async () =>
-				documentNamed(names.shift() ?? "unexpected"),
+				namedMetadataResponse(clientId, names.shift() ?? "unexpected"),
 			);
 			const leader = await createRequestContext();
 			const joiner = await createRequestContext();
@@ -548,11 +545,60 @@ describe("CIMD in-flight coalescing", () => {
 
 			leaderPolicy.resolve(true);
 			await expect(leaderResolution).resolves.toMatchObject({
-				name: "Abandoned",
+				name: "Replacement",
 			});
+			expect((await leader.findClient(clientId))?.name).toBe("Replacement");
 			await expect(
 				discovery.resolve(later.ctx, clientId, null),
 			).resolves.toMatchObject({ name: "Replacement" });
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+		});
+
+		/**
+		 * The origin can answer the abandoned fetch with a document older than the
+		 * one its replacement cached. Saving it would leave the stored client
+		 * behind a fresh cache entry, and later requests trust the stored client.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12358
+		 */
+		it("keeps an abandoned fetch's older document out of a shared database", async () => {
+			const clientId = "https://abandoned-shared-database.example/client.json";
+			const leaderPolicy = deferred<boolean>();
+			const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
+			isMetadataDocumentUrlAllowed.mockImplementationOnce(
+				() => leaderPolicy.promise,
+			);
+			const { discovery, fetchClientMetadataResource } = createDiscovery({
+				isMetadataDocumentUrlAllowed,
+			});
+			const leaderResponse = deferred<Response>();
+			// The replacement fetches while the leader is still in its policy check.
+			fetchClientMetadataResource.mockImplementationOnce(async () =>
+				namedMetadataResponse(clientId, "New"),
+			);
+			fetchClientMetadataResource.mockImplementationOnce(
+				() => leaderResponse.promise,
+			);
+			const request = await createRequestContext();
+			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+			const leaderResolution = discovery.resolve(request.ctx, clientId, null);
+			await vi.advanceTimersByTimeAsync(0);
+			const joinerResolution = discovery.resolve(request.ctx, clientId, null);
+			await vi.advanceTimersByTimeAsync(10_000);
+			await expect(joinerResolution).resolves.toMatchObject({ name: "New" });
+			expect((await request.findClient(clientId))?.name).toBe("New");
+
+			leaderPolicy.resolve(true);
+			await vi.advanceTimersByTimeAsync(0);
+			leaderResponse.resolve(namedMetadataResponse(clientId, "Old"));
+			await expect(leaderResolution).resolves.toMatchObject({ name: "New" });
+
+			const stored = await request.findClient(clientId);
+			expect(stored?.name).toBe("New");
+			await expect(
+				discovery.resolve(request.ctx, clientId, stored),
+			).resolves.toMatchObject({ name: "New" });
 			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 		});
 
@@ -619,6 +665,63 @@ describe("CIMD in-flight coalescing", () => {
 			).resolves.toMatchObject({ clientId });
 			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
 		});
+
+		/**
+		 * Only the fetching request or a request for the same client can otherwise
+		 * return a permit, so a fetch whose request the runtime ended would hold it
+		 * for good and keep every other client at the concurrency limit.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12358
+		 */
+		it.each([
+			{
+				limit: "global",
+				metadataFetchPolicy: { maximumConcurrentFetches: 1 },
+				stuckClientId: "https://stuck-permit.example/client.json",
+				otherClientId: "https://other-origin.example/client.json",
+			},
+			{
+				limit: "per-origin",
+				metadataFetchPolicy: { maximumConcurrentFetchesPerOrigin: 1 },
+				stuckClientId: "https://shared-origin.example/stuck.json",
+				otherClientId: "https://shared-origin.example/other.json",
+			},
+		])(
+			"lets another client reclaim the $limit permit of a fetch past its lease",
+			async ({ metadataFetchPolicy, stuckClientId, otherClientId }) => {
+				const { discovery, fetchClientMetadataResource } = createDiscovery({
+					metadataFetchPolicy: {
+						minimumFetchInterval: 0,
+						...metadataFetchPolicy,
+					},
+				});
+				fetchClientMetadataResource.mockImplementationOnce(
+					() => new Promise<Response>(() => {}),
+				);
+				fetchClientMetadataResource.mockImplementation(async (input) =>
+					metadataResponse(String(input)),
+				);
+				const stuck = await createRequestContext();
+				const other = await createRequestContext();
+				vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+
+				void discovery.resolve(stuck.ctx, stuckClientId, null);
+				await vi.advanceTimersByTimeAsync(9_999);
+				await expect(
+					discovery.resolve(other.ctx, otherClientId, null),
+				).rejects.toMatchObject({ body: { error: "temporarily_unavailable" } });
+
+				await vi.advanceTimersByTimeAsync(1);
+				await expect(
+					discovery.resolve(other.ctx, otherClientId, null),
+				).resolves.toMatchObject({ clientId: otherClientId });
+				// The retired fetch also left the in-flight map, so its client fetches again.
+				await expect(
+					discovery.resolve(stuck.ctx, stuckClientId, null),
+				).resolves.toMatchObject({ clientId: stuckClientId });
+				expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
+			},
+		);
 	});
 });
 
