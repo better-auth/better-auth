@@ -16,20 +16,14 @@ const MAX_OUTSTANDING_DNS_LOOKUPS = 16;
 let outstandingDNSLookups = 0;
 
 /**
- * Resolve a hostname while honoring the caller's AbortSignal.
- *
- * `dns.lookup` itself cannot be cancelled, so an aborted call leaves one
- * lookup outstanding until it settles in the background, capped across
- * requests by MAX_OUTSTANDING_DNS_LOOKUPS. We stop awaiting it when the
- * caller's deadline fires instead of letting a stalled resolver defeat it.
+ * Resolve every address of a hostname, rejecting with the signal's reason as
+ * soon as it aborts. An abandoned lookup keeps its slot in
+ * MAX_OUTSTANDING_DNS_LOOKUPS until it settles, and its result is discarded.
  */
 function lookupWithAbort(
 	hostname: string,
 	signal: AbortSignal | undefined,
 ): Promise<LookupAddress[]> {
-	if (signal?.aborted) {
-		return Promise.reject(signal.reason);
-	}
 	if (outstandingDNSLookups >= MAX_OUTSTANDING_DNS_LOOKUPS) {
 		return Promise.reject(new TypeError("metadata DNS lookup limit exceeded"));
 	}
@@ -104,6 +98,13 @@ function responseHeaders(
  * connected to directly once it is classified public-routable. It sends no
  * SNI, and its certificate must name the IP address. Redirect responses are
  * returned to the caller and are never followed.
+ *
+ * The abort signal is honored during DNS resolution as well as the request.
+ * The underlying `getaddrinfo` call cannot be cancelled: after an abort it
+ * keeps running until the resolver answers or times out. At most 16 lookups
+ * may be outstanding per process, abandoned ones included, and while 16 are
+ * outstanding a fetch to any hostname rejects without starting another.
+ * IP-literal hosts need no lookup and are not limited.
  */
 export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 	input,
@@ -121,6 +122,7 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 	const signal =
 		init?.signal ??
 		(input instanceof Request ? input.signal : webRequest.signal);
+	signal?.throwIfAborted();
 
 	// A literal host has no DNS answer to pin. lookup() rejects the bracketed
 	// form of an IPv6 literal, so classify the literal itself and pin it.
