@@ -1,4 +1,13 @@
+import { BetterAuthError } from "@better-auth/core/error";
 import { getTableColumns, is, Table } from "drizzle-orm";
+
+const uuidPattern =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function idMatchKey(id: unknown): string {
+	const value = String(id);
+	return uuidPattern.test(value) ? value.toLowerCase() : value;
+}
 
 export function rowsShareKeys(rows: Record<string, unknown>[]): boolean {
 	const first = rows[0];
@@ -31,4 +40,24 @@ export function chunkByMaxRows<T>(rows: T[], maxRows: number): T[][] {
 		chunks.push(rows.slice(offset, offset + size));
 	}
 	return chunks;
+}
+
+export function orderInsertedRowsById<T extends Record<string, unknown>>(
+	ids: unknown[],
+	rows: T[],
+	idField: string,
+	model: string,
+): T[] {
+	const byId = new Map(
+		rows.map((row) => [idMatchKey(row[idField] ?? row.id), row]),
+	);
+	return ids.map((id) => {
+		const row = byId.get(idMatchKey(id));
+		if (!row) {
+			throw new BetterAuthError(
+				`[# Drizzle Adapter]: createMany could not read back inserted "${model}" row ${String(id)}.`,
+			);
+		}
+		return row;
+	});
 }

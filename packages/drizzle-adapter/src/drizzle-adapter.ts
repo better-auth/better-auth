@@ -40,6 +40,7 @@ import {
 import {
 	chunkByMaxRows,
 	getInsertColumnCount,
+	orderInsertedRowsById,
 	rowsShareKeys,
 } from "./create-many-utils";
 import { isD1SqliteClient } from "./d1-sqlite-client";
@@ -134,24 +135,6 @@ function readDriverRowCount(result: unknown): unknown {
 
 function hasDriverRowCount(result: unknown): boolean {
 	return readDriverRowCount(result) !== undefined;
-}
-
-function orderInsertedRowsById<T extends Record<string, unknown>>(
-	ids: unknown[],
-	rows: T[],
-	idField: string,
-	model: string,
-): T[] {
-	const byId = new Map(rows.map((row) => [String(row[idField]), row]));
-	return ids.map((id) => {
-		const row = byId.get(String(id));
-		if (!row) {
-			throw new BetterAuthError(
-				`[# Drizzle Adapter]: createMany could not read back inserted "${model}" row ${String(id)}.`,
-			);
-		}
-		return row;
-	});
 }
 
 export interface DrizzleAdapterConfig {

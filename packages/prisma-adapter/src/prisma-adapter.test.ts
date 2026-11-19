@@ -1130,6 +1130,49 @@ describe("prisma-adapter", () => {
 			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
 		});
 
+		it("restores input order when PostgreSQL lowercases UUID ids", async () => {
+			const adaId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
+			const bobId = "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB";
+			const createManyAndReturn = vi.fn(async () => [
+				{ id: bobId.toLowerCase(), name: "Bob" },
+				{ id: adaId.toLowerCase(), name: "Ada" },
+			]);
+			const adapter = prismaAdapter(
+				{
+					$transaction: vi.fn(),
+					user: {
+						createManyAndReturn,
+						createMany: vi.fn(),
+						findMany: vi.fn(),
+					},
+				} as never,
+				{ provider: "postgresql" },
+			)({
+				advanced: { database: { generateId: "uuid" } },
+			} as BetterAuthOptions);
+
+			const created = await adapter.createMany({
+				model: "user",
+				data: [
+					{
+						id: adaId,
+						name: "Ada",
+						email: "ada@example.com",
+						emailVerified: false,
+					},
+					{
+						id: bobId,
+						name: "Bob",
+						email: "bob@example.com",
+						emailVerified: false,
+					},
+				],
+				forceAllowId: true,
+			});
+
+			expect(created.map((row) => row.name)).toEqual(["Ada", "Bob"]);
+		});
+
 		it("restores input order when the caller select omits id", async () => {
 			const createManyAndReturn = vi.fn(
 				async ({ select }: { select?: Record<string, boolean> }) => {
