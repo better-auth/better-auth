@@ -510,6 +510,40 @@ describe("createAdapterFactory createMany", () => {
 		expect(created).toHaveLength(3);
 	});
 
+	it("appends large native createMany results without spreading the chunk", async () => {
+		const count = 70_000;
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "memory-like",
+				adapterName: "Memory Like",
+				disableTransformInput: true,
+				disableTransformOutput: true,
+				createManyMaxParameters: Number.MAX_SAFE_INTEGER,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					createMany: createMany as CustomAdapter["createMany"],
+				}),
+		})({});
+
+		const data = Array.from({ length: count }, (_, index) => ({
+			id: `row-${index}`,
+		}));
+		const created = await adapter.createMany({
+			model: "user",
+			data,
+			forceAllowId: true,
+		});
+
+		expect(createMany).toHaveBeenCalledTimes(1);
+		expect(created).toHaveLength(count);
+		expect(created[0]?.id).toBe("row-0");
+		expect(created[count - 1]?.id).toBe(`row-${count - 1}`);
+	});
+
 	it("chunks from the union of keys, not the widest single row", async () => {
 		const createMany = vi.fn(
 			async ({ data }: { data: Record<string, any>[] }) => data,
