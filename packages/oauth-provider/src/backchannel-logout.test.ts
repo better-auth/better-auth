@@ -546,7 +546,7 @@ describe("oauth back-channel logout", async () => {
 		expect(rp.received).toHaveLength(1);
 	});
 
-	it("revokes access tokens, deletes non-offline_access refresh tokens, and preserves offline_access refresh tokens", async () => {
+	it("revokes access tokens and non-offline_access refresh tokens, and preserves offline_access refresh tokens", async () => {
 		const oauthClient = await registerClient();
 		const tokens = await issueTokens({ client: oauthClient });
 
@@ -578,11 +578,6 @@ describe("oauth back-channel logout", async () => {
 			(t) => !t.scopes.includes("offline_access"),
 		);
 		expect(narrowedRow).toBeDefined();
-		const linkedBefore = await ctx.adapter.findMany({
-			model: "oauthAccessToken",
-			where: [{ field: "refreshId", value: narrowedRow!.id }],
-		});
-		expect(linkedBefore.length).toBeGreaterThan(0);
 
 		await client.signOut({ fetchOptions: { headers } });
 		await waitForDispatches();
@@ -596,12 +591,9 @@ describe("oauth back-channel logout", async () => {
 			where: [{ field: "clientId", value: oauthClient.client_id }],
 		});
 		for (const t of accessAfter) expect(t.revoked).toBeInstanceOf(Date);
-		expect(refreshAfter.find((t) => t.id === narrowedRow!.id)).toBeUndefined();
-		const linkedAfter = await ctx.adapter.findMany({
-			model: "oauthAccessToken",
-			where: [{ field: "refreshId", value: narrowedRow!.id }],
-		});
-		expect(linkedAfter).toHaveLength(0);
+		expect(
+			refreshAfter.find((t) => t.id === narrowedRow!.id)?.revoked,
+		).toBeInstanceOf(Date);
 		// Offline access refresh tokens must survive (spec §2.7)
 		const offlineAfter = refreshAfter.filter(
 			(t) => t.scopes.includes("offline_access") && !t.revoked,

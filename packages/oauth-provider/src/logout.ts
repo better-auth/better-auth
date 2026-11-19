@@ -116,7 +116,7 @@ async function signLogoutToken(
  * access token keeps its `sid` claim. Opaque access tokens and refresh tokens
  * therefore still depend on this cleanup. Access tokens bound to the session
  * are revoked as OP hardening. Refresh tokens follow OIDC Back-Channel Logout
- * 1.0 §2.7: those without `offline_access` are deleted; `offline_access`
+ * 1.0 §2.7: those without `offline_access` are revoked; `offline_access`
  * refresh tokens survive so long-lived API access can outlive the browser
  * session.
  *
@@ -168,7 +168,7 @@ async function prepareBackchannelLogoutPlan(
 		});
 
 		// Access tokens are always revoked (OP hardening). Refresh tokens follow
-		// §2.7: end them unless `offline_access` was granted. The non-offline_access
+		// §2.7: revoke unless `offline_access` was granted. The non-offline_access
 		// branch is reachable via refresh-token scope narrowing, so it must stay.
 		const accessToRevokeIds = accessTokens
 			.filter((t) => !t.revoked)
@@ -216,27 +216,6 @@ async function prepareBackchannelLogoutPlan(
 }
 
 /**
- * Deletes the session's refresh tokens instead of marking them revoked. A
- * client that presents a revoked refresh token is treated as replaying it,
- * which tears down every refresh token the client holds for the user, so a
- * client refreshing after sign-out would otherwise lose its `offline_access`
- * grants on other devices.
- */
-async function deleteRefreshTokens(
-	adapter: Awaited<ReturnType<typeof getCurrentAdapter>>,
-	refreshTokenIds: string[],
-): Promise<void> {
-	await adapter.deleteMany({
-		model: "oauthAccessToken",
-		where: [{ field: "refreshId", operator: "in", value: refreshTokenIds }],
-	});
-	await adapter.deleteMany({
-		model: "oauthRefreshToken",
-		where: [{ field: "id", operator: "in", value: refreshTokenIds }],
-	});
-}
-
-/**
  * Apply a prepared logout plan after the session deletion succeeds. Core runs
  * `session.delete.after` after the row is consumed and, for transactional
  * callers, only after the transaction commits.
@@ -256,11 +235,15 @@ async function applyBackchannelLogoutPlan(
 				})
 			: Promise.resolve(),
 		plan.refreshTokenIds.length > 0
-			? deleteRefreshTokens(adapter, plan.refreshTokenIds)
+			? adapter.updateMany({
+					model: "oauthRefreshToken",
+					where: [{ field: "id", operator: "in", value: plan.refreshTokenIds }],
+					update: { revoked: revokedAt },
+				})
 			: Promise.resolve(),
 	]);
 	// The refresh grant and introspection check the session at use, but
-	// operators still need a signal when this cleanup fails.
+	// operators still need a signal when this revocation fails.
 	for (const result of revocations) {
 		if (result.status === "rejected") {
 			ctx.context.logger.error(

@@ -2178,20 +2178,22 @@ describe("oauth token - refresh_token", async () => {
 				await authorizationServer.api.signOut({ headers: signedOut.headers });
 
 				const refreshed = await refresh(narrowedRefreshToken);
-				expect(refreshed.error).toMatchObject({ error: "invalid_grant" });
+				expect(refreshed.error).toMatchObject({
+					error: "invalid_grant",
+					error_description: "invalid refresh token",
+				});
 
 				const offlineRefresh = await refresh(offline.tokens.refresh_token!);
 				expect(offlineRefresh.error).toBeNull();
 			});
 
-			it("keeps the client's offline grants when a token revoked at an earlier sign-out is presented", async () => {
+			it("keeps the client's offline grants when a revoked token is presented after its session expired", async () => {
 				const offline = await signInAndAuthorize();
 				const signedOut = await signInAndAuthorize();
 				const narrowedRefreshToken = await narrow(
 					signedOut.tokens.refresh_token!,
 				);
-				// Earlier releases marked these tokens revoked at sign-out instead of
-				// deleting them, and such rows stay until they expire.
+				// The session expires in place, so the row keeps its sessionId.
 				const context = await authorizationServer.$context;
 				await context.adapter.updateMany({
 					model: "oauthRefreshToken",
