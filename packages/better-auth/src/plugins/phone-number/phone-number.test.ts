@@ -10,6 +10,7 @@ import {
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { emailOTP } from "../email-otp";
+import type { UserWithPhoneNumber } from ".";
 import { phoneNumber } from ".";
 import { phoneNumberClient } from "./client";
 
