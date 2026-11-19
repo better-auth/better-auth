@@ -225,6 +225,52 @@ describe("drizzle-adapter", () => {
 	);
 
 	it.for(adapterFactories)(
+		"createMany does not wrap extra D1 chunks in an interactive transaction on $relations",
+		async ({ createAdapter }) => {
+			const user = sqliteTable("user", {
+				id: sqliteText("id").primaryKey(),
+				name: sqliteText("name"),
+				email: sqliteText("email"),
+				emailVerified: sqliteText("emailVerified"),
+				image: sqliteText("image"),
+				createdAt: sqliteText("createdAt"),
+				updatedAt: sqliteText("updatedAt"),
+				extra: sqliteText("extra").default("x"),
+			});
+			const values = vi.fn((rows: unknown[]) => ({
+				returning: vi.fn().mockResolvedValue(rows),
+			}));
+			const transaction = vi.fn(async () => {
+				throw new Error("D1 does not support interactive transactions");
+			});
+			const db = {
+				_: { fullSchema: { user }, relations: {} },
+				$client: {
+					batch: vi.fn(),
+					prepare: vi.fn(),
+					exec: vi.fn(),
+				},
+				insert: vi.fn().mockReturnValue({ values }),
+				transaction,
+			} as any;
+			const adapter = createAdapter(db, {
+				provider: "sqlite",
+				createManyMaxParameters: 12,
+			})({});
+			await adapter.createMany({
+				model: "user",
+				data: [
+					{ id: "a", name: "Ada" },
+					{ id: "b", name: "Bob" },
+				],
+				forceAllowId: true,
+			});
+			expect(transaction).not.toHaveBeenCalled();
+			expect(values).toHaveBeenCalledTimes(2);
+		},
+	);
+
+	it.for(adapterFactories)(
 		"createMany does not require a MySQL transaction when falling back to sequential inserts on $relations",
 		async ({ createAdapter }) => {
 			const execute = vi.fn().mockResolvedValue(undefined);
