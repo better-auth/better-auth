@@ -28,7 +28,11 @@ import {
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import { confirmationTokenType, getOAuthProviderApi } from "./token";
+import {
+	cleanupExpiredOAuthTokens,
+	confirmationTokenType,
+	getOAuthProviderApi,
+} from "./token";
 import type {
 	Confirmation,
 	OAuthOptions,
@@ -6411,5 +6415,328 @@ describe("DPoP with secondary storage and no database-backed verification", asyn
 		expect(await replayed.json()).toMatchObject({
 			error: "invalid_dpop_proof",
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12794
+ */
+describe("oauth token - expired token cleanup", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+
+	it("should clean up expired access and refresh tokens during token requests", async () => {
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({
+						jwt: {
+							issuer: authServerBaseUrl,
+						},
+					}),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						scopes: ["openid", "profile", "email", "offline_access", "read"],
+						clientPrivileges: () => true,
+						tokenCleanupInterval: 0,
+					}),
+				],
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+		const session = await auth.api.getSession({ headers });
+		const userId = session?.user.id!;
+		const context = await auth.$context;
+		const adminClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				client_name: "Cleanup Test Client",
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read"],
+			},
+		});
+
+		const now = Date.now();
+		const expiredDate = new Date(now - 10_000);
+		const futureDate = new Date(now + 100_000);
+
+		// Seed expired refresh token
+		const expiredRefresh = await context.adapter.create<{ id: string }>({
+			model: "oauthRefreshToken",
+			data: {
+				token: "expired_refresh_token_hash",
+				clientId: adminClient.client_id,
+				userId,
+				scopes: ["read"],
+				createdAt: new Date(now - 20_000),
+				expiresAt: expiredDate,
+				revoked: expiredDate,
+			},
+		});
+
+		// Seed valid refresh token
+		const validRefresh = await context.adapter.create<{ id: string }>({
+			model: "oauthRefreshToken",
+			data: {
+				token: "valid_refresh_token_hash",
+				clientId: adminClient.client_id,
+				userId,
+				scopes: ["read"],
+				createdAt: new Date(now),
+				expiresAt: futureDate,
+			},
+		});
+
+		// Seed expired access token referencing expired refresh token
+		await context.adapter.create({
+			model: "oauthAccessToken",
+			data: {
+				token: "expired_access_token_hash",
+				clientId: adminClient.client_id,
+				userId,
+				refreshId: expiredRefresh.id,
+				scopes: ["read"],
+				createdAt: new Date(now - 20_000),
+				expiresAt: expiredDate,
+			},
+		});
+
+		// Seed valid access token referencing valid refresh token
+		await context.adapter.create({
+			model: "oauthAccessToken",
+			data: {
+				token: "valid_access_token_hash",
+				clientId: adminClient.client_id,
+				userId,
+				refreshId: validRefresh.id,
+				scopes: ["read"],
+				createdAt: new Date(now),
+				expiresAt: futureDate,
+			},
+		});
+
+		// Verify rows exist before token request
+		const accessTokensBefore = await context.adapter.findMany({
+			model: "oauthAccessToken",
+		});
+		const refreshTokensBefore = await context.adapter.findMany({
+			model: "oauthRefreshToken",
+		});
+		expect(accessTokensBefore).toHaveLength(2);
+		expect(refreshTokensBefore).toHaveLength(2);
+
+		// Make a token request to trigger the lazy cleanup
+		const response = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/oauth2/token`,
+			{
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: adminClient.client_id,
+					client_secret: adminClient.client_secret!,
+					scope: "read",
+				}).toString(),
+			},
+		);
+		expect(response.status).toBe(200);
+
+		// Verify expired rows were deleted, and valid rows remain
+		const accessTokensAfter = await context.adapter.findMany<{
+			token: string;
+			expiresAt: Date;
+		}>({
+			model: "oauthAccessToken",
+		});
+		const refreshTokensAfter = await context.adapter.findMany<{
+			token: string;
+			expiresAt: Date;
+		}>({
+			model: "oauthRefreshToken",
+		});
+
+		expect(
+			accessTokensAfter.some((t) => t.token === "expired_access_token_hash"),
+		).toBe(false);
+		expect(
+			accessTokensAfter.some((t) => t.token === "valid_access_token_hash"),
+		).toBe(true);
+
+		expect(refreshTokensAfter).toHaveLength(1);
+		expect(refreshTokensAfter[0]!.token).toBe("valid_refresh_token_hash");
+		expect(refreshTokensAfter[0]!.expiresAt.getTime()).toBeGreaterThan(now);
+	});
+
+	it("should not clean up expired tokens when disableTokenCleanup is true", async () => {
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({
+						jwt: {
+							issuer: authServerBaseUrl,
+						},
+					}),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						scopes: ["openid", "profile", "email", "offline_access", "read"],
+						clientPrivileges: () => true,
+						disableTokenCleanup: true,
+					}),
+				],
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+		const session = await auth.api.getSession({ headers });
+		const userId = session?.user.id!;
+		const context = await auth.$context;
+		const adminClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				client_name: "Disabled Cleanup Client",
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read"],
+			},
+		});
+
+		const now = Date.now();
+		const expiredDate = new Date(now - 10_000);
+
+		// Seed expired refresh token
+		await context.adapter.create({
+			model: "oauthRefreshToken",
+			data: {
+				token: "disabled_expired_refresh_token",
+				clientId: adminClient.client_id,
+				userId,
+				scopes: ["read"],
+				createdAt: new Date(now - 20_000),
+				expiresAt: expiredDate,
+				revoked: expiredDate,
+			},
+		});
+
+		// Seed expired access token
+		await context.adapter.create({
+			model: "oauthAccessToken",
+			data: {
+				token: "disabled_expired_access_token",
+				clientId: adminClient.client_id,
+				userId,
+				scopes: ["read"],
+				createdAt: new Date(now - 20_000),
+				expiresAt: expiredDate,
+			},
+		});
+
+		// Trigger token request
+		const response = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/oauth2/token`,
+			{
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: adminClient.client_id,
+					client_secret: adminClient.client_secret!,
+					scope: "read",
+				}).toString(),
+			},
+		);
+		expect(response.status).toBe(200);
+
+		// Verify expired rows were NOT deleted
+		const accessTokens = await context.adapter.findMany<{ token: string }>({
+			model: "oauthAccessToken",
+			where: [{ field: "token", value: "disabled_expired_access_token" }],
+		});
+		const refreshTokens = await context.adapter.findMany<{ token: string }>({
+			model: "oauthRefreshToken",
+			where: [{ field: "token", value: "disabled_expired_refresh_token" }],
+		});
+		expect(accessTokens).toHaveLength(1);
+		expect(refreshTokens).toHaveLength(1);
+	});
+
+	it("should allow manual cleanup via cleanupExpiredOAuthTokens", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({
+					jwt: {
+						issuer: authServerBaseUrl,
+					},
+				}),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid", "profile", "email", "offline_access", "read"],
+					clientPrivileges: () => true,
+					disableTokenCleanup: true,
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		const session = await auth.api.getSession({ headers });
+		const userId = session?.user.id!;
+		const context = await auth.$context;
+		const adminClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				client_name: "Manual Cleanup Client",
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read"],
+			},
+		});
+
+		const now = Date.now();
+		const expiredDate = new Date(now - 10_000);
+
+		await context.adapter.create({
+			model: "oauthRefreshToken",
+			data: {
+				token: "manual_cleanup_refresh_token",
+				clientId: adminClient.client_id,
+				userId,
+				scopes: ["read"],
+				createdAt: new Date(now - 20_000),
+				expiresAt: expiredDate,
+				revoked: expiredDate,
+			},
+		});
+
+		await context.adapter.create({
+			model: "oauthAccessToken",
+			data: {
+				token: "manual_cleanup_access_token",
+				clientId: adminClient.client_id,
+				userId,
+				scopes: ["read"],
+				createdAt: new Date(now - 20_000),
+				expiresAt: expiredDate,
+			},
+		});
+
+		// Invoke manual cleanup passing context
+		await cleanupExpiredOAuthTokens(context, undefined, true);
+
+		const accessTokens = await context.adapter.findMany<{ token: string }>({
+			model: "oauthAccessToken",
+			where: [{ field: "token", value: "manual_cleanup_access_token" }],
+		});
+		const refreshTokens = await context.adapter.findMany<{ token: string }>({
+			model: "oauthRefreshToken",
+			where: [{ field: "token", value: "manual_cleanup_refresh_token" }],
+		});
+		expect(accessTokens).toHaveLength(0);
+		expect(refreshTokens).toHaveLength(0);
 	});
 });

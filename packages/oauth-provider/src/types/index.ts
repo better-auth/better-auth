@@ -755,6 +755,23 @@ export interface OAuthOptions<
 	 */
 	refreshTokenReuseInterval?: number;
 	/**
+	 * Disable automatic lazy cleanup of expired access and refresh tokens
+	 * during token requests.
+	 *
+	 * When false or omitted, the token endpoint periodically sweeps and deletes
+	 * `oauthAccessToken` and `oauthRefreshToken` rows whose `expiresAt` is in
+	 * the past (at most once every 60 seconds by default).
+	 *
+	 * @default false
+	 */
+	disableTokenCleanup?: boolean;
+	/**
+	 * Interval in milliseconds between lazy sweeps of expired tokens.
+	 *
+	 * @default 60000 (60 seconds)
+	 */
+	tokenCleanupInterval?: number;
+	/**
 	 * The amount of time in seconds that the authorization code is valid for.
 	 *
 	 * @default 600 (10 minutes) - Recommended by the OIDC spec
