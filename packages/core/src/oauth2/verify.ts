@@ -467,70 +467,93 @@ async function getJwksForVerification(
 				? getJwksCacheEntry(functionJwksCache, opts.jwksCacheKey)
 				: { fetchedAt: 0, refetchedAt: 0 };
 
+	const refresh = (failed: JSONWebKeySet) =>
+		refreshJwks(entry, failed, opts.jwksFetch);
+	const resolveCached = async (
+		cached: JSONWebKeySet,
+	): Promise<ResolvedJwks> => {
+		// Without `kid`, key selection is deferred to JOSE because RFC 7515 makes
+		// the header parameter optional.
+		if (
+			!kid ||
+			(Array.isArray(cached.keys) &&
+				cached.keys.some(
+					(jwk) => jwk && typeof jwk === "object" && jwk.kid === kid,
+				))
+		) {
+			return { jwks: cached, kid, refresh };
+		}
+		return { jwks: (await refresh(cached)) ?? cached, kid };
+	};
+
 	const now = Date.now();
 	const cached =
 		now - entry.fetchedAt < JWKS_CACHE_TTL_MS ? entry.jwks : undefined;
-	if (!cached) {
-		if (!allowStale) {
-			return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
-		}
-		const stale =
-			entry.jwks &&
-			Array.isArray(entry.jwks.keys) &&
-			now - entry.fetchedAt < JWKS_MAX_STALE_MS
-				? entry.jwks
-				: undefined;
-		const canUseStale =
-			stale &&
-			(!kid ||
-				stale.keys.some(
-					(jwk) => jwk && typeof jwk === "object" && jwk.kid === kid,
-				));
-
-		// Only while serving a stale set does a failed refresh leave a token
-		// without `kid` with its own verification error. With a fresh set, the
-		// failure stays an outage error.
-		const refreshStale = async (failed: JSONWebKeySet) => {
-			try {
-				return await refreshJwks(entry, failed, opts.jwksFetch);
-			} catch {
-				return undefined;
-			}
-		};
-
-		if (stale && now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) {
-			if (canUseStale) return { jwks: stale, kid, refresh: refreshStale };
-			// The set is not known to lack the key, because the refetch that
-			// could tell failed, so this is an outage rather than an invalid
-			// token. A refetch still in flight settles it, and this joins it.
-			if (!isFetching(entry, now)) throw new Error("JWKS fetch failed");
-		}
-
-		try {
-			return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
-		} catch (error) {
-			const failedAt = Date.now();
-			entry.refetchedAt = failedAt;
-			if (canUseStale && failedAt - entry.fetchedAt < JWKS_MAX_STALE_MS) {
-				return { jwks: stale, kid, refresh: refreshStale };
-			}
-			throw error;
-		}
+	if (cached) return resolveCached(cached);
+	if (!allowStale) {
+		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
 	}
-	const refresh = (failed: JSONWebKeySet) =>
-		refreshJwks(entry, failed, opts.jwksFetch);
-	// Without `kid`, key selection is deferred to JOSE because RFC 7515 makes
-	// the header parameter optional.
-	if (
-		!kid ||
-		(Array.isArray(cached.keys) &&
-			cached.keys.some(
+
+	// The expired set in the entry while it is within the stale window at `at`,
+	// and whether it can verify this token. A set is cached without validation,
+	// so its entries are checked before `kid` is read from them.
+	const getStaleJwks = (at: number) => {
+		const stale = entry.jwks;
+		if (
+			!stale ||
+			!Array.isArray(stale.keys) ||
+			at - entry.fetchedAt >= JWKS_MAX_STALE_MS
+		) {
+			return undefined;
+		}
+		const canUse =
+			!kid ||
+			stale.keys.some(
 				(jwk) => jwk && typeof jwk === "object" && jwk.kid === kid,
-			))
-	) {
-		return { jwks: cached, kid, refresh };
+			);
+		return { stale, canUse };
+	};
+
+	// Only while serving a stale set does a failed refresh leave a token
+	// without `kid` with its own verification error. With a fresh set, the
+	// failure stays an outage error.
+	const refreshStale = async (failed: JSONWebKeySet) => {
+		try {
+			return await refreshJwks(entry, failed, opts.jwksFetch);
+		} catch {
+			return undefined;
+		}
+	};
+
+	const expired = getStaleJwks(now);
+	if (expired && now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) {
+		if (expired.canUse) {
+			return { jwks: expired.stale, kid, refresh: refreshStale };
+		}
+		// The set is not known to lack the key, because the refetch that
+		// could tell failed, so this is an outage rather than an invalid
+		// token. A refetch still in flight settles it, and this joins it.
+		if (!isFetching(entry, now)) throw new Error("JWKS fetch failed");
 	}
-	return { jwks: (await refresh(cached)) ?? cached, kid };
+
+	try {
+		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
+	} catch (error) {
+		const failedAt = Date.now();
+		entry.refetchedAt = failedAt;
+		// An earlier fetch that outlived its wait can land while this one fails.
+		// Its set replaces the one read above, which may still hold a key the
+		// issuer has since dropped, so the entry is read again and each set is
+		// judged by the time of its own fetch.
+		if (entry.jwks && failedAt - entry.fetchedAt < JWKS_CACHE_TTL_MS) {
+			return resolveCached(entry.jwks);
+		}
+		const latest = getStaleJwks(failedAt);
+		if (latest?.canUse) {
+			return { jwks: latest.stale, kid, refresh: refreshStale };
+		}
+		throw error;
+	}
 }
 
 async function verifyAccessTokenPayload(

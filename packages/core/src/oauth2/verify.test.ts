@@ -1520,6 +1520,87 @@ describe("verifyBearerToken", () => {
 			mockedFetch.mockReset();
 			vi.resetModules();
 		});
+
+		describe("when a slow refetch lands while a later one fails", () => {
+			async function seedKeySet() {
+				vi.resetModules();
+				const { verifyBearerToken: verify } = await import("./verify");
+				const retiredKey = await createTestJWKS();
+				const currentKey = await createTestJWKS();
+				const token = await createSignedToken(
+					retiredKey.privateKey,
+					retiredKey.kid,
+				);
+				const options = { jwksUrl, verifyOptions: { issuer, audience } };
+				const fetchedAt = Date.now();
+				mockedFetch.mockImplementationOnce(() =>
+					Promise.resolve(jwksResponse(retiredKey.publicJWK)),
+				);
+				await expect(verify(token, options)).resolves.toMatchObject({
+					sub: "user-123",
+				});
+				return { verify, token, options, fetchedAt, currentKey };
+			}
+
+			it("should reject a key the landed set dropped as an invalid token while that set is fresh", async () => {
+				const { verify, token, options, fetchedAt, currentKey } =
+					await seedKeySet();
+
+				// Nine minutes in, a refetch outlives its 5 s wait and the expired set
+				// still verifies the token.
+				vi.useFakeTimers({ now: fetchedAt + 9 * 60 * 1000 });
+				const slowRefetch = Promise.withResolvers<Response>();
+				mockedFetch.mockReturnValueOnce(slowRefetch.promise);
+				const servedFromExpiredSet = verify(token, options);
+				await vi.advanceTimersByTimeAsync(5_000);
+				await expect(servedFromExpiredSet).resolves.toMatchObject({
+					sub: "user-123",
+				});
+
+				// Near the end of the window another refetch hangs, and meanwhile the
+				// slow refetch lands with a set the issuer rotated the key out of.
+				vi.setSystemTime(fetchedAt + 10 * 60 * 1000 - 2_000);
+				mockedFetch.mockReturnValueOnce(new Promise(() => {}));
+				const rejection = expectUnauthorized(verify(token, options));
+				await vi.advanceTimersByTimeAsync(0);
+				expect(mockedFetch).toHaveBeenCalledTimes(3);
+				slowRefetch.resolve(jwksResponse(currentKey.publicJWK));
+				await vi.advanceTimersByTimeAsync(5_000);
+
+				await rejection;
+			});
+
+			it("should report the failed refetch for a key the landed set dropped once that set has expired", async () => {
+				const { verify, token, options, fetchedAt, currentKey } =
+					await seedKeySet();
+
+				// Just after the set expires, a refetch outlives its 5 s wait and the
+				// expired set still verifies the token.
+				vi.useFakeTimers({ now: fetchedAt + 5 * 60 * 1000 + 1_000 });
+				const slowRefetch = Promise.withResolvers<Response>();
+				mockedFetch.mockReturnValueOnce(slowRefetch.promise);
+				const servedFromExpiredSet = verify(token, options);
+				await vi.advanceTimersByTimeAsync(5_000);
+				await expect(servedFromExpiredSet).resolves.toMatchObject({
+					sub: "user-123",
+				});
+
+				// Near the end of the window another refetch hangs, and meanwhile the
+				// slow refetch lands with a set the issuer rotated the key out of. That
+				// set is already more than five minutes old when the refetch times out.
+				vi.setSystemTime(fetchedAt + 10 * 60 * 1000 - 2_000);
+				mockedFetch.mockReturnValueOnce(new Promise(() => {}));
+				const rejection = expect(verify(token, options)).rejects.toMatchObject({
+					code: "ERR_JWKS_TIMEOUT",
+				});
+				await vi.advanceTimersByTimeAsync(0);
+				expect(mockedFetch).toHaveBeenCalledTimes(3);
+				slowRefetch.resolve(jwksResponse(currentKey.publicJWK));
+				await vi.advanceTimersByTimeAsync(5_000);
+
+				await rejection;
+			});
+		});
 	});
 
 	describe("expired JWKS cache outside access-token verification", () => {
