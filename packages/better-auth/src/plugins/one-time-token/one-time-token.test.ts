@@ -414,7 +414,7 @@ describe("one-time token session refresh", () => {
 				fetchOptions: { throw: true },
 			});
 			headers.delete("cookie");
-			const session = client.$store.atoms.session!;
+			const session = client.useSession;
 			onTestFinished(session.subscribe(() => {}));
 			await vi.waitFor(() => {
 				expect(session.get().isPending).toBe(false);

@@ -866,7 +866,7 @@ describe("anonymous session refresh", () => {
 			await client.signIn.anonymous({
 				fetchOptions: { onSuccess: sessionSetter(headers) },
 			});
-			const session = client.$store.atoms.session!;
+			const session = client.useSession;
 			onTestFinished(session.subscribe(() => {}));
 			await vi.waitFor(() => {
 				expect(session.get().data).not.toBeNull();

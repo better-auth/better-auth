@@ -1233,7 +1233,7 @@ describe("one-tap session refresh", () => {
 			await oneTapInstance();
 		await runWithUser(testUser.email, testUser.password, async (headers) => {
 			headers.delete("cookie");
-			const session = client.$store.atoms.session!;
+			const session = client.useSession;
 			onTestFinished(session.subscribe(() => {}));
 			await vi.waitFor(() => {
 				expect(session.get().isPending).toBe(false);
@@ -1253,7 +1253,7 @@ describe("one-tap session refresh", () => {
 			await oneTapInstance();
 		await runWithUser(testUser.email, testUser.password, async (headers) => {
 			headers.delete("cookie");
-			const session = client.$store.atoms.session!;
+			const session = client.useSession;
 			onTestFinished(session.subscribe(() => {}));
 			await vi.waitFor(() => {
 				expect(session.get().isPending).toBe(false);
