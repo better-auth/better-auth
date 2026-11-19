@@ -409,19 +409,14 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		cimdOptions.metadataStaleIfError,
 	);
 	const metadataCache = new Map<string, CimdMetadataCacheEntry>();
-	// Clients whose last fetch failed transiently, kept only while
-	// `metadataStaleIfError` is set. An evicted record makes the next request
-	// fetch, which is safe.
+	// Evicting a transient record only makes the next request fetch.
 	const transientFailureByClientId = new Map<
 		string,
 		{ failedAtMs: number; reason: string }
 	>();
-	// When a client that had a stored client within the stale bound last failed
-	// terminally, since its last successful fetch.
-	// Its stored client is not served stale. A record older than the bound can
-	// no longer block anything and is pruned first; evicting a newer record
-	// moves the watermark, and stored clients last validated before it are not
-	// served stale either, so an eviction cannot resume stale serving.
+	// Evicting a terminal record moves the watermark, so stored clients
+	// validated before it are not served stale and eviction cannot resume
+	// stale serving.
 	const terminalFailureAtMsByClientId = new Map<string, number>();
 	let terminalFailureEvictedAtMs = Number.NEGATIVE_INFINITY;
 	const inFlightMetadataByClientId = new Map<string, InFlightMetadataFetch>();
@@ -457,9 +452,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		terminalFailureAtMsByClientId.delete(clientId);
 	};
 
-	// A failure that is not transient ends the client's transient record. A
-	// transient one is recorded by the request that serves a stored client, so
-	// failures for client IDs with nothing to serve cannot evict the records.
 	const recordFetchFailure = (clientId: string, failure: unknown) => {
 		if (
 			staleIfErrorMs === null ||
@@ -484,9 +476,8 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		});
 	};
 
-	// Recorded only by a request whose stored client is within the stale
-	// bound, the only case a record can block, so failures for client IDs with
-	// no servable stored client cannot fill the records.
+	// Callers record only for a servable stored client, so unknown client IDs
+	// cannot fill the records.
 	const recordTerminalFailure = (clientId: string) => {
 		if (staleIfErrorMs === null) return;
 		const nowMs = Date.now();
@@ -899,8 +890,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 					metadataCache.delete(clientId);
 				}
 				recordFailedFetch(clientId);
-				// The provider refused the newest document, a terminal failure. A
-				// storage failure says nothing about the document.
+				// A storage failure says nothing about the document.
 				if (
 					isAPIError(error) &&
 					error.status === "BAD_REQUEST" &&
@@ -912,9 +902,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			}
 		};
 
-		// CIMD draft-03 §6.1: a transient failure should not invalidate a
-		// client's established trust, and a terminal one may. Only the stored row
-		// stands in, never an instance's cached document.
+		// Only the stored row stands in, never an instance's cached document.
 		const storedClientWithinStaleBound = () => {
 			if (
 				!existingClient?.updatedAt ||
@@ -982,8 +970,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 					recordTransientFailure(clientId, error);
 					return serveStoredClient(storedClient, describeFetchFailure(error));
 				}
-				// CIMD draft-03 §6.1: a failure is terminal only when the document was
-				// retrieved and rejected, or the fetch was refused by policy.
 				if (
 					storedClient &&
 					!isMetadataFetchRefusal(error) &&
@@ -992,9 +978,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				) {
 					recordTerminalFailure(clientId);
 				}
-				// A local limit refused a fetch for a client already being served
-				// stale. The refusal says nothing about the document, so only a recent
-				// transient failure lets the stored client stand in.
 				const lastFailure = transientFailureByClientId.get(clientId);
 				if (
 					storedClient &&

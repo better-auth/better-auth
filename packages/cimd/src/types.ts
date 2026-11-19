@@ -103,53 +103,17 @@ export interface CimdOptions {
 	 */
 	metadataRevalidationInterval?: number | string;
 	/**
-	 * Keep serving a stored client whose metadata document cannot be refreshed
-	 * because of a transient failure, for up to this long after the client was
-	 * last validated (its `updatedAt`). A transient failure is the plugin's
-	 * 5-second fetch timeout, a connection failure such as a reset or refused
-	 * connection, or an HTTP 500, 502, 503, or 504 response. A connection
-	 * failure counts only when its error carries a known error code, so on a
-	 * runtime whose `fetch` throws connection failures without one, only the
-	 * timeout and those four statuses count. While a client is served this way,
-	 * its document is fetched again at most once a minute.
-	 *
-	 * The timeout counts even when the delay is local: the Node transport's
-	 * DNS lookups run on the Node.js thread pool, 4 threads by default, so a
-	 * few host names whose DNS servers do not answer can hold lookups for
-	 * other hosts past the timeout, and a stored client whose host would have
-	 * answered with a terminal failure is served instead. Keep this bound
-	 * short; a larger pool set through `UV_THREADPOOL_SIZE` reduces the
-	 * queuing.
-	 *
-	 * Two refusals are local limits rather than failures: a
-	 * `metadataFetchPolicy` limit, and the Node transport's limit on
-	 * outstanding DNS lookups (any transport error with the code
-	 * `ERR_CIMD_DNS_LOOKUP_LIMIT`). They serve the stored client only within 5
-	 * minutes of its last transient failure, otherwise answer
-	 * `temporarily_unavailable`, and never stop stale serving. A database
-	 * error while saving a refreshed document, and any other error the
-	 * transport throws, such as an unresolvable host or the transport's own
-	 * refusal of an address, also fail the request without stopping stale
-	 * serving. A terminal failure, where the document was retrieved and
-	 * rejected, a URL that `isMetadataDocumentUrlAllowed` refuses, or a
-	 * refreshed document that the OAuth provider refuses to save, still
-	 * rejects the request, and also stops this plugin instance from serving
-	 * the stored client until a refresh succeeds.
-	 *
-	 * This is an operator trust policy modeled on RFC 5861 stale-if-error, and
-	 * applies whatever cache directives the document was served with: the
-	 * stored client is a registration, not a cached HTTP response (CIMD
-	 * draft-03 §6.1).
-	 *
-	 * A client that authenticates with `private_key_jwt` and a `jwks_uri` also
-	 * keeps its cached keys for up to this long after they were last fetched
-	 * when refreshing them fails transiently. Keys are cached in memory, so
-	 * after a restart they must be fetched before they can be used.
+	 * Keep serving a stored client for up to this long after it was last
+	 * validated (its `updatedAt`) when refreshing its metadata document fails
+	 * transiently: the fetch times out, the connection fails with a known error
+	 * code, or the server answers with HTTP 500, 502, 503, or 504. Other
+	 * failures still reject the request. Cached `jwks_uri` keys follow the same
+	 * rules.
 	 *
 	 * Accepts a number of seconds or a duration string (e.g. `"6h"`), at most
-	 * 24 hours. Unset, every refresh failure rejects the request.
+	 * 24 hours.
 	 *
-	 * @see https://www.rfc-editor.org/rfc/rfc5861#section-4
+	 * @see https://www.better-auth.com/docs/plugins/cimd#transient-refresh-failures
 	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1
 	 */
 	metadataStaleIfError?: number | string;

@@ -55,11 +55,7 @@ type JwksCache = {
 	sets: Map<string, JwksCacheEntry>;
 	/** Fetch in flight per `jwks_uri`, kept apart so failures never evict a set. */
 	fetches: Map<string, JwksFetch>;
-	/**
-	 * Last failure per `jwks_uri` of a discovery that sets `jwksStaleIfError`,
-	 * until a fetch succeeds. Evicting a terminal failure also evicts its key
-	 * set, so an eviction cannot resume serving stale keys.
-	 */
+	/** Evicting a terminal failure also evicts its key set. */
 	failures: Map<string, JwksFetchFailure & { sequence: number }>;
 	/** Sequence the next fetch takes. */
 	nextSequence: number;
@@ -73,16 +69,9 @@ const JWKS_FETCH_TIMEOUT_MS = 5_000;
 const MAX_JWKS_RESPONSE_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
 const MAX_JWKS_STALE_IF_ERROR_SECONDS = 24 * 60 * 60;
-// Past the grace period, keys served stale are fetched again at most this
-// often, so an outage does not send every assertion to the key host.
 const JWKS_STALE_REFETCH_INTERVAL_MS = 60_000;
-// How recent a transient failure must be for stale keys to stand in when the
-// transport refuses the fetch at a local capacity limit instead.
 const JWKS_STALE_REFUSAL_WINDOW_MS = 5 * 60_000;
 
-// Key fetch failures that a later fetch can get past: a timeout, a connection
-// failure, or HTTP 500, 502, 503, or 504. Only these may extend a discovery's
-// stale key window.
 const transientJwksFetchFailures = new WeakSet<Error>();
 
 function createTransientJwksFetchFailure(
@@ -98,9 +87,8 @@ function isTransientJwksFetchFailure(error: unknown): error is Error {
 	return error instanceof Error && transientJwksFetchFailures.has(error);
 }
 
-// Errors the transport threw that are not transient. Without an error code, a
-// failed connection and the transport's own refusal of the host throw the same
-// error, so these are neither transient nor terminal.
+// Without an error code, a failed connection and a refused address look the
+// same, so these are neither transient nor terminal.
 const jwksTransportErrors = new WeakSet<Error>();
 
 function isJwksTransportError(error: unknown): boolean {
@@ -159,7 +147,6 @@ function getJwksStaleIfErrorMs(discovery: ClientDiscovery | undefined): number {
 	return Math.min(seconds, MAX_JWKS_STALE_IF_ERROR_SECONDS) * 1000;
 }
 
-/** `null` for a local capacity refusal, which says nothing about the host. */
 function toJwksFetchFailure(
 	error: unknown,
 ): JwksFetchFailure | "transport-error" | null {
@@ -170,11 +157,6 @@ function toJwksFetchFailure(
 		: { transient: false };
 }
 
-/**
- * Records how the fetch with sequence `sequence` failed. A transport error
- * ends a transient record, so cached keys are not served on its strength, and
- * records nothing in its place.
- */
 function recordJwksFetchFailure(
 	cache: JwksCache,
 	cacheKey: string,
@@ -186,7 +168,6 @@ function recordJwksFetchFailure(
 	const cached = cache.sets.get(cacheKey);
 	if (cached && cached.sequence > sequence) return;
 	const terminal = failure !== "transport-error" && !failure.transient;
-	// A terminal failure holds until a fetch succeeds.
 	if (!terminal && cache.failures.get(cacheKey)?.transient === false) return;
 	cache.failures.delete(cacheKey);
 	if (failure === "transport-error") return;
@@ -233,8 +214,7 @@ function isFetching(fetch: JwksFetch | undefined, now: number): boolean {
  * wait, since the request that started a fetch may end before it settles.
  * A caller whose joined fetch throws or returns an invalid key set makes one
  * fetch of its own, as it would without sharing, so a failure that is not its
- * own does not fail it. With `recordsFailures`, the failure of the fetch that
- * answers the caller is recorded with that fetch's sequence.
+ * own does not fail it.
  */
 async function loadJwks(
 	cache: JwksCache,
@@ -631,8 +611,7 @@ async function fetchClientJwks(
 
 	// Return stale cache on transient failures, but only within a grace period.
 	// After 2x the TTL, stale keys are no longer trusted (prevents accepting
-	// revoked keys indefinitely when the JWKS endpoint is down) unless the
-	// discovery's `jwksStaleIfError` window still covers them.
+	// revoked keys indefinitely when the JWKS endpoint is down).
 	const staleLimitMs = JWKS_CACHE_TTL_MS * 2;
 	const staleIfErrorMs = getJwksStaleIfErrorMs(discovery);
 	const serveStaleKeys = (keys: JwksCacheEntry, reason: string) => {

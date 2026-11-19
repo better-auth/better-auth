@@ -55,10 +55,8 @@ function invalidClient(description: string): APIError {
 	});
 }
 
-// Fetch failures that a later fetch can get past: the fetch timeout, a
-// connection failure, or HTTP 500, 502, 503, or 504. They answer with the same
-// error as any other failure, so the classification is kept beside the error
-// instead.
+// Transient failures answer with the same error as any other failure, so the
+// classification is kept beside the error.
 const transientMetadataFetchFailures = new WeakSet<object>();
 const metadataFetchCapacityRefusals = new WeakSet<object>();
 const metadataTransportErrors = new WeakSet<object>();
@@ -78,10 +76,9 @@ function transportError(description: string, transient: boolean): APIError {
 }
 
 /**
- * Whether a metadata document fetch failed because the transport threw, so no
- * document was retrieved. Without an error code, a failed connection and the
- * transport's own refusal of the host throw the same error, so such a failure
- * is neither transient nor terminal.
+ * The transport threw, so no document was retrieved. Without an error code, a
+ * failed connection and a refused address look the same, so this is neither
+ * transient nor terminal.
  */
 export function isMetadataTransportError(error: unknown): boolean {
 	return (
@@ -91,10 +88,6 @@ export function isMetadataTransportError(error: unknown): boolean {
 	);
 }
 
-/**
- * Whether a metadata document fetch failed transiently: it timed out, its
- * connection failed, or the server answered with HTTP 500, 502, 503, or 504.
- */
 export function isTransientMetadataFetchFailure(error: unknown): boolean {
 	return (
 		typeof error === "object" &&

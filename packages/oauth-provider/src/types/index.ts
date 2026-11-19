@@ -140,36 +140,13 @@ export interface ClientDiscovery {
 		context: GenericEndpointContext,
 	) => Awaitable<boolean>;
 	/**
-	 * Seconds after its last successful fetch that a cached `jwks_uri` key set
-	 * of a client owned by this discovery keeps verifying client assertions
-	 * when a refetch fails transiently: the fetch times out, the connection
-	 * fails with an error that carries a known error code, or the server
-	 * answers with HTTP 500, 502, 503, or 504.
+	 * Seconds after the last successful fetch that cached `jwks_uri` keys of
+	 * this discovery's clients keep verifying assertions while refetching them
+	 * fails transiently: a timeout, a connection failure with a known error
+	 * code, or HTTP 500, 502, 503, or 504. Capped at 24 hours. Values under the
+	 * default 10-minute fallback do not shorten it.
 	 *
-	 * Without it, cached keys already keep verifying for 10 minutes after
-	 * their last successful fetch, twice the 5-minute key cache lifetime, when
-	 * a refetch fails for any reason other than a response that is not valid
-	 * JSON or not a valid key set. That window is a floor: a value under 600
-	 * seconds does not shorten it.
-	 *
-	 * Past those 10 minutes, a refetch that the transport refuses at a local
-	 * capacity limit, such as the Node transport's limit on outstanding DNS
-	 * lookups (error code `ERR_CIMD_DNS_LOOKUP_LIMIT`), uses the cached keys
-	 * only within 5 minutes of the last transient failure, and does not stop
-	 * stale serving. Any other error the transport throws, such as an
-	 * unresolvable host or the transport's own refusal of an address, rejects
-	 * the assertion without stopping stale serving. Any other failure, such as
-	 * an HTTP 404 response, rejects the assertion, and stops this server
-	 * process from serving the stale keys until a fetch succeeds.
-	 * While stale keys are served, they are fetched again at most once a
-	 * minute, and assertions in between use them without a fetch, except an
-	 * assertion that names a key the cached set lacks, which fetches them
-	 * again before it is rejected.
-	 *
-	 * Non-finite and negative values add no time. Values above 24 hours are
-	 * capped at 24 hours.
-	 *
-	 * @see https://www.rfc-editor.org/rfc/rfc5861#section-4
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/clients#private-key-jwt
 	 */
 	jwksStaleIfError?: number;
 	/**
