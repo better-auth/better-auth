@@ -542,6 +542,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						})) as T[];
 						return orderRowsByIds(ids, created, idField, model);
 					}
+					if (typeof db[model].createMany !== "function") {
+						return createSequentially();
+					}
 					const insertAndReadBack = async (tx: PrismaClient) => {
 						const client = tx as PrismaClientInternal;
 						await client[model]!.createMany({ data: values });
@@ -551,6 +554,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						})) as T[];
 						return orderRowsByIds(ids, rows, idField, model);
 					};
+					if (config.provider === "mongodb" && !config.transaction) {
+						return createSequentially();
+					}
 					if (inTransaction) {
 						return insertAndReadBack(db);
 					}
@@ -988,6 +994,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			createManyMaxParameters: createManyMaxParametersForProvider(
 				config.provider,
 			),
+			createManyMaxRows: config.provider === "sqlserver" ? 1000 : undefined,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,
 			supportsArrays:
 				config.provider === "postgresql" || config.provider === "mongodb"
