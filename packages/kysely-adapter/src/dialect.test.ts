@@ -87,6 +87,18 @@ describe("createKyselyAdapter transaction detection", () => {
 		expect(introspectIndexes).toBeTypeOf("function");
 	});
 
+	it("detects D1 when the database is wrapped in D1SqliteDialect", async () => {
+		const { isD1, transaction, databaseType } = await createKyselyAdapter({
+			database: {
+				dialect: new D1SqliteDialect({ database: fakeD1Database() }),
+				type: "sqlite",
+			},
+		});
+		expect(isD1).toBe(true);
+		expect(transaction).toBeUndefined();
+		expect(databaseType).toBe("sqlite");
+	});
+
 	it("leaves transaction support unspecified for a caller-supplied dialect of unknown capability", async () => {
 		const { transaction, databaseType } = await createKyselyAdapter({
 			database: new UnknownDialect(),

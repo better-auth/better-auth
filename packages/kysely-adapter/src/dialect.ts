@@ -56,6 +56,27 @@ export function getKyselyDatabaseType(
 	return null;
 }
 
+function isD1Like(value: unknown): boolean {
+	try {
+		return (
+			!!value &&
+			typeof value === "object" &&
+			typeof (value as { batch?: unknown }).batch === "function" &&
+			typeof (value as { prepare?: unknown }).prepare === "function" &&
+			typeof (value as { exec?: unknown }).exec === "function"
+		);
+	} catch {
+		return false;
+	}
+}
+
+function isD1Dialect(value: unknown): boolean {
+	if (!value || typeof value !== "object") return false;
+	if ("isD1" in value && value.isD1 === true) return true;
+	if ("database" in value && isD1Like(value.database)) return true;
+	return isD1Like(value);
+}
+
 function checkSchemaName(
 	schemaName: string | undefined,
 	databaseType: KyselyDatabaseType | null,
@@ -96,7 +117,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			introspectIndexes: undefined,
 			schemaName,
 			transaction: db.transaction,
-			isD1: false,
+			isD1: isD1Dialect(db.db),
 		};
 	}
 
@@ -110,7 +131,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			introspectIndexes: undefined,
 			schemaName,
 			transaction: db.transaction,
-			isD1: false,
+			isD1: isD1Dialect(db.dialect),
 		};
 	}
 

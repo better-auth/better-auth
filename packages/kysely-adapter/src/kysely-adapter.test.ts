@@ -235,7 +235,9 @@ describe("kysely-adapter", () => {
 		expect(sqlite.options?.adapterConfig.createManyMaxParameters).toBe(999);
 		expect(postgres.options?.adapterConfig.createManyMaxParameters).toBe(65535);
 		expect(mssql.options?.adapterConfig.createManyMaxParameters).toBe(2099);
+		expect(mssql.options?.adapterConfig.createManyMaxRows).toBe(1000);
 		expect(d1.options?.adapterConfig.createManyMaxParameters).toBe(100);
+		expect(sqlite.options?.adapterConfig.createManyMaxRows).toBeUndefined();
 	});
 
 	const createManyRows = [
@@ -301,6 +303,44 @@ describe("kysely-adapter", () => {
 		});
 
 		expect(insertQuery.values).toHaveBeenCalledTimes(2);
+		expect(insertQuery.execute).not.toHaveBeenCalled();
+		expect(insertQuery.executeTakeFirst).toHaveBeenCalledTimes(2);
+	});
+
+	it("inserts sqlite rows sequentially when optional fields differ", async () => {
+		const insertQuery = {
+			values: vi.fn(() => insertQuery),
+			returningAll: vi.fn(() => insertQuery),
+			execute: vi.fn(),
+			executeTakeFirst: vi.fn().mockResolvedValue({ id: "generated" }),
+		};
+		const db = {
+			insertInto: vi.fn(() => insertQuery),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "sqlite" })({});
+
+		await adapter.createMany({
+			model: "user",
+			data: [
+				{
+					id: "a",
+					name: "Ada",
+					email: "ada@example.com",
+					emailVerified: false,
+					image: "https://example.com/ada.png",
+				},
+				{
+					id: "b",
+					name: "Bob",
+					email: "bob@example.com",
+					emailVerified: false,
+				},
+			],
+			forceAllowId: true,
+		});
+
+		expect(insertQuery.values).toHaveBeenCalledTimes(2);
+		expect(insertQuery.returningAll).toHaveBeenCalledTimes(2);
 		expect(insertQuery.execute).not.toHaveBeenCalled();
 		expect(insertQuery.executeTakeFirst).toHaveBeenCalledTimes(2);
 	});
