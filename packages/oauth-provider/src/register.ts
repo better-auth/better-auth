@@ -30,6 +30,7 @@ import {
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import { assertResourcePrivileges } from "./oauthResource/privileges";
 import { getResource } from "./resources";
+import { schema as oauthProviderSchema } from "./schema";
 import type {
 	ClientRegistrationRequest,
 	OAuthClientAdministrativeResponse,
@@ -133,6 +134,42 @@ function applyOAuthClientRegistrationDefaults(
 		grant_types: grantTypes,
 		response_types: resolveRegistrationResponseTypes(client, grantTypes),
 	};
+}
+
+/**
+ * Client fields that a metadata document sets and a refresh clears when it
+ * omits them. `subjectType` is not listed: changing it changes every user's
+ * `sub` for the client (OIDC Core §8), so an omitted value keeps the stored
+ * one. A document that states another value still changes it.
+ */
+const METADATA_DOCUMENT_CLIENT_FIELDS = [
+	"name",
+	"uri",
+	"icon",
+	"tos",
+	"policy",
+	"contacts",
+	"jwks",
+	"jwksUri",
+	"softwareId",
+	"softwareVersion",
+	"softwareStatement",
+	"postLogoutRedirectUris",
+	"responseTypes",
+	"dpopBoundAccessTokens",
+] as const satisfies readonly (keyof SchemaClient<Scope[]>)[];
+
+/**
+ * The value a refresh stores for a document field the document omits. Some
+ * adapters store a list field in a non-nullable array column, so a list is
+ * cleared to an empty list instead of `null`.
+ */
+function clearedDocumentFieldValue(
+	field: (typeof METADATA_DOCUMENT_CLIENT_FIELDS)[number],
+): [] | null {
+	return oauthProviderSchema.oauthClient.fields[field].type === "string[]"
+		? []
+		: null;
 }
 
 function isCustomSchemeWithHost(redirectUri: string): boolean {
@@ -1013,6 +1050,14 @@ async function persistOAuthClientRegistration(
 					enableEndSession: _enableEndSession,
 					...refreshed
 				} = schema;
+				// An update skips undefined values, so a field the document no longer
+				// lists is cleared explicitly.
+				const omittedDocumentFields = Object.fromEntries(
+					METADATA_DOCUMENT_CLIENT_FIELDS.map((field) => [
+						field,
+						refreshed[field] ?? clearedDocumentFieldValue(field),
+					]),
+				);
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
 					model: clientModel,
 					where: [
@@ -1024,6 +1069,7 @@ async function persistOAuthClientRegistration(
 					],
 					update: {
 						...refreshed,
+						...omittedDocumentFields,
 						createdAt: existingClient.createdAt,
 						updatedAt: new Date(iat * 1000),
 					},
