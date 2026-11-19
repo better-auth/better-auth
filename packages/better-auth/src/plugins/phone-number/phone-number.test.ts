@@ -1683,12 +1683,55 @@ describe("phone number at user creation", () => {
 			phoneNumber: "",
 		});
 		expect(res.error).toBeNull();
+		const user = await db.findOne<UserWithPhoneNumber>({
+			model: "user",
+			where: [{ field: "email", value: "empty-unverified@test.com" }],
+		});
+		expect(user).toMatchObject({
+			phoneNumber: null,
+			phoneNumberVerified: false,
+		});
 		expect(
 			await db.findMany({
 				model: "user",
 				where: [{ field: "phoneNumber", value: "" }],
 			}),
 		).toHaveLength(0);
+	});
+
+	it("rejects duplicate phone number during sign-up when requireVerification is false", async () => {
+		const phoneNumberValue = "+1234567890";
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						requireVerification: false,
+						async sendOTP() {},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		await client.signUp.email({
+			email: "first-user@test.com",
+			password: "password123",
+			name: "first",
+			phoneNumber: phoneNumberValue,
+		});
+
+		const duplicateRes = await client.signUp.email({
+			email: "second-user@test.com",
+			password: "password123",
+			name: "second",
+			phoneNumber: phoneNumberValue,
+		});
+		expect(duplicateRes.error?.code).toBe("PHONE_NUMBER_EXIST");
 	});
 
 	it("rejects a phone number sent with email sign-up when requireVerification is true", async () => {

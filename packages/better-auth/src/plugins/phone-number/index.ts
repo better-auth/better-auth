@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
 import { PACKAGE_VERSION } from "../../version";
@@ -40,7 +41,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 	return {
 		id: "phone-number",
 		version: PACKAGE_VERSION,
-		init() {
+		init(authContext) {
 			return {
 				options: {
 					databaseHooks: {
@@ -57,7 +58,10 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 									) {
 										return;
 									}
-									if (data[opts.phoneNumber] === "") {
+									if (
+										typeof data[opts.phoneNumber] === "string" &&
+										data[opts.phoneNumber].trim() === ""
+									) {
 										return {
 											data: {
 												...data,
@@ -67,7 +71,13 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 										};
 									}
 									if (opts.requireVerification === false) {
-										if (opts.phoneNumberValidator && data[opts.phoneNumber]) {
+										if (typeof data[opts.phoneNumber] !== "string") {
+											throw APIError.from(
+												"BAD_REQUEST",
+												PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
+											);
+										}
+										if (opts.phoneNumberValidator) {
 											const isValidNumber = await opts.phoneNumberValidator(
 												data[opts.phoneNumber],
 											);
@@ -75,6 +85,26 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 												throw APIError.from(
 													"BAD_REQUEST",
 													PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
+												);
+											}
+										}
+										const baseAdapter =
+											ctx?.context?.adapter ?? authContext.adapter;
+										if (baseAdapter) {
+											const adapter = await getCurrentAdapter(baseAdapter);
+											const existingUser = await adapter.findOne({
+												model: "user",
+												where: [
+													{
+														field: "phoneNumber",
+														value: data[opts.phoneNumber],
+													},
+												],
+											});
+											if (existingUser) {
+												throw APIError.from(
+													"BAD_REQUEST",
+													PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_EXIST,
 												);
 											}
 										}
