@@ -290,6 +290,9 @@ export async function fetchClientMetadataDocument(
 		};
 	} finally {
 		clearTimeout(timeout);
+		// A refused response may still be streaming; aborting lets the transport
+		// release its connection instead of holding it until the server closes it.
+		controller.abort();
 	}
 }
 

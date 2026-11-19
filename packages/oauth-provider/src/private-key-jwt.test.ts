@@ -520,6 +520,22 @@ describe("private_key_jwt authentication", async () => {
 			expect(fixture.transport).toHaveBeenCalledTimes(3);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11609
+		 */
+		it("aborts the key set request after refusing an unread error response", async () => {
+			const fixture = await setup("abort-refused");
+			const signals: (AbortSignal | undefined)[] = [];
+			fixture.transport.mockImplementation(async (_input, init) => {
+				signals.push(init?.signal ?? undefined);
+				return new Response(new ReadableStream<Uint8Array>(), { status: 500 });
+			});
+
+			await expect(fixture.verify("old", fixture.oldKey)).rejects.toBeDefined();
+			expect(signals.length).toBeGreaterThan(0);
+			expect(signals.every((signal) => signal?.aborted === true)).toBe(true);
+		});
+
 		it("lets a joiner make its own fetch when the shared fetch fails", async () => {
 			const fixture = await setup("share-transient");
 			await fixture.verify("old", fixture.oldKey);

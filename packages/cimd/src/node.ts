@@ -205,6 +205,8 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 						: (Readable.toWeb(
 								response,
 							) as unknown as ReadableStream<Uint8Array>);
+				// Node releases the socket only once the response is consumed.
+				if (body === null) response.resume();
 				// Response throws on an out-of-range status or invalid reason phrase,
 				// and a throw from this listener would escape the promise.
 				try {
@@ -222,6 +224,17 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 			},
 		);
 		request.once("error", reject);
+		// Without an upgrade listener, Node destroys the socket after a 101 and
+		// emits neither a response nor an error, and the abort signal can no
+		// longer settle the request.
+		request.once("upgrade", (response, socket) => {
+			response.destroy();
+			socket.destroy();
+			reject(new TypeError("metadata server answered with a protocol upgrade"));
+		});
+		request.once("close", () => {
+			reject(new TypeError("metadata request closed before a response"));
+		});
 		request.end();
 	});
 };
