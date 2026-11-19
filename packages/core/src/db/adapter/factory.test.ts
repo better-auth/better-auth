@@ -511,7 +511,7 @@ describe("createAdapterFactory createMany", () => {
 	});
 
 	it("appends large native createMany results without spreading the chunk", async () => {
-		const count = 70_000;
+		const count = 200_000;
 		const createMany = vi.fn(
 			async ({ data }: { data: Record<string, any>[] }) => data,
 		);
