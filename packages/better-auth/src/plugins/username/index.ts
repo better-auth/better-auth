@@ -601,7 +601,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						if (
-							typeof ctx.body.displayUsername !== "string" ||
+							typeof ctx.body?.displayUsername !== "string" ||
 							ctx.body.username !== undefined
 						) {
 							return;
@@ -622,7 +622,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const username = ctx.body.username;
+						const username = ctx.body?.username;
 
 						if (username !== undefined && typeof username === "string") {
 							const validationError = await validateUsernameValue(username);
@@ -679,10 +679,10 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 						}
 
 						const displayUsername =
-							typeof ctx.body.displayUsername === "string" &&
+							typeof ctx.body?.displayUsername === "string" &&
 							options?.validationOrder?.displayUsername === "post-normalization"
 								? displayUsernameNormalizer(ctx.body.displayUsername)
-								: ctx.body.displayUsername;
+								: ctx.body?.displayUsername;
 
 						if (
 							displayUsername !== undefined &&
@@ -709,7 +709,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 						if (!includeDisplayUsername) {
 							return;
 						}
-						if (ctx.body.username && !ctx.body.displayUsername) {
+						if (ctx.body?.username && !ctx.body.displayUsername) {
 							ctx.body.displayUsername = ctx.body.username;
 						}
 					}),

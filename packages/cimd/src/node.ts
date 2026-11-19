@@ -2,7 +2,10 @@ import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import { Readable } from "node:stream";
-import { isPublicRoutableHost } from "@better-auth/core/utils/host";
+import {
+	classifyHost,
+	isPublicRoutableHost,
+} from "@better-auth/core/utils/host";
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
 
 const BODY_FORBIDDEN_RESPONSE_STATUSES = new Set([204, 205, 304]);
@@ -25,10 +28,13 @@ function responseHeaders(
  * Fetch a CIMD-owned HTTPS resource with resolve-once DNS validation and
  * connection pinning.
  *
- * Every DNS answer must be public-routable. The selected answer is pinned for
- * the connection while the original hostname remains the HTTP Host, TLS SNI,
- * and certificate-verification identity. Redirect responses are returned to
- * the caller and are never followed.
+ * Every DNS answer must be public-routable. The connection is limited to those
+ * validated answers, so Node can fall back between them without a second DNS
+ * query, while the original hostname remains the HTTP Host, TLS SNI, and
+ * certificate-verification identity. An IP-literal host skips DNS and is
+ * connected to directly once it is classified public-routable. It sends no
+ * SNI, and its certificate must name the IP address. Redirect responses are
+ * returned to the caller and are never followed.
  */
 export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 	input,
@@ -43,18 +49,36 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 		throw new TypeError("CIMD Node transport supports only GET and HEAD");
 	}
 
-	const addresses = await lookup(url.hostname, {
-		all: true,
-		verbatim: true,
-	});
-	if (addresses.length === 0) {
-		throw new TypeError("metadata hostname returned no DNS addresses");
-	}
-	for (const result of addresses) {
-		if (!isPublicRoutableHost(result.address)) {
+	// A literal host has no DNS answer to pin. lookup() rejects the bracketed
+	// form of an IPv6 literal, so classify the literal itself and pin it.
+	const literal = classifyHost(url.hostname);
+	let addresses: { address: string; family: number }[];
+	if (literal.literal !== "fqdn") {
+		if (literal.kind !== "public") {
 			throw new TypeError(
 				"metadata hostname must resolve only to public-routable addresses",
 			);
+		}
+		addresses = [
+			{
+				address: literal.canonical,
+				family: literal.literal === "ipv6" ? 6 : 4,
+			},
+		];
+	} else {
+		addresses = await lookup(url.hostname, {
+			all: true,
+			verbatim: true,
+		});
+		if (addresses.length === 0) {
+			throw new TypeError("metadata hostname returned no DNS addresses");
+		}
+		for (const result of addresses) {
+			if (!isPublicRoutableHost(result.address)) {
+				throw new TypeError(
+					"metadata hostname must resolve only to public-routable addresses",
+				);
+			}
 		}
 	}
 	const pinnedAddress = addresses[0] as (typeof addresses)[number];
@@ -81,15 +105,17 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 				 * Node requests all lookup results when automatic address-family
 				 * selection is enabled. The callback must receive an address array for
 				 * `all: true`, and the legacy address and family arguments otherwise.
-				 * Both forms return only the previously validated address to preserve
-				 * connection pinning.
+				 * Every address in the array was already validated as public-routable,
+				 * so the full list goes back to let Node fall back when the first
+				 * family is unreachable, without a second DNS query. The legacy form
+				 * returns only the first validated address.
 				 *
 				 * @see https://nodejs.org/api/net.html#socketconnectoptions-connectlistener
 				 * @see https://nodejs.org/api/dns.html#dnslookuphostname-options-callback
 				 */
 				lookup: (_hostname, options, callback) => {
 					if (options.all) {
-						callback(null, [pinnedAddress]);
+						callback(null, addresses);
 					} else {
 						callback(null, pinnedAddress.address, pinnedAddress.family);
 					}

@@ -345,3 +345,78 @@ describe("onAPIError.onError", () => {
 		);
 	});
 });
+
+/**
+ * @see https://www.rfc-editor.org/rfc/rfc9110#section-8.6
+ * @see https://github.com/better-auth/better-auth/issues/10588
+ */
+describe("requests without content", () => {
+	const emptyStream = () =>
+		new ReadableStream({
+			start(controller) {
+				controller.close();
+			},
+		});
+	const post = (path: string, init: RequestInit) =>
+		new Request(`http://localhost:3000/api/auth${path}`, {
+			method: "POST",
+			duplex: "half",
+			...init,
+		} as RequestInit);
+
+	it.each([
+		["without Content-Length", undefined],
+		[
+			"with Content-Length: 0",
+			{
+				"content-length": "0",
+			},
+		],
+	])(
+		"accepts a POST whose empty body arrives as a stream %s",
+		async (_, headers) => {
+			const { auth } = await getTestInstance({});
+
+			const response = await auth.handler(
+				post("/sign-out", {
+					headers,
+					body: emptyStream(),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+		},
+	);
+
+	it("refuses a cross-site POST without content that carries cookies", async () => {
+		const { auth } = await getTestInstance({
+			advanced: {
+				disableOriginCheck: false,
+			},
+		});
+
+		const response = await auth.handler(
+			post("/sign-out", {
+				headers: {
+					cookie: "better-auth.session_token=token",
+					origin: "https://attacker.example",
+				},
+				body: emptyStream(),
+			}),
+		);
+
+		expect(response.status).toBe(403);
+	});
+
+	it("rejects content without Content-Type", async () => {
+		const { auth } = await getTestInstance({});
+
+		const response = await auth.handler(
+			post("/sign-out", {
+				body: new Blob(["{}"]),
+			}),
+		);
+
+		expect(response.status).toBe(415);
+	});
+});

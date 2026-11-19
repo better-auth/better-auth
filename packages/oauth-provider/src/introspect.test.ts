@@ -3,10 +3,12 @@ import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
+	refreshAccessTokenRequest,
 	verifyAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import { CompactEncrypt, compactDecrypt, errors as joseErrors } from "jose";
 import {
 	afterEach,
 	beforeAll,
@@ -626,6 +628,66 @@ describe("oauth introspect", async () => {
 		});
 		expect(introspection.data?.sid).toBeUndefined();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11132
+	 * @see https://github.com/better-auth/better-auth/issues/12222
+	 */
+	it("reports a jwt access_token refreshed after the session expired as active", async () => {
+		const { headers: testHeaders } = await signInWithTestUser();
+		const tokens = await getTokens(
+			undefined,
+			{ resource: validResource },
+			testHeaders,
+		);
+		const session = await auth.api.getSession({ headers: testHeaders });
+		const context = await auth.$context;
+		await context.internalAdapter.updateSession(session!.session.token, {
+			expiresAt: new Date(Date.now() - 1000),
+		});
+
+		const refresh = await refreshAccessTokenRequest({
+			refreshToken: tokens.data?.refresh_token!,
+			options: {
+				clientId: oauthClient?.client_id!,
+				clientSecret: oauthClient?.client_secret!,
+				redirectURI: redirectUri,
+			},
+			resource: validResource,
+		});
+		const refreshed = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body: refresh.body, headers: refresh.headers },
+		);
+		expect(refreshed.data?.access_token).toBeDefined();
+		// The rotated refresh token stays bound to the session, so back-channel
+		// logout still finds it when the session is deleted.
+		const bound = await context.adapter.findMany<{ revoked?: Date | null }>({
+			model: "oauthRefreshToken",
+			where: [{ field: "sessionId", value: session!.session.id }],
+		});
+		expect(bound.filter((token) => !token.revoked)).toHaveLength(1);
+
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: refreshed.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(introspection.data).toMatchObject({
+			active: true,
+			client_id: oauthClient?.client_id,
+		});
+		expect(introspection.data?.sid).toBeUndefined();
+	});
 });
 
 describe("oauth introspect - config", async () => {
@@ -1052,6 +1114,159 @@ describe("oauth introspect - config", async () => {
 			resource_count: 1,
 			first_resource: validResource,
 		});
+	});
+
+	/**
+	 * A `formatRefreshToken` built on JWE rejects any value that is not a
+	 * compact JWE, such as an unknown token or an access token sent with the
+	 * wrong hint, with a jose error. That rejection means the value is not a
+	 * refresh token, so the endpoint reports it inactive instead of failing.
+	 * @see https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
+	 */
+	describe("formatRefreshToken rejects a value it cannot decode", async () => {
+		const key = new Uint8Array(32).fill(7);
+		const testScopes = ["openid", "offline_access"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				scopes: testScopes,
+				formatRefreshToken: {
+					encrypt: async (token, sessionId) =>
+						new CompactEncrypt(
+							new TextEncoder().encode(JSON.stringify({ token, sessionId })),
+						)
+							.setProtectedHeader({ alg: "A256KW", enc: "A256GCM" })
+							.encrypt(key),
+					decrypt: async (token) => {
+						const { plaintext } = await compactDecrypt(token, key);
+						return JSON.parse(new TextDecoder().decode(plaintext));
+					},
+				},
+			},
+		});
+		if (!oauthClient) expect.unreachable();
+
+		const formHeaders = {
+			accept: "application/json",
+			"content-type": "application/x-www-form-urlencoded",
+		};
+
+		async function getTokens() {
+			const { url: authUrl, codeVerifier } = await createAuthUrl(oauthClient!, {
+				scopes: testScopes,
+			});
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			const url = new URL(callbackRedirectUrl);
+			const tokens = await client.oauth2.token(
+				{
+					grant_type: "authorization_code",
+					code: url.searchParams.get("code") ?? undefined,
+					code_verifier: codeVerifier,
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					scope: testScopes.join(" "),
+					redirect_uri: redirectUri,
+				},
+				{ headers: formHeaders },
+			);
+			return tokens.data as { access_token?: string; refresh_token?: string };
+		}
+
+		function introspect(
+			token: string,
+			token_type_hint?: "access_token" | "refresh_token",
+		) {
+			return client.oauth2.introspect(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token,
+					token_type_hint,
+				},
+				{ headers: formHeaders },
+			);
+		}
+
+		it.each([undefined, "access_token", "refresh_token"] as const)(
+			"reports an unknown token with token_type_hint %s as inactive",
+			async (token_type_hint) => {
+				const introspection = await introspect("bogus", token_type_hint);
+				expect(introspection.error).toBe(null);
+				expect(introspection.data).toEqual({ active: false });
+			},
+		);
+
+		it("reports an access_token sent with token_type_hint refresh_token as inactive", async () => {
+			const tokens = await getTokens();
+			const introspection = await introspect(
+				tokens.access_token!,
+				"refresh_token",
+			);
+			expect(introspection.error).toBe(null);
+			expect(introspection.data).toEqual({ active: false });
+		});
+
+		it("still finds a valid refresh_token", async () => {
+			const tokens = await getTokens();
+			expect(tokens.refresh_token?.split(".")).toHaveLength(5);
+			const introspection = await introspect(tokens.refresh_token!);
+			expect(introspection.data).toMatchObject({ active: true });
+		});
+	});
+
+	/**
+	 * Only a value the format rejects is "not a refresh token". A failure of the
+	 * decoder itself, such as an unreachable key service, is a server error and
+	 * must not read as an inactive token.
+	 */
+	describe("formatRefreshToken fails for another reason", async () => {
+		let failure: Error = new Error("key service unavailable");
+		const testScopes = ["openid", "offline_access"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				scopes: testScopes,
+				formatRefreshToken: {
+					encrypt: (token) => `enc.${token}`,
+					decrypt: () => {
+						throw failure;
+					},
+				},
+			},
+		});
+
+		it.each([
+			[undefined, "a plain error"],
+			["refresh_token", "a plain error"],
+			[undefined, "a key set timeout"],
+			["refresh_token", "a key set timeout"],
+		] as const)(
+			"returns a server error for token_type_hint %s and %s",
+			async (token_type_hint, kind) => {
+				failure =
+					kind === "a key set timeout"
+						? new joseErrors.JWKSTimeout()
+						: new Error("key service unavailable");
+				const introspection = await client.oauth2.introspect(
+					{
+						client_id: oauthClient?.client_id,
+						client_secret: oauthClient?.client_secret,
+						token: "bogus",
+						token_type_hint,
+					},
+					{
+						headers: {
+							accept: "application/json",
+							"content-type": "application/x-www-form-urlencoded",
+						},
+					},
+				);
+				expect(introspection.error?.status).toBe(500);
+			},
+		);
 	});
 });
 

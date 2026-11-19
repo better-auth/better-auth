@@ -9,7 +9,7 @@ import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { createLocalJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import { isAudienceClaimAllowed } from "./resources";
-import { decodeRefreshToken, invalidateRefreshFamily } from "./token";
+import { decodeRefreshTokenForLookup, invalidateRefreshFamily } from "./token";
 import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
@@ -206,7 +206,11 @@ async function revokeRefreshToken(
 		});
 	}
 	if (refreshToken.revoked) {
-		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+		// Only the owner can replay a token. A token from another client must not
+		// delete the presenting client's own grants.
+		if (refreshToken.clientId === clientId) {
+			await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+		}
 		throw new APIError("BAD_REQUEST", {
 			error_description: "refresh token revoked",
 			error: "invalid_request",
@@ -380,7 +384,7 @@ export async function revokeEndpoint(
 
 		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
 			try {
-				const refreshToken = await decodeRefreshToken(opts, token);
+				const refreshToken = await decodeRefreshTokenForLookup(opts, token);
 				return await revokeRefreshToken(
 					ctx,
 					opts,
