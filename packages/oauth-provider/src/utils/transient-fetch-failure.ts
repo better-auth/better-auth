@@ -62,9 +62,9 @@ export function isTransientHttpStatus(status: number): boolean {
 }
 
 /**
- * Whether aborting `signal` ended the fetch after its host name resolved. A
- * timeout during the lookup can come from lookups for other hosts queued ahead
- * of it, which any caller can cause, so it does not count.
+ * Whether aborting `signal` ended the fetch, unless the transport tagged the
+ * abort `ERR_CIMD_DNS_LOOKUP_ABORTED`. A lookup can be queued behind other
+ * hosts' lookups, which any caller can cause, so that abort does not count.
  */
 export function isTransientAbort(error: unknown, signal: AbortSignal): boolean {
 	if (!signal.aborted) return false;

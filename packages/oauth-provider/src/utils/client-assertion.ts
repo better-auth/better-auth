@@ -66,8 +66,9 @@ const jwksCaches = new WeakMap<OAuthOptions<Scope[]>, JwksCache>();
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
 const JWKS_CACHE_MAX_ENTRIES = 500;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
-// The transport's own abort settles the fetch first, so its classification of
-// the timeout wins over this backstop for a transport that ignores the signal.
+// A transport that honors the abort settles the fetch before this backstop, so
+// its classification of the timeout wins. The backstop settles one that ignores
+// the signal.
 const JWKS_FETCH_SETTLE_DEADLINE_MS = JWKS_FETCH_TIMEOUT_MS + 1_000;
 const MAX_JWKS_RESPONSE_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
