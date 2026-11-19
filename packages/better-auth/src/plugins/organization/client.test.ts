@@ -167,8 +167,8 @@ describe("active organization during an auth change", () => {
 				global.window = previousWindow;
 			});
 		})
-		.extend("signedIn", true)
-		.extend("instance", async ({ signedIn }, { onCleanup }) => {
+		.extend("startSignedIn", true)
+		.extend("instance", async ({ startSignedIn }, { onCleanup }) => {
 			// The client keeps its own cookie jar, so a test controls when the
 			// credentials from a sign-in become visible to later requests.
 			const jar = new Headers();
@@ -234,7 +234,7 @@ describe("active organization during an auth change", () => {
 						onSuccess: setCookie,
 					},
 				});
-			if (signedIn) {
+			if (startSignedIn) {
 				await signIn();
 				// Like an app, read the session somewhere so it is known signed in.
 				const session = client.$store.atoms.session!;
@@ -391,7 +391,7 @@ describe("active organization during an auth change", () => {
 	});
 
 	describe("on sign-in", () => {
-		test.override("signedIn", false);
+		test.override("startSignedIn", false);
 
 		test("resolves with the organization loaded", async ({
 			instance: {
