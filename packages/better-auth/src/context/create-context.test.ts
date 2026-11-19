@@ -550,6 +550,31 @@ describe("base context creation", () => {
 			expect(res.skipOriginCheck).toBe(true);
 		});
 
+		it("should warn when the test environment defaults skipOriginCheck", async () => {
+			const log = vi.fn();
+			await initBase({
+				logger: { log },
+			});
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining("NODE_ENV=test or TEST is set"),
+			);
+		});
+
+		it("should not warn when disableOriginCheck is set explicitly", async () => {
+			const log = vi.fn();
+			await initBase({
+				advanced: {
+					disableOriginCheck: false,
+				},
+				logger: { log },
+			});
+			expect(log).not.toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining("NODE_ENV=test or TEST is set"),
+			);
+		});
+
 		it("should respect explicit disableOriginCheck setting", async () => {
 			const res = await initBase({
 				advanced: {

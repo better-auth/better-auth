@@ -133,6 +133,10 @@ Disables **URL validation** against `trustedOrigins`, including:
   For backward compatibility, `disableOriginCheck: true` also disables CSRF protection. If you only want to disable URL validation without affecting CSRF protection, this is not currently possible - both checks are disabled together when using this option.
 </Callout>
 
+<Callout type="warning">
+  When `NODE_ENV` is `test` or the `TEST` environment variable is truthy, Better Auth defaults `disableOriginCheck` to `true` unless you set it explicitly. Through the backward-compatible coupling above, that also skips CSRF / Fetch Metadata checks. Set `advanced.disableOriginCheck: false` if a process that runs with those variables should keep the checks enabled.
+</Callout>
+
 #### Summary
 
 | Option               | What it disables                                                       |
