@@ -657,7 +657,7 @@ describe("pairwise client credentials introspection", async () => {
 				subject_type: "pairwise",
 			},
 		});
-		const { access_token } = await auth.api.oauth2Token({
+		const { access_token: accessToken } = await auth.api.oauth2Token({
 			body: {
 				grant_type: "client_credentials",
 				client_id: machine.client_id,
@@ -666,11 +666,11 @@ describe("pairwise client credentials introspection", async () => {
 				resource,
 			},
 		});
-		expect(decodeJwt(access_token).sub).toBe(machine.client_id);
+		expect(decodeJwt(accessToken).sub).toBe(machine.client_id);
 
 		const introspection = await auth.api.oauth2Introspect({
 			body: {
-				token: access_token,
+				token: accessToken,
 				client_id: machine.client_id,
 				client_secret: machine.client_secret,
 			},
@@ -694,7 +694,7 @@ describe("pairwise client credentials introspection", async () => {
 				subject_type: "pairwise",
 			},
 		});
-		const { access_token } = await auth.api.oauth2Token({
+		const { access_token: accessToken } = await auth.api.oauth2Token({
 			body: {
 				grant_type: "client_credentials",
 				client_id: machine.client_id,
@@ -709,7 +709,7 @@ describe("pairwise client credentials introspection", async () => {
 				method: "POST",
 				headers: { "content-type": "application/x-www-form-urlencoded" },
 				body: new URLSearchParams({
-					token: access_token,
+					token: accessToken,
 					client_id: machine.client_id,
 					client_secret: machine.client_secret!,
 				}),
