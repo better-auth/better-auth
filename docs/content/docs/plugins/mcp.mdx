@@ -245,6 +245,10 @@ requireMcpAuth(auth, handler, {
 })
 ```
 
+Without the `resource` option, the audience check expects the URL of your Better Auth server, and a token issued for your MCP resource fails with `invalid_token`. The [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#token-handling) says an MCP server must validate that a token was issued for it as the intended audience. It also [requires an MCP client to send the server's own URI as the `resource` parameter](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#resource-parameter-implementation). The default audience is not that URI.
+
+`requireMcpAuth` rejects opaque access tokens, which have no `aud` claim. A token request that omits the `resource` parameter uses the resources bound to the authorization code, and a refresh request uses the resources stored on the refresh token. When no resource is named or bound, the access token is opaque. The specification [requires MCP clients to send the `resource` parameter in authorization and token requests](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#resource-parameter-implementation), so a conforming client is not affected.
+
 To require scopes, pass `requiredScopes`. A token missing any of them is rejected with a `403` and an `insufficient_scope` challenge naming every missing scope, so the client can re-authorize for all of them at once ([step-up authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#step-up-authorization-flow)):
 
 ```ts
