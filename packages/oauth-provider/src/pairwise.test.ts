@@ -623,13 +623,14 @@ describe("pairwise metadata", async () => {
 });
 
 /**
- * A `client_credentials` token's subject is the client itself, which has no
- * pairwise sector to hide it in.
+ * @see https://www.rfc-editor.org/rfc/rfc9068#section-2.2
+ * @see https://www.rfc-editor.org/rfc/rfc7662#section-2.2
  */
 describe("pairwise client credentials introspection", async () => {
+	const baseURL = "http://localhost:4127";
 	const resource = "https://api.example.com";
 	const { auth, signInWithTestUser } = await getTestInstance({
-		baseURL: "http://localhost:4127",
+		baseURL,
 		plugins: [
 			jwt(),
 			oauthProvider({
@@ -678,6 +679,48 @@ describe("pairwise client credentials introspection", async () => {
 		expect(introspection).toMatchObject({
 			active: true,
 			sub: machine.client_id,
+			client_id: machine.client_id,
+		});
+	});
+
+	it("introspects the token of a pairwise client registered without redirect URIs", async () => {
+		const { headers } = await signInWithTestUser();
+		const machine = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:posts"],
+				subject_type: "pairwise",
+			},
+		});
+		const { access_token } = await auth.api.oauth2Token({
+			body: {
+				grant_type: "client_credentials",
+				client_id: machine.client_id,
+				client_secret: machine.client_secret,
+				scope: "read:posts",
+				resource,
+			},
+		});
+
+		const response = await auth.handler(
+			new Request(`${baseURL}/api/auth/oauth2/introspect`, {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					token: access_token,
+					client_id: machine.client_id,
+					client_secret: machine.client_secret!,
+				}),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			active: true,
+			sub: machine.client_id,
+			client_id: machine.client_id,
 		});
 	});
 });
