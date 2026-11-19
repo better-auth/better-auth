@@ -2,7 +2,8 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
-	DBAdapter,
+	BuiltInCustomAdapter,
+	BuiltInDBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
@@ -180,7 +181,13 @@ export const mongodbAdapter = (
 			db: Db,
 			session?: ClientSession | undefined,
 		): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldAttributes, getFieldName, getModelName, schema, options }) => {
+		({
+			getFieldAttributes,
+			getFieldName,
+			getModelName,
+			schema,
+			options,
+		}): BuiltInCustomAdapter => {
 			const customIdGen = getCustomIdGenerator(options);
 			const useUUIDs = options.advanced?.database?.generateId === "uuid";
 			const resolvedIndexesByModel = new Map<
@@ -691,6 +698,28 @@ export const mongodbAdapter = (
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
+				async createMany<T extends Record<string, any>>({
+					model,
+					modelKey = model,
+					data: values,
+				}: {
+					model: string;
+					modelKey?: string;
+					data: T[];
+				}): Promise<T[]> {
+					retryFieldIndexSetup();
+					await ensureModelIndexes(model, modelKey);
+					const res = await db
+						.collection(model)
+						.insertMany(values, { session, ordered: true });
+					return values.map((row, index) => {
+						const insertedId = res.insertedIds[index];
+						return {
+							_id: insertedId ? String(insertedId) : undefined,
+							...row,
+						} as T;
+					});
+				},
 				async findOne({ model, modelKey = model, where, select, join }) {
 					retryFieldIndexSetup();
 					const matchStage = where
@@ -1039,7 +1068,7 @@ export const mongodbAdapter = (
 		};
 
 	let lazyAdapter:
-		| ((options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>)
+		| ((options: BetterAuthOptions) => BuiltInDBAdapter<BetterAuthOptions>)
 		| null = null;
 	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
@@ -1048,6 +1077,7 @@ export const mongodbAdapter = (
 			adapterName: "MongoDB Adapter",
 			usePlural: config?.usePlural ?? false,
 			debugLogs: config?.debugLogs ?? false,
+			createManyMaxParameters: 100000,
 			mapKeysTransformInput: {
 				id: "_id",
 			},
@@ -1185,7 +1215,7 @@ export const mongodbAdapter = (
 	};
 	lazyAdapter = createAdapterFactory(adapterOptions);
 
-	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	return (options: BetterAuthOptions): BuiltInDBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return lazyAdapter(options);
 	};

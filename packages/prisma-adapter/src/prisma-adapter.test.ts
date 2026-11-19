@@ -996,4 +996,165 @@ describe("prisma-adapter", () => {
 
 		expect(transaction).toHaveBeenCalledTimes(1);
 	});
+
+	describe("createMany", () => {
+		const rows = [
+			{
+				id: "a",
+				name: "Ada",
+				email: "ada@example.com",
+				emailVerified: false,
+			},
+			{
+				id: "b",
+				name: "Bob",
+				email: "bob@example.com",
+				emailVerified: false,
+			},
+		];
+
+		it.each(["mysql", "mongodb", "sqlserver"] as const)(
+			"does not call createManyAndReturn on %s",
+			async (provider) => {
+				const createManyAndReturn = vi.fn(async () => {
+					throw new Error("createManyAndReturn is not supported");
+				});
+				const createMany = vi.fn(async () => ({ count: 2 }));
+				const findMany = vi.fn(async () => [...rows].reverse());
+				const prisma = {
+					user: {
+						createManyAndReturn,
+						createMany,
+						findMany,
+						create: vi.fn(),
+					},
+					$transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+						cb(prisma),
+					),
+				};
+				const adapter = prismaAdapter(prisma as never, { provider })(
+					{} as BetterAuthOptions,
+				);
+
+				const created = await adapter.createMany({
+					model: "user",
+					data: rows,
+					forceAllowId: true,
+				});
+
+				expect(createManyAndReturn).not.toHaveBeenCalled();
+				expect(createMany).toHaveBeenCalledTimes(1);
+				expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+				expect(created.map((row) => row.id)).toEqual(["a", "b"]);
+			},
+		);
+
+		it("reorders createManyAndReturn rows to match input order", async () => {
+			const createManyAndReturn = vi.fn(async () => [...rows].reverse());
+			const adapter = prismaAdapter(
+				{
+					$transaction: vi.fn(),
+					user: {
+						createManyAndReturn,
+						createMany: vi.fn(),
+						findMany: vi.fn(),
+					},
+				} as never,
+				{ provider: "postgresql" },
+			)({} as BetterAuthOptions);
+
+			const created = await adapter.createMany({
+				model: "user",
+				data: rows,
+				forceAllowId: true,
+			});
+
+			expect(createManyAndReturn).toHaveBeenCalledTimes(1);
+			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
+		});
+
+		it("does not use createManyAndReturn when ids are generated", async () => {
+			const createManyAndReturn = vi.fn(async () => {
+				throw new Error("createManyAndReturn should not be used");
+			});
+			const create = vi.fn(
+				async ({ data }: { data: Record<string, unknown> }) => ({
+					id: "generated",
+					...data,
+				}),
+			);
+			const adapter = prismaAdapter(
+				{
+					$transaction: vi.fn(),
+					user: {
+						createManyAndReturn,
+						createMany: vi.fn(),
+						findMany: vi.fn(),
+						create,
+					},
+				} as never,
+				{ provider: "postgresql" },
+			)({
+				advanced: { database: { generateId: false } },
+			} as BetterAuthOptions);
+
+			await adapter.createMany({
+				model: "user",
+				data: [
+					{ name: "Ada", email: "ada@example.com", emailVerified: false },
+					{ name: "Bob", email: "bob@example.com", emailVerified: false },
+				],
+			});
+
+			expect(createManyAndReturn).not.toHaveBeenCalled();
+			expect(create).toHaveBeenCalledTimes(2);
+		});
+
+		it("reads MySQL rows back in the same transaction as the insert", async () => {
+			const readError = new Error("read failed");
+			const createMany = vi.fn(async () => ({ count: 2 }));
+			const findMany = vi.fn(async () => {
+				throw readError;
+			});
+			const prisma = {
+				user: {
+					createManyAndReturn: vi.fn(),
+					createMany,
+					findMany,
+					create: vi.fn(),
+				},
+				$transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+					cb(prisma),
+				),
+			};
+			const adapter = prismaAdapter(prisma as never, { provider: "mysql" })(
+				{} as BetterAuthOptions,
+			);
+
+			await expect(
+				adapter.createMany({
+					model: "user",
+					data: rows,
+					forceAllowId: true,
+				}),
+			).rejects.toBe(readError);
+			expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+			expect(createMany).toHaveBeenCalledTimes(1);
+			expect(findMany).toHaveBeenCalledTimes(1);
+		});
+
+		it("sets a sqlite-safe bind limit and raises it for postgres", () => {
+			const sqlite = prismaAdapter({ $transaction: vi.fn() } as never, {
+				provider: "sqlite",
+			})({} as BetterAuthOptions);
+			const postgres = prismaAdapter({ $transaction: vi.fn() } as never, {
+				provider: "postgresql",
+			})({} as BetterAuthOptions);
+
+			expect(sqlite.options?.adapterConfig.createManyMaxParameters).toBe(999);
+			expect(postgres.options?.adapterConfig.createManyMaxParameters).toBe(
+				65535,
+			);
+		});
+	});
 });

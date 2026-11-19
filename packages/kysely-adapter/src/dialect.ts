@@ -83,6 +83,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			introspectIndexes: undefined,
 			schemaName: undefined,
 			transaction: undefined,
+			isD1: false,
 		};
 	}
 
@@ -95,6 +96,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			introspectIndexes: undefined,
 			schemaName,
 			transaction: db.transaction,
+			isD1: false,
 		};
 	}
 
@@ -108,12 +110,14 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			introspectIndexes: undefined,
 			schemaName,
 			transaction: db.transaction,
+			isD1: false,
 		};
 	}
 
 	let dialect: Dialect | undefined = undefined;
 	let introspectIndexes: DatabaseIndexIntrospector | undefined = undefined;
 	let transaction: boolean | undefined = undefined;
+	let isD1 = false;
 
 	const databaseType = getKyselyDatabaseType(db);
 
@@ -192,6 +196,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		introspectIndexes = createD1IndexIntrospector(db);
 		// D1 has no interactive transactions; only its batch() API.
 		transaction = false;
+		isD1 = true;
 	}
 
 	return {
@@ -202,5 +207,6 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		// so a schema can only be declared through the object config forms.
 		schemaName: undefined,
 		transaction,
+		isD1,
 	};
 };

@@ -2596,6 +2596,9 @@ describe("--adapter flag support (mock adapter)", () => {
 			create: async () => {
 				throw new Error("Mock adapter methods should not be called");
 			},
+			createMany: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
 			findOne: async () => {
 				throw new Error("Mock adapter methods should not be called");
 			},
@@ -2839,6 +2842,9 @@ describe("--dialect flag support", () => {
 		return {
 			id: adapterId,
 			create: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			createMany: async () => {
 				throw new Error("Mock adapter methods should not be called");
 			},
 			findOne: async () => {

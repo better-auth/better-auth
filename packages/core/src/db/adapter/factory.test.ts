@@ -301,6 +301,229 @@ describe("createAdapterFactory atomic primitives", () => {
 	});
 });
 
+describe("createAdapterFactory createMany", () => {
+	it("returns an empty array without calling the adapter", async () => {
+		const create = vi.fn(
+			async ({ data }: { data: Record<string, any> }) => data,
+		);
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				create: create as CustomAdapter["create"],
+				createMany: createMany as CustomAdapter["createMany"],
+			}),
+		});
+
+		await expect(
+			adapter.createMany({ model: "user", data: [] }),
+		).resolves.toEqual([]);
+		expect(create).not.toHaveBeenCalled();
+		expect(createMany).not.toHaveBeenCalled();
+	});
+
+	it("falls back to sequential create when createMany is omitted", async () => {
+		const create = vi.fn(
+			async ({ data }: { data: Record<string, any> }) => data,
+		);
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				create: create as CustomAdapter["create"],
+			}),
+		});
+
+		const created = await adapter.createMany({
+			model: "user",
+			data: [
+				{ name: "Ada", email: "ada@example.com", emailVerified: false },
+				{ name: "Bob", email: "bob@example.com", emailVerified: false },
+			],
+		});
+
+		expect(create).toHaveBeenCalledTimes(2);
+		expect(created).toHaveLength(2);
+		expect(created[0]?.name).toBe("Ada");
+		expect(created[1]?.name).toBe("Bob");
+		expect(typeof created[0]?.id).toBe("string");
+		expect(typeof created[1]?.id).toBe("string");
+		expect(created[0]?.id).not.toBe(created[1]?.id);
+	});
+
+	it("delegates to native createMany with transformed rows", async () => {
+		const create = vi.fn(
+			async ({ data }: { data: Record<string, any> }) => data,
+		);
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				create: create as CustomAdapter["create"],
+				createMany: createMany as CustomAdapter["createMany"],
+			}),
+		});
+
+		const created = await adapter.createMany({
+			model: "user",
+			data: [
+				{
+					id: "user-1",
+					name: "Ada",
+					email: "ada@example.com",
+					emailVerified: false,
+				},
+			],
+			forceAllowId: true,
+		});
+
+		expect(create).not.toHaveBeenCalled();
+		expect(createMany).toHaveBeenCalledTimes(1);
+		expect(createMany.mock.calls[0]?.[0]).toEqual(
+			expect.objectContaining({
+				model: "users",
+				modelKey: "user",
+			}),
+		);
+		expect(createMany.mock.calls[0]?.[0].data[0]).toEqual(
+			expect.objectContaining({
+				id: "user-1",
+				name: "Ada",
+				email: "ada@example.com",
+			}),
+		);
+		expect(created).toHaveLength(1);
+		expect(created[0]?.id).toBe("user-1");
+	});
+
+	it("chunks from the union of keys, not the widest single row", async () => {
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				disableTransformInput: true,
+				disableTransformOutput: true,
+				createManyMaxParameters: 6,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					createMany: createMany as CustomAdapter["createMany"],
+				}),
+		})({});
+
+		await adapter.createMany({
+			model: "user",
+			data: [
+				{ id: "a", name: "Ada", email: "ada@example.com" },
+				{ id: "b", image: "https://example.com/b.png" },
+			],
+			forceAllowId: true,
+		});
+
+		expect(createMany).toHaveBeenCalledTimes(2);
+		expect(createMany.mock.calls[0]?.[0].data).toHaveLength(1);
+		expect(createMany.mock.calls[1]?.[0].data).toHaveLength(1);
+	});
+
+	it("splits a user-shaped batch of 15 rows at the D1 bind limit and keeps it in one statement on SQLite", async () => {
+		const userRows = Array.from({ length: 15 }, (_, index) => ({
+			name: `User ${index}`,
+			email: `user${index}@example.com`,
+			emailVerified: false,
+			image: `https://example.com/${index}.png`,
+		}));
+		const createLimited = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const createSqlite = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const d1 = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "d1-adapter",
+				adapterName: "D1 Adapter",
+				createManyMaxParameters: 100,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					createMany: createLimited as CustomAdapter["createMany"],
+				}),
+		})({});
+		const sqlite = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "sqlite-adapter",
+				adapterName: "SQLite Adapter",
+				createManyMaxParameters: 999,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					createMany: createSqlite as CustomAdapter["createMany"],
+				}),
+		})({});
+
+		await d1.createMany({ model: "user", data: userRows });
+		await sqlite.createMany({ model: "user", data: userRows });
+
+		expect(createLimited.mock.calls.length).toBeGreaterThan(1);
+		expect(
+			createLimited.mock.calls.reduce(
+				(total, call) => total + call[0]!.data.length,
+				0,
+			),
+		).toBe(15);
+		expect(createSqlite).toHaveBeenCalledTimes(1);
+		expect(createSqlite.mock.calls[0]?.[0].data).toHaveLength(15);
+	});
+
+	it("chunks native createMany using createManyMaxParameters", async () => {
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				usePlural: true,
+				createManyMaxParameters: 1,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					createMany: createMany as CustomAdapter["createMany"],
+				}),
+		})({});
+
+		await adapter.createMany({
+			model: "user",
+			data: [
+				{ name: "Ada", email: "ada@example.com", emailVerified: false },
+				{ name: "Bob", email: "bob@example.com", emailVerified: false },
+			],
+		});
+
+		expect(createMany).toHaveBeenCalledTimes(2);
+		expect(createMany.mock.calls[0]?.[0].data).toHaveLength(1);
+		expect(createMany.mock.calls[1]?.[0].data).toHaveLength(1);
+	});
+
+	it("throws when native createMany returns the wrong number of rows", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				createMany: async () => [],
+			}),
+		});
+
+		await expect(
+			adapter.createMany({
+				model: "user",
+				data: [{ name: "Ada", email: "ada@example.com", emailVerified: false }],
+			}),
+		).rejects.toThrow(/createMany must return an array with one row/);
+	});
+});
+
 /**
  * HTTP query params arrive as strings. Coercion must happen in the adapter
  * factory before the underlying store sees the where clause — SQL engines

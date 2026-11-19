@@ -76,6 +76,7 @@ export const createAdapterFactory =
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
+			createManyMaxParameters: cfg.createManyMaxParameters ?? 999,
 		} satisfies AdapterFactoryConfig;
 
 		const useNumberId = options.advanced?.database?.generateId === "serial";
@@ -116,6 +117,11 @@ export const createAdapterFactory =
 					// Make sure the method is enabled in the config.
 					if (typeof config.debugLogs === "object") {
 						if (method === "create" && !config.debugLogs.create) {
+							return;
+						} else if (
+							method === "createMany" &&
+							!config.debugLogs.createMany
+						) {
 							return;
 						} else if (method === "update" && !config.debugLogs.update) {
 							return;
@@ -961,6 +967,127 @@ export const createAdapterFactory =
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
 					`${formatMethod("create")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed;
+			},
+			createMany: async <T extends Record<string, any>, R = T>({
+				data: unsafeData,
+				model: inputModel,
+				select,
+				forceAllowId = false,
+			}: {
+				model: string;
+				data: T[];
+				select?: string[] | undefined;
+				forceAllowId?: boolean | undefined;
+			}): Promise<R[]> => {
+				if (unsafeData.length === 0) {
+					return [];
+				}
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
+				let warnedProvidedId = false;
+				const unsafeRows = unsafeData.map((unsafeRow) => {
+					const row: Record<string, unknown> = { ...unsafeRow };
+					if ("id" in row && typeof row.id !== "undefined" && !forceAllowId) {
+						if (!warnedProvidedId) {
+							logger.warn(
+								`[${config.adapterName}] - You are trying to create a record with an id. This is not allowed as we handle id generation for you, unless you pass in the \`forceAllowId\` parameter. The id will be ignored.`,
+							);
+							warnedProvidedId = true;
+						}
+						row.id = undefined;
+					}
+					return row;
+				});
+				debugLog(
+					{ method: "createMany" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
+					`${formatMethod("createMany")} ${formatAction("Unsafe Input")}:`,
+					{ model, data: unsafeRows },
+				);
+				let rows: Record<string, unknown>[] = unsafeRows;
+				if (!config.disableTransformInput) {
+					rows = [];
+					for (const unsafeRow of unsafeRows) {
+						rows.push(
+							await transformInput(unsafeRow, modelKey, "create", forceAllowId),
+						);
+					}
+				}
+				debugLog(
+					{ method: "createMany" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
+					`${formatMethod("createMany")} ${formatAction("Parsed Input")}:`,
+					{ model, data: rows },
+				);
+				const columnCount = Math.max(
+					1,
+					new Set(rows.flatMap((row) => Object.keys(row))).size,
+				);
+				const chunkSize = Math.max(
+					1,
+					Math.floor((config.createManyMaxParameters ?? 999) / columnCount),
+				);
+				const results: Record<string, unknown>[] = [];
+				for (let offset = 0; offset < rows.length; offset += chunkSize) {
+					const chunk = rows.slice(offset, offset + chunkSize);
+					const res = await withSpan(
+						`db createMany ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "createMany",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						async () => {
+							if (adapterInstance.createMany) {
+								return adapterInstance.createMany({
+									data: chunk,
+									model,
+									modelKey,
+								});
+							}
+							const created: Record<string, unknown>[] = [];
+							for (const data of chunk) {
+								created.push(
+									await adapterInstance.create({
+										data,
+										model,
+										modelKey,
+									}),
+								);
+							}
+							return created;
+						},
+					);
+					if (!Array.isArray(res) || res.length !== chunk.length) {
+						throw new BetterAuthError(
+							`Adapter "${config.adapterId}" createMany must return an array with one row per inserted record.`,
+						);
+					}
+					results.push(...res);
+				}
+				debugLog(
+					{ method: "createMany" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
+					`${formatMethod("createMany")} ${formatAction("DB Result")}:`,
+					{ model, res: results },
+				);
+				let transformed = results as R[];
+				if (!config.disableTransformOutput) {
+					transformed = [];
+					for (const row of results) {
+						transformed.push(
+							(await transformOutput(row, modelKey, select, undefined)) as R,
+						);
+					}
+				}
+				debugLog(
+					{ method: "createMany" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
+					`${formatMethod("createMany")} ${formatAction("Parsed Result")}:`,
 					{ model, data: transformed },
 				);
 				return transformed;

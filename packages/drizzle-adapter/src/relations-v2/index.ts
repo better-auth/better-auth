@@ -2,7 +2,8 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
-	DBAdapter,
+	BuiltInCustomAdapter,
+	BuiltInDBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
@@ -33,6 +34,7 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
+import { isD1SqliteClient } from "../d1-sqlite-client";
 import { fromDriverDate, toDriverDate } from "../date-columns";
 import type { RelationKeysByModel } from "../join-relation-key";
 import {
@@ -85,6 +87,24 @@ function readDriverRowCount(result: unknown): unknown {
 
 function hasDriverRowCount(result: unknown): boolean {
 	return readDriverRowCount(result) !== undefined;
+}
+
+function orderInsertedRowsById<T extends Record<string, unknown>>(
+	ids: unknown[],
+	rows: T[],
+	idField: string,
+	model: string,
+): T[] {
+	const byId = new Map(rows.map((row) => [String(row[idField]), row]));
+	return ids.map((id) => {
+		const row = byId.get(String(id));
+		if (!row) {
+			throw new BetterAuthError(
+				`[# Drizzle Adapter]: createMany could not read back inserted "${model}" row ${String(id)}.`,
+			);
+		}
+		return row;
+	});
 }
 
 function getAffectedRowCount(
@@ -271,6 +291,14 @@ export interface DrizzleAdapterConfig {
 	 * @default undefined
 	 */
 	schemaName?: string | undefined;
+	/**
+	 * Maximum number of bound parameters allowed in one `createMany` insert.
+	 * Large batches are split so they stay at or below this limit.
+	 *
+	 * SQLite defaults to 999. Cloudflare D1 is detected automatically and
+	 * uses 100. Set this only when that detection is wrong.
+	 */
+	createManyMaxParameters?: number | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -281,7 +309,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		(relationKeysByModel ??= buildRelationKeysByModel(db._?.relations));
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldName, getDefaultModelName, options, schema: baSchema }) => {
+		({
+			getFieldName,
+			getDefaultModelName,
+			options,
+			schema: baSchema,
+		}): BuiltInCustomAdapter => {
 			if (
 				config.provider === "mysql" &&
 				options.advanced?.database?.generateId === false &&
@@ -732,6 +765,62 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					);
 					return returned;
 				},
+				async createMany<T extends Record<string, any>>({
+					model,
+					modelKey = model,
+					data: values,
+				}: {
+					model: string;
+					modelKey?: string;
+					data: T[];
+				}): Promise<T[]> {
+					const table = getSchema(model);
+					for (const row of values) {
+						checkMissingFields(table, modelKey, row);
+					}
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const ids = values.map((row) => row[idField] ?? row.id);
+					const hasAllIds = ids.every((id) => id !== undefined && id !== null);
+					const createSequentially = async () => {
+						const created: T[] = [];
+						for (const row of values) {
+							created.push(
+								(await withReturning(
+									model,
+									modelKey,
+									db.insert(table).values(row),
+									row,
+								)) as T,
+							);
+						}
+						return created;
+					};
+					if (!hasAllIds) {
+						return createSequentially();
+					}
+					if (config.provider !== "mysql") {
+						const rows = (await db
+							.insert(table)
+							.values(values)
+							.returning()) as T[];
+						return orderInsertedRowsById(ids, rows, idField, model);
+					}
+					const insertAndReadBack = async (tx: DB) => {
+						await tx.insert(table).values(values).execute();
+						const rows = (await tx
+							.select()
+							.from(table)
+							.where(inArray(table[idField], ids))) as T[];
+						return orderInsertedRowsById(ids, rows, idField, model);
+					};
+					if (inTransaction) {
+						return insertAndReadBack(db);
+					}
+					if (typeof db.transaction === "function") {
+						return db.transaction(insertAndReadBack);
+					}
+					return createSequentially();
+				},
 				async findOne({ model, modelKey = model, where, select, join }) {
 					const table = getSchema(model);
 					const clause = convertWhereClause(where, model, modelKey);
@@ -1167,6 +1256,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			createManyMaxParameters:
+				config.createManyMaxParameters ??
+				(config.provider === "sqlite"
+					? isD1SqliteClient(db)
+						? 100
+						: undefined
+					: 65535),
 			supportsUUIDs: config.provider === "pg" ? true : false,
 			// All providers generate schemas where Drizzle handles JSON serialization:
 			//   - PostgreSQL: native `jsonb` column.
@@ -1210,7 +1306,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		adapter: createCustomAdapter(db),
 	};
 	const adapter = createAdapterFactory(adapterOptions);
-	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	return (options: BetterAuthOptions): BuiltInDBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		const instance = adapter(options);
 		const schemaCheck = createSchemaCheck(() => {

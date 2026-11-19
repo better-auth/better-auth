@@ -20,6 +20,14 @@ describe("mongodb-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	it("raises createManyMaxParameters above the sqlite bind default", () => {
+		const db = {
+			collection: vi.fn(),
+		} as any;
+		const adapter = mongodbAdapter(db, { transaction: false })({});
+		expect(adapter.options?.adapterConfig.createManyMaxParameters).toBe(100000);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10925
 	 */
