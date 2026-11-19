@@ -1427,6 +1427,39 @@ describe("oauth-provider device-code grant", async () => {
 		);
 	});
 
+	it("keeps a device-grant refresh token usable after narrowing away offline_access", async () => {
+		const scope = "openid offline_access";
+		const clientId = await createDeviceClient(
+			[DEVICE_CODE_GRANT_TYPE, "refresh_token"],
+			scope,
+		);
+		const deviceCode = await approvedDeviceCode(clientId, scope);
+		const issued = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+		});
+		expect(issued.error).toBeNull();
+
+		// The device grant has no session, so dropping offline_access must not
+		// make the refresh token end with one.
+		const narrowed = await pollToken({
+			grant_type: "refresh_token",
+			refresh_token: issued.data!.refresh_token as string,
+			client_id: clientId,
+			scope: "openid",
+		});
+		expect(narrowed.error).toBeNull();
+		const narrowedRefreshToken = narrowed.data!.refresh_token as string;
+
+		const refreshed = await pollToken({
+			grant_type: "refresh_token",
+			refresh_token: narrowedRefreshToken,
+			client_id: clientId,
+		});
+		expect(refreshed.error).toBeNull();
+	});
+
 	it("single-uses the device code (second exchange fails)", async () => {
 		const clientId = await createDeviceClient();
 		const deviceCode = await approvedDeviceCode(clientId);

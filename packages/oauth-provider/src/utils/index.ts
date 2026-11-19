@@ -28,6 +28,7 @@ import type {
 	GrantType,
 	OAuthConsent,
 	OAuthOptions,
+	OAuthRefreshToken,
 	Prompt,
 	SchemaClient,
 	Scope,
@@ -285,6 +286,53 @@ export async function findActiveSessionId(
 		where: [{ field: "id", value: sessionId }],
 	});
 	return session && session.expiresAt >= new Date() ? sessionId : undefined;
+}
+
+/**
+ * Whether a grant with these scopes, derived from this refresh token, belongs
+ * to the session that issued the token.
+ *
+ * Without `offline_access`, a grant issued in a session ends with it (OIDC
+ * Back-Channel Logout 1.0 §2.7). Authorization codes are redeemed only in a
+ * live session, so a code-issued row with no `sessionId` lost it to the
+ * foreign key when the session row was deleted. Device-code rows never had a
+ * session.
+ */
+export function isSessionBoundRefreshToken(
+	refreshToken: Pick<
+		OAuthRefreshToken<Scope[]>,
+		"sessionId" | "authorizationCodeId"
+	>,
+	scopes: readonly string[] | undefined,
+): boolean {
+	return (
+		!scopes?.includes("offline_access") &&
+		Boolean(refreshToken.sessionId || refreshToken.authorizationCodeId)
+	);
+}
+
+/**
+ * Resolves the session of a refresh token at the moment it is used.
+ *
+ * A session-bound refresh token ends once its session has expired or been
+ * deleted. Checking here, rather than relying only on the cleanup at sign-out,
+ * covers a refresh that races the sign-out. An `offline_access` refresh token
+ * outlives its session and only loses `sid`.
+ */
+export async function resolveRefreshTokenSession(
+	ctx: GenericEndpointContext,
+	refreshToken: Pick<
+		OAuthRefreshToken<Scope[]>,
+		"scopes" | "sessionId" | "authorizationCodeId"
+	>,
+): Promise<{ sessionId: string | undefined; ended: boolean }> {
+	const sessionId = await findActiveSessionId(ctx, refreshToken.sessionId);
+	return {
+		sessionId,
+		ended:
+			!sessionId &&
+			isSessionBoundRefreshToken(refreshToken, refreshToken.scopes),
+	};
 }
 
 /**

@@ -37,6 +37,7 @@ import {
 	getStoredToken,
 	isInvalidJwtError,
 	parseClientMetadata,
+	resolveRefreshTokenSession,
 	resolveSubjectIdentifier,
 	toAudienceClaim,
 	validateClientCredentials,
@@ -321,9 +322,10 @@ async function validateOpaqueAccessToken(
 	}
 
 	// An opaque access token bound to a session (every authorization-code token;
-	// client-credentials tokens have no sessionId) dies with that session. This
-	// mirrors the JWT path so revocation is a function of session state and does
-	// not depend solely on the `revoked` flag written by the session-delete hook.
+	// client-credentials tokens have no sessionId) dies with that session. A
+	// database that enforces the foreign key clears `sessionId` when the session
+	// row is deleted, so such a token relies on the `revoked` flag written by the
+	// session-delete hook instead.
 	const sessionId = accessToken.sessionId ?? undefined;
 	if (sessionId && !(await findActiveSessionId(ctx, sessionId))) {
 		return inactiveAccessToken();
@@ -454,7 +456,15 @@ async function validateRefreshToken(
 		};
 	}
 
-	const sessionId = await findActiveSessionId(ctx, refreshToken.sessionId);
+	const { sessionId, ended } = await resolveRefreshTokenSession(
+		ctx,
+		refreshToken,
+	);
+	if (ended) {
+		return {
+			active: false,
+		};
+	}
 
 	let user: User | undefined = undefined;
 	if (refreshToken.userId) {

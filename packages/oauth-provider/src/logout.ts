@@ -110,14 +110,15 @@ async function signLogoutToken(
  * Token identifiers must be captured here because their `sessionId` foreign key
  * is cleared when the session row disappears.
  *
- * Revocation is the stored backstop, not the primary enforcement: introspection
- * and `/userinfo` already treat a token whose session has ended as inactive
- * (see `validateOpaqueAccessToken` / `validateJwtAccessToken`), so a missed
- * `revoked` write cannot keep a session-bound token alive on its own. Access
- * tokens bound to the session are revoked as OP hardening. Refresh tokens
- * follow OIDC Back-Channel Logout 1.0 §2.7: those without `offline_access` are
- * revoked; `offline_access` refresh tokens survive so long-lived API access can
- * outlive the browser session.
+ * Introspection, `/userinfo`, and the refresh grant also check the session at
+ * use, but only while a token still names it: a database that enforces the
+ * foreign key clears `sessionId` when the session row is deleted, and a JWT
+ * access token keeps its `sid` claim. Opaque access tokens and refresh tokens
+ * therefore still depend on this cleanup. Access tokens bound to the session
+ * are revoked as OP hardening. Refresh tokens follow OIDC Back-Channel Logout
+ * 1.0 §2.7: those without `offline_access` are revoked; `offline_access`
+ * refresh tokens survive so long-lived API access can outlive the browser
+ * session.
  *
  * Token revocation runs regardless of the JWT plugin (refresh-token revocation
  * has no dependency on signing). Only Logout Token delivery needs the JWT
@@ -241,8 +242,8 @@ async function applyBackchannelLogoutPlan(
 				})
 			: Promise.resolve(),
 	]);
-	// Session liveness remains authoritative, but operators still need a signal
-	// if the stored revocation backstop drifts from the committed session state.
+	// The refresh grant and introspection check the session at use, but
+	// operators still need a signal when this revocation fails.
 	for (const result of revocations) {
 		if (result.status === "rejected") {
 			ctx.context.logger.error(
