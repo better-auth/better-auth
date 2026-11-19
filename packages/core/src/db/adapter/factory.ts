@@ -1086,7 +1086,9 @@ export const createAdapterFactory =
 							`Adapter "${config.adapterId}" createMany must return an array with one row per inserted record.`,
 						);
 					}
-					results.push(...res);
+					for (const row of res) {
+						results.push(row);
+					}
 				}
 				debugLog(
 					{ method: "createMany" },
