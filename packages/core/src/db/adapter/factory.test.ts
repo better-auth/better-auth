@@ -396,6 +396,61 @@ describe("createAdapterFactory createMany", () => {
 		expect(created[0]?.id).toBe("user-1");
 	});
 
+	it("generates ids for native createMany when none are provided", async () => {
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				createMany: createMany as CustomAdapter["createMany"],
+			}),
+		});
+
+		const created = await adapter.createMany({
+			model: "user",
+			data: [
+				{ name: "Ada", email: "ada@example.com", emailVerified: false },
+				{ name: "Bob", email: "bob@example.com", emailVerified: false },
+			],
+		});
+
+		expect(createMany).toHaveBeenCalledTimes(1);
+		expect(typeof createMany.mock.calls[0]?.[0].data[0]?.id).toBe("string");
+		expect(typeof createMany.mock.calls[0]?.[0].data[1]?.id).toBe("string");
+		expect(createMany.mock.calls[0]?.[0].data[0]?.id).not.toBe(
+			createMany.mock.calls[0]?.[0].data[1]?.id,
+		);
+		expect(created[0]?.id).toBe(createMany.mock.calls[0]?.[0].data[0]?.id);
+		expect(created[1]?.id).toBe(createMany.mock.calls[0]?.[0].data[1]?.id);
+	});
+
+	it("ignores provided ids on native createMany unless forceAllowId is set", async () => {
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				createMany: createMany as CustomAdapter["createMany"],
+			}),
+		});
+
+		const created = await adapter.createMany({
+			model: "user",
+			data: [
+				{
+					id: "ignored",
+					name: "Ada",
+					email: "ada@example.com",
+					emailVerified: false,
+				},
+			],
+		});
+
+		expect(createMany.mock.calls[0]?.[0].data[0]?.id).not.toBe("ignored");
+		expect(created[0]?.id).not.toBe("ignored");
+		expect(typeof created[0]?.id).toBe("string");
+	});
+
 	it("forwards select to native createMany", async () => {
 		const createMany = vi.fn(
 			async ({ data }: { data: Record<string, any>[]; select?: string[] }) =>
