@@ -133,6 +133,10 @@ describe("oauth metadata", async () => {
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8414#section-2
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
 	describe("advertisedMetadata.token_endpoint_auth_methods_supported", () => {
 		const confidential = [
 			"client_secret_basic",
