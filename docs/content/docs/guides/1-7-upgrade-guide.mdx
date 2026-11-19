@@ -84,28 +84,24 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
 **The account schema is unchanged from 1.6.** No column needs to be added.
 
 <Callout type="warn">
-  Databases created or migrated with 1.7.0 through 1.7.2 need the cleanup below, including preview builds that stored synthetic issuers with `identityStrategy: "provider-id"`. Remove `account.identityStrategy` from preview configurations; 1.7.3 no longer supports it. A required `issuer` column rejects new account writes, and schema checks can also block existing sign-ins and session requests.
+  Databases created or migrated with 1.7.0 through 1.7.2 need the cleanup below. A required `issuer` column rejects new account writes, and schema checks can also block existing sign-ins and session requests.
 </Callout>
 
 <Steps>
   <Step>
     #### Check whether the column is there
 
-    Inspect the account table's columns and indexes using your database tools. For SQL databases, this query shows the columns without reading account data:
-
     ```sql
     SELECT * FROM account WHERE 1 = 0;
     ```
 
     If neither the `issuer` column nor its old index exists, no issuer schema cleanup is needed. If you already dropped the column on MySQL, check whether the old index survived on `accountId` alone.
-
-    Back up the database, including existing issuer values, and rehearse cleanup on a restored copy. Resolve [duplicate account keys](#check-for-duplicate-account-keys) and review connections that shared an account before changing the live database.
   </Step>
 
   <Step>
     #### Relax the constraint
 
-    Pause authentication and background writes during the cutover. Remove the issuer index, then make the column nullable or drop it. Keeping it nullable preserves existing issuer values, but it does not make a package downgrade safe once new accounts have been written without them.
+    Remove the issuer index, then make the column nullable or drop it.
 
     <Callout type="warn">
       Drop the index before the column. MySQL keeps an index whose column disappears and rebuilds it on the remaining ones, turning the compound unique index into a unique constraint on `accountId` alone. That rejects a user who holds the same account ID at two providers.
@@ -120,23 +116,23 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
       </Tab>
 
       <Tab value="MySQL">
-        Read the existing column definition with `SHOW CREATE TABLE account`. Replace the example's type, length, character set, and collation with those of your `issuer` column before running it; omitting these attributes can change them.
-
         ```sql
         DROP INDEX account_issuer_accountId_uidx ON account;
-        ALTER TABLE account MODIFY issuer VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL;
+        ALTER TABLE account MODIFY issuer VARCHAR(191) NULL;
         ```
+
+        `MODIFY` resets any attribute you omit. If you customized the column's type, character set, or collation, check `SHOW CREATE TABLE account` and repeat them.
 
         In non-strict mode, MySQL can fill a missing required `issuer` with an empty string. The surviving unique index then rejects equal account IDs across providers. These databases also need cleanup.
       </Tab>
 
       <Tab value="SQL Server">
-        Check the column definition in your database tools. Replace the example's type, length, collation, and schema with your existing values before running it; the collation shown is not a required Better Auth setting.
-
         ```sql
         DROP INDEX account_issuer_accountId_uidx ON dbo.account;
-        ALTER TABLE dbo.account ALTER COLUMN issuer VARCHAR(255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
+        ALTER TABLE dbo.account ALTER COLUMN issuer VARCHAR(255) NULL;
         ```
+
+        If the column uses a non-default collation, add it back with `COLLATE`.
       </Tab>
 
       <Tab value="SQLite">
@@ -167,15 +163,13 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
       </Tab>
     </Tabs>
 
-    The examples assume the generated index name `account_issuer_accountId_uidx`. Use your actual schema, table, column, and index names, including any mappings previously configured through `account.fields.issuer`. If a cleanup step is already complete, skip that statement rather than rerunning it.
+    The examples assume the generated index name `account_issuer_accountId_uidx`. Use your actual schema, table, column, and index names, including any mappings previously configured through `account.fields.issuer`.
   </Step>
 
   <Step>
     #### Confirm
 
-    Deploy the matching packages and configuration, then restart every app instance to clear cached schema mismatches after manual repair. Schema validation does not stop the server, so successful startup alone does not confirm compatibility.
-
-    Test existing sessions, fresh sign-ins, and new registrations with every provider before reopening traffic. Confirm that returning users reach the same application user, including through each connection that previously shared an account.
+    Restart every app instance to clear cached schema mismatches, then sign up a new user and sign in with an existing account.
   </Step>
 </Steps>
 
@@ -183,7 +177,7 @@ If several sign-in connections shared one account row on 1.7.0 through 1.7.2, so
 
 For OAuth sign-in, users can sign in through a connection that still works, then [link the missing connection](/docs/concepts/users-accounts#manually-linking-accounts). Have them sign out and sign in through that connection to confirm they reach their original account.
 
-For SSO, users cannot link the connection themselves. Configure [`resolveUser`](/docs/plugins/sso#resolve-sso-users) to match each verified SSO identity to the correct existing user. Check its database and session requirements first: deployments without resolver support have no automatic recovery path in this guide. Test the mapping on a restored database copy before re-enabling affected SSO connections.
+For SSO, users cannot link the connection themselves. Configure [`resolveUser`](/docs/plugins/sso/provisioning#resolve-sso-users) to match each verified SSO identity to the correct existing user. `resolveUser` needs an adapter with native transactions; without one, [domain-verified email linking](/docs/plugins/sso/provisioning#how-sso-users-are-matched) can link the identity to the existing user.
 
 Account-specific APIs now use explicit, strongly typed selectors. Read `id` from `listAccounts`, then pass it as `accountId` to `unlinkAccount`. For `getAccessToken`, `refreshToken`, and `accountInfo`, choose exactly one of these request shapes:
 
