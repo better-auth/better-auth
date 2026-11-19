@@ -228,6 +228,10 @@ describe("drizzle-adapter", () => {
 		"createMany does not require a MySQL transaction when falling back to sequential inserts on $relations",
 		async ({ createAdapter }) => {
 			const execute = vi.fn().mockResolvedValue(undefined);
+			const selectExecute = vi
+				.fn()
+				.mockResolvedValueOnce([{ id: "a", name: "Ada" }])
+				.mockResolvedValueOnce([{ id: "b", name: "Bob" }]);
 			const db = {
 				_: { fullSchema: { user: userTable }, relations: {} },
 				insert: vi.fn().mockReturnValue({
@@ -237,20 +241,62 @@ describe("drizzle-adapter", () => {
 					from: vi.fn().mockReturnValue({
 						where: vi.fn().mockReturnValue({
 							limit: vi.fn().mockReturnValue({
-								execute: vi.fn().mockResolvedValue([{ id: "a" }]),
+								execute: selectExecute,
 							}),
 						}),
 					}),
 				}),
 			} as any;
 			const adapter = createAdapter(db, { provider: "mysql" })({});
-			await adapter.createMany({
+			const created = await adapter.createMany({
 				model: "user",
 				data: createManyRows,
 				forceAllowId: true,
 			});
 			expect(db.insert).toHaveBeenCalledTimes(2);
 			expect(execute).toHaveBeenCalledTimes(2);
+			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany inserts mixed-key MySQL rows in one $relations transaction",
+		async ({ createAdapter }) => {
+			const insertExecute = vi.fn().mockResolvedValue(undefined);
+			const trx = {
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ execute: insertExecute }),
+				}),
+				select: vi.fn().mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi
+							.fn()
+							.mockResolvedValueOnce([{ id: "a" }])
+							.mockResolvedValueOnce([{ id: "b" }]),
+					}),
+				}),
+			};
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn(),
+				select: vi.fn(),
+				transaction: vi.fn((cb: (tx: typeof trx) => Promise<unknown>) =>
+					cb(trx),
+				),
+			} as any;
+			const adapter = createAdapter(db, { provider: "mysql" })({});
+			const created = await adapter.createMany({
+				model: "user",
+				data: [
+					{ ...createManyRows[0]!, image: "https://example.com/ada.png" },
+					createManyRows[1]!,
+				],
+				forceAllowId: true,
+			});
+			expect(db.transaction).toHaveBeenCalledTimes(1);
+			expect(trx.insert).toHaveBeenCalledTimes(2);
+			expect(db.insert).not.toHaveBeenCalled();
+			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
 		},
 	);
 
