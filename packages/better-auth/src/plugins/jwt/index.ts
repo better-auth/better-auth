@@ -13,7 +13,7 @@ import { getDefaultKeyAlg, getJwksAdapter } from "./adapter";
 import { createCookieCacheSigner } from "./cookie-cache";
 import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
-import type { JwtOptions } from "./types";
+import type { JWSAlgorithms, JwtOptions } from "./types";
 import { createJwk } from "./utils";
 import { verifyJWT as verifyJWTHelper } from "./verify";
 
@@ -30,9 +30,27 @@ declare module "@better-auth/core" {
 	}
 }
 
+const jwsAlgorithms = [
+	"EdDSA",
+	"ES256",
+	"ES512",
+	"PS256",
+	"RS256",
+] as const satisfies readonly JWSAlgorithms[];
+
 const signJWTBodySchema = z.object({
 	payload: z.record(z.string(), z.any()),
 	overrideOptions: z.record(z.string(), z.any()).optional(),
+	// Strict so key-locating and parsing members (`alg`, `kid`, `jku`, `x5u`,
+	// `jwk`, `b64`, `crit`) are rejected rather than signed into the header.
+	header: z
+		.strictObject({
+			typ: z.string().min(1).optional(),
+			cty: z.string().min(1).optional(),
+		})
+		.optional(),
+	signingKeyId: z.string().min(1).optional(),
+	signingAlgorithm: z.enum(jwsAlgorithms).optional(),
 });
 
 const verifyJWTBodySchema = z.object({
@@ -290,6 +308,39 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 						$Infer: {
 							body: {} as {
 								payload: JWTPayload;
+								/**
+								 * Protected header members to add. `alg` and `kid` always
+								 * come from the signing key.
+								 */
+								header?:
+									| {
+											/**
+											 * Media type of the token, such as `"logout+jwt"`.
+											 *
+											 * @see https://www.rfc-editor.org/rfc/rfc8725#section-3.11
+											 */
+											typ?: string | undefined;
+											/** Content type of the payload. */
+											cty?: string | undefined;
+									  }
+									| undefined;
+								/**
+								 * Sign with the JWKS key whose `id` (the `kid` header) matches.
+								 * Throws when no such key exists.
+								 */
+								signingKeyId?: string | undefined;
+								/**
+								 * Sign with the newest unexpired key of this algorithm. A key
+								 * is created on first use only when the algorithm is
+								 * `jwks.keyPairConfig.alg` or listed in `jwks.keyPairConfigs`;
+								 * otherwise the call throws.
+								 */
+								signingAlgorithm?: JWSAlgorithms | undefined;
+								/**
+								 * Replaces each top-level option group it sets (such as `jwks`
+								 * or `jwt`) for this call. Prefer `signingAlgorithm` to choose
+								 * the algorithm.
+								 */
 								overrideOptions?: JwtOptions | undefined;
 							},
 						},
@@ -303,6 +354,9 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 							...c.body.overrideOptions,
 						},
 						payload: c.body.payload,
+						header: c.body.header,
+						signingKeyId: c.body.signingKeyId,
+						signingAlgorithm: c.body.signingAlgorithm,
 					});
 					return c.json({ token: jwt });
 				},

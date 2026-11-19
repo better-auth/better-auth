@@ -218,3 +218,209 @@ describe("JWKS adapter helpers", () => {
 		expect(found).toBeUndefined();
 	});
 });
+
+describe("auth.api.signJWT — header and signing key", () => {
+	it("sets typ and cty while alg and kid come from the plugin, with no request", async () => {
+		const { auth } = await bootJwt();
+		const ctx = asShim(await auth.$context);
+		const key = await provisionKey(ctx, "EdDSA");
+
+		const { token } = await auth.api.signJWT({
+			body: {
+				payload: { sub: "u1" },
+				header: { typ: "logout+jwt", cty: "JWT" },
+			},
+		});
+		expect(decodeProtectedHeader(token)).toEqual({
+			typ: "logout+jwt",
+			cty: "JWT",
+			alg: "EdDSA",
+			kid: key.id,
+		});
+	});
+
+	it.each(["alg", "kid", "jku", "x5u", "jwk", "b64", "crit"])(
+		"rejects %s in header",
+		async (member) => {
+			const { auth } = await bootJwt();
+
+			await expect(
+				auth.api.signJWT({
+					body: {
+						payload: { sub: "u1" },
+						header: { typ: "JWT", [member]: "attacker" } as never,
+					},
+				}),
+			).rejects.toMatchObject({ status: 400 });
+		},
+	);
+
+	it("rejects header members outside the public type", async () => {
+		const { auth } = await bootJwt();
+
+		await expect(
+			auth.api.signJWT({
+				body: {
+					payload: { sub: "u1" },
+					// @ts-expect-error only typ and cty are settable
+					header: { kid: "attacker" },
+				},
+			}),
+		).rejects.toMatchObject({ status: 400 });
+	});
+
+	it("signs with the key named by signingKeyId", async () => {
+		const { auth } = await bootJwt();
+		const ctx = asShim(await auth.$context);
+		const older = await provisionKey(ctx, "ES256");
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		await provisionKey(ctx, "EdDSA");
+
+		const { token } = await auth.api.signJWT({
+			body: { payload: { sub: "u1" }, signingKeyId: older.id },
+		});
+		const header = decodeProtectedHeader(token);
+		expect(header.kid).toBe(older.id);
+		expect(header.alg).toBe("ES256");
+	});
+
+	it("throws for an unknown signingKeyId instead of using another key", async () => {
+		const { auth } = await bootJwt();
+		const ctx = asShim(await auth.$context);
+		await provisionKey(ctx, "EdDSA");
+
+		await expect(
+			auth.api.signJWT({
+				body: { payload: { sub: "u1" }, signingKeyId: "no-such-kid" },
+			}),
+		).rejects.toThrow(/signingKeyId "no-such-kid" not found in JWKS/);
+	});
+
+	it("signs with the newest key of signingAlgorithm", async () => {
+		const { auth } = await bootJwt();
+		const ctx = asShim(await auth.$context);
+		const es256 = await provisionKey(ctx, "ES256");
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		await provisionKey(ctx, "EdDSA");
+
+		const { token } = await auth.api.signJWT({
+			body: { payload: { sub: "u1" }, signingAlgorithm: "ES256" },
+		});
+		const header = decodeProtectedHeader(token);
+		expect(header.kid).toBe(es256.id);
+		expect(header.alg).toBe("ES256");
+	});
+
+	it("mints a signingAlgorithm key on first use only when keyPairConfigs lists it", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						disablePrivateKeyEncryption: true,
+						keyPairConfigs: [{ alg: "ES256" }],
+					},
+				}),
+			],
+			logger: { level: "error" },
+		});
+
+		const { token } = await auth.api.signJWT({
+			body: { payload: { sub: "u1" }, signingAlgorithm: "ES256" },
+		});
+		expect(decodeProtectedHeader(token).alg).toBe("ES256");
+
+		await expect(
+			auth.api.signJWT({
+				body: { payload: { sub: "u1" }, signingAlgorithm: "RS256" },
+			}),
+		).rejects.toThrow(/no key with alg "RS256"/);
+	});
+
+	it("rejects an unsupported signingAlgorithm", async () => {
+		const { auth } = await bootJwt();
+
+		await expect(
+			auth.api.signJWT({
+				body: {
+					payload: { sub: "u1" },
+					// @ts-expect-error HS256 is not an asymmetric JWKS algorithm
+					signingAlgorithm: "HS256",
+				},
+			}),
+		).rejects.toMatchObject({ status: 400 });
+	});
+
+	it("reads and mints keys through the configured adapter", async () => {
+		const keys: Jwk[] = [];
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						disablePrivateKeyEncryption: true,
+						keyPairConfigs: [{ alg: "ES256" }],
+					},
+					adapter: {
+						getJwks: async () => keys,
+						createJwk: async (webKey) => {
+							const key = { ...webKey, id: `custom-${keys.length}` } as Jwk;
+							keys.push(key);
+							return key;
+						},
+					},
+				}),
+			],
+			logger: { level: "error" },
+		});
+
+		const { token } = await auth.api.signJWT({
+			body: { payload: { sub: "u1" }, signingAlgorithm: "ES256" },
+		});
+		expect(keys).toHaveLength(1);
+		expect(decodeProtectedHeader(token)).toMatchObject({
+			alg: "ES256",
+			kid: "custom-0",
+		});
+
+		const { token: pinned } = await auth.api.signJWT({
+			body: { payload: { sub: "u1" }, signingKeyId: "custom-0" },
+		});
+		expect(decodeProtectedHeader(pinned).kid).toBe("custom-0");
+		expect(keys).toHaveLength(1);
+	});
+
+	it("passes header and signing overrides to a custom jwt.sign", async () => {
+		const calls: unknown[][] = [];
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						remoteUrl: "https://kms.example.com/jwks.json",
+						keyPairConfig: { alg: "ES256" },
+					},
+					jwt: {
+						sign: async (...args) => {
+							calls.push(args);
+							return "remote.signed.jwt";
+						},
+					},
+				}),
+			],
+			logger: { level: "error" },
+		});
+
+		const { token } = await auth.api.signJWT({
+			body: {
+				payload: { sub: "u1" },
+				header: { typ: "logout+jwt" },
+				signingKeyId: "kms-key-1",
+				signingAlgorithm: "ES256",
+			},
+		});
+		expect(token).toBe("remote.signed.jwt");
+		expect(calls[0]?.[1]).toEqual({ typ: "logout+jwt" });
+		expect(calls[0]?.[2]).toEqual({
+			signingKeyId: "kms-key-1",
+			signingAlgorithm: "ES256",
+		});
+	});
+});

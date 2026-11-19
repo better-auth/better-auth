@@ -135,6 +135,66 @@ await authClient.getSession({
 })
 ```
 
+### Sign a custom JWT on the server
+
+To sign your own payload with the plugin's keys, call `auth.api.signJWT` from server code. It needs no incoming request, so you can call it from a background job or a script. The endpoint is server-only and is not exposed over HTTP.
+
+```ts title="notify.ts"
+import { auth } from "./auth"
+
+const { token } = await auth.api.signJWT({
+  body: {
+    payload: {
+      sub: user.id,
+      aud: "https://notifications.example.com",
+    },
+    header: { typ: "notice+jwt" },
+  },
+})
+```
+
+Any service that trusts your JWKS accepts a token signed this way. To stop a verifier from accepting one kind of token where it expects another, give each kind its own `typ` and `aud`, and check both when you verify it.
+
+The body accepts these fields:
+
+* `payload`: the claims to sign. When a claim is missing, the plugin fills `iss`, `aud`, and `exp` from the plugin options and your `baseURL`. These defaults match the session JWTs from `/token`, so set your own `aud` on custom tokens.
+* `header`: protected header members to add. Only `typ` and `cty` are accepted. The plugin sets `alg` and `kid` from the signing key, unless you configure a custom `jwt.sign` function. A request with any other member, such as `jku` or `crit`, fails with a 400 error.
+* `signingKeyId`: the `id` of the JWKS key to sign with, which is also the token's `kid`. If no key has that id, the call throws instead of using another key.
+* `signingAlgorithm`: sign with the newest unexpired key of this algorithm.
+
+When no unexpired key of that algorithm exists, the plugin creates one only when one of these holds:
+
+* The algorithm is `jwks.keyPairConfig.alg`.
+* The algorithm is listed in `jwks.keyPairConfigs`.
+
+Otherwise the call throws. A key you select with `signingKeyId` is never replaced when it expires. The call throws, and you rotate the key yourself.
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    keyPairConfig: { alg: "EdDSA" },
+    keyPairConfigs: [{ alg: "RS256" }],
+  },
+})
+```
+
+```ts title="sign.ts"
+const { token } = await auth.api.signJWT({
+  body: {
+    payload: {
+      sub: user.id,
+      aud: "https://reports.example.com",
+    },
+    header: { typ: "report+jwt" },
+    signingAlgorithm: "RS256",
+  },
+})
+```
+
+<Callout>
+  Use `signingAlgorithm` to choose the algorithm instead of setting `jwks.keyPairConfig.alg` in `overrideOptions`. Each top-level group in `overrideOptions`, such as `jwks` or `jwt`, replaces the configured group for that call. Overriding `jwks` therefore drops your other `jwks` settings, such as `disablePrivateKeyEncryption` and `rotationInterval`.
+</Callout>
+
 ### Verifying the token
 
 The token can be verified in your own service, without the need for an additional verify call or database check.
@@ -381,6 +441,23 @@ jwt({
   },
 })
 ```
+
+The `sign` function also receives the protected header members a caller set, such as `typ`, and the caller's `signingKeyId` and `signingAlgorithm`:
+
+```ts title="auth.ts"
+jwt({
+  jwt: {
+    sign: async (jwtPayload, header, { signingKeyId, signingAlgorithm } = {}) => {
+      // this is pseudocode
+      const kid = signingKeyId ?? process.env.currentKid
+      const alg = signingAlgorithm ?? "ES256"
+      return await remoteSign({ ...header, alg, kid }, jwtPayload)
+    },
+  },
+})
+```
+
+Merge `header` into the header you sign. Otherwise tokens that need a specific `typ` lose it.
 
 ## Schema
 
