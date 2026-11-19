@@ -47,7 +47,8 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 						user: {
 							create: {
 								// An unproven number is still unique, so storing one could squat
-								// someone else's number. Only this plugin's verified path sets it.
+								// someone else's number. Only this plugin's verified path sets it,
+								// unless requireVerification is explicitly disabled.
 								async before(data, ctx) {
 									// An empty string is no number, so it is dropped like one.
 									if (
@@ -55,6 +56,34 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 										data[opts.phoneNumberVerified] === true
 									) {
 										return;
+									}
+									if (data[opts.phoneNumber] === "") {
+										return {
+											data: {
+												...data,
+												[opts.phoneNumber]: null,
+												[opts.phoneNumberVerified]: false,
+											},
+										};
+									}
+									if (opts.requireVerification === false) {
+										if (opts.phoneNumberValidator && data[opts.phoneNumber]) {
+											const isValidNumber = await opts.phoneNumberValidator(
+												data[opts.phoneNumber],
+											);
+											if (!isValidNumber) {
+												throw APIError.from(
+													"BAD_REQUEST",
+													PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
+												);
+											}
+										}
+										return {
+											data: {
+												...data,
+												[opts.phoneNumberVerified]: false,
+											},
+										};
 									}
 									if (ctx?.body?.[opts.phoneNumber]) {
 										throw APIError.from(
