@@ -61,8 +61,8 @@ const test = it
 			vi.unstubAllGlobals();
 		});
 	})
-	.extend("signedIn", false)
-	.extend("instance", async ({ signedIn }) => {
+	.extend("startSignedIn", false)
+	.extend("instance", async ({ startSignedIn }) => {
 		// The client keeps its own cookie jar, so a test controls when the
 		// credentials from a sign-in become visible to session requests.
 		const jar = new Headers();
@@ -101,7 +101,7 @@ const test = it
 			},
 		});
 		const setCookie = instance.sessionSetter(jar);
-		if (signedIn) {
+		if (startSignedIn) {
 			await instance.client.signIn.email({
 				email: instance.testUser.email,
 				password: instance.testUser.password,
@@ -469,7 +469,7 @@ describe("session after sign-in", () => {
 });
 
 describe("session after a data change", () => {
-	test.override("signedIn", true);
+	test.override("startSignedIn", true);
 
 	test("resolves with the updated session", async ({
 		instance: { client },
