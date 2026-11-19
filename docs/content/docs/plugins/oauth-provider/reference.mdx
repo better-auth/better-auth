@@ -358,7 +358,7 @@ The token endpoint answers a request with missing client credentials by grant:
 
 * A request that carries no client identity returns `invalid_request`. The identity can come from the form `client_id`, the `Authorization` header, or a `private_key_jwt` assertion.
 * A request that names a confidential client but sends no secret returns `invalid_client` on the `client_credentials` and `refresh_token` grants. A client registered for `private_key_jwt` that sends no valid assertion gets the same error. A valid assertion authenticates the client instead of a secret.
-* On the `authorization_code` grant, a request with a `client_id` but neither a secret, a valid client assertion, nor a `code_verifier` returns `invalid_request`. The endpoint checks for one of them before it looks up the client. With a `code_verifier` and no secret, a confidential client that sends no secret and no valid assertion gets `invalid_client`.
+* On the `authorization_code` grant, a request with a `client_id` but neither a secret, a client assertion, nor a `code_verifier` returns `invalid_request`. The endpoint checks for one of them before it looks up the client. With a `code_verifier` and no secret, a confidential client that sends no secret and no assertion gets `invalid_client`.
 
 [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) lists "no client authentication included" under `invalid_client`. The `invalid_request` answers depart from that text.
 
