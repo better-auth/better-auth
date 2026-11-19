@@ -508,15 +508,15 @@ describe("session after a data change", () => {
 	}) => {
 		// Only an unmounted atom skips the signal listener. Read it through
 		// `value`, since `get()` would mount it.
-		const session = client.$store.atoms.session!;
-		await session.value.refetch();
-		expect(session.value.data).not.toBeNull();
+		const session = client.useSession;
+		await session.value?.refetch();
+		expect(session.value?.data?.user).toBeDefined();
 
 		await client.updateUser({
 			name: "Renamed",
 			fetchOptions: {
 				async onSuccess() {
-					await session.value.refetch();
+					await session.value?.refetch();
 				},
 			},
 		});
@@ -525,6 +525,6 @@ describe("session after a data change", () => {
 			isPending: false,
 			isRefetching: false,
 		});
-		expect(session.value.data?.user.name).toBe("Renamed");
+		expect(session.value?.data?.user.name).toBe("Renamed");
 	});
 });

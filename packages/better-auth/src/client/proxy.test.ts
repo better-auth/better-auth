@@ -182,6 +182,7 @@ describe("createDynamicPathProxy", () => {
 
 	it("refreshes every matched signal when a listener callback throws", async () => {
 		const failure = new Error("callback failed");
+		const second = atom(false);
 		const { $fetch, pluginPathMethods, pluginsAtoms, atomListeners } =
 			getClientConfig({
 				baseURL: "http://localhost:3000",
@@ -193,7 +194,7 @@ describe("createDynamicPathProxy", () => {
 						id: "listeners",
 						getAtoms: () => ({
 							$first: atom(false),
-							$second: atom(false),
+							$second: second,
 						}),
 						atomListeners: [
 							{
@@ -212,7 +213,7 @@ describe("createDynamicPathProxy", () => {
 				],
 			});
 		const updates = vi.fn();
-		onTestFinished(pluginsAtoms.$second!.listen(updates));
+		onTestFinished(second.listen(updates));
 
 		const proxy = createDynamicPathProxy(
 			{} as { signIn: { email: () => Promise<unknown> } },

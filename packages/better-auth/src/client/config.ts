@@ -160,7 +160,8 @@ export const getClientConfig = (
 		notify: (
 			signal?: (Omit<string, "$sessionSignal"> | "$sessionSignal") | undefined,
 		) => {
-			const atom = pluginsAtoms[signal as keyof typeof pluginsAtoms]!;
+			const atom = pluginsAtoms[signal as string];
+			if (!atom) return;
 			// A notification reports a change that already happened.
 			const ends = beginAuthChange(
 				atom,
