@@ -49,6 +49,32 @@ function invalidClient(description: string): APIError {
 	});
 }
 
+// The code the Node transport sets when it refuses a fetch at its limit on
+// outstanding DNS lookups. The refusal says nothing about the host.
+const DNS_LOOKUP_LIMIT_ERROR_CODE = "ERR_CIMD_DNS_LOOKUP_LIMIT";
+const metadataFetchCapacityRefusals = new WeakSet<object>();
+
+/**
+ * Whether the transport refused a metadata document fetch at a local capacity
+ * limit, which says nothing about the document or its host.
+ */
+export function isMetadataFetchCapacityRefusal(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		metadataFetchCapacityRefusals.has(error)
+	);
+}
+
+function metadataFetchCapacityRefusal(): APIError {
+	const error = new APIError("TOO_MANY_REQUESTS", {
+		error: "temporarily_unavailable",
+		error_description: "metadata DNS lookup capacity exceeded",
+	});
+	metadataFetchCapacityRefusals.add(error);
+	return error;
+}
+
 function tooLargeError(): APIError {
 	return invalidClient(
 		`Metadata document exceeds ${MAX_RESPONSE_BYTES / 1024}KB size limit`,
@@ -173,7 +199,14 @@ export async function fetchClientMetadataDocument(
 				redirect: "manual",
 				signal: controller.signal,
 			});
-		} catch {
+		} catch (error) {
+			if (
+				typeof error === "object" &&
+				error !== null &&
+				(error as { code?: unknown }).code === DNS_LOOKUP_LIMIT_ERROR_CODE
+			) {
+				throw metadataFetchCapacityRefusal();
+			}
 			throw invalidClient(
 				didTimeOut
 					? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`
