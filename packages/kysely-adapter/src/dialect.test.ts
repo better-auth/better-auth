@@ -77,12 +77,13 @@ describe("createKyselyAdapter transaction detection", () => {
 	});
 
 	it("does not report native transaction support for a Cloudflare D1 database", async () => {
-		const { transaction, databaseType, introspectIndexes } =
+		const { transaction, databaseType, introspectIndexes, isD1 } =
 			await createKyselyAdapter({
 				database: fakeD1Database(),
 			});
 		expect(transaction).toBe(false);
 		expect(databaseType).toBe("sqlite");
+		expect(isD1).toBe(true);
 		expect(introspectIndexes).toBeTypeOf("function");
 	});
 

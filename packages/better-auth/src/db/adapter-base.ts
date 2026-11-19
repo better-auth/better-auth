@@ -36,5 +36,25 @@ export async function getBaseAdapter(
 		};
 	}
 
+	if (typeof adapter.createMany !== "function") {
+		logger.warn(
+			"Adapter does not correctly implement createMany, patching it automatically with sequential create. Please update your adapter implementation.",
+		);
+		adapter.createMany = async ({ data, model, select, forceAllowId }) => {
+			const created: unknown[] = [];
+			for (const row of data) {
+				created.push(
+					await adapter.create({
+						data: row,
+						model,
+						select,
+						forceAllowId,
+					}),
+				);
+			}
+			return created as never;
+		};
+	}
+
 	return adapter;
 }

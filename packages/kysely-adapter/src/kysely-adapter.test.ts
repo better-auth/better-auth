@@ -183,6 +183,166 @@ describe("kysely-adapter", () => {
 		expect(deleteQuery.outputAll).toHaveBeenCalledWith("deleted");
 	});
 
+	it("createMany restores input order from mssql OUTPUT", async () => {
+		const insertQuery = {
+			values: vi.fn(() => insertQuery),
+			outputAll: vi.fn(() => insertQuery),
+			execute: vi.fn().mockResolvedValue([
+				{ id: "b", name: "Bob" },
+				{ id: "a", name: "Ada" },
+			]),
+		};
+		const db = {
+			insertInto: vi.fn(() => insertQuery),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "mssql" })({});
+
+		const created = await adapter.createMany({
+			model: "user",
+			data: [
+				{
+					id: "a",
+					name: "Ada",
+					email: "ada@example.com",
+					emailVerified: false,
+				},
+				{
+					id: "b",
+					name: "Bob",
+					email: "bob@example.com",
+					emailVerified: false,
+				},
+			],
+			forceAllowId: true,
+		});
+
+		expect(insertQuery.outputAll).toHaveBeenCalledWith("inserted");
+		expect(created.map((row) => row.id)).toEqual(["a", "b"]);
+	});
+
+	it("raises createManyMaxParameters for postgres and keeps sqlite at the default", () => {
+		const db = {
+			selectFrom: vi.fn(),
+		} as any;
+		const sqlite = kyselyAdapter(db, { type: "sqlite" })({});
+		const postgres = kyselyAdapter(db, { type: "postgres" })({});
+		const mssql = kyselyAdapter(db, { type: "mssql" })({});
+		const d1 = kyselyAdapter(db, {
+			type: "sqlite",
+			createManyMaxParameters: 100,
+		})({});
+
+		expect(sqlite.options?.adapterConfig.createManyMaxParameters).toBe(999);
+		expect(postgres.options?.adapterConfig.createManyMaxParameters).toBe(65535);
+		expect(mssql.options?.adapterConfig.createManyMaxParameters).toBe(2099);
+		expect(d1.options?.adapterConfig.createManyMaxParameters).toBe(100);
+	});
+
+	const createManyRows = [
+		{
+			id: "a",
+			name: "Ada",
+			email: "ada@example.com",
+			emailVerified: false,
+		},
+		{
+			id: "b",
+			name: "Bob",
+			email: "bob@example.com",
+			emailVerified: false,
+		},
+	];
+
+	it("createMany restores input order from sqlite RETURNING", async () => {
+		const insertQuery = {
+			values: vi.fn(() => insertQuery),
+			returningAll: vi.fn(() => insertQuery),
+			execute: vi.fn().mockResolvedValue([
+				{ id: "b", name: "Bob" },
+				{ id: "a", name: "Ada" },
+			]),
+		};
+		const db = {
+			insertInto: vi.fn(() => insertQuery),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "sqlite" })({});
+
+		const created = await adapter.createMany({
+			model: "user",
+			data: createManyRows,
+			forceAllowId: true,
+		});
+
+		expect(insertQuery.returningAll).toHaveBeenCalledTimes(1);
+		expect(created.map((row) => row.id)).toEqual(["a", "b"]);
+	});
+
+	it("createMany does not use bulk RETURNING or OUTPUT when ids are generated", async () => {
+		const insertQuery = {
+			values: vi.fn(() => insertQuery),
+			returningAll: vi.fn(() => insertQuery),
+			outputAll: vi.fn(() => insertQuery),
+			execute: vi.fn(),
+			executeTakeFirst: vi.fn().mockResolvedValue({ id: "generated" }),
+		};
+		const db = {
+			insertInto: vi.fn(() => insertQuery),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "sqlite" })({
+			advanced: { database: { generateId: false } },
+		});
+
+		await adapter.createMany({
+			model: "user",
+			data: [
+				{ name: "Ada", email: "ada@example.com", emailVerified: false },
+				{ name: "Bob", email: "bob@example.com", emailVerified: false },
+			],
+		});
+
+		expect(insertQuery.values).toHaveBeenCalledTimes(2);
+		expect(insertQuery.execute).not.toHaveBeenCalled();
+		expect(insertQuery.executeTakeFirst).toHaveBeenCalledTimes(2);
+	});
+
+	it("createMany reads MySQL rows back in the same transaction as the insert", async () => {
+		const readError = new Error("read failed");
+		const insertQuery = {
+			values: vi.fn(() => insertQuery),
+			execute: vi.fn().mockResolvedValue(undefined),
+		};
+		const selectQuery = {
+			selectAll: vi.fn(() => selectQuery),
+			where: vi.fn(() => selectQuery),
+			execute: vi.fn().mockRejectedValue(readError),
+		};
+		const trx = {
+			insertInto: vi.fn(() => insertQuery),
+			selectFrom: vi.fn(() => selectQuery),
+		};
+		const db = {
+			insertInto: vi.fn(),
+			selectFrom: vi.fn(),
+			transaction: vi.fn(() => ({
+				execute: (cb: (transaction: typeof trx) => Promise<unknown>) => cb(trx),
+			})),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "mysql" })({});
+
+		await expect(
+			adapter.createMany({
+				model: "user",
+				data: createManyRows,
+				forceAllowId: true,
+			}),
+		).rejects.toBe(readError);
+		expect(db.transaction).toHaveBeenCalledTimes(1);
+		expect(trx.insertInto).toHaveBeenCalledTimes(1);
+		expect(trx.selectFrom).toHaveBeenCalledTimes(1);
+		expect(db.insertInto).not.toHaveBeenCalled();
+		expect(db.selectFrom).not.toHaveBeenCalled();
+	});
+
 	/**
 	 * @see https://node-postgres.com/features/types
 	 */

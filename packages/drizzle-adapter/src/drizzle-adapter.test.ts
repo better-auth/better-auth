@@ -12,6 +12,19 @@ import { drizzleAdapter } from "./drizzle-adapter";
 import { drizzleAdapter as drizzleRelationsV2Adapter } from "./relations-v2";
 
 describe("drizzle-adapter", () => {
+	const adapterFactories = [
+		{
+			relations: "Relations v1",
+			createAdapter: drizzleAdapter,
+			relationMetadata: { schema: {} },
+		},
+		{
+			relations: "Relations v2",
+			createAdapter: drizzleRelationsV2Adapter,
+			relationMetadata: { relations: {} },
+		},
+	] as const;
+
 	it("should create drizzle adapter", () => {
 		const db = {
 			_: {
@@ -25,23 +38,157 @@ describe("drizzle-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	it("raises createManyMaxParameters for postgres and keeps sqlite at the default", () => {
+		const db = {
+			_: {
+				fullSchema: {},
+			},
+		} as any;
+		const sqlite = drizzleAdapter(db, { provider: "sqlite" })({});
+		const postgres = drizzleAdapter(db, { provider: "pg" })({});
+		const sqliteV2 = drizzleRelationsV2Adapter(db, { provider: "sqlite" })({});
+		const postgresV2 = drizzleRelationsV2Adapter(db, { provider: "pg" })({});
+
+		expect(sqlite.options?.adapterConfig.createManyMaxParameters).toBe(999);
+		expect(postgres.options?.adapterConfig.createManyMaxParameters).toBe(65535);
+		expect(sqliteV2.options?.adapterConfig.createManyMaxParameters).toBe(999);
+		expect(postgresV2.options?.adapterConfig.createManyMaxParameters).toBe(
+			65535,
+		);
+	});
+
+	it("sets the D1 bind limit when the sqlite client has batch, prepare, and exec", () => {
+		const db = {
+			_: { fullSchema: {} },
+			$client: {
+				batch: vi.fn(),
+				prepare: vi.fn(),
+				exec: vi.fn(),
+			},
+		} as any;
+		const sqlite = drizzleAdapter(db, { provider: "sqlite" })({});
+		const sqliteV2 = drizzleRelationsV2Adapter(db, { provider: "sqlite" })({});
+
+		expect(sqlite.options?.adapterConfig.createManyMaxParameters).toBe(100);
+		expect(sqliteV2.options?.adapterConfig.createManyMaxParameters).toBe(100);
+	});
+
+	const createManyRows = [
+		{
+			id: "a",
+			name: "Ada",
+			email: "ada@example.com",
+			emailVerified: false,
+		},
+		{
+			id: "b",
+			name: "Bob",
+			email: "bob@example.com",
+			emailVerified: false,
+		},
+	];
+	const userTable = {
+		id: { name: "id" },
+		name: { name: "name" },
+		email: { name: "email" },
+		emailVerified: { name: "emailVerified" },
+		image: { name: "image" },
+		createdAt: { name: "createdAt" },
+		updatedAt: { name: "updatedAt" },
+	};
+
+	it.for(adapterFactories)(
+		"createMany restores input order from $relations sqlite RETURNING",
+		async ({ createAdapter }) => {
+			const returning = vi.fn().mockResolvedValue([
+				{ id: "b", name: "Bob" },
+				{ id: "a", name: "Ada" },
+			]);
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ returning }),
+				}),
+			} as any;
+			const adapter = createAdapter(db, { provider: "sqlite" })({});
+			const created = await adapter.createMany({
+				model: "user",
+				data: createManyRows,
+				forceAllowId: true,
+			});
+			expect(returning).toHaveBeenCalledTimes(1);
+			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany does not use bulk RETURNING when ids are generated on $relations",
+		async ({ createAdapter }) => {
+			const returning = vi.fn().mockResolvedValue([{ id: "generated" }]);
+			const values = vi.fn().mockReturnValue({ returning });
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn().mockReturnValue({ values }),
+			} as any;
+			const adapter = createAdapter(db, { provider: "sqlite" })({
+				advanced: { database: { generateId: false } },
+			});
+			await adapter.createMany({
+				model: "user",
+				data: [
+					{ name: "Ada", email: "ada@example.com", emailVerified: false },
+					{ name: "Bob", email: "bob@example.com", emailVerified: false },
+				],
+			});
+			expect(values).toHaveBeenCalledTimes(2);
+			expect(values.mock.calls[0]?.[0]).not.toEqual(
+				expect.arrayContaining([expect.any(Object)]),
+			);
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany reads MySQL rows back in the same $relations transaction as the insert",
+		async ({ createAdapter }) => {
+			const readError = new Error("read failed");
+			const insertExecute = vi.fn().mockResolvedValue(undefined);
+			const trx = {
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ execute: insertExecute }),
+				}),
+				select: vi.fn().mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi.fn().mockRejectedValue(readError),
+					}),
+				}),
+			};
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn(),
+				select: vi.fn(),
+				transaction: vi.fn((cb: (tx: typeof trx) => Promise<unknown>) =>
+					cb(trx),
+				),
+			} as any;
+			const adapter = createAdapter(db, { provider: "mysql" })({});
+			await expect(
+				adapter.createMany({
+					model: "user",
+					data: createManyRows,
+					forceAllowId: true,
+				}),
+			).rejects.toBe(readError);
+			expect(db.transaction).toHaveBeenCalledTimes(1);
+			expect(trx.insert).toHaveBeenCalledTimes(1);
+			expect(trx.select).toHaveBeenCalledTimes(1);
+			expect(db.insert).not.toHaveBeenCalled();
+		},
+	);
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11258
 	 */
 	describe("lazy database initialization", () => {
-		const adapterFactories = [
-			{
-				relations: "Relations v1",
-				createAdapter: drizzleAdapter,
-				relationMetadata: { schema: {} },
-			},
-			{
-				relations: "Relations v2",
-				createAdapter: drizzleRelationsV2Adapter,
-				relationMetadata: { relations: {} },
-			},
-		] as const;
-
 		it.for(adapterFactories)(
 			"should not initialize a lazy database during $relations adapter construction",
 			({ createAdapter }) => {
@@ -53,6 +200,11 @@ describe("drizzle-adapter", () => {
 
 				expect(() =>
 					createAdapter(db, { provider: "pg" })({
+						secret: "test-secret-that-is-at-least-32-chars-long!!",
+					}),
+				).not.toThrow();
+				expect(() =>
+					createAdapter(db, { provider: "sqlite" })({
 						secret: "test-secret-that-is-at-least-32-chars-long!!",
 					}),
 				).not.toThrow();

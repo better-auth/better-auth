@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "../../types";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import type {
+	BuiltInCustomAdapter,
 	CleanedWhere,
 	CustomAdapter,
 	DBAdapterFactoryConfig,
@@ -127,6 +128,10 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 			| "count";
 	}) => W extends undefined ? undefined : CleanedWhere[];
 }) => CustomAdapter;
+
+export type BuiltInAdapterFactoryCustomizeAdapterCreator = (
+	config: Parameters<AdapterFactoryCustomizeAdapterCreator>[0],
+) => BuiltInCustomAdapter;
 
 export type AdapterTestDebugLogs = {
 	resetDebugLogs: () => void;

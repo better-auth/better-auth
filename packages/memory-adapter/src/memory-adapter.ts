@@ -1,5 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	BuiltInCustomAdapter,
+	BuiltInDBAdapter,
 	CleanedWhere,
 	DBAdapterDebugLogOption,
 	JoinConfig,
@@ -168,6 +170,7 @@ export const memoryAdapter = (
 				adapterName: "Memory Adapter",
 				usePlural: false,
 				debugLogs: config?.debugLogs || false,
+				createManyMaxParameters: Number.MAX_SAFE_INTEGER,
 				supportsArrays: true,
 				transaction: async (cb) => {
 					// Copy-on-write isolation: run the callback against a clone, then
@@ -184,7 +187,11 @@ export const memoryAdapter = (
 					return result;
 				},
 			},
-			adapter: ({ getFieldName, getDefaultFieldName, options }) => {
+			adapter: ({
+				getFieldName,
+				getDefaultFieldName,
+				options,
+			}): BuiltInCustomAdapter => {
 				const applySortToRecords = (
 					records: any[],
 					sortBy: { field: string; direction: "asc" | "desc" } | undefined,
@@ -449,6 +456,30 @@ export const memoryAdapter = (
 						activeDb[model].push(data);
 						return data;
 					},
+					createMany: async <T extends Record<string, any>>({
+						model,
+						data,
+					}: {
+						model: string;
+						data: T[];
+					}): Promise<T[]> => {
+						const useNumberId =
+							options.advanced?.database?.generateId === "serial";
+						if (!activeDb[model]) {
+							activeDb[model] = [];
+						}
+						const created: T[] = [];
+						for (const row of data) {
+							if (useNumberId && !("id" in row)) {
+								Object.assign(row, {
+									id: reserveSerialId(model, activeDb[model]),
+								});
+							}
+							activeDb[model].push(row);
+							created.push(row);
+						}
+						return created;
+					},
 					findOne: async ({ model, modelKey = model, where, select, join }) => {
 						const res = convertWhereClause(
 							where,
@@ -609,7 +640,7 @@ export const memoryAdapter = (
 		});
 
 	const adapterCreator = buildAdapterFactory(db);
-	return (options: BetterAuthOptions) => {
+	return (options: BetterAuthOptions): BuiltInDBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return adapterCreator(options);
 	};
