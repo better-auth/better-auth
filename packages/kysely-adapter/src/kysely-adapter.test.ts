@@ -319,6 +319,45 @@ describe("kysely-adapter", () => {
 		expect(created.map((row) => row.name)).toEqual(["Ada", "Bob"]);
 	});
 
+	it("createMany preserves case-distinct UUID-shaped text ids", async () => {
+		const upperId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
+		const lowerId = upperId.toLowerCase();
+		const insertQuery = {
+			values: vi.fn(() => insertQuery),
+			returningAll: vi.fn(() => insertQuery),
+			execute: vi.fn().mockResolvedValue([
+				{ id: lowerId, name: "Lower" },
+				{ id: upperId, name: "Upper" },
+			]),
+		};
+		const db = {
+			insertInto: vi.fn(() => insertQuery),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "sqlite" })({});
+
+		const created = await adapter.createMany({
+			model: "user",
+			data: [
+				{
+					id: upperId,
+					name: "Upper",
+					email: "upper@example.com",
+					emailVerified: false,
+				},
+				{
+					id: lowerId,
+					name: "Lower",
+					email: "lower@example.com",
+					emailVerified: false,
+				},
+			],
+			forceAllowId: true,
+		});
+
+		expect(created.map((row) => row.id)).toEqual([upperId, lowerId]);
+		expect(created.map((row) => row.name)).toEqual(["Upper", "Lower"]);
+	});
+
 	it("createMany does not use bulk RETURNING or OUTPUT when ids are generated", async () => {
 		const insertQuery = {
 			values: vi.fn(() => insertQuery),
