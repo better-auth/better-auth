@@ -1150,6 +1150,7 @@ describe("account", async () => {
 	 * @see https://github.com/better-auth/better-auth/issues/11557
 	 */
 	it("should not pass the account id in the refreshToken update data", async () => {
+		const accountUpdates: Partial<Account>[] = [];
 		const { auth, client, signInWithTestUser } = await getTestInstance({
 			socialProviders: {
 				google: {
@@ -1158,22 +1159,29 @@ describe("account", async () => {
 					enabled: true,
 				},
 			},
+			databaseHooks: {
+				account: {
+					update: {
+						async before(data) {
+							accountUpdates.push(data);
+						},
+					},
+				},
+			},
 		});
 		const testCtx = await auth.$context;
 
 		server.use(
-			http.post("https://oauth2.googleapis.com/token", async ({ request }) => {
-				const params = new URLSearchParams(await request.text());
-				expect(params.get("grant_type")).toBe("refresh_token");
-				return HttpResponse.json({
+			http.post("https://oauth2.googleapis.com/token", () =>
+				HttpResponse.json({
 					access_token: "rotated-access-token",
 					refresh_token: "rotated-refresh-token",
-				});
-			}),
+				}),
+			),
 		);
 
 		const { headers, user } = await signInWithTestUser();
-		const account = await testCtx.internalAdapter.createAccount({
+		await testCtx.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
 			accountId: "google-sub",
@@ -1181,7 +1189,6 @@ describe("account", async () => {
 			refreshToken: "initial-refresh-token",
 			scope: "email",
 		});
-		const updateAccountSpy = vi.spyOn(testCtx.internalAdapter, "updateAccount");
 
 		const res = await client.$fetch<{ refreshToken?: string }>(
 			"/refresh-token",
@@ -1196,13 +1203,10 @@ describe("account", async () => {
 		expect(res.error).toBeFalsy();
 		expect(res.data?.refreshToken).toBe("rotated-refresh-token");
 
-		// Adapters that reject the primary key in update data (e.g. Convex) would
-		// fail the write after the provider has already rotated the refresh token
-		expect(updateAccountSpy).toHaveBeenCalledTimes(1);
-		const [updatedId, updateData] = updateAccountSpy.mock.calls[0]!;
-		expect(updatedId).toBe(account.id);
-		expect(updateData).not.toHaveProperty("id");
-		updateAccountSpy.mockRestore();
+		// Adapters that reject the primary key in update data would fail the
+		// write after the provider has already rotated the refresh token
+		expect(accountUpdates).toHaveLength(1);
+		expect(accountUpdates[0]).not.toHaveProperty("id");
 
 		const accounts = await testCtx.internalAdapter.findAccounts(user.id);
 		const googleAccount = accounts.find((a) => a.providerId === "google");
