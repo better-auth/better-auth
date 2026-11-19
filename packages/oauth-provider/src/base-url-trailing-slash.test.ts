@@ -233,7 +233,8 @@ describe("end-session id_token_hint issuer forms", () => {
 
 		const response = await endSessionWithHint(instance, metadata, foreignHint);
 
-		expect(response.status).not.toBe(200);
+		expect(response.status).toBe(401);
+		expect(await response.json()).toMatchObject({ error: "invalid_token" });
 		expect(
 			await instance.auth.api.getSession({ headers: instance.sessionHeaders }),
 		).not.toBeNull();
