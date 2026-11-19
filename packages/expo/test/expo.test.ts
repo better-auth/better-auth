@@ -235,6 +235,26 @@ describe("expo", async () => {
 		expect(result["better-auth.session_token"]).toBeUndefined();
 	});
 
+	it("should ignore unparseable Expires and treat as session cookie", async () => {
+		const { getSetCookie } = await import("../src/client");
+		const header = "better-auth.session_token=abc123; Expires=not-a-date";
+		const result = JSON.parse(getSetCookie(header));
+		expect(result["better-auth.session_token"]).toEqual({
+			value: "abc123",
+			expires: null,
+		});
+	});
+
+	it("should ignore unparseable Max-Age and treat as session cookie", async () => {
+		const { getSetCookie } = await import("../src/client");
+		const header = "better-auth.session_token=abc123; Max-Age=soon";
+		const result = JSON.parse(getSetCookie(header));
+		expect(result["better-auth.session_token"]).toEqual({
+			value: "abc123",
+			expires: null,
+		});
+	});
+
 	it("should correctly parse multiple Set-Cookie headers with Expires commas", async () => {
 		const header =
 			"better-auth.session_token=abc; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, better-auth.session_data=xyz; Expires=Thu, 22 Oct 2015 07:28:00 GMT; Path=/";

@@ -90,11 +90,19 @@ export function getSetCookie(header: string, prevCookie?: string | undefined) {
 			delete toSetCookie[key];
 			return;
 		}
-		const expires = maxAge
-			? new Date(Date.now() + Number(maxAge) * 1000)
-			: expiresAt
-				? new Date(String(expiresAt))
-				: null;
+		let expires: Date | null = null;
+		if (maxAge !== undefined) {
+			const maxAgeNum = Number(maxAge);
+			if (!Number.isNaN(maxAgeNum)) {
+				expires = new Date(Date.now() + maxAgeNum * 1000);
+			}
+		}
+		if (!expires && expiresAt) {
+			const date = new Date(String(expiresAt));
+			if (!Number.isNaN(date.getTime())) {
+				expires = date;
+			}
+		}
 		if (expires && expires.getTime() <= Date.now()) {
 			delete toSetCookie[key];
 			return;
