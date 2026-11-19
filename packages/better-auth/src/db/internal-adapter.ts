@@ -574,7 +574,7 @@ export const createInternalAdapter = (
 				{
 					fn: async (where) => {
 						const currentAdapter = await getCurrentAdapter(adapter);
-						await currentAdapter.delete({
+						await currentAdapter.deleteMany({
 							model: "user",
 							where,
 						});
