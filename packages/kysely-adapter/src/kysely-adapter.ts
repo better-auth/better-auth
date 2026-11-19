@@ -45,6 +45,18 @@ function createManyMaxParametersForType(
 	return undefined;
 }
 
+function rowsShareKeys(rows: Record<string, unknown>[]): boolean {
+	const first = rows[0];
+	if (!first || rows.length < 2) return true;
+	const expected = new Set(Object.keys(first));
+	return rows.every((row) => {
+		const keys = Object.keys(row);
+		return (
+			keys.length === expected.size && keys.every((key) => expected.has(key))
+		);
+	});
+}
+
 function orderInsertedRowsById<T extends Record<string, unknown>>(
 	ids: unknown[],
 	rows: T[],
@@ -687,7 +699,7 @@ export const kyselyAdapter = (
 						}
 						return created;
 					};
-					if (!hasAllIds) {
+					if (!hasAllIds || !rowsShareKeys(encoded)) {
 						return createSequentially();
 					}
 					if (config?.type === "mysql") {
@@ -1166,6 +1178,7 @@ export const kyselyAdapter = (
 				config?.type,
 				config?.createManyMaxParameters,
 			),
+			createManyMaxRows: config?.type === "mssql" ? 1000 : undefined,
 			supportsBooleans:
 				config?.type === "sqlite" ||
 				config?.type === "mssql" ||
