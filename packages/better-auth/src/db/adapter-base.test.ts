@@ -47,4 +47,30 @@ describe("getBaseAdapter createMany patch", () => {
 		expect(trx.create).toHaveBeenCalledTimes(2);
 		expect(root.create).not.toHaveBeenCalled();
 	});
+
+	it("invokes a legacy transaction method with the adapter as this", async () => {
+		const trx = legacyAdapter();
+		const root = legacyAdapter({
+			transaction: async function (
+				this: DBAdapter<BetterAuthOptions>,
+				callback,
+			) {
+				expect(this.id).toBe("legacy");
+				return callback(trx);
+			},
+		});
+		const adapter = await getBaseAdapter(
+			{
+				database: () => root,
+			} as BetterAuthOptions,
+			async () => root,
+		);
+
+		await adapter.transaction(async (transactionAdapter) => {
+			return transactionAdapter.createMany({
+				model: "user",
+				data: [{ name: "Ada", email: "ada@example.com" }],
+			});
+		});
+	});
 });
