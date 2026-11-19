@@ -61,8 +61,8 @@ function lookupWithAbort(
 		return countedLookup;
 	}
 	return new Promise((resolve, reject) => {
-		// A lookup queued behind other hosts' lookups times out without reaching
-		// this host, so the code keeps the timeout from counting as an outage.
+		// A lookup can be queued behind other hosts' lookups, so this abort says
+		// nothing about this host.
 		const onAbort = () => {
 			reject(
 				Object.assign(
@@ -233,7 +233,16 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 				}
 			},
 		);
-		request.once("error", reject);
+		// The code tells callers the abort ended a request already sent to the
+		// host, so its timeout can count as an outage of that host.
+		const requestAborted = (cause: unknown) =>
+			Object.assign(new Error("metadata request aborted", { cause }), {
+				name: "AbortError",
+				code: "ERR_CIMD_REQUEST_ABORTED",
+			});
+		request.once("error", (error) => {
+			reject(signal?.aborted ? requestAborted(error) : error);
+		});
 		// Without an upgrade listener, Node destroys the socket after a 101 and
 		// emits neither a response nor an error, and the abort signal can no
 		// longer settle the request.
@@ -243,7 +252,11 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 			reject(new TypeError("metadata server answered with a protocol upgrade"));
 		});
 		request.once("close", () => {
-			reject(new TypeError("metadata request closed before a response"));
+			reject(
+				signal?.aborted
+					? requestAborted(signal.reason)
+					: new TypeError("metadata request closed before a response"),
+			);
 		});
 		request.end();
 	});

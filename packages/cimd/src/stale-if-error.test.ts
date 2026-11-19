@@ -39,12 +39,22 @@ function clientDocument(overrides: Record<string, unknown> = {}) {
 	};
 }
 
-/** Rejects with the abort reason once the plugin's fetch timeout fires. */
+/**
+ * Rejects once the plugin's fetch timeout fires, as a transport whose request
+ * had reached the host does.
+ */
 function untilAborted(init?: RequestInit): Promise<Response> {
 	return new Promise((_resolve, reject) => {
-		init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), {
-			once: true,
-		});
+		init?.signal?.addEventListener(
+			"abort",
+			() =>
+				reject(
+					Object.assign(new Error("request aborted"), {
+						code: "ERR_CIMD_REQUEST_ABORTED",
+					}),
+				),
+			{ once: true },
+		);
 	});
 }
 
@@ -227,6 +237,26 @@ describe("CIMD metadataStaleIfError", () => {
 			expect(await server.findClient()).toEqual(stored);
 		},
 	);
+
+	it("rejects when the fetch timeout aborts a request the transport did not mark as sent", async () => {
+		const server = await createAuthorizationServer({
+			metadataStaleIfError: "1h",
+		});
+		await server.authorize();
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		server.transport.answer = (_url, init) =>
+			new Promise((_resolve, reject) => {
+				init?.signal?.addEventListener(
+					"abort",
+					() => reject(init.signal?.reason),
+					{ once: true },
+				);
+			});
+
+		expect((await settle(server.authorize())).errorDescription).toBe(
+			"Metadata document fetch timed out after 5000ms",
+		);
+	});
 
 	it("keeps today's error for a transient failure when the option is unset", async () => {
 		const server = await createAuthorizationServer();

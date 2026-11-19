@@ -550,7 +550,10 @@ async function fetchJwksFromUri(
 		try {
 			responseBody = await readBoundedResponseBody(response);
 		} catch (error) {
-			throw classifyJwksTransportError(error, controller.signal);
+			// The host answered, so a timeout while reading the body is transient.
+			throw controller.signal.aborted
+				? createTransientJwksFetchFailure("JWKS fetch timed out", error)
+				: classifyJwksTransportError(error, controller.signal);
 		}
 		if (responseBody === null) {
 			throw new Error("JWKS response exceeds 64 KiB");

@@ -108,12 +108,22 @@ async function createVerifier(
 	return { clientId, jwksUri, context, keys, transport, verify };
 }
 
-/** Rejects with the abort reason once the key fetch timeout fires. */
+/**
+ * Rejects once the key fetch timeout fires, as a transport whose request had
+ * reached the host does.
+ */
 function untilAborted(init?: RequestInit): Promise<Response> {
 	return new Promise((_resolve, reject) => {
-		init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), {
-			once: true,
-		});
+		init?.signal?.addEventListener(
+			"abort",
+			() =>
+				reject(
+					Object.assign(new Error("request aborted"), {
+						code: "ERR_CIMD_REQUEST_ABORTED",
+					}),
+				),
+			{ once: true },
+		);
 	});
 }
 
@@ -273,6 +283,19 @@ describe("jwksStaleIfError on a client discovery", () => {
 								),
 							);
 						},
+						{ once: true },
+					);
+				}),
+			elapsedMs: 5_000,
+		},
+		{
+			failure:
+				"the fetch timeout aborts a request the transport did not mark as sent",
+			answer: (init?: RequestInit) =>
+				new Promise<Response>((_resolve, reject) => {
+					init?.signal?.addEventListener(
+						"abort",
+						() => reject(init.signal?.reason),
 						{ once: true },
 					);
 				}),

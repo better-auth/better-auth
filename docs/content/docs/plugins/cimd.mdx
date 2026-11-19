@@ -274,7 +274,7 @@ cimd({
 
 A failed refresh then returns the stored client unchanged and logs a warning when its `updatedAt` is within `metadataStaleIfError` and the failure is transient:
 
-* The plugin's 5-second fetch timeout, once the host name has resolved. A timeout during DNS resolution does not count, because other client IDs can delay lookups by holding Node's shared DNS threads. A custom transport marks such a timeout by rejecting with an error whose `code` is `ERR_CIMD_DNS_LOOKUP_ABORTED`.
+* The plugin's 5-second fetch timeout, when the transport reports that its request had reached the host. The Node transport does. A custom transport does so by rejecting with an error whose `code` is `ERR_CIMD_REQUEST_ABORTED`, and only after DNS resolution: other client IDs can delay lookups, for example by holding Node's shared DNS threads, so a timeout during resolution says nothing about the host.
 * HTTP 500, 502, 503, or 504.
 * A connection failure whose error, or an error in its `cause` chain, has the code `EAI_AGAIN`, `ECONNRESET`, `ECONNREFUSED`, `ETIMEDOUT`, `EHOSTUNREACH`, `ENETUNREACH`, `EPIPE`, `UND_ERR_CONNECT_TIMEOUT`, `UND_ERR_HEADERS_TIMEOUT`, `UND_ERR_BODY_TIMEOUT`, or `UND_ERR_SOCKET`. On runtimes whose `fetch` errors carry no code, only the timeout and the four statuses count.
 

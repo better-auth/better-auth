@@ -23,7 +23,7 @@ const TRANSIENT_HTTP_STATUSES = new Set([500, 502, 503, 504]);
 
 // Local capacity refusals say nothing about the host.
 const LOCAL_CAPACITY_ERROR_CODES = new Set(["ERR_CIMD_DNS_LOOKUP_LIMIT"]);
-const DNS_LOOKUP_ABORTED_CODE = "ERR_CIMD_DNS_LOOKUP_ABORTED";
+const REQUEST_ABORTED_CODE = "ERR_CIMD_REQUEST_ABORTED";
 
 function someErrorInCauseChain(
 	error: unknown,
@@ -62,25 +62,18 @@ export function isTransientHttpStatus(status: number): boolean {
 }
 
 /**
- * Whether aborting `signal` ended the fetch, unless the transport tagged the
- * abort `ERR_CIMD_DNS_LOOKUP_ABORTED`. A lookup can be queued behind other
- * hosts' lookups, which any caller can cause, so that abort does not count.
+ * Whether aborting `signal` ended a request the transport had already sent to
+ * the host, which it reports with the code `ERR_CIMD_REQUEST_ABORTED`. An
+ * unmarked abort may have ended a DNS lookup queued behind other hosts'
+ * lookups, which any caller can cause, so it does not count.
  */
 export function isTransientAbort(error: unknown, signal: AbortSignal): boolean {
-	if (!signal.aborted) return false;
-	if (
+	return (
+		signal.aborted &&
 		someErrorInCauseChain(
 			error,
 			(candidate) =>
-				(candidate as { code?: unknown }).code === DNS_LOOKUP_ABORTED_CODE,
+				(candidate as { code?: unknown }).code === REQUEST_ABORTED_CODE,
 		)
-	) {
-		return false;
-	}
-	return someErrorInCauseChain(
-		error,
-		(candidate) =>
-			candidate === signal.reason ||
-			(candidate as { name?: unknown }).name === "AbortError",
 	);
 }
