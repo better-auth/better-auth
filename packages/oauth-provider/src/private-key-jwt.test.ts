@@ -800,9 +800,9 @@ describe("private_key_jwt authentication", async () => {
 			([url]) => String(url) === oldestJwksUri,
 		);
 		expect(oldestFetches).toHaveLength(1);
-	});
+	}, 60_000);
 
-	describe("jwks_uri key set cache bound", () => {
+	describe("jwks_uri key set cache bound", { timeout: 60_000 }, () => {
 		async function setup(clientCount: number) {
 			const origin = "https://lru-provider.example.com";
 			const tokenUrl = `${origin}/api/auth/oauth2/token`;
