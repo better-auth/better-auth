@@ -626,6 +626,57 @@ describe("CIMD metadataStaleIfError", () => {
 		});
 	});
 
+	it("keeps a stored client's once-a-minute fetch limit when other client IDs with no stored client fail", async () => {
+		const request = await getTestInstance({
+			baseURL: `http://localhost:${3700 + ++instanceSequence}`,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid"],
+				}),
+			],
+		});
+		const context = await request.auth.$context;
+		const ctx = { context } as unknown as GenericEndpointContext;
+		// One origin, because `maxCacheEntries` also bounds the origin records.
+		const storedClientId = "https://transient-flood.example.com/stored.json";
+		let status = 200;
+		let fetchCount = 0;
+		const discovery = createCimdClientDiscovery({
+			maxCacheEntries: 1,
+			metadataRevalidationInterval: 0,
+			metadataFetchPolicy: { minimumFetchInterval: 0 },
+			metadataStaleIfError: "1h",
+			fetchClientMetadataResource: async (input) => {
+				fetchCount += 1;
+				return status === 200
+					? Response.json(clientDocument({ client_id: String(input) }))
+					: new Response(null, { status });
+			},
+		});
+		const stored = await discovery.resolve(ctx, storedClientId, null);
+
+		status = 503;
+		await expect(
+			discovery.resolve(ctx, storedClientId, stored),
+		).resolves.toMatchObject({ clientId: storedClientId });
+		await expect(
+			discovery.resolve(
+				ctx,
+				"https://transient-flood.example.com/unknown.json",
+				null,
+			),
+		).rejects.toMatchObject({ body: { error: "invalid_client" } });
+		const fetchesBefore = fetchCount;
+
+		await expect(
+			discovery.resolve(ctx, storedClientId, stored),
+		).resolves.toMatchObject({ clientId: storedClientId });
+		expect(fetchCount).toBe(fetchesBefore);
+	});
+
 	it("keeps serving a stored client when other client IDs with no stored client fail", async () => {
 		const request = await getTestInstance({
 			baseURL: `http://localhost:${3700 + ++instanceSequence}`,

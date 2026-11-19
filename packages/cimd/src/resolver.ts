@@ -456,22 +456,31 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		terminalFailureAtMsByClientId.delete(clientId);
 	};
 
+	// A failure that is not transient ends the client's transient record. A
+	// transient one is recorded by the request that serves a stored client, so
+	// failures for client IDs with nothing to serve cannot evict the records.
 	const recordFetchFailure = (clientId: string, failure: unknown) => {
-		if (staleIfErrorMs === null || isMetadataFetchCapacityRefusal(failure)) {
+		if (
+			staleIfErrorMs === null ||
+			isMetadataFetchCapacityRefusal(failure) ||
+			isTransientMetadataFetchFailure(failure)
+		) {
 			return;
 		}
 		transientFailureByClientId.delete(clientId);
-		if (isTransientMetadataFetchFailure(failure)) {
-			while (transientFailureByClientId.size >= maxCacheEntries) {
-				const oldestClientId = transientFailureByClientId.keys().next().value;
-				if (typeof oldestClientId !== "string") break;
-				transientFailureByClientId.delete(oldestClientId);
-			}
-			transientFailureByClientId.set(clientId, {
-				failedAtMs: Date.now(),
-				reason: describeFetchFailure(failure),
-			});
+	};
+
+	const recordTransientFailure = (clientId: string, failure: unknown) => {
+		transientFailureByClientId.delete(clientId);
+		while (transientFailureByClientId.size >= maxCacheEntries) {
+			const oldestClientId = transientFailureByClientId.keys().next().value;
+			if (typeof oldestClientId !== "string") break;
+			transientFailureByClientId.delete(oldestClientId);
 		}
+		transientFailureByClientId.set(clientId, {
+			failedAtMs: Date.now(),
+			reason: describeFetchFailure(failure),
+		});
 	};
 
 	// Recorded only by a request whose stored client is within the stale
@@ -969,6 +978,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			} catch (error) {
 				const storedClient = storedClientWithinStaleBound();
 				if (storedClient && isTransientMetadataFetchFailure(error)) {
+					recordTransientFailure(clientId, error);
 					return serveStoredClient(storedClient, describeFetchFailure(error));
 				}
 				if (
