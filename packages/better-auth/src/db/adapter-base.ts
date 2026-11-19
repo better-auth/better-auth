@@ -62,8 +62,10 @@ export async function getBaseAdapter(
 		patchCreateMany(adapter);
 		const originalTransaction = adapter.transaction;
 		if (typeof originalTransaction === "function") {
+			const runTransaction: typeof originalTransaction =
+				originalTransaction.bind(adapter);
 			adapter.transaction = async (callback) => {
-				return originalTransaction(async (trx) => {
+				return runTransaction(async (trx) => {
 					patchCreateMany(trx);
 					return callback(trx);
 				});
