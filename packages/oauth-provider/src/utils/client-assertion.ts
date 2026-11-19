@@ -18,6 +18,7 @@ import { getIssuer } from "../authorize";
 import { validatePublicClientJwks } from "../client-jwks";
 import { getClientDiscoveries } from "../extensions";
 import type {
+	ClientDiscovery,
 	ClientMetadataResourceFetch,
 	OAuthOptions,
 	SchemaClient,
@@ -228,11 +229,34 @@ export function isPrivateHostname(hostname: string): boolean {
 	return !isPublicRoutableHost(hostname);
 }
 
-function validateJwksUri(
+/**
+ * Asks the discovery that owns a client whether its `jwks_uri` may use an
+ * origin the default rule rejects. Only a resolved `true` allows it; a throw
+ * or rejection is logged and denies.
+ */
+export async function isCrossOriginJwksUriAllowedByDiscovery(
+	ctx: GenericEndpointContext,
+	discovery: ClientDiscovery | undefined,
+	input: { clientId: string; jwksUri: string },
+): Promise<boolean> {
+	if (!discovery?.isCrossOriginJwksUriAllowed) return false;
+	try {
+		return (await discovery.isCrossOriginJwksUriAllowed(input, ctx)) === true;
+	} catch (error) {
+		ctx.context.logger.error(
+			`oauth-provider: client discovery "${discovery.id}" isCrossOriginJwksUriAllowed failed`,
+			error,
+		);
+		return false;
+	}
+}
+
+async function validateJwksUri(
 	ctx: GenericEndpointContext,
 	jwksUri: string,
-	clientIdUrlOrigin?: string,
-): void {
+	client: SchemaClient<Scope[]>,
+	discovery: ClientDiscovery | undefined,
+): Promise<void> {
 	const parsed = new URL(jwksUri);
 	if (parsed.protocol !== "https:") {
 		throw new APIError("BAD_REQUEST", {
@@ -263,15 +287,28 @@ function validateJwksUri(
 	// Trust a jwks_uri that shares origin with a URL-format client_id: the
 	// discovery that installed the client has already verified the
 	// client_id URL, and same-origin jwks_uri is part of that verification.
+	const clientIdUrlOrigin = client.clientDiscoveryId
+		? urlClientIdOrigin(client.clientId)
+		: undefined;
 	if (clientIdUrlOrigin && parsed.origin === clientIdUrlOrigin) {
 		return;
 	}
-	if (!ctx.context.isTrustedOrigin(parsed.href)) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client jwks_uri is not trusted",
-			error: "invalid_client",
-		});
+	if (ctx.context.isTrustedOrigin(parsed.href)) {
+		return;
 	}
+	if (
+		client.clientDiscoveryId &&
+		(await isCrossOriginJwksUriAllowedByDiscovery(ctx, discovery, {
+			clientId: client.clientId,
+			jwksUri,
+		}))
+	) {
+		return;
+	}
+	throw new APIError("BAD_REQUEST", {
+		error_description: "client jwks_uri is not trusted",
+		error: "invalid_client",
+	});
 }
 
 function urlClientIdOrigin(clientId: string): string | undefined {
@@ -402,11 +439,7 @@ async function fetchClientJwks(
 			error: "invalid_client",
 		});
 	}
-	validateJwksUri(
-		ctx,
-		client.jwksUri,
-		client.clientDiscoveryId ? urlClientIdOrigin(client.clientId) : undefined,
-	);
+	await validateJwksUri(ctx, client.jwksUri, client, discovery);
 
 	const now = Date.now();
 	const cacheKey = getJwksCacheKey(client);

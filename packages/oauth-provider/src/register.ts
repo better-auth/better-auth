@@ -19,6 +19,7 @@ import { toExpJWT } from "better-auth/plugins";
 import { assertValidClientJwks } from "./client-jwks";
 import { stripReservedOAuthClientMetadataExtensions } from "./client-metadata";
 import {
+	getClientDiscoveries,
 	getSupportedAuthMethods,
 	getSupportedGrantTypes,
 	isExtensionTokenEndpointAuthMethod,
@@ -48,7 +49,10 @@ import {
 	parseClientMetadata,
 	storeClientSecret,
 } from "./utils";
-import { isPrivateHostname } from "./utils/client-assertion";
+import {
+	isCrossOriginJwksUriAllowedByDiscovery,
+	isPrivateHostname,
+} from "./utils/client-assertion";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
 const DEFAULT_REGISTRATION_GRANT_TYPES = [
@@ -455,6 +459,8 @@ export async function checkOAuthClient(
 	opts: OAuthOptions<Scope[]>,
 	settings?: {
 		registrationSource?: "dynamic" | "managed" | "clientMetadataDocument";
+		/** Discovery that owns a `clientMetadataDocument` registration. */
+		clientDiscoveryId?: string;
 		ctx?: GenericEndpointContext;
 	},
 ) {
@@ -724,7 +730,21 @@ export async function checkOAuthClient(
 						clientId !== undefined &&
 						URL.canParse(clientId) &&
 						new URL(clientId).origin === uri.origin;
-					if (!isSameOriginClientMetadataDocumentKey) {
+					const isAllowedCrossOriginClientMetadataDocumentKey =
+						!isSameOriginClientMetadataDocumentKey &&
+						isClientMetadataDocument &&
+						clientId !== undefined &&
+						(await isCrossOriginJwksUriAllowedByDiscovery(
+							settings.ctx,
+							getClientDiscoveries(opts).find(
+								(discovery) => discovery.id === settings.clientDiscoveryId,
+							),
+							{ clientId, jwksUri: clientWithDefaults.jwks_uri },
+						));
+					if (
+						!isSameOriginClientMetadataDocumentKey &&
+						!isAllowedCrossOriginClientMetadataDocumentKey
+					) {
 						throw new APIError("BAD_REQUEST", {
 							error: "invalid_client_metadata",
 							error_description:
@@ -934,6 +954,10 @@ async function persistOAuthClientRegistration(
 	// Check if client parameters are valid combination
 	await checkOAuthClient(body, opts, {
 		registrationSource: input.registrationSource,
+		clientDiscoveryId:
+			input.registrationSource === "clientMetadataDocument"
+				? input.clientDiscoveryId
+				: undefined,
 		ctx,
 	});
 

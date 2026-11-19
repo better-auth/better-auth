@@ -32,6 +32,7 @@ export function createCimdClientDiscovery(
 		matches: isCimdClientIdUrlCandidate,
 		resolve: resolver,
 		fetchClientMetadataResource: options.fetchClientMetadataResource,
+		isCrossOriginJwksUriAllowed: options.isCrossOriginJwksUriAllowed,
 		discoveryMetadata: { client_id_metadata_document_supported: true },
 	};
 }
