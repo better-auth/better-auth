@@ -1,5 +1,20 @@
 # better-auth
 
+## 1.6.35
+
+### Patch Changes
+
+- [#12063](https://github.com/better-auth/better-auth/pull/12063) [`a548782`](https://github.com/better-auth/better-auth/commit/a54878261fd22bdf5548cef9b0e7b000c36ead0f) Thanks [@jainamm-gala](https://github.com/jainamm-gala)! - `refreshToken` now stores rotated tokens with adapters that reject the account `id` in update data, such as Convex. Previously the write failed after the provider had already rotated the refresh token, so the next refresh used a spent token and the account had to be linked again.
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.35
+  - @better-auth/drizzle-adapter@1.6.35
+  - @better-auth/kysely-adapter@1.6.35
+  - @better-auth/memory-adapter@1.6.35
+  - @better-auth/mongo-adapter@1.6.35
+  - @better-auth/prisma-adapter@1.6.35
+  - @better-auth/telemetry@1.6.35
+
 ## 1.6.34
 
 ### Patch Changes
