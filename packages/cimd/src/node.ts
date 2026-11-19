@@ -16,9 +16,10 @@ const MAX_OUTSTANDING_DNS_LOOKUPS = 16;
 let outstandingDNSLookups = 0;
 
 /**
- * Resolve every address of a hostname, rejecting with the signal's reason as
- * soon as it aborts. An abandoned lookup keeps its slot in
- * MAX_OUTSTANDING_DNS_LOOKUPS until it settles, and its result is discarded.
+ * Resolve every address of a hostname, rejecting with
+ * `ERR_CIMD_DNS_LOOKUP_ABORTED` as soon as the signal aborts. An abandoned
+ * lookup keeps its slot in MAX_OUTSTANDING_DNS_LOOKUPS until it settles, and
+ * its result is discarded.
  */
 function lookupWithAbort(
 	hostname: string,
@@ -60,8 +61,17 @@ function lookupWithAbort(
 		return countedLookup;
 	}
 	return new Promise((resolve, reject) => {
+		// A lookup queued behind other hosts' lookups times out without reaching
+		// this host, so the code keeps the timeout from counting as an outage.
 		const onAbort = () => {
-			reject(signal.reason);
+			reject(
+				Object.assign(
+					new TypeError("metadata DNS lookup aborted", {
+						cause: signal.reason,
+					}),
+					{ code: "ERR_CIMD_DNS_LOOKUP_ABORTED" },
+				),
+			);
 		};
 		signal.addEventListener("abort", onAbort, { once: true });
 		if (signal.aborted) onAbort();

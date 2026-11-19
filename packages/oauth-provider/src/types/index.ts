@@ -142,9 +142,9 @@ export interface ClientDiscovery {
 	/**
 	 * Seconds after the last successful fetch that cached `jwks_uri` keys of
 	 * this discovery's clients keep verifying assertions while refetching them
-	 * fails transiently: a timeout, a connection failure with a known error
-	 * code, or HTTP 500, 502, 503, or 504. Capped at 24 hours. Values under the
-	 * default 10-minute fallback do not shorten it.
+	 * fails transiently: a timeout after DNS resolution, a connection failure
+	 * with a known error code, or HTTP 500, 502, 503, or 504. Capped at 24
+	 * hours. Values under the default 10-minute fallback do not shorten it.
 	 *
 	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/clients#private-key-jwt
 	 */

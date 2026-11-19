@@ -105,10 +105,10 @@ export interface CimdOptions {
 	/**
 	 * Keep serving a stored client for up to this long after it was last
 	 * validated (its `updatedAt`) when refreshing its metadata document fails
-	 * transiently: the fetch times out, the connection fails with a known error
-	 * code, or the server answers with HTTP 500, 502, 503, or 504. Other
-	 * failures still reject the request. Cached `jwks_uri` keys follow the same
-	 * rules.
+	 * transiently: the fetch times out after its host name resolved, the
+	 * connection fails with a known error code, or the server answers with
+	 * HTTP 500, 502, 503, or 504. Other failures still reject the request.
+	 * Cached `jwks_uri` keys follow the same rules.
 	 *
 	 * Accepts a number of seconds or a duration string (e.g. `"6h"`), at most
 	 * 24 hours.

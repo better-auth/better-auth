@@ -26,8 +26,8 @@ import type {
 } from "../types";
 import { challengeHeaders, getAuthEndpointUrl, getClient } from "./index";
 import {
-	isAbortedBySignal,
 	isLocalCapacityRefusal,
+	isTransientAbort,
 	isTransientHttpStatus,
 	isTransientNetworkError,
 } from "./transient-fetch-failure";
@@ -66,6 +66,9 @@ const jwksCaches = new WeakMap<OAuthOptions<Scope[]>, JwksCache>();
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
 const JWKS_CACHE_MAX_ENTRIES = 500;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
+// The transport's own abort settles the fetch first, so its classification of
+// the timeout wins over this backstop for a transport that ignores the signal.
+const JWKS_FETCH_SETTLE_DEADLINE_MS = JWKS_FETCH_TIMEOUT_MS + 1_000;
 const MAX_JWKS_RESPONSE_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
 const MAX_JWKS_STALE_IF_ERROR_SECONDS = 24 * 60 * 60;
@@ -95,21 +98,25 @@ function isJwksTransportError(error: unknown): boolean {
 	return error instanceof Error && jwksTransportErrors.has(error);
 }
 
+function createJwksTransportError(message: string, cause?: unknown): Error {
+	const failure = new Error(message, { cause });
+	jwksTransportErrors.add(failure);
+	return failure;
+}
+
 function classifyJwksTransportError(
 	error: unknown,
 	signal: AbortSignal,
 ): unknown {
 	const reason = error instanceof Error ? error.message : String(error);
-	if (isAbortedBySignal(error, signal) || isTransientNetworkError(error)) {
+	if (isTransientAbort(error, signal) || isTransientNetworkError(error)) {
 		return createTransientJwksFetchFailure(
 			`JWKS fetch failed: ${reason}`,
 			error,
 		);
 	}
 	if (isLocalCapacityRefusal(error)) return error;
-	const failure = new Error(`JWKS fetch failed: ${reason}`, { cause: error });
-	jwksTransportErrors.add(failure);
-	return failure;
+	return createJwksTransportError(`JWKS fetch failed: ${reason}`, error);
 }
 
 function getJwksCache(opts: OAuthOptions<Scope[]>): JwksCache {
@@ -282,9 +289,11 @@ async function loadJwks(
 				fetch.promise,
 				new Promise<never>((_, reject) => {
 					timeout = setTimeout(
-						() =>
-							reject(createTransientJwksFetchFailure("JWKS fetch timed out")),
-						Math.max(0, fetch.startedAt + JWKS_FETCH_TIMEOUT_MS - Date.now()),
+						() => reject(createJwksTransportError("JWKS fetch timed out")),
+						Math.max(
+							0,
+							fetch.startedAt + JWKS_FETCH_SETTLE_DEADLINE_MS - Date.now(),
+						),
 					);
 				}),
 			]);

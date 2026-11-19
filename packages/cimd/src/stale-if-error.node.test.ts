@@ -143,11 +143,51 @@ async function fillDnsLookupLimit() {
  * @see https://github.com/better-auth/better-auth/issues/11875
  */
 describe("CIMD metadataStaleIfError with the Node transport", () => {
-	it("serves the stored client when the fetch timeout aborts a stalled DNS lookup", async () => {
+	it("rejects without ending stale serving when the fetch timeout aborts a stalled DNS lookup", async () => {
 		const register = await createRegistrar();
 		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 		const client = await register("aborted-lookup");
 		mocks.lookup.mockImplementation(stalledLookup);
+
+		const pending = Promise.resolve(client.resolve());
+		void pending.catch(() => {});
+		await vi.advanceTimersByTimeAsync(5_000);
+
+		await expect(pending).rejects.toMatchObject({
+			body: {
+				error_description: "Metadata document fetch timed out after 5000ms",
+			},
+		});
+		mocks.lookup.mockResolvedValue(PUBLIC_ADDRESSES);
+		answerRequests(respondWith(503));
+		await expect(client.resolve()).resolves.toBe(client.stored);
+	});
+
+	it("serves the stored client when the fetch timeout aborts a request after DNS resolved", async () => {
+		const register = await createRegistrar();
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		const client = await register("aborted-request");
+		mocks.request.mockImplementation(
+			(_url: URL, options: { signal?: AbortSignal }) => {
+				const request = new EventEmitter() as MockRequest;
+				request.end = () => {
+					options.signal?.addEventListener(
+						"abort",
+						() => {
+							request.emit(
+								"error",
+								Object.assign(new Error("The operation was aborted"), {
+									name: "AbortError",
+								}),
+							);
+						},
+						{ once: true },
+					);
+				};
+				request.destroy = () => {};
+				return request;
+			},
+		);
 
 		const pending = client.resolve();
 		await vi.advanceTimersByTimeAsync(5_000);

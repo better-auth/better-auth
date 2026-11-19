@@ -194,6 +194,7 @@ const nonTransientFailures: { failure: string; answer: KeyAnswer }[] = [
 /** Verifies an assertion, moving fake time past the key fetch timeout. */
 async function verifyAfterFetchTimeout(
 	verifier: Awaited<ReturnType<typeof createVerifier>>,
+	elapsedMs = 5_000,
 ) {
 	const calls = verifier.transport.mock.calls.length;
 	const pending = verifier.verify();
@@ -201,7 +202,7 @@ async function verifyAfterFetchTimeout(
 	await vi.waitFor(() => {
 		expect(verifier.transport.mock.calls.length).toBeGreaterThan(calls);
 	});
-	await vi.advanceTimersByTimeAsync(5_000);
+	await vi.advanceTimersByTimeAsync(elapsedMs);
 	return pending;
 }
 
@@ -250,6 +251,54 @@ describe("jwksStaleIfError on a client discovery", () => {
 			verifier.keys.answer = answer;
 
 			await expect(verifier.verify()).rejects.toMatchObject({
+				body: { error_description: "failed to fetch client JWKS" },
+			});
+		},
+	);
+
+	it.each([
+		{
+			failure: "the fetch timeout aborts a DNS lookup",
+			answer: (init?: RequestInit) =>
+				new Promise<Response>((_resolve, reject) => {
+					init?.signal?.addEventListener(
+						"abort",
+						() => {
+							reject(
+								Object.assign(
+									new TypeError("metadata DNS lookup aborted", {
+										cause: init.signal?.reason,
+									}),
+									{ code: "ERR_CIMD_DNS_LOOKUP_ABORTED" },
+								),
+							);
+						},
+						{ once: true },
+					);
+				}),
+			elapsedMs: 5_000,
+		},
+		{
+			failure: "a transport ignores the fetch timeout",
+			answer: () => new Promise<Response>(() => {}),
+			elapsedMs: 6_000,
+		},
+	])(
+		"rejects past twice the cache lifetime when $failure",
+		async ({ answer, elapsedMs }) => {
+			const verifier = await createVerifier({ jwksStaleIfError: 3_600 });
+			vi.useFakeTimers({
+				toFake: ["setTimeout", "clearTimeout", "Date"],
+				now: START_MS,
+			});
+			await verifier.verify();
+
+			vi.setSystemTime(START_MS + 11 * MINUTE_MS);
+			verifier.keys.answer = answer;
+
+			await expect(
+				verifyAfterFetchTimeout(verifier, elapsedMs),
+			).rejects.toMatchObject({
 				body: { error_description: "failed to fetch client JWKS" },
 			});
 		},

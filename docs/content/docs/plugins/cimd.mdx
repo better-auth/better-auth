@@ -274,7 +274,7 @@ cimd({
 
 A failed refresh then returns the stored client unchanged and logs a warning when its `updatedAt` is within `metadataStaleIfError` and the failure is transient:
 
-* The plugin's 5-second fetch timeout.
+* The plugin's 5-second fetch timeout, once the host name has resolved. A timeout during DNS resolution does not count, because other client IDs can delay lookups by holding Node's shared DNS threads. A custom transport marks such a timeout by rejecting with an error whose `code` is `ERR_CIMD_DNS_LOOKUP_ABORTED`.
 * HTTP 500, 502, 503, or 504.
 * A connection failure whose error, or an error in its `cause` chain, has the code `EAI_AGAIN`, `ECONNRESET`, `ECONNREFUSED`, `ETIMEDOUT`, `EHOSTUNREACH`, `ENETUNREACH`, `EPIPE`, `UND_ERR_CONNECT_TIMEOUT`, `UND_ERR_HEADERS_TIMEOUT`, `UND_ERR_BODY_TIMEOUT`, or `UND_ERR_SOCKET`. On runtimes whose `fetch` errors carry no code, only the timeout and the four statuses count.
 
@@ -283,7 +283,7 @@ While it serves a stored client, Better Auth fetches the document at most once a
 Every other failure rejects the request as before. A terminal failure also stops this instance from serving the stored client until a refresh succeeds, so an owner can revoke a client by removing its document. A failure is terminal when a document was retrieved and rejected (any other status, a redirect, or an invalid document), when the OAuth provider refuses to save the refreshed document, or when the `client_id` URL is refused. Other transport errors, such as `ENOTFOUND`, reject the request without stopping stale serving. A `metadataFetchPolicy` limit or the Node transport's DNS lookup limit serves the stored client only within 5 minutes of its last transient failure.
 
 <Callout type="warn">
-While a stored client is served, changes to its document, such as new redirect URIs, keys, or a new domain owner, are not seen. Terminal failures are recorded in memory, so another instance or a restarted one can still serve the stored client. Choose the shortest bound that covers the outages you expect. On Node, DNS lookups share the libuv thread pool, so host names whose DNS servers never answer can make lookups for other hosts time out; a larger `UV_THREADPOOL_SIZE` reduces this.
+While a stored client is served, changes to its document, such as new redirect URIs, keys, or a new domain owner, are not seen. Terminal failures are recorded in memory, so another instance or a restarted one can still serve the stored client. Choose the shortest bound that covers the outages you expect.
 </Callout>
 
 For a `private_key_jwt` client with a `jwks_uri`, the option also keeps its cached keys in use under the same rules, counted from the last successful key fetch. Keys are cached in memory only, so after a restart they must be fetched before the client can authenticate. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).

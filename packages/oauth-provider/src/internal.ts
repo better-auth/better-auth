@@ -18,8 +18,8 @@ export {
 } from "./register";
 export { getLocalJwksSource } from "./utils";
 export {
-	isAbortedBySignal,
 	isLocalCapacityRefusal,
+	isTransientAbort,
 	isTransientHttpStatus,
 	isTransientNetworkError,
 } from "./utils/transient-fetch-failure";

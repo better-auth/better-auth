@@ -7,8 +7,8 @@ import type {
 	Scope,
 } from "@better-auth/oauth-provider";
 import {
-	isAbortedBySignal,
 	isLocalCapacityRefusal,
+	isTransientAbort,
 	isTransientHttpStatus,
 	isTransientNetworkError,
 	registerClientMetadataDocument,
@@ -248,7 +248,7 @@ export async function fetchClientMetadataDocument(
 				: FETCH_FAILURE_DESCRIPTION;
 			// A refusal that arrives after the timeout fired is still a refusal.
 			const transient =
-				(didTimeOut && isAbortedBySignal(error, controller.signal)) ||
+				(didTimeOut && isTransientAbort(error, controller.signal)) ||
 				isTransientNetworkError(error);
 			throw transportError(description, transient);
 		}

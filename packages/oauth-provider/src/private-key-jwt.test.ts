@@ -691,7 +691,7 @@ describe("private_key_jwt authentication", async () => {
 			const stuck = fixture.verify("new", fixture.newKey);
 			const stuckResult = expect(stuck).rejects.toBeDefined();
 			await started;
-			await vi.advanceTimersByTimeAsync(5_000);
+			await vi.advanceTimersByTimeAsync(6_000);
 			await stuckResult;
 
 			// The next assertion starts a new fetch instead of joining the dead one.
