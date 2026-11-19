@@ -1013,7 +1013,7 @@ describe("prisma-adapter", () => {
 			},
 		];
 
-		it.each(["mysql", "mongodb", "sqlserver"] as const)(
+		it.each(["mysql", "sqlserver"] as const)(
 			"does not call createManyAndReturn on %s",
 			async (provider) => {
 				const createManyAndReturn = vi.fn(async () => {
@@ -1048,6 +1048,63 @@ describe("prisma-adapter", () => {
 				expect(created.map((row) => row.id)).toEqual(["a", "b"]);
 			},
 		);
+
+		it("inserts sequentially on MongoDB when transactions are disabled", async () => {
+			const create = vi.fn(
+				async ({ data }: { data: Record<string, unknown> }) => data,
+			);
+			const createMany = vi.fn(async () => ({ count: 2 }));
+			const prisma = {
+				user: {
+					createManyAndReturn: vi.fn(),
+					createMany,
+					findMany: vi.fn(),
+					create,
+				},
+				$transaction: vi.fn(),
+			};
+			const adapter = prismaAdapter(prisma as never, { provider: "mongodb" })(
+				{} as BetterAuthOptions,
+			);
+
+			const created = await adapter.createMany({
+				model: "user",
+				data: rows,
+				forceAllowId: true,
+			});
+
+			expect(create).toHaveBeenCalledTimes(2);
+			expect(createMany).not.toHaveBeenCalled();
+			expect(prisma.$transaction).not.toHaveBeenCalled();
+			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
+		});
+
+		it("falls back to sequential create when createMany is missing", async () => {
+			const create = vi.fn(
+				async ({ data }: { data: Record<string, unknown> }) => data,
+			);
+			const prisma = {
+				user: {
+					create,
+				},
+				$transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+					cb(prisma),
+				),
+			};
+			const adapter = prismaAdapter(prisma as never, { provider: "sqlite" })(
+				{} as BetterAuthOptions,
+			);
+
+			const created = await adapter.createMany({
+				model: "user",
+				data: rows,
+				forceAllowId: true,
+			});
+
+			expect(create).toHaveBeenCalledTimes(2);
+			expect(prisma.$transaction).not.toHaveBeenCalled();
+			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
+		});
 
 		it("reorders createManyAndReturn rows to match input order", async () => {
 			const createManyAndReturn = vi.fn(async () => [...rows].reverse());
@@ -1150,11 +1207,15 @@ describe("prisma-adapter", () => {
 			const postgres = prismaAdapter({ $transaction: vi.fn() } as never, {
 				provider: "postgresql",
 			})({} as BetterAuthOptions);
+			const sqlserver = prismaAdapter({ $transaction: vi.fn() } as never, {
+				provider: "sqlserver",
+			})({} as BetterAuthOptions);
 
 			expect(sqlite.options?.adapterConfig.createManyMaxParameters).toBe(999);
 			expect(postgres.options?.adapterConfig.createManyMaxParameters).toBe(
 				65535,
 			);
+			expect(sqlserver.options?.adapterConfig.createManyMaxRows).toBe(1000);
 		});
 	});
 });
