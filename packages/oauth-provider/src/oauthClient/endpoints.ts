@@ -369,7 +369,11 @@ export async function updateClientEndpoint(
 			],
 			update: {
 				...schemaUpdates,
-				updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000),
+				// A discovered client's `updatedAt` records when its document was last
+				// validated, which bounds how long it can be served stale.
+				...(client.clientDiscoveryId
+					? {}
+					: { updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000) }),
 			},
 		},
 	);
