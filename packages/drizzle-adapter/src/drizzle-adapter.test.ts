@@ -6,6 +6,7 @@ import {
 	text,
 	timestamp,
 } from "drizzle-orm/pg-core";
+import { sqliteTable, text as sqliteText } from "drizzle-orm/sqlite-core";
 import { describe, expect, it, vi } from "vitest";
 import type { DB } from "./drizzle-adapter";
 import { drizzleAdapter } from "./drizzle-adapter";
@@ -141,9 +142,8 @@ describe("drizzle-adapter", () => {
 				],
 			});
 			expect(values).toHaveBeenCalledTimes(2);
-			expect(values.mock.calls[0]?.[0]).not.toEqual(
-				expect.arrayContaining([expect.any(Object)]),
-			);
+			expect(values.mock.calls[0]?.[0]).not.toHaveProperty("id");
+			expect(values.mock.calls[1]?.[0]).not.toHaveProperty("id");
 		},
 	);
 
@@ -180,8 +180,77 @@ describe("drizzle-adapter", () => {
 			).rejects.toBe(readError);
 			expect(db.transaction).toHaveBeenCalledTimes(1);
 			expect(trx.insert).toHaveBeenCalledTimes(1);
+			expect(insertExecute).toHaveBeenCalledTimes(1);
 			expect(trx.select).toHaveBeenCalledTimes(1);
 			expect(db.insert).not.toHaveBeenCalled();
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany chunks sqlite inserts by table columns including omitted defaults on $relations",
+		async ({ createAdapter }) => {
+			const user = sqliteTable("user", {
+				id: sqliteText("id").primaryKey(),
+				name: sqliteText("name"),
+				email: sqliteText("email"),
+				emailVerified: sqliteText("emailVerified"),
+				image: sqliteText("image"),
+				createdAt: sqliteText("createdAt"),
+				updatedAt: sqliteText("updatedAt"),
+				extra: sqliteText("extra").default("x"),
+			});
+			const values = vi.fn((rows: unknown[]) => ({
+				returning: vi.fn().mockResolvedValue(rows),
+			}));
+			const db = {
+				_: { fullSchema: { user }, relations: {} },
+				insert: vi.fn().mockReturnValue({ values }),
+			} as any;
+			const adapter = createAdapter(db, {
+				provider: "sqlite",
+				createManyMaxParameters: 12,
+			})({});
+			await adapter.createMany({
+				model: "user",
+				data: [
+					{ id: "a", name: "Ada" },
+					{ id: "b", name: "Bob" },
+				],
+				forceAllowId: true,
+			});
+			expect(values).toHaveBeenCalledTimes(2);
+			expect(values.mock.calls[0]?.[0]).toHaveLength(1);
+			expect(values.mock.calls[1]?.[0]).toHaveLength(1);
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany does not require a MySQL transaction when falling back to sequential inserts on $relations",
+		async ({ createAdapter }) => {
+			const execute = vi.fn().mockResolvedValue(undefined);
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ execute }),
+				}),
+				select: vi.fn().mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi.fn().mockReturnValue({
+							limit: vi.fn().mockReturnValue({
+								execute: vi.fn().mockResolvedValue([{ id: "a" }]),
+							}),
+						}),
+					}),
+				}),
+			} as any;
+			const adapter = createAdapter(db, { provider: "mysql" })({});
+			await adapter.createMany({
+				model: "user",
+				data: createManyRows,
+				forceAllowId: true,
+			});
+			expect(db.insert).toHaveBeenCalledTimes(2);
+			expect(execute).toHaveBeenCalledTimes(2);
 		},
 	);
 

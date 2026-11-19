@@ -34,6 +34,11 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
+import {
+	chunkByMaxRows,
+	getInsertColumnCount,
+	rowsShareKeys,
+} from "../create-many-utils";
 import { isD1SqliteClient } from "../d1-sqlite-client";
 import { fromDriverDate, toDriverDate } from "../date-columns";
 import type { RelationKeysByModel } from "../join-relation-key";
@@ -535,9 +540,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					return null;
 				};
 
-				return inTransaction
-					? fetchInserted(db)
-					: db.transaction(fetchInserted);
+				if (inTransaction) return fetchInserted(db);
+				if (typeof db.transaction === "function") {
+					return db.transaction(fetchInserted);
+				}
+				return fetchInserted(db);
 			};
 			function resolveColumn(model: string, modelKey: string, w: Where) {
 				const schemaModel = getSchema(model);
@@ -779,8 +786,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						checkMissingFields(table, modelKey, row);
 					}
 					const idField = getFieldName({ model: modelKey, field: "id" });
-					const ids = values.map((row) => row[idField] ?? row.id);
-					const hasAllIds = ids.every((id) => id !== undefined && id !== null);
+					const hasAllIds = values.every((row) => {
+						const id = row[idField] ?? row.id;
+						return id !== undefined && id !== null;
+					});
 					const createSequentially = async () => {
 						const created: T[] = [];
 						for (const row of values) {
@@ -795,29 +804,51 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 						return created;
 					};
-					if (!hasAllIds) {
+					if (!hasAllIds || !rowsShareKeys(values)) {
 						return createSequentially();
 					}
-					if (config.provider !== "mysql") {
+					const maxParameters =
+						adapterOptions?.config.createManyMaxParameters ?? 999;
+					const chunks = chunkByMaxRows(
+						values,
+						Math.floor(maxParameters / getInsertColumnCount(table, values)),
+					);
+					const insertReturning = async (chunk: T[]) => {
+						const chunkIds = chunk.map((row) => row[idField] ?? row.id);
 						const rows = (await db
 							.insert(table)
-							.values(values)
+							.values(chunk)
 							.returning()) as T[];
-						return orderInsertedRowsById(ids, rows, idField, model);
+						return orderInsertedRowsById(chunkIds, rows, idField, model);
+					};
+					if (config.provider !== "mysql") {
+						const created: T[] = [];
+						for (const chunk of chunks) {
+							created.push(...(await insertReturning(chunk)));
+						}
+						return created;
 					}
-					const insertAndReadBack = async (tx: DB) => {
-						await tx.insert(table).values(values).execute();
+					const insertAndReadBack = async (tx: DB, chunk: T[]) => {
+						const chunkIds = chunk.map((row) => row[idField] ?? row.id);
+						await tx.insert(table).values(chunk).execute();
 						const rows = (await tx
 							.select()
 							.from(table)
-							.where(inArray(table[idField], ids))) as T[];
-						return orderInsertedRowsById(ids, rows, idField, model);
+							.where(inArray(table[idField], chunkIds))) as T[];
+						return orderInsertedRowsById(chunkIds, rows, idField, model);
+					};
+					const insertMysqlChunks = async (tx: DB) => {
+						const created: T[] = [];
+						for (const chunk of chunks) {
+							created.push(...(await insertAndReadBack(tx, chunk)));
+						}
+						return created;
 					};
 					if (inTransaction) {
-						return insertAndReadBack(db);
+						return insertMysqlChunks(db);
 					}
 					if (typeof db.transaction === "function") {
-						return db.transaction(insertAndReadBack);
+						return db.transaction(insertMysqlChunks);
 					}
 					return createSequentially();
 				},

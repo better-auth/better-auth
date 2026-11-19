@@ -5,9 +5,9 @@
  */
 export function isD1SqliteClient(db: unknown): boolean {
 	if (!db || typeof db !== "object") return false;
-	if (hasD1Methods(db)) return true;
-	if (!("$client" in db)) return false;
 	try {
+		if (hasD1Methods(db)) return true;
+		if (!("$client" in db)) return false;
 		return hasD1Methods((db as { $client: unknown }).$client);
 	} catch {
 		return false;
@@ -18,8 +18,8 @@ function hasD1Methods(value: unknown): boolean {
 	return (
 		!!value &&
 		typeof value === "object" &&
-		"batch" in value &&
-		"prepare" in value &&
-		"exec" in value
+		typeof (value as { batch?: unknown }).batch === "function" &&
+		typeof (value as { prepare?: unknown }).prepare === "function" &&
+		typeof (value as { exec?: unknown }).exec === "function"
 	);
 }
