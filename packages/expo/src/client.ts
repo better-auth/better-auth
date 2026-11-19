@@ -94,11 +94,17 @@ export function getSetCookie(header: string, prevCookie?: string | undefined) {
 		if (maxAge !== undefined) {
 			const maxAgeNum = Number(maxAge);
 			if (!Number.isNaN(maxAgeNum)) {
-				expires = new Date(Date.now() + maxAgeNum * 1000);
+				const date = new Date(Date.now() + maxAgeNum * 1000);
+				if (!Number.isNaN(date.getTime())) {
+					expires = date;
+				}
 			}
 		}
 		if (!expires && expiresAt) {
-			const date = new Date(String(expiresAt));
+			const date =
+				expiresAt instanceof Date
+					? expiresAt
+					: new Date(String(expiresAt));
 			if (!Number.isNaN(date.getTime())) {
 				expires = date;
 			}

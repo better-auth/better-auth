@@ -245,9 +245,20 @@ describe("expo", async () => {
 		});
 	});
 
-	it("should ignore unparseable Max-Age and treat as session cookie", async () => {
+	it("should ignore out-of-range Max-Age and treat as session cookie", async () => {
 		const { getSetCookie } = await import("../src/client");
-		const header = "better-auth.session_token=abc123; Max-Age=soon";
+		const header = "better-auth.session_token=abc123; Max-Age=9999999999999";
+		const result = JSON.parse(getSetCookie(header));
+		expect(result["better-auth.session_token"]).toEqual({
+			value: "abc123",
+			expires: null,
+		});
+	});
+
+	it("should ignore unparseable Max-Age combined with unparseable Expires and treat as session cookie", async () => {
+		const { getSetCookie } = await import("../src/client");
+		const header =
+			"better-auth.session_token=abc123; Max-Age=soon; Expires=not-a-date";
 		const result = JSON.parse(getSetCookie(header));
 		expect(result["better-auth.session_token"]).toEqual({
 			value: "abc123",
