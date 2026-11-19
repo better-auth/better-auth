@@ -6,6 +6,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import { CompactEncrypt, compactDecrypt, errors as joseErrors } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -53,16 +54,17 @@ describe("oauth revoke", async () => {
 
 	async function createAuthUrl(
 		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
+		targetClient: OAuthClient | null = oauthClient,
 	) {
-		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+		if (!targetClient?.client_id || !targetClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
 		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
-				clientId: oauthClient?.client_id,
-				clientSecret: oauthClient?.client_secret,
+				clientId: targetClient?.client_id,
+				clientSecret: targetClient?.client_secret,
 				redirectURI: redirectUri,
 			},
 			redirectURI: "",
@@ -83,8 +85,9 @@ describe("oauth revoke", async () => {
 			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
+		targetClient: OAuthClient | null = oauthClient,
 	) {
-		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+		if (!targetClient?.client_id || !targetClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
 
@@ -92,8 +95,8 @@ describe("oauth revoke", async () => {
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
-				clientId: oauthClient.client_id,
-				clientSecret: oauthClient.client_secret,
+				clientId: targetClient.client_id,
+				clientSecret: targetClient.client_secret,
 				redirectURI: redirectUri,
 			},
 		});
@@ -119,8 +122,12 @@ describe("oauth revoke", async () => {
 	async function getTokens(
 		overrides?: Partial<Parameters<typeof createAuthUrl>[0]>,
 		resource?: string,
+		targetClient: OAuthClient | null = oauthClient,
 	) {
-		const { url: authUrl, codeVerifier } = await createAuthUrl(overrides);
+		const { url: authUrl, codeVerifier } = await createAuthUrl(
+			overrides,
+			targetClient,
+		);
 		let callbackRedirectUrl = "";
 		await client.$fetch(authUrl.toString(), {
 			onError(context) {
@@ -128,11 +135,14 @@ describe("oauth revoke", async () => {
 			},
 		});
 		const url = new URL(callbackRedirectUrl);
-		return await validateAuthCode({
-			code: url.searchParams.get("code")!,
-			codeVerifier,
-			resource,
-		});
+		return await validateAuthCode(
+			{
+				code: url.searchParams.get("code")!,
+				codeVerifier,
+				resource,
+			},
+			targetClient,
+		);
 	}
 
 	// Registers a confidential client application to work with
@@ -338,6 +348,145 @@ describe("oauth revoke", async () => {
 		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12679
+	 */
+	it("does not invalidate presenting client's refresh family when revoking a foreign revoked token", async () => {
+		const clientBResponse = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
+				skip_consent: true,
+			},
+		});
+		expect(clientBResponse?.client_id).toBeDefined();
+
+		const tokensA = await getTokens();
+		const tokensB = await getTokens(undefined, undefined, clientBResponse);
+
+		const firstRefreshTokenA = tokensA.data?.refresh_token;
+		const refreshTokenB = tokensB.data?.refresh_token;
+		expect(firstRefreshTokenA).toBeDefined();
+		expect(refreshTokenB).toBeDefined();
+
+		// Client A rotates its refresh token, marking firstRefreshTokenA as revoked
+		const refreshedA = await client.oauth2.token(
+			{
+				grant_type: "refresh_token",
+				refresh_token: firstRefreshTokenA!,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(refreshedA.data?.refresh_token).toBeDefined();
+		expect(refreshedA.data?.refresh_token).not.toBe(firstRefreshTokenA);
+
+		// Client B attempts to revoke Client A's already-revoked refresh token
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: clientBResponse?.client_id,
+				client_secret: clientBResponse?.client_secret,
+				token: firstRefreshTokenA!,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.error?.status).toBe(400);
+		expect(revocation.error).toMatchObject({
+			error: "invalid_request",
+			error_description: "refresh token revoked",
+		});
+
+		// Client B's own refresh token family must NOT have been invalidated
+		const refreshedB = await client.oauth2.token(
+			{
+				grant_type: "refresh_token",
+				refresh_token: refreshTokenB!,
+				client_id: clientBResponse?.client_id,
+				client_secret: clientBResponse?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(refreshedB.data?.refresh_token).toBeDefined();
+		expect(refreshedB.error).toBe(null);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+	 */
+	it("invalidates the refresh family when the owning client presents its own revoked token", async () => {
+		const tokens = await getTokens();
+		const firstRefreshToken = tokens.data?.refresh_token;
+		expect(firstRefreshToken).toBeDefined();
+
+		const refreshed = await client.oauth2.token(
+			{
+				grant_type: "refresh_token",
+				refresh_token: firstRefreshToken!,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		const currentRefreshToken = refreshed.data?.refresh_token;
+		expect(currentRefreshToken).toBeDefined();
+
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: firstRefreshToken!,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.error?.status).toBe(400);
+
+		const reused = await client.oauth2.token(
+			{
+				grant_type: "refresh_token",
+				refresh_token: currentRefreshToken!,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(reused.error?.status).toBe(400);
 	});
 });
 
@@ -564,5 +713,152 @@ describe("oauth revoke - config", async () => {
 		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
+	});
+
+	/**
+	 * A `formatRefreshToken` built on JWE rejects any value that is not a
+	 * compact JWE with a jose error. That rejection means the value is not a
+	 * refresh token, so revocation answers as it does for any unknown token
+	 * instead of failing with a server error.
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
+	 */
+	describe("formatRefreshToken rejects a value it cannot decode", async () => {
+		const key = new Uint8Array(32).fill(7);
+		const testScopes = ["openid", "offline_access"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				scopes: testScopes,
+				formatRefreshToken: {
+					encrypt: async (token, sessionId) =>
+						new CompactEncrypt(
+							new TextEncoder().encode(JSON.stringify({ token, sessionId })),
+						)
+							.setProtectedHeader({ alg: "A256KW", enc: "A256GCM" })
+							.encrypt(key),
+					decrypt: async (token) => {
+						const { plaintext } = await compactDecrypt(token, key);
+						return JSON.parse(new TextDecoder().decode(plaintext));
+					},
+				},
+			},
+		});
+		if (!oauthClient) expect.unreachable();
+
+		const formHeaders = {
+			accept: "application/json",
+			"content-type": "application/x-www-form-urlencoded",
+		};
+
+		async function getTokens() {
+			const { url: authUrl, codeVerifier } = await createAuthUrl(oauthClient!, {
+				scopes: testScopes,
+			});
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			const url = new URL(callbackRedirectUrl);
+			const tokens = await client.oauth2.token(
+				{
+					grant_type: "authorization_code",
+					code: url.searchParams.get("code") ?? undefined,
+					code_verifier: codeVerifier,
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					scope: testScopes.join(" "),
+					redirect_uri: redirectUri,
+				},
+				{ headers: formHeaders },
+			);
+			return tokens.data as { access_token?: string; refresh_token?: string };
+		}
+
+		function revoke(
+			token: string,
+			token_type_hint?: "access_token" | "refresh_token",
+		) {
+			return client.oauth2.revoke(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token,
+					token_type_hint,
+				},
+				{ headers: formHeaders },
+			);
+		}
+
+		it.each([undefined, "refresh_token"] as const)(
+			"answers an unknown token with token_type_hint %s as it does without a format",
+			async (token_type_hint) => {
+				const revocation = await revoke("bogus", token_type_hint);
+				expect(revocation.error?.status).toBe(400);
+			},
+		);
+
+		it("answers an access_token sent with token_type_hint refresh_token as a wrong hint", async () => {
+			const tokens = await getTokens();
+			const revocation = await revoke(tokens.access_token!, "refresh_token");
+			expect(revocation.error?.status).toBe(400);
+		});
+
+		it("still revokes a valid refresh_token", async () => {
+			const tokens = await getTokens();
+			expect(tokens.refresh_token?.split(".")).toHaveLength(5);
+			const revocation = await revoke(tokens.refresh_token!);
+			expect(revocation.error).toBe(null);
+		});
+	});
+
+	/**
+	 * Only a value the format rejects is "not a refresh token". A failure of the
+	 * decoder itself, such as an unreachable key service, is a server error.
+	 */
+	describe("formatRefreshToken fails for another reason", async () => {
+		let failure: Error = new Error("key service unavailable");
+		const testScopes = ["openid", "offline_access"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				scopes: testScopes,
+				formatRefreshToken: {
+					encrypt: (token) => `enc.${token}`,
+					decrypt: () => {
+						throw failure;
+					},
+				},
+			},
+		});
+
+		it.each([
+			[undefined, "a plain error"],
+			["refresh_token", "a plain error"],
+			[undefined, "a key set timeout"],
+			["refresh_token", "a key set timeout"],
+		] as const)(
+			"returns a server error for token_type_hint %s and %s",
+			async (token_type_hint, kind) => {
+				failure =
+					kind === "a key set timeout"
+						? new joseErrors.JWKSTimeout()
+						: new Error("key service unavailable");
+				const revocation = await client.oauth2.revoke(
+					{
+						client_id: oauthClient?.client_id,
+						client_secret: oauthClient?.client_secret,
+						token: "bogus",
+						token_type_hint,
+					},
+					{
+						headers: {
+							accept: "application/json",
+							"content-type": "application/x-www-form-urlencoded",
+						},
+					},
+				);
+				expect(revocation.error?.status).toBe(500);
+			},
+		);
 	});
 });

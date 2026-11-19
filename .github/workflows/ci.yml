@@ -66,9 +66,6 @@ jobs:
           - name: Lint
             run: pnpm biome ci --error-on-warnings
 
-          - name: Lint Dependencies
-            run: pnpm lint:dependencies
-
           - name: Lint Spell
             run: pnpm lint:spell
 
@@ -79,6 +76,10 @@ jobs:
         wait: build
 
       - parallel:
+          # The dependency check needs built workspace package exports.
+          - name: Lint Dependencies
+            run: pnpm lint:dependencies
+
           - name: Lint Packages
             env:
               TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -143,7 +144,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [22.x, 24.x]
+        node-version: [22.x, 24.x, 26.x]
     env:
       COMPOSE_SERVICES: postgres postgres-kysely mongodb mysql
     steps:
@@ -173,6 +174,9 @@ jobs:
       - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
         with:
           node-version: ${{ matrix.node-version }}
+
+      - name: Expose Node version to Turbo
+        run: echo "NODE_VERSION=$(node --version)" >> "$GITHUB_ENV"
 
       - name: Test release tooling
         if: matrix.node-version == '24.x'

@@ -1,5 +1,13 @@
 # @better-auth/cimd
 
+## 1.7.26
+
+### Patch Changes
+
+- [#12730](https://github.com/better-auth/better-auth/pull/12730) [`5bd20bf`](https://github.com/better-auth/better-auth/commit/5bd20bf35fc86479f68f0ec1f911930957660cf0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Node CIMD metadata fetches now succeed when the first DNS answer is unreachable, for example when the host has no outbound IPv6. The transport returns every validated address to Node's address-family fallback instead of only the first, and it still queries DNS once and rejects the request when any answer is not publicly routable.
+
+- [#12694](https://github.com/better-auth/better-auth/pull/12694) [`8b8843f`](https://github.com/better-auth/better-auth/commit/8b8843fbc38dde826bc9ec94bea4b38375c2ec92) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed client ID metadata fetches for a `client_id` URL whose host is a public IPv6 literal, such as `https://[2606:2800:220:1:248:1893:25c8:1946]/client.json`, which always failed with a DNS lookup error. The literal is now classified directly, pinned for the connection, and still rejected when it is not publicly routable.
+
 ## 1.7.25
 
 ## 1.7.24

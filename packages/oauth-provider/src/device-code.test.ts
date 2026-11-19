@@ -1382,6 +1382,9 @@ describe("oauth-provider device-code grant", async () => {
 		});
 		expect(widened.error?.status).toBe(400);
 		expect((widened.error as TokenErrorBody)?.error).toBe("invalid_target");
+		expect((widened.error as TokenErrorBody)?.error_description).toBe(
+			"Requested resource was not authorized by the user",
+		);
 
 		const stored = await db.findOne<{ deviceCode: string }>({
 			model: "deviceCode",
@@ -1535,6 +1538,9 @@ describe("oauth-provider device-code grant", async () => {
 		});
 		expect(res.error?.status).toBe(400);
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+		expect((res.error as TokenErrorBody)?.error_description).toBe(
+			"Invalid device code",
+		);
 	});
 
 	/**
@@ -1565,6 +1571,9 @@ describe("oauth-provider device-code grant", async () => {
 		});
 		expect(res.error?.status).toBe(400);
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+		expect((res.error as TokenErrorBody)?.error_description).toBe(
+			"Client ID mismatch",
+		);
 	});
 
 	it("returns invalid_grant (not invalid_scope) when a narrower-scoped client replays a code", async () => {
@@ -1596,6 +1605,9 @@ describe("oauth-provider device-code grant", async () => {
 		});
 		expect(res.error?.status).toBe(400);
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+		expect((res.error as TokenErrorBody)?.error_description).toBe(
+			"Client ID mismatch",
+		);
 	});
 
 	it("does not reveal device-code scopes to a confidential client", async () => {
@@ -1632,6 +1644,9 @@ describe("oauth-provider device-code grant", async () => {
 
 		expect(res.error?.status).toBe(400);
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+		expect((res.error as TokenErrorBody)?.error_description).toBe(
+			"Client ID mismatch",
+		);
 	});
 
 	it("blocks redeeming an OAuth-client device code at the first-party /device/token", async () => {

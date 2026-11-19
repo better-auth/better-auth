@@ -104,6 +104,24 @@ describe("IP Normalization", () => {
 		});
 	});
 
+	describe("IPv6 with a dotted IPv4 tail", () => {
+		it("should not read a dotted tail after a non-mapped prefix as IPv4-mapped", () => {
+			// ::ffff:808:127.0.0.1 is 0:0:0:0:ffff:0808:7f00:0001, not ::ffff:8.8.18.7.
+			expect(normalizeIP("::ffff:808:127.0.0.1", { ipv6Subnet: 128 })).toBe(
+				"0000:0000:0000:0000:ffff:0808:7f00:0001",
+			);
+			expect(normalizeIP("::ffff:808:127.0.0.1", { ipv6Subnet: 128 })).toBe(
+				normalizeIP("::ffff:808:7f00:1", { ipv6Subnet: 128 }),
+			);
+		});
+
+		it("should expand a dotted tail into two hex groups", () => {
+			expect(normalizeIP("64:ff9b::192.0.2.33", { ipv6Subnet: 128 })).toBe(
+				"0064:ff9b:0000:0000:0000:0000:c000:0221",
+			);
+		});
+	});
+
 	describe("IPv6 Subnet Support", () => {
 		it("should extract /64 subnet", () => {
 			/* cspell:disable-next-line */

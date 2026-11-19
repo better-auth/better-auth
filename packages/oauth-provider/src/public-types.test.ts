@@ -35,6 +35,9 @@ describe("public oauth-provider types", () => {
 		expectTypeOf<OAuthOptions["grantTypes"]>().toEqualTypeOf<
 			GrantType[] | undefined
 		>();
+		expectTypeOf<OAuthOptions["assertionClockTolerance"]>().toEqualTypeOf<
+			number | undefined
+		>();
 		expectTypeOf<TokenEndpointAuthMethod>().toEqualTypeOf<
 			AuthMethod | "none"
 		>();

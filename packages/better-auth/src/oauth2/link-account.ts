@@ -46,6 +46,12 @@ interface LinkOAuthAccountOptions {
 	account: OAuthAccountData;
 	profile: Record<string, unknown>;
 	scopes?: string[] | undefined;
+	/**
+	 * Values from the provider's `getAccountFields` hook, already limited to
+	 * declared account fields by `resolveOAuthAccountFields`. Better Auth's own
+	 * account columns always take precedence over them.
+	 */
+	accountFields?: Record<string, unknown> | undefined;
 }
 
 interface LinkOAuthAccountFailure {
@@ -92,7 +98,7 @@ export async function linkOAuthAccount(
 	c: GenericEndpointContext,
 	opts: LinkOAuthAccountOptions,
 ): Promise<LinkOAuthAccountResult> {
-	const { link, account, profile, scopes } = opts;
+	const { link, account, profile, scopes, accountFields } = opts;
 	const userInfo = {
 		...opts.userInfo,
 		emailVerified: parseStringBoolean(opts.userInfo.emailVerified) ?? false,
@@ -157,6 +163,7 @@ export async function linkOAuthAccount(
 		const mergedScope = mergeScopes(existingAccount.scope, scopes);
 		const updateData = Object.fromEntries(
 			Object.entries({
+				...accountFields,
 				providerId: account.providerId,
 				accessToken: await setTokenUtil(account.accessToken, c.context),
 				refreshToken: await setTokenUtil(account.refreshToken, c.context),
@@ -172,6 +179,7 @@ export async function linkOAuthAccount(
 		);
 	} else {
 		const newAccount = await c.context.internalAdapter.createAccount({
+			...accountFields,
 			userId: link.userId,
 			...account,
 			accessToken: await setTokenUtil(account.accessToken, c.context),
@@ -211,9 +219,21 @@ export async function handleOAuthUserInfo(
 			| undefined;
 		deferNonDatabaseWrites?: boolean | undefined;
 		requireExactAccountBinding?: boolean | undefined;
+		/**
+		 * Values from the provider's `getAccountFields` hook, already limited to
+		 * declared account fields by `resolveOAuthAccountFields`. Better Auth's
+		 * own account columns always take precedence over them.
+		 */
+		accountFields?: Record<string, unknown> | undefined;
 	},
 ) {
-	const { account, callbackURL, disableSignUp, overrideUserInfo } = opts;
+	const {
+		account,
+		callbackURL,
+		disableSignUp,
+		overrideUserInfo,
+		accountFields,
+	} = opts;
 	const userInfo = {
 		...opts.userInfo,
 		emailVerified: parseStringBoolean(opts.userInfo.emailVerified) ?? false,
@@ -352,6 +372,7 @@ export async function handleOAuthUserInfo(
 					source: { ...source, action: "link-account" },
 				});
 				const createdAccount = await c.context.internalAdapter.linkAccount({
+					...accountFields,
 					providerId: account.providerId,
 					accountId: account.accountId,
 					userId: dbUser.user.id,
@@ -431,36 +452,37 @@ export async function handleOAuthUserInfo(
 			 *
 			 * @see {@link Account.scope}
 			 */
-			const freshTokens =
-				c.context.options.account?.updateAccountOnSignIn !== false
-					? Object.fromEntries(
-							Object.entries({
-								providerId: account.providerId,
-								idToken: account.idToken,
-								accessToken: await setTokenUtil(account.accessToken, c.context),
-								refreshToken: await setTokenUtil(
-									account.refreshToken,
-									c.context,
-								),
-								accessTokenExpiresAt: account.accessTokenExpiresAt,
-								refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-							}).filter(([_, value]) => value !== undefined),
-						)
-					: {};
+			const updateAccountOnSignIn =
+				c.context.options.account?.updateAccountOnSignIn !== false;
+			const freshTokens = updateAccountOnSignIn
+				? Object.fromEntries(
+						Object.entries({
+							providerId: account.providerId,
+							idToken: account.idToken,
+							accessToken: await setTokenUtil(account.accessToken, c.context),
+							refreshToken: await setTokenUtil(account.refreshToken, c.context),
+							accessTokenExpiresAt: account.accessTokenExpiresAt,
+							refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+						}).filter(([_, value]) => value !== undefined),
+					)
+				: {};
+			const freshAccount = updateAccountOnSignIn
+				? { ...accountFields, ...freshTokens }
+				: freshTokens;
 
 			if (c.context.options.account?.storeAccountCookie) {
 				const accountCookie = {
 					...linkedAccount,
-					...freshTokens,
+					...freshAccount,
 				};
 				if (opts.deferNonDatabaseWrites) pendingAccountCookie = accountCookie;
 				else await setAccountCookie(c, accountCookie);
 			}
 
-			if (Object.keys(freshTokens).length > 0) {
+			if (Object.keys(freshAccount).length > 0) {
 				const updatedAccount = await c.context.internalAdapter.updateAccount(
 					linkedAccount.id,
-					freshTokens,
+					freshAccount,
 				);
 				if (!updatedAccount) {
 					return {
@@ -567,6 +589,7 @@ export async function handleOAuthUserInfo(
 				"create",
 			);
 			const accountData = {
+				...accountFields,
 				accessToken: await setTokenUtil(account.accessToken, c.context),
 				refreshToken: await setTokenUtil(account.refreshToken, c.context),
 				idToken: account.idToken,

@@ -1,5 +1,25 @@
 # @better-auth/oauth-provider
 
+## 1.7.26
+
+### Patch Changes
+
+- [`f242834`](https://github.com/better-auth/better-auth/commit/f2428340b9b58609401d3c4a06b0779684687248) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add the `assertionClockTolerance` option so a `private_key_jwt` client whose clock runs a few seconds ahead of or behind the server no longer fails token exchange with "client assertion signature verification failed". The default of `0` keeps the current strict check, and values above 60 seconds are treated as 60.
+
+- [#12622](https://github.com/better-auth/better-auth/pull/12622) [`d04ea26`](https://github.com/better-auth/better-auth/commit/d04ea262d2c39df5ef76d433dca6a44dfa84ed1e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Introspection and revocation requests with no client credentials, and `private_key_jwt` client assertions with an invalid signature, now get a `WWW-Authenticate: Basic` challenge with their `401 invalid_client` response. Browser clients on another origin can read it through `Access-Control-Expose-Headers`. Before, these 401 responses had no challenge. Status codes and error bodies don't change.
+
+- [#12624](https://github.com/better-auth/better-auth/pull/12624) [`7604fd4`](https://github.com/better-auth/better-auth/commit/7604fd45d8587699bdba74705a93e66a01ac4c6b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The OAuth provider and `requireMcpAuth` no longer cache keys returned by a custom JWT plugin `adapter.getJwks`, so keys it returns for one tenant or request can no longer verify a token presented in another. They now call it on every verification; cache inside the store if reads are expensive. The built-in database store is still cached.
+
+- [#12624](https://github.com/better-auth/better-auth/pull/12624) [`7604fd4`](https://github.com/better-auth/better-auth/commit/7604fd45d8587699bdba74705a93e66a01ac4c6b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A custom JWT plugin `adapter.getJwks` again receives the request being verified when the OAuth provider reads signing keys for introspection, revocation, or end-session, and when `requireMcpAuth` verifies a token. Since 1.7.25 it received only the auth context, without `request` or `headers`, so a key store that picks keys by the request's host or headers found none.
+
+- [#11201](https://github.com/better-auth/better-auth/pull/11201) [`eca5b9c`](https://github.com/better-auth/better-auth/commit/eca5b9cc02fe97d32de3130e31fec2bc17269335) Thanks [@SibteProf](https://github.com/SibteProf)! - Omit the `given_name` and `family_name` claims for users who have no name, instead of failing the request. Requesting the `profile` scope for such a user previously returned a 500 from `/userinfo`.
+
+- [#12724](https://github.com/better-auth/better-auth/pull/12724) [`1904081`](https://github.com/better-auth/better-auth/commit/1904081ba517707eeaa6a0a44c483102ca82c884) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Revoking another client's already revoked refresh token no longer deletes the presenting client's own refresh tokens and the opaque access tokens they issued. The revoked-token check ran before the ownership check, so a client that presented a token it did not own was treated as replaying its own token and ended its own grants for that user. The response is unchanged: the request still gets a `400 invalid_request`.
+
+- [#12725](https://github.com/better-auth/better-auth/pull/12725) [`b9369e5`](https://github.com/better-auth/better-auth/commit/b9369e5c4756d3def4d0796d537b56c6975e4f1a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Introspection and revocation no longer return a `500` when a custom `formatRefreshToken.decrypt` throws a JOSE error about the value itself, such as `compactDecrypt` does, for a value that is not a refresh token. This happened for an unknown token sent without a hint or with `token_type_hint=refresh_token`, and for an access token sent with `token_type_hint=refresh_token`. Introspection now reports these as `{ active: false }`, and revocation answers with a `400`, as it does for any other unknown token. A `decrypt` that throws a key set failure (`JWKSTimeout`, `JWKSInvalid`, or `JWKSMultipleMatchingKeys`) or any other error still returns a `500`, so a failing key service is not mistaken for an inactive token.
+
+- [#12723](https://github.com/better-auth/better-auth/pull/12723) [`b0cda69`](https://github.com/better-auth/better-auth/commit/b0cda692bc85ce5425c2cbdb43fe26aeef307844) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed the `refresh_token` grant issuing access and ID tokens whose `sid` names a session that has expired or been deleted. Introspection reported those tokens inactive as soon as they were issued, so a client that refreshed after the user's session ended got a token it couldn't use. Refreshed tokens now leave out `sid` once the session has ended, the same way refresh token introspection already does.
+
 ## 1.7.25
 
 ### Patch Changes

@@ -5,7 +5,7 @@ import {
 	getJwks,
 	stripAccessTokenAuthorizationScheme,
 } from "better-auth/oauth2";
-import type { Session, User } from "better-auth/types";
+import type { User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { createLocalJWKSet, errors as joseErrors, jwtVerify } from "jose";
@@ -15,7 +15,7 @@ import {
 	isAudienceClaimAllowed,
 	isClientLinkedToAnyResource,
 } from "./resources";
-import { confirmationTokenType, decodeRefreshToken } from "./token";
+import { confirmationTokenType, decodeRefreshTokenForLookup } from "./token";
 import type {
 	ActiveAccessTokenPayload,
 	Confirmation,
@@ -29,6 +29,7 @@ import {
 	challengeHeaders,
 	destructureCredentials,
 	extractClientCredentials,
+	findActiveSessionId,
 	getAuthEndpointUrl,
 	getClient,
 	getJwksSource,
@@ -231,14 +232,8 @@ async function validateJwtAccessToken(
 	// token is revoked per OIDC Back-Channel Logout §2.7 even though the JWT
 	// itself is still within its TTL.
 	const sessionId = jwtPayload.sid;
-	if (sessionId) {
-		const session = await ctx.context.adapter.findOne<Session>({
-			model: "session",
-			where: [{ field: "id", value: sessionId }],
-		});
-		if (!session || session.expiresAt < new Date()) {
-			return { active: false };
-		}
+	if (sessionId && !(await findActiveSessionId(ctx, sessionId))) {
+		return { active: false };
 	}
 
 	// Return the JWT payload in introspection format
@@ -330,19 +325,8 @@ async function validateOpaqueAccessToken(
 	// mirrors the JWT path so revocation is a function of session state and does
 	// not depend solely on the `revoked` flag written by the session-delete hook.
 	const sessionId = accessToken.sessionId ?? undefined;
-	if (sessionId) {
-		const session = await ctx.context.adapter.findOne<Session>({
-			model: "session",
-			where: [
-				{
-					field: "id",
-					value: sessionId,
-				},
-			],
-		});
-		if (!session || session.expiresAt < new Date()) {
-			return inactiveAccessToken();
-		}
+	if (sessionId && !(await findActiveSessionId(ctx, sessionId))) {
+		return inactiveAccessToken();
 	}
 
 	let user: User | null | undefined;
@@ -470,21 +454,7 @@ async function validateRefreshToken(
 		};
 	}
 
-	let sessionId = refreshToken.sessionId ?? undefined;
-	if (sessionId) {
-		const session = await ctx.context.adapter.findOne<Session>({
-			model: "session",
-			where: [
-				{
-					field: "id",
-					value: sessionId,
-				},
-			],
-		});
-		if (!session || session.expiresAt < new Date()) {
-			sessionId = undefined;
-		}
-	}
+	const sessionId = await findActiveSessionId(ctx, refreshToken.sessionId);
 
 	let user: User | undefined = undefined;
 	if (refreshToken.userId) {
@@ -746,7 +716,7 @@ export async function introspectEndpoint(
 
 		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
 			try {
-				const refreshToken = await decodeRefreshToken(opts, token);
+				const refreshToken = await decodeRefreshTokenForLookup(opts, token);
 				const payload = await validateRefreshToken(
 					ctx,
 					opts,
