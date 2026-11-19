@@ -217,8 +217,17 @@ Do not split `data` yourself. Better Auth already chunks large batches using [`c
 </Callout>
 
 ```ts title="Example"
-createMany: async ({ model, data, select }) => {
-  return await db.insert(model).values(data).returning();
+createMany: async ({ model, data }) => {
+  const created = await db.insert(model).values(data).returning();
+  // Databases may not return rows in insert order. Reorder to match `data`.
+  const byId = new Map(created.map((row) => [String(row.id), row]));
+  return data.map((row) => {
+    const inserted = byId.get(String(row.id));
+    if (!inserted) {
+      throw new Error(`createMany could not read back inserted "${model}" row ${String(row.id)}.`);
+    }
+    return inserted;
+  });
 };
 ```
 
@@ -594,13 +603,15 @@ The maximum number of bound parameters your database allows in one insert. Bette
 
 The limit is on parameters, not rows. A bulk insert binds one parameter per column per row, so `INSERT INTO user (id, name, email) VALUES (?, ?, ?), (?, ?, ?)` uses 6 parameters for 2 rows. Better Auth sizes each chunk as `createManyMaxParameters / columnCount`, which means wider rows produce smaller chunks. Column count is the number of distinct keys in the batch, including optional fields that appear on only some rows.
 
+SQL Server also rejects a single `INSERT ... VALUES` statement with more than 1000 rows, even when the parameter count is under 2099. Built-in SQL Server adapters set `createManyMaxRows` to 1000 so those batches are split.
+
 Defaults to `999`, which is safe for SQLite.
 
 Set this when your database's limit is different:
 
-* Cloudflare D1 allows 100 bound parameters. Do not leave the default at 999 on D1.
+* Cloudflare D1 allows 100 bound parameters. Passing `database: env.DB` or a Drizzle SQLite client that looks like D1 selects 100 automatically. If you wrap D1 in `{ db, type: "sqlite" }`, set `createManyMaxParameters: 100` on the Kysely adapter.
 * PostgreSQL and MySQL typically allow 65535.
-* SQL Server typically allows 2099.
+* SQL Server typically allows 2099 parameters and 1000 rows.
 * Databases that do not use SQL bind parameters, such as MongoDB, can use a much higher value so batches are not split.
 
 If you set this higher than your database allows, inserts can fail with a bound-parameter error.
