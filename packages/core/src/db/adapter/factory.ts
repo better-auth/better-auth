@@ -48,6 +48,13 @@ const createAsIsTransaction =
 	<R>(fn: (trx: DBTransactionAdapter<Options>) => Promise<R>) =>
 		fn(adapter);
 
+function finitePositiveInt(value: number | undefined): number | undefined {
+	if (typeof value !== "number" || !Number.isFinite(value) || value < 1) {
+		return undefined;
+	}
+	return Math.floor(value);
+}
+
 export type AdapterFactory<Options extends BetterAuthOptions> = (
 	options: Options,
 ) => DBAdapter<Options>;
@@ -1028,15 +1035,19 @@ export const createAdapterFactory =
 					1,
 					new Set(rows.flatMap((row) => Object.keys(row))).size,
 				);
+				const parameterLimit = finitePositiveInt(
+					config.createManyMaxParameters ?? 999,
+				);
 				const parameterChunkSize = Math.max(
 					1,
-					Math.floor((config.createManyMaxParameters ?? 999) / columnCount),
+					Math.floor((parameterLimit ?? 999) / columnCount),
 				);
+				const maxRows = finitePositiveInt(config.createManyMaxRows);
 				const chunkSize = Math.max(
 					1,
-					config.createManyMaxRows === undefined
+					maxRows === undefined
 						? parameterChunkSize
-						: Math.min(parameterChunkSize, config.createManyMaxRows),
+						: Math.min(parameterChunkSize, maxRows),
 				);
 				const results: Record<string, unknown>[] = [];
 				for (let offset = 0; offset < rows.length; offset += chunkSize) {

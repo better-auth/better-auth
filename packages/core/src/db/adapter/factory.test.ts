@@ -476,6 +476,40 @@ describe("createAdapterFactory createMany", () => {
 		expect(createMany.mock.calls[1]?.[0].data).toHaveLength(1);
 	});
 
+	it("ignores a non-finite createManyMaxRows cap", async () => {
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				disableTransformInput: true,
+				disableTransformOutput: true,
+				createManyMaxParameters: 2099,
+				createManyMaxRows: Number.NaN,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					createMany: createMany as CustomAdapter["createMany"],
+				}),
+		})({});
+
+		const data = Array.from({ length: 3 }, (_, index) => ({
+			id: `row-${index}`,
+			value: index,
+		}));
+		const created = await adapter.createMany({
+			model: "user",
+			data,
+			forceAllowId: true,
+		});
+
+		expect(createMany).toHaveBeenCalledTimes(1);
+		expect(createMany.mock.calls[0]?.[0].data).toHaveLength(3);
+		expect(created).toHaveLength(3);
+	});
+
 	it("chunks from the union of keys, not the widest single row", async () => {
 		const createMany = vi.fn(
 			async ({ data }: { data: Record<string, any>[] }) => data,
