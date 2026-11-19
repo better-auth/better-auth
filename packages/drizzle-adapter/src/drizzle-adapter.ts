@@ -925,7 +925,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						if (
 							!inTransaction &&
 							chunks.length > 1 &&
-							typeof db.transaction === "function"
+							typeof db.transaction === "function" &&
+							!isD1SqliteClient(db)
 						) {
 							return db.transaction(insertChunks);
 						}
