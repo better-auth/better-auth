@@ -1735,6 +1735,85 @@ describe("phone number at user creation", () => {
 		expect(duplicateRes.error?.code).toBe("PHONE_NUMBER_EXIST");
 	});
 
+	it("strips an unverified squatter's number before the legitimate owner verifies", async () => {
+		// SECURITY: when requireVerification is false, a third party (the
+		// "squatter") can register with someone else's phone number. When the
+		// real owner later verifies via OTP, the route must NOT hand them into
+		// the squatter's account. Instead it should disassociate the number
+		// from the unverified account so the legitimate owner claims it cleanly.
+		const targetPhone = "+19998887777";
+		let capturedOTP = "";
+
+		const { client, db } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						requireVerification: false,
+						async sendOTP({ code }) {
+							capturedOTP = code;
+						},
+						signUpOnVerification: {
+							getTempEmail: (phone) => `temp-${phone}@phone.local`,
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		// Squatter registers with the target phone using email+password
+		await client.signUp.email({
+			email: "squatter@test.com",
+			password: "squatter-pass",
+			name: "squatter",
+			// @ts-expect-error - phoneNumber is accepted when requireVerification is false
+			phoneNumber: targetPhone,
+		});
+
+		// Confirm the squatter's account holds the number, unverified
+		const squatterBefore = await db.findOne<UserWithPhoneNumber>({
+			model: "user",
+			where: [{ field: "email", value: "squatter@test.com" }],
+		});
+		expect(squatterBefore?.phoneNumber).toBe(targetPhone);
+		expect(squatterBefore?.phoneNumberVerified).toBe(false);
+
+		// Legitimate owner requests an OTP for that number
+		await client.phoneNumber.sendOtp({ phoneNumber: targetPhone });
+		expect(capturedOTP).not.toBe("");
+
+		// Legitimate owner verifies — the route must NOT create a session into
+		// the squatter's account; instead it should create a fresh verified account
+		// for the owner via signUpOnVerification.
+		const verifyRes = await client.phoneNumber.verify({
+			phoneNumber: targetPhone,
+			code: capturedOTP,
+		});
+		expect(verifyRes.error).toBeNull();
+
+		// The owner's account must exist, be verified, and be distinct from squatter's
+		const ownerAccount = await db.findOne<UserWithPhoneNumber>({
+			model: "user",
+			where: [{ field: "phoneNumber", value: targetPhone }],
+		});
+		expect(ownerAccount).not.toBeNull();
+		expect(ownerAccount?.phoneNumberVerified).toBe(true);
+		expect(ownerAccount?.id).not.toBe(squatterBefore?.id);
+
+		// Critical security property: the squatter's account had its phone stripped
+		const squatterAfter = await db.findOne<UserWithPhoneNumber>({
+			model: "user",
+			where: [{ field: "email", value: "squatter@test.com" }],
+		});
+		expect(squatterAfter?.phoneNumber).toBeNull();
+		expect(squatterAfter?.phoneNumberVerified).toBe(false);
+	});
+
 	it("rejects a phone number sent with email sign-up when requireVerification is true", async () => {
 		const { client, db } = await getTestInstance(
 			{
