@@ -113,6 +113,14 @@ export interface CimdOptions {
 	 * timeout and those four statuses count. While a client is served this way,
 	 * its document is fetched again at most once a minute.
 	 *
+	 * The timeout counts even when the delay is local: the Node transport's
+	 * DNS lookups run on the Node.js thread pool, 4 threads by default, so a
+	 * few host names whose DNS servers do not answer can hold lookups for
+	 * other hosts past the timeout, and a stored client whose host would have
+	 * answered with a terminal failure is served instead. Keep this bound
+	 * short; a larger pool set through `UV_THREADPOOL_SIZE` reduces the
+	 * queuing.
+	 *
 	 * Two refusals are local limits rather than failures: a
 	 * `metadataFetchPolicy` limit, and the Node transport's limit on
 	 * outstanding DNS lookups (any transport error with the code

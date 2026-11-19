@@ -162,7 +162,9 @@ export interface ClientDiscovery {
 	 * an HTTP 404 response, rejects the assertion, and stops this server
 	 * process from serving the stale keys until a fetch succeeds.
 	 * While stale keys are served, they are fetched again at most once a
-	 * minute, and assertions in between use them without a fetch.
+	 * minute, and assertions in between use them without a fetch, except an
+	 * assertion that names a key the cached set lacks, which fetches them
+	 * again before it is rejected.
 	 *
 	 * Non-finite and negative values add no time. Values above 24 hours are
 	 * capped at 24 hours.
