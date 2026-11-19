@@ -16,8 +16,11 @@ export const joinsTestSuite = createTestSuite(
 		prefixTests: "joins",
 	},
 	(helpers) => {
-		const { "create - should use generateId if provided": _, ...normalTests } =
-			getNormalTestSuiteTests({ ...helpers });
+		const {
+			"create - should use generateId if provided": _,
+			"createMany - should use generateId if provided": _createManyGenerateId,
+			...normalTests
+		} = getNormalTestSuiteTests({ ...helpers });
 
 		return {
 			"init - tests": async () => {

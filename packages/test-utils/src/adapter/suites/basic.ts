@@ -126,6 +126,89 @@ export const getNormalTestSuiteTests = (
 			expect(typeof created[0]?.id).toEqual("string");
 			expect(typeof created[1]?.id).toEqual("string");
 			expect(created[0]?.id).not.toEqual(created[1]?.id);
+			const found = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: [created[0]!.id, created[1]!.id],
+						operator: "in",
+					},
+				],
+			});
+			expect(sortModels(found)).toEqual(sortModels([created[0]!, created[1]!]));
+		},
+		"createMany - should use generateId if provided": async () => {
+			const ID = (await customIdGenerator?.()) || "MOCK-ID";
+			let n = 0;
+			await modifyBetterAuthOptions(
+				{
+					advanced: {
+						database: {
+							generateId: () => `${ID}-${++n}`,
+						},
+					},
+				},
+				false,
+			);
+			const { id: _firstId, ...first } = await generate("user");
+			const { id: _secondId, ...second } = await generate("user");
+			const created = await adapter.createMany<User>({
+				model: "user",
+				data: [first, second],
+			});
+			const firstId = transformIdOutput
+				? transformIdOutput(`${ID}-1`)
+				: `${ID}-1`;
+			const secondId = transformIdOutput
+				? transformIdOutput(`${ID}-2`)
+				: `${ID}-2`;
+			expect(created[0]?.id).toEqual(firstId);
+			expect(created[1]?.id).toEqual(secondId);
+			const found = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: [created[0]!.id, created[1]!.id],
+						operator: "in",
+					},
+				],
+			});
+			expect(sortModels(found)).toEqual(sortModels(created));
+		},
+		"createMany - should apply default values to fields": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							testField: {
+								type: "string",
+								defaultValue: "test-value",
+							},
+							cbDefaultValueField: {
+								type: "string",
+								defaultValue: () => {
+									return "advanced-test-value";
+								},
+							},
+						},
+					},
+				},
+				true,
+			);
+			const created = await adapter.createMany<
+				User & { testField?: string; cbDefaultValueField?: string }
+			>({
+				model: "user",
+				data: [await generate("user"), await generate("user")],
+				forceAllowId: true,
+			});
+			expect(created).toHaveLength(2);
+			expect(created[0]?.testField).toBe("test-value");
+			expect(created[0]?.cbDefaultValueField).toBe("advanced-test-value");
+			expect(created[1]?.testField).toBe("test-value");
+			expect(created[1]?.cbDefaultValueField).toBe("advanced-test-value");
 		},
 		"create - should use generateId if provided": async () => {
 			const ID = (await customIdGenerator?.()) || "MOCK-ID";

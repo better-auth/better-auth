@@ -28,6 +28,39 @@ describe("mongodb-adapter", () => {
 		expect(adapter.options?.adapterConfig.createManyMaxParameters).toBe(100000);
 	});
 
+	it("inserts many documents with insertMany in input order", async () => {
+		const insertMany = vi.fn(async (documents: Record<string, unknown>[]) => ({
+			insertedIds: Object.fromEntries(
+				documents.map((document, index) => [index, document._id]),
+			),
+		}));
+		const db = {
+			collection: vi.fn(() => ({
+				insertMany,
+				createIndex: vi.fn(),
+				listIndexes: vi.fn(() => ({ toArray: async () => [] })),
+			})),
+		} as any;
+		const adapter = mongodbAdapter(db, { transaction: false })({});
+
+		const created = await adapter.createMany({
+			model: "user",
+			data: [
+				{ name: "Ada", email: "ada@example.com", emailVerified: false },
+				{ name: "Bob", email: "bob@example.com", emailVerified: false },
+			],
+		});
+
+		expect(insertMany).toHaveBeenCalledTimes(1);
+		expect(insertMany.mock.calls[0]?.[1]).toEqual(
+			expect.objectContaining({ ordered: true }),
+		);
+		expect(created.map((row) => row.name)).toEqual(["Ada", "Bob"]);
+		expect(typeof created[0]?.id).toBe("string");
+		expect(typeof created[1]?.id).toBe("string");
+		expect(created[0]?.id).not.toBe(created[1]?.id);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10925
 	 */
