@@ -101,7 +101,7 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
   <Step>
     #### Relax the constraint
 
-    Remove the issuer index, then make the column nullable or drop it.
+    Pause authentication and background writes during the cutover, so no instance writes accounts while the index is gone. Remove the issuer index, then make the column nullable or drop it.
 
     <Callout type="warn">
       Drop the index before the column. MySQL keeps an index whose column disappears and rebuilds it on the remaining ones, turning the compound unique index into a unique constraint on `accountId` alone. That rejects a user who holds the same account ID at two providers.
@@ -132,7 +132,7 @@ Better Auth 1.7.0 through 1.7.2 added a required `issuer` column to the `account
         ALTER TABLE dbo.account ALTER COLUMN issuer VARCHAR(255) NULL;
         ```
 
-        If the column uses a non-default collation, add it back with `COLLATE`.
+        SQL Server requires `ALTER COLUMN` to restate the type and nullability, and the statement above restates the generated `VARCHAR(255)`. If you customized the column's type, length, or collation, read the current definition from `INFORMATION_SCHEMA.COLUMNS` and repeat it with `NULL`. Changing the type can fail or convert existing issuer values, and omitting `COLLATE` resets the column to the database default collation.
       </Tab>
 
       <Tab value="SQLite">
@@ -177,7 +177,7 @@ If several sign-in connections shared one account row on 1.7.0 through 1.7.2, so
 
 For OAuth sign-in, users can sign in through a connection that still works, then [link the missing connection](/docs/concepts/users-accounts#manually-linking-accounts). Have them sign out and sign in through that connection to confirm they reach their original account.
 
-For SSO, users cannot link the connection themselves. Configure [`resolveUser`](/docs/plugins/sso/provisioning#resolve-sso-users) to match each verified SSO identity to the correct existing user. `resolveUser` needs an adapter with native transactions; without one, [domain-verified email linking](/docs/plugins/sso/provisioning#how-sso-users-are-matched) can link the identity to the existing user.
+For SSO, users cannot link the connection themselves. Configure [`resolveUser`](/docs/plugins/sso/provisioning#resolve-sso-users) to match each verified SSO identity to the correct existing user. `resolveUser` needs an adapter with native transactions; without one, [domain-verified email linking](/docs/plugins/sso/provisioning#how-sso-users-are-matched) can link the identity to the existing user. Without either, keep the connection disabled until a verified recovery path exists.
 
 Account-specific APIs now use explicit, strongly typed selectors. Read `id` from `listAccounts`, then pass it as `accountId` to `unlinkAccount`. For `getAccessToken`, `refreshToken`, and `accountInfo`, choose exactly one of these request shapes:
 
