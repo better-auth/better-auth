@@ -1130,6 +1130,38 @@ describe("prisma-adapter", () => {
 			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
 		});
 
+		it("restores input order when the caller select omits id", async () => {
+			const createManyAndReturn = vi.fn(
+				async ({ select }: { select?: Record<string, boolean> }) => {
+					expect(select === undefined || select.id === true).toBe(true);
+					return [
+						{ id: "b", name: "Bob" },
+						{ id: "a", name: "Ada" },
+					];
+				},
+			);
+			const adapter = prismaAdapter(
+				{
+					$transaction: vi.fn(),
+					user: {
+						createManyAndReturn,
+						createMany: vi.fn(),
+						findMany: vi.fn(),
+					},
+				} as never,
+				{ provider: "postgresql" },
+			)({} as BetterAuthOptions);
+
+			const created = await adapter.createMany({
+				model: "user",
+				data: rows,
+				forceAllowId: true,
+				select: ["name"],
+			});
+
+			expect(created.map((row) => row.name)).toEqual(["Ada", "Bob"]);
+		});
+
 		it("does not use createManyAndReturn when ids are generated", async () => {
 			const createManyAndReturn = vi.fn(async () => {
 				throw new Error("createManyAndReturn should not be used");
