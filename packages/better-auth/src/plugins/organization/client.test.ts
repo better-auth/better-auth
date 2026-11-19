@@ -237,11 +237,11 @@ describe("active organization during an auth change", () => {
 			if (startSignedIn) {
 				await signIn();
 				// Like an app, read the session somewhere so it is known signed in.
-				const session = client.$store.atoms.session!;
+				const session = client.useSession;
 				onCleanup(session.subscribe(() => {}));
 				await expect.poll(() => session.get().data).not.toBeNull();
 			}
-			const activeOrganization = client.$store.atoms.activeOrganization!;
+			const activeOrganization = client.useActiveOrganization;
 			return {
 				client,
 				testUser,
