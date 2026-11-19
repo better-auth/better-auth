@@ -139,7 +139,8 @@ function applyOAuthClientRegistrationDefaults(
 /**
  * Client fields that a metadata document sets and a refresh clears when it
  * omits them. `subjectType` is not listed: changing it changes every user's
- * `sub` for the client (OIDC Core §8), so only an administrator changes it.
+ * `sub` for the client (OIDC Core §8), so an omitted value keeps the stored
+ * one. A document that states another value still changes it.
  */
 const METADATA_DOCUMENT_CLIENT_FIELDS = [
 	"name",
