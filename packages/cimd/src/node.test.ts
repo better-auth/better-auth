@@ -141,9 +141,13 @@ describe("Node CIMD metadata transport", () => {
 				"https://client.example.com/client.json",
 				{ signal: controller.signal },
 			);
-			controller.abort(new Error("deadline exceeded"));
+			const reason = new Error("deadline exceeded");
+			controller.abort(reason);
 
-			await expect(pending).rejects.toThrow("deadline exceeded");
+			await expect(pending).rejects.toMatchObject({
+				code: "ERR_CIMD_DNS_LOOKUP_ABORTED",
+				cause: reason,
+			});
 			expect(mocks.request).not.toHaveBeenCalled();
 
 			// the outstanding lookup settles in the background without unhandled
@@ -168,7 +172,9 @@ describe("Node CIMD metadata transport", () => {
 				{ signal: controller.signal },
 			);
 			controller.abort(new Error("deadline exceeded"));
-			await expect(pending).rejects.toThrow("deadline exceeded");
+			await expect(pending).rejects.toMatchObject({
+				code: "ERR_CIMD_DNS_LOOKUP_ABORTED",
+			});
 
 			rejectLookup?.(
 				Object.assign(new Error("timeout"), { code: "EAI_AGAIN" }),
@@ -204,7 +210,9 @@ describe("Node CIMD metadata transport", () => {
 					{ signal: controller.signal },
 				);
 				controller.abort(new Error("deadline exceeded"));
-				await expect(pending).rejects.toThrow("deadline exceeded");
+				await expect(pending).rejects.toMatchObject({
+					code: "ERR_CIMD_DNS_LOOKUP_ABORTED",
+				});
 			}
 			expect(mocks.lookup).toHaveBeenCalledTimes(16);
 			await expect(
@@ -373,7 +381,9 @@ describe("Node CIMD metadata transport", () => {
 					{ signal: controller.signal },
 				);
 				controller.abort(new Error("deadline exceeded"));
-				await expect(pending).rejects.toThrow("deadline exceeded");
+				await expect(pending).rejects.toMatchObject({
+					code: "ERR_CIMD_DNS_LOOKUP_ABORTED",
+				});
 			}
 
 			const refused = await authorize();

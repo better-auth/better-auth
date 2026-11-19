@@ -103,6 +103,21 @@ export interface CimdOptions {
 	 */
 	metadataRevalidationInterval?: number | string;
 	/**
+	 * Keep serving a stored client for up to this long after it was last
+	 * validated (its `updatedAt`) when refreshing its metadata document fails
+	 * transiently: the fetch times out after its host name resolved, the
+	 * connection fails with a known error code, or the server answers with
+	 * HTTP 500, 502, 503, or 504. Other failures still reject the request.
+	 * Cached `jwks_uri` keys follow the same rules.
+	 *
+	 * Accepts a number of seconds or a duration string (e.g. `"6h"`), at most
+	 * 24 hours.
+	 *
+	 * @see https://www.better-auth.com/docs/plugins/cimd#transient-refresh-failures
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1
+	 */
+	metadataStaleIfError?: number | string;
+	/**
 	 * Bounded request-amplification policy for metadata document fetches.
 	 *
 	 * A permitted fetch consumes its concurrency and rolling-window budget when

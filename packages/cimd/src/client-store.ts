@@ -6,7 +6,13 @@ import type {
 	SchemaClient,
 	Scope,
 } from "@better-auth/oauth-provider";
-import { registerClientMetadataDocument } from "@better-auth/oauth-provider/internal";
+import {
+	isLocalCapacityRefusal,
+	isTransientAbort,
+	isTransientHttpStatus,
+	isTransientNetworkError,
+	registerClientMetadataDocument,
+} from "@better-auth/oauth-provider/internal";
 import { APIError } from "better-call";
 import type { CimdOptions } from "./types";
 import {
@@ -49,10 +55,46 @@ function invalidClient(description: string): APIError {
 	});
 }
 
-// The code the Node transport sets when it refuses a fetch at its limit on
-// outstanding DNS lookups. The refusal says nothing about the host.
-const DNS_LOOKUP_LIMIT_ERROR_CODE = "ERR_CIMD_DNS_LOOKUP_LIMIT";
+// Transient failures answer with the same error as any other failure, so the
+// classification is kept beside the error.
+const transientMetadataFetchFailures = new WeakSet<object>();
 const metadataFetchCapacityRefusals = new WeakSet<object>();
+const metadataTransportErrors = new WeakSet<object>();
+
+function transientInvalidClient(description: string): APIError {
+	const error = invalidClient(description);
+	transientMetadataFetchFailures.add(error);
+	return error;
+}
+
+function transportError(description: string, transient: boolean): APIError {
+	const error = transient
+		? transientInvalidClient(description)
+		: invalidClient(description);
+	metadataTransportErrors.add(error);
+	return error;
+}
+
+/**
+ * The transport threw, so no document was retrieved. Without an error code, a
+ * failed connection and a refused address look the same, so this is neither
+ * transient nor terminal.
+ */
+export function isMetadataTransportError(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		metadataTransportErrors.has(error)
+	);
+}
+
+export function isTransientMetadataFetchFailure(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		transientMetadataFetchFailures.has(error)
+	);
+}
 
 /**
  * Whether the transport refused a metadata document fetch at a local capacity
@@ -200,18 +242,15 @@ export async function fetchClientMetadataDocument(
 				signal: controller.signal,
 			});
 		} catch (error) {
-			if (
-				typeof error === "object" &&
-				error !== null &&
-				(error as { code?: unknown }).code === DNS_LOOKUP_LIMIT_ERROR_CODE
-			) {
-				throw metadataFetchCapacityRefusal();
-			}
-			throw invalidClient(
-				didTimeOut
-					? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`
-					: FETCH_FAILURE_DESCRIPTION,
-			);
+			if (isLocalCapacityRefusal(error)) throw metadataFetchCapacityRefusal();
+			const description = didTimeOut
+				? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`
+				: FETCH_FAILURE_DESCRIPTION;
+			// A refusal that arrives after the timeout fired is still a refusal.
+			const transient =
+				(didTimeOut && isTransientAbort(error, controller.signal)) ||
+				isTransientNetworkError(error);
+			throw transportError(description, transient);
 		}
 		if (response.redirected) {
 			throw invalidClient("Metadata document fetch must not follow redirects");
@@ -227,9 +266,10 @@ export async function fetchClientMetadataDocument(
 			return { status: "not-modified", cacheHeaders };
 		}
 		if (response.status !== 200) {
-			throw invalidClient(
-				`Metadata document fetch returned HTTP ${response.status}`,
-			);
+			const description = `Metadata document fetch returned HTTP ${response.status}`;
+			throw isTransientHttpStatus(response.status)
+				? transientInvalidClient(description)
+				: invalidClient(description);
 		}
 
 		const contentType = response.headers.get("content-type") ?? "";
@@ -260,12 +300,16 @@ export async function fetchClientMetadataDocument(
 			);
 		} catch (error) {
 			if (didTimeOut) {
-				throw invalidClient(
-					`Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`,
-				);
+				const description = `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`;
+				throw isAPIError(error)
+					? invalidClient(description)
+					: transportError(description, true);
 			}
 			if (isAPIError(error)) throw error;
-			throw invalidClient(FETCH_FAILURE_DESCRIPTION);
+			throw transportError(
+				FETCH_FAILURE_DESCRIPTION,
+				isTransientNetworkError(error),
+			);
 		}
 		let rawMetadata: unknown;
 		try {

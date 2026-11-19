@@ -110,6 +110,36 @@ describe("adminUpdateOAuthClient on a client with a jwks_uri", async () => {
 	});
 
 	/**
+	 * The CIMD stale-if-error bound counts from `updatedAt`, so an edit that
+	 * validates nothing must not extend it.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11875
+	 */
+	it("keeps a discovered client's updatedAt when an administrator edits it", async () => {
+		const clientId = "https://client.example/validated/client.json";
+		const validatedAt = new Date("2026-01-01T00:00:00.000Z");
+		await storeClient({
+			clientId,
+			jwksUri: "https://client.example/validated/jwks.json",
+			clientDiscoveryId,
+		});
+		await context.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+			update: { updatedAt: validatedAt },
+		});
+
+		await setClientCredentialsScopes(clientId);
+
+		const stored = await context.adapter.findOne<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(stored?.clientCredentialsScopes).toEqual(["read"]);
+		expect(stored?.updatedAt).toEqual(validatedAt);
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11916
 	 */
 	describe("cross-origin jwks_uri", () => {

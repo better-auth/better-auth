@@ -16,9 +16,10 @@ const MAX_OUTSTANDING_DNS_LOOKUPS = 16;
 let outstandingDNSLookups = 0;
 
 /**
- * Resolve every address of a hostname, rejecting with the signal's reason as
- * soon as it aborts. An abandoned lookup keeps its slot in
- * MAX_OUTSTANDING_DNS_LOOKUPS until it settles, and its result is discarded.
+ * Resolve every address of a hostname, rejecting with
+ * `ERR_CIMD_DNS_LOOKUP_ABORTED` as soon as the signal aborts. An abandoned
+ * lookup keeps its slot in MAX_OUTSTANDING_DNS_LOOKUPS until it settles, and
+ * its result is discarded.
  */
 function lookupWithAbort(
 	hostname: string,
@@ -60,8 +61,17 @@ function lookupWithAbort(
 		return countedLookup;
 	}
 	return new Promise((resolve, reject) => {
+		// A lookup can be queued behind other hosts' lookups, so this abort says
+		// nothing about this host.
 		const onAbort = () => {
-			reject(signal.reason);
+			reject(
+				Object.assign(
+					new TypeError("metadata DNS lookup aborted", {
+						cause: signal.reason,
+					}),
+					{ code: "ERR_CIMD_DNS_LOOKUP_ABORTED" },
+				),
+			);
 		};
 		signal.addEventListener("abort", onAbort, { once: true });
 		if (signal.aborted) onAbort();
@@ -223,7 +233,16 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 				}
 			},
 		);
-		request.once("error", reject);
+		// The code tells callers the abort ended a request already sent to the
+		// host, so its timeout can count as an outage of that host.
+		const requestAborted = (cause: unknown) =>
+			Object.assign(new Error("metadata request aborted", { cause }), {
+				name: "AbortError",
+				code: "ERR_CIMD_REQUEST_ABORTED",
+			});
+		request.once("error", (error) => {
+			reject(signal?.aborted ? requestAborted(error) : error);
+		});
 		// Without an upgrade listener, Node destroys the socket after a 101 and
 		// emits neither a response nor an error, and the abort signal can no
 		// longer settle the request.
@@ -233,7 +252,11 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 			reject(new TypeError("metadata server answered with a protocol upgrade"));
 		});
 		request.once("close", () => {
-			reject(new TypeError("metadata request closed before a response"));
+			reject(
+				signal?.aborted
+					? requestAborted(signal.reason)
+					: new TypeError("metadata request closed before a response"),
+			);
 		});
 		request.end();
 	});

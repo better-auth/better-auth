@@ -132,6 +132,11 @@ export const cimdOptionsType = {
 		description:
 			"Maximum and fallback cache freshness lifetime. Expired entries are revalidated on the next client resolution; no periodic or background fetch runs. Number values are seconds; strings are duration expressions.",
 	},
+	metadataStaleIfError: {
+		type: "number | string",
+		description:
+			"How long after its last validation a stored client is still served when refreshing its metadata document fails transiently. At most 24 hours. Number values are seconds; strings are duration expressions.",
+	},
 	maxCacheEntries: {
 		type: "number",
 		default: "1000",
@@ -254,7 +259,34 @@ A fetched document that can be cached is cached once it is validated, before it 
 
 A caller that joins another caller's fetch waits at most 10 seconds for that fetch. If the fetch has not finished by then, the caller discards it. A fetch that has run for 10 seconds is also discarded when any new fetch starts. This keeps a fetch that never finishes from holding other clients at the concurrency limit or its pacing record from filling the `maxCacheEntries` bound. A discarded fetch neither caches nor saves its document, and its failure is not reported to any caller. The one exception is a fetch discarded after running for 10 seconds that finishes before any newer fetch for that client has started: its document is then the newest available, so it is saved, and cached when its response allows, as if it had not been discarded. Otherwise, the caller that started a discarded fetch resolves the client again when the fetch finishes. A caller that joined it resolves the client again when the fetch finishes or its own 10-second wait ends, whichever comes first. When it resolves again, the caller saves the fresh document that a newer fetch cached. Without one, the caller joins a newer fetch with a new 10-second wait, or starts a new fetch under the same limits. That new fetch fails with `temporarily_unavailable` when no concurrency slot is free, even if the discarded fetch succeeded.
 
-Refresh remains fail closed. A network or validation failure preserves the previous database and cache state, and a persistence failure preserves the database state and drops the document it failed to save from the cache. Each rejects the current OAuth request. `onClientRefreshed` receives `previousClient`; operators can compare security-sensitive metadata and choose whether to revoke grants, tokens, or consent.
+Refresh remains fail closed unless `metadataStaleIfError` applies, as described in the next section. A network or validation failure preserves the previous database and cache state, and a persistence failure preserves the database state and drops the document it failed to save from the cache. Each rejects the current OAuth request. `onClientRefreshed` receives `previousClient`; operators can compare security-sensitive metadata and choose whether to revoke grants, tokens, or consent.
+
+### Transient refresh failures
+
+By default, a failed refresh rejects the request, so a short outage at a client's metadata host stops its users from signing in. CIMD draft-03 §6.1 says a transient failure should not invalidate a client's established trust. Set `metadataStaleIfError`, modeled on RFC 5861 §4 stale-if-error, to keep serving the stored client through such failures:
+
+```ts title="auth.ts"
+cimd({
+  fetchClientMetadataResource,
+  metadataStaleIfError: "6h",
+});
+```
+
+A failed refresh then returns the stored client unchanged and logs a warning when its `updatedAt` is within `metadataStaleIfError` and the failure is transient:
+
+* The plugin's 5-second fetch timeout, when the transport reports that its request had reached the host. The Node transport does. A custom transport does so by rejecting with an error whose `code` is `ERR_CIMD_REQUEST_ABORTED`, and only after DNS resolution: other client IDs can delay lookups, for example by holding Node's shared DNS threads, so a timeout during resolution says nothing about the host.
+* HTTP 500, 502, 503, or 504.
+* A connection failure whose error, or an error in its `cause` chain, has the code `EAI_AGAIN`, `ECONNRESET`, `ECONNREFUSED`, `ETIMEDOUT`, `EHOSTUNREACH`, `ENETUNREACH`, `EPIPE`, `UND_ERR_CONNECT_TIMEOUT`, `UND_ERR_HEADERS_TIMEOUT`, `UND_ERR_BODY_TIMEOUT`, or `UND_ERR_SOCKET`. On runtimes whose `fetch` errors carry no code, only the timeout and the four statuses count.
+
+Only a successful refresh advances `updatedAt`. An administrator's edit of the client, such as setting its `client_credentials_scopes`, does not, so it cannot extend the bound. While it serves a stored client, Better Auth fetches the document at most once a minute. The document's cache directives, including `no-store`, do not apply, because the stored client is a registration rather than a cached response.
+
+Every other failure rejects the request as before. A terminal failure also stops this instance from serving the stored client until a refresh succeeds, so an owner can revoke a client by removing its document. A failure is terminal when a document was retrieved and rejected (any other status, a redirect, or an invalid document), when the OAuth provider refuses to save the refreshed document, or when the `client_id` URL is refused. Other transport errors, such as `ENOTFOUND`, reject the request without stopping stale serving. A `metadataFetchPolicy` limit or the Node transport's DNS lookup limit serves the stored client only within 5 minutes of its last transient failure.
+
+<Callout type="warn">
+While a stored client is served, changes to its document, such as new redirect URIs, keys, or a new domain owner, are not seen. Terminal failures are recorded in memory, so another instance or a restarted one can still serve the stored client. Choose the shortest bound that covers the outages you expect.
+</Callout>
+
+For a `private_key_jwt` client with a `jwks_uri`, the option also keeps its cached keys in use under the same rules, counted from the last successful key fetch. Keys are cached in memory only, so after a restart they must be fetched before the client can authenticate. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).
 
 ## Security boundary
 
