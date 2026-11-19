@@ -86,9 +86,16 @@ function createManyMaxParametersForProvider(
 const uuidPattern =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function idMatchKey(id: unknown): string {
+function rowId<T extends Record<string, unknown>>(
+	row: T,
+	idField: string,
+): string {
+	return String(row[idField] ?? row.id);
+}
+
+function uuidKey(id: unknown): string | undefined {
 	const value = String(id);
-	return uuidPattern.test(value) ? value.toLowerCase() : value;
+	return uuidPattern.test(value) ? value.toLowerCase() : undefined;
 }
 
 function orderRowsByIds<T extends Record<string, unknown>>(
@@ -97,11 +104,27 @@ function orderRowsByIds<T extends Record<string, unknown>>(
 	idField: string,
 	model: string,
 ): T[] {
-	const byId = new Map(
-		rows.map((row) => [idMatchKey(row[idField] ?? row.id), row]),
-	);
+	const byExactId = new Map<string, T>();
+	const byUuid = new Map<string, T>();
+	const ambiguousUuids = new Set<string>();
+
+	for (const row of rows) {
+		const exact = rowId(row, idField);
+		byExactId.set(exact, row);
+		const normalized = uuidKey(exact);
+		if (!normalized || ambiguousUuids.has(normalized)) continue;
+		const existing = byUuid.get(normalized);
+		if (existing && rowId(existing, idField) !== exact) {
+			byUuid.delete(normalized);
+			ambiguousUuids.add(normalized);
+			continue;
+		}
+		byUuid.set(normalized, row);
+	}
+
 	return ids.map((id) => {
-		const row = byId.get(idMatchKey(id));
+		const exact = String(id);
+		const row = byExactId.get(exact) ?? byUuid.get(uuidKey(id) ?? "");
 		if (!row) {
 			throw new BetterAuthError(
 				`Adapter createMany could not read back inserted "${model}" row ${String(id)}.`,

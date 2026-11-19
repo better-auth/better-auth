@@ -1173,6 +1173,48 @@ describe("prisma-adapter", () => {
 			expect(created.map((row) => row.name)).toEqual(["Ada", "Bob"]);
 		});
 
+		it("preserves case-distinct UUID-shaped text ids", async () => {
+			const upperId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
+			const lowerId = upperId.toLowerCase();
+			const createManyAndReturn = vi.fn(async () => [
+				{ id: lowerId, name: "Lower" },
+				{ id: upperId, name: "Upper" },
+			]);
+			const adapter = prismaAdapter(
+				{
+					$transaction: vi.fn(),
+					user: {
+						createManyAndReturn,
+						createMany: vi.fn(),
+						findMany: vi.fn(),
+					},
+				} as never,
+				{ provider: "sqlite" },
+			)({} as BetterAuthOptions);
+
+			const created = await adapter.createMany({
+				model: "user",
+				data: [
+					{
+						id: upperId,
+						name: "Upper",
+						email: "upper@example.com",
+						emailVerified: false,
+					},
+					{
+						id: lowerId,
+						name: "Lower",
+						email: "lower@example.com",
+						emailVerified: false,
+					},
+				],
+				forceAllowId: true,
+			});
+
+			expect(created.map((row) => row.id)).toEqual([upperId, lowerId]);
+			expect(created.map((row) => row.name)).toEqual(["Upper", "Lower"]);
+		});
+
 		it("restores input order when the caller select omits id", async () => {
 			const createManyAndReturn = vi.fn(
 				async ({ select }: { select?: Record<string, boolean> }) => {
