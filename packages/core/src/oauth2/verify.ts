@@ -112,10 +112,8 @@ const JWKS_FETCH_TIMEOUT_MS = 5_000;
  * lifetimes, the bound the client `jwks_uri` fallback in the OAuth provider
  * uses. The window is a local choice and ignores the key set's `Cache-Control`.
  * A key the issuer has already rotated out is accepted until the window ends.
- *
- * @internal
  */
-export const JWKS_MAX_STALE_MS = 2 * JWKS_CACHE_TTL_MS;
+const JWKS_MAX_STALE_MS = 2 * JWKS_CACHE_TTL_MS;
 
 function getJwksCacheEntry<K>(
 	cache: {
@@ -474,13 +472,7 @@ async function getJwksForVerification(
 	): Promise<ResolvedJwks> => {
 		// Without `kid`, key selection is deferred to JOSE because RFC 7515 makes
 		// the header parameter optional.
-		if (
-			!kid ||
-			(Array.isArray(cached.keys) &&
-				cached.keys.some(
-					(jwk) => jwk && typeof jwk === "object" && jwk.kid === kid,
-				))
-		) {
+		if (!kid || cached.keys.some((jwk) => jwk.kid === kid)) {
 			return { jwks: cached, kid, refresh };
 		}
 		return { jwks: (await refresh(cached)) ?? cached, kid };

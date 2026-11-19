@@ -1072,6 +1072,7 @@ describe("verifyBearerToken", () => {
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12242
+	 * @see https://www.rfc-editor.org/rfc/rfc5861#section-4
 	 */
 	describe("expired JWKS cache fallback (stale-if-error)", () => {
 		it("should verify with expired cached set when refetch fails within max-stale window", async () => {
@@ -1158,9 +1159,7 @@ describe("verifyBearerToken", () => {
 
 		it("should reject when refetch fails and cache has passed the max-stale window", async () => {
 			vi.resetModules();
-			const { verifyBearerToken: verify, JWKS_MAX_STALE_MS } = await import(
-				"./verify"
-			);
+			const { verifyBearerToken: verify } = await import("./verify");
 			const { publicJWK, privateKey, kid } = await createTestJWKS();
 			const token = await createSignedToken(privateKey, kid);
 			mockedFetch.mockImplementationOnce(() =>
@@ -1175,7 +1174,7 @@ describe("verifyBearerToken", () => {
 			).resolves.toMatchObject({ sub: "user-123" });
 
 			// Advance time past the max-stale window
-			vi.useFakeTimers({ now: Date.now() + JWKS_MAX_STALE_MS + 1000 });
+			vi.useFakeTimers({ now: Date.now() + 10 * 60 * 1000 + 1000 });
 			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 
 			await expect(
@@ -1333,6 +1332,32 @@ describe("verifyBearerToken", () => {
 			vi.resetModules();
 		});
 
+		/**
+		 * @see https://www.rfc-editor.org/rfc/rfc7517#section-5
+		 */
+		it("should report a failed refetch, not an invalid token, when the expired set has entries that are not JWKs", async () => {
+			vi.resetModules();
+			const { verifyBearerToken: verify } = await import("./verify");
+			const { privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			const options = { jwksUrl, verifyOptions: { issuer, audience } };
+			mockJSONResponse({ keys: [null, 42] });
+			await expect(verify(token, options)).rejects.toMatchObject({
+				code: "ERR_JWKS_INVALID",
+			});
+
+			vi.useFakeTimers({ now: Date.now() + 5 * 60 * 1000 + 1 });
+			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
+			const error = await verify(token, options).then(
+				() => undefined,
+				(thrown: unknown) => thrown,
+			);
+
+			expect(error).not.toBeInstanceOf(APIError);
+			expect(error).toMatchObject({ message: "JWKS fetch failed" });
+			expect(mockedFetch).toHaveBeenCalledTimes(2);
+		});
+
 		it("should preserve JWT verification error when kid-less token fails against stale set and refresh fails", async () => {
 			vi.resetModules();
 			const { verifyBearerToken: verify } = await import("./verify");
@@ -1480,9 +1505,7 @@ describe("verifyBearerToken", () => {
 
 		it("should not use stale cache when a slow failing fetch crosses the max-stale window", async () => {
 			vi.resetModules();
-			const { verifyBearerToken: verify, JWKS_MAX_STALE_MS } = await import(
-				"./verify"
-			);
+			const { verifyBearerToken: verify } = await import("./verify");
 			const { publicJWK, privateKey, kid } = await createTestJWKS();
 			const token = await createSignedToken(privateKey, kid);
 
@@ -1500,9 +1523,9 @@ describe("verifyBearerToken", () => {
 
 			// Advance time to 2 seconds before max-stale expires
 			const initialNow = Date.now();
-			vi.useFakeTimers({ now: initialNow + JWKS_MAX_STALE_MS - 2_000 });
+			vi.useFakeTimers({ now: initialNow + 10 * 60 * 1000 - 2_000 });
 
-			// Fetch hangs and times out after 5 seconds (which pushes total age past JWKS_MAX_STALE_MS)
+			// Fetch hangs and times out after 5 seconds, which pushes the set past ten minutes old
 			mockedFetch.mockReturnValueOnce(new Promise(() => {}));
 
 			const verification = verify(token, {
@@ -1706,24 +1729,6 @@ describe("verifyBearerToken", () => {
 		} finally {
 			vi.resetModules();
 		}
-	});
-
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/12242
-	 */
-	it("should safely handle JWKS keys array containing null or non-object elements without throwing", async () => {
-		const { errors: isolatedJoseErrors } = await import("jose");
-		const { verifyBearerToken: verify } = await import("./verify");
-		const { privateKey, kid } = await createTestJWKS();
-		const token = await createSignedToken(privateKey, kid);
-		mockJSONResponse({ keys: [null, undefined] });
-
-		await expect(
-			verify(token, {
-				jwksUrl,
-				verifyOptions: { issuer, audience },
-			}),
-		).rejects.toBeInstanceOf(isolatedJoseErrors.JWKSInvalid);
 	});
 
 	/**
