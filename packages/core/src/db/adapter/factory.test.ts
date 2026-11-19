@@ -396,6 +396,86 @@ describe("createAdapterFactory createMany", () => {
 		expect(created[0]?.id).toBe("user-1");
 	});
 
+	it("forwards select to native createMany", async () => {
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[]; select?: string[] }) =>
+				data,
+		);
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				createMany: createMany as CustomAdapter["createMany"],
+			}),
+		});
+
+		await adapter.createMany({
+			model: "user",
+			data: [{ name: "Ada", email: "ada@example.com", emailVerified: false }],
+			select: ["id", "name"],
+		});
+
+		expect(createMany.mock.calls[0]?.[0].select).toEqual(["id", "name"]);
+	});
+
+	it("deletes ignored ids when input transformation is disabled", async () => {
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				disableTransformInput: true,
+				disableTransformOutput: true,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					createMany: createMany as CustomAdapter["createMany"],
+				}),
+		})({});
+
+		await adapter.createMany({
+			model: "user",
+			data: [{ id: "ignored", name: "Ada" }],
+		});
+
+		expect(createMany.mock.calls[0]?.[0].data[0]).toEqual({ name: "Ada" });
+		expect(createMany.mock.calls[0]?.[0].data[0]).not.toHaveProperty("id");
+	});
+
+	it("chunks by createManyMaxRows as well as bound parameters", async () => {
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				disableTransformInput: true,
+				disableTransformOutput: true,
+				createManyMaxParameters: 2099,
+				createManyMaxRows: 1000,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					createMany: createMany as CustomAdapter["createMany"],
+				}),
+		})({});
+
+		const data = Array.from({ length: 1001 }, (_, index) => ({
+			id: `row-${index}`,
+			value: index,
+		}));
+		await adapter.createMany({
+			model: "user",
+			data,
+			forceAllowId: true,
+		});
+
+		expect(createMany).toHaveBeenCalledTimes(2);
+		expect(createMany.mock.calls[0]?.[0].data).toHaveLength(1000);
+		expect(createMany.mock.calls[1]?.[0].data).toHaveLength(1);
+	});
+
 	it("chunks from the union of keys, not the widest single row", async () => {
 		const createMany = vi.fn(
 			async ({ data }: { data: Record<string, any>[] }) => data,
