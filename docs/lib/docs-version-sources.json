@@ -7,7 +7,7 @@
   "1.6": {
     "contentDirectory": "_generated/docs/v1-6",
     "editBranch": "v1.6.x",
-    "commitSha": "37b418344ed88efa0e0034d62b6692b1ef11ae81"
+    "commitSha": "d31c352ac65b4619d428295659bbf60f0be6ae0c"
   },
   "beta": {
     "contentDirectory": "_generated/docs/beta",
