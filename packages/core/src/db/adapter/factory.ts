@@ -77,6 +77,7 @@ export const createAdapterFactory =
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
 			createManyMaxParameters: cfg.createManyMaxParameters ?? 999,
+			createManyMaxRows: cfg.createManyMaxRows,
 		} satisfies AdapterFactoryConfig;
 
 		const useNumberId = options.advanced?.database?.generateId === "serial";
@@ -999,7 +1000,8 @@ export const createAdapterFactory =
 							);
 							warnedProvidedId = true;
 						}
-						row.id = undefined;
+						const { id: _ignoredId, ...rest } = row;
+						return rest;
 					}
 					return row;
 				});
@@ -1028,9 +1030,15 @@ export const createAdapterFactory =
 					1,
 					new Set(rows.flatMap((row) => Object.keys(row))).size,
 				);
-				const chunkSize = Math.max(
+				const parameterChunkSize = Math.max(
 					1,
 					Math.floor((config.createManyMaxParameters ?? 999) / columnCount),
+				);
+				const chunkSize = Math.max(
+					1,
+					config.createManyMaxRows === undefined
+						? parameterChunkSize
+						: Math.min(parameterChunkSize, config.createManyMaxRows),
 				);
 				const results: Record<string, unknown>[] = [];
 				for (let offset = 0; offset < rows.length; offset += chunkSize) {
@@ -1047,6 +1055,7 @@ export const createAdapterFactory =
 									data: chunk,
 									model,
 									modelKey,
+									select,
 								});
 							}
 							const created: Record<string, unknown>[] = [];
@@ -1056,6 +1065,7 @@ export const createAdapterFactory =
 										data,
 										model,
 										modelKey,
+										select,
 									}),
 								);
 							}

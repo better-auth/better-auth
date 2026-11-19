@@ -150,11 +150,21 @@ export interface DBAdapterFactoryConfig<
 	 * Keep the default (999) for SQLite. Set `100` for Cloudflare D1.
 	 * PostgreSQL and MySQL typically allow 65535; SQL Server typically
 	 * allows 2099. Raise this for databases that do not use SQL bind
-	 * parameters.
+	 * parameters. SQL Server also limits a single `INSERT ... VALUES`
+	 * statement to 1000 rows; set `createManyMaxRows` to 1000 for it.
 	 *
 	 * @default 999
 	 */
 	createManyMaxParameters?: number | undefined;
+	/**
+	 * Maximum number of rows your database allows in one `createMany`
+	 * insert, separate from the bound-parameter limit. Large batches are
+	 * split so they stay at or below both limits.
+	 *
+	 * SQL Server rejects `INSERT ... VALUES` statements with more than
+	 * 1000 rows even when the parameter count is under 2099.
+	 */
+	createManyMaxRows?: number | undefined;
 	/**
 	 * Disable id generation for the `create` method.
 	 *
