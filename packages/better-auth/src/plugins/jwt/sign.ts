@@ -199,8 +199,11 @@ export async function resolveSigningKey(
 			// A key lazy-minted for a pinned `keyPairConfigs` alg must not
 			// stand in for the primary key, or the first pinned call on an
 			// empty JWKS moves every unpinned token onto that alg. Falling
-			// through mints the primary key below.
+			// through mints the primary key below. A custom `getJwks` keyring
+			// is operator-managed and may never return a minted key, so it
+			// keeps reusing its newest key.
 			const mintedForPinning =
+				!options?.adapter?.getJwks &&
 				latest?.alg !== undefined &&
 				latest.alg !== primaryAlg &&
 				options?.jwks?.keyPairConfigs?.some((c) => c.alg === latest.alg);

@@ -254,6 +254,46 @@ describe("signJWT — unpinned tokens stay on the primary algorithm", () => {
 		expect(keys.map((k) => k.alg).sort()).toEqual(["EdDSA", "RS256"]);
 	});
 
+	it("keeps signing with a custom keyring's newest key when it has no primary-algorithm key", async () => {
+		const { publicWebKey, privateWebKey } = await generateExportedKeyPair({
+			jwks: { keyPairConfig: { alg: "EdDSA" } },
+		});
+		const keyring: Jwk[] = [
+			{
+				id: "keyring-eddsa",
+				publicKey: JSON.stringify(publicWebKey),
+				privateKey: JSON.stringify(privateWebKey),
+				alg: "EdDSA",
+				createdAt: new Date(),
+			},
+		];
+		const keyringOptions = {
+			...options,
+			adapter: { getJwks: async () => keyring },
+		};
+		const { auth } = await getTestInstance({
+			plugins: [jwt(keyringOptions)],
+			logger: { level: "error" },
+		});
+		const ctx = asShim(await auth.$context);
+		const payload = { sub: "u1", iat: Math.floor(Date.now() / 1000) };
+
+		const first = await signJWT(makeSignCtx(ctx), {
+			options: keyringOptions,
+			payload,
+		});
+		const second = await signJWT(makeSignCtx(ctx), {
+			options: keyringOptions,
+			payload,
+		});
+		expect(decodeProtectedHeader(first)).toMatchObject({
+			alg: "EdDSA",
+			kid: "keyring-eddsa",
+		});
+		expect(decodeProtectedHeader(second).kid).toBe("keyring-eddsa");
+		expect(await ctx.adapter.findMany<Jwk>({ model: "jwks" })).toEqual([]);
+	});
+
 	it("keeps signing with an existing key whose algorithm is not configured for pinning", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [jwt(options)],
