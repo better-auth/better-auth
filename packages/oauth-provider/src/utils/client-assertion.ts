@@ -119,8 +119,14 @@ async function loadJwks(
 	canJoin: (fetch: JwksFetch) => boolean = () => true,
 ): Promise<FetchedJwksResult> {
 	const start = (joinable: (fetch: JwksFetch) => boolean) => {
+		const now = Date.now();
+		// On runtimes that cancel a request's I/O, a fetch past its timeout may
+		// never settle and run its own cleanup, so its entry is dropped here.
+		for (const [key, fetch] of cache.fetches) {
+			if (!isFetching(fetch, now)) cache.fetches.delete(key);
+		}
 		const current = cache.fetches.get(cacheKey);
-		if (current && isFetching(current, Date.now()) && joinable(current)) {
+		if (current && isFetching(current, now) && joinable(current)) {
 			return { fetch: current, joined: true };
 		}
 		const startedAt = Date.now();
