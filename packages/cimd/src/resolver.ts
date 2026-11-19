@@ -14,6 +14,7 @@ import {
 	FETCH_TIMEOUT_MS,
 	fetchClientMetadataDocument,
 	isMetadataFetchCapacityRefusal,
+	isMetadataTransportError,
 	isTransientMetadataFetchFailure,
 	persistMetadataDocumentClient,
 } from "./client-store";
@@ -416,7 +417,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		{ failedAtMs: number; reason: string }
 	>();
 	// When a client that had a stored client within the stale bound last failed
-	// with a failure that is not transient, since its last successful fetch.
+	// terminally, since its last successful fetch.
 	// Its stored client is not served stale. A record older than the bound can
 	// no longer block anything and is pruned first; evicting a newer record
 	// moves the watermark, and stored clients last validated before it are not
@@ -981,10 +982,13 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 					recordTransientFailure(clientId, error);
 					return serveStoredClient(storedClient, describeFetchFailure(error));
 				}
+				// CIMD draft-03 §6.1: a failure is terminal only when the document was
+				// retrieved and rejected, or the fetch was refused by policy.
 				if (
 					storedClient &&
 					!isMetadataFetchRefusal(error) &&
-					!isMetadataFetchCapacityRefusal(error)
+					!isMetadataFetchCapacityRefusal(error) &&
+					!isMetadataTransportError(error)
 				) {
 					recordTerminalFailure(clientId);
 				}

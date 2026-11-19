@@ -98,15 +98,30 @@ function isTransientJwksFetchFailure(error: unknown): error is Error {
 	return error instanceof Error && transientJwksFetchFailures.has(error);
 }
 
+// Errors the transport threw that are not transient. Without an error code, a
+// failed connection and the transport's own refusal of the host throw the same
+// error, so these are neither transient nor terminal.
+const jwksTransportErrors = new WeakSet<Error>();
+
+function isJwksTransportError(error: unknown): boolean {
+	return error instanceof Error && jwksTransportErrors.has(error);
+}
+
 function classifyJwksTransportError(
 	error: unknown,
 	signal: AbortSignal,
 ): unknown {
-	if (!isAbortedBySignal(error, signal) && !isTransientNetworkError(error)) {
-		return error;
-	}
 	const reason = error instanceof Error ? error.message : String(error);
-	return createTransientJwksFetchFailure(`JWKS fetch failed: ${reason}`, error);
+	if (isAbortedBySignal(error, signal) || isTransientNetworkError(error)) {
+		return createTransientJwksFetchFailure(
+			`JWKS fetch failed: ${reason}`,
+			error,
+		);
+	}
+	if (isLocalCapacityRefusal(error)) return error;
+	const failure = new Error(`JWKS fetch failed: ${reason}`, { cause: error });
+	jwksTransportErrors.add(failure);
+	return failure;
 }
 
 function getJwksCache(opts: OAuthOptions<Scope[]>): JwksCache {
@@ -145,29 +160,36 @@ function getJwksStaleIfErrorMs(discovery: ClientDiscovery | undefined): number {
 }
 
 /** `null` for a local capacity refusal, which says nothing about the host. */
-function toJwksFetchFailure(error: unknown): JwksFetchFailure | null {
+function toJwksFetchFailure(
+	error: unknown,
+): JwksFetchFailure | "transport-error" | null {
 	if (isLocalCapacityRefusal(error)) return null;
+	if (isJwksTransportError(error)) return "transport-error";
 	return isTransientJwksFetchFailure(error)
 		? { transient: true, failedAt: Date.now(), reason: error.message }
 		: { transient: false };
 }
 
-/** Records how the fetch with sequence `sequence` failed. */
+/**
+ * Records how the fetch with sequence `sequence` failed. A transport error
+ * ends a transient record, so cached keys are not served on its strength, and
+ * records nothing in its place.
+ */
 function recordJwksFetchFailure(
 	cache: JwksCache,
 	cacheKey: string,
-	failure: JwksFetchFailure | null,
+	failure: JwksFetchFailure | "transport-error" | null,
 	sequence: number,
 ): void {
 	if (!failure) return;
 	// A fetch that started before the cached set's fetch says nothing about it.
 	const cached = cache.sets.get(cacheKey);
 	if (cached && cached.sequence > sequence) return;
+	const terminal = failure !== "transport-error" && !failure.transient;
 	// A terminal failure holds until a fetch succeeds.
-	if (failure.transient && cache.failures.get(cacheKey)?.transient === false) {
-		return;
-	}
+	if (!terminal && cache.failures.get(cacheKey)?.transient === false) return;
 	cache.failures.delete(cacheKey);
+	if (failure === "transport-error") return;
 	cache.failures.set(cacheKey, { ...failure, sequence });
 	if (cache.failures.size > JWKS_CACHE_MAX_ENTRIES) {
 		const oldest = cache.failures.keys().next().value;
@@ -460,7 +482,10 @@ function urlClientIdOrigin(clientId: string): string | undefined {
 	}
 }
 
-async function readBoundedResponseBody(response: Response): Promise<string> {
+/** Resolves to `null` when the body exceeds 64 KiB. */
+async function readBoundedResponseBody(
+	response: Response,
+): Promise<string | null> {
 	const contentLength = response.headers.get("content-length");
 	if (
 		contentLength !== null &&
@@ -468,7 +493,7 @@ async function readBoundedResponseBody(response: Response): Promise<string> {
 		Number(contentLength) > MAX_JWKS_RESPONSE_BYTES
 	) {
 		await response.body?.cancel();
-		throw new Error("JWKS response exceeds 64 KiB");
+		return null;
 	}
 
 	if (!response.body) {
@@ -484,7 +509,7 @@ async function readBoundedResponseBody(response: Response): Promise<string> {
 		totalBytes += value.byteLength;
 		if (totalBytes > MAX_JWKS_RESPONSE_BYTES) {
 			await reader.cancel();
-			throw new Error("JWKS response exceeds 64 KiB");
+			return null;
 		}
 		chunks.push(value);
 	}
@@ -531,11 +556,14 @@ async function fetchJwksFromUri(
 		if (!contentType || !JSON_CONTENT_TYPE.test(contentType)) {
 			throw new Error("JWKS response must use a JSON media type");
 		}
-		let responseBody: string;
+		let responseBody: string | null;
 		try {
 			responseBody = await readBoundedResponseBody(response);
 		} catch (error) {
 			throw classifyJwksTransportError(error, controller.signal);
+		}
+		if (responseBody === null) {
+			throw new Error("JWKS response exceeds 64 KiB");
 		}
 		let parsedBody: unknown;
 		try {

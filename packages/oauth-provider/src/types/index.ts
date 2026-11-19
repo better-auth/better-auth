@@ -143,7 +143,8 @@ export interface ClientDiscovery {
 	 * Seconds after its last successful fetch that a cached `jwks_uri` key set
 	 * of a client owned by this discovery keeps verifying client assertions
 	 * when a refetch fails transiently: the fetch times out, the connection
-	 * fails, or the server answers with HTTP 500, 502, 503, or 504.
+	 * fails with an error that carries a known error code, or the server
+	 * answers with HTTP 500, 502, 503, or 504.
 	 *
 	 * Without it, cached keys already keep verifying for 10 minutes after
 	 * their last successful fetch, twice the 5-minute key cache lifetime, when
@@ -155,8 +156,11 @@ export interface ClientDiscovery {
 	 * capacity limit, such as the Node transport's limit on outstanding DNS
 	 * lookups (error code `ERR_CIMD_DNS_LOOKUP_LIMIT`), uses the cached keys
 	 * only within 5 minutes of the last transient failure, and does not stop
-	 * stale serving. Any other failure rejects the assertion, and stops this
-	 * server process from serving the stale keys until a fetch succeeds.
+	 * stale serving. Any other error the transport throws, such as an
+	 * unresolvable host or the transport's own refusal of an address, rejects
+	 * the assertion without stopping stale serving. Any other failure, such as
+	 * an HTTP 404 response, rejects the assertion, and stops this server
+	 * process from serving the stale keys until a fetch succeeds.
 	 * While stale keys are served, they are fetched again at most once a
 	 * minute, and assertions in between use them without a fetch.
 	 *

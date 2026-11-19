@@ -279,24 +279,32 @@ A failed refresh then serves the stored client when all of these hold:
 * The database has a stored client for the `client_id`.
 * The refresh failed transiently: the plugin's 5-second fetch timeout fired, the connection failed with one of the codes below, or the server answered with HTTP 500, 502, 503, or 504.
 * The stored client's `updatedAt` is no older than `metadataStaleIfError`.
-* Since its last successful refresh, no refresh of the document on this instance failed in a way that is not transient.
+* Since its last successful refresh, no refresh of the document on this instance failed terminally, as described below.
 
 This is an operator trust policy, not HTTP caching. It applies whatever cache directives the document was served with, including `no-store` and `must-revalidate`, because the stored client is an authorization server registration rather than a cached response, and draft-03 §6.1 states its rule about transient failures for that trust.
 
 Better Auth logs a warning with the `client_id` and the failure. It returns the stored client unchanged, and writes nothing to the database or the metadata cache.
 
-A connection failure counts when the transport's error, or an error in its `cause` chain, has one of these codes: `EAI_AGAIN`, `ECONNRESET`, `ECONNREFUSED`, `ETIMEDOUT`, `EHOSTUNREACH`, `ENETUNREACH`, `EPIPE`, `UND_ERR_CONNECT_TIMEOUT`, `UND_ERR_HEADERS_TIMEOUT`, `UND_ERR_BODY_TIMEOUT`, or `UND_ERR_SOCKET`. Every other failure still rejects the request with the same error as without the option:
+A connection failure counts when the transport's error, or an error in its `cause` chain, has one of these codes: `EAI_AGAIN`, `ECONNRESET`, `ECONNREFUSED`, `ETIMEDOUT`, `EHOSTUNREACH`, `ENETUNREACH`, `EPIPE`, `UND_ERR_CONNECT_TIMEOUT`, `UND_ERR_HEADERS_TIMEOUT`, `UND_ERR_BODY_TIMEOUT`, or `UND_ERR_SOCKET`. On a runtime whose `fetch` throws connection failures without an error code, only the 5-second timeout and HTTP 500, 502, 503, and 504 count as transient.
 
-* A host name that does not resolve (`ENOTFOUND`).
+Every other failure still rejects the request with the same error as without the option. A failure is terminal when the document was retrieved and rejected, or when policy refused the fetch:
+
 * Any HTTP 4xx response, including 429, any other HTTP 5xx response, such as 501 or 505, and any redirect.
 * A wrong content type, an oversized body, invalid JSON, or a document that fails validation.
 * A document that the OAuth provider refuses to save, such as one with a `jwks_uri` on an origin it does not allow. A database error while saving is not one of these: that request fails, but stale serving continues.
 * A `client_id` URL that fails validation or that `isMetadataDocumentUrlAllowed` refuses.
+
+A terminal failure also stops this instance from serving the stored client until a refresh succeeds, as draft-03 §6.1 allows. A client's owner who removes the document to revoke the client then does not see it served again when the host later times out. The record is kept in memory: another instance that did not see the failure, or this instance after a restart, can still serve the stored client during a later transient failure. A failure is recorded only for a request whose stored client could otherwise be served, so failures for client IDs without one cannot fill the records. The records are bounded by `maxCacheEntries`. A record older than `metadataStaleIfError` is dropped first, since it can no longer block anything; when a newer one is dropped, this instance stops serving every stored client last validated before then until it is refreshed.
+
+An error that the transport throws, other than the transient ones above, is not terminal, because no document was retrieved. It rejects the request, and the local limits described below no longer serve the stored client on the strength of an earlier transient failure. It does not stop stale serving, so the next transient failure serves the stored client again:
+
+* A host name that does not resolve (`ENOTFOUND`).
 * A refusal by the transport, such as an address that is not public-routable, even when it arrives after the timeout fired.
 * A response that the Node transport cannot use, such as a protocol upgrade or a connection that closes before a response.
+* A response body that fails while it is read, without one of the codes above.
 * Any other error from the transport, including errors from a custom transport that carry none of the codes above.
 
-Such a failure also stops this instance from serving the stored client until a refresh succeeds, as draft-03 §6.1 allows for failures that are not transient. A client's owner who removes the document to revoke the client then does not see it served again when the host later times out. The record is kept in memory: another instance that did not see the failure, or this instance after a restart, can still serve the stored client during a later transient failure. A failure is recorded only for a request whose stored client could otherwise be served, so failures for client IDs without one cannot fill the records. The records are bounded by `maxCacheEntries`. A record older than `metadataStaleIfError` is dropped first, since it can no longer block anything; when a newer one is dropped, this instance stops serving every stored client last validated before then until it is refreshed.
+Such an error is not served stale either: without an error code, a failed connection and the transport's own refusal of an address throw the same error.
 
 Two refusals are local limits rather than failures of the client's host. They neither count as transient failures nor stop stale serving:
 
@@ -311,7 +319,7 @@ The bound counts from the last successful validation, and a failed refresh does 
 
 While a client is served this way, Better Auth fetches its document at most once a minute. Requests in between get the stored client without a fetch, so an outage does not use up the origin's fetch budget. The first successful fetch saves the document and ends this mode.
 
-A client that authenticates with `private_key_jwt` and a `jwks_uri` also needs its keys at the token endpoint, and its key host often fails together with its metadata host. Better Auth caches fetched keys in memory for 5 minutes. Without this option, it keeps using cached keys for up to 10 minutes after the last successful fetch when fetching new keys fails. With `metadataStaleIfError`, it keeps using them after those 10 minutes when the key fetch fails transiently, and fetches them again at most once a minute while it does. The transient failures, the failures that stop stale serving, and the 5-minute rule for the DNS lookup limit are the same as for the document. Three things differ:
+A client that authenticates with `private_key_jwt` and a `jwks_uri` also needs its keys at the token endpoint, and its key host often fails together with its metadata host. Better Auth caches fetched keys in memory for 5 minutes. Without this option, it keeps using cached keys for up to 10 minutes after the last successful fetch when fetching new keys fails. With `metadataStaleIfError`, it keeps using them after those 10 minutes when the key fetch fails transiently, and fetches them again at most once a minute while it does. The transient failures, the terminal failures, the transport errors that are neither, and the 5-minute rule for the DNS lookup limit are the same as for the document. Three things differ:
 
 * The bound counts from the last successful key fetch, which is kept in memory, instead of the stored client's `updatedAt`. Keys are not stored in the database, so after a restart the keys must be fetched before the client can authenticate.
 * Key fetches are outside `metadataFetchPolicy`, so its limits neither refuse them nor let stale keys stand in.

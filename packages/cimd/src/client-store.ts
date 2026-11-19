@@ -61,11 +61,34 @@ function invalidClient(description: string): APIError {
 // instead.
 const transientMetadataFetchFailures = new WeakSet<object>();
 const metadataFetchCapacityRefusals = new WeakSet<object>();
+const metadataTransportErrors = new WeakSet<object>();
 
 function transientInvalidClient(description: string): APIError {
 	const error = invalidClient(description);
 	transientMetadataFetchFailures.add(error);
 	return error;
+}
+
+function transportError(description: string, transient: boolean): APIError {
+	const error = transient
+		? transientInvalidClient(description)
+		: invalidClient(description);
+	metadataTransportErrors.add(error);
+	return error;
+}
+
+/**
+ * Whether a metadata document fetch failed because the transport threw, so no
+ * document was retrieved. Without an error code, a failed connection and the
+ * transport's own refusal of the host throw the same error, so such a failure
+ * is neither transient nor terminal.
+ */
+export function isMetadataTransportError(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		metadataTransportErrors.has(error)
+	);
 }
 
 /**
@@ -234,8 +257,7 @@ export async function fetchClientMetadataDocument(
 			const transient =
 				(didTimeOut && isAbortedBySignal(error, controller.signal)) ||
 				isTransientNetworkError(error);
-			if (transient) throw transientInvalidClient(description);
-			throw invalidClient(description);
+			throw transportError(description, transient);
 		}
 		if (response.redirected) {
 			throw invalidClient("Metadata document fetch must not follow redirects");
@@ -288,12 +310,13 @@ export async function fetchClientMetadataDocument(
 				const description = `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`;
 				throw isAPIError(error)
 					? invalidClient(description)
-					: transientInvalidClient(description);
+					: transportError(description, true);
 			}
 			if (isAPIError(error)) throw error;
-			throw isTransientNetworkError(error)
-				? transientInvalidClient(FETCH_FAILURE_DESCRIPTION)
-				: invalidClient(FETCH_FAILURE_DESCRIPTION);
+			throw transportError(
+				FETCH_FAILURE_DESCRIPTION,
+				isTransientNetworkError(error),
+			);
 		}
 		let rawMetadata: unknown;
 		try {

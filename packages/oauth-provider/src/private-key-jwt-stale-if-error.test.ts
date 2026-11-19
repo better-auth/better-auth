@@ -143,7 +143,7 @@ const transientFailures: { failure: string; answer: KeyAnswer }[] = [
 	},
 ];
 
-const terminalFailures: { failure: string; answer: KeyAnswer }[] = [
+const nonTransientFailures: { failure: string; answer: KeyAnswer }[] = [
 	{
 		failure: "HTTP 404",
 		answer: () => new Response(null, { status: 404 }),
@@ -239,7 +239,7 @@ describe("jwksStaleIfError on a client discovery", () => {
 		},
 	);
 
-	it.each(terminalFailures)(
+	it.each(nonTransientFailures)(
 		"rejects past twice the cache lifetime after $failure",
 		async ({ answer }) => {
 			const verifier = await createVerifier({ jwksStaleIfError: 3_600 });
@@ -334,6 +334,104 @@ describe("jwksStaleIfError on a client discovery", () => {
 		verifier.keys.answer = unavailable;
 		await expect(verifier.verify()).resolves.toBeDefined();
 	});
+
+	/**
+	 * A transport error that is not transient can be the transport's own
+	 * refusal, so it does not serve cached keys, but it retrieved no key set
+	 * and does not stop stale serving either.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1
+	 */
+	it.each([
+		{
+			failure: "a connection failure with no error code",
+			answer: () => {
+				throw new TypeError("fetch failed");
+			},
+		},
+		{
+			failure: "an unresolvable host",
+			answer: () => {
+				throw withCode("getaddrinfo ENOTFOUND", "ENOTFOUND");
+			},
+		},
+		{
+			failure: "a response body that fails with no error code",
+			answer: () =>
+				new Response(
+					new ReadableStream({
+						start(controller) {
+							controller.error(new TypeError("terminated"));
+						},
+					}),
+					{ headers: { "content-type": "application/json" } },
+				),
+		},
+	] satisfies { failure: string; answer: KeyAnswer }[])(
+		"keeps serving cached keys past twice the cache lifetime after a fetch rejected for $failure",
+		async ({ answer }) => {
+			const verifier = await createVerifier({ jwksStaleIfError: 3_600 });
+			vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+			await verifier.verify();
+			const unavailable = () => new Response(null, { status: 503 });
+			vi.setSystemTime(START_MS + 11 * MINUTE_MS);
+			verifier.keys.answer = unavailable;
+			await expect(verifier.verify()).resolves.toBeDefined();
+
+			vi.setSystemTime(START_MS + 12 * MINUTE_MS);
+			verifier.keys.answer = answer;
+			await expect(verifier.verify()).rejects.toMatchObject({
+				body: { error_description: "failed to fetch client JWKS" },
+			});
+			// The transient failure no longer lets a local limit refusal stand in.
+			verifier.keys.answer = () => {
+				throw Object.assign(
+					new TypeError("metadata DNS lookup limit exceeded"),
+					{ code: "ERR_CIMD_DNS_LOOKUP_LIMIT" },
+				);
+			};
+			await expect(verifier.verify()).rejects.toMatchObject({
+				body: { error_description: "failed to fetch client JWKS" },
+			});
+
+			verifier.keys.answer = unavailable;
+			await expect(verifier.verify()).resolves.toBeDefined();
+			expect(verifier.transport).toHaveBeenCalledTimes(5);
+		},
+	);
+
+	it.each([
+		{
+			failure: "a response over 64 KiB",
+			answer: () => Response.json({ keys: [], padding: "x".repeat(64 * 1024) }),
+		},
+		{
+			failure: "a response that is not a valid key set",
+			answer: () => Response.json({ keys: "none" }),
+		},
+	] satisfies { failure: string; answer: KeyAnswer }[])(
+		"stops serving cached keys past twice the cache lifetime after $failure",
+		async ({ answer }) => {
+			const verifier = await createVerifier({ jwksStaleIfError: 3_600 });
+			vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+			await verifier.verify();
+			const unavailable = () => new Response(null, { status: 503 });
+			vi.setSystemTime(START_MS + 11 * MINUTE_MS);
+			verifier.keys.answer = unavailable;
+			await expect(verifier.verify()).resolves.toBeDefined();
+
+			vi.setSystemTime(START_MS + 12 * MINUTE_MS);
+			verifier.keys.answer = answer;
+			await expect(verifier.verify()).rejects.toMatchObject({
+				body: { error_description: "failed to fetch client JWKS" },
+			});
+
+			verifier.keys.answer = unavailable;
+			await expect(verifier.verify()).rejects.toMatchObject({
+				body: { error_description: "failed to fetch client JWKS" },
+			});
+		},
+	);
 
 	it("keeps a terminal failure when an older fetch of the keys succeeds after it", async () => {
 		const verifier = await createVerifier({ jwksStaleIfError: 3_600 });

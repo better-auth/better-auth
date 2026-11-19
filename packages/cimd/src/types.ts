@@ -107,8 +107,11 @@ export interface CimdOptions {
 	 * because of a transient failure, for up to this long after the client was
 	 * last validated (its `updatedAt`). A transient failure is the plugin's
 	 * 5-second fetch timeout, a connection failure such as a reset or refused
-	 * connection, or an HTTP 500, 502, 503, or 504 response. While a client
-	 * is served this way, its document is fetched again at most once a minute.
+	 * connection, or an HTTP 500, 502, 503, or 504 response. A connection
+	 * failure counts only when its error carries a known error code, so on a
+	 * runtime whose `fetch` throws connection failures without one, only the
+	 * timeout and those four statuses count. While a client is served this way,
+	 * its document is fetched again at most once a minute.
 	 *
 	 * Two refusals are local limits rather than failures: a
 	 * `metadataFetchPolicy` limit, and the Node transport's limit on
@@ -116,12 +119,14 @@ export interface CimdOptions {
 	 * `ERR_CIMD_DNS_LOOKUP_LIMIT`). They serve the stored client only within 5
 	 * minutes of its last transient failure, otherwise answer
 	 * `temporarily_unavailable`, and never stop stale serving. A database
-	 * error while saving a refreshed document also fails the request without
-	 * stopping stale serving. Every other failure, including a URL that
-	 * `isMetadataDocumentUrlAllowed` refuses and a refreshed document that the
-	 * OAuth provider refuses to save, still rejects the request, and also
-	 * stops this plugin instance from serving the stored client until a
-	 * refresh succeeds.
+	 * error while saving a refreshed document, and any other error the
+	 * transport throws, such as an unresolvable host or the transport's own
+	 * refusal of an address, also fail the request without stopping stale
+	 * serving. A terminal failure, where the document was retrieved and
+	 * rejected, a URL that `isMetadataDocumentUrlAllowed` refuses, or a
+	 * refreshed document that the OAuth provider refuses to save, still
+	 * rejects the request, and also stops this plugin instance from serving
+	 * the stored client until a refresh succeeds.
 	 *
 	 * This is an operator trust policy modeled on RFC 5861 stale-if-error, and
 	 * applies whatever cache directives the document was served with: the

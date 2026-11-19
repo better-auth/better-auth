@@ -544,6 +544,127 @@ describe("CIMD metadataStaleIfError", () => {
 		expect(server.metadataFetchCount()).toBe(6);
 	});
 
+	/**
+	 * CIMD draft-03 §6.1 counts a failure as terminal only when the document
+	 * was retrieved and rejected. A transport error that is not transient can
+	 * be the transport's own refusal, so it is not served stale, but it
+	 * retrieved no document and does not end stale serving.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1
+	 */
+	it.each([
+		{
+			failure: "a connection failure with no error code",
+			answer: () => {
+				throw new TypeError("fetch failed");
+			},
+		},
+		{
+			failure: "an unresolvable host",
+			answer: () => {
+				throw withCode("getaddrinfo ENOTFOUND", "ENOTFOUND");
+			},
+		},
+		{
+			failure: "a private-address refusal",
+			answer: () => {
+				throw new TypeError(
+					"metadata hostname must resolve only to public-routable addresses",
+				);
+			},
+		},
+		{
+			failure: "a response body that fails with no error code",
+			answer: () =>
+				new Response(
+					new ReadableStream({
+						start(controller) {
+							controller.error(new TypeError("terminated"));
+						},
+					}),
+					{ headers: { "content-type": "application/json" } },
+				),
+		},
+	])(
+		"keeps serving the stored client after a refresh rejected for $failure",
+		async ({ answer }) => {
+			const server = await createAuthorizationServer({
+				metadataStaleIfError: "1h",
+			});
+			vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+			await server.authorize();
+			const unavailable = () => new Response(null, { status: 503 });
+			server.transport.answer = unavailable;
+			expect((await server.authorize()).pathname).toBe("/consent");
+
+			vi.setSystemTime(START_MS + 60_000);
+			server.transport.answer = answer;
+			expect((await server.authorize()).errorDescription).toBe(
+				"Failed to fetch metadata document (network error or redirect blocked)",
+			);
+
+			server.transport.answer = unavailable;
+			expect((await server.authorize()).pathname).toBe("/consent");
+			expect(server.metadataFetchCount()).toBe(4);
+		},
+	);
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1
+	 */
+	it.each([
+		{
+			failure: "HTTP 404",
+			answer: () => new Response(null, { status: 404 }),
+			description: "Metadata document fetch returned HTTP 404",
+		},
+		{
+			failure: "a wrong content type",
+			answer: () =>
+				new Response("{}", { headers: { "content-type": "text/html" } }),
+			description:
+				'Metadata document must be JSON (got Content-Type "text/html")',
+		},
+		{
+			failure: "invalid JSON",
+			answer: () =>
+				new Response("{", { headers: { "content-type": "application/json" } }),
+			description: "Metadata document is not valid JSON",
+		},
+		{
+			failure: "a document for another client_id",
+			answer: () =>
+				Response.json(
+					clientDocument({
+						client_id: "https://other.example.com/client.json",
+					}),
+				),
+			description:
+				'client_id "https://other.example.com/client.json" does not match the metadata document URL',
+		},
+	])(
+		"stops serving the stored client after a refresh rejected for $failure",
+		async ({ answer, description }) => {
+			const server = await createAuthorizationServer({
+				metadataStaleIfError: "1h",
+			});
+			vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+			await server.authorize();
+			const unavailable = () => new Response(null, { status: 503 });
+			server.transport.answer = unavailable;
+			expect((await server.authorize()).pathname).toBe("/consent");
+
+			vi.setSystemTime(START_MS + 60_000);
+			server.transport.answer = answer;
+			expect((await server.authorize()).errorDescription).toBe(description);
+
+			server.transport.answer = unavailable;
+			expect((await server.authorize()).errorDescription).toBe(
+				"Metadata document fetch returned HTTP 503",
+			);
+		},
+	);
+
 	it("stops serving the stored client after the provider refuses its refreshed document", async () => {
 		const server = await createAuthorizationServer({
 			metadataStaleIfError: "1h",
