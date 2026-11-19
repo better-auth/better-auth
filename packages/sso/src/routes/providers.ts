@@ -2,7 +2,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { DBFieldAttribute, DBPrimitive } from "@better-auth/core/db";
 import { filterOutputFields } from "@better-auth/core/utils/db";
 import type { AuthContext, Where } from "better-auth";
 import {
@@ -452,22 +452,43 @@ function snapshotValuesEqual(a: unknown, b: unknown): boolean {
 	return false;
 }
 
-function isProviderUpdateNoOp(
+/**
+ * The value the adapter stores for an update field.
+ *
+ * `parseInputData` applies `transform.input` too, but only when the field has
+ * no input validator, and the adapter always applies it again. Comparing the
+ * column against `transform.input(updateValue)` therefore mirrors the write
+ * the adapter performs, whichever path produced the update value.
+ */
+async function getProviderWriteValue(
+	value: unknown,
+	attribute: DBFieldAttribute | undefined,
+): Promise<unknown> {
+	const transform = attribute?.transform?.input;
+	if (!transform) return value;
+	return await transform(value as DBPrimitive);
+}
+
+async function isProviderUpdateNoOp(
 	provider: SSOProviderRecord,
 	update: Partial<SSOProviderRecord>,
 	fields: ProviderSnapshotFields,
-): boolean {
+): Promise<boolean> {
 	const current = provider as Record<string, unknown>;
-	return Object.entries(update).every(([field, value]) => {
-		// A field with an output transform cannot be compared: the update carries
-		// the input value while the snapshot carries the transformed read value.
-		// Optimistic mutations reject such providers before reaching this point,
-		// so only treat the field as unchanged as a last resort.
-		if (!isFenceableSnapshotField(field, fields[field])) return true;
-		// SQL reads return `null` for an unset nullable column, while Mongo and
-		// the memory adapter omit it. Both spellings fence the same state.
-		return snapshotValuesEqual(current[field] ?? null, value ?? null);
-	});
+	const unchanged = await Promise.all(
+		Object.entries(update).map(async ([field, value]) => {
+			// A field with an output transform cannot be compared: the update carries
+			// the input value while the snapshot carries the transformed read value.
+			// Optimistic mutations reject such providers before reaching this point,
+			// so only treat the field as unchanged as a last resort.
+			if (!isFenceableSnapshotField(field, fields[field])) return true;
+			// SQL reads return `null` for an unset nullable column, while Mongo and
+			// the memory adapter omit it. Both spellings fence the same state.
+			const stored = await getProviderWriteValue(value, fields[field]);
+			return snapshotValuesEqual(current[field] ?? null, stored ?? null);
+		}),
+	);
+	return unchanged.every(Boolean);
 }
 
 /**
@@ -1321,11 +1342,11 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						// concurrent change that later restores the same values must not
 						// make an unsaved update look successful.
 						if (
-							!isProviderUpdateNoOp(
+							!(await isProviderUpdateNoOp(
 								existingProvider,
 								updateData,
 								providerFields,
-							)
+							))
 						) {
 							throw providerMutationConflict();
 						}

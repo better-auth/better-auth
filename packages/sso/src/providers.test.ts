@@ -3,6 +3,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import type { DBPrimitive } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import type { AuthContext, BetterAuthOptions } from "better-auth";
@@ -15,6 +16,7 @@ import { organization } from "better-auth/plugins";
 import { getHttpTestInstance } from "better-auth/test";
 import { OAuth2Server } from "oauth2-mock-server";
 import { describe, expect, expectTypeOf, it, onTestFinished } from "vitest";
+import * as z from "zod";
 import { sso } from ".";
 import { ssoClient } from "./client";
 import { lockSSOProviderForAccountLink } from "./routes/providers";
@@ -2106,6 +2108,84 @@ kBGIJYs=
 				data.ssoProvider.find((row) => row.providerId === "unchanged-update")
 					?.domain,
 			).toBe("example.com");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
+		it("accepts an optimistic guarded no-op update that normalizes an input-transformed field", async () => {
+			const trim = (value: DBPrimitive): DBPrimitive =>
+				typeof value === "string" ? value.trim() : value;
+			const options = {
+				guardProviderMutation() {},
+				schema: {
+					ssoProvider: {
+						additionalFields: {
+							externalId: {
+								type: "string",
+								required: false,
+								// The validator keeps the request value as given, so only
+								// the adapter's write transform normalizes it.
+								validator: { input: z.string() },
+								transform: { input: trim },
+							},
+						},
+					},
+				},
+			} satisfies SSOOptions;
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, options);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "normalized-noop", undefined, {
+				externalId: "team",
+			});
+			const provider = data.ssoProvider.find(
+				(row) => row.providerId === "normalized-noop",
+			)!;
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+			const updateMany = context.adapter.updateMany.bind(context.adapter);
+			context.adapter.updateMany = (async (input) => {
+				if (input.model === "ssoProvider") {
+					const current = await context.adapter.findOne<
+						Record<string, unknown>
+					>({
+						model: "ssoProvider",
+						where: [{ field: "id", value: provider.id }],
+					});
+					// MySQL and MongoDB report rows they changed, so a write whose
+					// transformed value already matches the column reports zero.
+					if (
+						current &&
+						Object.entries(input.update).every(
+							([field, value]) =>
+								current[field] ===
+								(field === "externalId" ? trim(value as DBPrimitive) : value),
+						)
+					) {
+						return 0;
+					}
+				}
+				return updateMany(input);
+			}) as typeof context.adapter.updateMany;
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "normalized-noop",
+					externalId: " team ",
+				},
+				headers,
+			} as Parameters<typeof auth.api.updateSSOProvider>[0]);
+
+			expect((updated as { externalId?: string }).externalId).toBe("team");
+			expect(
+				data.ssoProvider.find((row) => row.providerId === "normalized-noop")
+					?.externalId,
+			).toBe("team");
 		});
 
 		/**
