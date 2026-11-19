@@ -83,6 +83,14 @@ function createManyMaxParametersForProvider(
 	return 65535;
 }
 
+const uuidPattern =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function idMatchKey(id: unknown): string {
+	const value = String(id);
+	return uuidPattern.test(value) ? value.toLowerCase() : value;
+}
+
 function orderRowsByIds<T extends Record<string, unknown>>(
 	ids: unknown[],
 	rows: T[],
@@ -90,10 +98,10 @@ function orderRowsByIds<T extends Record<string, unknown>>(
 	model: string,
 ): T[] {
 	const byId = new Map(
-		rows.map((row) => [String(row[idField] ?? row.id), row]),
+		rows.map((row) => [idMatchKey(row[idField] ?? row.id), row]),
 	);
 	return ids.map((id) => {
-		const row = byId.get(String(id));
+		const row = byId.get(idMatchKey(id));
 		if (!row) {
 			throw new BetterAuthError(
 				`Adapter createMany could not read back inserted "${model}" row ${String(id)}.`,

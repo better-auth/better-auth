@@ -57,15 +57,25 @@ function rowsShareKeys(rows: Record<string, unknown>[]): boolean {
 	});
 }
 
+const uuidPattern =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function idMatchKey(id: unknown): string {
+	const value = String(id);
+	return uuidPattern.test(value) ? value.toLowerCase() : value;
+}
+
 function orderInsertedRowsById<T extends Record<string, unknown>>(
 	ids: unknown[],
 	rows: T[],
 	idField: string,
 	model: string,
 ): T[] {
-	const byId = new Map(rows.map((row) => [String(row[idField]), row]));
+	const byId = new Map(
+		rows.map((row) => [idMatchKey(row[idField] ?? row.id), row]),
+	);
 	return ids.map((id) => {
-		const row = byId.get(String(id));
+		const row = byId.get(idMatchKey(id));
 		if (!row) {
 			throw new BetterAuthError(
 				`[Kysely Adapter] createMany could not read back inserted "${model}" row ${String(id)}.`,

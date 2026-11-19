@@ -279,6 +279,46 @@ describe("kysely-adapter", () => {
 		expect(created.map((row) => row.id)).toEqual(["a", "b"]);
 	});
 
+	it("createMany restores input order when PostgreSQL lowercases UUID ids", async () => {
+		const adaId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
+		const bobId = "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB";
+		const insertQuery = {
+			values: vi.fn(() => insertQuery),
+			returningAll: vi.fn(() => insertQuery),
+			execute: vi.fn().mockResolvedValue([
+				{ id: bobId.toLowerCase(), name: "Bob" },
+				{ id: adaId.toLowerCase(), name: "Ada" },
+			]),
+		};
+		const db = {
+			insertInto: vi.fn(() => insertQuery),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "postgres" })({
+			advanced: { database: { generateId: "uuid" } },
+		});
+
+		const created = await adapter.createMany({
+			model: "user",
+			data: [
+				{
+					id: adaId,
+					name: "Ada",
+					email: "ada@example.com",
+					emailVerified: false,
+				},
+				{
+					id: bobId,
+					name: "Bob",
+					email: "bob@example.com",
+					emailVerified: false,
+				},
+			],
+			forceAllowId: true,
+		});
+
+		expect(created.map((row) => row.name)).toEqual(["Ada", "Bob"]);
+	});
+
 	it("createMany does not use bulk RETURNING or OUTPUT when ids are generated", async () => {
 		const insertQuery = {
 			values: vi.fn(() => insertQuery),

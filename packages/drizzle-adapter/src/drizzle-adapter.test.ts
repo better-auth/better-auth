@@ -123,6 +123,46 @@ describe("drizzle-adapter", () => {
 	);
 
 	it.for(adapterFactories)(
+		"createMany restores input order when PostgreSQL lowercases UUID ids on $relations",
+		async ({ createAdapter }) => {
+			const adaId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
+			const bobId = "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB";
+			const returning = vi.fn().mockResolvedValue([
+				{ id: bobId.toLowerCase(), name: "Bob" },
+				{ id: adaId.toLowerCase(), name: "Ada" },
+			]);
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ returning }),
+				}),
+			} as any;
+			const adapter = createAdapter(db, { provider: "pg" })({
+				advanced: { database: { generateId: "uuid" } },
+			});
+			const created = await adapter.createMany({
+				model: "user",
+				data: [
+					{
+						id: adaId,
+						name: "Ada",
+						email: "ada@example.com",
+						emailVerified: false,
+					},
+					{
+						id: bobId,
+						name: "Bob",
+						email: "bob@example.com",
+						emailVerified: false,
+					},
+				],
+				forceAllowId: true,
+			});
+			expect(created.map((row) => row.name)).toEqual(["Ada", "Bob"]);
+		},
+	);
+
+	it.for(adapterFactories)(
 		"createMany does not use bulk RETURNING when ids are generated on $relations",
 		async ({ createAdapter }) => {
 			const returning = vi.fn().mockResolvedValue([{ id: "generated" }]);
