@@ -347,6 +347,17 @@ describe("cookie-utils parseSetCookieHeader", () => {
 			partitioned: true,
 		});
 	});
+
+	it("ignores malformed Max-Age with trailing non-digits or non-numeric values", () => {
+		const map1 = parseSetCookieHeader("a=1; Max-Age=10junk");
+		expect(map1.get("a")?.["max-age"]).toBeUndefined();
+
+		const map2 = parseSetCookieHeader("b=2; Max-Age=soon");
+		expect(map2.get("b")?.["max-age"]).toBeUndefined();
+
+		const map3 = parseSetCookieHeader("c=3; Max-Age=300");
+		expect(map3.get("c")?.["max-age"]).toBe(300);
+	});
 });
 
 describe("cookie-utils stripSecureCookiePrefix", () => {
