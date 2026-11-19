@@ -620,7 +620,8 @@ async function fetchClientJwks(
 
 	// Return stale cache on transient failures, but only within a grace period.
 	// After 2x the TTL, stale keys are no longer trusted (prevents accepting
-	// revoked keys indefinitely when the JWKS endpoint is down).
+	// revoked keys indefinitely when the JWKS endpoint is down) unless the
+	// discovery's `jwksStaleIfError` still covers them.
 	const staleLimitMs = JWKS_CACHE_TTL_MS * 2;
 	const staleIfErrorMs = getJwksStaleIfErrorMs(discovery);
 	const serveStaleKeys = (keys: JwksCacheEntry, reason: string) => {
