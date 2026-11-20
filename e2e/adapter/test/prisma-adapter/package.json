@@ -7,7 +7,9 @@
     "prepare": "prisma generate"
   },
   "devDependencies": {
+    "@better-auth/cimd": "workspace:*",
     "@better-auth/core": "workspace:*",
+    "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
     "@better-auth/scim": "workspace:*",
     "@better-auth/test-utils": "workspace:*",

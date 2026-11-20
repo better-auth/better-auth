@@ -621,3 +621,106 @@ describe("pairwise metadata", async () => {
 		expect(metadata.subject_types_supported).toEqual(["public"]);
 	});
 });
+
+/**
+ * @see https://www.rfc-editor.org/rfc/rfc9068#section-2.2
+ * @see https://www.rfc-editor.org/rfc/rfc7662#section-2.2
+ */
+describe("pairwise client credentials introspection", async () => {
+	const baseURL = "http://localhost:4127";
+	const resource = "https://api.example.com";
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				pairwiseSecret: "test-pairwise-secret-key-32chars!!",
+				resources: [resource],
+				enforcePerClientResources: false,
+				scopes: ["read:posts"],
+				clientPrivileges: () => true,
+			}),
+		],
+	});
+
+	it("keeps the client ID as the sub of a pairwise client's own token", async () => {
+		const { headers } = await signInWithTestUser();
+		const machine = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: ["https://machine.example.com/callback"],
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:posts"],
+				subject_type: "pairwise",
+			},
+		});
+		const { access_token: accessToken } = await auth.api.oauth2Token({
+			body: {
+				grant_type: "client_credentials",
+				client_id: machine.client_id,
+				client_secret: machine.client_secret,
+				scope: "read:posts",
+				resource,
+			},
+		});
+		expect(decodeJwt(accessToken).sub).toBe(machine.client_id);
+
+		const introspection = await auth.api.oauth2Introspect({
+			body: {
+				token: accessToken,
+				client_id: machine.client_id,
+				client_secret: machine.client_secret,
+			},
+		});
+
+		expect(introspection).toMatchObject({
+			active: true,
+			sub: machine.client_id,
+			client_id: machine.client_id,
+		});
+	});
+
+	it("introspects the token of a pairwise client registered without redirect URIs", async () => {
+		const { headers } = await signInWithTestUser();
+		const machine = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:posts"],
+				subject_type: "pairwise",
+			},
+		});
+		const { access_token: accessToken } = await auth.api.oauth2Token({
+			body: {
+				grant_type: "client_credentials",
+				client_id: machine.client_id,
+				client_secret: machine.client_secret,
+				scope: "read:posts",
+				resource,
+			},
+		});
+
+		const response = await auth.handler(
+			new Request(`${baseURL}/api/auth/oauth2/introspect`, {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					token: accessToken,
+					client_id: machine.client_id,
+					client_secret: machine.client_secret!,
+				}),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			active: true,
+			sub: machine.client_id,
+			client_id: machine.client_id,
+		});
+	});
+});

@@ -798,6 +798,27 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
+	it("does not origin-bind client_uri by default", () => {
+		const result = validateCimdMetadata(fetchUrl, {
+			client_id: fetchUrl,
+			client_name: "Cross-origin Home Page Client",
+			redirect_uris: ["https://example.com/callback"],
+			client_uri: "https://other-domain.com/about",
+		});
+		expect(result.valid).toBe(true);
+	});
+
+	it("origin-binds post_logout_redirect_uris by default", () => {
+		const result = validateCimdMetadata(fetchUrl, {
+			client_id: fetchUrl,
+			client_name: "Cross-origin Logout Client",
+			redirect_uris: ["https://example.com/callback"],
+			post_logout_redirect_uris: ["https://other-domain.com/logout"],
+		});
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain("same origin");
+	});
+
 	it("respects custom originBoundFields parameter", () => {
 		const result = validateCimdMetadata(
 			fetchUrl,
@@ -821,11 +842,13 @@ describe("validateCimdMetadata", () => {
 				client_name: "External Home Page Client",
 				redirect_uris: ["https://example.com/callback"],
 				client_uri: "https://other.com/about",
+				post_logout_redirect_uris: ["https://other.com/logout"],
 			},
 			{ originBoundFields: ["redirect_uris"] },
 		);
-		// client_uri is NOT in the custom originBoundFields, so origin mismatch is not checked.
-		// However, client_uri still gets SSRF validation.
+		// post_logout_redirect_uris and client_uri are NOT in the custom
+		// originBoundFields, so origin mismatch is not checked.
+		// client_uri still receives SSRF validation.
 		expect(result.valid).toBe(true);
 	});
 

@@ -752,6 +752,56 @@ describe("canonical client metadata document registration", () => {
 		expect(links.map((link) => link.resourceId)).toEqual([resource]);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6
+	 */
+	it("clears the fields a refreshed document drops for any client discovery", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/dropped-fields.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const document = {
+			client_id: clientId,
+			redirect_uris: ["https://client.example.com/callback"],
+			token_endpoint_auth_method: "none" as const,
+		};
+		const created = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					...document,
+					client_name: "Listed Client",
+					post_logout_redirect_uris: ["https://client.example.com/signed-out"],
+					dpop_bound_access_tokens: true,
+				},
+			},
+		);
+		expect(created.client).toMatchObject({
+			name: "Listed Client",
+			postLogoutRedirectUris: ["https://client.example.com/signed-out"],
+			dpopBoundAccessTokens: true,
+		});
+
+		await registerClientMetadataDocument(endpointContext, instance.opts, {
+			clientId,
+			clientDiscoveryId: "test-client-discovery",
+			existingClient: created.client,
+			metadata: document,
+		});
+
+		const stored = await instance.ctx.adapter.findOne<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(stored?.name ?? null).toBeNull();
+		expect(stored?.postLogoutRedirectUris).toEqual([]);
+		expect(stored?.dpopBoundAccessTokens ?? null).toBeNull();
+	});
+
 	it("converges a stale fixed-ID creator after a unique-constraint race", async () => {
 		const instance = await boot();
 		const clientId = "https://client.example.com/concurrent.json";
@@ -785,6 +835,274 @@ describe("canonical client metadata document registration", () => {
 		);
 		expect(converged.created).toBe(false);
 		expect(converged.client.name).toBe("Concurrent Writer");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12357
+	 */
+	it("converges a stale fixed-ID creator after an ORM-wrapped unique constraint error (error.cause)", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/wrapped-collision.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		await registerClientMetadataDocument(endpointContext, instance.opts, {
+			clientId,
+			clientDiscoveryId: "test-client-discovery",
+			metadata: {
+				client_id: clientId,
+				client_name: "First Writer",
+				redirect_uris: ["https://client.example.com/callback"],
+				token_endpoint_auth_method: "none",
+			},
+		});
+
+		const wrappedUniqueError = Object.assign(
+			new Error(
+				'Failed query: insert into "oauth_client" ("client_id", ...) values (...) params: [...]',
+			),
+			{
+				cause: Object.assign(
+					new Error(
+						'duplicate key value violates unique constraint "oauth_client_client_id_unique"',
+					),
+					{ code: "23505" },
+				),
+			},
+		);
+
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) =>
+				originalTransaction(async (transactionAdapter) => {
+					const originalCreate =
+						transactionAdapter.create.bind(transactionAdapter);
+					vi.spyOn(transactionAdapter, "create").mockImplementation(
+						async (data) => {
+							if (data.model === "oauthClient") throw wrappedUniqueError;
+							return originalCreate(data);
+						},
+					);
+					return callback(transactionAdapter);
+				}),
+		);
+
+		const converged = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					client_id: clientId,
+					client_name: "Concurrent Wrapped Writer",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+		expect(converged.created).toBe(false);
+		expect(converged.client.name).toBe("Concurrent Wrapped Writer");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12357
+	 */
+	it.each([
+		{
+			label: "duplicate key number 2601 beside a generic code",
+			err: { code: "EREQUEST", number: 2601 },
+		},
+		{
+			label: "unique constraint number 2627 beside a generic code",
+			err: { code: "EREQUEST", number: 2627 },
+		},
+		{
+			label: "extended unique constraint errcode 2067 beside a generic code",
+			err: { code: "ERR_SQLITE_ERROR", errcode: 2067 },
+		},
+	])(
+		"converges after a driver-specific unique error ($label)",
+		async ({ err }) => {
+			const instance = await boot();
+			const clientId = `https://client.example.com/unique-code-${err.number ?? err.errcode}.json`;
+			const endpointContext = {
+				context: instance.ctx,
+			} as unknown as GenericEndpointContext;
+			await registerClientMetadataDocument(endpointContext, instance.opts, {
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					client_id: clientId,
+					client_name: "Initial Writer",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			});
+
+			const driverWrappedError = Object.assign(
+				new Error("Driver execution failed"),
+				{ cause: Object.assign(new Error("unique violation"), err) },
+			);
+
+			const originalTransaction = instance.ctx.adapter.transaction.bind(
+				instance.ctx.adapter,
+			);
+			vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+				async (callback) =>
+					originalTransaction(async (transactionAdapter) => {
+						const originalCreate =
+							transactionAdapter.create.bind(transactionAdapter);
+						vi.spyOn(transactionAdapter, "create").mockImplementation(
+							async (data) => {
+								if (data.model === "oauthClient") throw driverWrappedError;
+								return originalCreate(data);
+							},
+						);
+						return callback(transactionAdapter);
+					}),
+			);
+
+			const converged = await registerClientMetadataDocument(
+				endpointContext,
+				instance.opts,
+				{
+					clientId,
+					clientDiscoveryId: "test-client-discovery",
+					metadata: {
+						client_id: clientId,
+						client_name: "Concurrent Writer",
+						redirect_uris: ["https://client.example.com/callback"],
+						token_endpoint_auth_method: "none",
+					},
+				},
+			);
+			expect(converged.created).toBe(false);
+			expect(converged.client.name).toBe("Concurrent Writer");
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12357
+	 */
+	it("preserves an ORM-wrapped non-unique database error without retrying", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/wrapped-non-unique-error.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+
+		await instance.ctx.adapter.create({
+			model: "oauthClient",
+			data: {
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				name: "Existing Discovery Client",
+				redirectUris: ["https://client.example.com/callback"],
+				tokenEndpointAuthMethod: "none",
+				applicationType: "web",
+				grantTypes: ["authorization_code"],
+				responseTypes: ["code"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const nonUniqueWrappedError = Object.assign(
+			new Error(
+				'Failed query: insert into "oauth_client" ("client_id", ...) values (...) params: [...]',
+			),
+			{
+				cause: Object.assign(new Error('syntax error at or near "SELECT"'), {
+					code: "42601",
+				}),
+			},
+		);
+
+		const findOneSpy = vi.spyOn(instance.ctx.adapter, "findOne");
+		let transactionCount = 0;
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) => {
+				transactionCount++;
+				return originalTransaction(async (transactionAdapter) => {
+					const originalCreate =
+						transactionAdapter.create.bind(transactionAdapter);
+					vi.spyOn(transactionAdapter, "create").mockImplementation(
+						async (data) => {
+							if (data.model === "oauthClient") throw nonUniqueWrappedError;
+							return originalCreate(data);
+						},
+					);
+					return callback(transactionAdapter);
+				});
+			},
+		);
+
+		await expect(
+			registerClientMetadataDocument(endpointContext, instance.opts, {
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					client_id: clientId,
+					client_name: "Failing Client",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			}),
+		).rejects.toBe(nonUniqueWrappedError);
+
+		expect(findOneSpy).not.toHaveBeenCalled();
+		expect(transactionCount).toBe(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12357
+	 */
+	it("rethrows safely when error.cause has a circular reference", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/circular-cause-error.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+
+		const circularError = new Error("Circular error without unique match");
+		circularError.cause = circularError;
+
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) =>
+				originalTransaction(async (transactionAdapter) => {
+					const originalCreate =
+						transactionAdapter.create.bind(transactionAdapter);
+					vi.spyOn(transactionAdapter, "create").mockImplementation(
+						async (data) => {
+							if (data.model === "oauthClient") throw circularError;
+							return originalCreate(data);
+						},
+					);
+					return callback(transactionAdapter);
+				}),
+		);
+
+		await expect(
+			registerClientMetadataDocument(endpointContext, instance.opts, {
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					client_id: clientId,
+					client_name: "Circular Error Client",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			}),
+		).rejects.toBe(circularError);
 	});
 
 	it("does not take over a managed client after a fixed-ID registration race", async () => {
@@ -1051,6 +1369,108 @@ describe("canonical client metadata document registration", () => {
 		expect(transactionAttempts).toBe(2);
 		expect(refreshed.created).toBe(false);
 		expect(refreshed.client.name).toBe("After Link Race");
+		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
+			model: "oauthClientResource",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(links.map((link) => link.resourceId)).toEqual([resource]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12357
+	 */
+	it("converges a metadata refresh when the raced link-row error is wrapped in error.cause", async () => {
+		const resource = "https://api.example.com/wrapped-link-race";
+		const instance = await boot({ resources: [resource] }, true);
+		const clientId = "https://client.example.com/wrapped-link-race.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const created = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					client_id: clientId,
+					client_name: "Initial Link Client",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+		instance.opts.clientRegistrationDefaultResources = [resource];
+
+		const wrappedLinkError = Object.assign(
+			new Error(
+				'Failed query: insert into "oauth_client_resource" (...) values (...) params: [...]',
+			),
+			{
+				cause: Object.assign(
+					new Error(
+						'duplicate key value violates unique constraint "oauth_client_resource_unique"',
+					),
+					{ code: "23505" },
+				),
+			},
+		);
+
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		let transactionAttempts = 0;
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) => {
+				transactionAttempts += 1;
+				if (transactionAttempts > 1) return originalTransaction(callback);
+				try {
+					return await originalTransaction(async (transactionAdapter) => {
+						const originalCreate =
+							transactionAdapter.create.bind(transactionAdapter);
+						vi.spyOn(transactionAdapter, "create").mockImplementation(
+							async (input) => {
+								if (input.model === "oauthClientResource") {
+									throw wrappedLinkError;
+								}
+								return originalCreate(input);
+							},
+						);
+						return callback(transactionAdapter);
+					});
+				} catch (error) {
+					await instance.ctx.adapter.create({
+						model: "oauthClientResource",
+						data: {
+							clientId,
+							resourceId: resource,
+							createdAt: new Date(),
+						},
+					});
+					throw error;
+				}
+			},
+		);
+
+		const refreshed = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				existingClient: created.client,
+				metadata: {
+					client_id: clientId,
+					client_name: "After Wrapped Link Race",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+
+		expect(transactionAttempts).toBe(2);
+		expect(refreshed.created).toBe(false);
+		expect(refreshed.client.name).toBe("After Wrapped Link Race");
 		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
 			model: "oauthClientResource",
 			where: [{ field: "clientId", value: clientId }],

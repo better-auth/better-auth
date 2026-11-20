@@ -308,6 +308,8 @@ export async function updateClientEndpoint(
 		}
 	}
 
+	// A discovered client is checked against the rules it registered under, so
+	// its jwks_uri may stay on its client_id origin or one its discovery allows.
 	await checkOAuthClient(
 		{
 			...schemaToOAuth(client),
@@ -316,6 +318,10 @@ export async function updateClientEndpoint(
 		opts,
 		{
 			ctx,
+			registrationSource: client.clientDiscoveryId
+				? "clientMetadataDocument"
+				: undefined,
+			clientDiscoveryId: client.clientDiscoveryId ?? undefined,
 		},
 	);
 
@@ -363,7 +369,11 @@ export async function updateClientEndpoint(
 			],
 			update: {
 				...schemaUpdates,
-				updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000),
+				// A discovered client's `updatedAt` records when its document was last
+				// validated, which bounds how long it can be served stale.
+				...(client.clientDiscoveryId
+					? {}
+					: { updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000) }),
 			},
 		},
 	);

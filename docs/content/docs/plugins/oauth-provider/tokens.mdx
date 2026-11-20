@@ -18,6 +18,8 @@ description: Control which tokens the provider issues, for which APIs, and for h
 
 To get a JWT access token, include a `resource` in the request and enable the JWT plugin. The token's `aud` is that resource. When the scopes also include `openid`, `aud` is an array that also holds the UserInfo endpoint URL. If either is missing, the access token is opaque. Error codes are listed in [Token errors](/docs/plugins/oauth-provider/reference#token-errors).
 
+An `authorization_code` request that omits `resource` uses the resources bound to the authorization code, and a refresh request uses the resources stored on the refresh token. When no resource is named or bound, including on `client_credentials` requests that omit `resource`, the access token is opaque with no `aud` claim, and the provider applies no default resource. [RFC 8707 §2.1](https://datatracker.ietf.org/doc/html/rfc8707#section-2.1) says a provider can process an authorization request that omits `resource` without a specific resource, use a default resource, or fail the request with `invalid_target`. Better Auth processes it without a resource. A resource server that sets `audience` rejects the resulting token.
+
 ## Scopes
 
 To control which scopes your clients may request, set `scopes`. It defaults to `["openid", "profile", "email", "offline_access"]`. Your provider acts as an OpenID provider only when the list includes `openid`.
@@ -74,11 +76,17 @@ A string uses the plugin defaults. An object sets per-resource policy:
 
 In a request for several resources, a `signingAlgorithm` or `signingKeyId` set on one of them applies to the whole token, and resources without one do not conflict with it. The request fails with `invalid_request` only when two resources set different values, because one token carries one signature. To fix it, set the same value on both resources, or leave it unset on one of them.
 
+In a request for several resources, the granted scopes are narrowed to the intersection of the `allowedScopes` of the requested resources. A resource without `allowedScopes` does not restrict, and accepts any requested scope.
+
+[RFC 8707 §2.2](https://datatracker.ietf.org/doc/html/rfc8707#section-2.2) says a request for several resources asks for a token that is usable at all of them, and that the provider should downscope the token to what each resource needs. Better Auth issues one scope set for every requested resource instead. A scope that one resource disallows is dropped for all of them, including resources that allow it. The token's `scope` does not record which resource each scope was meant for, so use scope names that mean the same thing at every resource a client can request together.
+
 The resources you configure are written to the `oauthResource` table at startup. Set `resourceSeedMode` to choose what happens to a row that already exists:
 
 * `insertOnly` (default): only adds missing rows, so edits made through the admin endpoints survive restarts.
 * `merge`: adds missing rows and updates the fields present in the config.
 * `overwrite`: replaces existing rows with the config values.
+
+Each instance reads the table once per configured resource to seed it. If you build Better Auth per request, for example on Cloudflare Workers with a database client per request, those reads run on every request. Set `resourceSeedScope: "process"` to remember each seeded entry for the life of the process instead, as long as every instance in the process uses the same database.
 
 ### Manage resources at runtime
 
@@ -135,9 +143,14 @@ oauthProvider({
 
 ## Refresh tokens
 
-Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire. After a replay, the refresh fails with `invalid_grant`, and the client must start a new authorization request to get tokens.
+Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire. After a replay, the refresh fails with `invalid_grant`, and the client must start a new authorization request to get tokens. A refresh that narrows the scope to drop `offline_access` still returns a new refresh token, but that token lacks `offline_access`. Refreshing it later returns no new refresh token, so the client keeps the one it has.
 
-A refresh keeps the `sid` of the session that authorized the grant while that session is live. Once the session has expired or been deleted, the refresh still succeeds, and the new access and ID tokens omit `sid` so that introspection and UserInfo accept them.
+A refresh keeps the `sid` of the session that authorized the grant while that session is live. What happens once the session has expired or been deleted depends on `offline_access`:
+
+* With `offline_access`, the refresh still succeeds, and the new access and ID tokens omit `sid` so that introspection and UserInfo accept them. A refresh that would drop `offline_access`, through a narrower `scope` or a resource's allowed scopes, fails with `invalid_grant` instead, and the presented refresh token keeps working.
+* Without `offline_access`, the refresh token ends with its session. The refresh fails with `invalid_grant`, and introspection reports the refresh token inactive.
+
+Tokens from the device authorization grant are not tied to a session, so neither case applies to them.
 
 Keep the default, `0`, unless your clients lose refresh responses. To let a client retry a refresh after a lost response, set `refreshTokenReuseInterval` to a number of seconds. A retry within that window gets the same response back, including the replacement refresh token. The retry gets that response only when it uses the same client, scopes, resources, and DPoP key as the first refresh. A retry that differs but is otherwise valid gets `invalid_grant`.
 

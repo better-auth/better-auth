@@ -11,7 +11,7 @@ import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { compactVerify, createLocalJWKSet, decodeJwt } from "jose";
 import type { OAuthRedirectResult } from "./authorize";
-import { getIssuer, handleRedirect } from "./authorize";
+import { getAcceptedIssuers, handleRedirect } from "./authorize";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import {
 	decryptStoredClientSecret,
@@ -139,14 +139,15 @@ async function signLogoutToken(
  * Token identifiers must be captured here because their `sessionId` foreign key
  * is cleared when the session row disappears.
  *
- * Revocation is the stored backstop, not the primary enforcement: introspection
- * and `/userinfo` already treat a token whose session has ended as inactive
- * (see `validateOpaqueAccessToken` / `validateJwtAccessToken`), so a missed
- * `revoked` write cannot keep a session-bound token alive on its own. Access
- * tokens bound to the session are revoked as OP hardening. Refresh tokens
- * follow OIDC Back-Channel Logout 1.0 §2.7: those without `offline_access` are
- * revoked; `offline_access` refresh tokens survive so long-lived API access can
- * outlive the browser session.
+ * Introspection, `/userinfo`, and the refresh grant also check the session at
+ * use, but only while a token still names it: a database that enforces the
+ * foreign key clears `sessionId` when the session row is deleted, and a JWT
+ * access token keeps its `sid` claim. Opaque access tokens and refresh tokens
+ * therefore still depend on this cleanup. Access tokens bound to the session
+ * are revoked as OP hardening. Refresh tokens follow OIDC Back-Channel Logout
+ * 1.0 §2.7: those without `offline_access` are revoked; `offline_access`
+ * refresh tokens survive so long-lived API access can outlive the browser
+ * session.
  *
  * When `revokeAllUserGrants` is set, every grant of the user is revoked
  * instead, including `offline_access` refresh tokens (see
@@ -348,8 +349,8 @@ async function applyBackchannelLogoutPlan(
 			: Promise.resolve(),
 		sweepUserId ? revokeAllUserGrants(ctx, sweepUserId) : Promise.resolve(),
 	]);
-	// Session liveness remains authoritative, but operators still need a signal
-	// if the stored revocation backstop drifts from the committed session state.
+	// The refresh grant and introspection check the session at use, but
+	// operators still need a signal when this revocation fails.
 	for (const result of revocations) {
 		if (result.status === "rejected") {
 			ctx.context.logger.error(
@@ -482,7 +483,8 @@ async function deliverBackchannelLogoutTokens(
 					},
 					body: new URLSearchParams({ logout_token: token }),
 					signal: AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS),
-					redirect: "error",
+					// Not "error": Workers rejects it. The status check refuses 3xx and opaque redirects.
+					redirect: "manual",
 				});
 				// Spec §2.8: RP MUST return 200; many frameworks normalize empty 200
 				// bodies to 204, which is commonly accepted.
@@ -881,7 +883,12 @@ async function verifyLogoutHint(
 			) as JWTPayload;
 		}
 
-		if (payload.iss !== getIssuer(ctx, opts)) return null;
+		if (
+			typeof payload.iss !== "string" ||
+			!getAcceptedIssuers(ctx, opts).includes(payload.iss)
+		) {
+			return null;
+		}
 		if (!normalizeLogoutAudiences(payload.aud).includes(client.clientId)) {
 			return null;
 		}

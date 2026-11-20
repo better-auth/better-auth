@@ -59,15 +59,16 @@ import {
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
-	findActiveSessionId,
 	getAuthEndpointUrl,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
 	isInvalidJwtError,
 	isPKCERequired,
+	isSessionBoundRefreshToken,
 	normalizeTimestampValue,
 	parseClientMetadata,
+	resolveRefreshTokenSession,
 	resolveSessionAuthTime,
 	resolveSubjectIdentifier,
 	storeToken,
@@ -932,16 +933,20 @@ export async function checkDpopProofBeforeConsume(
 		scopes: string[];
 		resources?: string[];
 		verificationValue?: VerificationValue;
+		/** The policy already resolved for this client, scopes, and resources. */
+		policy?: ResolvedResourcePolicy;
 	},
 ): Promise<{
 	confirmation?: Confirmation;
 	recordReplay: () => Promise<void>;
 }> {
-	const policy = await resolveResourcePolicy(ctx, opts, {
-		resource: params.resources,
-		clientId: params.client.clientId,
-		requestedScopes: params.scopes,
-	});
+	const policy =
+		params.policy ??
+		(await resolveResourcePolicy(ctx, opts, {
+			resource: params.resources,
+			clientId: params.client.clientId,
+			requestedScopes: params.scopes,
+		}));
 	let reservation: DpopReplayReservation | undefined;
 	const confirmation = await resolveDpopTokenBinding(ctx, opts, {
 		client: params.client,
@@ -1284,6 +1289,21 @@ async function createUserTokens(
 		clientAllowsGrant(client, "refresh_token") &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
+	// A refresh that drops `offline_access`, whether the client narrowed the
+	// scope or a resource policy filtered it, asks for a session-bound grant,
+	// which cannot start once the session has ended. Refuse before rotation so
+	// the presented `offline_access` token stays usable.
+	if (
+		isRefreshToken &&
+		existingRefreshToken &&
+		!sessionId &&
+		isSessionBoundRefreshToken(existingRefreshToken, effectiveScopes)
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
 	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
 	const isIdToken = user && effectiveScopes.includes("openid");
 	const metadata = parseClientMetadata(client.metadata);
@@ -1573,7 +1593,9 @@ async function rejectAuthorizationCode(
 /**
  * Reads and checks the verification value without consuming it. The caller
  * consumes the code only after every request-level check passes, so a rejected
- * verifier, binding, or DPoP proof leaves the code for a retry.
+ * verifier, binding, or DPoP proof leaves the code for a retry. A DPoP proof
+ * whose `jti` was already used is the exception: it is detected after the
+ * claim, so it spends the code.
  */
 async function checkVerificationValue(
 	ctx: GenericEndpointContext,
@@ -2141,6 +2163,17 @@ async function handleRefreshTokenGrant(
 
 	validateClientScopes(client, requestedScopes ?? scopes);
 
+	// A session-bound refresh token is never rotated, so presenting one that was
+	// revoked at sign-out is not replay and must not tear down the client's
+	// other grants.
+	const session = await resolveRefreshTokenSession(ctx, refreshToken);
+	if (session.ended) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
+
 	if (refreshToken.revoked) {
 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
 			const replayRequest = await resolveRefreshTokenRotationReplayRequest(
@@ -2196,7 +2229,7 @@ async function handleRefreshTokenGrant(
 		grantType: "refresh_token",
 		referenceId: refreshToken.referenceId,
 		authorizationCodeId: refreshToken.authorizationCodeId,
-		sessionId: await findActiveSessionId(ctx, refreshToken.sessionId),
+		sessionId: session.sessionId,
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,
