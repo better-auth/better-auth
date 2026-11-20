@@ -112,7 +112,7 @@ export const gitlab = (options: GitlabOptions) => {
 				redirectURI,
 				options,
 				codeVerifier,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -125,7 +125,7 @@ export const gitlab = (options: GitlabOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -133,7 +133,7 @@ export const gitlab = (options: GitlabOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<GitlabProfile>(
-				userinfoEndpoint,
+				options.userInfoEndpoint ?? userinfoEndpoint,
 				{ headers: { authorization: `Bearer ${token.accessToken}` } },
 			);
 			if (error || profile.state !== "active" || profile.locked) {

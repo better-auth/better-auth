@@ -80,7 +80,7 @@ export const twitch = (options: TwitchOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -93,7 +93,7 @@ export const twitch = (options: TwitchOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -104,7 +104,7 @@ export const twitch = (options: TwitchOptions) => {
 				return null;
 			}
 			const { data } = await betterFetch<{ data: TwitchUser[] }>(
-				"https://api.twitch.tv/helix/users",
+				options.userInfoEndpoint ?? "https://api.twitch.tv/helix/users",
 				{
 					headers: {
 						Authorization: `Bearer ${token.accessToken}`,

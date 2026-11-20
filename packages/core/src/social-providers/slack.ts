@@ -43,6 +43,8 @@ export interface SlackOptions extends ProviderOptions<SlackProfile> {
 
 export const slack = (options: SlackOptions) => {
 	const tokenEndpoint = "https://slack.com/api/openid.connect.token";
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? "https://slack.com/api/openid.connect.userInfo";
 	return {
 		id: "slack",
 		name: "Slack",
@@ -68,7 +70,7 @@ export const slack = (options: SlackOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -81,7 +83,7 @@ export const slack = (options: SlackOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -89,7 +91,7 @@ export const slack = (options: SlackOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<SlackProfile>(
-				"https://slack.com/api/openid.connect.userInfo",
+				userInfoEndpoint,
 				{
 					method: "POST",
 					headers: {

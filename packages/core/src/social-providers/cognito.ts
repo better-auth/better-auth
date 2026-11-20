@@ -76,7 +76,8 @@ export const cognito = (options: CognitoOptions) => {
 	const cleanDomain = options.domain.replace(/^https?:\/\//, "");
 	const authorizationEndpoint = `https://${cleanDomain}/oauth2/authorize`;
 	const tokenEndpoint = `https://${cleanDomain}/oauth2/token`;
-	const userInfoEndpoint = `https://${cleanDomain}/oauth2/userinfo`;
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? `https://${cleanDomain}/oauth2/userinfo`;
 
 	return {
 		id: "cognito",
@@ -146,7 +147,7 @@ export const cognito = (options: CognitoOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 
@@ -160,7 +161,7 @@ export const cognito = (options: CognitoOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 
@@ -174,6 +175,7 @@ export const cognito = (options: CognitoOptions) => {
 					options.region,
 					options.userPoolId,
 					claims.iss === updatedIssuer ? updatedIssuer : originalIssuer,
+					options.jwksEndpoint,
 				);
 			},
 			issuer: [originalIssuer, updatedIssuer],
@@ -269,8 +271,9 @@ export const getCognitoPublicKey = async (
 	region: string,
 	userPoolId: string,
 	issuer = `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`,
+	jwksEndpoint?: string,
 ) => {
-	const COGNITO_JWKS_URI = `${issuer}/.well-known/jwks.json`;
+	const COGNITO_JWKS_URI = jwksEndpoint ?? `${issuer}/.well-known/jwks.json`;
 
 	try {
 		const { data } = await fetchRefusingRedirects<{

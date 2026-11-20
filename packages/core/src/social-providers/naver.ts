@@ -64,7 +64,7 @@ export const naver = (options: NaverOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -77,7 +77,7 @@ export const naver = (options: NaverOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -85,7 +85,7 @@ export const naver = (options: NaverOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<NaverProfile>(
-				"https://openapi.naver.com/v1/nid/me",
+				options.userInfoEndpoint ?? "https://openapi.naver.com/v1/nid/me",
 				{
 					headers: {
 						Authorization: `Bearer ${token.accessToken}`,

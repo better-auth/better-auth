@@ -85,7 +85,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -98,7 +98,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -106,7 +106,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<HuggingFaceProfile>(
-				"https://huggingface.co/oauth/userinfo",
+				options.userInfoEndpoint ?? "https://huggingface.co/oauth/userinfo",
 				{
 					method: "GET",
 					headers: {

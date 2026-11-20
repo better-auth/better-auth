@@ -24,6 +24,7 @@ const mockedBetterFetch = vi.mocked(betterFetch);
 describe("private_key_jwt OAuth2 helpers", () => {
 	const clientId = "test-client-id";
 	const tokenEndpoint = "https://idp.example.com/token";
+	const overriddenTokenEndpoint = "https://emulator.example.com/token";
 	let privateJwk: JsonWebKey;
 
 	beforeAll(async () => {
@@ -48,9 +49,9 @@ describe("private_key_jwt OAuth2 helpers", () => {
 		};
 	}
 
-	function expectAssertionRequest() {
+	function expectAssertionRequest(requestEndpoint = tokenEndpoint) {
 		const [url, init] = mockedBetterFetch.mock.calls[0] ?? [];
-		expect(url).toBe(tokenEndpoint);
+		expect(url).toBe(requestEndpoint);
 		expect(init?.method).toBe("POST");
 		expect(init?.headers).not.toHaveProperty("authorization");
 
@@ -68,7 +69,7 @@ describe("private_key_jwt OAuth2 helpers", () => {
 		const payload = decodeJwt(assertion!);
 		expect(payload.iss).toBe(clientId);
 		expect(payload.sub).toBe(clientId);
-		expect(payload.aud).toBe(tokenEndpoint);
+		expect(payload.aud).toBe(requestEndpoint);
 
 		return body;
 	}
@@ -99,6 +100,23 @@ describe("private_key_jwt OAuth2 helpers", () => {
 		expect(body.get("grant_type")).toBe("authorization_code");
 		expect(body.get("code")).toBe("auth-code");
 		expect(body.get("redirect_uri")).toBe("https://rp.example.com/callback");
+	});
+
+	it("signs authorization-code assertions for the tokenEndpoint override", async () => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: { access_token: "access-token", token_type: "Bearer" },
+			error: null,
+		});
+
+		await validateAuthorizationCode({
+			code: "auth-code",
+			redirectURI: "https://rp.example.com/callback",
+			options: { clientId, tokenEndpoint: overriddenTokenEndpoint },
+			tokenEndpoint,
+			tokenEndpointAuth: privateKeyJwtAuth("override-key"),
+		});
+
+		expectAssertionRequest(overriddenTokenEndpoint);
 	});
 
 	it("passes request context to custom assertion getters", async () => {
@@ -213,6 +231,22 @@ describe("private_key_jwt OAuth2 helpers", () => {
 		const body = expectAssertionRequest();
 		expect(body.get("grant_type")).toBe("refresh_token");
 		expect(body.get("refresh_token")).toBe("old-refresh-token");
+	});
+
+	it("signs refresh-token assertions for the tokenEndpoint override", async () => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: { access_token: "new-access-token", token_type: "Bearer" },
+			error: null,
+		});
+
+		await refreshAccessToken({
+			refreshToken: "old-refresh-token",
+			options: { clientId, tokenEndpoint: overriddenTokenEndpoint },
+			tokenEndpoint,
+			tokenEndpointAuth: privateKeyJwtAuth("override-refresh-key"),
+		});
+
+		expectAssertionRequest(overriddenTokenEndpoint);
 	});
 
 	it("signs client-credentials assertions with the request tokenEndpoint", async () => {

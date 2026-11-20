@@ -151,6 +151,8 @@ export const zoom = (userOptions: ZoomOptions) => {
 		pkce: true,
 		...userOptions,
 	};
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? "https://api.zoom.us/v2/users/me";
 
 	return {
 		id: "zoom",
@@ -177,7 +179,7 @@ export const zoom = (userOptions: ZoomOptions) => {
 				redirectURI: options.redirectURI || redirectURI,
 				codeVerifier,
 				options,
-				tokenEndpoint: "https://zoom.us/oauth/token",
+				tokenEndpoint: options.tokenEndpoint ?? "https://zoom.us/oauth/token",
 				authentication: "post",
 			});
 		},
@@ -191,14 +193,15 @@ export const zoom = (userOptions: ZoomOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://zoom.us/oauth/token",
+						tokenEndpoint:
+							options.tokenEndpoint ?? "https://zoom.us/oauth/token",
 					}),
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<ZoomProfile>(
-				"https://api.zoom.us/v2/users/me",
+				userInfoEndpoint,
 				{
 					headers: {
 						authorization: `Bearer ${token.accessToken}`,

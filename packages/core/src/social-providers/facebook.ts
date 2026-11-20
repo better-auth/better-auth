@@ -10,6 +10,7 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
+import { appendQueryParams } from "../utils/url";
 export interface FacebookGraphProfile {
 	id: string;
 	name: string;
@@ -43,6 +44,20 @@ interface FacebookDebugTokenData {
 }
 
 /**
+ * `debug_token` sits next to the Graph `/me` endpoint, so a `userInfoEndpoint`
+ * override moves it too.
+ */
+function debugTokenEndpoint(options: FacebookOptions) {
+	if (!options.userInfoEndpoint) {
+		return "https://graph.facebook.com/debug_token";
+	}
+	const base = new URL(options.userInfoEndpoint);
+	// A trailing slash would otherwise resolve `debug_token` as a child of `/me/`.
+	base.pathname = base.pathname.replace(/\/+$/, "");
+	return new URL("debug_token", base).href;
+}
+
+/**
  * Validate an opaque Facebook access token against the configured app.
  *
  * Facebook access tokens are not audience-bound at the Graph `/me` endpoint: a
@@ -71,7 +86,7 @@ async function verifyFacebookAccessToken(
 	const appAccessToken = `${primaryClientId}|${options.clientSecret}`;
 	const { data, error } = await fetchRefusingRedirects<{
 		data?: FacebookDebugTokenData;
-	}>("https://graph.facebook.com/debug_token", {
+	}>(debugTokenEndpoint(options), {
 		query: {
 			input_token: accessToken,
 			access_token: appAccessToken,
@@ -103,6 +118,8 @@ export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
 }
 
 export const facebook = (options: FacebookOptions) => {
+	const userInfoEndpoint =
+		options.userInfoEndpoint ?? "https://graph.facebook.com/me";
 	return {
 		id: "facebook",
 		name: "Facebook",
@@ -145,13 +162,18 @@ export const facebook = (options: FacebookOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://graph.facebook.com/v24.0/oauth/access_token",
+				tokenEndpoint:
+					options.tokenEndpoint ??
+					"https://graph.facebook.com/v24.0/oauth/access_token",
 			});
 		},
 		idToken: {
 			// https://developers.facebook.com/docs/facebook-login/limited-login/token/#jwks
 			jwks: createRemoteJWKSet(
-				new URL("https://limited.facebook.com/.well-known/oauth/openid/jwks/"),
+				new URL(
+					options.jwksEndpoint ??
+						"https://limited.facebook.com/.well-known/oauth/openid/jwks/",
+				),
 			),
 			issuer: "https://www.facebook.com",
 			audience: options.clientId,
@@ -171,6 +193,7 @@ export const facebook = (options: FacebookOptions) => {
 							clientSecret: options.clientSecret,
 						},
 						tokenEndpoint:
+							options.tokenEndpoint ??
 							"https://graph.facebook.com/v24.0/oauth/access_token",
 					});
 				},
@@ -235,7 +258,10 @@ export const facebook = (options: FacebookOptions) => {
 				...(options?.fields || []),
 			];
 			const { data: profile, error } = await betterFetch<FacebookGraphProfile>(
-				"https://graph.facebook.com/me?fields=" + fields.join(","),
+				appendQueryParams(
+					userInfoEndpoint,
+					new URLSearchParams({ fields: fields.join(",") }),
+				),
 				{
 					auth: {
 						type: "Bearer",

@@ -93,6 +93,8 @@ export interface VerifyGoogleIdTokenOptions {
 	token: string;
 	audience: string | string[];
 	nonce?: string | undefined;
+	/** Overrides the URL of the key set that verifies the token. */
+	jwksEndpoint?: string | undefined;
 }
 
 /**
@@ -103,12 +105,13 @@ export const verifyGoogleIdToken = async ({
 	token,
 	audience,
 	nonce,
+	jwksEndpoint,
 }: VerifyGoogleIdTokenOptions): Promise<JWTPayload | null> => {
 	try {
 		const { kid, alg } = decodeProtectedHeader(token);
 		if (!isGoogleIdTokenAlgorithm(alg)) return null;
 
-		const publicKeys = await getGooglePublicKeys(kid);
+		const publicKeys = await getGooglePublicKeys(kid, jwksEndpoint);
 		for (const publicKey of publicKeys) {
 			try {
 				const { payload: jwtClaims } = await jwtVerify(
@@ -210,7 +213,8 @@ export const google = (options: GoogleOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://oauth2.googleapis.com/token",
+				tokenEndpoint:
+					options.tokenEndpoint ?? "https://oauth2.googleapis.com/token",
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -223,12 +227,13 @@ export const google = (options: GoogleOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://oauth2.googleapis.com/token",
+						tokenEndpoint:
+							options.tokenEndpoint ?? "https://oauth2.googleapis.com/token",
 					});
 				},
 		idToken: {
 			// https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
-			jwks: (header) => getGooglePublicKey(header.kid!),
+			jwks: (header) => getGooglePublicKey(header.kid!, options.jwksEndpoint),
 			issuer: ["https://accounts.google.com", "accounts.google.com"],
 			audience: options.clientId,
 			algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
@@ -277,15 +282,18 @@ export const google = (options: GoogleOptions) => {
 	} satisfies OAuthProvider<GoogleProfile>;
 };
 
-export const getGooglePublicKey = async (kid: string) => {
-	const [publicKey] = await getGooglePublicKeys(kid);
+export const getGooglePublicKey = async (
+	kid: string,
+	jwksEndpoint?: string,
+) => {
+	const [publicKey] = await getGooglePublicKeys(kid, jwksEndpoint);
 	if (!publicKey) {
 		throw new Error(`JWK with kid ${kid} not found`);
 	}
 	return publicKey;
 };
 
-const getGooglePublicKeys = async (kid?: string) => {
+const getGooglePublicKeys = async (kid?: string, jwksEndpoint?: string) => {
 	const { data } = await fetchRefusingRedirects<{
 		keys: Array<{
 			kid: string;
@@ -295,7 +303,7 @@ const getGooglePublicKeys = async (kid?: string) => {
 			n: string;
 			e: string;
 		}>;
-	}>("https://www.googleapis.com/oauth2/v3/certs");
+	}>(jwksEndpoint ?? "https://www.googleapis.com/oauth2/v3/certs");
 
 	if (!data?.keys) {
 		throw new APIError("BAD_REQUEST", {
