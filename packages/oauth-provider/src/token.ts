@@ -2260,7 +2260,7 @@ async function handleAuthorizationCodeGrant(
 		resources,
 		code_verifier,
 	);
-	const scopes = verificationValue.query.scope?.split(" ");
+	const scopes = verificationValue.query.scope?.split(" ").filter(Boolean);
 	if (!scopes) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error_description: "verification scope unset",
@@ -2271,7 +2271,8 @@ async function handleAuthorizationCodeGrant(
 
 	// Parse scopes from the authorization request
 	const requestedScopes =
-		(verificationValue.query?.scope as string)?.split(" ") || [];
+		(verificationValue.query?.scope as string)?.split(" ").filter(Boolean) ||
+		[];
 
 	// Check if PKCE is required for this client and authorization request
 	const pkceRequired = isPKCERequired(client, {
@@ -2428,7 +2429,7 @@ async function handleAuthorizationCodeGrant(
 
 	return createUserTokens(ctx, opts, {
 		client,
-		scopes: verificationValue.query.scope?.split(" ") ?? [],
+		scopes: verificationValue.query.scope?.split(" ").filter(Boolean) ?? [],
 		user,
 		grantType: "authorization_code",
 		referenceId: verificationValue.referenceId,
