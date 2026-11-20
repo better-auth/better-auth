@@ -157,6 +157,7 @@
     "oauth-provider-verify-dpop-proof-expected-jkt",
     "oauth-refresh-replay-revokes-one-grant",
     "oauth-resource-opaque-access-tokens",
+    "oauth-retry-revoked-issuance-cleanup",
     "oauth-revoke-introspect-token-lookup",
     "oauth-token-empty-scope",
     "oauth-token-exchange-dpop-key",

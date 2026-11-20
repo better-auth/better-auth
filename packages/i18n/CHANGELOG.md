@@ -1,5 +1,7 @@
 # @better-auth/i18n
 
+## 1.8.0-beta.12
+
 ## 1.8.0-beta.11
 
 ## 1.8.0-beta.10
