@@ -1,5 +1,14 @@
 # auth
 
+## 1.7.27
+
+### Patch Changes
+
+- Updated dependencies [[`1ab8e21`](https://github.com/better-auth/better-auth/commit/1ab8e21f47f5f96913dc532c08898291092038f6), [`c6fd56d`](https://github.com/better-auth/better-auth/commit/c6fd56d0e38d9122a65a276148c40b00cfbc845e), [`5956cb7`](https://github.com/better-auth/better-auth/commit/5956cb7632eaf104eff9b281dcd6e058609b59ca), [`00f5017`](https://github.com/better-auth/better-auth/commit/00f50170626a6ab501120badade36dbcf251520a), [`d0a8cab`](https://github.com/better-auth/better-auth/commit/d0a8cabc1a46d0ac6ec0a59d870f1ece1bd1d39f), [`559c837`](https://github.com/better-auth/better-auth/commit/559c837ffad761dd085ef732e886a2a4d72150a3), [`ac7c317`](https://github.com/better-auth/better-auth/commit/ac7c3175417601778aa2d4786babe8af6d5673fa), [`d0a8cab`](https://github.com/better-auth/better-auth/commit/d0a8cabc1a46d0ac6ec0a59d870f1ece1bd1d39f)]:
+  - better-auth@1.7.27
+  - @better-auth/core@1.7.27
+  - @better-auth/telemetry@1.7.27
+
 ## 1.7.26
 
 ### Patch Changes

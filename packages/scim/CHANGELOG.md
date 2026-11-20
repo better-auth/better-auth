@@ -1,5 +1,7 @@
 # @better-auth/scim
 
+## 1.7.27
+
 ## 1.7.26
 
 ### Patch Changes

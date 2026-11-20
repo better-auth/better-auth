@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/oauth-provider",
-  "version": "1.7.26",
+  "version": "1.7.27",
   "description": "An oauth provider plugin for Better Auth",
   "type": "module",
   "license": "MIT",

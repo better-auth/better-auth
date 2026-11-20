@@ -1,5 +1,32 @@
 # better-auth
 
+## 1.7.27
+
+### Patch Changes
+
+- [#12809](https://github.com/better-auth/better-auth/pull/12809) [`1ab8e21`](https://github.com/better-auth/better-auth/commit/1ab8e21f47f5f96913dc532c08898291092038f6) Thanks [@bytaesu](https://github.com/bytaesu)! - Validate the request origin on `/sign-in/anonymous`, the same way the other sign-in endpoints do. A browser request from an origin outside `trustedOrigins` now gets a 403.
+
+- [#12805](https://github.com/better-auth/better-auth/pull/12805) [`c6fd56d`](https://github.com/better-auth/better-auth/commit/c6fd56d0e38d9122a65a276148c40b00cfbc845e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `POST` requests sent without a body, such as `/sign-out` or `/revoke-sessions`, failing with 415 on Deno, Next.js, Nuxt and other servers that pass an empty stream as the request body.
+
+- [#12655](https://github.com/better-auth/better-auth/pull/12655) [`00f5017`](https://github.com/better-auth/better-auth/commit/00f50170626a6ab501120badade36dbcf251520a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Tokens signed without a pinned algorithm, such as ID tokens and session JWTs, now prefer a key for `jwks.keyPairConfig.alg`. Before, if the first signature on an empty key set pinned an algorithm listed in `jwks.keyPairConfigs`, later unpinned tokens reused that key instead of creating one for the primary algorithm. An existing key whose algorithm is not listed in `jwks.keyPairConfigs` is still reused.
+
+  A deployment already in the affected state, with no key for `jwks.keyPairConfig.alg` and a newest key for another `jwks.keyPairConfigs` algorithm, creates a key for `jwks.keyPairConfig.alg` on its next unpinned signature. This includes a deployment whose old primary algorithm moved into `jwks.keyPairConfigs`. A deployment that already has a key for `jwks.keyPairConfig.alg` keeps its current `alg` and `kid`. ID tokens, `/token` JWTs, and cookie-cache JWTs of an affected deployment then change `alg` and `kid`. Earlier tokens keep verifying by `kid`, but verifiers that hard-code the old algorithm, or never refetch the JWKS for an unknown `kid`, must adapt. A custom `adapter.getJwks` keyring is unchanged: unpinned tokens keep using its newest key, and no key is created for it.
+
+- [#12810](https://github.com/better-auth/better-auth/pull/12810) [`d0a8cab`](https://github.com/better-auth/better-auth/commit/d0a8cabc1a46d0ac6ec0a59d870f1ece1bd1d39f) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix the phone number plugin answering `/update-user` with a 500 when the request has no body. It now gets the same 400 as without the plugin.
+
+- [#12553](https://github.com/better-auth/better-auth/pull/12553) [`ac7c317`](https://github.com/better-auth/better-auth/commit/ac7c3175417601778aa2d4786babe8af6d5673fa) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `getTestInstance` from `better-auth/test` now runs every instance cleanup when one of them fails (several failures surface as an `AggregateError`), so later instances no longer leave their database or connection open.
+
+- [#12810](https://github.com/better-auth/better-auth/pull/12810) [`d0a8cab`](https://github.com/better-auth/better-auth/commit/d0a8cabc1a46d0ac6ec0a59d870f1ece1bd1d39f) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix the username plugin answering `/sign-up/email` and `/update-user` with a 500 when the request has no body. It now gets the same 400 as without the plugin.
+
+- Updated dependencies [[`5956cb7`](https://github.com/better-auth/better-auth/commit/5956cb7632eaf104eff9b281dcd6e058609b59ca), [`559c837`](https://github.com/better-auth/better-auth/commit/559c837ffad761dd085ef732e886a2a4d72150a3)]:
+  - @better-auth/core@1.7.27
+  - @better-auth/drizzle-adapter@1.7.27
+  - @better-auth/kysely-adapter@1.7.27
+  - @better-auth/memory-adapter@1.7.27
+  - @better-auth/mongo-adapter@1.7.27
+  - @better-auth/prisma-adapter@1.7.27
+  - @better-auth/telemetry@1.7.27
+
 ## 1.7.26
 
 ### Patch Changes
