@@ -73,9 +73,11 @@ import {
 import {
 	assertConfirmation,
 	clientAllowsGrant,
+	consentCovers,
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
+	findConsent,
 	getAuthEndpointUrl,
 	getClient,
 	getJwtPlugin,
@@ -2133,6 +2135,48 @@ async function checkVerificationValue(
 }
 
 /**
+ * A pending authorization code follows its consent. Redeeming it needs a stored
+ * consent that still covers what the code authorizes, so a code issued before
+ * the user deleted or narrowed their consent mints nothing. A consent given
+ * again for the same client, consent reference, and access leaves the code
+ * valid, because the user approved that access again. A client that skips
+ * consent has none to check.
+ */
+async function assertConsentStillCovers(
+	ctx: GenericEndpointContext,
+	client: Pick<SchemaClient<Scope[]>, "clientId" | "skipConsent">,
+	code: {
+		userId: string;
+		referenceId?: string;
+		scopes: readonly string[];
+		resources: readonly string[];
+		userInfoClaims: readonly string[];
+	},
+) {
+	if (client.skipConsent) return;
+	const consent = await findConsent(
+		ctx,
+		client.clientId,
+		code.userId,
+		code.referenceId,
+	);
+	if (!consent) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "consent revoked",
+			error: "invalid_grant",
+		});
+	}
+	if (
+		!consentCovers(consent, code.scopes, code.resources, code.userInfoClaims)
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "consent no longer covers this authorization",
+			error: "invalid_grant",
+		});
+	}
+}
+
+/**
  * Obtains new Session Jwt and Refresh Tokens using a code
  */
 async function handleAuthorizationCodeGrant(
@@ -2340,6 +2384,13 @@ async function handleAuthorizationCodeGrant(
 		verificationValue.query.claims,
 		getSupportedClaims(opts),
 	);
+	await assertConsentStillCovers(ctx, client, {
+		userId: user.id,
+		referenceId: verificationValue.referenceId,
+		scopes,
+		resources: authorizedResources ?? [],
+		userInfoClaims: requestedUserInfoClaims,
+	});
 
 	const dpop = await checkDpopProofBeforeConsume(ctx, opts, {
 		client,

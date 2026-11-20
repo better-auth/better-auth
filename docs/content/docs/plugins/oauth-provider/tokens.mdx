@@ -584,7 +584,7 @@ Deleting a consent through [`deleteOAuthConsent`](/docs/plugins/oauth-provider/s
 * **Opaque access tokens.** They are deleted, including one issued without a refresh token.
 * **JWT access tokens.** Without `revocableJwtAccessTokens`, they stay valid until they expire. A JWT issued without a refresh token has no stored record to find, so it also stays valid until it expires, or until the user's session ends when it carries a `sid`.
 * **Rows from before 1.8.** A refresh token stored without a grant ID is deleted by the consent's scope, but a refresh that was already issuing tokens for it isn't stopped.
-* **A redemption in flight.** An authorization code redemption that is issuing its tokens when the consent is deleted has stored nothing to revoke, so it can still finish, and the tokens it issues stay valid.
+* **A redemption in flight.** An authorization code redemption that passed its [consent check](/docs/plugins/oauth-provider/sign-in-flow#manage-consents) just before the consent is deleted has stored nothing to revoke, so it can still finish, and the tokens it issues stay valid.
 * **A failed revocation keeps the consent.** The call fails and the consent stays in place, so the user can delete it again.
 
 ## Without the JWT plugin
