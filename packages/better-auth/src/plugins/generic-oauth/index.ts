@@ -58,6 +58,7 @@ export type BaseOAuthProviderOptions = Pick<
 	| "pkce"
 	| "disableImplicitSignUp"
 	| "disableSignUp"
+	| "disableIdTokenSignIn"
 	| "overrideUserInfo"
 >;
 
@@ -545,8 +546,13 @@ export const genericOAuth = <const ID extends string>(
 						return resolveUserInfo(oauthTokens);
 					}
 
+					// This id_token comes from the token endpoint, not the client,
+					// so `disableIdTokenSignIn` must not reject it.
 					const valid = await verifyProviderIdToken(
-						provider,
+						{
+							...provider,
+							options: { ...provider.options, disableIdTokenSignIn: false },
+						},
 						oauthTokens.idToken,
 						expectedIdTokenNonce,
 					);
@@ -591,6 +597,7 @@ export const genericOAuth = <const ID extends string>(
 				disableSignUp: c.disableSignUp,
 				options: {
 					disableSignUp: c.disableSignUp,
+					disableIdTokenSignIn: c.disableIdTokenSignIn,
 					overrideUserInfoOnSignIn: c.overrideUserInfo,
 					requireEmailVerification: c.requireEmailVerification,
 				},
