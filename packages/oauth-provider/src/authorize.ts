@@ -200,6 +200,19 @@ export function validateIssuerUrl(issuer: string): string {
 	}
 }
 
+function getConfiguredIssuer(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+): string {
+	if (opts.disableJwtPlugin) return ctx.context.baseURL;
+	try {
+		const jwtPluginOptions = getJwtPlugin(ctx.context).options;
+		return jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
+	} catch {
+		return ctx.context.baseURL;
+	}
+}
+
 /**
  * Gets the issuer identifier
  */
@@ -207,20 +220,21 @@ export function getIssuer(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ): string {
-	let issuer: string;
+	return validateIssuerUrl(getConfiguredIssuer(ctx, opts));
+}
 
-	if (opts.disableJwtPlugin) {
-		issuer = ctx.context.baseURL;
-	} else {
-		try {
-			const jwtPluginOptions = getJwtPlugin(ctx.context).options;
-			issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
-		} catch {
-			issuer = ctx.context.baseURL;
-		}
-	}
-
-	return validateIssuerUrl(issuer);
+/**
+ * Gets every `iss` value this server's own tokens can carry: the published
+ * issuer and, when it differs, the configured value that issued tokens
+ * carry, such as a base URL with a trailing slash.
+ */
+export function getAcceptedIssuers(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+): string[] {
+	const configured = getConfiguredIssuer(ctx, opts);
+	const issuer = validateIssuerUrl(configured);
+	return configured === issuer ? [issuer] : [issuer, configured];
 }
 
 /**

@@ -11,7 +11,7 @@ import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { compactVerify, createLocalJWKSet, decodeJwt } from "jose";
 import type { OAuthRedirectResult } from "./authorize";
-import { getIssuer, handleRedirect } from "./authorize";
+import { getAcceptedIssuers, handleRedirect } from "./authorize";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import {
 	decryptStoredClientSecret,
@@ -711,7 +711,12 @@ async function verifyLogoutHint(
 			) as JWTPayload;
 		}
 
-		if (payload.iss !== getIssuer(ctx, opts)) return null;
+		if (
+			typeof payload.iss !== "string" ||
+			!getAcceptedIssuers(ctx, opts).includes(payload.iss)
+		) {
+			return null;
+		}
 		if (!normalizeLogoutAudiences(payload.aud).includes(client.clientId)) {
 			return null;
 		}
