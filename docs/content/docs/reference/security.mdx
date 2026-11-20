@@ -52,9 +52,9 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
 4. **Fetch Metadata Protection for First-Login CSRF**
    Better Auth also uses [Fetch Metadata headers](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#fetch_metadata) (`Sec-Fetch-Site`, `Sec-Fetch-Mode`, `Sec-Fetch-Dest`) to provide additional CSRF protection specifically for **first-login scenarios**, where the client does not yet have any cookies.
 
-   This protection applies to **sign-in and sign-up email routes**, which accept form submissions (simple requests) to support progressive enhancement patterns.
+   This protection applies to routes a browser can call as a **simple request**: the sign-in and sign-up email routes, which accept form submissions to support progressive enhancement patterns, and routes that take no request body, such as anonymous sign-in.
 
-   When a sign-in or sign-up request is received **without** any cookies:
+   When such a request is received **without** any cookies:
 
    * If the browser indicates a **cross-site navigation** (for example: `Sec-Fetch-Site: cross-site` and `Sec-Fetch-Mode: navigate`), Better Auth **blocks** the request as a potential login CSRF attack.
 

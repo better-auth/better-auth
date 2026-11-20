@@ -77,9 +77,13 @@ Lets `/oauth2/public-client-prelogin` answer before sign-in when the request car
 
 Scopes clients may request. Without `openid`, the provider is OAuth only. Defaults to `["openid", "profile", "email", "offline_access"]`. See [Scopes](/docs/plugins/oauth-provider/tokens#scopes).
 
-`advertisedMetadata` <span className="opacity-70">`{ scopes_supported?, claims_supported? }`</span>
+`requireOpenId` <span className="opacity-70">`boolean`</span>
 
-Overrides what discovery advertises. Every `scopes_supported` value must be in `scopes`. See [Discovery metadata](/docs/plugins/oauth-provider/openid-connect#discovery-metadata).
+Requires authorization code requests to include the `openid` scope. Once the client and `redirect_uri` have been validated, a request without `openid`, or with no `scope` at all, is redirected to the client's `redirect_uri` with `invalid_scope`. Pushed authorization requests at `/oauth2/par` and calls to `issueAuthorizationCode` return `invalid_scope` directly. Device authorization and CIBA approvals are unaffected. Defaults to `false`, where a request without `openid` is served as plain OAuth and a request with no `scope` falls back to the client's registered `scopes`, or to the provider's `scopes` when the client has none. `openid` must be in `scopes`, or the plugin fails at startup.
+
+`advertisedMetadata` <span className="opacity-70">`{ scopes_supported?, claims_supported?, token_endpoint_auth_methods_supported? }`</span>
+
+Overrides what the two discovery documents advertise, and can add values as well as hide them. Every `scopes_supported` value must be in `scopes`. `token_endpoint_auth_methods_supported` lists exactly the methods you set in both discovery documents, and every method must be one the server supports (`none`, the built-in confidential methods, or a method contributed through `extensions` or a companion plugin's `extendOAuthProvider` call). The list cannot be empty or repeat a method, or the plugin fails at startup. An unsupported method throws when discovery metadata is built, because companion plugins register their methods after the provider is created. Unset, `none` is listed when `allowUnauthenticatedClientRegistration` is `true` or an extension contributes client discovery, such as the [CIMD plugin](/docs/plugins/cimd). These options change only what discovery advertises. They do not change which clients the token endpoint accepts, and they do not open `/oauth2/register`. See [Discovery metadata](/docs/plugins/oauth-provider/openid-connect#discovery-metadata).
 
 `customAccessTokenClaims` <span className="opacity-70">`(info) => Awaitable<Record<string, any>>`</span>
 
@@ -211,6 +215,10 @@ Protected resources seeded into `oauthResource` at startup. See [Resources](/doc
 `resourceSeedMode` <span className="opacity-70">`"insertOnly" | "merge" | "overwrite"`</span>
 
 How seeding treats existing rows: skip them, update only the configured fields, or replace them. Defaults to `"insertOnly"`.
+
+`resourceSeedScope` <span className="opacity-70">`"adapter" | "process"`</span>
+
+How long a finished seed is remembered. `"adapter"` (default) remembers it per database adapter. `"process"` remembers each seeded entry for the life of the process, for apps that build Better Auth per request, such as on Cloudflare Workers. Use `"process"` only when every instance in the process uses the same database.
 
 `enforcePerClientResources` <span className="opacity-70">`boolean`</span>
 
@@ -478,7 +486,7 @@ Server method: `adminLinkClientResource`. Auth: session and `resourcePrivileges`
 
 Server method: `adminUnlinkClientResource`. Auth: session and `resourcePrivileges`. Server-only.
 
-In the browser, `oauthProviderClient()` adds the signed `oauth_query` from the page URL to POST requests. `/oauth2/register` rejects requests unless `allowDynamicClientRegistration` is on, and `/oauth2/client/rotate-keys` unless `allowClientKeyRotation` is on.
+In the browser, `oauthProviderClient()` forwards the signed `oauth_query` from the page URL in JSON object and form-encoded bodies for methods other than GET and DELETE. See [Sign-in flow](/docs/plugins/oauth-provider/sign-in-flow). `/oauth2/register` rejects requests unless `allowDynamicClientRegistration` is on, and `/oauth2/client/rotate-keys` unless `allowClientKeyRotation` is on.
 
 Some endpoints behave differently with other plugins or requests:
 
@@ -493,9 +501,19 @@ Errors use the [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#se
 
 Every 401 from an endpoint that authenticates a client or an access token carries a `WWW-Authenticate` challenge, as [RFC 9110 §15.5.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2) requires. A client-authentication failure that the endpoint reports as 401 carries a `Basic` challenge. If the client sent an `Authorization` header with another scheme, the challenge names that scheme instead. When `allowUnauthenticatedClientRegistration` is off, client registration without a session or an initial access token returns 401 with a bare `Bearer` challenge.
 
-The token endpoint reports most client-authentication failures as 400 with no challenge, as [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) allows. It returns 401 with a challenge when the client authenticated through the `Authorization` header, and for a `private_key_jwt` assertion from a registered client that fails the JWT library's verification: signature, issuer, subject, audience, expiry, or not-before. Other assertion failures stay 400 with no challenge, such as an unsupported `client_assertion_type` or signing algorithm, a malformed assertion, a `client_id` that does not match the assertion, a client that is unknown, disabled, or not registered for `private_key_jwt`, client keys that are missing or cannot be fetched, a missing `exp`, an `iat` that is too old, an `exp` further out than `assertionMaxLifetime`, a missing `jti`, and a `jti` that was already used. Every one of them returns the `invalid_client` error code.
+The token endpoint reports most client-authentication failures as 400 with no challenge, as [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) allows. It returns 401 with a challenge when the client authenticated through the `Authorization` header, and for a `private_key_jwt` assertion from a registered client that fails the JWT library's verification: signature, issuer, subject, audience, expiry, or not-before. Other assertion failures stay 400 with no challenge, such as an unsupported `client_assertion_type` or signing algorithm, a malformed assertion, a `client_id` that does not match the assertion, a client that is unknown, disabled, or not registered for `private_key_jwt`, client keys that are missing or cannot be fetched, a missing `exp`, an `iat` older than `assertionMaxLifetime`, an `exp` further out than `assertionMaxLifetime`, a missing `jti`, and a `jti` that was already used. The `iat` and `exp` limits each allow an extra `assertionClockTolerance` seconds. Every one of them returns the `invalid_client` error code.
 
 The response also lists `WWW-Authenticate` in `Access-Control-Expose-Headers`, so a browser client on another origin can read the challenge. Names that a hook already exposed stay in the list.
+
+The end-session endpoint does not follow the rule that every 401 carries a challenge. It authenticates with `id_token_hint`, not with an HTTP scheme. Its 401 responses carry no `WWW-Authenticate` challenge, although [RFC 9110 §15.5.2](https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2) says a 401 response must carry one. The endpoint returns 401 `invalid_client` when the client has not enabled end-session, and 401 `invalid_token` for an invalid hint when no browser confirmation applies. See [RP-initiated logout](/docs/plugins/oauth-provider/openid-connect#rp-initiated-logout).
+
+The token endpoint answers a request with missing client credentials by grant:
+
+* A request that carries no client identity returns `invalid_request`. The identity can come from the form `client_id`, the `Authorization` header, or a `private_key_jwt` assertion.
+* A request that names a confidential client but sends no secret returns `invalid_client` on the `client_credentials` and `refresh_token` grants. A client registered for `private_key_jwt` that sends no valid assertion gets the same error. A valid assertion authenticates the client instead of a secret.
+* On the `authorization_code` grant, a request with a `client_id` but neither a secret, a client assertion, nor a `code_verifier` returns `invalid_request`. The endpoint checks for one of them before it looks up the client. With a `code_verifier` and no secret, a confidential client that sends no secret and no assertion gets `invalid_client`.
+
+[RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) lists "no client authentication included" under `invalid_client`. The `invalid_request` answers depart from that text.
 
 `invalid_request` <span className="opacity-70">400</span>
 

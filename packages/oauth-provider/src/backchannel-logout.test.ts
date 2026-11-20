@@ -9,6 +9,7 @@ import {
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
+	refreshAccessTokenRequest,
 } from "@better-auth/core/oauth2";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { createAuthClient } from "better-auth/client";
@@ -44,7 +45,7 @@ interface ReceivedLogoutRequest {
  * returns a configurable status, with optional artificial latency.
  */
 async function startMockRp(
-	options: { status?: number; delayMs?: number } = {},
+	options: { status?: number; delayMs?: number; location?: string } = {},
 ) {
 	const received: ReceivedLogoutRequest[] = [];
 	const server = createServer((req, res) => {
@@ -63,6 +64,7 @@ async function startMockRp(
 				await new Promise((r) => setTimeout(r, options.delayMs));
 			}
 			res.statusCode = options.status ?? 200;
+			if (options.location) res.setHeader("location", options.location);
 			res.end();
 		});
 	});
@@ -545,27 +547,38 @@ describe("oauth back-channel logout", async () => {
 		expect(rp.received).toHaveLength(1);
 	});
 
-	it("marks non-offline_access access + refresh tokens revoked, preserves offline_access refresh tokens", async () => {
+	it("revokes access tokens and non-offline_access refresh tokens, and preserves offline_access refresh tokens", async () => {
 		const oauthClient = await registerClient();
+		const tokens = await issueTokens({ client: oauthClient });
+
+		// Narrowing the scope on a refresh leaves a session-bound refresh token
+		// without offline_access.
+		const { body, headers: refreshHeaders } = await refreshAccessTokenRequest({
+			refreshToken: tokens.refresh_token!,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret!,
+				redirectURI: `${rp.url}/callback`,
+			},
+			extraParams: { scope: "openid email profile" },
+		});
+		const narrowed = await client.$fetch<{ refresh_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: refreshHeaders },
+		);
+		expect(narrowed.error).toBeNull();
 		await issueTokens({ client: oauthClient });
 
 		const ctx = await auth.$context;
-
-		const accessBefore = await ctx.adapter.findMany<{ revoked?: Date | null }>({
-			model: "oauthAccessToken",
-			where: [{ field: "clientId", value: oauthClient.client_id }],
-		});
-		const refreshBefore = await ctx.adapter.findMany<{
-			revoked?: Date | null;
-			scopes: string[];
-		}>({
+		type RefreshRow = { id: string; revoked?: Date | null; scopes: string[] };
+		const refreshBefore = await ctx.adapter.findMany<RefreshRow>({
 			model: "oauthRefreshToken",
 			where: [{ field: "clientId", value: oauthClient.client_id }],
 		});
-		expect(accessBefore.length).toBeGreaterThan(0);
-		expect(refreshBefore.length).toBeGreaterThan(0);
-		for (const t of accessBefore) expect(t.revoked ?? null).toBeNull();
-		for (const t of refreshBefore) expect(t.revoked ?? null).toBeNull();
+		const narrowedRow = refreshBefore.find(
+			(t) => !t.scopes.includes("offline_access"),
+		);
+		expect(narrowedRow).toBeDefined();
 
 		await client.signOut({ fetchOptions: { headers } });
 		await waitForDispatches();
@@ -574,22 +587,19 @@ describe("oauth back-channel logout", async () => {
 			model: "oauthAccessToken",
 			where: [{ field: "clientId", value: oauthClient.client_id }],
 		});
-		const refreshAfter = await ctx.adapter.findMany<{
-			revoked?: Date | null;
-			scopes: string[];
-		}>({
+		const refreshAfter = await ctx.adapter.findMany<RefreshRow>({
 			model: "oauthRefreshToken",
 			where: [{ field: "clientId", value: oauthClient.client_id }],
 		});
 		for (const t of accessAfter) expect(t.revoked).toBeInstanceOf(Date);
+		expect(
+			refreshAfter.find((t) => t.id === narrowedRow!.id)?.revoked,
+		).toBeInstanceOf(Date);
 		// Offline access refresh tokens must survive (spec §2.7)
-		for (const t of refreshAfter) {
-			if (t.scopes.includes("offline_access")) {
-				expect(t.revoked ?? null).toBeNull();
-			} else {
-				expect(t.revoked).toBeInstanceOf(Date);
-			}
-		}
+		const offlineAfter = refreshAfter.filter(
+			(t) => t.scopes.includes("offline_access") && !t.revoked,
+		);
+		expect(offlineAfter.length).toBeGreaterThan(0);
 	});
 
 	it("revokes access tokens on session end even when no refresh token was issued", async () => {
@@ -651,6 +661,37 @@ describe("oauth back-channel logout", async () => {
 		const result = await client.signOut({ fetchOptions: { headers } });
 		expect(result.error).toBeNull();
 		await waitForDispatches();
+		expect(rp.received).toHaveLength(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11328
+	 */
+	it("delivers the logout token on runtimes without redirect: error", async () => {
+		const oauthClient = await registerClient();
+		await issueTokens({ client: oauthClient });
+		// Cloudflare Workers only accepts "follow" and "manual".
+		const routedFetch = globalThis.fetch;
+		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+			if (init?.redirect !== "manual") {
+				return Promise.reject(new TypeError("Invalid redirect value"));
+			}
+			return routedFetch(input, init);
+		});
+
+		await client.signOut({ fetchOptions: { headers } });
+
+		expect(rp.received).toHaveLength(1);
+	});
+
+	it("does not follow a redirect from the back-channel logout URI", async () => {
+		await rp.close();
+		rp = await startMockRp({ status: 307, location: "/followed" });
+		const oauthClient = await registerClient();
+		await issueTokens({ client: oauthClient });
+
+		await client.signOut({ fetchOptions: { headers } });
+
 		expect(rp.received).toHaveLength(1);
 	});
 

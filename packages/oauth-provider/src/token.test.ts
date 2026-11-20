@@ -2412,7 +2412,11 @@ describe("oauth token - refresh_token", async () => {
 				["openid", "profile", "offline_access"],
 				sessionHeaders,
 			);
-			return { sessionId: session!.session.id, tokens: tokens! };
+			return {
+				headers: sessionHeaders,
+				sessionId: session!.session.id,
+				tokens: tokens!,
+			};
 		}
 
 		async function expireSession(sessionId: string) {
@@ -2500,29 +2504,199 @@ describe("oauth token - refresh_token", async () => {
 			expect(introspection.data?.sid).toBeUndefined();
 		});
 
-		it("keeps an opaque access token usable when the refresh token has no offline_access", async () => {
-			const { sessionId, tokens } = await signInAndAuthorize();
-			// Narrowing the scope on a refresh persists the narrowed scope on the
-			// rotated token, which leaves a session-bound refresh token without
-			// offline_access.
-			const narrowed = await refresh(tokens.refresh_token!, {
-				scope: "openid profile",
+		/**
+		 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions
+		 */
+		describe("refresh token without offline_access", () => {
+			/**
+			 * Narrowing the scope on a refresh persists the narrowed scope on the
+			 * rotated token, which leaves a session-bound refresh token without
+			 * offline_access.
+			 */
+			async function narrow(refreshToken: string) {
+				const narrowed = await refresh(refreshToken, {
+					scope: "openid profile",
+				});
+				expect(narrowed.error).toBeNull();
+				return narrowed.data!.refresh_token!;
+			}
+
+			function introspectRefreshToken(token: string) {
+				return client.oauth2.introspect(
+					{
+						client_id: oauthClient!.client_id,
+						client_secret: oauthClient!.client_secret,
+						token,
+						token_type_hint: "refresh_token",
+					},
+					{
+						headers: { "content-type": "application/x-www-form-urlencoded" },
+					},
+				);
+			}
+
+			/** Pauses the next session lookup until `release` is called. */
+			async function holdNextSessionLookup() {
+				const context = await authorizationServer.$context;
+				const findOne = context.adapter.findOne.bind(context.adapter);
+				const reached = Promise.withResolvers<void>();
+				const released = Promise.withResolvers<void>();
+				const spy = vi.spyOn(context.adapter, "findOne");
+				spy.mockImplementation(async (...args) => {
+					if (args[0].model === "session") {
+						spy.mockRestore();
+						reached.resolve();
+						await released.promise;
+					}
+					return findOne(...args);
+				});
+				return {
+					reached: reached.promise,
+					release: released.resolve,
+					restore: () => {
+						spy.mockRestore();
+						released.resolve();
+					},
+				};
+			}
+
+			it("rejects the refresh once its session expired", async () => {
+				const { sessionId, tokens } = await signInAndAuthorize();
+				const narrowedRefreshToken = await narrow(tokens.refresh_token!);
+				await expireSession(sessionId);
+
+				const refreshed = await refresh(narrowedRefreshToken, {
+					opaque: true,
+				});
+				expect(refreshed.error).toMatchObject({ error: "invalid_grant" });
+
+				const introspection =
+					await introspectRefreshToken(narrowedRefreshToken);
+				expect(introspection.data).toMatchObject({ active: false });
 			});
-			expect(narrowed.error).toBeNull();
-			const narrowedRefreshToken = narrowed.data!.refresh_token!;
-			await expireSession(sessionId);
 
-			const refreshed = await refresh(narrowedRefreshToken, { opaque: true });
-			expect(refreshed.error).toBeNull();
-			const accessToken = refreshed.data!.access_token!;
+			it("rejects the refresh once deleting its session cleared the link", async () => {
+				const { sessionId, tokens } = await signInAndAuthorize();
+				const narrowedRefreshToken = await narrow(tokens.refresh_token!);
+				// A database that enforces the foreign key sets sessionId to null
+				// when the session row is deleted.
+				const context = await authorizationServer.$context;
+				await context.adapter.updateMany({
+					model: "oauthRefreshToken",
+					where: [{ field: "sessionId", value: sessionId }],
+					update: { sessionId: null },
+				});
+				await context.adapter.delete({
+					model: "session",
+					where: [{ field: "id", value: sessionId }],
+				});
 
-			const introspection = await introspectAccessToken(accessToken);
-			expect(introspection.data).toMatchObject({ active: true });
-			expect(introspection.data?.sid).toBeUndefined();
+				const refreshed = await refresh(narrowedRefreshToken, {
+					opaque: true,
+				});
+				expect(refreshed.error).toMatchObject({ error: "invalid_grant" });
 
-			const userinfo = await fetchUserinfo(accessToken);
-			expect(userinfo.error).toBeNull();
-			expect(userinfo.data?.sub).toBeDefined();
+				const introspection =
+					await introspectRefreshToken(narrowedRefreshToken);
+				expect(introspection.data).toMatchObject({ active: false });
+			});
+
+			it("rejects a refresh that read the token before sign-out ended the session", async () => {
+				const { headers, tokens } = await signInAndAuthorize();
+				const narrowedRefreshToken = await narrow(tokens.refresh_token!);
+
+				const lookup = await holdNextSessionLookup();
+				try {
+					const refreshing = refresh(narrowedRefreshToken);
+					// A refresh that fails before the lookup must not hang the test.
+					await Promise.race([lookup.reached, refreshing]);
+					await authorizationServer.api.signOut({ headers });
+					lookup.release();
+
+					const refreshed = await refreshing;
+					expect(refreshed.error).toMatchObject({ error: "invalid_grant" });
+				} finally {
+					lookup.restore();
+				}
+			});
+
+			it("keeps the client's offline grants after it presents the token following sign-out", async () => {
+				const offline = await signInAndAuthorize();
+				const signedOut = await signInAndAuthorize();
+				const narrowedRefreshToken = await narrow(
+					signedOut.tokens.refresh_token!,
+				);
+				await authorizationServer.api.signOut({ headers: signedOut.headers });
+
+				const refreshed = await refresh(narrowedRefreshToken);
+				expect(refreshed.error).toMatchObject({
+					error: "invalid_grant",
+					error_description: "invalid refresh token",
+				});
+
+				const offlineRefresh = await refresh(offline.tokens.refresh_token!);
+				expect(offlineRefresh.error).toBeNull();
+			});
+
+			it("keeps the client's offline grants when a revoked token is presented after its session expired", async () => {
+				const offline = await signInAndAuthorize();
+				const signedOut = await signInAndAuthorize();
+				const narrowedRefreshToken = await narrow(
+					signedOut.tokens.refresh_token!,
+				);
+				// The session expires in place, so the row keeps its sessionId.
+				const context = await authorizationServer.$context;
+				await context.adapter.updateMany({
+					model: "oauthRefreshToken",
+					where: [{ field: "sessionId", value: signedOut.sessionId }],
+					update: { revoked: new Date() },
+				});
+				await expireSession(signedOut.sessionId);
+
+				const refreshed = await refresh(narrowedRefreshToken);
+				expect(refreshed.error).toMatchObject({ error: "invalid_grant" });
+
+				const offlineRefresh = await refresh(offline.tokens.refresh_token!);
+				expect(offlineRefresh.error).toBeNull();
+			});
+
+			it("refuses to narrow away offline_access once the session ended, keeping the presented token", async () => {
+				const { sessionId, tokens } = await signInAndAuthorize();
+				await expireSession(sessionId);
+
+				const narrowed = await refresh(tokens.refresh_token!, {
+					scope: "openid profile",
+				});
+				expect(narrowed.error).toMatchObject({ error: "invalid_grant" });
+
+				const refreshed = await refresh(tokens.refresh_token!);
+				expect(refreshed.error).toBeNull();
+				expect(refreshed.data?.scope).toContain("offline_access");
+			});
+
+			it("refuses a refresh whose resource policy drops offline_access once the session ended, keeping the presented token", async () => {
+				const { sessionId, tokens } = await signInAndAuthorize();
+				await expireSession(sessionId);
+				const context = await authorizationServer.$context;
+				const setAllowedScopes = (allowedScopes: string[] | null) =>
+					context.adapter.update({
+						model: "oauthResource",
+						where: [{ field: "identifier", value: validResource }],
+						update: { allowedScopes },
+					});
+
+				await setAllowedScopes(["openid", "profile"]);
+				try {
+					const filtered = await refresh(tokens.refresh_token!);
+					expect(filtered.error).toMatchObject({ error: "invalid_grant" });
+				} finally {
+					await setAllowedScopes(null);
+				}
+
+				const refreshed = await refresh(tokens.refresh_token!);
+				expect(refreshed.error).toBeNull();
+				expect(refreshed.data?.scope).toContain("offline_access");
+			});
 		});
 	});
 });

@@ -1294,3 +1294,35 @@ describe("username social sign-up", async () => {
 		});
 	});
 });
+
+describe("username with a request that has no body", async () => {
+	const { auth } = await getTestInstance(
+		{
+			plugins: [username()],
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it.each([
+		["/sign-up/email", undefined],
+		["/update-user", undefined],
+		["/sign-up/email", "null"],
+		["/update-user", "null"],
+	])("should answer %s with 400 when the body is %s", async (path, body) => {
+		const response = await auth.handler(
+			new Request(`http://localhost:3000/api/auth${path}`, {
+				method: "POST",
+				headers: body
+					? {
+							"content-type": "application/json",
+						}
+					: undefined,
+				body,
+			}),
+		);
+
+		expect(response.status).toBe(400);
+	});
+});

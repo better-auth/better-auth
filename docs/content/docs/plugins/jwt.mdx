@@ -243,6 +243,8 @@ betterAuth({
 })
 ```
 
+The provider identifies JWT access tokens by their `azp` claim. Introspection, UserInfo, and `requireMcpAuth` do not require the `typ: "at+jwt"` header. Reserve `azp` for OAuth access tokens and remove it from any untrusted payload before signing it. On a resource server, keep the local JWT check and require `typ: "at+jwt"`. See [JWT or opaque tokens](/docs/plugins/oauth-provider/resource-server#jwt-or-opaque-tokens).
+
 ### Remote JWKS Url
 
 Disables the `/jwks` endpoint and uses this endpoint in any discovery such as OIDC.
@@ -323,6 +325,7 @@ Implementers:
 * `remoteUrl` must be defined if using the `sign` function. This shall store all active keys, not just the current one.
 * If using localized approach, ensure server uses the latest private key when rotated. Depending on deployment, the server may need to be restarted.
 * When using remote approach, verify the payload is unchanged after transit. Use integrity validation like CRC32 or SHA256 checks if available.
+* Apply the optional `header` argument to the signed header. The OAuth provider passes `typ: "at+jwt"` for access tokens, and resource servers that check `typ`, as [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) requires, reject an access token without it.
 
 #### Localized Signing
 
@@ -335,13 +338,14 @@ jwt({
     },
   },
   jwt: {
-    sign: async (jwtPayload: JWTPayload) => {
+    sign: async (jwtPayload: JWTPayload, header) => {
       // this is pseudocode
       return await new SignJWT(jwtPayload)
         .setProtectedHeader({
           alg: "EdDSA",
           kid: process.env.currentKid,
           typ: "JWT",
+          ...header, // carries typ: "at+jwt" for OAuth access tokens
         })
         .sign(process.env.clientPrivateKey);
     },
@@ -362,9 +366,10 @@ jwt({
     },
   },
   jwt: {
-    sign: async (jwtPayload: JWTPayload) => {
+    sign: async (jwtPayload: JWTPayload, header) => {
       // this is pseudocode
-      const headers = JSON.stringify({ kid: '123', alg: 'ES256', typ: 'JWT' })
+      // `header` carries typ: "at+jwt" for OAuth access tokens
+      const headers = JSON.stringify({ kid: '123', alg: 'ES256', typ: 'JWT', ...header })
       const payload = JSON.stringify(jwtPayload)
       const encodedHeaders = Buffer.from(headers).toString('base64url')
       const encodedPayload = Buffer.from(payload).toString('base64url')

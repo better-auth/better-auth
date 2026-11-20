@@ -2775,3 +2775,37 @@ describe("phone-number sign-in password length", async () => {
 		expect(verify).not.toHaveBeenCalled();
 	});
 });
+
+describe("updateUser with a request that has no body", async () => {
+	const { auth } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP() {},
+				}),
+			],
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it.each([undefined, "null", '"phoneNumber"'])(
+		"should answer with 400 when the body is %s",
+		async (body) => {
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/update-user", {
+					method: "POST",
+					headers: body
+						? {
+								"content-type": "application/json",
+							}
+						: undefined,
+					body,
+				}),
+			);
+
+			expect(response.status).toBe(400);
+		},
+	);
+});

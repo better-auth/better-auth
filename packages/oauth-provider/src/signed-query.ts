@@ -14,6 +14,20 @@ export function getSignedQueryExpiresIn(
 export const postLoginClearedParam = "ba_pl";
 const signedQueryParameterNameParam = "ba_param";
 
+/**
+ * Rewrites a standard base64 string into the base64url alphabet.
+ *
+ * The verifier compares signatures in this form, so a `sig` matches whether it
+ * is written in the standard or the base64url alphabet.
+ */
+export function toBase64Url(value: string) {
+	let end = value.length;
+	// A loop, not a trailing `=+$` pattern, so a long run of `=` in an untrusted
+	// `sig` cannot make the match quadratic.
+	while (end > 0 && value.charCodeAt(end - 1) === 61) end--;
+	return value.slice(0, end).replace(/\+/g, "-").replace(/\//g, "_");
+}
+
 export function canonicalizeOAuthQueryParams(params: URLSearchParams) {
 	const canonicalParams = new URLSearchParams();
 	const entries = [...params.entries()].sort(

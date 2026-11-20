@@ -150,6 +150,14 @@
 
 ## 1.8.0-beta.0
 
+## 1.7.27
+
+### Patch Changes
+
+- [#12722](https://github.com/better-auth/better-auth/pull/12722) [`5956cb7`](https://github.com/better-auth/better-auth/commit/5956cb7632eaf104eff9b281dcd6e058609b59ca) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed valid access tokens being rejected while the JWKS refetch fails or times out, such as on a slow cold start. After the five-minute key cache expires and the refetch fails, `verifyBearerToken`, `verifyAccessTokenRequest`, and `verifyJwsAccessToken` now verify against the expired key set when it holds the token's `kid` (or the token has no `kid`) and was fetched less than 10 minutes ago. Verification still fails with the key set error with no cached set, such as on a cold start, for a `kid` the set lacks, and once the set is older than 10 minutes. The 10 minutes are a local choice that ignores the key set's `Cache-Control`, so a token signed with a key the issuer already rotated out can still pass for up to 10 minutes after the last successful fetch. `getJwks` and `validateToken` do not use the expired set.
+
+- [#12807](https://github.com/better-auth/better-auth/pull/12807) [`559c837`](https://github.com/better-auth/better-auth/commit/559c837ffad761dd085ef732e886a2a4d72150a3) Thanks [@bytaesu](https://github.com/bytaesu)! - The edge and browser build now uses the runtime's `AsyncLocalStorage` when one exists, so overlapping requests no longer read each other's request state. Where none exists, the fallback no longer keeps the store of a request that has finished or thrown.
+
 ## 1.7.26
 
 ### Patch Changes

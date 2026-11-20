@@ -55,7 +55,8 @@ interface JwksCacheEntry {
 	/** Start time of the fetch that produced `jwks`. */
 	fetchedAt: number;
 	/**
-	 * Start time of the last refetch for a key missing from `jwks`, whatever
+	 * Completion timestamp of the last failed expired-cache refetch attempt, or
+	 * start time of the last refetch for a key missing from `jwks`, whatever
 	 * its outcome.
 	 */
 	refetchedAt: number;
@@ -107,6 +108,14 @@ const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
 // key. Bounds how often tokens naming made-up `kid` values make a source fetch.
 const JWKS_REFETCH_COOLDOWN_MS = 30 * 1000;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
+/**
+ * Maximum age an expired cached JWKS is trusted for verification when a refetch
+ * fails or times out, measured from the fetch that produced it. It is two cache
+ * lifetimes, the bound the client `jwks_uri` fallback in the OAuth provider
+ * uses. The window is a local choice and ignores the key set's `Cache-Control`.
+ * A key the issuer has already rotated out is accepted until the window ends.
+ */
+const JWKS_MAX_STALE_MS = 2 * JWKS_CACHE_TTL_MS;
 
 function getJwksCacheEntry<K>(
 	cache: {
@@ -398,12 +407,21 @@ export async function verifyJwsToken<PayloadType = JWTPayload>(
 	token: string,
 	opts: JwksFetchOptions & {
 		verifyOptions: JWTVerifyOptions;
+		/**
+		 * Verify against an expired cached key set when its refetch fails. Only
+		 * access-token verification sets it.
+		 */
+		allowStaleJwks?: boolean;
 	},
 ) {
 	if (token.split(".").length !== 3) {
 		throw new joseErrors.JWSInvalid("Invalid Compact JWS");
 	}
-	const resolved = await getJwksForVerification(token, opts);
+	const resolved = await getJwksForVerification(
+		token,
+		opts,
+		opts.allowStaleJwks,
+	);
 	let jwks = resolved.jwks;
 	// Retry with a newer cached key set, then await a fetch already in progress.
 	// Allow at most two retries.
@@ -439,7 +457,7 @@ export async function verifyJwsAccessToken(
 	},
 ) {
 	try {
-		const jwt = await verifyJwsToken(token, opts);
+		const jwt = await verifyJwsToken(token, { ...opts, allowStaleJwks: true });
 		// Return the JWT payload in introspection format
 		// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 		if (jwt.payload.azp) {
@@ -459,6 +477,7 @@ export async function getJwks(token: string, opts: JwksFetchOptions) {
 async function getJwksForVerification(
 	token: string,
 	opts: JwksFetchOptions,
+	allowStale = false,
 ): Promise<ResolvedJwks> {
 	// Attempt to decode the token and find a matching kid in jwks
 	let jwtHeaders: ProtectedHeaderParameters | undefined;
@@ -483,19 +502,87 @@ async function getJwksForVerification(
 				? getJwksCacheEntry(functionJwksCache, opts.jwksCacheKey)
 				: { fetchedAt: 0, refetchedAt: 0 };
 
-	const cached =
-		Date.now() - entry.fetchedAt < JWKS_CACHE_TTL_MS ? entry.jwks : undefined;
-	if (!cached) {
-		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
-	}
 	const refresh = (failed: JSONWebKeySet) =>
 		refreshJwks(entry, failed, opts.jwksFetch);
-	// Without `kid`, key selection is deferred to JOSE because RFC 7515 makes
-	// the header parameter optional.
-	if (!kid || cached.keys.some((jwk) => jwk.kid === kid)) {
-		return { jwks: cached, kid, refresh };
+	const resolveCached = async (
+		cached: JSONWebKeySet,
+	): Promise<ResolvedJwks> => {
+		// Without `kid`, key selection is deferred to JOSE because RFC 7515 makes
+		// the header parameter optional.
+		if (!kid || cached.keys.some((jwk) => jwk.kid === kid)) {
+			return { jwks: cached, kid, refresh };
+		}
+		return { jwks: (await refresh(cached)) ?? cached, kid };
+	};
+
+	const now = Date.now();
+	const cached =
+		now - entry.fetchedAt < JWKS_CACHE_TTL_MS ? entry.jwks : undefined;
+	if (cached) return resolveCached(cached);
+	if (!allowStale) {
+		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
 	}
-	return { jwks: (await refresh(cached)) ?? cached, kid };
+
+	// The expired set in the entry while it is within the stale window at `at`,
+	// and whether it can verify this token. A set is cached without validation,
+	// so its entries are checked before `kid` is read from them.
+	const getStaleJwks = (at: number) => {
+		const stale = entry.jwks;
+		if (
+			!stale ||
+			!Array.isArray(stale.keys) ||
+			at - entry.fetchedAt >= JWKS_MAX_STALE_MS
+		) {
+			return undefined;
+		}
+		const canUse =
+			!kid ||
+			stale.keys.some(
+				(jwk) => jwk && typeof jwk === "object" && jwk.kid === kid,
+			);
+		return { stale, canUse };
+	};
+
+	// Only while serving a stale set does a failed refresh leave a token
+	// without `kid` with its own verification error. With a fresh set, the
+	// failure stays an outage error.
+	const refreshStale = async (failed: JSONWebKeySet) => {
+		try {
+			return await refreshJwks(entry, failed, opts.jwksFetch);
+		} catch {
+			return undefined;
+		}
+	};
+
+	const expired = getStaleJwks(now);
+	if (expired && now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) {
+		if (expired.canUse) {
+			return { jwks: expired.stale, kid, refresh: refreshStale };
+		}
+		// The set is not known to lack the key, because the refetch that
+		// could tell failed, so this is an outage rather than an invalid
+		// token. A refetch still in flight settles it, and this joins it.
+		if (!isFetching(entry, now)) throw new Error("JWKS fetch failed");
+	}
+
+	try {
+		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
+	} catch (error) {
+		const failedAt = Date.now();
+		entry.refetchedAt = failedAt;
+		// An earlier fetch that outlived its wait can land while this one fails.
+		// Its set replaces the one read above, which may still hold a key the
+		// issuer has since dropped, so the entry is read again and each set is
+		// judged by the time of its own fetch.
+		if (entry.jwks && failedAt - entry.fetchedAt < JWKS_CACHE_TTL_MS) {
+			return resolveCached(entry.jwks);
+		}
+		const latest = getStaleJwks(failedAt);
+		if (latest?.canUse) {
+			return { jwks: latest.stale, kid, refresh: refreshStale };
+		}
+		throw error;
+	}
 }
 
 /**
