@@ -29,11 +29,16 @@ describe("mongodb-adapter", () => {
 	});
 
 	it("inserts many documents with insertMany in input order", async () => {
-		const insertMany = vi.fn(async (documents: Record<string, unknown>[]) => ({
-			insertedIds: Object.fromEntries(
-				documents.map((document, index) => [index, document._id]),
-			),
-		}));
+		const insertMany = vi.fn(
+			async (
+				documents: Record<string, unknown>[],
+				_options?: { ordered?: boolean; session?: unknown },
+			) => ({
+				insertedIds: Object.fromEntries(
+					documents.map((document, index) => [index, document._id]),
+				),
+			}),
+		);
 		const db = {
 			collection: vi.fn(() => ({
 				insertMany,
