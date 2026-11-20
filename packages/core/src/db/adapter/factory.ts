@@ -1306,6 +1306,11 @@ export const createAdapterFactory =
 					where: unsafeWhere,
 					action: "delete",
 				});
+				// `delete` targets a single row. Empty predicates have no
+				// target, so fail closed and leave bulk deletes to `deleteMany`.
+				if (where.length === 0) {
+					return;
+				}
 				debugLog(
 					{ method: "delete" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,

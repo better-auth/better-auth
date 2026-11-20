@@ -457,6 +457,12 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		where: Where[];
 		update: Record<string, any>;
 	}) => Promise<number>;
+	/**
+	 * Delete a single row matching the where clause.
+	 *
+	 * Empty `where` clauses are a no-op; use `deleteMany` for intentional bulk
+	 * deletes (including deleting every row in the model).
+	 */
 	delete: <_T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
