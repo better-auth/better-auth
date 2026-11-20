@@ -223,52 +223,72 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 		 *
 		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 		 */
-		it("fails a rotation that stores its refresh token after reuse revoked the grant", async () => {
-			const ctx = await server.auth.$context;
-			const readRows = () =>
-				ctx.adapter.findMany<{ id: string; grantId: string }>({
-					model: "oauthRefreshToken",
-					where: [{ field: "clientId", value: server.options.clientId }],
-					limit: 1000,
-				});
-			const before = new Set((await readRows()).map((row) => row.id));
-			const first = await authorize(server);
-			const [issued] = (await readRows()).filter((row) => !before.has(row.id));
-			const create = ctx.adapter.create.bind(ctx.adapter);
-			const reached = Promise.withResolvers<void>();
-			const released = Promise.withResolvers<void>();
-			const spy = vi.spyOn(ctx.adapter, "create");
-			spy.mockImplementation(async (...args) => {
-				if (args[0].model === "oauthRefreshToken") {
-					spy.mockRestore();
-					reached.resolve();
-					await released.promise;
-				}
-				return create(...args);
-			});
-			try {
-				const rotating = requestRefresh(server, first.refresh_token);
-				await reached.promise;
-				const reused = await requestRefresh(server, first.refresh_token);
-				released.resolve();
-				const rotated = await rotating;
-
-				expect(reused.error?.status).toBe(400);
-				expect(rotated.error?.status).toBe(400);
-				expect(
-					await ctx.adapter.count({
+		it.each(["oauthAccessToken", "oauthRefreshToken"])(
+			"cleans up a rotation after reuse revoked the grant even if the %s delete fails once",
+			async (failedModel) => {
+				const ctx = await server.auth.$context;
+				const readRows = () =>
+					ctx.adapter.findMany<{ id: string; grantId: string }>({
 						model: "oauthRefreshToken",
-						where: [
-							{ field: "clientId", value: server.options.clientId },
-							{ field: "grantId", value: issued!.grantId },
-						],
-					}),
-				).toBe(0);
-			} finally {
-				released.resolve();
-				spy.mockRestore();
-			}
-		});
+						where: [{ field: "clientId", value: server.options.clientId }],
+						limit: 1000,
+					});
+				const before = new Set((await readRows()).map((row) => row.id));
+				const first = await authorize(server);
+				const [issued] = (await readRows()).filter(
+					(row) => !before.has(row.id),
+				);
+				const create = ctx.adapter.create.bind(ctx.adapter);
+				const reached = Promise.withResolvers<void>();
+				const released = Promise.withResolvers<void>();
+				const deleteRow = ctx.adapter.delete.bind(ctx.adapter);
+				const cleanup = vi.spyOn(ctx.adapter, "delete");
+				const spy = vi.spyOn(ctx.adapter, "create");
+				spy.mockImplementation(async (...args) => {
+					if (args[0].model === "oauthRefreshToken") {
+						spy.mockRestore();
+						reached.resolve();
+						await released.promise;
+					}
+					return create(...args);
+				});
+				try {
+					const rotating = requestRefresh(server, first.refresh_token);
+					await reached.promise;
+					const reused = await requestRefresh(server, first.refresh_token);
+					cleanup.mockImplementation(async (args) => {
+						if (args.model === failedModel) {
+							cleanup.mockRestore();
+							throw new Error("Deadlock found when trying to get lock");
+						}
+						return deleteRow(args);
+					});
+					released.resolve();
+					const rotated = await rotating;
+
+					expect(reused.error?.status).toBe(400);
+					expect(rotated.error).toMatchObject({
+						status: 400,
+						error: "invalid_grant",
+					});
+					for (const model of ["oauthAccessToken", "oauthRefreshToken"]) {
+						expect(
+							await ctx.adapter.count({
+								model,
+								where: [
+									{ field: "clientId", value: server.options.clientId },
+									{ field: "grantId", value: issued!.grantId },
+								],
+							}),
+						).toBe(0);
+					}
+				} finally {
+					released.resolve();
+					spy.mockRestore();
+					cleanup.mockRestore();
+				}
+			},
+		);
 	},
 );
 
