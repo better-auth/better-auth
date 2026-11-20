@@ -54,6 +54,32 @@ describe("sign-out", async () => {
 		expect(cookies.get("better-auth.session_token")?.["max-age"]).toBe(0);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12144
+	 */
+	it("should not read accounts when no provider can build a logout URL", async () => {
+		const instance = await getTestInstance();
+		const { headers } = await instance.signInWithTestUser();
+		const context = await instance.auth.$context;
+		// A runtime role without access to the account table rejects the read.
+		const findAccounts = vi
+			.spyOn(context.internalAdapter, "findAccounts")
+			.mockRejectedValue(new Error("permission denied for table account"));
+		const loggerError = vi.spyOn(context.logger, "error");
+
+		const res = await instance.client.signOut({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.data).toEqual({
+			success: true,
+		});
+		expect(findAccounts).not.toHaveBeenCalled();
+		expect(loggerError).not.toHaveBeenCalled();
+	});
+
 	const baseOAuthConfig = {
 		providerId: "oidc-provider",
 		clientId: "test-client-id",
@@ -134,6 +160,62 @@ describe("sign-out", async () => {
 		expect(res.data).toEqual({
 			success: true,
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/12156#discussion_r4430807001
+	 */
+	it("should not read accounts for generic OAuth without endSessionEndpoint", async () => {
+		const { client, headers, auth } = await setupGenericOAuthSignOut();
+		const context = await auth.$context;
+		expect(
+			context.socialProviders.find((p) => p.id === baseOAuthConfig.providerId)
+				?.createEndSessionURL,
+		).toBeUndefined();
+		const findAccounts = vi
+			.spyOn(context.internalAdapter, "findAccounts")
+			.mockRejectedValue(new Error("permission denied for table account"));
+		const loggerError = vi.spyOn(context.logger, "error");
+
+		const res = await client.signOut({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.data).toEqual({
+			success: true,
+		});
+		expect(findAccounts).not.toHaveBeenCalled();
+		expect(loggerError).not.toHaveBeenCalled();
+	});
+
+	it("should not read accounts when generic OAuth provider logout is disabled", async () => {
+		const { client, headers, auth } = await setupGenericOAuthSignOut({
+			endSessionEndpoint: "https://idp.example.com/logout",
+			disableProviderLogout: true,
+		});
+		const context = await auth.$context;
+		expect(
+			context.socialProviders.find((p) => p.id === baseOAuthConfig.providerId)
+				?.createEndSessionURL,
+		).toBeUndefined();
+		const findAccounts = vi
+			.spyOn(context.internalAdapter, "findAccounts")
+			.mockRejectedValue(new Error("permission denied for table account"));
+		const loggerError = vi.spyOn(context.logger, "error");
+
+		const res = await client.signOut({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.data).toEqual({
+			success: true,
+		});
+		expect(findAccounts).not.toHaveBeenCalled();
+		expect(loggerError).not.toHaveBeenCalled();
 	});
 
 	it("should keep local-only sign out when provider logout is disabled", async () => {
