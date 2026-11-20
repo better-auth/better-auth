@@ -172,17 +172,17 @@ Claims follow the granted [scopes](https://openid.net/specs/openid-connect-core-
 | `profile` | `name`, `picture`, `given_name`, `family_name` |
 | `email`   | `email`, `email_verified`                      |
 
+By default, UserInfo omits `name` when the user’s name is empty and `picture` when their image is empty. Your `customUserInfoClaims` callback can supply either claim, including an empty string. The default follows [OpenID Connect Core §5.3.2](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse).
+
 Better Auth returns a claim from the table above even when its scope was not granted, if all of these are true:
 
 * The client requests the claim through the [`claims.userinfo` parameter](https://openid.net/specs/openid-connect-core-1_0.html#IndividualClaimsRequests).
 * The claim appears in `claims_supported`.
 * Your [consent page](/docs/plugins/oauth-provider/sign-in-flow#consent-page) did not remove the claim. It removes one when it passes a `claims` object to `oauth2.consent` that leaves the claim out.
-* The user has a value for the claim. Better Auth omits missing values instead of returning `null`.
+* The user has a value for the requested standard claim. The built-in resolvers omit missing values and skip empty names and images.
 * The access token is opaque. With a JWT access token, UserInfo returns only the claims its scopes cover.
 
 Better Auth does not fill in other requested names, such as `locale`. To return one on request, list it in `advertisedMetadata.claims_supported` together with the defaults you still want, as in [Discovery metadata](#discovery-metadata). Then read `requestedClaims` in `customUserInfoClaims`, described below.
-
-Better Auth does not treat an empty string as a missing value, so a user whose `name` is `""` gets `name: ""`. [OIDC Core §5.3.2](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse) says a claim that is not returned should be omitted, and should not be present with a null or empty string value.
 
 Better Auth reads only the claim names under `claims.userinfo`. It ignores `essential`, `value`, and `values` there, and it ignores `claims.id_token` requests except `acr`. [OIDC Core §5.5.1](https://openid.net/specs/openid-connect-core-1_0.html#IndividualClaimsRequests) says a claim whose value does not match a requested `value` is left out of the response. It also says a mismatch on `sub` must cause the authentication to fail, and [§3.1.2.2](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequestValidation) says the provider must not reply with a token for a different user. Better Auth ignores a `value` on `sub` too. A client that requests a specific `sub` must check the `sub` it receives.
 

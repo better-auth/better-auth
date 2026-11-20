@@ -18,7 +18,7 @@ interface StandardClaimDefinition {
  *
  * `User["name"]` is typed as a string, but the stored value can be absent:
  * providers may omit it, and rows can predate a name being required. The `name`
- * claim below already resolves that away with `?? undefined`, so a missing name
+ * claim below already resolves that away with `|| undefined`, so a missing name
  * leaves these two claims unresolved rather than failing the whole response.
  */
 function splitDisplayName(name: string | null | undefined): {
@@ -48,8 +48,10 @@ function splitDisplayName(name: string | null | undefined): {
  * `customUserInfoClaims` and advertise them in `claims_supported`.
  */
 export const STANDARD_CLAIMS = {
-	name: { scope: "profile", resolve: (user) => user.name ?? undefined },
-	picture: { scope: "profile", resolve: (user) => user.image ?? undefined },
+	// An empty string is omitted like a missing value: OIDC Core §5.3.2 says a
+	// claim that is not returned SHOULD be omitted, not sent as null or "".
+	name: { scope: "profile", resolve: (user) => user.name || undefined },
+	picture: { scope: "profile", resolve: (user) => user.image || undefined },
 	given_name: {
 		scope: "profile",
 		resolve: (user) => splitDisplayName(user.name).given,

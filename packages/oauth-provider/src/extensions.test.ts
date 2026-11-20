@@ -252,6 +252,8 @@ describe("oauth-provider extensions", async () => {
 				customAccessTokenClaims: () => ({ undefined_probe: undefined }),
 				customUserInfoClaims: () => ({
 					custom_userinfo_claim: "custom-userinfo",
+					name: "",
+					picture: "",
 					sub: "malicious-custom-sub", // re-pinned by the endpoint
 					email_verified: true, // first-party override of a base claim
 				}),
@@ -664,6 +666,7 @@ describe("oauth-provider extensions", async () => {
 		// First-party customUserInfoClaims may override a provider base claim,
 		// unlike an additive third-party extension claim. `sub` stays re-pinned.
 		expect(userInfo.data?.email_verified).toBe(true);
+		expect(userInfo.data).toMatchObject({ name: "", picture: "" });
 
 		const introspection = await client.$fetch<Record<string, unknown>>(
 			"/oauth2/introspect",

@@ -1130,6 +1130,58 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.data?.given_name).toBeUndefined();
 		expect(userinfo.data?.family_name).toBeUndefined();
 	});
+
+	/**
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
+	 */
+	describe("empty profile values", () => {
+		async function userInfoFor(profile: { name: string; image: string }) {
+			const ctx = await auth.$context;
+			const original = { name: user.name, image: user.image ?? null };
+			await ctx.internalAdapter.updateUser(user.id, profile);
+			try {
+				const tokens = await getTokens({ scopes: ["openid", "profile"] });
+				const response = await client.$fetch<Record<string, unknown>>(
+					"/oauth2/userinfo",
+					{
+						headers: {
+							authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
+						},
+					},
+				);
+				return response.data ?? {};
+			} finally {
+				await ctx.internalAdapter.updateUser(user.id, original);
+			}
+		}
+
+		it("omits an empty name and picture", async () => {
+			const claims = await userInfoFor({ name: "", image: "" });
+			expect(claims.sub).toBe(user.id);
+			expect(claims).not.toHaveProperty("name");
+			expect(claims).not.toHaveProperty("picture");
+			expect(claims).not.toHaveProperty("given_name");
+			expect(claims).not.toHaveProperty("family_name");
+		});
+
+		it("returns a non-empty name and picture", async () => {
+			const claims = await userInfoFor({
+				name: "Ada Lovelace",
+				image: "https://example.com/ada.png",
+			});
+			expect(claims).toMatchObject({
+				name: "Ada Lovelace",
+				picture: "https://example.com/ada.png",
+				given_name: "Ada",
+				family_name: "Lovelace",
+			});
+		});
+
+		it("leaves a whitespace-only name and picture unchanged", async () => {
+			const claims = await userInfoFor({ name: " ", image: " " });
+			expect(claims).toMatchObject({ name: " ", picture: " " });
+		});
+	});
 });
 
 describe("oauth userinfo - unresolved baseURL", async () => {
