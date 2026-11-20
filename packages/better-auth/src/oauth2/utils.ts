@@ -36,6 +36,26 @@ export function setTokenUtil(
 	return token;
 }
 
+/**
+ * Encrypts the tokens of an account record when `account.encryptOAuthTokens` is on.
+ *
+ * @internal
+ */
+export async function encryptAccountTokens(
+	tokens: {
+		accessToken?: string | null | undefined;
+		refreshToken?: string | null | undefined;
+		idToken?: string | null | undefined;
+	},
+	ctx: AuthContext,
+) {
+	return {
+		accessToken: await setTokenUtil(tokens.accessToken, ctx),
+		refreshToken: await setTokenUtil(tokens.refreshToken, ctx),
+		idToken: tokens.idToken,
+	};
+}
+
 export function getOAuthCallbackPath(provider: {
 	id: LiteralString;
 	callbackPath?: string | undefined;

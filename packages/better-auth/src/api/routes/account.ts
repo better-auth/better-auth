@@ -28,6 +28,7 @@ import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
 import { generateIdTokenNonce, generateState } from "../../oauth2/state";
 import {
 	decryptOAuthToken,
+	encryptAccountTokens,
 	getOAuthCallbackPath,
 	setTokenUtil,
 } from "../../oauth2/utils";
@@ -347,15 +348,14 @@ export const linkSocialAccount = createAuthEndpoint(
 					Object.entries({
 						...accountFields,
 						providerId: provider.id,
-						accessToken: await setTokenUtil(
-							c.body.idToken.accessToken,
+						...(await encryptAccountTokens(
+							{
+								accessToken: c.body.idToken.accessToken,
+								refreshToken: c.body.idToken.refreshToken,
+								idToken: token,
+							},
 							c.context,
-						),
-						idToken: token,
-						refreshToken: await setTokenUtil(
-							c.body.idToken.refreshToken,
-							c.context,
-						),
+						)),
 					}).filter(([_, value]) => value !== undefined),
 				);
 				await c.context.internalAdapter.updateAccount(
@@ -417,15 +417,14 @@ export const linkSocialAccount = createAuthEndpoint(
 					...accountFields,
 					userId: session.user.id,
 					...accountKey,
-					accessToken: await setTokenUtil(
-						c.body.idToken.accessToken,
+					...(await encryptAccountTokens(
+						{
+							accessToken: c.body.idToken.accessToken,
+							refreshToken: c.body.idToken.refreshToken,
+							idToken: token,
+						},
 						c.context,
-					),
-					idToken: token,
-					refreshToken: await setTokenUtil(
-						c.body.idToken.refreshToken,
-						c.context,
-					),
+					)),
 				});
 			} catch {
 				throw APIError.from("EXPECTATION_FAILED", {
