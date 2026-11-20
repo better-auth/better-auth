@@ -1144,9 +1144,11 @@ export type OAuthTokenRevokedEvent = {
 			 * `"revocation_request"`: the client revoked the refresh token at
 			 * `/oauth2/revoke`. `"reuse_detected"`: a client refreshed with the
 			 * token after it was rotated or revoked, or asked to revoke it after
-			 * it was rotated. A client retrying after a lost refresh response can
-			 * also trigger reuse detection. Refreshing a session-bound token
-			 * after its session ends returns `invalid_grant` without an event.
+			 * it was rotated. Reuse can indicate token theft. A legitimate client
+			 * retrying after a lost refresh response can produce the same event,
+			 * so confirming theft requires other evidence. Refreshing a
+			 * session-bound token after its session ends returns `invalid_grant`
+			 * without an event.
 			 *
 			 * When the token had already been rotated or revoked, or a rotation
 			 * of it raced the revocation, the provider also revokes every other
