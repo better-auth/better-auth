@@ -17,6 +17,10 @@ Any time an endpoint in Better Auth is called that has a valid API key in the he
 </Callout>
 
 <Callout>
+  **Banned and Deleted Users**: The key's owner is checked on every request. If the owner has been deleted or is banned through the [admin plugin](/docs/plugins/admin), the request is rejected with `INVALID_REFERENCE_ID_FROM_API_KEY` or `USER_BANNED` instead of receiving a session.
+</Callout>
+
+<Callout>
   **Rate Limiting Note**: When `enableSessionForAPIKeys` is enabled, the API key is validated once per request, and rate limiting is applied accordingly.
   If you manually verify an API key and then fetch a session separately, both operations will increment the rate limit counter. Using `enableSessionForAPIKeys` avoids this double increment.
 </Callout>
