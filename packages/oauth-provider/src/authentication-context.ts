@@ -47,16 +47,21 @@ export async function resolveAuthenticationContext(
 		scopes: string[];
 		headers: Headers;
 		query: Pick<OAuthInteractionQuery, "claims" | "acr_values">;
+		/** The `amr` a plugin endpoint reported to `issueAuthorizationCode`. */
+		amr?: string[] | undefined;
 	},
 ): Promise<OAuthAuthenticationContext> {
 	const resolve = opts.authenticationContext?.resolve;
 	// acr and amr only reach ID tokens, which need the openid scope.
-	if (!resolve || !info.scopes.includes("openid")) return {};
-	const { query, ...resolveInfo } = info;
+	if (!info.scopes.includes("openid")) return {};
+	const { query, amr: callerAmr, ...resolveInfo } = info;
+	const reportedAmr = readReportedAmr(callerAmr);
+	if (!resolve) return reportedAmr?.length ? { amr: reportedAmr } : {};
 	// The resolver is user code; check the runtime shape, not just the types.
 	const resolved: unknown = await resolve({
 		...resolveInfo,
 		requestedAcrValues: getRequestedAcrValues(query.claims, query.acr_values),
+		...(reportedAmr ? { amr: reportedAmr } : {}),
 	});
 	if (
 		resolved !== undefined &&
@@ -86,6 +91,21 @@ export async function resolveAuthenticationContext(
 		invalidAuthenticationContext("returned an amr that is not a string array");
 	}
 	return { acr, amr: amr.length ? (amr as string[]) : undefined };
+}
+
+/** Checks the caller's `amr` at runtime, since plugin code may forward input. */
+function readReportedAmr(amr: unknown): string[] | undefined {
+	if (amr === undefined) return undefined;
+	if (
+		!Array.isArray(amr) ||
+		!Array.from(amr).every((value) => typeof value === "string")
+	) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description: "issueAuthorizationCode amr must be a string array",
+		});
+	}
+	return [...amr];
 }
 
 const RESERVED_ID_TOKEN_CLAIMS = new Set([
