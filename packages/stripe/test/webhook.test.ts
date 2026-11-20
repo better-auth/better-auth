@@ -8,6 +8,8 @@ import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
 import {
+	createCheckoutSession,
+	createCheckoutSessionCompletedEvent,
 	createPrice,
 	createSubscription,
 	createSubscriptionEvent,
@@ -3373,6 +3375,114 @@ describe("stripe webhook", () => {
 			const { onEvent, send } = await setup(memory, stripeOptions, [event]);
 
 			expect((await send()).status).toBe(200);
+			expect(onEvent).toHaveBeenCalledTimes(1);
+		});
+
+		// The checkout session points at the row that checkout pre-created
+		const createCheckoutEvent = () => {
+			const checkoutSession = createCheckoutSession({
+				customer: "cus_propagation",
+				subscription: "sub_propagation",
+				metadata: { referenceId: "user_propagation" },
+			});
+			const event = {
+				...createCheckoutSessionCompletedEvent(),
+				data: { object: checkoutSession },
+			} as Stripe.Event;
+			const linkRow = (subscriptionId: string) => {
+				checkoutSession.metadata = {
+					...checkoutSession.metadata,
+					subscriptionId,
+				};
+			};
+			return { event, linkRow };
+		};
+
+		test("should return non-2xx when onSubscriptionComplete throws and re-run it on redelivery", async ({
+			memory,
+			stripeOptions,
+			stripeMock,
+		}) => {
+			stripeMock.subscriptions.retrieve.mockResolvedValue(
+				createSubscription({
+					id: "sub_propagation",
+					customer: "cus_propagation",
+					status: "active",
+					items: subscriptionItems,
+				}),
+			);
+			const onSubscriptionComplete = vi
+				.fn()
+				.mockRejectedValueOnce(new Error("callback failed"))
+				.mockResolvedValue(undefined);
+			const checkout = createCheckoutEvent();
+			const { createRow, findRow, onEvent, send } = await setup(
+				memory,
+				stripeOptions,
+				[checkout.event, checkout.event],
+				{ onSubscriptionComplete },
+			);
+			const { id } = await createRow({
+				stripeSubscriptionId: undefined,
+				status: "incomplete",
+			});
+			checkout.linkRow(id);
+
+			expect((await send()).status).toBe(400);
+			expect(onEvent).not.toHaveBeenCalled();
+			expect((await findRow(id))?.status).toBe("active");
+
+			expect((await send()).status).toBe(200);
+			expect(onSubscriptionComplete).toHaveBeenCalledTimes(2);
+			expect(onEvent).toHaveBeenCalledTimes(1);
+		});
+
+		test("should return non-2xx when onTrialStart throws and re-run it on redelivery", async ({
+			memory,
+			stripeOptions,
+			stripeMock,
+		}) => {
+			const now = Math.floor(Date.now() / 1000);
+			stripeMock.subscriptions.retrieve.mockResolvedValue(
+				createSubscription({
+					id: "sub_propagation",
+					customer: "cus_propagation",
+					status: "trialing",
+					trial_start: now,
+					trial_end: now + 7 * 24 * 60 * 60,
+					items: subscriptionItems,
+				}),
+			);
+			const onTrialStart = vi
+				.fn()
+				.mockRejectedValueOnce(new Error("callback failed"))
+				.mockResolvedValue(undefined);
+			const checkout = createCheckoutEvent();
+			const { createRow, onEvent, send } = await setup(
+				memory,
+				stripeOptions,
+				[checkout.event, checkout.event],
+				{
+					plans: [
+						{
+							priceId: TEST_PRICES.starter,
+							name: "starter",
+							freeTrial: { days: 7, onTrialStart },
+						},
+					],
+				},
+			);
+			const { id } = await createRow({
+				stripeSubscriptionId: undefined,
+				status: "incomplete",
+			});
+			checkout.linkRow(id);
+
+			expect((await send()).status).toBe(400);
+			expect(onEvent).not.toHaveBeenCalled();
+
+			expect((await send()).status).toBe(200);
+			expect(onTrialStart).toHaveBeenCalledTimes(2);
 			expect(onEvent).toHaveBeenCalledTimes(1);
 		});
 	});
