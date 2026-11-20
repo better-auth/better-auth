@@ -15,7 +15,12 @@ import type {
 	OAuthRefreshToken,
 	Scope,
 } from "./types";
-import { getJwksSource, getJwtPlugin, getStoredToken } from "./utils";
+import {
+	getJwksSource,
+	getJwtPlugin,
+	getStoredToken,
+	JWT_ACCESS_TOKEN_TYPE,
+} from "./utils";
 
 /** Signature, issuer, and `azp` are verified; audience and client are not. */
 export type JwtAccessTokenPayload = JWTPayload & { azp: string; sid?: string };
@@ -44,8 +49,9 @@ const jwksInfrastructureErrorCodes = new Set([
  * Verifies a JWT access token issued by this server. Returns `"inactive"` for
  * one that is expired or fails claim validation, so the lookup can stop: it
  * cannot be another token type. Returns `null` for anything else (an opaque
- * token, a malformed or forged JWT, a JWT that is not an access token) so the
- * lookup can continue. Key-set failures still throw.
+ * token, a malformed or forged JWT, a JWT that is not an access token, such as
+ * one without `typ: at+jwt`) so the lookup can continue. Key-set failures
+ * still throw.
  */
 async function verifyJwtAccessToken(
 	ctx: GenericEndpointContext,
@@ -69,8 +75,18 @@ async function verifyJwtAccessToken(
 		// resource identifiers, which each endpoint validates itself.
 		({ payload } = await jwtVerify(token, createLocalJWKSet(jwks), {
 			issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+			// RFC 9068 §4: other JWTs signed with these keys, such as session or
+			// app JWTs, must not pass as access tokens. jose compares media
+			// types, so `application/at+jwt` and any letter case also match.
+			typ: JWT_ACCESS_TOKEN_TYPE,
 		}));
 	} catch (error) {
+		if (
+			error instanceof joseErrors.JWTClaimValidationFailed &&
+			error.claim === "typ"
+		) {
+			return null;
+		}
 		// jose checks claims only after the signature verifies. `JWTExpired` is
 		// not a subclass of `JWTClaimValidationFailed`, so both are listed.
 		if (

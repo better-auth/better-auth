@@ -144,12 +144,14 @@ export interface JwtOptions {
 				 *
 				 * All headers, such as `alg` and `kid`,
 				 * MUST be defined within this function.
-				 * You can safely define the header `typ: 'JWT'`.
+				 * Use `typ: 'JWT'` only when `header.typ` is not set.
 				 *
-				 * The optional `header` argument carries extra protected-header
-				 * parameters the caller requires (e.g. `typ: "logout+jwt"` for
-				 * OIDC Back-Channel Logout). Merge them into the signed header so
-				 * such profiles stay conformant; `alg`/`kid` remain yours to set.
+				 * The `header` argument carries protected-header parameters the
+				 * caller requires, such as `typ: "at+jwt"` for OAuth access tokens
+				 * (RFC 9068) or `typ: "logout+jwt"` for OIDC Back-Channel Logout.
+				 * Merge them into the signed header: the OAuth provider rejects an
+				 * access token without `typ: at+jwt`. `alg`/`kid` remain yours to
+				 * set.
 				 *
 				 * The optional `signingConfig` third argument carries the
 				 * per-call signing overrides (e.g. an OAuth protected resource pinned

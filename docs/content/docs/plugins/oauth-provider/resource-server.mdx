@@ -228,7 +228,7 @@ If your API also receives opaque tokens, have it introspect them:
 2. [Link it to the resource](#introspection).
 3. Pass its credentials as `remoteVerify`.
 
-With `remoteVerify` set, the provider introspects tokens and checks any associated session. For JWTs, keep the local signature check and set `typ: "at+jwt"` to require the access-token header. With `force: true`, the resource server skips this check. The introspection response contains claims only, and the provider identifies JWT access tokens by their `azp` claim without checking the original header. Reserve `azp` for OAuth access tokens when you use the [JWT plugin](/docs/plugins/jwt#oauth-provider-mode) to sign other tokens.
+With `remoteVerify` set, the provider introspects tokens and checks any associated session. Set `typ: "at+jwt"` to check the JWT access-token header locally as well. With `force: true`, the resource server skips local signature and header checks. The Better Auth provider still requires both `typ: at+jwt` and `azp` during introspection.
 
 ```ts title="api/posts.ts"
 const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {

@@ -20,6 +20,8 @@ To get a JWT access token, include a `resource` in the request and enable the JW
 
 An `authorization_code` request that omits `resource` uses the resources bound to the authorization code, and a refresh request uses the resources stored on the refresh token. When no resource is named or bound, including on `client_credentials` requests that omit `resource`, the access token is opaque with no `aud` claim, and the provider applies no default resource. [RFC 8707 §2.1](https://datatracker.ietf.org/doc/html/rfc8707#section-2.1) says a provider can process an authorization request that omits `resource` without a specific resource, use a default resource, or fail the request with `invalid_target`. Better Auth processes it without a resource. A resource server that sets `audience` rejects the resulting token.
 
+The OAuth provider sets `typ: at+jwt` on JWT access tokens. Introspection, revocation, UserInfo, and token exchange require that header type when accepting a JWT as an access token. [RFC 9068 §2.1](https://datatracker.ietf.org/doc/html/rfc9068#section-2.1)
+
 ## Scopes
 
 To control which scopes your clients may request, set `scopes`. It defaults to `["openid", "profile", "email", "offline_access"]`. Your provider acts as an OpenID provider only when the list includes `openid`.
