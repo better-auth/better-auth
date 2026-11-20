@@ -1049,6 +1049,127 @@ export const kyselyAdapter = (
 					}
 					return (await updateQuery.returningAll().executeTakeFirst()) ?? null;
 				},
+				async incrementMany({ model, modelKey = model, increment, set, rows }) {
+					if (rows.length === 0) return [];
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const sorted = rows.slice().sort((left, right) => {
+						const leftId = left.where.find(
+							(clause) => clause.field === idField,
+						)?.value;
+						const rightId = right.where.find(
+							(clause) => clause.field === idField,
+						)?.value;
+						if (typeof leftId === "number" && typeof rightId === "number") {
+							return leftId - rightId;
+						}
+						return String(leftId ?? "").localeCompare(String(rightId ?? ""));
+					});
+					const assignments: Record<string, any> = {
+						...encodeJSONArrays(modelKey, set ?? {}),
+					};
+					for (const [field, delta] of Object.entries(increment)) {
+						assignments[field] = sql`${sql.ref(field)} + ${delta}`;
+					}
+					const applyRowWhere = (query: any, where: Where[]) => {
+						const { and, or } = convertWhereClause(model, modelKey, where);
+						if (and) {
+							query = query.where((eb: any) =>
+								eb.and(and.map((expr: any) => expr(eb))),
+							);
+						}
+						if (or) {
+							query = query.where((eb: any) =>
+								eb.or(or.map((expr: any) => expr(eb))),
+							);
+						}
+						return query;
+					};
+					if (config?.type === "mysql") {
+						const incrementInTransaction = async (trx: any) => {
+							const updated: unknown[] = [];
+							for (const row of sorted) {
+								const target = await applyRowWhere(
+									trx
+										.selectFrom(model)
+										.select(`${model}.${idField}`)
+										.forUpdate(),
+									row.where,
+								)
+									.limit(1)
+									.executeTakeFirst();
+								if (!target) continue;
+								const targetId = target[idField] ?? target.id;
+								if (targetId === undefined || targetId === null) continue;
+								const result = await applyRowWhere(
+									trx.updateTable(model).set(assignments),
+									row.where,
+								)
+									.where(`${model}.${idField}`, "=", targetId)
+									.executeTakeFirst();
+								if (Number(result.numUpdatedRows) === 0) continue;
+								const next =
+									(await trx
+										.selectFrom(model)
+										.selectAll()
+										.where(`${model}.${idField}`, "=", targetId)
+										.limit(1)
+										.executeTakeFirst()) ?? null;
+								if (next) updated.push(next);
+							}
+							return updated;
+						};
+						return inTransaction
+							? incrementInTransaction(db)
+							: db.transaction().execute(incrementInTransaction);
+					}
+					const applyRowsWhere = (query: any) =>
+						query.where((eb: any) =>
+							eb.or(
+								sorted.map((row) => {
+									const { and, or } = convertWhereClause(
+										model,
+										modelKey,
+										row.where,
+									);
+									const parts: unknown[] = [];
+									if (and) {
+										parts.push(eb.and(and.map((expr: any) => expr(eb))));
+									}
+									if (or) {
+										parts.push(eb.or(or.map((expr: any) => expr(eb))));
+									}
+									if (parts.length === 0) return eb.lit(false);
+									if (parts.length === 1) return parts[0];
+									return eb.and(parts);
+								}),
+							),
+						);
+					const executeUpdate = async (trx: typeof db) => {
+						const updateQuery = applyRowsWhere(
+							trx.updateTable(model).set(assignments),
+						);
+						if (config?.type === "mssql") {
+							return await updateQuery.outputAll("inserted").execute();
+						}
+						return await updateQuery.returningAll().execute();
+					};
+					if (config?.type === "postgres" || config?.type === "mssql") {
+						const incrementInTransaction = async (trx: typeof db) => {
+							await applyRowsWhere(
+								trx
+									.selectFrom(model)
+									.select(`${model}.${idField}`)
+									.orderBy(`${model}.${idField}`, "asc")
+									.forUpdate(),
+							).execute();
+							return executeUpdate(trx);
+						};
+						return inTransaction
+							? incrementInTransaction(db)
+							: db.transaction().execute(incrementInTransaction);
+					}
+					return executeUpdate(db);
+				},
 				options: config,
 			};
 		};

@@ -15,6 +15,12 @@ import { initGetFieldAttributes } from "./get-field-attributes";
 import { initGetFieldName } from "./get-field-name";
 import { initGetIdField } from "./get-id-field";
 import { initGetModelName } from "./get-model-name";
+import {
+	assertUniqueIncrementManyIds,
+	chunkIncrementManyRows,
+	incrementManyAssignmentBinds,
+	sortIncrementManyRows,
+} from "./increment-many";
 import type {
 	CleanedWhere,
 	DBAdapter,
@@ -76,6 +82,8 @@ export const createAdapterFactory =
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
+			incrementManyMaxParameters: cfg.incrementManyMaxParameters ?? 999,
+			incrementManyMaxRows: cfg.incrementManyMaxRows,
 		} satisfies AdapterFactoryConfig;
 
 		const useNumberId = options.advanced?.database?.generateId === "serial";
@@ -143,6 +151,11 @@ export const createAdapterFactory =
 						} else if (
 							method === "incrementOne" &&
 							!config.debugLogs.incrementOne
+						) {
+							return;
+						} else if (
+							method === "incrementMany" &&
+							!config.debugLogs.incrementMany
 						) {
 							return;
 						} else if (method === "count" && !config.debugLogs.count) {
@@ -502,6 +515,7 @@ export const createAdapterFactory =
 				| "deleteMany"
 				| "consumeOne"
 				| "incrementOne"
+				| "incrementMany"
 				| "count";
 		}): W extends undefined ? undefined : CleanedWhere[] => {
 			if (!where) return undefined as any;
@@ -1547,6 +1561,173 @@ export const createAdapterFactory =
 					{ model, data: transformed },
 				);
 				return transformed as T | null;
+			},
+			incrementMany: async <T>({
+				model: inputModel,
+				increment: unsafeIncrement,
+				set: unsafeSet,
+				rows: unsafeRows,
+			}: {
+				model: string;
+				increment: Record<string, number>;
+				set?: Record<string, unknown> | undefined;
+				rows: Array<{ where: Where[] }>;
+			}): Promise<T[]> => {
+				if (unsafeRows.length === 0) {
+					return [];
+				}
+				const hasIncrement = Object.keys(unsafeIncrement).length > 0;
+				const hasSet = !!unsafeSet && Object.keys(unsafeSet).length > 0;
+				if (!hasIncrement && !hasSet) {
+					throw new BetterAuthError(
+						"incrementMany requires a non-empty `increment` or `set`; both were empty.",
+					);
+				}
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
+				const idField =
+					config.mapKeysTransformInput?.id ||
+					getFieldName({ model: modelKey, field: "id" });
+				const rows = unsafeRows.map((row) => ({
+					where: transformWhereClause({
+						model: modelKey,
+						where: row.where,
+						action: "incrementMany",
+					}),
+				}));
+				assertUniqueIncrementManyIds(rows, idField);
+				const sorted = sortIncrementManyRows(rows, idField);
+				debugLog(
+					{ method: "incrementMany" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("incrementMany")} ${formatAction("IncrementMany")}:`,
+					{
+						model,
+						rows: sorted,
+						increment: unsafeIncrement,
+						set: unsafeSet,
+					},
+				);
+
+				const mappedKeys = config.mapKeysTransformInput ?? {};
+				const increment: Record<string, number> = {};
+				for (const [field, delta] of Object.entries(unsafeIncrement)) {
+					increment[
+						mappedKeys[field] || getFieldName({ model: modelKey, field })
+					] = delta;
+				}
+				let set: Record<string, unknown> | undefined;
+				if (unsafeSet && !config.disableTransformInput) {
+					set = await transformInput(unsafeSet, modelKey, "update");
+				} else {
+					set = unsafeSet;
+				}
+				if (
+					Object.keys(increment).length === 0 &&
+					(!set || Object.keys(set).length === 0)
+				) {
+					throw new BetterAuthError(
+						"incrementMany resolved to an empty update: every increment/set field was unknown to the schema or transformed away.",
+					);
+				}
+				const chunks = chunkIncrementManyRows(sorted, {
+					maxParameters: config.incrementManyMaxParameters,
+					maxRows: config.incrementManyMaxRows,
+					assignmentBinds: incrementManyAssignmentBinds(increment, set),
+				});
+				const wrapInTransaction =
+					typeof config.transaction === "function" &&
+					(chunks.length > 1 ||
+						(!adapterInstance.incrementMany && sorted.length > 1));
+				if (wrapInTransaction) {
+					return adapter.transaction((trx) =>
+						trx.incrementMany<T>({
+							model: inputModel,
+							increment: unsafeIncrement,
+							set: unsafeSet,
+							rows: unsafeRows,
+						}),
+					);
+				}
+				const results: Record<string, unknown>[] = [];
+				for (const chunk of chunks) {
+					const res = await withSpan(
+						`db incrementMany ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "incrementMany",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						async () => {
+							if (adapterInstance.incrementMany) {
+								return adapterInstance.incrementMany<T>({
+									model,
+									modelKey,
+									increment,
+									set,
+									rows: chunk,
+								});
+							}
+							const updated: Record<string, unknown>[] = [];
+							for (const row of chunk) {
+								const next = adapterInstance.incrementOne
+									? await adapterInstance.incrementOne<T>({
+											model,
+											modelKey,
+											where: row.where,
+											increment,
+											set,
+										})
+									: await atomicFallbacks.incrementOne({
+											model,
+											modelKey,
+											where: row.where,
+											increment,
+											set,
+										});
+								if (next) updated.push(next);
+							}
+							return updated;
+						},
+					);
+					if (!Array.isArray(res)) {
+						throw new BetterAuthError(
+							`Adapter "${config.adapterId}" incrementMany must return an array of updated rows.`,
+						);
+					}
+					if (res.length > chunk.length) {
+						throw new BetterAuthError(
+							`Adapter "${config.adapterId}" incrementMany returned more rows than were requested.`,
+						);
+					}
+					for (const row of res) {
+						results.push(row as Record<string, unknown>);
+					}
+				}
+
+				debugLog(
+					{ method: "incrementMany" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("incrementMany")} ${formatAction("DB Result")}:`,
+					{ model, data: results },
+				);
+				let transformed = results as T[];
+				if (!config.disableTransformOutput) {
+					transformed = [];
+					for (const row of results) {
+						transformed.push(
+							(await transformOutput(row, modelKey, undefined, undefined)) as T,
+						);
+					}
+				}
+				debugLog(
+					{ method: "incrementMany" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("incrementMany")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed;
 			},
 			count: async ({
 				model: inputModel,

@@ -1144,6 +1144,112 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.returning();
 					return (updated[0] as any) ?? null;
 				},
+				async incrementMany({ model, modelKey = model, increment, set, rows }) {
+					if (rows.length === 0) return [];
+					const table = getSchema(model);
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const idColumn = table[idField];
+					const assignments: Record<string, unknown> = {};
+					for (const [field, delta] of Object.entries(increment)) {
+						const columnName = getFieldName({ model: modelKey, field });
+						const column = table[columnName];
+						if (!column) {
+							throw new BetterAuthError(
+								`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+							);
+						}
+						assignments[columnName] = sql`${column} + ${sql.param(delta)}`;
+					}
+					if (set) {
+						for (const [field, value] of Object.entries(set)) {
+							const columnName = getFieldName({ model: modelKey, field });
+							if (!table[columnName]) {
+								throw new BetterAuthError(
+									`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+								);
+							}
+							assignments[columnName] = value;
+						}
+					}
+					const sorted = rows.slice().sort((left, right) => {
+						const leftId = left.where.find(
+							(clause) => clause.field === idField,
+						)?.value;
+						const rightId = right.where.find(
+							(clause) => clause.field === idField,
+						)?.value;
+						if (typeof leftId === "number" && typeof rightId === "number") {
+							return leftId - rightId;
+						}
+						return String(leftId ?? "").localeCompare(String(rightId ?? ""));
+					});
+					if (config.provider === "mysql") {
+						const mutateInTransaction = async (tx: DB) => {
+							const updated: unknown[] = [];
+							for (const row of sorted) {
+								const clause = convertWhereClause(row.where, model, modelKey);
+								const found = await tx
+									.select()
+									.from(table)
+									.where(...clause)
+									.for("update")
+									.limit(1);
+								const target = found[0];
+								if (!target) continue;
+								const targetId = target[idField] ?? (target as any).id;
+								if (targetId === undefined || targetId === null || !idColumn) {
+									continue;
+								}
+								await tx
+									.update(table)
+									.set(assignments)
+									.where(eq(idColumn, targetId))
+									.execute();
+								const next = await tx
+									.select()
+									.from(table)
+									.where(eq(idColumn, targetId))
+									.limit(1)
+									.execute();
+								if (next[0]) updated.push(next[0]);
+							}
+							return updated as any[];
+						};
+						return inTransaction
+							? mutateInTransaction(db)
+							: db.transaction(mutateInTransaction);
+					}
+					const predicates = sorted.map((row) => {
+						const clause = convertWhereClause(row.where, model, modelKey);
+						return and(...clause);
+					});
+					const whereClause = or(...predicates);
+					const executeUpdate = async (tx: DB) => {
+						const updated = await tx
+							.update(table)
+							.set(assignments)
+							.where(whereClause)
+							.returning();
+						return updated as any[];
+					};
+					if (config.provider === "pg") {
+						const incrementInTransaction = async (tx: DB) => {
+							if (idColumn) {
+								await tx
+									.select({ id: idColumn })
+									.from(table)
+									.where(whereClause)
+									.orderBy(asc(idColumn))
+									.for("update");
+							}
+							return executeUpdate(tx);
+						};
+						return inTransaction
+							? incrementInTransaction(db)
+							: db.transaction(incrementInTransaction);
+					}
+					return executeUpdate(db);
+				},
 				async createSchema(props) {
 					const { generateDrizzleSchema } = await import(
 						"./generate-drizzle-schema"

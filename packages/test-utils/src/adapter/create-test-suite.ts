@@ -348,6 +348,14 @@ export const createTestSuite = <
 									adapter = await helpers.adapter();
 									return adapter.incrementOne<T>(args);
 								},
+								incrementMany: async <T>(
+									args: Parameters<
+										DBAdapter<BetterAuthOptions>["incrementMany"]
+									>[0],
+								) => {
+									adapter = await helpers.adapter();
+									return adapter.incrementMany<T>(args);
+								},
 								createSchema: adapter.createSchema as any,
 								async create({ data, model, select }) {
 									const defaultModelName = getDefaultModelName(model);
