@@ -5514,3 +5514,94 @@ describe("api key creation uses a fresh session", async () => {
 		expect(second.error?.status).toBe(401);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12874
+ */
+describe("list API keys beyond the adapter's default findMany limit", async () => {
+	const defaultFindManyLimit = 2;
+	const keyCount = defaultFindManyLimit + 1;
+
+	async function createKeys(create: (name: string) => Promise<{ id: string }>) {
+		const ids: string[] = [];
+		for (let index = 0; index < keyCount; index++) {
+			const key = await create(`limit-key-${index}`);
+			ids.push(key.id);
+		}
+		return ids.sort();
+	}
+
+	it("returns every key in database storage when no limit is given", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			advanced: { database: { defaultFindManyLimit } },
+			plugins: [apiKey()],
+		});
+		const { headers } = await signInWithTestUser();
+		const ids = await createKeys((name) =>
+			auth.api.createApiKey({ body: { name }, headers }),
+		);
+
+		const all = await auth.api.listApiKeys({ headers });
+		expect(all.total).toBe(keyCount);
+		expect(all.apiKeys.map((key) => key.id).sort()).toEqual(ids);
+
+		const lastPage = await auth.api.listApiKeys({
+			query: { offset: defaultFindManyLimit },
+			headers,
+		});
+		expect(lastPage.total).toBe(keyCount);
+		expect(lastPage.apiKeys).toHaveLength(keyCount - defaultFindManyLimit);
+	});
+
+	it("rebuilds the secondary storage cache with every key after a database fallback", async () => {
+		const store = new Map<string, string>();
+		const secondaryStorage: SecondaryStorage = {
+			set(key, value) {
+				store.set(key, value as string);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			getAndDelete(key) {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment(key) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		};
+		const { auth, signInWithTestUser } = await getTestInstance({
+			advanced: { database: { defaultFindManyLimit } },
+			secondaryStorage,
+			plugins: [
+				apiKey({ storage: "secondary-storage", fallbackToDatabase: true }),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const ids = await createKeys((name) =>
+			auth.api.createApiKey({ body: { name }, headers }),
+		);
+
+		// Drop the cached key list so the next read falls back to the database.
+		for (const key of [...store.keys()]) {
+			if (key.startsWith("api-key:by-ref:")) store.delete(key);
+		}
+		const firstPage = await auth.api.listApiKeys({
+			query: { limit: 1 },
+			headers,
+		});
+		expect(firstPage.total).toBe(keyCount);
+		expect(firstPage.apiKeys).toHaveLength(1);
+
+		// The fallback read must not leave a partial key list in the cache.
+		const fromCache = await auth.api.listApiKeys({ headers });
+		expect(fromCache.total).toBe(keyCount);
+		expect(fromCache.apiKeys.map((key) => key.id).sort()).toEqual(ids);
+	});
+});
