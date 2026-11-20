@@ -9,7 +9,7 @@ function compareSCIMOrderKey(left: string, right: string): number {
 /**
  * List a connection-scoped SCIM collection. Uniform `and` uses one adapter
  * query. Uniform `or` unions equality matches by `id`/`orderKey`, then loads
- * full rows for the requested page only.
+ * full rows for the requested page while re-applying each equality.
  */
 export async function querySCIMFilteredCollection<
 	Filter,
@@ -66,15 +66,18 @@ export async function querySCIMFilteredCollection<
 	);
 	if (pageIds.length === 0) return { totalResults, rows: [] };
 
-	const rows = await adapter.findMany<Row>({
-		model,
-		where: [
-			{ field: "connectionId", value: connectionId },
-			{ field: "id", value: pageIds, operator: "in" },
-		],
-		limit: pageIds.length,
-	});
-	const byId = new Map(rows.map((row) => [row.id, row]));
+	const byId = new Map<string, Row>();
+	for (const filter of filters) {
+		const matches = await adapter.findMany<Row>({
+			model,
+			where: [
+				...createWhere(connectionId, [filter]),
+				{ field: "id", value: pageIds, operator: "in" },
+			],
+			limit: pageIds.length,
+		});
+		for (const row of matches) byId.set(row.id, row);
+	}
 	return {
 		totalResults,
 		rows: pageIds.flatMap((id) => {
