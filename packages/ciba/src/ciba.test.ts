@@ -345,6 +345,25 @@ describe("ciba poll mode", () => {
 		expect((await poll(authReqId)).body.error).toBe("invalid_grant");
 	});
 
+	/**
+	 * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.1.1
+	 */
+	it.each(["openid", "openid profile"])(
+		"always includes an ID token for the approved scopes %j",
+		async (scope) => {
+			const { authReqId, url } = await start({ scope });
+			await approve(url);
+
+			const issued = await poll(authReqId);
+
+			expect(issued.status).toBe(200);
+			expect(issued.body.scope).toBe(scope);
+			const idToken = decodeJwt(issued.body.id_token as string);
+			expect(idToken.sub).toBe(lastNotification!.user.id);
+			expect(idToken.aud).toBe(pollClient.client_id);
+		},
+	);
+
 	it("sends the user a link to the provider with the request details", async () => {
 		const { url } = await start({ binding_message: "Code 77" });
 		expect(lastNotification).toMatchObject({
