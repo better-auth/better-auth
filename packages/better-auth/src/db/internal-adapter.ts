@@ -559,31 +559,24 @@ export const createInternalAdapter = (
 			const sessionReferences = await getActiveSessionReferences(userId);
 			const revokeCachedSessions = () =>
 				revokeCachedUserSessions(userId, sessionReferences);
-			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-				await deleteSessionRows(userId, revokeCachedSessions);
-			}
-			await deleteManyWithHooks(
-				[
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-				"account",
-				undefined,
-			);
-
-			// Revoke before the delete.after hooks, which can throw.
-			await deleteWithHooks(
-				[
-					{
-						field: "id",
-						value: userId,
-					},
-				],
-				"user",
-				{
+			// One transaction, so a failed delete keeps the sessions and accounts.
+			await runWithTransaction(adapter, async () => {
+				// Revoke before the delete.after hooks, which can throw.
+				await deleteWithHooks([{ field: "id", value: userId }], "user", {
 					fn: async (where) => {
+						if (!secondaryStorage || options.session?.storeSessionInDatabase) {
+							await deleteSessionRows(userId, revokeCachedSessions);
+						}
+						await deleteManyWithHooks(
+							[
+								{
+									field: "userId",
+									value: userId,
+								},
+							],
+							"account",
+							undefined,
+						);
 						const currentAdapter = await getCurrentAdapter(adapter);
 						await currentAdapter.deleteMany({
 							model: "user",
@@ -592,8 +585,8 @@ export const createInternalAdapter = (
 						await revokeCachedSessions();
 					},
 					executeMainFn: false,
-				},
-			);
+				});
+			});
 		},
 		createSession: async (
 			userId: string,

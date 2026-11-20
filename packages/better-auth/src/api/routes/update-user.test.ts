@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import type { DatabaseSync } from "node:sqlite";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
-import type { Account, Session } from "../../types";
+import type { Account, BetterAuthOptions, Session } from "../../types";
 
 describe("updateUser", () => {
 	it("should update the user's name", async () => {
@@ -1080,6 +1081,142 @@ describe("delete user", async () => {
 			),
 		);
 		expect(response.status).toBe(404);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11667
+ */
+describe("delete user when a database statement fails", () => {
+	// restoreAllMocks would also undo spies other describes create at collection time.
+	const spies: { mockRestore: () => void }[] = [];
+	afterEach(() => {
+		for (const spy of spies.splice(0)) spy.mockRestore();
+	});
+
+	async function deleteUserWithFailingStatement(failing: string | null) {
+		const { auth, client, db, signInWithTestUser } = await getTestInstance({
+			user: { deleteUser: { enabled: true } },
+		});
+		const { user, headers } = await signInWithTestUser();
+		const sessionsBefore = await db.findMany({
+			model: "session",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(sessionsBefore.length).toBeGreaterThan(0);
+		// Fail at the driver so the fault also reaches transaction statements.
+		const { database } = auth.options as BetterAuthOptions;
+		const sqlite = database as DatabaseSync;
+		const prepare = sqlite.prepare.bind(sqlite);
+		let failed = false;
+		const spy = vi
+			.spyOn(sqlite, "prepare")
+			.mockImplementation((sql: string) => {
+				if (!failed && sql === failing) {
+					failed = true;
+					throw new Error("database statement timed out");
+				}
+				return prepare(sql);
+			});
+		spies.push(spy);
+		const response = await client.deleteUser({ fetchOptions: { headers } });
+		return {
+			failed,
+			response,
+			sessionCount: sessionsBefore.length,
+			user: await db.findOne({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+			}),
+			sessions: await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+			accounts: await db.findMany({
+				model: "account",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		};
+	}
+
+	it("fails and deletes nothing when the user lookup fails", async () => {
+		const result = await deleteUserWithFailingStatement(
+			'select "primary".* from (select * from "user" where "user"."id" = ? limit ?) as "primary"',
+		);
+
+		expect(result.failed).toBe(true);
+		expect(result.response.data).toBeNull();
+		expect(result.response.error?.status).toBe(500);
+		expect(result.user).not.toBeNull();
+		expect(result.sessions).toHaveLength(result.sessionCount);
+		expect(result.accounts).toHaveLength(1);
+	});
+
+	it("fails and deletes nothing when the account lookup fails", async () => {
+		const result = await deleteUserWithFailingStatement(
+			'select "primary".* from (select * from "account" where "account"."userId" = ? limit ?) as "primary"',
+		);
+
+		expect(result.failed).toBe(true);
+		expect(result.response.error?.status).toBe(500);
+		expect(result.user).not.toBeNull();
+		expect(result.sessions).toHaveLength(result.sessionCount);
+		expect(result.accounts).toHaveLength(1);
+	});
+
+	it("keeps the sessions and accounts when the user delete fails", async () => {
+		const result = await deleteUserWithFailingStatement(
+			'delete from "user" where "user"."id" = ?',
+		);
+
+		expect(result.failed).toBe(true);
+		expect(result.response.error?.status).toBe(500);
+		expect(result.user).not.toBeNull();
+		expect(result.sessions).toHaveLength(result.sessionCount);
+		expect(result.accounts).toHaveLength(1);
+	});
+
+	it("deletes the user, sessions and accounts when every statement succeeds", async () => {
+		const result = await deleteUserWithFailingStatement(null);
+
+		expect(result.response.data).toMatchObject({
+			success: true,
+			message: "User deleted",
+		});
+		expect(result.user).toBeNull();
+		expect(result.sessions).toHaveLength(0);
+		expect(result.accounts).toHaveLength(0);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11667
+ */
+describe("delete user when a user delete.before hook vetoes it", () => {
+	it("fails and keeps the user, sessions and accounts", async () => {
+		const afterDelete = vi.fn();
+		const { client, db, signInWithTestUser } = await getTestInstance({
+			user: { deleteUser: { enabled: true, afterDelete } },
+			databaseHooks: { user: { delete: { before: async () => false } } },
+		});
+		const { user, headers } = await signInWithTestUser();
+
+		const response = await client.deleteUser({ fetchOptions: { headers } });
+
+		expect(response.error?.code).toBe("FAILED_TO_DELETE_USER");
+		expect(afterDelete).not.toHaveBeenCalled();
+		const remaining = await db.findOne({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(remaining).not.toBeNull();
+		const accounts = await db.findMany({
+			model: "account",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(accounts).toHaveLength(1);
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user.id).toBe(user.id);
 	});
 });
 

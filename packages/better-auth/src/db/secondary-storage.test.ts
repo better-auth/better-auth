@@ -1439,28 +1439,32 @@ describe("secondary storage - revocation when an earlier after hook throws", () 
 			const resumed = new Promise<void>((resolve) => {
 				resumeHook = resolve;
 			});
-			const { auth, client, signInWithTestUser } = await getTestInstance({
-				secondaryStorage: createStringSecondaryStorage(store),
-				session: { storeSessionInDatabase },
-				user: { deleteUser: { enabled: true } },
-				databaseHooks: {
-					[model]: {
-						delete: {
-							async before() {
-								if (!pauseNextDelete) return;
-								pauseNextDelete = false;
-								hookStarted();
-								await resumed;
-							},
-							async after() {
-								if (!throwNextAfterHook) return;
-								throwNextAfterHook = false;
-								throw new Error(`${model} delete.after hook failed`);
+			// Single-connection SQLite would serialize the write below behind the transaction.
+			const { auth, client, signInWithTestUser } = await getTestInstance(
+				{
+					secondaryStorage: createStringSecondaryStorage(store),
+					session: { storeSessionInDatabase },
+					user: { deleteUser: { enabled: true } },
+					databaseHooks: {
+						[model]: {
+							delete: {
+								async before() {
+									if (!pauseNextDelete) return;
+									pauseNextDelete = false;
+									hookStarted();
+									await resumed;
+								},
+								async after() {
+									if (!throwNextAfterHook) return;
+									throwNextAfterHook = false;
+									throw new Error(`${model} delete.after hook failed`);
+								},
 							},
 						},
 					},
 				},
-			});
+				{ testWith: "postgres", transaction: true },
+			);
 			const { internalAdapter } = await auth.$context;
 			const { headers, user } = await signInWithTestUser();
 			vi.setSystemTime(Date.now() + 1000);

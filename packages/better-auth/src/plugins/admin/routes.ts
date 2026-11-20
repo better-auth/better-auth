@@ -1672,8 +1672,17 @@ export const removeUser = (opts: AdminOptions) =>
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
-			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
 			await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
+			const remaining = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (remaining) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.FAILED_TO_DELETE_USER,
+				);
+			}
+			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
 			return ctx.json({
 				success: true,
 			});
