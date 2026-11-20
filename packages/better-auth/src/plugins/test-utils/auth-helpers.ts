@@ -3,6 +3,14 @@ import { sessionSchema } from "@better-auth/core/db";
 import { createCookieHeaders, createTestCookie } from "./cookie-builder";
 import type { LoginResult, TestAuthOptions, TestCookie } from "./types";
 
+async function getUser(ctx: AuthContext, userId: string) {
+	const user = await ctx.internalAdapter.findUserById(userId);
+	if (!user) {
+		throw new Error(`User not found: ${userId}`);
+	}
+	return user;
+}
+
 function createSession(ctx: AuthContext, opts: TestAuthOptions) {
 	const additionalFields = Object.fromEntries(
 		Object.entries(opts.session ?? {}).filter(
@@ -20,20 +28,13 @@ function createSession(ctx: AuthContext, opts: TestAuthOptions) {
 
 export function createLogin(ctx: AuthContext) {
 	return async (opts: TestAuthOptions): Promise<LoginResult> => {
-		// Find the user first to avoid creating orphaned sessions
-		const user = await ctx.internalAdapter.findUserById(opts.userId);
-		if (!user) {
-			throw new Error(`User not found: ${opts.userId}`);
-		}
-
-		// Create a session for the user
+		// Find the user first to avoid creating orphaned sessions.
+		const user = await getUser(ctx, opts.userId);
 		const session = await createSession(ctx, opts);
 
-		// Create headers with cookie
-		const headers = await createCookieHeaders(ctx, session.token);
-
 		// Create cookies array for browser/e2e testing
-		const cookies = await createTestCookie(ctx, session.token);
+		const cookies = await createTestCookie(ctx, { session, user });
+		const headers = createCookieHeaders(cookies);
 
 		return {
 			session,
@@ -47,8 +48,10 @@ export function createLogin(ctx: AuthContext) {
 
 export function createGetAuthHeaders(ctx: AuthContext) {
 	return async (opts: TestAuthOptions): Promise<Headers> => {
+		const user = await getUser(ctx, opts.userId);
 		const session = await createSession(ctx, opts);
-		return createCookieHeaders(ctx, session.token);
+		const cookies = await createTestCookie(ctx, { session, user });
+		return createCookieHeaders(cookies);
 	};
 }
 
@@ -56,7 +59,8 @@ export function createGetCookies(ctx: AuthContext) {
 	return async (
 		opts: TestAuthOptions & { domain?: string },
 	): Promise<TestCookie[]> => {
+		const user = await getUser(ctx, opts.userId);
 		const session = await createSession(ctx, opts);
-		return createTestCookie(ctx, session.token, opts.domain);
+		return createTestCookie(ctx, { session, user }, opts.domain);
 	};
 }
