@@ -357,3 +357,129 @@ describe("database indexes", () => {
 		);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11520
+ */
+describe("database indexes on the implicit primary key", () => {
+	const memberFields = {
+		organizationId: {
+			type: "string",
+			references: { model: "organization", field: "id" },
+		},
+		userId: { type: "string" },
+	} as const;
+
+	it("resolves a compound index that includes the implicit id", () => {
+		expect(
+			resolveDatabaseTableIndexes({
+				fields: memberFields,
+				indexes: [
+					{
+						name: "member_organization_id_id_unique",
+						fields: ["organizationId", "id"],
+						unique: true,
+					},
+				],
+				tableName: "member",
+			}),
+		).toEqual([
+			{
+				columns: ["organizationId", "id"],
+				name: "member_organization_id_id_unique",
+				unique: true,
+			},
+		]);
+	});
+
+	it("resolves a single-field index on the implicit id", () => {
+		expect(
+			resolveDatabaseTableIndexes({
+				fields: memberFields,
+				indexes: [{ fields: ["id"] }],
+				tableName: "member",
+			}),
+		).toEqual([{ columns: ["id"], name: "member_id_idx", unique: undefined }]);
+	});
+
+	it("still rejects an index on an unknown field", () => {
+		expect(() =>
+			resolveDatabaseTableIndexes({
+				fields: memberFields,
+				indexes: [{ fields: ["organizationId", "missing"], unique: true }],
+				tableName: "member",
+			}),
+		).toThrow('Index on table "member" references unknown field "missing".');
+	});
+
+	it("prefers an explicitly declared id field", () => {
+		expect(
+			resolveDatabaseTableIndexes({
+				fields: {
+					...memberFields,
+					id: { type: "string", fieldName: "member_id" },
+				},
+				indexes: [{ fields: ["organizationId", "id"], unique: true }],
+				tableName: "member",
+			}),
+		).toEqual([
+			{
+				columns: ["organizationId", "member_id"],
+				name: "member_organizationId_member_id_uidx",
+				unique: true,
+			},
+		]);
+	});
+
+	it("treats a declared id as required in unique indexes", () => {
+		expect(
+			resolveDatabaseTableIndexes({
+				fields: {
+					...memberFields,
+					id: { type: "number", required: false },
+				},
+				indexes: [{ fields: ["organizationId", "id"], unique: true }],
+				tableName: "member",
+			}),
+		).toEqual([
+			{
+				columns: ["organizationId", "id"],
+				name: "member_organizationId_id_uidx",
+				unique: true,
+			},
+		]);
+	});
+
+	it.each([
+		{ generateId: "serial", idLength: undefined, expected: 191 },
+		{ generateId: undefined, idLength: undefined, expected: 183 },
+		{ generateId: "uuid", idLength: undefined, expected: 183 },
+		{ generateId: false, idLength: undefined, expected: 183 },
+		{ generateId: () => "custom-id", idLength: undefined, expected: 183 },
+		{ generateId: undefined, idLength: 191, expected: 144 },
+	] as const)("counts the implicit id against the MySQL index budget (generateId: $generateId, idLength: $idLength)", ({
+		generateId,
+		idLength,
+		expected,
+	}) => {
+		const fields = Object.fromEntries(
+			["a", "b", "c", "d"].map((field) => [field, { type: "string" as const }]),
+		);
+		const indexes = resolveDatabaseTableIndexes({
+			fields,
+			indexes: [{ fields: ["a", "b", "c", "d", "id"] }],
+			tableName: "wide_lookup",
+		});
+
+		expect(
+			getDatabaseIndexStringLength({
+				columnName: "a",
+				dialect: "mysql",
+				fields,
+				generateId,
+				idLength,
+				indexes,
+			}),
+		).toBe(expected);
+	});
+});
