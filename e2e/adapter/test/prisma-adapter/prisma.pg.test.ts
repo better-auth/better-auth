@@ -11,6 +11,7 @@ import {
 	uuidTestSuite,
 } from "../adapter-factory";
 import { cimdRefreshTestSuite } from "../adapter-factory/cimd-refresh-test-suite";
+import { oauthResourceScopeTestSuite } from "../adapter-factory/oauth-resource-scope-test-suite";
 import { scimHttpTestSuite } from "../adapter-factory/scim-http-test-suite";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
@@ -53,6 +54,7 @@ const { execute } = await testAdapter({
 			testId: "prisma-postgres",
 		}),
 		cimdRefreshTestSuite(),
+		oauthResourceScopeTestSuite(),
 	],
 	onFinish: async () => {},
 	prefixTests: "pg",
