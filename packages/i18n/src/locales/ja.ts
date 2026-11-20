@@ -9,6 +9,7 @@ export const ja: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "セッションの作成に失敗しました",
 	FAILED_TO_UPDATE_USER: "ユーザーの更新に失敗しました",
 	FAILED_TO_GET_SESSION: "セッションの取得に失敗しました",
+	FAILED_TO_DELETE_SESSION: "セッションの削除に失敗しました",
 	INVALID_PASSWORD: "パスワードが無効です",
 	INVALID_EMAIL: "メールアドレスが無効です",
 	INVALID_EMAIL_OR_PASSWORD: "メールアドレスまたはパスワードが無効です",
