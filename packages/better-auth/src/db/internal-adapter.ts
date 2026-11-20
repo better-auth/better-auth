@@ -17,7 +17,11 @@ import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import type { InternalLogger } from "@better-auth/core/env";
 import { isWorkerd } from "@better-auth/core/env";
-import { APIError, BetterAuthError } from "@better-auth/core/error";
+import {
+	APIError,
+	BASE_ERROR_CODES,
+	BetterAuthError,
+} from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -582,6 +586,13 @@ export const createInternalAdapter = (
 							model: "user",
 							where,
 						});
+						// A row-level policy or trigger can skip the delete without an error.
+						if (await findUser(userId)) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.FAILED_TO_DELETE_USER,
+							);
+						}
 						await revokeCachedSessions();
 					},
 					executeMainFn: false,

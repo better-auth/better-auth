@@ -1220,6 +1220,34 @@ describe("delete user when a user delete.before hook vetoes it", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11667
+ */
+describe("delete user when the database skips the user delete", () => {
+	it("fails and keeps the sessions and accounts", async () => {
+		const { auth, client, db, signInWithTestUser } = await getTestInstance({
+			user: { deleteUser: { enabled: true } },
+		});
+		const { user, headers } = await signInWithTestUser();
+		const { database } = auth.options as BetterAuthOptions;
+		const sqlite = database as DatabaseSync;
+		sqlite.exec(
+			'create trigger keep_user before delete on "user" begin select raise(ignore); end',
+		);
+
+		const response = await client.deleteUser({ fetchOptions: { headers } });
+
+		expect(response.error?.code).toBe("FAILED_TO_DELETE_USER");
+		const accounts = await db.findMany({
+			model: "account",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(accounts).toHaveLength(1);
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user.id).toBe(user.id);
+	});
+});
+
 describe("change-email enumeration protection", async () => {
 	const { client, signInWithTestUser, testUser, sessionSetter } =
 		await getTestInstance({
