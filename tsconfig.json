@@ -25,6 +25,9 @@
       "path": "./packages/cimd/tsconfig.json"
     },
     {
+      "path": "./packages/dbsc/tsconfig.json"
+    },
+    {
       "path": "./packages/core/tsconfig.json"
     },
     {

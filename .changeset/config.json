@@ -13,6 +13,7 @@
       "@better-auth/api-key",
       "@better-auth/ciba",
       "@better-auth/cimd",
+      "@better-auth/dbsc",
       "@better-auth/drizzle-adapter",
       "@better-auth/electron",
       "@better-auth/expo",

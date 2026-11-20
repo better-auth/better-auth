@@ -1,0 +1,67 @@
+{
+  "name": "@better-auth/dbsc",
+  "version": "1.8.0-beta.9",
+  "description": "Device Bound Session Credentials plugin for Better Auth",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/plugins/dbsc",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/dbsc"
+  },
+  "keywords": [
+    "auth",
+    "dbsc",
+    "device-bound-session-credentials",
+    "session",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict --pack false",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ]
+    }
+  },
+  "dependencies": {
+    "jose": "^6.2.3"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
+    "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:^",
+    "better-auth": "workspace:^",
+    "better-call": "catalog:"
+  }
+}

@@ -56,6 +56,7 @@ const SCOPE_TO_DOMAIN = new Map(
 		captcha: "security",
 		haveibeenpwned: "security",
 		"rate-limiter": "security",
+		dbsc: "security",
 
 		// enterprise
 		sso: "enterprise",
@@ -108,6 +109,7 @@ const PATH_TO_DOMAIN = [
 	["packages/better-auth/src/api/rate-limiter/", "security"],
 	["packages/better-auth/src/plugins/captcha/", "security"],
 	["packages/better-auth/src/plugins/haveibeenpwned/", "security"],
+	["packages/dbsc/", "security"],
 	["packages/better-auth/src/plugins/organization/", "organization"],
 	["packages/better-auth/src/plugins/admin/", "organization"],
 	["packages/better-auth/src/plugins/access/", "organization"],
@@ -231,6 +233,7 @@ const SCOPE_TO_PACKAGE = new Map(
 	Object.entries({
 		ciba: "@better-auth/ciba",
 		cimd: "@better-auth/cimd",
+		dbsc: "@better-auth/dbsc",
 		sso: "@better-auth/sso",
 		scim: "@better-auth/scim",
 		passkey: "@better-auth/passkey",
@@ -258,6 +261,7 @@ const SCOPE_TO_PACKAGE = new Map(
 const PATH_TO_PACKAGE = [
 	["packages/ciba/", "@better-auth/ciba"],
 	["packages/cimd/", "@better-auth/cimd"],
+	["packages/dbsc/", "@better-auth/dbsc"],
 	["packages/sso/", "@better-auth/sso"],
 	["packages/scim/", "@better-auth/scim"],
 	["packages/passkey/", "@better-auth/passkey"],

@@ -1,0 +1,262 @@
+---
+icon: pluginsDBSC
+sidebarTitle: "DBSC"
+title: Device Bound Session Credentials (DBSC)
+description: Bind sessions to the device so a stolen session cookie stops working elsewhere.
+---
+
+`Experimental`
+
+[Device Bound Session Credentials](https://w3c.github.io/webappsec-dbsc/) let the browser bind a session to a key it keeps in hardware, such as a TPM or the Secure Enclave. The browser holds a short-lived bound cookie and renews it by signing a challenge with that key. A cookie copied to another device stops working when it expires, because the other device cannot sign.
+
+<Callout type="warn">
+  DBSC is an early W3C draft and its wire format still changes. This plugin follows the draft at commit `3f0424f` and Chrome 157. Its options and schema may change in a minor release.
+</Callout>
+
+## Browser support
+
+Chrome binds sessions on Windows and macOS. Other browsers ignore the protocol headers, and their sessions work exactly as before. Chrome also skips binding when the device has no hardware key.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the plugin
+
+    ```package-install
+    @better-auth/dbsc
+    ```
+  </Step>
+
+  <Step>
+    ### Add the plugin to the server
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { dbsc } from "@better-auth/dbsc" // [!code highlight]
+
+    export const auth = betterAuth({
+        plugins: [
+            dbsc(), // [!code highlight]
+        ],
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth@latest migrate
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```package-install
+        npx auth@latest generate
+        ```
+      </Tab>
+    </Tabs>
+
+    See the [Schema](#schema) section to add the table manually.
+  </Step>
+</Steps>
+
+There is no client plugin. The browser runs the protocol on its own.
+
+## How it works
+
+1. Every response that creates a session, including OAuth and SAML callbacks, offers registration with a `Secure-Session-Registration` header. After a sign-in made on the server through `auth.api`, the offer is sent on the browser's next request to the auth server.
+2. Chrome creates a key for the session and posts a signed proof to `/dbsc/register`. The plugin stores the public key and sets the bound cookie.
+3. When the bound cookie is missing or about to expire, Chrome holds the request, posts a proof to `/dbsc/refresh`, and receives a new bound cookie. This also happens for a navigation that arrives from another site.
+4. Each refresh also checks the Better Auth session, so signing out or revoking a session ends the browser's DBSC session too.
+
+By default the session cookie keeps working as before, and the plugin only records which sessions are bound. Turn on [enforcement](#enforcement) to make a copied session cookie stop working.
+
+## Enforcement
+
+```ts title="auth.ts"
+dbsc({
+    enforce: true, // [!code highlight]
+})
+```
+
+With `enforce`, a bound session is accepted only together with a fresh bound cookie. A request without one is treated as signed out on every Better Auth endpoint and in `auth.api.getSession`, so a session cookie copied to another device stops working when the bound cookie expires. The session itself is kept, and the real browser is signed in again as soon as Chrome refreshes.
+
+* Sessions that were never bound, such as those in other browsers, are not affected.
+* A copied token sent as `Authorization: Bearer` through the bearer plugin is rejected with `401`.
+* With the [multi-session](/docs/plugins/multi-session) plugin every session in the browser has its own bound cookie and is checked the same way.
+* Requests already in flight when registration completes are accepted for 10 seconds.
+* Each blocked request emits a `blocked` event.
+
+To see what enforcement would do before turning it on, start in monitor mode. It runs the same check and emits `blocked` events with `enforced: false`, and rejects nothing.
+
+```ts title="auth.ts"
+dbsc({
+    enforce: "monitor", // [!code highlight]
+    onEvent(event) {
+        if (event.type === "blocked") console.log(event)
+    },
+})
+```
+
+* A request with a fresh bound cookie costs no database read. A session that was never bound is looked up until it is too old to register, about six minutes, and then remembered in a cookie.
+
+A request can still arrive without a fresh bound cookie when Chrome skips a refresh, for example because the refresh endpoint was unreachable or the device's signing quota ran out. That request is treated as signed out, and the next successful refresh signs the browser in again.
+
+## Checking the binding
+
+Use `getDbscState` on the server to require a fresh bound cookie for sensitive actions.
+
+```ts title="server.ts"
+const { status } = await auth.api.getDbscState({
+    headers: request.headers,
+})
+
+if (status === "stale") {
+    // The session is bound but this request carries no fresh bound cookie.
+}
+```
+
+| Status    | Meaning                                                           |
+| --------- | ----------------------------------------------------------------- |
+| `unbound` | The session was never bound. Expected for browsers without DBSC.  |
+| `bound`   | The request carries a fresh bound cookie for this session.        |
+| `stale`   | The session is bound, but the bound cookie is missing or expired. |
+
+A session can be `stale` for the real user when Chrome skipped a refresh. Ask for re-authentication rather than signing the user out.
+
+A session is bound once, when it is created. If the browser later drops its DBSC session, for example after its site data is cleared, the session stays `stale` until the user signs in again. An existing session is never offered registration again, because a stolen cookie could then be bound to the thief's device.
+
+## Observing events
+
+```ts title="auth.ts"
+dbsc({
+    onEvent(event) {
+        console.log(event.type, event)
+    },
+})
+```
+
+| Event        | When                                                                                                                                                 |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `registered` | A browser bound a session.                                                                                                                           |
+| `refreshed`  | A browser renewed its bound cookie.                                                                                                                  |
+| `rejected`   | A registration or refresh proof was invalid. `reason` says why.                                                                                      |
+| `blocked`    | With `enforce`, a bound session arrived without a fresh bound cookie. `reason` is `missing` or `invalid`, and `enforced` is `false` in monitor mode. |
+| `ended`      | The browser was told to drop its DBSC session, for example after sign-out.                                                                           |
+| `skipped`    | Chrome sent a request without refreshing, for example because the refresh failed or its signing quota ran out.                                       |
+
+`skipped` is read from a request header before any authentication, so treat its `reason` and `bindingId` as untrusted input. At most four are reported per request.
+
+## Options
+
+**boundCookieMaxAge**: Lifetime of the bound cookie in seconds. A stolen cookie works on another device for at most this long. Must be at least 300, because Chrome refreshes 120 seconds before expiry and signs at most 6 times per 9 minutes for a site. Defaults to `600`.
+
+**algorithms**: Signing algorithms offered to the browser. Defaults to `["ES256", "RS256"]`.
+
+**shouldOffer**: Decides whether a new session is offered registration, for example to roll DBSC out to part of your users.
+
+```ts title="auth.ts"
+dbsc({
+    shouldOffer: ({ user }) => user.email.endsWith("@example.com"),
+})
+```
+
+**enforce**: `true` rejects bound sessions that arrive without a fresh bound cookie, and `"monitor"` only reports them. See [Enforcement](#enforcement). Defaults to `false`.
+
+**allowedRefreshInitiators**: Hosts whose requests may make Chrome refresh the bound cookie, besides the auth origin. The default `["*"]` lets a navigation arriving from any site refresh first. Narrow it only if nothing links into your app from other sites.
+
+**onEvent**: Receives the events listed above. Errors thrown here are logged and never change the protocol response.
+
+## Deployment
+
+* Serve your app over HTTPS. Chrome ignores DBSC headers on other connections.
+* Let `403` responses from `/dbsc/refresh` reach the browser unchanged. Chrome only signs when it receives a `403` with a challenge, and it deletes the DBSC session on most other `4xx` responses.
+* Do not redirect `/dbsc/register` or `/dbsc/refresh`.
+* The plugin exempts both endpoints from the origin check and the rate limiter, because Chrome deletes the session on those `403` and `429` responses. Their requests are authenticated by the browser's signature instead.
+* `advanced.crossSubDomainCookies` and partitioned cookies are not supported yet.
+* Because the two endpoints are not rate limited, put your own limit in front of them if you need one, and make it answer `503`, never `429`.
+
+## Security considerations
+
+DBSC limits what a stolen cookie is worth. It does not stop:
+
+* Malware running on the user's device, which can use the browser and its key directly.
+* Phishing at sign-in, which steals the credentials rather than the cookie.
+* Cross-site scripting, which runs inside the user's browser.
+
+The browser does not prove to the server that the key is hardware-backed.
+
+Two things are outside what a bound session protects:
+
+* A session created through an identity provider is only as protected as the sign-in at that provider. Someone who can sign in there can create a new session here.
+* Credentials issued from a bound session, such as JWTs, API keys and OAuth tokens, are not bound to the device.
+
+## Schema
+
+The plugin adds one table.
+
+Table Name: `dbscBinding`
+
+export const dbscBindingFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "The DBSC session identifier sent to the browser",
+		isPrimaryKey: true,
+	},
+	{
+		name: "tokenHash",
+		type: "string",
+		description: "SHA-256 hash of the bound session's token",
+		isUnique: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user",
+		isForeignKey: true,
+		references: { model: "user", field: "id" },
+	},
+	{
+		name: "publicKey",
+		type: "string",
+		description: "The browser's public key as a JWK",
+	},
+	{
+		name: "algorithm",
+		type: "string",
+		description: "The signing algorithm, `ES256` or `RS256`",
+	},
+	{
+		name: "thumbprint",
+		type: "string",
+		description: "RFC 7638 thumbprint of the public key",
+		isUnique: true,
+	},
+	{
+		name: "lastChallengeAt",
+		type: "number",
+		description: "Issue time of the last accepted challenge, so each is used once",
+	},
+	{
+		name: "expiresAt",
+		type: "Date",
+		description: "Expiry of the bound session",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "When the binding was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "When the binding was last refreshed",
+	},
+];
+
+<DatabaseTable name="dbscBinding" fields={dbscBindingFields} />

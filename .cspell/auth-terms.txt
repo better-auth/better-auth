@@ -36,6 +36,7 @@ Vercel
 rgba
 idtoken
 HIBP
+dbsc
 dpop
 mtls
 jkt

@@ -30,6 +30,7 @@
     "---Utility---",
     "bearer",
     "captcha",
+    "dbsc",
     "have-i-been-pwned",
     "i18n",
     "last-login-method",

@@ -22,6 +22,13 @@ export default defineConfig({
 		{
 			name: "chromium",
 			use: { ...devices["Desktop Chrome"] },
+			testIgnore: "**/dbsc/**",
+		},
+		// DBSC needs the full browser with feature flags; the specs launch it
+		// themselves because the TLS trust flag is only known at runtime.
+		{
+			name: "dbsc",
+			testMatch: "**/dbsc/e2e/**/*.spec.ts",
 		},
 		// Front-channel logout depends on each browser's third-party cookie
 		// rules. CI sets PLAYWRIGHT_CROSS_BROWSER only when that code changes.
