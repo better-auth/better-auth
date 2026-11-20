@@ -1359,7 +1359,7 @@ describe("ciba ping mode", () => {
 		expect(ping).toHaveBeenCalledOnce();
 		const [endpoint, init] = ping.mock.calls[0]!;
 		expect(endpoint).toBe(notificationEndpoint);
-		expect(init).toMatchObject({ method: "POST", redirect: "error" });
+		expect(init).toMatchObject({ method: "POST", redirect: "manual" });
 		expect(new Headers(init?.headers).get("authorization")).toBe(
 			`Bearer ${token}`,
 		);

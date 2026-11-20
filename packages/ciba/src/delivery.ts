@@ -107,7 +107,7 @@ export async function pingClient(
 				auth_req_id: await decrypt(encryptedAuthReqId),
 			}),
 			signal,
-			redirect: "error",
+			redirect: "manual",
 		});
 		if (!response.ok) {
 			ctx.context.logger.warn(
