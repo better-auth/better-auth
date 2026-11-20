@@ -339,7 +339,7 @@ function buildOAuthDeviceGrant() {
 				clientId: authenticated.clientId,
 				deviceCodeFields: {
 					oauthClientId: authenticated.clientId,
-					resources: toResourceList(resource) ?? null,
+					resources: toResourceList(resource),
 				},
 			};
 		},
