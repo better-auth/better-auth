@@ -17,10 +17,12 @@ interface Recorded<T> {
 	instance: object;
 	value: T;
 }
-const authenticatedClientState =
-	defineRequestState<Recorded<OAuthAuthenticatedClient> | null>(() => null);
-const verifiedDpopProofState =
-	defineRequestState<Recorded<VerifiedDpopProof> | null>(() => null);
+const authenticatedClientState = defineRequestState<Recorded<
+	Pick<OAuthAuthenticatedClient, "clientId" | "method">
+> | null>(() => null);
+const verifiedDpopProofState = defineRequestState<Recorded<
+	Pick<VerifiedDpopProof, "jkt">
+> | null>(() => null);
 
 // The internal adapter is built once per auth context and survives the
 // per-request copy that dynamic base URLs make of it. Unlike `adapter`, which
@@ -30,8 +32,12 @@ const instanceOf = (ctx: GenericEndpointContext): object =>
 
 export const recordAuthenticatedClient = (
 	ctx: GenericEndpointContext,
-	client: OAuthAuthenticatedClient,
-) => authenticatedClientState.set({ instance: instanceOf(ctx), value: client });
+	{ clientId, method }: OAuthAuthenticatedClient,
+) =>
+	authenticatedClientState.set({
+		instance: instanceOf(ctx),
+		value: { clientId, method },
+	});
 export const getRecordedAuthenticatedClient = async (
 	ctx: GenericEndpointContext,
 ) => {
@@ -40,8 +46,8 @@ export const getRecordedAuthenticatedClient = async (
 };
 export const recordVerifiedDpopProof = (
 	ctx: GenericEndpointContext,
-	proof: VerifiedDpopProof,
-) => verifiedDpopProofState.set({ instance: instanceOf(ctx), value: proof });
+	{ jkt }: VerifiedDpopProof,
+) => verifiedDpopProofState.set({ instance: instanceOf(ctx), value: { jkt } });
 export const getRecordedDpopProof = async (ctx: GenericEndpointContext) => {
 	const recorded = await verifiedDpopProofState.get();
 	return recorded?.instance === instanceOf(ctx) ? recorded.value : null;

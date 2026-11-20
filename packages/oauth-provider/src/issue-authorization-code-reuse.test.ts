@@ -7,6 +7,10 @@ import type { BetterAuthPlugin } from "better-auth/types";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProvider } from "./oauth";
+import {
+	getRecordedAuthenticatedClient,
+	getRecordedDpopProof,
+} from "./request-authentication";
 import { createDpopKey, createDpopProof } from "./test-utils/dpop";
 import { getOAuthProviderApi } from "./token";
 import { storeToken } from "./utils";
@@ -37,20 +41,24 @@ describe("provider.issueAuthorizationCode after authenticateClient and verifyDpo
 					);
 					const { expected_client_id, expected_jkt, ...query } =
 						ctx.body as Record<string, string>;
-					await provider.authenticateClient({
+					const authenticated = await provider.authenticateClient({
 						clientId: expected_client_id,
 						requireCredentials: false,
 					});
-					if (expected_jkt) {
-						await provider.verifyDpopProof({ expectedJkt: expected_jkt });
-					} else {
-						await provider.verifyDpopProof();
-					}
+					const proof = expected_jkt
+						? await provider.verifyDpopProof({ expectedJkt: expected_jkt })
+						: await provider.verifyDpopProof();
 					const issued = await provider.issueAuthorizationCode({
 						query,
 						session: ctx.context.session,
 					});
-					return ctx.json({ code: issued.code });
+					return ctx.json({
+						code: issued.code,
+						separateClientRecord:
+							(await getRecordedAuthenticatedClient(ctx)) !== authenticated,
+						separateProofRecord:
+							proof && (await getRecordedDpopProof(ctx)) !== proof,
+					});
 				},
 			),
 		},
@@ -127,7 +135,11 @@ describe("provider.issueAuthorizationCode after authenticateClient and verifyDpo
 	}
 
 	function send(body: Record<string, string>, dpop?: string) {
-		return client.$fetch<{ code: string }>("/test/checked-issue-code", {
+		return client.$fetch<{
+			code: string;
+			separateClientRecord: boolean;
+			separateProofRecord?: boolean;
+		}>("/test/checked-issue-code", {
 			method: "POST",
 			headers: {
 				...Object.fromEntries(headers),
@@ -172,6 +184,18 @@ describe("provider.issueAuthorizationCode after authenticateClient and verifyDpo
 		);
 		expect(issued.error).toBeNull();
 		expect(await storedJkt(issued.data!.code)).toBe(key.jkt);
+	});
+
+	it("keeps the recorded checks independent of the results returned to the plugin", async () => {
+		const key = await createDpopKey();
+		const issued = await send(
+			await codeRequest(publicClient.client_id),
+			await createDpopProof(key, { url: endpointUrl }),
+		);
+		expect(issued.data).toMatchObject({
+			separateClientRecord: true,
+			separateProofRecord: true,
+		});
 	});
 
 	it("rejects a query that names another client than the one authenticated", async () => {
