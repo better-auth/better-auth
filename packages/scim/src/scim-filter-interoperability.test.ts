@@ -301,8 +301,17 @@ describe("SCIM provider filter interoperability", () => {
 	});
 
 	it("evaluates a logical or of equality expressions without leaving the connection", async () => {
-		const { ada, auth, grace, listGroups, listUsers, partnerHeaders } =
-			await createFilterFixture();
+		const {
+			ada,
+			auth,
+			grace,
+			listGroups,
+			listUsers,
+			partnerHeaders,
+			partnerPlatformGroup,
+			platformGroup,
+			quotedGroup,
+		} = await createFilterFixture();
 		const partnerAda = await auth.api.createSCIMUser({
 			body: {
 				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -320,10 +329,15 @@ describe("SCIM provider filter interoperability", () => {
 		const matching = await listUsers(
 			'userName eq "ada.login@example.com" or emails.value eq "grace.work@example.com"',
 		);
-		const paged = await listUsers(
+		const firstPage = await listUsers(
 			'userName eq "ada.login@example.com" or emails.value eq "grace.work@example.com"',
 			"test-scim-token",
 			{ count: "1", startIndex: "1" },
+		);
+		const secondPage = await listUsers(
+			'userName eq "ada.login@example.com" or emails.value eq "grace.work@example.com"',
+			"test-scim-token",
+			{ count: "1", startIndex: "2" },
 		);
 		const mismatching = await listUsers(
 			'userName eq "missing@example.com" or emails.value eq "missing.alias@example.com"',
@@ -350,14 +364,26 @@ describe("SCIM provider filter interoperability", () => {
 			},
 		});
 		expect(matchingIds).toEqual(expect.arrayContaining([ada.id, grace.id]));
+		expect(matchingIds).toHaveLength(2);
 		expect(matchingIds).not.toContain(partnerAda.id);
-		expect(paged).toMatchObject({
+		expect(firstPage).toMatchObject({
 			status: 200,
 			body: {
 				totalResults: 2,
+				startIndex: 1,
 				itemsPerPage: 1,
 			},
 		});
+		expect(listResourceIds(firstPage.body)).toEqual(matchingIds.slice(0, 1));
+		expect(secondPage).toMatchObject({
+			status: 200,
+			body: {
+				totalResults: 2,
+				startIndex: 2,
+				itemsPerPage: 1,
+			},
+		});
+		expect(listResourceIds(secondPage.body)).toEqual(matchingIds.slice(1, 2));
 		expect(mismatching).toMatchObject({
 			status: 200,
 			body: {
@@ -380,7 +406,11 @@ describe("SCIM provider filter interoperability", () => {
 				totalResults: 2,
 			},
 		});
+		expect(groupIds).toEqual(
+			expect.arrayContaining([platformGroup.id, quotedGroup.id]),
+		);
 		expect(groupIds).toHaveLength(2);
+		expect(groupIds).not.toContain(partnerPlatformGroup.id);
 		expect(mixed).toMatchObject({
 			status: 400,
 			body: { scimType: "invalidFilter" },
