@@ -47,10 +47,12 @@ import { resolveResourcePolicy } from "./resources";
 import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
 import {
 	authorizationCodeGrantId,
+	DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
 	findRefreshToken,
 	grantRevocationWindowMs,
 	isGrantRevoked,
 	markGrantRevoked,
+	maxAccessTokenExpiresIn,
 } from "./token-lookup";
 import type {
 	Confirmation,
@@ -311,9 +313,9 @@ async function createJwtAccessToken(
 	client: SchemaClient<Scope[]>,
 	audienceClaim: string | string[],
 	scopes: string[],
-	overrides?: {
-		iat?: number;
-		exp?: number;
+	overrides: {
+		iat: number;
+		exp: number;
 		sid?: string;
 		/** Consent reference from `postLogin.consentReferenceId`. */
 		referenceId?: string;
@@ -341,8 +343,7 @@ async function createJwtAccessToken(
 		grantId?: string;
 	},
 ) {
-	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
-	const exp = overrides?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
+	const { iat, exp } = overrides;
 
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 	// RFC 9068 §2.2 requires `sub` on every JWT access token. For
@@ -569,7 +570,7 @@ async function createOpaqueAccessToken(
 	user: User | undefined,
 	client: SchemaClient<Scope[]>,
 	scopes: string[],
-	payload: JWTPayload,
+	payload: { iat: number; exp: number; sid?: string },
 	resources?: string[],
 	referenceId?: string,
 	authorizationCodeId?: string,
@@ -583,8 +584,7 @@ async function createOpaqueAccessToken(
 	} = {},
 ) {
 	const { confirmation, requestedUserInfoClaims, act, grantId } = issuance;
-	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
-	const exp = payload?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
+	const { iat, exp } = payload;
 	const token = opts.generateOpaqueAccessToken
 		? await opts.generateOpaqueAccessToken()
 		: generateRandomString(32, "A-Z", "a-z");
@@ -931,7 +931,7 @@ function consumedAuthorizationCodeIdentifier(authorizationCodeId: string) {
  */
 function consumedAuthorizationCodeExpiresAt(opts: OAuthOptions<Scope[]>) {
 	const lifetimeSeconds = Math.max(
-		opts.accessTokenExpiresIn ?? 3600,
+		maxAccessTokenExpiresIn(opts),
 		opts.refreshTokenExpiresIn ?? 2592000,
 	);
 	return new Date(Date.now() + lifetimeSeconds * 1000);
@@ -1794,7 +1794,7 @@ async function resolveRefreshTokenRotationReplayRequest(
 		resources: params.resources,
 		refreshToken: params.refreshToken,
 		iat,
-		scopeExpiresAtSeconds: iat + (opts.accessTokenExpiresIn ?? 3600),
+		scopeExpiresAtSeconds: iat + maxAccessTokenExpiresIn(opts),
 	});
 	const confirmation = params.skipDpopVerification
 		? params.verifiedConfirmation
@@ -1819,6 +1819,49 @@ function replayRefreshTokenRotationResponse(
 		...response,
 		expires_in: Math.max(0, response.expires_at - now),
 	});
+}
+
+/**
+ * Resolves the lifetime of a user access token for one grant.
+ *
+ * A number is used as is. A function gets copies of the grant the provider
+ * already validated and nothing from the request, so a client cannot lengthen
+ * its own token by asking. It may throw, which fails the request. It may not
+ * return an unusable number: a result that is not finite after rounding down to
+ * whole seconds, or is below one second, falls back to the default, and a result
+ * above `accessTokenMaxExpiresIn` is lowered to it, so the windows sized from
+ * that bound always outlast the token.
+ */
+async function resolveAccessTokenExpiresIn(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		user: User;
+		client: SchemaClient<Scope[]>;
+		scopes: string[];
+		grantType: GrantType | undefined;
+	},
+): Promise<number> {
+	const configured = opts.accessTokenExpiresIn;
+	if (typeof configured !== "function") {
+		return configured ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
+	}
+	const max = maxAccessTokenExpiresIn(opts);
+	const result = await configured(structuredClone(params));
+	const resolved = typeof result === "number" ? Math.floor(result) : Number.NaN;
+	if (!Number.isFinite(resolved) || resolved < 1) {
+		ctx.context.logger.warn(
+			"accessTokenExpiresIn returned an unusable lifetime, using the default",
+		);
+		return Math.min(DEFAULT_ACCESS_TOKEN_EXPIRES_IN, max);
+	}
+	if (resolved > max) {
+		ctx.context.logger.warn(
+			`accessTokenExpiresIn returned ${resolved} seconds, above accessTokenMaxExpiresIn, using ${max}`,
+		);
+		return max;
+	}
+	return resolved;
 }
 
 async function createUserTokens(
@@ -1876,7 +1919,12 @@ async function createUserTokens(
 
 	const iat = Math.floor(Date.now() / 1000);
 	const baseExpiry = user
-		? (opts.accessTokenExpiresIn ?? 3600)
+		? await resolveAccessTokenExpiresIn(ctx, opts, {
+				user,
+				client,
+				scopes,
+				grantType,
+			})
 		: (opts.m2mAccessTokenExpiresIn ?? 3600);
 	// Every other access token expiry is min()-ed against this, so the cap holds.
 	const defaultExp = Math.min(

@@ -146,6 +146,10 @@ function getServerContextSignedQueryIssuedAt(value: unknown) {
 	return new Date(issuedAtMs);
 }
 
+// Ten years. The retention windows derived from the bound become expiry dates,
+// which a larger value pushes beyond what a `Date` or a database column holds.
+const MAX_ACCESS_TOKEN_MAX_EXPIRES_IN = 10 * 365 * 24 * 60 * 60;
+
 /**
  * oAuth 2.1 provider plugin for Better Auth.
  *
@@ -292,6 +296,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	) {
 		throw new BetterAuthError(
 			`resourceDefaults.accessTokenFormat must be one of ${ACCESS_TOKEN_FORMATS.join(", ")}`,
+		);
+	}
+
+	if (
+		opts.accessTokenMaxExpiresIn !== undefined &&
+		(!Number.isSafeInteger(opts.accessTokenMaxExpiresIn) ||
+			opts.accessTokenMaxExpiresIn <= 0 ||
+			opts.accessTokenMaxExpiresIn > MAX_ACCESS_TOKEN_MAX_EXPIRES_IN)
+	) {
+		throw new BetterAuthError(
+			`accessTokenMaxExpiresIn must be a positive integer number of seconds, at most ${MAX_ACCESS_TOKEN_MAX_EXPIRES_IN}`,
 		);
 	}
 

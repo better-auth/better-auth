@@ -1237,6 +1237,32 @@ export interface InitialAccessTokenAuthorization {
 	clientCredentialsScopes?: string[];
 }
 
+/**
+ * What an {@link OAuthOptions.accessTokenExpiresIn} resolver receives when a user
+ * grant is issued. The provider has already validated every field, and it
+ * hands over copies, so changing them affects nothing else. Nothing from the
+ * request is included, so a client cannot ask for a longer lifetime.
+ */
+export interface AccessTokenExpiresInContext<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	/** The authenticated user the grant is issued for. */
+	user: User;
+	/** The authenticated client the grant is issued to. */
+	client: SchemaClient<Scopes>;
+	/** The scopes of the grant. */
+	scopes: Scopes[number][];
+	/** The grant type in play, when the flow provides one. */
+	grantType: GrantType | undefined;
+}
+
+/**
+ * Resolves the user access-token lifetime, in seconds, for a single grant.
+ */
+export type AccessTokenExpiresInResolver<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> = (params: AccessTokenExpiresInContext<Scopes>) => Awaitable<number>;
+
 export interface OAuthOptions<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
@@ -1518,9 +1544,44 @@ export interface OAuthOptions<
 	/**
 	 * The amount of time in seconds that the access token is valid for.
 	 *
+	 * May also be a function, evaluated each time a user grant is issued or
+	 * refreshed, so the lifetime can be decided per grant rather than once per
+	 * process. It receives the user, the client, the scopes, and the grant type,
+	 * never anything read from the token request, so a client cannot obtain a
+	 * longer token by asking for one.
+	 *
+	 * The resolver returns a number of seconds. A result that is not a finite
+	 * number of at least one second falls back to 1 hour, or to
+	 * {@link OAuthOptions.accessTokenMaxExpiresIn} when that is lower. A result
+	 * above {@link OAuthOptions.accessTokenMaxExpiresIn} is lowered to it.
+	 * Throwing fails the token request.
+	 *
+	 * Client-credentials (machine-to-machine) grants are unaffected and continue to
+	 * use {@link OAuthOptions.m2mAccessTokenExpiresIn}.
+	 *
 	 * @default 3600 (1 hour) - Industry standard
+	 *
+	 * @example
+	 * ```ts
+	 * accessTokenExpiresIn: ({ scopes }) =>
+	 * 	scopes.includes("write:payments") ? 300 : 3600,
+	 * ```
 	 */
-	accessTokenExpiresIn?: number;
+	accessTokenExpiresIn?: number | AccessTokenExpiresInResolver<Scopes>;
+	/**
+	 * The longest access token lifetime in seconds that an
+	 * {@link OAuthOptions.accessTokenExpiresIn} function may return.
+	 *
+	 * The grant revocation entry and the record of a redeemed authorization code
+	 * must outlast every access token, so they last this long when
+	 * `accessTokenExpiresIn` is a function. Raise it to let the function return
+	 * more than 1 hour. A larger value also keeps those entries longer.
+	 *
+	 * Ignored when `accessTokenExpiresIn` is a number, which is its own bound.
+	 *
+	 * @default 3600 (1 hour)
+	 */
+	accessTokenMaxExpiresIn?: number;
 	/**
 	 * The amount of time in seconds that a client
 	 * credentials grant access token is valid for.
