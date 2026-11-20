@@ -1535,7 +1535,9 @@ describe("SCIM connection-owned Groups", () => {
 			headers: authorization,
 		});
 
-		expect(created.members).toHaveLength(1_001);
+		expect(created.members?.map((member) => member.value).sort()).toEqual(
+			members.map((member) => member.value).sort(),
+		);
 		expect(writes.createManyRowCounts).toEqual([1_001]);
 		expect(writes.countCreateCalls()).toBe(0);
 		expect(data.scimGroupMember).toHaveLength(1_001);

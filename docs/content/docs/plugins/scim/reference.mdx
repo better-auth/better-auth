@@ -307,7 +307,7 @@ PATCH accepts standard Enterprise paths such as `urn:ietf:params:scim:schemas:ex
 
 Each `members[].value` must contain a SCIM User ID from the same connection. Members may be direct Users only. When `type` is present, it must equal `User` case-insensitively. Duplicate references are collapsed. There is no server limit on the number of unique direct members.
 
-GET, PUT, and collection responses embed the complete `members` array unless `excludedAttributes=members` or a narrower `attributes` list omits it. [RFC 7643](https://datatracker.ietf.org/doc/html/rfc7643) does not page members inside a Group resource, so large Groups produce large payloads. Directory assignment jobs can omit `members` on reads and change membership with PATCH. PUT replace still accepts the full set. Collection pagination still caps `count` at 100 Groups; that cap does not apply to members of one Group.
+GET, POST, PUT, PATCH, and collection responses embed the complete `members` array unless `excludedAttributes=members` or a narrower `attributes` list omits it. [RFC 7643](https://datatracker.ietf.org/doc/html/rfc7643) does not page members inside a Group resource, so large Groups produce large payloads. Directory assignment jobs can omit `members` on reads and change membership with PATCH. PUT replace still accepts the full set. Collection pagination still caps `count` at 100 Groups; that cap does not apply to members of one Group.
 
 ## Discovery
 

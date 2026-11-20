@@ -823,21 +823,22 @@ async function createProjectedGroupResources(
 
 	const memberships: SCIMGroupMember[] = [];
 	for (const chunk of chunkSCIMIds(groups.map((group) => group.id))) {
-		memberships.push(
-			...(await adapter.findMany<SCIMGroupMember>({
-				model: "scimGroupMember",
-				where: [
-					{ field: "connectionId", value: firstGroup.connectionId },
-					{
-						field: "groupId",
-						value: chunk,
-						operator: "in",
-					},
-				],
-				limit: SCIM_UNBOUNDED_ROW_LIMIT,
-				sortBy: { field: "createdAt", direction: "asc" },
-			})),
-		);
+		const chunkMemberships = await adapter.findMany<SCIMGroupMember>({
+			model: "scimGroupMember",
+			where: [
+				{ field: "connectionId", value: firstGroup.connectionId },
+				{
+					field: "groupId",
+					value: chunk,
+					operator: "in",
+				},
+			],
+			limit: SCIM_UNBOUNDED_ROW_LIMIT,
+			sortBy: { field: "createdAt", direction: "asc" },
+		});
+		for (const membership of chunkMemberships) {
+			memberships.push(membership);
+		}
 	}
 	const membershipsByGroupId = new Map<string, SCIMGroupMember[]>();
 	for (const membership of memberships) {
