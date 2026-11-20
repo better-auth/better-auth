@@ -24,6 +24,7 @@ import {
 	getJwtPlugin,
 	getLocalJwksSource,
 	getOAuthProviderPlugin,
+	JWT_ACCESS_TOKEN_TYPE,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
@@ -203,7 +204,11 @@ export const oauthProviderResourceClient = <
 			introspect,
 			jwksUrl,
 			verifyOptions: {
+				// RFC 9068 §4: other JWTs signed with the same keys, such as session
+				// JWTs, must not pass as access tokens. Applies to the signature
+				// check only; the records check has its own `typ` rule.
 				...opts?.verifyOptions,
+				typ: opts?.verifyOptions?.typ ?? JWT_ACCESS_TOKEN_TYPE,
 				audience,
 				issuer,
 			},
