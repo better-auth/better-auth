@@ -1,5 +1,7 @@
 # @better-auth/kysely-adapter
 
+## 1.8.0-beta.11
+
 ## 1.8.0-beta.10
 
 ## 1.8.0-beta.9
