@@ -1359,6 +1359,80 @@ export type AccessTokenExpiresInResolver<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > = (params: AccessTokenExpiresInContext<Scopes>) => Awaitable<number>;
 
+/**
+ * A revocation reported to {@link OAuthOptions.onTokenRevoked}. A refresh
+ * token and an authorization code each stand for their grant, so the event
+ * names the grant that was revoked. An access token is revoked on its own,
+ * so the event names the token. `type` names the token the request
+ * presented, and `reason` says why the provider revoked it.
+ */
+export type OAuthTokenRevokedEvent = {
+	/** The client the revoked tokens were issued to. */
+	clientId: string;
+	/**
+	 * Keep the revocation record until this time. When an access-token lifetime
+	 * or its per-grant ceiling was lowered, earlier tokens can last longer.
+	 */
+	expiresAt: Date;
+	/**
+	 * The endpoint context of the request. Its body and headers hold the
+	 * presented token and the client's credentials, so don't log it.
+	 */
+	ctx: GenericEndpointContext;
+} & (
+	| {
+			/** One access token, revoked by its client at `/oauth2/revoke`. */
+			type: "access_token";
+			reason: "revocation_request";
+			/** The token's `jti`. Absent for an opaque access token. */
+			jti?: string;
+	  }
+	| {
+			/**
+			 * A refresh token. Its grant's access tokens are revoked with it:
+			 * opaque ones always, JWT ones with `revocableJwtAccessTokens`.
+			 *
+			 * `"revocation_request"`: the client revoked the refresh token at
+			 * `/oauth2/revoke`. `"reuse_detected"`: a client refreshed with the
+			 * token after it was rotated or revoked, or asked to revoke it after
+			 * it was rotated. Reuse can indicate token theft. A legitimate client
+			 * retrying after a lost refresh response can produce the same event,
+			 * so confirming theft requires other evidence. Refreshing a
+			 * session-bound token after its session ends returns `invalid_grant`
+			 * without an event.
+			 *
+			 * An identified grant is revoked independently. For a legacy token with
+			 * no grant ID, reuse also revokes the client's other refresh tokens for
+			 * the user, and the event has no grant ID.
+			 */
+			type: "refresh_token";
+			reason: "revocation_request" | "reuse_detected";
+			/** The user the refresh token was issued to. */
+			userId: string;
+			/**
+			 * The grant whose access tokens were revoked. With
+			 * `revocableJwtAccessTokens`, its JWT access tokens carry it as
+			 * `grant_id`. Absent for a refresh token stored before 1.8 and not
+			 * rotated since.
+			 */
+			grantId?: string;
+	  }
+	| {
+			/**
+			 * An authorization code redeemed again by the client it was issued to.
+			 * The tokens issued for the code are revoked: refresh and opaque access
+			 * tokens always, JWT access tokens with `revocableJwtAccessTokens`.
+			 */
+			type: "authorization_code";
+			reason: "reuse_detected";
+			/**
+			 * The code's grant. With `revocableJwtAccessTokens`, its JWT access
+			 * tokens carry it as `grant_id`.
+			 */
+			grantId: string;
+	  }
+);
+
 export interface OAuthOptions<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
@@ -2613,6 +2687,47 @@ export interface OAuthOptions<
 	 * @default true
 	 */
 	revokeGrantsOnPasswordReset?: boolean;
+	/**
+	 * Called after the provider revokes a grant or a single access token: when
+	 * a client revokes a token at `/oauth2/revoke`, and when a client presents
+	 * an authorization code or refresh token again after the provider used it.
+	 * Use it to tell resource servers that verify JWT access tokens locally,
+	 * or to keep an audit log.
+	 *
+	 * A refresh token and an authorization code each stand for their grant, so
+	 * revoking one revokes the grant's opaque access tokens, and its JWT access
+	 * tokens too with `revocableJwtAccessTokens`. The event carries the
+	 * `grantId`, which a refresh token stored before 1.8 lacks; revoking such a
+	 * token directly reaches its linked access tokens. Reuse of a legacy token
+	 * without a grant ID also revokes the client's other refresh tokens for the
+	 * user. An access token is
+	 * revoked on its own, and the event carries its `jti`.
+	 *
+	 * It is not called when nothing is revoked, such as for an unknown,
+	 * expired, or already revoked access token, a token issued to another
+	 * client, an authorization code reused by another client or without its
+	 * `code_verifier`, or a refresh that rotates the refresh token.
+	 *
+	 * Tokens also stop working for these causes, and none of them is
+	 * reported:
+	 * - An ended session. `databaseHooks.session.delete.after` sees it.
+	 * - A disabled client. Introspection reports its tokens as inactive.
+	 * - A deleted client or user. Introspection reports a deleted client's
+	 *   tokens as inactive, and a database that enforces the schema's foreign
+	 *   keys deletes the tokens of a deleted client or user.
+	 * - A deleted resource. Introspection reports its tokens as inactive.
+	 * - A deleted consent or a password reset that revokes stored grants.
+	 * - Other grants affected by reuse of a legacy refresh token without a
+	 *   grant ID. Such an event has no grant ID to identify those grants.
+	 *
+	 * Delivery is best effort. The response waits for the callback. The
+	 * tokens are already revoked when it runs, so an error it throws is logged
+	 * and the response stays the same. A request that fails partway can leave
+	 * tokens revoked without calling it. A reused authorization code is
+	 * reported even if deleting its tokens failed. Concurrent requests that
+	 * revoke the same token can each report it.
+	 */
+	onTokenRevoked?: (event: OAuthTokenRevokedEvent) => Awaitable<void>;
 	/**
 	 * Rate limit configuration for OAuth endpoints.
 	 *

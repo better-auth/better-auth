@@ -13,6 +13,7 @@ import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
 	OAuthRefreshToken,
+	OAuthTokenRevokedEvent,
 	Scope,
 } from "./types";
 import {
@@ -246,6 +247,30 @@ export function grantRevocationWindowMs(opts: OAuthOptions<Scope[]>) {
 }
 
 /**
+ * When the mark of a grant revoked now expires. Every access token the grant
+ * issued has expired by then.
+ */
+export function grantRevocationExpiresAt(opts: OAuthOptions<Scope[]>) {
+	return new Date(Date.now() + grantRevocationWindowMs(opts) + 1000);
+}
+
+/**
+ * Revocation is complete when the callback runs. Log delivery failures so
+ * clients receive the response for the revocation that already took effect.
+ */
+export async function notifyTokenRevoked(
+	opts: OAuthOptions<Scope[]>,
+	event: OAuthTokenRevokedEvent,
+) {
+	if (!opts.onTokenRevoked) return;
+	try {
+		await opts.onTokenRevoked(event);
+	} catch (error) {
+		event.ctx.context.logger.error("onTokenRevoked callback failed", error);
+	}
+}
+
+/**
  * Marks a grant revoked, keyed on its grant ID. Token issuance on the grant
  * checks the mark after storing its tokens, so a revocation that writes it
  * before deleting the grant's tokens also catches an issuance in flight: the
@@ -270,7 +295,7 @@ export async function markGrantRevoked(
 	await ctx.context.internalAdapter.createVerificationValue({
 		identifier: grantRevocationIdentifier(grant.grantId),
 		value: grant.clientId,
-		expiresAt: new Date(Date.now() + grantRevocationWindowMs(opts) + 1000),
+		expiresAt: grantRevocationExpiresAt(opts),
 	});
 }
 

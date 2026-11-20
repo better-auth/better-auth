@@ -300,6 +300,10 @@ Lets `/oauth2/revoke` revoke JWT access tokens by `jti`, and makes revoking a re
 
 Revokes the access and refresh tokens stored for a user when their password is reset, including `offline_access` grants that no session holds. It applies when `emailAndPassword.revokeSessionsOnPasswordReset` is on. JWT access tokens are revoked only with `revocableJwtAccessTokens`, and only when their grant has a stored refresh token or opaque access token. Defaults to `true`. Set it to `false` to keep a user's tokens across a password reset. The reset still ends the user's sessions, and so a JWT access token that carries their `sid`. See [Password reset](/docs/plugins/oauth-provider/openid-connect#password-reset).
 
+`onTokenRevoked` <span className="opacity-70">`(event) => void | Promise<void>`</span>
+
+Called after the provider revokes a grant or a single access token: when a client revokes a token at `/oauth2/revoke`, and when a client presents a used authorization code or refresh token again. The event has `type`, `reason`, `clientId`, `expiresAt`, and `ctx`, and `jti`, `grantId`, or `userId` depending on the token. It isn't called when a session ends, a client is disabled or deleted, a resource or consent is deleted, or a password reset revokes stored grants. Delivery is best effort: the response waits for the callback, and an error it throws is logged and does not change the response. See [Observe revocations](/docs/plugins/oauth-provider/tokens#observe-revocations).
+
 `dpop` <span className="opacity-70">`{ proofMaxAgeSeconds?, signingAlgorithms?, nonce? }`</span>
 
 DPoP proof validation. `proofMaxAgeSeconds` defaults to `300`, and `signingAlgorithms` to `["EdDSA", "ES256", "ES512", "PS256", "RS256"]`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).

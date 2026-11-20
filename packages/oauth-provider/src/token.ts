@@ -50,10 +50,12 @@ import {
 	authorizationCodeGrantId,
 	DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
 	findRefreshToken,
+	grantRevocationExpiresAt,
 	grantRevocationWindowMs,
 	isGrantRevoked,
 	markGrantRevoked,
 	maxAccessTokenExpiresIn,
+	notifyTokenRevoked,
 } from "./token-lookup";
 import type {
 	Confirmation,
@@ -716,6 +718,7 @@ export async function invalidateRefreshFamily(
 		OAuthRefreshToken<Scope[]>,
 		"userId" | "grantId" | "authorizationCodeId"
 	>,
+	reason: "revocation_request" | "reuse_detected",
 ) {
 	const { userId, grantId, authorizationCodeId } = refreshToken;
 	const pair = [
@@ -787,6 +790,15 @@ export async function invalidateRefreshFamily(
 				await deleteLinkedAccessTokens();
 			}),
 	);
+	await notifyTokenRevoked(opts, {
+		type: "refresh_token",
+		reason,
+		clientId,
+		userId,
+		grantId: refreshToken.grantId ?? undefined,
+		expiresAt: grantRevocationExpiresAt(opts),
+		ctx,
+	});
 }
 
 const TOKEN_PAGE_SIZE = 100;
@@ -974,23 +986,22 @@ async function revokeTokensIssuedForAuthorizationCode(
 		}
 	};
 
-	await revokeGrantTokens(
+	const grantId = await authorizationCodeGrantId(authorizationCodeId);
+	await revokeGrantTokens(ctx, opts, [{ grantId, clientId }], async () => {
+		await deleteIssuedTokens("oauthAccessToken");
+		await deleteIssuedTokens("oauthRefreshToken");
+		// Without a foreign key, an in-flight redemption can store an access
+		// token between the two deletes above. See `createOpaqueAccessToken`.
+		await deleteIssuedTokens("oauthAccessToken");
+	});
+	await notifyTokenRevoked(opts, {
+		type: "authorization_code",
+		reason: "reuse_detected",
+		clientId,
+		grantId,
+		expiresAt: grantRevocationExpiresAt(opts),
 		ctx,
-		opts,
-		[
-			{
-				grantId: await authorizationCodeGrantId(authorizationCodeId),
-				clientId,
-			},
-		],
-		async () => {
-			await deleteIssuedTokens("oauthAccessToken");
-			await deleteIssuedTokens("oauthRefreshToken");
-			// Without a foreign key, an in-flight redemption can store an access
-			// token between the two deletes above. See `createOpaqueAccessToken`.
-			await deleteIssuedTokens("oauthAccessToken");
-		},
-	);
+	});
 }
 
 function consumedAuthorizationCodeIdentifier(authorizationCodeId: string) {
@@ -3072,7 +3083,13 @@ async function handleRefreshTokenGrant(
 				resources: resources ?? refreshToken.resources,
 			});
 		}
-		await invalidateRefreshFamily(ctx, opts, client_id, refreshToken);
+		await invalidateRefreshFamily(
+			ctx,
+			opts,
+			client_id,
+			refreshToken,
+			"reuse_detected",
+		);
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",

@@ -243,7 +243,11 @@ async function endAllSessions({ auth, user }: TestServer) {
  * @see https://github.com/better-auth/better-auth/issues/12276
  */
 describe("oauth-provider - a password reset revokes the user's grants", async () => {
-	const server = await setup({ revocableJwtAccessTokens: true });
+	const onTokenRevoked = vi.fn();
+	const server = await setup({
+		revocableJwtAccessTokens: true,
+		onTokenRevoked,
+	});
 
 	it("revokes offline_access grants that no session holds", async () => {
 		const detached = await authorize(server, { jwtAccessToken: true });
@@ -252,6 +256,7 @@ describe("oauth-provider - a password reset revokes the user's grants", async ()
 		expect(await isActive(server, opaque.access_token)).toBe(true);
 
 		await resetPassword(server);
+		expect(onTokenRevoked).not.toHaveBeenCalled();
 
 		expect(await isActive(server, opaque.access_token)).toBe(false);
 		expect(await isActive(server, standalone.access_token)).toBe(false);

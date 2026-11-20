@@ -6,7 +6,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 
@@ -18,12 +18,17 @@ const formHeaders = {
 };
 
 async function setup(testWith: "sqlite" | "postgres" | "mysql") {
+	const onTokenRevoked = vi.fn();
 	const { auth, client, signInWithTestUser } = await getTestInstance(
 		{
 			baseURL: authServerBaseUrl,
 			plugins: [
 				jwt({ jwt: { issuer: authServerBaseUrl } }),
-				oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					onTokenRevoked,
+				}),
 			],
 		},
 		{ clientOptions: { plugins: [oauthProviderClient()] }, testWith },
@@ -44,7 +49,7 @@ async function setup(testWith: "sqlite" | "postgres" | "mysql") {
 		clientSecret: oauthClient.client_secret!,
 		redirectURI: redirectUri,
 	};
-	return { auth, client, headers, options };
+	return { auth, client, headers, options, onTokenRevoked };
 }
 
 type TestServer = Awaited<ReturnType<typeof setup>>;
@@ -224,10 +229,19 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 				const other = await authorize(server);
 				const otherSecond = await refresh(server, other.refresh_token);
 				await dropGrantIds(server);
+				server.onTokenRevoked.mockClear();
 
 				const replay = await requestRefresh(server, first.refresh_token);
 
 				expect(replay.error).toMatchObject({ error: "invalid_grant" });
+				expect(server.onTokenRevoked).toHaveBeenCalledTimes(1);
+				expect(server.onTokenRevoked).toHaveBeenCalledWith(
+					expect.objectContaining({
+						type: "refresh_token",
+						reason: "reuse_detected",
+						grantId: undefined,
+					}),
+				);
 				expect(await countRefreshTokens(server)).toBe(0);
 				expect(
 					(await requestRefresh(server, second.refresh_token)).error,
