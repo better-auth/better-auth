@@ -497,7 +497,7 @@ In the browser, `oauthProviderClient()` forwards the signed `oauth_query` from t
 Some endpoints behave differently with other plugins or requests:
 
 * With `oauthDeviceAuthorization()`, `/oauth2/authorize` also accepts `user_code` instead of an authorization request. The user approves the device code on the same pages. See [Device code grant](/docs/plugins/oauth-provider/tokens#device-code-grant).
-* With [`ciba()`](/docs/plugins/ciba), `/oauth2/authorize` also accepts `ciba_request_id`. The user approves the backchannel request on the same pages. See [What the user sees](/docs/plugins/ciba#what-the-user-sees). When you set `approvalPage`, `/oauth2/authorize` rejects `ciba_request_id` with `invalid_request`, and only your own app decides. See [Approve only in your own app](/docs/plugins/ciba#approve-only-in-your-own-app).
+* With [`ciba()`](/docs/plugins/ciba), `/oauth2/authorize` also accepts `ciba_request_id`. The user approves the backchannel request on the same pages. See [What the user sees](/docs/plugins/ciba#what-the-user-sees). When you set `approvalPage`, `/oauth2/authorize` skips the CIBA interaction for `ciba_request_id`. Your server records the decision with `completeCibaRequest`. See [Approve only in your own app](/docs/plugins/ciba#approve-only-in-your-own-app).
 * During a browser navigation, `/oauth2/end-session` can return the [front-channel logout](/docs/plugins/oauth-provider/openid-connect#front-channel-logout) page.
 * `/oauth2/token`, `/oauth2/introspect`, and `/oauth2/revoke` return 400 `invalid_request` for a parameter sent more than once. At the token endpoint, only `resource` and `audience` may repeat.
 
