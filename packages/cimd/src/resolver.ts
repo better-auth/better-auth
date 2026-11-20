@@ -12,6 +12,7 @@ import { toExpJWT } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { MetadataDocumentResponseCacheHeaders } from "./client-store";
 import {
+	assertClientIdUrlFetchable,
 	FETCH_TIMEOUT_MS,
 	fetchClientMetadataDocument,
 	isMetadataFetchCapacityRefusal,
@@ -24,9 +25,7 @@ import { isCimdClientIdUrlCandidate } from "./validate-metadata-document";
 
 const FETCH_BUDGET_WINDOW_MS = 60_000;
 // A request that joins a fetch stops waiting for it after twice the fetch
-// timeout. The request that started the fetch enforces that timeout on the
-// network fetch only, so a URL policy callback that runs longer than the wait
-// counts as a stuck fetch.
+// timeout, even if the transport never settles.
 const JOINED_FETCH_WAIT_MS = FETCH_TIMEOUT_MS * 2;
 // A fetch holds its concurrency permit on a lease of the same length. Only the
 // fetch's own request or a request for the same client can otherwise return
@@ -930,14 +929,13 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			return storedClient;
 		};
 
-		// A request resolves again only after a fetch it waited on was retired. A
-		// fresh cache entry found then came from a later fetch, so the stored
-		// client the request started with can be older than it.
-		let resolvingAgain = false;
+		// A document cached while the policy ran or a retired fetch was pending
+		// can be newer than the stored client this request started with.
+		let checkedUrl = false;
 		while (true) {
 			const cachedEntry = readCacheEntry(clientId);
 			if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
-				if (existingClient && cachedEntry.saved && !resolvingAgain) {
+				if (existingClient && cachedEntry.saved && !checkedUrl) {
 					return existingClient;
 				}
 				// The stored client can be missing or older than this entry. Later
@@ -947,6 +945,20 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 					metadata: cachedEntry.metadata,
 					nextEntry: cachedEntry,
 				});
+			}
+
+			if (!checkedUrl) {
+				// Policy may depend on this request. Check it before joining another
+				// fetch, spending a permit, or serving a stored client during an outage.
+				try {
+					await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
+				} catch (error) {
+					recordFetchFailure(clientId, error);
+					if (storedClientWithinStaleBound()) recordTerminalFailure(clientId);
+					throw error;
+				}
+				checkedUrl = true;
+				continue;
 			}
 
 			const transientFailure = transientFailureByClientId.get(clientId);
@@ -1004,7 +1016,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			// would put the stored client behind a fresh cache entry that later
 			// requests trust, so this request resolves again instead.
 			if (fetched) return persistFetchedMetadata(fetched);
-			resolvingAgain = true;
 		}
 	};
 }
