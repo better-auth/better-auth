@@ -909,7 +909,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
  * expiry and an incremented attempt counter. Once the budget is exhausted the
  * row is not recreated. With `"restore"`, a correct code is written back
  * unchanged so a follow-up call can spend it. Neither is written back when a
- * new code was sent while this one was being checked.
+ * newer code is already stored by then.
  */
 async function verifyPhoneNumberOTP(
 	ctx: GenericEndpointContext,

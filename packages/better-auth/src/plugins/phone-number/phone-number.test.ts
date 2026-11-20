@@ -793,8 +793,11 @@ describe("verify phone-number race condition protection", async () => {
 		});
 		await rowConsumed;
 		consume.mockRestore();
-		await client.phoneNumber.sendOtp({ phoneNumber });
-		const secondCode = otp;
+		let secondCode = firstCode;
+		while (secondCode === firstCode) {
+			await client.phoneNumber.sendOtp({ phoneNumber });
+			secondCode = otp;
+		}
 		// A write-back of the old code would be newer than the new code.
 		onTestFinished(() => {
 			vi.useRealTimers();

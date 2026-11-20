@@ -1275,8 +1275,8 @@ const defaultOTPGenerator = (options: EmailOTPOptions) =>
  * successful OTP consumed. The optional preflight restores it unchanged so
  * the documented follow-up call can use it. A wrong guess restores it with
  * one additional attempt and the original expiry. Neither restore happens
- * when a new code was issued while this one was being checked. An exhausted
- * record stays consumed, locking the identifier out.
+ * when a newer code is already stored by then. An exhausted record stays
+ * consumed, locking the identifier out.
  */
 async function atomicVerifyOTP(
 	ctx: GenericEndpointContext,
