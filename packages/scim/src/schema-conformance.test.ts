@@ -722,6 +722,18 @@ describe("SCIM core schema conformance", () => {
 			displayName: "Engineering",
 			members: [{ value: "scim-user-id", type: "User" }],
 		});
+		expect(
+			APIGroupSchema.safeParse({
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+				displayName: "Engineering",
+				members: Array.from({ length: 1_001 }, (_, index) => ({
+					value: `member-${index}`,
+				})),
+			}).success,
+		).toBe(true);
+		expect(OpenAPIGroupResourceSchema.properties.members).not.toHaveProperty(
+			"maxItems",
+		);
 	});
 
 	it("requires only fields that survive every response projection", () => {

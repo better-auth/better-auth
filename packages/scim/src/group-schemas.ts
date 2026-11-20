@@ -9,9 +9,6 @@ const SCIM_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA =
 	"http://schemas.microsoft.com/2006/11/ResourceManagement/ADSCIM/2.0/Group";
 
-/** Maximum number of direct User members in one canonical SCIM Group. */
-export const SCIM_MAX_GROUP_MEMBERS = 1_000;
-
 const groupMemberSchema = z.object({
 	value: z.string().min(1),
 	type: z
@@ -26,7 +23,7 @@ export const APIGroupSchema = z.object({
 		.length(1, "schemas must contain only the core SCIM Group schema"),
 	externalId: z.string().min(1).optional(),
 	displayName: z.string().trim().min(1),
-	members: z.array(groupMemberSchema).max(SCIM_MAX_GROUP_MEMBERS).optional(),
+	members: z.array(groupMemberSchema).optional(),
 });
 
 export type MicrosoftEntraGroupSchemaNormalization =
@@ -83,7 +80,6 @@ export const OpenAPIGroupResourceSchema = {
 		displayName: { type: "string" },
 		members: {
 			type: "array",
-			maxItems: SCIM_MAX_GROUP_MEMBERS,
 			items: {
 				type: "object",
 				properties: {
