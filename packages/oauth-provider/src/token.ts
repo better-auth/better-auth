@@ -676,15 +676,31 @@ async function revokeGrantTokens(
 }
 
 /**
- * Tear down the entire refresh-token family for a (client, user) pair, plus
- * any access tokens that reference those refresh rows, per RFC 9700 §4.14.
- * Access tokens are deleted first so the parent rows' foreign-key children
- * do not block the refresh-row delete.
+ * Tears down the grant of a replayed refresh token: its refresh tokens and the
+ * access tokens linked to them, per RFC 9700 §4.14.2. The client's other
+ * grants for the same user stay valid. The grant ID keys the teardown because
+ * every grant has one, including those a device code or a CIBA request
+ * started, which have no authorization code. Access tokens are deleted first
+ * so the parent rows' foreign-key children do not block the refresh-row
+ * delete.
+ *
+ * A refresh gives the rotated token its grant ID but leaves the access tokens
+ * issued before it without one. They are deleted through the grant's refresh
+ * rows, because an adapter without the `refreshId` foreign key would not
+ * remove them with those rows. A token rotated before grant IDs existed, and
+ * before the token that was refreshed after the upgrade, has none either. When
+ * the grant started from an authorization code, those rows are found by the
+ * code and removed the same way.
+ *
+ * A refresh token stored without a grant ID, because it was rotated before
+ * grant IDs existed, names no grant. Its teardown covers every refresh token
+ * of the client and user, and the access tokens linked to them.
  *
  * A rotation of the presented token's grant that is still storing its tokens
- * fails on the grant's revocation mark (see `markGrantRevoked`). A rotation
- * of another grant of the pair, or of a grant stored without a grant ID, can
- * still store a refresh token after the delete.
+ * fails on the grant's revocation mark (see `markGrantRevoked`). A token
+ * stored without a grant ID marks no grant, so on that broader teardown any
+ * in-flight rotation of the client and user can still store a refresh token
+ * after the delete.
  *
  * @internal
  */
@@ -692,25 +708,62 @@ export async function invalidateRefreshFamily(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	clientId: string,
-	refreshToken: Pick<OAuthRefreshToken<Scope[]>, "userId" | "grantId">,
+	refreshToken: Pick<
+		OAuthRefreshToken<Scope[]>,
+		"userId" | "grantId" | "authorizationCodeId"
+	>,
 ) {
-	const { userId } = refreshToken;
-	// Every access token linked to this family's refresh rows carries the same
-	// client and user, so the delete needs no list of refresh IDs, which
-	// `findMany` would cap at `defaultFindManyLimit`.
+	const { userId, grantId, authorizationCodeId } = refreshToken;
+	const pair = [
+		{ field: "clientId", value: clientId },
+		{ field: "userId", value: userId },
+	];
+	const familyWhere = grantId
+		? [...pair, { field: "grantId", value: grantId }]
+		: pair;
+	// An access token of a grant carries its ID, and one without a grant ID is
+	// linked to a refresh row, so neither delete needs a list of refresh IDs,
+	// which `findMany` would cap at `defaultFindManyLimit`.
 	const deleteLinkedAccessTokens = () =>
 		ctx.context.adapter.deleteMany({
 			model: "oauthAccessToken",
-			where: [
-				{ field: "clientId", value: clientId },
-				{ field: "userId", value: userId },
-				{ field: "refreshId", operator: "ne", value: null },
-			],
+			where: grantId
+				? familyWhere
+				: [...pair, { field: "refreshId", operator: "ne", value: null }],
 		});
+	const refreshWheres: TokenScope[] = [familyWhere];
+	if (grantId && authorizationCodeId) {
+		refreshWheres.push([
+			...pair,
+			{ field: "authorizationCodeId", value: authorizationCodeId },
+			{ field: "grantId", value: null },
+		]);
+	}
+	const deletePreGrantAccessTokens = async () => {
+		for (const where of refreshWheres) {
+			await forEachTokenPage<{ id: string }>(
+				ctx,
+				"oauthRefreshToken",
+				where,
+				["id"],
+				(rows) =>
+					ctx.context.adapter.deleteMany({
+						model: "oauthAccessToken",
+						where: [
+							{
+								field: "refreshId",
+								operator: "in",
+								value: rows.map((row) => row.id),
+							},
+						],
+					}),
+			);
+		}
+	};
 	await revokeGrantTokens(
 		ctx,
 		opts,
-		[{ grantId: refreshToken.grantId, clientId }],
+		[{ grantId, clientId }],
 		// On MySQL, the refresh-row delete can lose a deadlock to a concurrent
 		// access-token insert of the same pair, which holds a foreign-key lock
 		// on its refresh row. Every delete here is idempotent, so retry them
@@ -718,13 +771,13 @@ export async function invalidateRefreshFamily(
 		() =>
 			retryIdempotent(async () => {
 				await deleteLinkedAccessTokens();
-				await ctx.context.adapter.deleteMany({
-					model: "oauthRefreshToken",
-					where: [
-						{ field: "clientId", value: clientId },
-						{ field: "userId", value: userId },
-					],
-				});
+				if (grantId) await deletePreGrantAccessTokens();
+				for (const where of refreshWheres) {
+					await ctx.context.adapter.deleteMany({
+						model: "oauthRefreshToken",
+						where,
+					});
+				}
 				// Without a foreign key, an in-flight issuance can store an access
 				// token between the two deletes above. See `createOpaqueAccessToken`.
 				await deleteLinkedAccessTokens();
@@ -732,14 +785,39 @@ export async function invalidateRefreshFamily(
 	);
 }
 
-const GRANT_ID_PAGE_SIZE = 100;
+const TOKEN_PAGE_SIZE = 100;
 
 type TokenScope = { field: string; value: string | null }[];
 
 /**
- * The grants, as grant ID to client ID, of the tokens a scope matches. It reads
- * a page at a time, because `findMany` would cap the list at
- * `defaultFindManyLimit` and leave a grant past the cap unmarked.
+ * Hands every token row a scope matches to `handle`, a page at a time, because
+ * `findMany` would cap the list at `defaultFindManyLimit` and leave the rows
+ * past the cap out.
+ */
+async function forEachTokenPage<Row extends { id: string }>(
+	ctx: GenericEndpointContext,
+	model: "oauthAccessToken" | "oauthRefreshToken",
+	where: TokenScope,
+	select: (keyof Row & string)[],
+	handle: (rows: Row[]) => Promise<unknown> | unknown,
+) {
+	for (let offset = 0; ; offset += TOKEN_PAGE_SIZE) {
+		const rows = await ctx.context.adapter.findMany<Row>({
+			model,
+			where,
+			select,
+			limit: TOKEN_PAGE_SIZE,
+			offset,
+			sortBy: { field: "id", direction: "asc" },
+		});
+		if (rows.length) await handle(rows);
+		if (rows.length < TOKEN_PAGE_SIZE) return;
+	}
+}
+
+/**
+ * The grants, as grant ID to client ID, of the tokens a scope matches. A grant
+ * past the `findMany` cap would stay unmarked, so it reads every page.
  */
 async function findGrants(
 	ctx: GenericEndpointContext,
@@ -747,23 +825,15 @@ async function findGrants(
 	where: TokenScope,
 	grants: Map<string, string>,
 ) {
-	for (let offset = 0; ; offset += GRANT_ID_PAGE_SIZE) {
-		const rows = await ctx.context.adapter.findMany<{
-			clientId: string;
-			grantId?: string | null;
-		}>({
-			model,
-			where,
-			select: ["id", "clientId", "grantId"],
-			limit: GRANT_ID_PAGE_SIZE,
-			offset,
-			sortBy: { field: "id", direction: "asc" },
-		});
+	await forEachTokenPage<{
+		id: string;
+		clientId: string;
+		grantId?: string | null;
+	}>(ctx, model, where, ["id", "clientId", "grantId"], (rows) => {
 		for (const row of rows) {
 			if (row.grantId) grants.set(row.grantId, row.clientId);
 		}
-		if (rows.length < GRANT_ID_PAGE_SIZE) return;
-	}
+	});
 }
 
 /**

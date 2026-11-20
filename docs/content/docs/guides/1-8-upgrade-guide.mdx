@@ -268,10 +268,22 @@ oauthProvider({
 Revoking a refresh token at `/oauth2/revoke` now deletes every opaque access token of its grant, including tokens issued before earlier refreshes. Before, only the access tokens issued with that exact refresh token were deleted, so an older token stayed active until it expired.
 
 * Opaque access tokens issued before you upgrade are still deleted only with the refresh token that issued them.
-* Replaying a revoked refresh token works as before. It deletes every refresh token the client holds for that user, and the opaque access tokens linked to them.
+* Replaying a revoked refresh token deletes the refresh tokens of its grant and the opaque access tokens linked to them. See [A refresh token replay revokes one grant](#a-refresh-token-replay-revokes-one-grant).
 * JWT access tokens stay valid until they expire. With `revocableJwtAccessTokens: true`, they are revoked too, but only where the auth server checks the token, such as introspection, UserInfo, or `verifyResourceRequest`, and only for tokens issued after you turned the option on. With secondary storage alone, an evicted entry makes a revoked token valid again. See [JWT revocation](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
 * A refresh of the grant that is still issuing tokens when you revoke it now fails with `invalid_grant`, and the tokens it stored are deleted. This needs a refresh token issued or refreshed since you upgraded.
 * Each grant revocation now writes one row to the verification store, with or without `revocableJwtAccessTokens`. This includes revoking a refresh token, replaying one, and reusing an authorization code. Your `databaseHooks.verification` hooks see these rows. See [Grant revocation entries](/docs/plugins/oauth-provider/tokens#grant-revocation-entries).
+
+### A refresh token replay revokes one grant
+
+Replaying a rotated or revoked refresh token now revokes only the grant the token belongs to: its refresh tokens, and the opaque access tokens issued under them. Before, it revoked every refresh token the client held for that user, so one replayed token ended the user's access on every other device and agent that used the client. A grant is everything one authorization produced, whether an authorization code, a device code, or a CIBA request started it.
+
+* The user's other grants with the same client keep their refresh tokens and access tokens. A refresh on one of them still succeeds.
+* A refresh token with no grant ID, such as one rotated or revoked before you upgraded, names no grant, so a replay of it still deletes every refresh token the client holds for that user and the opaque access tokens linked to them. An unexpired token that was not rotated or revoked yet gets its grant ID at its first refresh after the upgrade. In a grant that a device code or a CIBA request started, the opaque access tokens of tokens rotated before the upgrade stay valid until they expire.
+* A rotated token presented to `/oauth2/revoke` follows the same rule.
+* A refresh of the replayed grant that is still issuing tokens fails with `invalid_grant`, and the tokens it stored are deleted. This needs a replayed token with a grant ID. A refresh of another grant that is still issuing tokens keeps its tokens.
+* JWT access tokens follow the rules in [Revoking a refresh token revokes its grant](#revoking-a-refresh-token-revokes-its-grant).
+
+**What to do:** nothing, unless a client relied on one device's replay ending the user's other grants with it. That no longer happens. See [Refresh tokens](/docs/plugins/oauth-provider/tokens#refresh-tokens).
 
 ### Overlapping refreshes get the same response
 

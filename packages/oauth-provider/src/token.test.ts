@@ -2210,6 +2210,37 @@ describe("oauth token - refresh_token", async () => {
 			expect(parent?.rotationReplayResponse ?? null).toBeNull();
 		});
 
+		async function readRefreshTokenRows() {
+			const context = await authorizationServer.$context;
+			return context.adapter.findMany<{ id: string; grantId?: string | null }>({
+				model: "oauthRefreshToken",
+				where: [{ field: "clientId", value: oauthClient!.client_id }],
+				limit: 1000,
+			});
+		}
+
+		/** Issues a parent refresh token and returns the ID of the grant it starts. */
+		async function issueParentGrant() {
+			const before = new Set((await readRefreshTokenRows()).map((r) => r.id));
+			const refreshToken = await issueParentRefreshToken();
+			const issued = (await readRefreshTokenRows()).find(
+				(row) => !before.has(row.id),
+			);
+			expect(issued?.grantId).toBeTruthy();
+			return { refreshToken, grantId: issued!.grantId! };
+		}
+
+		async function countGrantRefreshTokens(grantId: string) {
+			const context = await authorizationServer.$context;
+			return context.adapter.count({
+				model: "oauthRefreshToken",
+				where: [
+					{ field: "clientId", value: oauthClient!.client_id },
+					{ field: "grantId", value: grantId },
+				],
+			});
+		}
+
 		it("rotates once and fails the other rotation with invalid_grant", async () => {
 			const parentToken = await issueParentRefreshToken();
 			const cas = await holdNextRefreshTokenCas();
@@ -2270,7 +2301,7 @@ describe("oauth token - refresh_token", async () => {
 		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 		 */
 		it("revokes the refresh token a rotation stores after reuse tore down its family", async () => {
-			const parentToken = await issueParentRefreshToken();
+			const { refreshToken: parentToken, grantId } = await issueParentGrant();
 			const insert = await holdNextInsert(
 				authorizationServer,
 				"oauthRefreshToken",
@@ -2284,14 +2315,8 @@ describe("oauth token - refresh_token", async () => {
 
 				expect(reused.error).toMatchObject({ error: "invalid_grant" });
 				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
-				// The teardown covers every refresh token of this client and user.
-				const context = await authorizationServer.$context;
-				expect(
-					await context.adapter.count({
-						model: "oauthRefreshToken",
-						where: [{ field: "clientId", value: oauthClient!.client_id }],
-					}),
-				).toBe(0);
+				// The teardown covers every refresh token of the grant.
+				expect(await countGrantRefreshTokens(grantId)).toBe(0);
 			} finally {
 				insert.restore();
 			}
@@ -2304,7 +2329,7 @@ describe("oauth token - refresh_token", async () => {
 		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 		 */
 		it("fails a rotation that stores its refresh token after the grant's revocation mark expired", async () => {
-			const parentToken = await issueParentRefreshToken();
+			const { refreshToken: parentToken, grantId } = await issueParentGrant();
 			const insert = await holdNextInsert(
 				authorizationServer,
 				"oauthRefreshToken",
@@ -2339,12 +2364,7 @@ describe("oauth token - refresh_token", async () => {
 				const rotated = await rotating;
 
 				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
-				expect(
-					await context.adapter.count({
-						model: "oauthRefreshToken",
-						where: [{ field: "clientId", value: oauthClient!.client_id }],
-					}),
-				).toBe(0);
+				expect(await countGrantRefreshTokens(grantId)).toBe(0);
 			} finally {
 				vi.useRealTimers();
 				insert.restore();
@@ -2352,7 +2372,7 @@ describe("oauth token - refresh_token", async () => {
 		});
 
 		it("fails the rotation and the revoke closed when the rotation wins the swap", async () => {
-			const parentToken = await issueParentRefreshToken();
+			const { refreshToken: parentToken, grantId } = await issueParentGrant();
 			const cas = await holdNextRefreshTokenCas();
 			try {
 				const revoking = revoke(parentToken);
@@ -2366,13 +2386,7 @@ describe("oauth token - refresh_token", async () => {
 				// 200 and tears down the family.
 				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
 				expect(revoked.error).toBeNull();
-				const context = await authorizationServer.$context;
-				expect(
-					await context.adapter.count({
-						model: "oauthRefreshToken",
-						where: [{ field: "clientId", value: oauthClient!.client_id }],
-					}),
-				).toBe(0);
+				expect(await countGrantRefreshTokens(grantId)).toBe(0);
 				expect((await refresh(parentToken)).error).toMatchObject({
 					error: "invalid_grant",
 				});
@@ -2398,6 +2412,42 @@ describe("oauth token - refresh_token", async () => {
 				});
 			} finally {
 				cas.restore();
+			}
+		});
+
+		/**
+		 * Reuse tears down the grant of the replayed token. A rotation of the
+		 * user's other grant with the same client has nothing to do with it, so
+		 * it keeps the tokens it is still issuing.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12154
+		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+		 */
+		it("keeps the tokens an in-flight rotation of another grant stores while reuse tears down a grant", async () => {
+			const replayedParent = await issueParentRefreshToken();
+			const rotated = await refresh(replayedParent);
+			expect(rotated.error).toBeNull();
+			const otherParent = await issueParentRefreshToken();
+			const insert = await holdNextInsert(
+				authorizationServer,
+				"oauthAccessToken",
+			);
+			try {
+				const rotatingOther = refresh(otherParent);
+				await insert.reached;
+				const reused = await refresh(replayedParent);
+				insert.release();
+				const other = await rotatingOther;
+
+				expect(reused.error).toMatchObject({ error: "invalid_grant" });
+				expect(other.error).toBeNull();
+				expect(other.data?.refresh_token).toBeDefined();
+				expect((await refresh(other.data!.refresh_token!)).error).toBeNull();
+				expect(
+					(await refresh(rotated.data!.refresh_token!)).error,
+				).toMatchObject({ error: "invalid_grant" });
+			} finally {
+				insert.restore();
 			}
 		});
 	});
@@ -8158,48 +8208,174 @@ describe("oauth token - in-flight issuance without foreign keys", async () => {
 		}
 	});
 
-	it("revokes every access token in a family larger than the findMany limit", async () => {
-		const { code, codeVerifier } = await authorize();
-		const issued = await redeem(code, codeVerifier);
-		const parentToken = issued.data!.refresh_token!;
-		const context = await auth.$context;
-		const [family] = database.oauthRefreshToken as {
-			clientId: string;
-			userId: string;
-		}[];
-		for (let i = 0; i < 101; i++) {
-			const sibling = await context.adapter.create<{ id: string }>({
-				model: "oauthRefreshToken",
-				data: {
-					token: `sibling-refresh-${i}`,
-					clientId: family!.clientId,
-					userId: family!.userId,
-					scopes: ["openid", "offline_access"],
-					createdAt: new Date(),
-					expiresAt: new Date(Date.now() + 60_000),
-				},
-			});
-			await context.adapter.create({
-				model: "oauthAccessToken",
-				data: {
-					token: `sibling-access-${i}`,
-					clientId: family!.clientId,
-					userId: family!.userId,
-					refreshId: sibling.id,
-					scopes: ["openid"],
-					createdAt: new Date(),
-					expiresAt: new Date(Date.now() + 60_000),
-				},
-			});
+	it.each([
+		{ title: "with a grant ID", legacy: false },
+		{ title: "without a grant ID", legacy: true },
+	])(
+		"revokes every access token in a family larger than the findMany limit $title",
+		async ({ legacy }) => {
+			const { code, codeVerifier } = await authorize();
+			const issued = await redeem(code, codeVerifier);
+			const parentToken = issued.data!.refresh_token!;
+			const context = await auth.$context;
+			const [family] = database.oauthRefreshToken as {
+				clientId: string;
+				userId: string;
+				grantId: string;
+			}[];
+			for (let i = 0; i < 101; i++) {
+				const sibling = await context.adapter.create<{ id: string }>({
+					model: "oauthRefreshToken",
+					data: {
+						token: `sibling-refresh-${i}`,
+						clientId: family!.clientId,
+						userId: family!.userId,
+						grantId: family!.grantId,
+						scopes: ["openid", "offline_access"],
+						createdAt: new Date(),
+						expiresAt: new Date(Date.now() + 60_000),
+					},
+				});
+				await context.adapter.create({
+					model: "oauthAccessToken",
+					data: {
+						token: `sibling-access-${i}`,
+						clientId: family!.clientId,
+						userId: family!.userId,
+						grantId: family!.grantId,
+						refreshId: sibling.id,
+						scopes: ["openid"],
+						createdAt: new Date(),
+						expiresAt: new Date(Date.now() + 60_000),
+					},
+				});
+			}
+
+			const rotated = await refresh(parentToken);
+			expect(rotated.error).toBeNull();
+			if (legacy) {
+				for (const model of ["oauthRefreshToken", "oauthAccessToken"]) {
+					await context.adapter.updateMany({
+						model,
+						where: [{ field: "clientId", value: family!.clientId }],
+						update: { grantId: null },
+					});
+				}
+			}
+			const reused = await refresh(parentToken);
+
+			expect(reused.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthRefreshToken).toHaveLength(0);
+			expect(database.oauthAccessToken).toHaveLength(0);
+		},
+	);
+
+	/**
+	 * A refresh gives the rotated legacy token the grant ID, but not the access
+	 * tokens issued before it. Without foreign keys, deleting the refresh rows
+	 * does not remove them.
+	 */
+	describe("an access token issued before grant IDs", () => {
+		async function dropGrantIds() {
+			const context = await auth.$context;
+			for (const model of ["oauthRefreshToken", "oauthAccessToken"]) {
+				await context.adapter.updateMany({
+					model,
+					where: [{ field: "clientId", value: oauthClient.client_id }],
+					update: { grantId: null },
+				});
+			}
+			return context;
 		}
 
-		const rotated = await refresh(parentToken);
-		expect(rotated.error).toBeNull();
-		const reused = await refresh(parentToken);
+		it("is deleted when a replay revokes the grant its refresh token joined", async () => {
+			const { code, codeVerifier } = await authorize();
+			const issued = await redeem(code, codeVerifier);
+			const legacyToken = issued.data!.refresh_token!;
+			await dropGrantIds();
+			expect((await refresh(legacyToken)).error).toBeNull();
 
-		expect(reused.error).toMatchObject({ error: "invalid_grant" });
-		expect(database.oauthRefreshToken).toHaveLength(0);
-		expect(database.oauthAccessToken).toHaveLength(0);
+			const replay = await refresh(legacyToken);
+
+			expect(replay.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthRefreshToken).toHaveLength(0);
+			expect(database.oauthAccessToken).toHaveLength(0);
+		});
+
+		it("is deleted when its refresh row is past the findMany limit", async () => {
+			const { code, codeVerifier } = await authorize();
+			const issued = await redeem(code, codeVerifier);
+			const legacyToken = issued.data!.refresh_token!;
+			const context = await dropGrantIds();
+			expect((await refresh(legacyToken)).error).toBeNull();
+			const [family] = database.oauthRefreshToken as {
+				id: string;
+				clientId: string;
+				userId: string;
+				grantId: string;
+			}[];
+			for (let i = 0; i < 101; i++) {
+				// Zero-led IDs sort before the legacy row's ID, which pushes that row
+				// onto the second page of the teardown's ID-ordered read.
+				const sibling = await context.adapter.create<{ id: string }>({
+					model: "oauthRefreshToken",
+					forceAllowId: true,
+					data: {
+						id: `${"0".repeat(24)}${String(i).padStart(3, "0")}`,
+						token: `sibling-refresh-${i}`,
+						clientId: family!.clientId,
+						userId: family!.userId,
+						grantId: family!.grantId,
+						scopes: ["openid", "offline_access"],
+						createdAt: new Date(),
+						expiresAt: new Date(Date.now() + 60_000),
+					},
+				});
+				await context.adapter.create({
+					model: "oauthAccessToken",
+					data: {
+						token: `sibling-access-${i}`,
+						clientId: family!.clientId,
+						userId: family!.userId,
+						refreshId: sibling.id,
+						scopes: ["openid"],
+						createdAt: new Date(),
+						expiresAt: new Date(Date.now() + 60_000),
+					},
+				});
+			}
+			const ordered = await context.adapter.findMany<{ id: string }>({
+				model: "oauthRefreshToken",
+				sortBy: { field: "id", direction: "asc" },
+				limit: 1000,
+			});
+			expect(
+				ordered.findIndex((row) => row.id === family!.id),
+			).toBeGreaterThanOrEqual(100);
+
+			const replay = await refresh(legacyToken);
+
+			expect(replay.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthRefreshToken).toHaveLength(0);
+			expect(database.oauthAccessToken).toHaveLength(0);
+		});
+
+		it("leaves the access tokens of the user's other grant", async () => {
+			const first = await authorize();
+			const legacyToken = (await redeem(first.code, first.codeVerifier)).data!
+				.refresh_token!;
+			await dropGrantIds();
+			expect((await refresh(legacyToken)).error).toBeNull();
+			const second = await authorize();
+			const other = await redeem(second.code, second.codeVerifier);
+
+			const replay = await refresh(legacyToken);
+
+			expect(replay.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthRefreshToken).toHaveLength(1);
+			expect(database.oauthAccessToken).toHaveLength(1);
+			expect((await refresh(other.data!.refresh_token!)).error).toBeNull();
+		});
 	});
 
 	it("removes an access token stored between the revocation's deletes", async () => {
