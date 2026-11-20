@@ -243,7 +243,7 @@ betterAuth({
 })
 ```
 
-The provider identifies JWT access tokens by their `azp` claim. Introspection, UserInfo, and `requireMcpAuth` do not require the `typ: "at+jwt"` header. Reserve `azp` for OAuth access tokens and remove it from any untrusted payload before signing it. On a resource server, keep the local JWT check and require `typ: "at+jwt"`. See [JWT or opaque tokens](/docs/plugins/oauth-provider/resource-server#jwt-or-opaque-tokens).
+The OAuth provider requires both `typ: "at+jwt"` and the `azp` claim on JWT access tokens. This also applies when `requireMcpAuth` checks tokens against the provider in the same process. For signature verification on a resource server, pass `typ: "at+jwt"` in its verification options. See [JWT or opaque tokens](/docs/plugins/oauth-provider/resource-server#jwt-or-opaque-tokens).
 
 ### Remote JWKS Url
 
