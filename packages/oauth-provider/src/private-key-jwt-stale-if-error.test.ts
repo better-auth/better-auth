@@ -88,12 +88,12 @@ async function createVerifier(
 			updatedAt: new Date(),
 		},
 	});
-	const verify = async (kid = "stale-key") =>
+	const verify = async (kid: string | null = "stale-key") =>
 		verifyClientAssertion(
 			{ context } as unknown as GenericEndpointContext,
 			opts,
 			await new SignJWT({})
-				.setProtectedHeader({ alg: "RS256", kid })
+				.setProtectedHeader({ alg: "RS256", kid: kid ?? undefined })
 				.setIssuer(clientId)
 				.setSubject(clientId)
 				.setAudience(context.baseURL)
@@ -523,6 +523,7 @@ describe("jwksStaleIfError on a client discovery", () => {
 		const olderAssertion = verifier.verify("rotated-key");
 		void olderAssertion.catch(() => {});
 		await vi.waitFor(() => expect(verifier.transport).toHaveBeenCalledTimes(2));
+		vi.setSystemTime(Date.now() + MINUTE_MS);
 		verifier.keys.answer = () => new Response(null, { status: 404 });
 		await expect(verifier.verify("rotated-key")).rejects.toMatchObject({
 			body: { error: "invalid_client" },
@@ -556,6 +557,7 @@ describe("jwksStaleIfError on a client discovery", () => {
 		const olderAssertion = verifier.verify("rotated-key");
 		void olderAssertion.catch(() => {});
 		await vi.waitFor(() => expect(verifier.transport).toHaveBeenCalledTimes(2));
+		vi.setSystemTime(Date.now() + MINUTE_MS);
 		verifier.keys.answer = serveKeys;
 		await expect(verifier.verify("rotated-key")).rejects.toMatchObject({
 			body: { error: "invalid_client" },
@@ -639,7 +641,7 @@ describe("jwksStaleIfError on a client discovery", () => {
 		});
 	});
 
-	it.each([{}, { jwksStaleIfError: 3_600 }])(
+	it.each([{}, { jwksStaleIfError: 60 }, { jwksStaleIfError: 3_600 }])(
 		"keeps serving cached keys within twice the cache lifetime after any failed fetch (%o)",
 		async (discovery) => {
 			const verifier = await createVerifier(discovery);
@@ -650,6 +652,9 @@ describe("jwksStaleIfError on a client discovery", () => {
 			verifier.keys.answer = () => new Response(null, { status: 404 });
 
 			await expect(verifier.verify()).resolves.toMatchObject({
+				clientId: verifier.clientId,
+			});
+			await expect(verifier.verify(null)).resolves.toMatchObject({
 				clientId: verifier.clientId,
 			});
 		},

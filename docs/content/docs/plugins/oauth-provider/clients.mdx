@@ -365,9 +365,11 @@ Prefer inline `jwks` for clients whose host you do not control.
 * `jwks_uri` must be an HTTPS URL on a public host. Its origin must be in [`trustedOrigins`](/docs/reference/options#trustedorigins), unless it matches the origin of a CIMD `client_id`. `trustedOrigins` applies to the whole app. That origin is then also trusted for redirects and requests.
 * A CIMD client whose keys are on another origin can be allowed with the CIMD plugin's [`isCrossOriginJwksUriAllowed`](/docs/plugins/cimd#key-set-origin) instead. Better Auth calls it only for a `jwks_uri` that the rule above rejects, and only a resolved `true` allows it. Keep it narrow: match the client origin and the key origin together. A CIMD document is written by the client, and Better Auth fetches its `jwks_uri` without the metadata document's fetch limits. Every other client, including one created through Dynamic Client Registration, still needs `trustedOrigins`.
 
-Better Auth caches a `jwks_uri` key set for 5 minutes in each server process. When refetching it fails, the cached keys keep verifying assertions for up to 10 minutes after the last successful fetch, unless the response was not a valid key set. A client discovery can extend this for transient failures with `jwksStaleIfError`; the CIMD plugin sets it from [`metadataStaleIfError`](/docs/plugins/cimd#transient-refresh-failures).
+Each provider instance caches a `jwks_uri` key set for 5 minutes. If a refresh fails, the default fallback can use a set less than 10 minutes old at lookup. A response containing an invalid key set fails verification. An assertion without a `kid` can still verify if exactly one cached key is eligible for its signing algorithm.
 
-When an assertion names a key the cached set lacks, such as a `kid` the client published after the set was cached, Better Auth fetches the `jwks_uri` again before it rejects the assertion ([OIDC Core §10.1.1](https://openid.net/specs/openid-connect-core-1_0.html#RotateSigKeys)). Concurrent assertions for the same `jwks_uri` share one fetch, but that refetch never uses a fetch that started before the assertion arrived, so a key published before the client signed is always seen. If that refetch fails, the assertion is rejected, even while older keys are served stale.
+A client discovery can extend the fallback for eligible transient failures with `jwksStaleIfError`. Values below 600 seconds keep the default 10-minute window. CIMD takes this setting from [`metadataStaleIfError`](/docs/plugins/cimd#transient-refresh-failures).
+
+Concurrent assertions can share a key-set fetch that started after they arrived. An assertion that names a missing key can trigger one extra fetch, subject to the [unknown-key cooldown](#rotating-jwks_uri-keys). If the refetch fails and the key is still missing, verification fails even when older keys can still verify other assertions.
 
 The client sends `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer` and the signed `client_assertion` instead of a secret. The assertion is signed with `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, or `EdDSA`, and must contain:
 
@@ -396,6 +398,21 @@ Any key left out of the new set stops working at once. To roll a key without dow
 <Callout type="info">
   The provider refuses to start with this option on the memory adapter or with `advanced.database.generateId: "serial"`, because neither enforces single-use assertions.
 </Callout>
+
+### Rotating `jwks_uri` keys
+
+Better Auth caches a client's `jwks_uri` key set for 5 minutes. When an assertion names a key the cached set lacks, such as a `kid` the client published after the set was cached, Better Auth fetches the `jwks_uri` again and verifies against the new set ([OIDC Core §10.1.1](https://openid.net/specs/openid-connect-core-1_0.html#RotateSigKeys)). It does this at most once every 60 seconds per cache entry, whether or not the fetch succeeds, so assertions that name keys the client never published add at most one fetch a minute on top of the regular cache refresh. Each provider instance has a cache of up to 500 key sets. Its entries are separate for managed clients and for each discovery. Evicting an entry also drops its cooldown.
+
+An assertion signed with a key missing from the cached key set, such as a newly published key, fails with `401 invalid_client` when another unknown-key fetch of the same `jwks_uri` started in the last 60 seconds, even if that fetch failed, unless a request has already cached a set that holds the key. The client can retry after the 60 seconds.
+
+To rotate without failed authentications, keep the `jwks_uri` reachable throughout, give every key a unique `kid`, and follow this order:
+
+1. Publish the new key at the `jwks_uri`, next to the old key.
+2. Wait 5 minutes for older cache entries to expire, then start signing with the new key.
+3. Keep the old key published until the assertions signed with it have expired, which takes `assertionMaxLifetime` (5 minutes by default).
+4. Remove the old key. A server may still accept it from a cache entry less than 5 minutes old. If the endpoint is unreachable, the default fallback accepts a cached set less than 10 minutes old at lookup. For eligible transient failures, a discovery can allow cached keys up to 24 hours old with `jwksStaleIfError`. CIMD takes that window from [`metadataStaleIfError`](/docs/plugins/cimd#transient-refresh-failures). These windows measure the age of the key set from the start of its last successful fetch.
+
+A client with inline `jwks` has no refetch. To rotate its keys, see [Rotating client keys](#rotating-client-keys).
 
 ## Trusted clients
 
