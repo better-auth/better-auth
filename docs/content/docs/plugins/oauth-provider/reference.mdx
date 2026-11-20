@@ -243,6 +243,14 @@ Shorter access token lifetimes per scope. The earliest expiry wins.
 
 Seconds a rotated refresh token can replay the same response. Defaults to `0`. See [Refresh tokens](/docs/plugins/oauth-provider/tokens#refresh-tokens).
 
+`disableTokenCleanup` <span className="opacity-70">`boolean`</span>
+
+Disables automatic lazy cleanup of expired access and refresh tokens at the token endpoint. Defaults to `false`. See [Token cleanup](/docs/plugins/oauth-provider/tokens#token-cleanup).
+
+`tokenCleanupInterval` <span className="opacity-70">`number`</span>
+
+Interval in milliseconds between lazy expired-token sweeps at the token endpoint. Defaults to `60000` (60 seconds).
+
 `formatRefreshToken` <span className="opacity-70">`{ encrypt, decrypt }`</span>
 
 Custom refresh token encoding sent to clients.

@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
 import {
 	generateRandomString,
@@ -98,6 +98,71 @@ export function confirmationTokenType(confirmation?: Confirmation): TokenType {
 
 const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
 
+export const DEFAULT_TOKEN_CLEANUP_INTERVAL_MS = 60_000;
+let nextTokenCleanupAt = 0;
+
+export type TokenCleanupContext =
+	| GenericEndpointContext
+	| {
+			adapter: Pick<AuthContext["adapter"], "deleteMany">;
+			logger?: Pick<AuthContext["logger"], "error">;
+	  }
+	| {
+			context: {
+				adapter: Pick<AuthContext["adapter"], "deleteMany">;
+				logger?: Pick<AuthContext["logger"], "error">;
+			};
+	  };
+
+/**
+ * Sweeps and deletes expired `oauthAccessToken` and `oauthRefreshToken` rows.
+ *
+ * Expired access tokens are deleted first to preserve foreign-key integrity
+ * on `oauthAccessToken.refreshId -> oauthRefreshToken.id`.
+ *
+ * @param ctx GenericEndpointContext or AuthContext
+ * @param opts OAuthOptions for tokenCleanupInterval
+ * @param byPassInterval Whether to bypass the throttled cleanup interval
+ */
+export async function cleanupExpiredOAuthTokens(
+	ctx: TokenCleanupContext,
+	opts?: OAuthOptions<Scope[]>,
+	byPassInterval = false,
+): Promise<void> {
+	const now = Date.now();
+	const interval =
+		typeof opts?.tokenCleanupInterval === "number"
+			? opts.tokenCleanupInterval
+			: DEFAULT_TOKEN_CLEANUP_INTERVAL_MS;
+	if (!byPassInterval && now < nextTokenCleanupAt) {
+		return;
+	}
+	nextTokenCleanupAt = now + interval;
+
+	const context = "context" in ctx ? ctx.context : ctx;
+	const adapter = context.adapter;
+	const logger = context.logger;
+	const nowDate = new Date(now);
+
+	try {
+		await adapter.deleteMany({
+			model: "oauthAccessToken",
+			where: [{ field: "expiresAt", operator: "lt", value: nowDate }],
+		});
+	} catch (error) {
+		logger?.error("Failed to delete expired OAuth access tokens:", error);
+	}
+
+	try {
+		await adapter.deleteMany({
+			model: "oauthRefreshToken",
+			where: [{ field: "expiresAt", operator: "lt", value: nowDate }],
+		});
+	} catch (error) {
+		logger?.error("Failed to delete expired OAuth refresh tokens:", error);
+	}
+}
+
 /**
  * Handles the /oauth2/token endpoint by delegating
  * the grant types
@@ -106,6 +171,13 @@ export async function tokenEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
+	if (!opts.disableTokenCleanup) {
+		const cleanupTask = cleanupExpiredOAuthTokens(ctx, opts).catch((error) => {
+			ctx.context.logger.error("Failed to delete expired OAuth tokens:", error);
+		});
+		await ctx.context.runInBackgroundOrAwait(cleanupTask);
+	}
+
 	const grantType: GrantType = ctx.body.grant_type;
 
 	if (!getSupportedGrantTypes(opts).includes(grantType)) {

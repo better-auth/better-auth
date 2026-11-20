@@ -280,6 +280,26 @@ oauthProvider({
 
 To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's session. A JWT that carries a `sid` is reported inactive by introspection and rejected by UserInfo once its session ends. A `client_credentials` JWT has no session. Its lifetime is the only limit.
 
+## Token cleanup
+
+By default, the token endpoint periodically sweeps and deletes expired rows from `oauthAccessToken` and `oauthRefreshToken` (at most once every 60 seconds). Expired access tokens are deleted first to preserve database foreign-key integrity.
+
+To disable automatic lazy cleanup, set `disableTokenCleanup: true`:
+
+```ts title="auth.ts"
+oauthProvider({
+  disableTokenCleanup: true,
+})
+```
+
+You can also adjust the sweep interval with `tokenCleanupInterval` (in milliseconds), or call the exported `cleanupExpiredOAuthTokens` helper from a scheduled cron job or background worker:
+
+```ts
+import { cleanupExpiredOAuthTokens } from "@better-auth/oauth-provider";
+
+await cleanupExpiredOAuthTokens(auth.$context);
+```
+
 ## Without the JWT plugin
 
 To run without the [JWT plugin](/docs/plugins/jwt), set `disableJwtPlugin: true`:
