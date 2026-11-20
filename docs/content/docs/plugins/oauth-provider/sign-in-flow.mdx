@@ -33,7 +33,7 @@ Better Auth also applies these rules to the authorize request ([OAuth 2.1 §4.1.
 
 ## Login page
 
-To send users to your sign-in page, set `loginPage`. When the sign-in request carries `oauth_query` and creates a session, the plugin continues the authorization flow. With `oauthProviderClient`, your page needs no OAuth code.
+To send users to your sign-in page, set `loginPage`. When the sign-in request carries `oauth_query` and creates a session, the plugin continues the authorization flow. Sign-ins that return through a provider callback continue it only through `/sign-in/social` and, for OIDC providers, `/sign-in/sso`; SAML and generic OAuth sign-ins end on `callbackURL`. With `oauthProviderClient`, your page needs no OAuth code.
 
 ```ts title="auth.ts"
 oauthProvider({
