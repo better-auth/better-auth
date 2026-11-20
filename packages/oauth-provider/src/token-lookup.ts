@@ -224,9 +224,8 @@ export function grantRevocationExpiresAt(opts: OAuthOptions<Scope[]>) {
 }
 
 /**
- * Reports a completed revocation to `onTokenRevoked`. The tokens are already
- * revoked, so a failing callback is logged and never fails the request: a
- * client retrying a refresh-token revocation would be treated as reuse.
+ * Revocation is complete when the callback runs. Log delivery failures so
+ * clients receive the response for the revocation that already took effect.
  */
 export async function notifyTokenRevoked(
 	opts: OAuthOptions<Scope[]>,
