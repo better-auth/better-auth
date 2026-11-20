@@ -2619,8 +2619,9 @@ export interface OAuthOptions<
 	 *   `access_denied`, or `unmet_authentication_requirements`, to refuse
 	 *   the request. The client gets it at its `redirect_uri` with
 	 *   `error_description`, `iss`, and any `state` the client sent.
-	 *   No code is issued and a `request_uri` stays usable. Any other error,
-	 *   including a redirect from `ctx.redirect`, passes through unchanged.
+	 *   A refusal issues no code and does not consume a request loaded from
+	 *   `/oauth2/par`. Any other error, including a redirect from `ctx.redirect`,
+	 *   passes through unchanged.
 	 *
 	 * `issueAuthorizationCode` runs it too, with `pushed: false`. There, a
 	 * thrown OAuth error fails the call with that error, and
