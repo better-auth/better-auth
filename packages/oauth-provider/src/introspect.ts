@@ -496,20 +496,69 @@ export async function requireActiveAccessToken(
  * Introspects access tokens against this server's records, for a verifier in
  * the same process such as `requireMcpAuth`. Accepts JWT and opaque access
  * tokens, and reports a revoked token, one whose session ended, and one whose
- * client is disabled as inactive. `sub` is the user ID even when the token's
- * own `sub` is pairwise. `undefined` without an OAuth provider.
+ * client is disabled as inactive. `undefined` without an OAuth provider.
+ *
+ * With `subject: "user"`, the default, user subjects in `sub`, `act`, and
+ * `may_act` are restored to user IDs when the token's subjects are pairwise;
+ * client and service subjects keep their client IDs. With
+ * `subject: "token"`, a JWT returns the subjects it carries, and an opaque
+ * token, which stores user IDs, returns the subjects its client sees, as
+ * `/oauth2/introspect` does.
  *
  * @internal
  */
-export function getLocalIntrospection(context: AuthContext, request?: Request) {
+export function getLocalIntrospection(
+	context: AuthContext,
+	request?: Request,
+	options?: { subject?: "user" | "token" },
+) {
 	const provider = getOAuthProviderPlugin(context);
 	if (!provider) return undefined;
+	const opts = provider.options;
 	const ctx = {
 		context,
 		request,
 		headers: request?.headers,
 	} as GenericEndpointContext;
-	return (token: string) => validateAccessToken(ctx, provider.options, token);
+	return async (token: string): Promise<JWTPayload> => {
+		const found = await findAccessToken(ctx, opts, token);
+		if (!found) return inactiveAccessToken().payload;
+		// Validation restores user IDs in the payload it is given, so keep the
+		// subjects the JWT carries first.
+		const carried: Record<string, unknown> | undefined =
+			options?.subject === "token" && found.type === "jwt"
+				? structuredClone(found.payload)
+				: undefined;
+		const { payload } = await validateFoundAccessToken(ctx, opts, found);
+		if (options?.subject !== "token" || !payload.active) return payload;
+		// A verified JWT's subjects are the ones it carries, whether they name a
+		// user, a pairwise subject, or a client. A custom opaque token can also
+		// have three segments, so branch on the lookup, not on the token's shape.
+		if (carried) {
+			const subjects: Record<string, unknown> = { ...payload };
+			for (const claim of ["sub", "act", "may_act"]) {
+				if (claim in carried) subjects[claim] = carried[claim];
+				else delete subjects[claim];
+			}
+			return subjects as JWTPayload;
+		}
+		// An opaque token stores the user ID, which a pairwise client must not
+		// see.
+		if (typeof payload.sub !== "string") return payload;
+		const client = await getClient(ctx, opts, payload.client_id as string);
+		// Validation already requires the client; never fall back to user IDs.
+		if (!client) return { active: false };
+		const subjects = await resolvePresentedSubjects(
+			opts,
+			{
+				sub: payload.sub,
+				...(payload.act ? { act: payload.act as OAuthActorClaim } : {}),
+				...(payload.may_act !== undefined ? { may_act: payload.may_act } : {}),
+			},
+			client,
+		);
+		return { ...payload, ...subjects };
+	};
 }
 
 /**
