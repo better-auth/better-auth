@@ -1,10 +1,11 @@
 import { createAuthEndpoint } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { generateCodeChallenge } from "better-auth/oauth2";
-import { jwt } from "better-auth/plugins/jwt";
+import type { JWKOptions, Jwk } from "better-auth/plugins/jwt";
+import { generateExportedKeyPair, jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin } from "better-auth/types";
-import { decodeJwt } from "jose";
+import { base64url, decodeJwt, decodeProtectedHeader } from "jose";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { oauthProvider } from "./oauth";
@@ -17,6 +18,37 @@ const redirectUri = "https://rp.example.com/callback";
 const opaqueResource = "https://internal.example.com";
 const jwtResource = "https://api.example.com";
 const explicitJwtResource = "https://reports.example.com";
+const pinnedResource = "https://payments.example.com";
+const keyPinnedResource = "https://ledger.example.com";
+
+/**
+ * A JWKS store whose key ids are `<alg>-key`, so a test can configure
+ * `signingKeyId` before the first token is issued. Keys come from the JWT
+ * plugin's own generator.
+ */
+async function provisionKeys(configs: JWKOptions[]) {
+	const keys: Jwk[] = [];
+	for (const keyPairConfig of configs) {
+		const { publicWebKey, privateWebKey, alg } = await generateExportedKeyPair({
+			jwks: { keyPairConfig },
+		});
+		keys.push({
+			id: `${alg}-key`,
+			alg,
+			publicKey: JSON.stringify(publicWebKey),
+			privateKey: JSON.stringify(privateWebKey),
+			createdAt: new Date(),
+		});
+	}
+	return {
+		getJwks: async () => keys,
+		createJwk: async (data: Omit<Jwk, "id">) => {
+			const key = { ...data, id: `minted-${keys.length}` };
+			keys.push(key);
+			return key;
+		},
+	};
+}
 
 /** A protected resource served by the authorization server's own instance. */
 const resourcePlugin = {
@@ -44,19 +76,40 @@ const resourcePlugin = {
 
 async function setup(
 	options: Partial<OAuthOptions<Scope[]>> = {},
-	{ withJwtPlugin = true }: { withJwtPlugin?: boolean } = {},
+	{
+		withJwtPlugin = true,
+		jwks,
+	}: {
+		withJwtPlugin?: boolean;
+		jwks?: Awaited<ReturnType<typeof provisionKeys>>;
+	} = {},
 ) {
 	const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance({
 		baseURL,
 		plugins: [
 			resourcePlugin,
-			...(withJwtPlugin ? [jwt({ jwt: { issuer: baseURL } })] : []),
+			...(withJwtPlugin
+				? [
+						jwt({
+							jwt: { issuer: baseURL },
+							jwks: {
+								// ID tokens use the primary key.
+								keyPairConfig: { alg: "RS256" },
+								keyPairConfigs: [{ alg: "EdDSA" }, { alg: "ES256" }],
+								// A provisioned store holds the private keys as generated.
+								disablePrivateKeyEncryption: jwks !== undefined,
+							},
+							adapter: jwks,
+						}),
+					]
+				: []),
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
 				resources: [
 					{ identifier: opaqueResource, accessTokenFormat: "opaque" },
 					jwtResource,
+					{ identifier: pinnedResource, signingAlgorithm: "ES256" },
 				],
 				enforcePerClientResources: false,
 				scopes: ["openid", "profile", "email", "offline_access", "read"],
@@ -174,6 +227,17 @@ async function setup(
 
 function isJwt(token: string | undefined) {
 	return token?.split(".").length === 3;
+}
+
+/** OIDC Core §3.1.3.6 `at_hash` for an RS256 ID token. */
+async function rs256AtHash(accessToken: string) {
+	const digest = new Uint8Array(
+		await crypto.subtle.digest(
+			"SHA-256",
+			new TextEncoder().encode(accessToken),
+		),
+	);
+	return base64url.encode(digest.slice(0, digest.length / 2));
 }
 
 describe("per-resource access token format", () => {
@@ -318,6 +382,53 @@ describe("resourceDefaults", () => {
 		expect(isJwt(overridden.body.access_token)).toBe(true);
 	});
 
+	it("signs access tokens with the default algorithm while ID tokens keep theirs", async () => {
+		const { authorizationCode } = await setup({
+			resourceDefaults: { signingAlgorithm: "EdDSA" },
+		});
+		const { status, body } = await authorizationCode(jwtResource);
+		expect(status).toBe(200);
+		expect(decodeProtectedHeader(body.access_token!).alg).toBe("EdDSA");
+		expect(decodeProtectedHeader(body.id_token!).alg).toBe("RS256");
+		expect(decodeJwt(body.id_token!).at_hash).toBe(
+			await rs256AtHash(body.access_token!),
+		);
+	});
+
+	it("lets a resource's own signing algorithm override the default", async () => {
+		const { clientCredentials } = await setup({
+			resourceDefaults: { signingAlgorithm: "EdDSA" },
+		});
+		const pinned = await clientCredentials(pinnedResource);
+		expect(decodeProtectedHeader(pinned.body.access_token!).alg).toBe("ES256");
+		const defaulted = await clientCredentials(jwtResource);
+		expect(decodeProtectedHeader(defaulted.body.access_token!).alg).toBe(
+			"EdDSA",
+		);
+	});
+
+	it("keeps the default algorithm on refresh", async () => {
+		const { authorizationCode, refresh } = await setup({
+			resourceDefaults: { signingAlgorithm: "EdDSA" },
+		});
+		const initial = await authorizationCode(jwtResource);
+		const refreshed = await refresh(initial.body.refresh_token!);
+		expect(refreshed.status).toBe(200);
+		expect(decodeProtectedHeader(refreshed.body.access_token!).alg).toBe(
+			"EdDSA",
+		);
+	});
+
+	it("rejects an unsupported default signing algorithm at startup", () => {
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resourceDefaults: { signingAlgorithm: "HS256" as never },
+			}),
+		).toThrow(/resourceDefaults\.signingAlgorithm/);
+	});
+
 	it("rejects an unsupported default format at startup", () => {
 		expect(() =>
 			oauthProvider({
@@ -326,5 +437,69 @@ describe("resourceDefaults", () => {
 				resourceDefaults: { accessTokenFormat: "reference" as never },
 			}),
 		).toThrow(/resourceDefaults\.accessTokenFormat/);
+	});
+
+	it("rejects default signing settings without the JWT plugin", () => {
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				disableJwtPlugin: true,
+				storeClientSecret: "encrypted",
+				resourceDefaults: { signingAlgorithm: "EdDSA" },
+			}),
+		).toThrow(/disableJwtPlugin/);
+	});
+});
+
+describe("resourceDefaults signing key", () => {
+	async function setupWithKeys(options: Partial<OAuthOptions<Scope[]>>) {
+		const jwks = await provisionKeys([{ alg: "EdDSA" }, { alg: "ES256" }]);
+		return setup(options, { jwks });
+	}
+
+	it("signs access tokens with the default key id", async () => {
+		const { clientCredentials } = await setupWithKeys({
+			resourceDefaults: { signingKeyId: "EdDSA-key" },
+		});
+		const { status, body } = await clientCredentials(jwtResource);
+		expect(status).toBe(200);
+		expect(decodeProtectedHeader(body.access_token!)).toMatchObject({
+			alg: "EdDSA",
+			kid: "EdDSA-key",
+		});
+	});
+
+	it("replaces the default key id with a resource's own signing algorithm", async () => {
+		const { clientCredentials } = await setupWithKeys({
+			resourceDefaults: { signingKeyId: "EdDSA-key" },
+		});
+		const pinned = await clientCredentials(pinnedResource);
+		expect(pinned.status).toBe(200);
+		expect(decodeProtectedHeader(pinned.body.access_token!)).toMatchObject({
+			alg: "ES256",
+			kid: "ES256-key",
+		});
+	});
+
+	it("does not combine the default algorithm with a resource's own key id", async () => {
+		const { clientCredentials } = await setupWithKeys({
+			resourceDefaults: { signingAlgorithm: "EdDSA" },
+			resources: [
+				jwtResource,
+				{ identifier: keyPinnedResource, signingKeyId: "ES256-key" },
+			],
+		});
+		const pinned = await clientCredentials(keyPinnedResource);
+		expect(pinned.status).toBe(200);
+		expect(decodeProtectedHeader(pinned.body.access_token!)).toMatchObject({
+			alg: "ES256",
+			kid: "ES256-key",
+		});
+		const defaulted = await clientCredentials(jwtResource);
+		expect(decodeProtectedHeader(defaulted.body.access_token!)).toMatchObject({
+			alg: "EdDSA",
+			kid: "EdDSA-key",
+		});
 	});
 });

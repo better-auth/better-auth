@@ -1412,16 +1412,18 @@ export interface OAuthOptions<
 	 */
 	resourceSeedScope?: "adapter" | "process";
 	/**
-	 * Access-token format for resources that do not set their own. A resource's
-	 * `accessTokenFormat` replaces the default. A JWT needs a request that names
-	 * a `resource` and the JWT plugin; other requests receive opaque tokens.
+	 * Access-token format and signing for resources that do not set their own.
+	 * A resource's `accessTokenFormat` replaces the default format. A resource
+	 * that sets `signingAlgorithm` or `signingKeyId` replaces both signing
+	 * defaults. A JWT needs a request that names a `resource` and the JWT
+	 * plugin; other requests receive opaque tokens.
 	 *
 	 * @example
 	 * ```ts
-	 * resourceDefaults: { accessTokenFormat: "opaque" },
+	 * resourceDefaults: { signingAlgorithm: "EdDSA" },
 	 * resources: [
-	 *   "https://internal.example.com",
-	 *   { identifier: "https://api.example.com", accessTokenFormat: "jwt" },
+	 *   { identifier: "https://internal.example.com", accessTokenFormat: "opaque" },
+	 *   { identifier: "https://payments.example.com", signingAlgorithm: "ES256" },
 	 * ]
 	 * ```
 	 */
@@ -2745,6 +2747,17 @@ export interface OAuthResourceDefaults {
 	 * @default "jwt"
 	 */
 	accessTokenFormat?: AccessTokenFormat;
+	/**
+	 * Signing algorithm for JWT access tokens. The JWT plugin must have a key
+	 * for this algorithm, for example through `jwks.keyPairConfigs`.
+	 *
+	 * @default The JWT plugin selects the signing key.
+	 */
+	signingAlgorithm?: JWSAlgorithms;
+	/**
+	 * JWKS key id for JWT access tokens.
+	 */
+	signingKeyId?: string;
 }
 
 /**
@@ -2771,8 +2784,14 @@ export interface OAuthResource {
 	 * {@link OAuthOptions.resourceDefaults}, then `"jwt"`.
 	 */
 	accessTokenFormat?: AccessTokenFormat | null;
-	/** When set, overrides the JWT plugin's getLatestKey() default at signing time. */
+	/**
+	 * Signing algorithm for JWT access tokens. Either signing field on a
+	 * requested resource overrides both {@link OAuthOptions.resourceDefaults} signing fields.
+	 */
 	signingAlgorithm?: JWSAlgorithms | null;
+	/**
+	 * JWKS key id for JWT access tokens. See {@link OAuthResource.signingAlgorithm}.
+	 */
 	signingKeyId?: string | null;
 	/**
 	 * When non-null, requested scopes must intersect this set or the request is
