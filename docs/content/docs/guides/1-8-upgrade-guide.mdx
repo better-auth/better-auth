@@ -273,6 +273,18 @@ Revoking a refresh token at `/oauth2/revoke` now deletes every opaque access tok
 * A refresh of the grant that is still issuing tokens when you revoke it now fails with `invalid_grant`, and the tokens it stored are deleted. This needs a refresh token issued or refreshed since you upgraded.
 * Each grant revocation now writes one row to the verification store, with or without `revocableJwtAccessTokens`. This includes revoking a refresh token, replaying one, and reusing an authorization code. Your `databaseHooks.verification` hooks see these rows. See [Grant revocation entries](/docs/plugins/oauth-provider/tokens#grant-revocation-entries).
 
+### Overlapping refreshes get the same response
+
+With `refreshTokenReuseInterval` above `0`, two matching requests to refresh the same token can now receive the same response. Before, the second request failed with `400 invalid_grant`, and a client that sent two refreshes at once lost its session.
+
+The second request can wait up to 5 seconds for the first to store its response. It receives that response only if the client, scopes, resources, and DPoP key match. A retry with different but valid scopes or resources can also wait before the provider detects the mismatch. The provider returns `invalid_grant` on a mismatch or if the wait expires.
+
+* The interval is set when the token rotates. If you enable it during the upgrade, it applies to later rotations. Reusing a token that rotated with the default of `0` still revokes the grant. A token rotated on 1.7 with a reuse window keeps its original deadline.
+* `mcp()` sets the interval to 30 seconds, so MCP clients get this behavior.
+* A DPoP-bound refresh must still use the key it is bound to.
+
+**What to do:** nothing, unless a client relies on the second of two overlapping refreshes failing. See [Refresh tokens](/docs/plugins/oauth-provider/tokens#refresh-tokens).
+
 ### A password reset revokes the user's tokens
 
 When `emailAndPassword.revokeSessionsOnPasswordReset` is on, a password reset now also revokes every access and refresh token stored for the user, including `offline_access` grants that no session holds. It runs for `/reset-password`, `/email-otp/reset-password`, and `/phone-number/reset-password`, and for a user with no live session. Before, an `offline_access` refresh token kept working after the reset.
