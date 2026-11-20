@@ -173,6 +173,53 @@ export function validateOAuthProviderExtensions(
 	);
 }
 
+/**
+ * Validates the shape of `advertisedMetadata.token_endpoint_auth_methods_supported`:
+ * a non-empty list without duplicates. Runs at setup.
+ */
+export function validateAdvertisedAuthMethodsShape(
+	methods: readonly TokenEndpointAuthMethod[] | undefined,
+) {
+	if (!methods) return;
+	const name = "advertisedMetadata.token_endpoint_auth_methods_supported";
+	if (methods.length === 0) {
+		throw new BetterAuthError(
+			`${name} cannot be empty. Omit it to use the derived list.`,
+		);
+	}
+	const seen = new Set<string>();
+	for (const method of methods) {
+		if (seen.has(method)) {
+			throw new BetterAuthError(`${name} lists ${method} more than once`);
+		}
+		seen.add(method);
+	}
+}
+
+/**
+ * Checks that every advertised auth method is one the server supports. This
+ * needs the full extension set, which is only known once companion plugins have
+ * called {@link extendOAuthProvider}, so it runs when discovery metadata is
+ * built rather than at setup.
+ */
+export function assertAdvertisedAuthMethodsSupported(
+	opts: OAuthOptions<Scope[]>,
+) {
+	const methods =
+		opts.advertisedMetadata?.token_endpoint_auth_methods_supported;
+	if (!methods) return;
+	const supported = new Set(
+		getSupportedAuthMethods(opts, { includeNone: true }),
+	);
+	for (const method of methods) {
+		if (!supported.has(method)) {
+			throw new BetterAuthError(
+				`advertisedMetadata.token_endpoint_auth_methods_supported ${method} is not a supported token endpoint auth method`,
+			);
+		}
+	}
+}
+
 function getOAuthProviderExtensions(
 	opts: OAuthOptions<Scope[]>,
 ): OAuthProviderExtension[] {

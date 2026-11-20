@@ -8,12 +8,13 @@ import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-resource";
+import { extendOAuthProvider } from "./extensions";
 import {
 	oauthProviderAuthServerMetadata,
 	oauthProviderOpenIdConfigMetadata,
 } from "./metadata";
 import { oauthProvider } from "./oauth";
-import type { OAuthOptions, Scope } from "./types";
+import type { ClientDiscovery, OAuthOptions, Scope } from "./types";
 
 describe("oauth metadata", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -130,6 +131,255 @@ describe("oauth metadata", async () => {
 		});
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8414#section-2
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	describe("advertisedMetadata.token_endpoint_auth_methods_supported", () => {
+		const confidential = [
+			"client_secret_basic",
+			"client_secret_post",
+			"private_key_jwt",
+		] as const;
+		const clientDiscovery = {
+			id: "test-client-discovery",
+			matches: () => false,
+			resolve: () => null,
+		} satisfies ClientDiscovery;
+
+		it('should advertise "none" for protected registration when the list includes it, without opening dynamic client registration', async () => {
+			const { auth } = await createTestInstance({
+				oauthProviderConfig: {
+					allowUnauthenticatedClientRegistration: false,
+					advertisedMetadata: {
+						token_endpoint_auth_methods_supported: ["none", ...confidential],
+					},
+				},
+			});
+
+			const openId = await auth.api.getOpenIdConfig();
+			expect(openId?.token_endpoint_auth_methods_supported).toEqual([
+				"none",
+				...confidential,
+			]);
+			const oauth = await auth.api.getOAuthServerConfig();
+			expect(oauth?.token_endpoint_auth_methods_supported).toEqual([
+				"none",
+				...confidential,
+			]);
+
+			// The introspection and revocation endpoints never accept public
+			// clients, so they must not gain "none" alongside the token endpoint.
+			expect(openId?.introspection_endpoint_auth_methods_supported).toEqual([
+				...confidential,
+			]);
+			expect(openId?.revocation_endpoint_auth_methods_supported).toEqual([
+				...confidential,
+			]);
+
+			// Registration stays authenticated: the option advertises what the
+			// token endpoint accepts, it does not open `/oauth2/register`.
+			const registration = await auth.api
+				.registerOAuthClient({
+					body: { redirect_uris: ["https://example.com/callback"] },
+				})
+				.catch((error: unknown) => error);
+			expect(registration).toBeInstanceOf(APIError);
+			expect((registration as APIError).status).toBe("UNAUTHORIZED");
+		});
+
+		it("should list exactly the configured methods, in order", async () => {
+			const { auth } = await createTestInstance({
+				oauthProviderConfig: {
+					allowUnauthenticatedClientRegistration: true,
+					advertisedMetadata: {
+						token_endpoint_auth_methods_supported: ["private_key_jwt", "none"],
+					},
+				},
+			});
+
+			const metadata = await auth.api.getOpenIdConfig();
+			expect(metadata?.token_endpoint_auth_methods_supported).toEqual([
+				"private_key_jwt",
+				"none",
+			]);
+		});
+
+		it('should omit "none" when the list leaves it out, even with unauthenticated client registration or a contributed clientDiscovery', async () => {
+			const { auth } = await createTestInstance({
+				oauthProviderConfig: {
+					allowUnauthenticatedClientRegistration: true,
+					extensions: [{ clientDiscovery }],
+					advertisedMetadata: {
+						token_endpoint_auth_methods_supported: [...confidential],
+					},
+				},
+			});
+
+			const openId = await auth.api.getOpenIdConfig();
+			expect(openId?.token_endpoint_auth_methods_supported).toEqual([
+				...confidential,
+			]);
+			const oauth = await auth.api.getOAuthServerConfig();
+			expect(oauth?.token_endpoint_auth_methods_supported).toEqual([
+				...confidential,
+			]);
+		});
+
+		it("should keep deriving public-client support from registration when unset", async () => {
+			const { auth } = await createTestInstance({
+				oauthProviderConfig: { allowUnauthenticatedClientRegistration: true },
+			});
+
+			const metadata = await auth.api.getOpenIdConfig();
+			expect(metadata?.token_endpoint_auth_methods_supported).toEqual([
+				"none",
+				...confidential,
+			]);
+		});
+
+		it('should keep advertising "none" for a contributed clientDiscovery when unset', async () => {
+			const { auth } = await createTestInstance({
+				oauthProviderConfig: {
+					allowUnauthenticatedClientRegistration: false,
+					extensions: [{ clientDiscovery }],
+				},
+			});
+
+			const openId = await auth.api.getOpenIdConfig();
+			expect(openId?.token_endpoint_auth_methods_supported).toEqual([
+				"none",
+				...confidential,
+			]);
+			const oauth = await auth.api.getOAuthServerConfig();
+			expect(oauth?.token_endpoint_auth_methods_supported).toEqual([
+				"none",
+				...confidential,
+			]);
+		});
+
+		it("should reject a method the server does not support when building metadata", async () => {
+			const { auth } = await createTestInstance({
+				oauthProviderConfig: {
+					advertisedMetadata: {
+						token_endpoint_auth_methods_supported: [
+							"none",
+							"client_secret_jwt",
+						],
+					},
+				},
+			});
+
+			await expect(auth.api.getOpenIdConfig()).rejects.toThrowError(
+				"advertisedMetadata.token_endpoint_auth_methods_supported client_secret_jwt is not a supported token endpoint auth method",
+			);
+		});
+
+		it("should reject an empty list at startup", () => {
+			expect(() =>
+				getTestInstance({
+					baseURL: authServerBaseUrl,
+					plugins: [
+						oauthProvider({
+							loginPage: "/login",
+							consentPage: "/consent",
+							advertisedMetadata: {
+								token_endpoint_auth_methods_supported: [],
+							},
+						}),
+						jwt(),
+					],
+				}),
+			).toThrowError(
+				"advertisedMetadata.token_endpoint_auth_methods_supported cannot be empty",
+			);
+		});
+
+		it("should reject duplicate methods at startup", () => {
+			expect(() =>
+				getTestInstance({
+					baseURL: authServerBaseUrl,
+					plugins: [
+						oauthProvider({
+							loginPage: "/login",
+							consentPage: "/consent",
+							advertisedMetadata: {
+								token_endpoint_auth_methods_supported: [
+									"none",
+									"client_secret_basic",
+									"none",
+								],
+							},
+						}),
+						jwt(),
+					],
+				}),
+			).toThrowError(
+				"advertisedMetadata.token_endpoint_auth_methods_supported lists none more than once",
+			);
+		});
+
+		it("should accept a method registered by another plugin through extendOAuthProvider", async () => {
+			const { auth } = await getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						advertisedMetadata: {
+							token_endpoint_auth_methods_supported: ["none", "attest_jwt"],
+						},
+					}),
+					jwt(),
+					{
+						id: "attest-plugin",
+						init(ctx) {
+							extendOAuthProvider(ctx, {
+								clientAuthentication: {
+									attest_jwt: {
+										assertionTypes: ["urn:example:params:oauth:attest"],
+										authenticate: async () => ({ clientId: "client" }),
+									},
+								},
+							});
+						},
+					},
+				],
+			});
+
+			const metadata = await auth.api.getOpenIdConfig();
+			expect(metadata?.token_endpoint_auth_methods_supported).toEqual([
+				"none",
+				"attest_jwt",
+			]);
+		});
+
+		it("should accept a method contributed by an extension", async () => {
+			const { auth } = await createTestInstance({
+				oauthProviderConfig: {
+					extensions: [
+						{
+							clientAuthentication: {
+								attest_jwt: {
+									assertionTypes: ["urn:example:params:oauth:attest"],
+									authenticate: async () => ({ clientId: "client" }),
+								},
+							},
+						},
+					],
+					advertisedMetadata: {
+						token_endpoint_auth_methods_supported: ["attest_jwt"],
+					},
+				},
+			});
+
+			const metadata = await auth.api.getOpenIdConfig();
+			expect(metadata?.token_endpoint_auth_methods_supported).toEqual([
+				"attest_jwt",
+			]);
+		});
 	});
 
 	/**

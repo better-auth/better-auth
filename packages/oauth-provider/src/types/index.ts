@@ -1403,9 +1403,11 @@ export interface OAuthOptions<
 		verificationValue?: VerificationValue;
 	}) => Awaitable<Record<string, unknown>>;
 	/**
-	 * Overwrite specific /.well-known/openid-configuration
-	 * values so they are not available publicly.
-	 * This may be important if not all clients need specific scopes.
+	 * Overrides values in the /.well-known/openid-configuration and
+	 * /.well-known/oauth-authorization-server discovery documents. It can hide
+	 * values, such as scopes not every client needs, and add values the
+	 * provider would not derive on its own. It does not change what the server
+	 * accepts.
 	 */
 	advertisedMetadata?: {
 		/**
@@ -1421,6 +1423,36 @@ export interface OAuthOptions<
 		 * ["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"]
 		 */
 		claims_supported?: string[];
+		/**
+		 * Advertised token_endpoint_auth_methods_supported located at
+		 * /.well-known/oauth-authorization-server and
+		 * /.well-known/openid-configuration
+		 *
+		 * Lists exactly these methods, in this order, and advertises public-client
+		 * support when the list includes `"none"`. Every method must be one the
+		 * server supports: the built-in confidential methods, `"none"`, or a
+		 * method contributed through `clientAuthentication` by an entry in
+		 * `extensions` or by a companion plugin via `extendOAuthProvider`. The
+		 * list cannot be empty or repeat a method, and the plugin throws at
+		 * startup when it does. An unsupported method throws when discovery
+		 * metadata is built, because companion plugins register their methods
+		 * after this plugin is created.
+		 *
+		 * Use it when the server accepts public clients at the token endpoint but
+		 * registers them itself, so `allowUnauthenticatedClientRegistration` is
+		 * `false` and discovery would otherwise leave `"none"` out. Clients that
+		 * follow RFC 8414 read that omission as "public clients are unsupported".
+		 *
+		 * Changes only what discovery advertises. It does not change which
+		 * clients the token endpoint accepts, and it does not open
+		 * `POST /oauth2/register`. The introspection and revocation lists are
+		 * not affected.
+		 *
+		 * @default derived: `"none"` is listed when
+		 * `allowUnauthenticatedClientRegistration` is `true` or an extension
+		 * contributes a `clientDiscovery`
+		 */
+		token_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 	};
 	/**
 	 * Attach prefixes to returned token types.

@@ -20,7 +20,10 @@ import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { claimsRequestParameterSchema } from "./claims-request";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
-import { validateOAuthProviderExtensions } from "./extensions";
+import {
+	validateAdvertisedAuthMethodsShape,
+	validateOAuthProviderExtensions,
+} from "./extensions";
 import { introspectEndpoint } from "./introspect";
 import type { BackchannelLogoutPlan } from "./logout";
 import {
@@ -232,6 +235,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		clientRegistrationAllowedScopes,
 	};
 	validateOAuthProviderExtensions(opts.extensions);
+
+	validateAdvertisedAuthMethodsShape(
+		opts.advertisedMetadata?.token_endpoint_auth_methods_supported,
+	);
 
 	// Validate pairwiseSecret minimum length
 	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
