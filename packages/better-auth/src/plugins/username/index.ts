@@ -305,7 +305,11 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 										currentPath &&
 										pathsWithHttpHookValidation.includes(currentPath);
 
-									if (username && currentPath === "/update-user") {
+									// The username arrives normalized, and that can be an empty string.
+									if (
+										typeof username === "string" &&
+										currentPath === "/update-user"
+									) {
 										const session = context?.context?.session;
 										const normalizedUsername = normalizer(username);
 										if (

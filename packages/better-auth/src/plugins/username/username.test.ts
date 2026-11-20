@@ -1070,6 +1070,59 @@ describe("immutable username", async () => {
 	});
 });
 
+describe("immutable username with a custom normalization", async () => {
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					immutableUsername: true,
+					usernameNormalization: (username) =>
+						username.replaceAll("_", "").toLowerCase(),
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient()],
+			},
+		},
+	);
+
+	it("should fail when the new username normalizes to an empty string", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "immutable-empty-test@example.com",
+				username: "immutable_empty_user",
+				password: "password123",
+				name: "Immutable Empty Test",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			username: "___",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			USERNAME_ERROR_CODES.USERNAME_IS_IMMUTABLE.code,
+		);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("immutableemptyuser");
+	});
+});
+
 describe("username sign-in verify-email callbackURL", async () => {
 	/**
 	 * The verify-email link sent on username sign-in for an unverified user must
