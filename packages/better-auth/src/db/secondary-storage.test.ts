@@ -630,6 +630,97 @@ describe("secondary storage - deleteUser", () => {
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/issues/10884
+ */
+describe("secondary storage - session cached while the user read missed", () => {
+	async function signInWhileTheUserReadMisses() {
+		const db = {
+			user: [] as { id: string }[],
+			session: [],
+			account: [],
+			verification: [],
+		};
+		const store = new Map<string, string>();
+		let missNextUserRead = false;
+		let userReadsFail = false;
+		const database = (
+			options: Parameters<ReturnType<typeof memoryAdapter>>[0],
+		) => {
+			const adapter = memoryAdapter(db)(options);
+			return {
+				...adapter,
+				findOne: async <T>(data: Parameters<typeof adapter.findOne>[0]) => {
+					const readsUserById =
+						data.model === "user" &&
+						data.where.some((condition) => condition.field === "id");
+					if (readsUserById && userReadsFail) {
+						throw new Error("database read timed out");
+					}
+					if (readsUserById && missNextUserRead) {
+						missNextUserRead = false;
+						return null;
+					}
+					return adapter.findOne<T>(data);
+				},
+			};
+		};
+		const { auth, client, testUser, sessionSetter } = await getTestInstance({
+			database,
+			secondaryStorage: createStringSecondaryStorage(store),
+			rateLimit: { enabled: false },
+		});
+		const headers = new Headers();
+		missNextUserRead = true;
+		const signedIn = await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: sessionSetter(headers), throw: true },
+		);
+		expect(missNextUserRead).toBe(false);
+		expect(JSON.parse(store.get(signedIn.token)!).user).toBeNull();
+		return {
+			auth,
+			client,
+			headers,
+			token: signedIn.token,
+			testUser,
+			failUserReads: () => {
+				userReadsFail = true;
+			},
+		};
+	}
+
+	it("returns the session with its user from getSession", async () => {
+		const { client, headers, testUser } = await signInWhileTheUserReadMisses();
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+
+		expect(session.error).toBeNull();
+		expect(session.data?.user.email).toBe(testUser.email);
+	});
+
+	it("returns the session with its user from findSessions", async () => {
+		const { auth, token, testUser } = await signInWhileTheUserReadMisses();
+		const { internalAdapter } = await auth.$context;
+
+		const sessions = await internalAdapter.findSessions([token]);
+
+		expect(sessions).toHaveLength(1);
+		expect(sessions[0]?.user.email).toBe(testUser.email);
+	});
+
+	it("rejects findSessions when reading the missing user fails", async () => {
+		const { auth, token, failUserReads } = await signInWhileTheUserReadMisses();
+		const { internalAdapter } = await auth.$context;
+
+		failUserReads();
+
+		await expect(internalAdapter.findSessions([token])).rejects.toThrow(
+			"database read timed out",
+		);
+	});
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-2vg6-77g8-24mp
  */
 describe("secondary storage - admin removeUser cleans up sessions", async () => {
