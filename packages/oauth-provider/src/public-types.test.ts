@@ -3,6 +3,7 @@ import type {
 	ClientRegistrationEndSessionInput,
 	ClientRegistrationRequest,
 	GrantType,
+	IssueAuthorizationCodeParams,
 	OAuthClient,
 	OAuthClientAdministrativeResponse,
 	OAuthClientRegistrationResponse,
@@ -11,6 +12,7 @@ import type {
 	SchemaClient,
 	Scope,
 	TokenEndpointAuthMethod,
+	VerificationValue,
 } from "@better-auth/oauth-provider";
 import { describe, expectTypeOf, it } from "vitest";
 
@@ -118,5 +120,24 @@ describe("public oauth-provider types", () => {
 		expectTypeOf<
 			ResourceServerMetadata["authorization_details_types_supported"]
 		>().toEqualTypeOf<string[] | undefined>();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10414
+	 */
+	it("types serverContext from issueAuthorizationCode to the token request", () => {
+		expectTypeOf<IssueAuthorizationCodeParams["serverContext"]>().toEqualTypeOf<
+			Record<string, unknown> | undefined
+		>();
+		expectTypeOf<VerificationValue["serverContext"]>().toEqualTypeOf<
+			Record<string, unknown> | undefined
+		>();
+		expectTypeOf<
+			NonNullable<
+				Parameters<
+					NonNullable<OAuthOptions["customTokenResponseFields"]>
+				>[0]["verificationValue"]
+			>["serverContext"]
+		>().toEqualTypeOf<Record<string, unknown> | undefined>();
 	});
 });
