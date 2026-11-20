@@ -1,10 +1,10 @@
-export { getIssuer } from "./authorize";
 export {
 	DEVICE_CODE_GRANT_TYPE,
 	type OAuthDeviceAuthorizationOptions,
 	oauthDeviceAuthorization,
 } from "./device-code";
 export { extendOAuthProvider } from "./extensions";
+export { getIssuer } from "./issuer";
 export {
 	authServerMetadata,
 	metadataResponse,

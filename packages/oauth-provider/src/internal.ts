@@ -15,6 +15,7 @@ export { isForbiddenCimdClientMetadataField } from "./client-metadata";
 export { withExposedHeaders } from "./dpop";
 export { getExtensionClientMetadataFields } from "./extensions";
 export { getLocalIntrospection } from "./introspect";
+export { getAcceptedIssuers } from "./issuer";
 export { createOAuthEndpoint } from "./oauth-endpoint";
 export {
 	assertPublicRoutableHttpsUri,

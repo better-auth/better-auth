@@ -15,6 +15,7 @@ import {
 	validateClientCredentials,
 } from "./client-authentication";
 import { exposeChallengeHeader } from "./dpop";
+import { getIssuer } from "./issuer";
 import { buildResourceServerChallenge } from "./resource-challenge";
 import {
 	getResourceCustomClaims,
@@ -47,7 +48,6 @@ import {
 	findActiveSessionId,
 	getAuthEndpointUrl,
 	getClient,
-	getJwtPlugin,
 	getOAuthProviderPlugin,
 	parseClientMetadata,
 	resolvePresentedSubjects,
@@ -322,15 +322,11 @@ async function validateOpaqueAccessToken(
 
 	// Return the access token in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
-	const jwtPlugin = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin?.options;
 	return {
 		payload: {
 			...accessTokenClaims,
 			active: true,
-			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+			iss: getIssuer(ctx, opts),
 			aud: toAudienceClaim(audienceClaim),
 			client_id: accessToken.clientId,
 			azp: accessToken.clientId,
@@ -409,15 +405,10 @@ async function validateRefreshToken(
 
 	// Return the access token in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
-	const jwtPlugin = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin?.options;
-
 	return {
 		active: true,
 		client_id: clientId,
-		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+		iss: getIssuer(ctx, opts),
 		sub: user?.id,
 		sid: sessionId,
 		reference_id: refreshToken.referenceId ?? undefined,

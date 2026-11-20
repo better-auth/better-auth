@@ -23,7 +23,7 @@ Better Auth serves [OpenID Provider metadata](https://openid.net/specs/openid-co
 
 The OpenID configuration returns 404 when you set `scopes` without `openid`. To serve it, add `openid` to `scopes`.
 
-The issuer keeps the scheme of your `baseURL`, or of `jwt.issuer` when you set it, so discovery, the authorization response `iss` parameter, and issued tokens report the same value. If a proxy terminates TLS in front of Better Auth, set `baseURL` to the public `https` URL.
+The issuer comes from `jwt.issuer` when you set it and the provider uses the JWT plugin, and otherwise from your `baseURL`. With `disableJwtPlugin: true`, it always comes from `baseURL`. The provider removes a trailing slash, a query, and a fragment from that URL, lowercases its scheme and host, drops a default port, and resolves dot segments in the path. Discovery, the authorization response `iss` parameter, ID tokens, JWT access tokens, introspection responses, and logout tokens all report this one value. [OpenID Connect Discovery §4.3](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation) requires it to match the `iss` of ID tokens. ID tokens and JWT access tokens issued by versions before 1.8 carry the URL as you configured it, and the provider's own checks, such as the `id_token_hint` check, accept both values. A resource server that checks signatures against keys fetched from a URL, such as a remote `jwksUrl`, expects the discovery issuer only. Opaque access tokens have no `iss` claim. If a proxy terminates TLS in front of Better Auth, set `baseURL` to the public `https` URL.
 
 To publish fewer scopes, more claims, or a different list of token endpoint authentication methods than discovery derives, set `advertisedMetadata`:
 

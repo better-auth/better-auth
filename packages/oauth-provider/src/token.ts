@@ -44,6 +44,7 @@ import {
 	getSupportedGrantTypes,
 	runBeforeTokenIssuance,
 } from "./extensions";
+import { getIssuer } from "./issuer";
 import { isUserDelegatedScope } from "./oauthClient/client-credentials";
 import {
 	recordAuthenticatedClient,
@@ -397,7 +398,7 @@ async function createJwtAccessToken(
 			// read the consent reference back from here.
 			reference_id: overrides?.referenceId,
 			...(overrides?.grantId ? { grant_id: overrides.grantId } : {}),
-			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+			iss: getIssuer(ctx, opts),
 			iat,
 			exp,
 			// RFC 9068 §2.2.4: `jti` SHOULD be present. Emit a 128-bit random ID
@@ -500,7 +501,7 @@ async function createIdToken(
 		amr: authenticationContext?.amr,
 		...customClaims,
 		at_hash: atHash,
-		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+		iss: getIssuer(ctx, opts),
 		sub: resolvedSub,
 		aud: client.clientId,
 		nonce,
