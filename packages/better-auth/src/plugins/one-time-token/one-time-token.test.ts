@@ -391,3 +391,67 @@ describe("One-time token", async () => {
 		});
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10252
+ *
+ * verifyOneTimeToken must not write a session cookie for an expired session.
+ * The old code called setSessionCookie(c, session) before checking whether
+ * session.session.expiresAt < new Date(). That ordering meant the cookie was
+ * written into the response context even though the handler subsequently threw
+ * "Session expired", so the caller could end up with a stale session cookie.
+ */
+describe("verifyOneTimeToken expiry ordering", async () => {
+	const testInstance = await getTestInstance(
+		{
+			session: {
+				// Very short session lifetime so we can expire it with fake timers.
+				expiresIn: 60,
+				updateAge: 0,
+			},
+			plugins: [
+				oneTimeToken({
+					// OTT itself is valid for 10 min; only the underlying session expires.
+					expiresIn: 10,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [oneTimeTokenClient()],
+			},
+		},
+	);
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("should not set a session cookie when the underlying session has expired", async () => {
+		const { headers } = await testInstance.signInWithTestUser();
+
+		const { token } = await testInstance.auth.api.generateOneTimeToken({
+			headers,
+		});
+		expect(token).toBeDefined();
+
+		// Advance time past the session's expiresIn (60 s) but before the OTT's
+		// expiresIn (10 min) so the token itself is still consumable.
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(2 * 60 * 1000); // 2 minutes
+
+		// The verify call must reject with "Session expired".
+		const response = await testInstance.auth.api
+			.verifyOneTimeToken({ body: { token }, asResponse: true })
+			.catch((e) => e.response as Response);
+
+		// Verify it did error (status 400).
+		expect(response.status).toBe(400);
+
+		// The key assertion: no session cookie should have been written even though
+		// the handler ran as far as calling setSessionCookie before (old code) or
+		// after (fix) the expiry guard.
+		const setCookie = response.headers.get("set-cookie");
+		expect(setCookie).toBeNull();
+	});
+});
