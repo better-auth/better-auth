@@ -1,4 +1,8 @@
-import type { OAuthAuthorizationDetail } from "@better-auth/oauth-provider";
+import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	OAuthActorClaim,
+	OAuthAuthorizationDetail,
+} from "@better-auth/oauth-provider";
 import {
 	getOAuthProviderApi,
 	ResourceUriSchema,
@@ -14,6 +18,8 @@ import {
 import { APIError, isAPIError } from "better-auth/api";
 import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 import * as z from "zod";
+import { parseActor } from "./actor";
+import { toPendingRequest } from "./approval";
 import {
 	getRegisteredDetailsTypes,
 	parseAuthorizationDetails,
@@ -75,6 +81,24 @@ async function authenticateBackchannelClient<T>(
 			headers,
 		);
 	}
+}
+
+/** The link the user approves from, or none when `approvalPage` is `false`. */
+function approvalURL(
+	ctx: GenericEndpointContext,
+	approvalPage: string | false | undefined,
+	requestId: string,
+): string | undefined {
+	if (approvalPage === false) return undefined;
+	const url = new URL(
+		approvalPage === undefined
+			? getAuthEndpointUrl(ctx, "/oauth2/authorize")
+			: approvalPage,
+		ctx.context.baseURL,
+	);
+	// A page URL that already names the parameter must not keep a stale id.
+	url.searchParams.set(APPROVAL_PARAMETER, requestId);
+	return url.toString();
 }
 
 export function createBcAuthorize(options: ResolvedCibaOptions) {
@@ -247,6 +271,14 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 			if (!user) {
 				oauthError("unknown_user_id", CIBA_ERROR_CODES.UNKNOWN_USER_ID.message);
 			}
+			let actor: OAuthActorClaim | undefined;
+			if (options.resolveActor) {
+				const resolved = await options.resolveActor(
+					{ client, user, scopes },
+					ctx,
+				);
+				actor = resolved === undefined ? undefined : parseActor(resolved);
+			}
 
 			// CIBA §7.1: requested_expiry may shorten, never extend, the lifetime.
 			const expiresIn = Math.min(
@@ -273,6 +305,7 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 					acrValues: acrValues ?? null,
 					authorizationDetails: storeAuthorizationDetails(authorizationDetails),
 					resources: resources ?? null,
+					actor: actor ?? null,
 					status: "pending",
 					...(ping
 						? {
@@ -292,24 +325,17 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 				},
 			});
 
-			const url = new URL(getAuthEndpointUrl(ctx, "/oauth2/authorize"));
-			url.searchParams.set(APPROVAL_PARAMETER, request.id);
-			// The async wrapper turns a synchronous throw into a logged failure too,
-			// so the client always receives its auth_req_id.
+			// The async wrapper turns a synchronous throw, including one from
+			// building the link, into a logged failure too, so the client always
+			// receives its auth_req_id.
 			await ctx.context.runInBackgroundOrAwait(
 				(async () =>
 					options.sendNotification(
+						// The same view getCibaRequest returns, plus the user and link.
 						{
-							requestId: request.id,
+							...toPendingRequest(request, client),
 							user,
-							clientId,
-							clientName: client.name ?? undefined,
-							scopes,
-							bindingMessage,
-							acrValues,
-							authorizationDetails,
-							url: url.toString(),
-							expiresAt,
+							url: approvalURL(ctx, options.approvalPage, request.id),
 						},
 						ctx,
 					))(),
