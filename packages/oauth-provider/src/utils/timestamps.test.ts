@@ -81,7 +81,7 @@ describe("hasExpectedRefreshParentState", () => {
 
 	it("accepts an active parent when issuance did not rotate it", () => {
 		expect(
-			hasExpectedRefreshParentState({ revoked: null, rotatedAt: null }, false),
+			hasExpectedRefreshParentState({}, false),
 		).toBe(true);
 	});
 
@@ -95,7 +95,7 @@ describe("hasExpectedRefreshParentState", () => {
 		"rejects a revoked or missing parent when rotation is %s",
 		(rotated) => {
 			expect(
-				hasExpectedRefreshParentState({ revoked: now, rotatedAt: null }, rotated),
+				hasExpectedRefreshParentState({ revoked: now }, rotated),
 			).toBe(false);
 			expect(hasExpectedRefreshParentState(null, rotated)).toBe(false);
 		},
