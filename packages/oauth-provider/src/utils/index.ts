@@ -21,13 +21,14 @@ import {
 	isExtensionTokenEndpointAuthMethod,
 } from "../extensions";
 import type { oauthProvider } from "../oauth";
-import { canonicalizeOAuthQueryParams } from "../signed-query";
+import { canonicalizeOAuthQueryParams, toBase64Url } from "../signed-query";
 import type {
 	Confirmation,
 	GrantType,
 	OAuthActorClaim,
 	OAuthConsent,
 	OAuthOptions,
+	OAuthRefreshToken,
 	Prompt,
 	SchemaClient,
 	Scope,
@@ -283,6 +284,53 @@ export async function findActiveSessionId(
 }
 
 /**
+ * Whether a grant with these scopes, derived from this refresh token, belongs
+ * to the session that issued the token.
+ *
+ * Without `offline_access`, a grant issued in a session ends with it (OIDC
+ * Back-Channel Logout 1.0 §2.7). Authorization codes are redeemed only in a
+ * live session, so a code-issued row with no `sessionId` lost it to the
+ * foreign key when the session row was deleted. Grants issued without a
+ * session, such as device code and CIBA, have neither link.
+ */
+export function isSessionBoundRefreshToken(
+	refreshToken: Pick<
+		OAuthRefreshToken<Scope[]>,
+		"sessionId" | "authorizationCodeId"
+	>,
+	scopes: readonly string[] | undefined,
+): boolean {
+	return (
+		!scopes?.includes("offline_access") &&
+		Boolean(refreshToken.sessionId || refreshToken.authorizationCodeId)
+	);
+}
+
+/**
+ * Resolves the session of a refresh token at the moment it is used.
+ *
+ * A session-bound refresh token ends once its session has expired or been
+ * deleted. Checking here, rather than relying only on the cleanup at sign-out,
+ * covers a refresh that races the sign-out. An `offline_access` refresh token
+ * outlives its session and only loses `sid`.
+ */
+export async function resolveRefreshTokenSession(
+	ctx: GenericEndpointContext,
+	refreshToken: Pick<
+		OAuthRefreshToken<Scope[]>,
+		"scopes" | "sessionId" | "authorizationCodeId"
+	>,
+): Promise<{ sessionId: string | undefined; ended: boolean }> {
+	const sessionId = await findActiveSessionId(ctx, refreshToken.sessionId);
+	return {
+		sessionId,
+		ended:
+			!sessionId &&
+			isSessionBoundRefreshToken(refreshToken, refreshToken.scopes),
+	};
+}
+
+/**
  * Normalizes OAuth resource values into a non-empty string array.
  */
 export function toResourceList(
@@ -337,10 +385,16 @@ export async function verifyOAuthQueryParams(
 		canonicalizeOAuthQueryParams(queryParams).toString(),
 		secret,
 	);
+	// A standard base64 `sig` can carry `+`, which reads back as a space once
+	// something in front of the server decodes the query. Restore it, then
+	// compare both sides in base64url so either alphabet matches.
 	return (
 		sigs.length === 1 &&
 		!!sig &&
-		constantTimeEqual(sig, verifySig) &&
+		constantTimeEqual(
+			toBase64Url(sig.replace(/ /g, "+")),
+			toBase64Url(verifySig),
+		) &&
 		new Date(exp * 1000) >= new Date()
 	);
 }
@@ -1429,6 +1483,7 @@ export async function resolvePresentedSubjects(
 	opts: OAuthOptions<Scope[]>,
 	subjects: TokenSubjects,
 	client: SchemaClient<Scope[]>,
+	subjectProfile: "user" | "service" = "user",
 ): Promise<TokenSubjects> {
 	if (client.subjectType !== "pairwise" || !opts.pairwiseSecret) {
 		return subjects;
@@ -1445,7 +1500,7 @@ export async function resolvePresentedSubjects(
 	const { act, may_act: mayAct } = subjects;
 	return {
 		...subjects,
-		sub: await resolveSubjectIdentifier(subjects.sub, client, opts),
+		sub: await presentSub(subjects.sub, subjectProfile),
 		...(act ? { act: await presentAct(act) } : {}),
 		...(isRecord(mayAct) && typeof mayAct.sub === "string"
 			? {

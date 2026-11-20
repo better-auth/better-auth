@@ -1079,6 +1079,25 @@ describe("pushed authorization requests with required DPoP nonces", async () => 
 	});
 });
 
+/**
+ * @see https://www.rfc-editor.org/rfc/rfc9126#section-2.3
+ */
+it("returns invalid_scope from PAR when requireOpenId is enabled", async () => {
+	const { createClient, authorizationParams, pushRequest } = await setup({
+		pushedAuthorizationRequests: { enabled: true },
+		requireOpenId: true,
+	});
+	const client = await createClient({ token_endpoint_auth_method: "none" });
+	const { params } = await authorizationParams(client.client_id);
+	const { response, body } = await pushRequest({ ...params, scope: "profile" });
+	expect(response.status).toBe(400);
+	expect(response.headers.get("location")).toBeNull();
+	expect(body).toMatchObject({
+		error: "invalid_scope",
+		error_description: "the openid scope is required",
+	});
+});
+
 describe("pushed authorization requests disabled", async () => {
 	const { auth, createClient, authorizationParams, pushRequest } = await setup(
 		{},

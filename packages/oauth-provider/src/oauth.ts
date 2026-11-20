@@ -24,7 +24,10 @@ import {
 import { claimsRequestParameterSchema } from "./claims-request";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
-import { validateOAuthProviderExtensions } from "./extensions";
+import {
+	validateAdvertisedAuthMethodsShape,
+	validateOAuthProviderExtensions,
+} from "./extensions";
 import { introspectEndpoint } from "./introspect";
 import type { SessionLogoutPlan } from "./logout";
 import {
@@ -188,6 +191,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			);
 		}
 	}
+	if (options.requireOpenId && !scopes.has("openid")) {
+		throw new BetterAuthError("requireOpenId requires openid in scopes");
+	}
 
 	const configuredResourceIdentifiers = new Set(
 		(options.resources ?? []).map((resource) =>
@@ -249,6 +255,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		clientRegistrationAllowedScopes,
 	};
 	validateOAuthProviderExtensions(opts.extensions);
+
+	validateAdvertisedAuthMethodsShape(
+		opts.advertisedMetadata?.token_endpoint_auth_methods_supported,
+	);
 
 	// Validate pairwiseSecret minimum length
 	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
@@ -724,11 +734,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						const signed = readSignedOAuthQuery(query);
 						await oAuthState.set(signed);
 
-						// On the social sign-in path the authorize query has to survive the
-						// provider redirect to be resumed after login. Carry it in the
-						// server-only OAuth state so a client cannot inject its own `query`
-						// through the request body.
-						if (ctx.path === "/sign-in/social") {
+						// On the social and SSO sign-in paths the authorize query has to
+						// survive the provider redirect to be resumed after login. Carry it
+						// in the server-only OAuth state so a client cannot inject its own
+						// `query` through the request body.
+						if (ctx.path === "/sign-in/social" || ctx.path === "/sign-in/sso") {
 							await addOAuthServerContext({
 								query: signed.query,
 								...(signed.signedQueryIssuedAt

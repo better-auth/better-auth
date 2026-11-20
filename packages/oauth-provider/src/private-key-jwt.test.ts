@@ -12,6 +12,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
@@ -387,6 +388,598 @@ describe("private_key_jwt authentication", async () => {
 		expect(transportB).toHaveBeenCalledTimes(1);
 	});
 
+	describe("jwks_uri fetch sharing", () => {
+		async function setup(name: string) {
+			const clientId = `https://${name}.example.com/client.json`;
+			const audience = `https://${name}-provider.example.com/oauth2/token`;
+			const [oldPair, newPair] = await Promise.all([
+				generateKeyPair("RS256", { extractable: true }),
+				generateKeyPair("RS256", { extractable: true }),
+			]);
+			const [oldJwk, newJwk] = await Promise.all([
+				exportJWK(oldPair.publicKey),
+				exportJWK(newPair.publicKey),
+			]);
+			const published: JWK[] = [{ ...oldJwk, kid: "old", alg: "RS256" }];
+			const transport = vi
+				.fn()
+				.mockImplementation(() =>
+					Promise.resolve(Response.json({ keys: published })),
+				);
+			const provider = await createDiscoveredClientVerifier({
+				baseURL: new URL(audience).origin,
+				clientId,
+				clientDiscoveryId: `${name}-discovery`,
+				fetchClientMetadataResource: transport,
+				jwksUri: `https://${name}.example.com/jwks.json`,
+			});
+			const sign = (keyId: string, key: CryptoKey) =>
+				signDiscoveredClientAssertion({
+					audience: provider.issuer,
+					clientId,
+					key,
+					keyId,
+				});
+			const verifyAssertion = (assertion: string) =>
+				verifyClientAssertion(
+					provider.ctx,
+					provider.opts,
+					assertion,
+					CLIENT_ASSERTION_TYPE,
+					clientId,
+					audience,
+				);
+			const verify = async (keyId: string, key: CryptoKey) =>
+				verifyAssertion(await sign(keyId, key));
+			// Signing first makes the assertions reach the provider together.
+			const verifyTogether = async (
+				count: number,
+				keyId: string,
+				key: CryptoKey,
+			) => {
+				const assertions = await Promise.all(
+					Array.from({ length: count }, () => sign(keyId, key)),
+				);
+				return Promise.allSettled(assertions.map(verifyAssertion));
+			};
+			return {
+				clientId,
+				oldKey: oldPair.privateKey as CryptoKey,
+				newKey: newPair.privateKey as CryptoKey,
+				publishNewKey: () =>
+					published.push({ ...newJwk, kid: "new", alg: "RS256" }),
+				transport,
+				sign,
+				verifyAssertion,
+				verify,
+				verifyTogether,
+				delayFetches: (ms: number) => {
+					const fetchJwks = transport.getMockImplementation()!;
+					transport.mockImplementation(async (...args) => {
+						await new Promise((resolve) => setTimeout(resolve, ms));
+						return fetchJwks(...args);
+					});
+				},
+			};
+		}
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it("refetches the key set when an assertion names a kid the cache lacks", async () => {
+			const fixture = await setup("share-rotation");
+			await fixture.verify("old", fixture.oldKey);
+			expect(fixture.transport).toHaveBeenCalledTimes(1);
+
+			fixture.publishNewKey();
+			await expect(
+				fixture.verify("new", fixture.newKey),
+			).resolves.toMatchObject({ clientId: fixture.clientId });
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+
+			await fixture.verify("new", fixture.newKey);
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("does not refetch for a known kid with a bad signature", async () => {
+			const fixture = await setup("share-known-kid");
+			await fixture.verify("old", fixture.oldKey);
+
+			await expect(fixture.verify("old", fixture.newKey)).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(1);
+		});
+
+		it("shares one fetch across concurrent assertions on a cold cache", async () => {
+			const fixture = await setup("share-cold");
+			fixture.delayFetches(50);
+
+			const results = await fixture.verifyTogether(5, "old", fixture.oldKey);
+			expect(results.map((r) => r.status)).toEqual(Array(5).fill("fulfilled"));
+			expect(fixture.transport).toHaveBeenCalledTimes(1);
+		});
+
+		it("shares one refetch across concurrent assertions with a new kid", async () => {
+			const fixture = await setup("share-refetch");
+			await fixture.verify("old", fixture.oldKey);
+			fixture.publishNewKey();
+			fixture.delayFetches(50);
+
+			const results = await fixture.verifyTogether(5, "new", fixture.newKey);
+			expect(results.map((r) => r.status)).toEqual(Array(5).fill("fulfilled"));
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("fails the assertions when the shared fetch and the retry both fail", async () => {
+			const fixture = await setup("share-failed");
+			await fixture.verify("old", fixture.oldKey);
+			fixture.publishNewKey();
+			fixture.transport.mockImplementation(async () => {
+				await new Promise((resolve) => setTimeout(resolve, 50));
+				return new Response("nope", { status: 500 });
+			});
+
+			const results = await fixture.verifyTogether(3, "new", fixture.newKey);
+			expect(results.map((r) => r.status)).toEqual(Array(3).fill("rejected"));
+			// The shared fetch, plus one retry shared by the two joiners.
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11609
+		 */
+		it("aborts the key set request after refusing an unread error response", async () => {
+			const fixture = await setup("abort-refused");
+			const signals: (AbortSignal | undefined)[] = [];
+			fixture.transport.mockImplementation(async (_input, init) => {
+				signals.push(init?.signal ?? undefined);
+				return new Response(new ReadableStream<Uint8Array>(), { status: 500 });
+			});
+
+			await expect(fixture.verify("old", fixture.oldKey)).rejects.toBeDefined();
+			expect(signals.length).toBeGreaterThan(0);
+			expect(signals.every((signal) => signal?.aborted === true)).toBe(true);
+		});
+
+		it("lets a joiner make its own fetch when the shared fetch fails", async () => {
+			const fixture = await setup("share-transient");
+			await fixture.verify("old", fixture.oldKey);
+			fixture.publishNewKey();
+			const fetchJwks = fixture.transport.getMockImplementation()!;
+			fixture.transport.mockImplementationOnce(async () => {
+				await new Promise((resolve) => setTimeout(resolve, 50));
+				return new Response("blip", { status: 500 });
+			});
+			fixture.transport.mockImplementation(fetchJwks);
+
+			const results = await fixture.verifyTogether(3, "new", fixture.newKey);
+			// The assertion that started the failed fetch fails as it would without
+			// sharing; the joiners succeed on one shared retry.
+			expect(results.map((r) => r.status).sort()).toEqual([
+				"fulfilled",
+				"fulfilled",
+				"rejected",
+			]);
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		it("does not join a fetch that started before the assertion arrived", async () => {
+			const fixture = await setup("share-published-after");
+			await fixture.verify("old", fixture.oldKey);
+			// A fetch in flight returns the key set as it was when the fetch began.
+			const fetchJwks = fixture.transport.getMockImplementation()!;
+			fixture.transport.mockImplementation(async (...args) => {
+				const response = await fetchJwks(...args);
+				await new Promise((resolve) => setTimeout(resolve, 100));
+				return response;
+			});
+
+			const ghost = fixture.verify("ghost", fixture.oldKey);
+			const ghostResult = expect(ghost).rejects.toBeDefined();
+			await vi.waitFor(() =>
+				expect(fixture.transport).toHaveBeenCalledTimes(2),
+			);
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			fixture.publishNewKey();
+			await expect(
+				fixture.verify("new", fixture.newKey),
+			).resolves.toMatchObject({ clientId: fixture.clientId });
+			await ghostResult;
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		/**
+		 * @see https://datatracker.ietf.org/doc/html/rfc7517#section-5
+		 */
+		it("does not join a fetch that started in the same millisecond as the assertion", async () => {
+			const fixture = await setup("share-same-millisecond");
+			await fixture.verify("old", fixture.oldKey);
+			const fetchJwks = fixture.transport.getMockImplementation()!;
+			let fetchStarted!: () => void;
+			const started = new Promise<void>((resolve) => {
+				fetchStarted = resolve;
+			});
+			fixture.transport.mockImplementation(async (...args) => {
+				const response = await fetchJwks(...args);
+				fetchStarted();
+				await new Promise((resolve) => setTimeout(resolve, 100));
+				return response;
+			});
+			// Frozen, so the fetch and the next assertion share one millisecond.
+			vi.useFakeTimers({ toFake: ["Date"] });
+
+			const ghost = fixture.verify("ghost", fixture.oldKey);
+			const ghostResult = expect(ghost).rejects.toBeDefined();
+			await started;
+			fixture.publishNewKey();
+			await expect(
+				fixture.verify("new", fixture.newKey),
+			).resolves.toMatchObject({ clientId: fixture.clientId });
+			await ghostResult;
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		/**
+		 * @see https://datatracker.ietf.org/doc/html/rfc7517#section-5
+		 */
+		it("answers with the newer key set when an older overlapping fetch finishes last", async () => {
+			const fixture = await setup("share-stale-finish");
+			await fixture.verify("old", fixture.oldKey);
+			const fetchJwks = fixture.transport.getMockImplementation()!;
+			let releaseOlderFetch!: () => void;
+			const olderFetchHeld = new Promise<void>((resolve) => {
+				releaseOlderFetch = resolve;
+			});
+			fixture.transport.mockImplementationOnce(async (...args) => {
+				const response = await fetchJwks(...args);
+				await olderFetchHeld;
+				return response;
+			});
+
+			const [first, second] = await Promise.all([
+				fixture.sign("new", fixture.newKey),
+				fixture.sign("new", fixture.newKey),
+			]);
+			const slowResults = Promise.allSettled([
+				fixture.verifyAssertion(first),
+				fixture.verifyAssertion(second),
+			]);
+			await vi.waitFor(() =>
+				expect(fixture.transport).toHaveBeenCalledTimes(2),
+			);
+			fixture.publishNewKey();
+			await expect(
+				fixture.verify("new", fixture.newKey),
+			).resolves.toMatchObject({ clientId: fixture.clientId });
+			releaseOlderFetch();
+
+			const results = await slowResults;
+			expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		it("lets a joiner make its own fetch when the shared fetch returns an invalid key set", async () => {
+			const fixture = await setup("share-invalid");
+			await fixture.verify("old", fixture.oldKey);
+			fixture.publishNewKey();
+			const fetchJwks = fixture.transport.getMockImplementation()!;
+			fixture.transport.mockImplementationOnce(async () => {
+				await new Promise((resolve) => setTimeout(resolve, 50));
+				return Response.json({ keys: "malformed" });
+			});
+			fixture.transport.mockImplementation(fetchJwks);
+
+			const results = await fixture.verifyTogether(3, "new", fixture.newKey);
+			expect(results.map((r) => r.status).sort()).toEqual([
+				"fulfilled",
+				"fulfilled",
+				"rejected",
+			]);
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		it("replaces a fetch that outlived its timeout", async () => {
+			const fixture = await setup("share-dead-fetch");
+			await fixture.verify("old", fixture.oldKey);
+			vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+			let fetchStarted!: () => void;
+			const started = new Promise<void>((resolve) => {
+				fetchStarted = resolve;
+			});
+			// A fetch whose request was canceled never settles.
+			fixture.transport.mockImplementationOnce(() => {
+				fetchStarted();
+				return new Promise(() => {});
+			});
+
+			fixture.publishNewKey();
+			const stuck = fixture.verify("new", fixture.newKey);
+			const stuckResult = expect(stuck).rejects.toBeDefined();
+			await started;
+			await vi.advanceTimersByTimeAsync(6_000);
+			await stuckResult;
+
+			// The next assertion starts a new fetch instead of joining the dead one.
+			await expect(
+				fixture.verify("new", fixture.newKey),
+			).resolves.toMatchObject({ clientId: fixture.clientId });
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+	});
+
+	it("keeps cached key sets when other clients' jwks_uri fetches fail at capacity", async () => {
+		const audience = "https://evict-provider.example.com/oauth2/token";
+		const okClientIds = Array.from(
+			{ length: 500 },
+			(_, index) => `https://evict-ok-${index}.example.com/client.json`,
+		);
+		const failingClientIds = Array.from(
+			{ length: 20 },
+			(_, index) => `https://evict-fail-${index}.example.com/client.json`,
+		);
+		const oldestJwksUri = "https://evict-ok-0.example.com/jwks.json";
+		const keyPair = await generateKeyPair("ES256", { extractable: true });
+		const publicJwk = await exportJWK(keyPair.publicKey);
+		const transport = vi.fn(async (url: string | URL | Request) => {
+			if (String(url).startsWith("https://evict-ok-")) {
+				return Response.json({
+					keys: [{ ...publicJwk, kid: "k", alg: "ES256" }],
+				});
+			}
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			return new Response("unavailable", { status: 503 });
+		});
+		const opts = {
+			loginPage: "/login",
+			consentPage: "/consent",
+			extensions: [
+				{
+					clientDiscovery: {
+						id: "evict-discovery",
+						matches: (candidateClientId: string) =>
+							candidateClientId.startsWith("https://evict-"),
+						resolve: (
+							_ctx: GenericEndpointContext,
+							_clientId: string,
+							existingClient: SchemaClient<Scope[]> | null,
+						) => existingClient,
+						fetchClientMetadataResource: transport,
+					},
+				},
+			],
+		} satisfies OAuthOptions<Scope[]>;
+		const instance = await getTestInstance({
+			baseURL: new URL(audience).origin,
+			plugins: [jwt(), oauthProvider(opts)],
+		});
+		const context = await instance.auth.$context;
+		const ctx = { context } as unknown as GenericEndpointContext;
+		for (const clientId of [...okClientIds, ...failingClientIds]) {
+			await context.adapter.create<SchemaClient<Scope[]>>({
+				model: "oauthClient",
+				data: {
+					clientId,
+					clientDiscoveryId: "evict-discovery",
+					name: "Discovered private_key_jwt client",
+					redirectUris: ["https://client.example.com/callback"],
+					tokenEndpointAuthMethod: "private_key_jwt",
+					applicationType: "web",
+					grantTypes: ["authorization_code"],
+					responseTypes: ["code"],
+					jwksUri: clientId.replace("client.json", "jwks.json"),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		}
+		const verify = async (clientId: string) => {
+			const now = Math.floor(Date.now() / 1000);
+			return verifyClientAssertion(
+				ctx,
+				opts,
+				await new SignJWT({})
+					.setProtectedHeader({ alg: "ES256", kid: "k" })
+					.setIssuer(clientId)
+					.setSubject(clientId)
+					.setAudience(context.baseURL)
+					.setIssuedAt(now)
+					.setExpirationTime(now + 120)
+					.setJti(crypto.randomUUID())
+					.sign(keyPair.privateKey),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				audience,
+			);
+		};
+
+		// Fill the cache to its limit with key sets.
+		for (const clientId of okClientIds) {
+			await verify(clientId);
+		}
+		// Slow failures in flight at the same time must not push key sets out.
+		const failures = await Promise.allSettled(failingClientIds.map(verify));
+		expect(failures.map((r) => r.status)).toEqual(Array(20).fill("rejected"));
+		await verify(okClientIds[0]!);
+
+		const oldestFetches = transport.mock.calls.filter(
+			([url]) => String(url) === oldestJwksUri,
+		);
+		expect(oldestFetches).toHaveLength(1);
+	}, 60_000);
+
+	describe("jwks_uri key set cache bound", { timeout: 60_000 }, () => {
+		async function setup(clientCount: number) {
+			const origin = "https://lru-provider.example.com";
+			const tokenUrl = `${origin}/api/auth/oauth2/token`;
+			const clientIdAt = (index: number) =>
+				`https://lru-${index}.example.com/client.json`;
+			const jwksUriAt = (index: number) =>
+				`https://lru-${index}.example.com/jwks.json`;
+			const [keyPair, rotatedKeyPair] = await Promise.all([
+				generateKeyPair("ES256", { extractable: true }),
+				generateKeyPair("ES256", { extractable: true }),
+			]);
+			const [publicJwk, rotatedPublicJwk] = await Promise.all([
+				exportJWK(keyPair.publicKey),
+				exportJWK(rotatedKeyPair.publicKey),
+			]);
+			const rotated = new Set<string>();
+			const held = new Map<string, Promise<void>>();
+			const transport = vi.fn(async (url: string | URL | Request) => {
+				const jwksUri = String(url);
+				const hold = held.get(jwksUri);
+				held.delete(jwksUri);
+				await hold;
+				const keys: JWK[] = [{ ...publicJwk, kid: "k", alg: "ES256" }];
+				if (rotated.has(jwksUri)) {
+					keys.push({ ...rotatedPublicJwk, kid: "rotated", alg: "ES256" });
+				}
+				return Response.json({ keys });
+			});
+			const instance = await getTestInstance({
+				baseURL: origin,
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						extensions: [
+							{
+								clientDiscovery: {
+									id: "lru-discovery",
+									matches: (candidateClientId: string) =>
+										candidateClientId.startsWith("https://lru-"),
+									resolve: (
+										_ctx: GenericEndpointContext,
+										_clientId: string,
+										existingClient: SchemaClient<Scope[]> | null,
+									) => existingClient,
+									fetchClientMetadataResource: transport,
+								},
+							},
+						],
+					}),
+				],
+			});
+			const context = await instance.auth.$context;
+			for (let index = 0; index < clientCount; index++) {
+				await context.adapter.create<SchemaClient<Scope[]>>({
+					model: "oauthClient",
+					data: {
+						clientId: clientIdAt(index),
+						clientDiscoveryId: "lru-discovery",
+						name: "Discovered private_key_jwt client",
+						redirectUris: ["https://client.example.com/callback"],
+						tokenEndpointAuthMethod: "private_key_jwt",
+						applicationType: "web",
+						grantTypes: ["client_credentials"],
+						responseTypes: [],
+						clientCredentialsScopes: ["read"],
+						jwksUri: jwksUriAt(index),
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				});
+			}
+			const requestToken = async (
+				index: number,
+				options?: { rotatedKey?: boolean },
+			) => {
+				const clientId = clientIdAt(index);
+				const now = Math.floor(Date.now() / 1000);
+				const assertion = await new SignJWT({})
+					.setProtectedHeader({
+						alg: "ES256",
+						kid: options?.rotatedKey ? "rotated" : "k",
+					})
+					.setIssuer(clientId)
+					.setSubject(clientId)
+					.setAudience(context.baseURL)
+					.setIssuedAt(now)
+					.setExpirationTime(now + 120)
+					.setJti(crypto.randomUUID())
+					.sign(
+						options?.rotatedKey
+							? rotatedKeyPair.privateKey
+							: keyPair.privateKey,
+					);
+				const response = await instance.auth.handler(
+					new Request(tokenUrl, {
+						method: "POST",
+						headers: { "content-type": "application/x-www-form-urlencoded" },
+						body: new URLSearchParams({
+							grant_type: "client_credentials",
+							client_id: clientId,
+							client_assertion_type: CLIENT_ASSERTION_TYPE,
+							client_assertion: assertion,
+						}),
+					}),
+				);
+				expect(response.status).toBe(200);
+			};
+			const requestTokens = async (from: number, to: number) => {
+				for (let index = from; index < to; index++) {
+					await requestToken(index);
+				}
+			};
+			return {
+				requestToken,
+				requestTokens,
+				fetchesFor: (index: number) =>
+					transport.mock.calls.filter(
+						([url]) => String(url) === jwksUriAt(index),
+					).length,
+				rotateKey: (index: number) => rotated.add(jwksUriAt(index)),
+				holdNextFetch: (index: number) => {
+					let release!: () => void;
+					held.set(
+						jwksUriAt(index),
+						new Promise<void>((resolve) => {
+							release = resolve;
+						}),
+					);
+					return release;
+				},
+			};
+		}
+
+		it("keeps an in-use key set cached when new clients fill the cache", async () => {
+			const fixture = await setup(501);
+			// Fill the cache to its limit; client 0's key set is the first stored.
+			await fixture.requestTokens(0, 500);
+			await fixture.requestToken(0);
+			expect(fixture.fetchesFor(0)).toBe(1);
+
+			// A new client overflows the cache, which must evict a set nobody used
+			// since it was stored rather than client 0's.
+			await fixture.requestToken(500);
+			await fixture.requestToken(0);
+			expect(fixture.fetchesFor(0)).toBe(1);
+			await fixture.requestToken(1);
+			expect(fixture.fetchesFor(1)).toBe(2);
+		});
+
+		it("treats a refetched key set as just used when other sets were stored during the refetch", async () => {
+			const fixture = await setup(1000);
+			await fixture.requestTokens(0, 500);
+
+			fixture.rotateKey(0);
+			const release = fixture.holdNextFetch(0);
+			const rotation = fixture.requestToken(0, { rotatedKey: true });
+			await vi.waitFor(() => expect(fixture.fetchesFor(0)).toBe(2));
+			// Stored while client 0's refetch is in flight, so ahead of its result.
+			await fixture.requestTokens(500, 510);
+			release();
+			await rotation;
+
+			// 490 new sets evict the 489 stored before client 0's assertion arrived,
+			// then one more.
+			await fixture.requestTokens(510, 1000);
+			await fixture.requestToken(0, { rotatedKey: true });
+			expect(fixture.fetchesFor(0)).toBe(2);
+		});
+	});
+
 	it.each([
 		{
 			name: "bare-array",
@@ -635,7 +1228,7 @@ describe("private_key_jwt authentication", async () => {
 			"https://trusted.example.com/.well-known/jwks.json",
 			expect.objectContaining({
 				headers: { accept: "application/json" },
-				redirect: "error",
+				redirect: "manual",
 			}),
 		);
 		expect(discoveryMetadataFetch).not.toHaveBeenCalled();

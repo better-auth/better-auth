@@ -6,7 +6,13 @@ import type {
 	SchemaClient,
 	Scope,
 } from "@better-auth/oauth-provider";
-import { registerClientMetadataDocument } from "@better-auth/oauth-provider/internal";
+import {
+	isLocalCapacityRefusal,
+	isTransientAbort,
+	isTransientHttpStatus,
+	isTransientNetworkError,
+	registerClientMetadataDocument,
+} from "@better-auth/oauth-provider/internal";
 import { APIError } from "better-call";
 import type { CimdOptions } from "./types";
 import {
@@ -14,7 +20,7 @@ import {
 	validateClientIdUrl,
 } from "./validate-metadata-document";
 
-const FETCH_TIMEOUT_MS = 5_000;
+export const FETCH_TIMEOUT_MS = 5_000;
 const MAX_RESPONSE_BYTES = 5 * 1024;
 const JSON_CONTENT_TYPE_RE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
 const FETCH_FAILURE_DESCRIPTION =
@@ -47,6 +53,68 @@ function invalidClient(description: string): APIError {
 		error: "invalid_client",
 		error_description: description,
 	});
+}
+
+// Transient failures answer with the same error as any other failure, so the
+// classification is kept beside the error.
+const transientMetadataFetchFailures = new WeakSet<object>();
+const metadataFetchCapacityRefusals = new WeakSet<object>();
+const metadataTransportErrors = new WeakSet<object>();
+
+function transientInvalidClient(description: string): APIError {
+	const error = invalidClient(description);
+	transientMetadataFetchFailures.add(error);
+	return error;
+}
+
+function transportError(description: string, transient: boolean): APIError {
+	const error = transient
+		? transientInvalidClient(description)
+		: invalidClient(description);
+	metadataTransportErrors.add(error);
+	return error;
+}
+
+/**
+ * The transport threw, so no document was retrieved. Without an error code, a
+ * failed connection and a refused address look the same, so this is neither
+ * transient nor terminal.
+ */
+export function isMetadataTransportError(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		metadataTransportErrors.has(error)
+	);
+}
+
+export function isTransientMetadataFetchFailure(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		transientMetadataFetchFailures.has(error)
+	);
+}
+
+/**
+ * Whether the transport refused a metadata document fetch at a local capacity
+ * limit, which says nothing about the document or its host.
+ */
+export function isMetadataFetchCapacityRefusal(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		metadataFetchCapacityRefusals.has(error)
+	);
+}
+
+function metadataFetchCapacityRefusal(): APIError {
+	const error = new APIError("TOO_MANY_REQUESTS", {
+		error: "temporarily_unavailable",
+		error_description: "metadata DNS lookup capacity exceeded",
+	});
+	metadataFetchCapacityRefusals.add(error);
+	return error;
 }
 
 function tooLargeError(): APIError {
@@ -170,15 +238,20 @@ export async function fetchClientMetadataDocument(
 		try {
 			response = await cimdOptions.fetchClientMetadataResource(clientIdUrl, {
 				headers: requestHeaders,
-				redirect: "error",
+				// Not "error": Workers rejects it. The status check refuses 3xx and opaque redirects.
+				redirect: "manual",
 				signal: controller.signal,
 			});
-		} catch {
-			throw invalidClient(
-				didTimeOut
-					? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`
-					: FETCH_FAILURE_DESCRIPTION,
-			);
+		} catch (error) {
+			if (isLocalCapacityRefusal(error)) throw metadataFetchCapacityRefusal();
+			const description = didTimeOut
+				? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`
+				: FETCH_FAILURE_DESCRIPTION;
+			// A refusal that arrives after the timeout fired is still a refusal.
+			const transient =
+				(didTimeOut && isTransientAbort(error, controller.signal)) ||
+				isTransientNetworkError(error);
+			throw transportError(description, transient);
 		}
 		if (response.redirected) {
 			throw invalidClient("Metadata document fetch must not follow redirects");
@@ -194,9 +267,10 @@ export async function fetchClientMetadataDocument(
 			return { status: "not-modified", cacheHeaders };
 		}
 		if (response.status !== 200) {
-			throw invalidClient(
-				`Metadata document fetch returned HTTP ${response.status}`,
-			);
+			const description = `Metadata document fetch returned HTTP ${response.status}`;
+			throw isTransientHttpStatus(response.status)
+				? transientInvalidClient(description)
+				: invalidClient(description);
 		}
 
 		const contentType = response.headers.get("content-type") ?? "";
@@ -227,12 +301,16 @@ export async function fetchClientMetadataDocument(
 			);
 		} catch (error) {
 			if (didTimeOut) {
-				throw invalidClient(
-					`Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`,
-				);
+				const description = `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`;
+				throw isAPIError(error)
+					? invalidClient(description)
+					: transportError(description, true);
 			}
 			if (isAPIError(error)) throw error;
-			throw invalidClient(FETCH_FAILURE_DESCRIPTION);
+			throw transportError(
+				FETCH_FAILURE_DESCRIPTION,
+				isTransientNetworkError(error),
+			);
 		}
 		let rawMetadata: unknown;
 		try {
@@ -258,6 +336,9 @@ export async function fetchClientMetadataDocument(
 		};
 	} finally {
 		clearTimeout(timeout);
+		// A refused response may still be streaming; aborting lets the transport
+		// release its connection instead of holding it until the server closes it.
+		controller.abort();
 	}
 }
 

@@ -1478,6 +1478,39 @@ describe("oauth-provider device-code grant", async () => {
 		);
 	});
 
+	it("keeps a device-grant refresh token usable after narrowing away offline_access", async () => {
+		const scope = "openid offline_access";
+		const clientId = await createDeviceClient(
+			[DEVICE_CODE_GRANT_TYPE, "refresh_token"],
+			scope,
+		);
+		const deviceCode = await approvedDeviceCode(clientId, scope);
+		const issued = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+		});
+		expect(issued.error).toBeNull();
+
+		// The device grant has no session, so dropping offline_access must not
+		// make the refresh token end with one.
+		const narrowed = await pollToken({
+			grant_type: "refresh_token",
+			refresh_token: issued.data!.refresh_token as string,
+			client_id: clientId,
+			scope: "openid",
+		});
+		expect(narrowed.error).toBeNull();
+		const narrowedRefreshToken = narrowed.data!.refresh_token as string;
+
+		const refreshed = await pollToken({
+			grant_type: "refresh_token",
+			refresh_token: narrowedRefreshToken,
+			client_id: clientId,
+		});
+		expect(refreshed.error).toBeNull();
+	});
+
 	it("single-uses the device code (second exchange fails)", async () => {
 		const clientId = await createDeviceClient();
 		const deviceCode = await approvedDeviceCode(clientId);
@@ -1783,6 +1816,42 @@ describe("oauth-provider device-code grant", async () => {
 		expect(res.error).toBeNull();
 		expect(res.data?.access_token).toBeDefined();
 		expect(res.data?.token_type).toBe("Bearer");
+	});
+});
+
+describe("oauth-provider device-code grant with requireOpenId", async () => {
+	const baseURL = "http://localhost:3000";
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				requireOpenId: true,
+			}),
+			oauthDeviceAuthorization(),
+		],
+	});
+
+	it("does not apply to the device authorization request", async () => {
+		const { headers } = await signInWithTestUser();
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "profile",
+				application_type: "native",
+			},
+		});
+
+		const res = await auth.api.deviceCode({
+			body: { client_id: created!.client_id, scope: "profile" },
+		});
+
+		expect(res.device_code).toBeTruthy();
+		expect(res.user_code).toBeTruthy();
 	});
 });
 

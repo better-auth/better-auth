@@ -76,16 +76,17 @@ import {
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
-	findActiveSessionId,
 	getAuthEndpointUrl,
 	getClient,
 	getJwtPlugin,
 	isConfirmation,
 	isPKCERequired,
 	isPublicClient,
+	isSessionBoundRefreshToken,
 	normalizeTimestampValue,
 	parseClientMetadata,
 	resolveAccessTokenSubject,
+	resolveRefreshTokenSession,
 	resolveSessionAuthTime,
 	resolveSubjectIdentifier,
 	storeToken,
@@ -1201,13 +1202,17 @@ export async function checkDpopProofBeforeConsume(
 		scopes: string[];
 		resources?: string[];
 		verificationValue?: VerificationValue;
+		/** The policy already resolved for this client, scopes, and resources. */
+		policy?: ResolvedResourcePolicy;
 	},
 ): Promise<{ confirmation?: Confirmation }> {
-	const policy = await resolveResourcePolicy(ctx, opts, {
-		resource: params.resources,
-		clientId: params.client.clientId,
-		requestedScopes: params.scopes,
-	});
+	const policy =
+		params.policy ??
+		(await resolveResourcePolicy(ctx, opts, {
+			resource: params.resources,
+			clientId: params.client.clientId,
+			requestedScopes: params.scopes,
+		}));
 	const confirmation = await resolveDpopTokenBinding(ctx, opts, {
 		client: params.client,
 		grantIssuance: policy,
@@ -1571,6 +1576,21 @@ async function createUserTokens(
 		clientAllowsGrant(client, "refresh_token") &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
+	// A refresh that drops `offline_access`, whether the client narrowed the
+	// scope or a resource policy filtered it, asks for a session-bound grant,
+	// which cannot start once the session has ended. Refuse before rotation so
+	// the presented `offline_access` token stays usable.
+	if (
+		isRefreshToken &&
+		existingRefreshToken &&
+		!sessionId &&
+		isSessionBoundRefreshToken(existingRefreshToken, effectiveScopes)
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
 	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
 	// Kept across rotations, so revoking any refresh token of the grant can
 	// revoke the access tokens it issued. A legacy row without one starts a new
@@ -2480,6 +2500,17 @@ async function handleRefreshTokenGrant(
 
 	validateClientScopes(client, requestedScopes ?? scopes);
 
+	// A session-bound refresh token is never rotated, so presenting one that was
+	// revoked at sign-out is not replay and must not tear down the client's
+	// other grants.
+	const session = await resolveRefreshTokenSession(ctx, refreshToken);
+	if (session.ended) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
+
 	if (refreshToken.revoked) {
 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
 			const replayRequest = await resolveRefreshTokenRotationReplayRequest(
@@ -2535,7 +2566,7 @@ async function handleRefreshTokenGrant(
 		grantType: "refresh_token",
 		referenceId: refreshToken.referenceId,
 		authorizationCodeId: refreshToken.authorizationCodeId,
-		sessionId: await findActiveSessionId(ctx, refreshToken.sessionId),
+		sessionId: session.sessionId,
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,

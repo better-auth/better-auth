@@ -6,6 +6,7 @@ import { assertValidClientJwks } from "../client-jwks";
 import { getEndpointUrl } from "../dpop";
 import type { OAuthClientRegistrationMetadata } from "../register";
 import {
+	assertClientRegistrationJwksUri,
 	assertEndSessionClientOrigins,
 	assertPostLogoutRedirectOrigins,
 	checkOAuthClient,
@@ -387,8 +388,24 @@ export async function updateClientEndpoint(
 	if (!isCrossOwnerServerConfiguration) {
 		await checkOAuthClient(updatedMetadata, opts, {
 			ctx,
+			registrationSource: client.clientDiscoveryId
+				? "clientMetadataDocument"
+				: undefined,
+			clientDiscoveryId: client.clientDiscoveryId ?? undefined,
 		});
-	} else if (enableEndSession && !client.enableEndSession) {
+	} else if (rawClientCredentialsScopes !== undefined && client.jwksUri) {
+		await assertClientRegistrationJwksUri(client.jwksUri, opts, {
+			ctx,
+			clientId: client.clientId,
+			isClientMetadataDocument: !!client.clientDiscoveryId,
+			clientDiscoveryId: client.clientDiscoveryId ?? undefined,
+		});
+	}
+	if (
+		isCrossOwnerServerConfiguration &&
+		enableEndSession &&
+		!client.enableEndSession
+	) {
 		// Granting logout to a client the caller does not own holds its stored
 		// post-logout URIs to the origin rule registration applies on a grant.
 		assertEndSessionClientOrigins({
@@ -482,7 +499,11 @@ export async function updateClientEndpoint(
 			],
 			update: {
 				...schemaUpdates,
-				updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000),
+				// A discovered client's `updatedAt` records when its document was last
+				// validated, which bounds how long it can be served stale.
+				...(client.clientDiscoveryId
+					? {}
+					: { updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000) }),
 			},
 		},
 	);

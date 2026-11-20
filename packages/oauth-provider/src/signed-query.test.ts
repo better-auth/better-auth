@@ -3,6 +3,7 @@ import {
 	buildSignedOAuthQuery,
 	canonicalizeOAuthQueryParams,
 	setSignedOAuthQueryParameterNames,
+	toBase64Url,
 } from "./signed-query";
 
 const signedQueryParameterNameParam = "ba_param";
@@ -52,5 +53,24 @@ describe("signed OAuth query", () => {
 		expect(canonicalizeOAuthQueryParams(params).toString()).toBe(
 			"client_id=client-a&resource=https%3A%2F%2Fa.example.com&resource=https%3A%2F%2Fb.example.com",
 		);
+	});
+});
+
+describe("toBase64Url", () => {
+	it("rewrites the standard alphabet and drops trailing padding", () => {
+		expect(toBase64Url("a+b/c==")).toBe("a-b_c");
+		expect(toBase64Url("abc")).toBe("abc");
+		expect(toBase64Url("==")).toBe("");
+	});
+
+	it("keeps padding that is not trailing", () => {
+		expect(toBase64Url("a=b=")).toBe("a=b");
+	});
+
+	it("handles a long run of padding in linear time", () => {
+		const input = `${"=".repeat(100_000)}x`;
+		const started = performance.now();
+		expect(toBase64Url(input)).toBe(input);
+		expect(performance.now() - started).toBeLessThan(1_000);
 	});
 });

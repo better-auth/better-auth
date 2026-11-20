@@ -1,3 +1,4 @@
+import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
@@ -9,6 +10,84 @@ import {
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
 
 const BODY_FORBIDDEN_RESPONSE_STATUSES = new Set([204, 205, 304]);
+// `dns.lookup` runs on Node's shared thread pool and cannot be cancelled. Keep
+// abandoned lookups in this count until they actually settle.
+const MAX_OUTSTANDING_DNS_LOOKUPS = 16;
+let outstandingDNSLookups = 0;
+
+/**
+ * Resolve every address of a hostname, rejecting with
+ * `ERR_CIMD_DNS_LOOKUP_ABORTED` as soon as the signal aborts. An abandoned
+ * lookup keeps its slot in MAX_OUTSTANDING_DNS_LOOKUPS until it settles, and
+ * its result is discarded.
+ */
+function lookupWithAbort(
+	hostname: string,
+	signal: AbortSignal | undefined,
+): Promise<LookupAddress[]> {
+	if (outstandingDNSLookups >= MAX_OUTSTANDING_DNS_LOOKUPS) {
+		// The code marks a local capacity limit, so callers can tell it apart from
+		// a refusal of the host.
+		return Promise.reject(
+			Object.assign(new TypeError("metadata DNS lookup limit exceeded"), {
+				code: "ERR_CIMD_DNS_LOOKUP_LIMIT",
+			}),
+		);
+	}
+	outstandingDNSLookups += 1;
+	let lookupPromise: Promise<LookupAddress[]>;
+	try {
+		lookupPromise = lookup(hostname, {
+			all: true,
+			verbatim: true,
+		});
+	} catch (error) {
+		outstandingDNSLookups -= 1;
+		return Promise.reject(error);
+	}
+	// Attach both handlers immediately, including when the caller has already
+	// stopped waiting. A late error cannot become an unhandled rejection.
+	const countedLookup = lookupPromise.then(
+		(addresses) => {
+			outstandingDNSLookups -= 1;
+			return addresses;
+		},
+		(error) => {
+			outstandingDNSLookups -= 1;
+			throw error;
+		},
+	);
+	if (!signal) {
+		return countedLookup;
+	}
+	return new Promise((resolve, reject) => {
+		// A lookup can be queued behind other hosts' lookups, so this abort says
+		// nothing about this host.
+		const onAbort = () => {
+			reject(
+				Object.assign(
+					new TypeError("metadata DNS lookup aborted", {
+						cause: signal.reason,
+					}),
+					{ code: "ERR_CIMD_DNS_LOOKUP_ABORTED" },
+				),
+			);
+		};
+		signal.addEventListener("abort", onAbort, { once: true });
+		if (signal.aborted) onAbort();
+		const cleanup = () => signal.removeEventListener("abort", onAbort);
+		countedLookup.then(
+			(addresses) => {
+				cleanup();
+				resolve(addresses);
+			},
+			(error) => {
+				cleanup();
+				reject(error);
+			},
+		);
+	});
+}
 
 function responseHeaders(
 	headers: Record<string, string | string[] | undefined>,
@@ -35,6 +114,13 @@ function responseHeaders(
  * connected to directly once it is classified public-routable. It sends no
  * SNI, and its certificate must name the IP address. Redirect responses are
  * returned to the caller and are never followed.
+ *
+ * The abort signal is honored during DNS resolution as well as the request.
+ * The underlying `getaddrinfo` call cannot be cancelled: after an abort it
+ * keeps running until the resolver answers or times out. At most 16 lookups
+ * may be outstanding per process, abandoned ones included, and while 16 are
+ * outstanding a fetch to any hostname rejects without starting another.
+ * IP-literal hosts need no lookup and are not limited.
  */
 export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 	input,
@@ -48,6 +134,11 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 	if (webRequest.method !== "GET" && webRequest.method !== "HEAD") {
 		throw new TypeError("CIMD Node transport supports only GET and HEAD");
 	}
+
+	const signal =
+		init?.signal ??
+		(input instanceof Request ? input.signal : webRequest.signal);
+	signal?.throwIfAborted();
 
 	// A literal host has no DNS answer to pin. lookup() rejects the bracketed
 	// form of an IPv6 literal, so classify the literal itself and pin it.
@@ -66,10 +157,7 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 			},
 		];
 	} else {
-		addresses = await lookup(url.hostname, {
-			all: true,
-			verbatim: true,
-		});
+		addresses = await lookupWithAbort(url.hostname, signal);
 		if (addresses.length === 0) {
 			throw new TypeError("metadata hostname returned no DNS addresses");
 		}
@@ -85,9 +173,6 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 
 	const headers = Object.fromEntries(webRequest.headers.entries());
 	headers.host = url.host;
-	const signal =
-		init?.signal ??
-		(input instanceof Request ? input.signal : webRequest.signal);
 
 	return new Promise<Response>((resolve, reject) => {
 		const request = httpsRequest(
@@ -130,6 +215,8 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 						: (Readable.toWeb(
 								response,
 							) as unknown as ReadableStream<Uint8Array>);
+				// Node releases the socket only once the response is consumed.
+				if (body === null) response.resume();
 				// Response throws on an out-of-range status or invalid reason phrase,
 				// and a throw from this listener would escape the promise.
 				try {
@@ -146,7 +233,31 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 				}
 			},
 		);
-		request.once("error", reject);
+		// The code tells callers the abort ended a request already sent to the
+		// host, so its timeout can count as an outage of that host.
+		const requestAborted = (cause: unknown) =>
+			Object.assign(new Error("metadata request aborted", { cause }), {
+				name: "AbortError",
+				code: "ERR_CIMD_REQUEST_ABORTED",
+			});
+		request.once("error", (error) => {
+			reject(signal?.aborted ? requestAborted(error) : error);
+		});
+		// Without an upgrade listener, Node destroys the socket after a 101 and
+		// emits neither a response nor an error, and the abort signal can no
+		// longer settle the request.
+		request.once("upgrade", (response, socket) => {
+			response.destroy();
+			socket.destroy();
+			reject(new TypeError("metadata server answered with a protocol upgrade"));
+		});
+		request.once("close", () => {
+			reject(
+				signal?.aborted
+					? requestAborted(signal.reason)
+					: new TypeError("metadata request closed before a response"),
+			);
+		});
 		request.end();
 	});
 };

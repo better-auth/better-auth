@@ -114,9 +114,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 				{
 					matcher: (ctx) =>
 						// Block phone number changes except disassociation (when phoneNumber is null)
-						ctx.path === "/update-user" &&
-						"phoneNumber" in ctx.body &&
-						ctx.body.phoneNumber !== null,
+						ctx.path === "/update-user" && ctx.body?.phoneNumber != null,
 					handler: createAuthMiddleware(async (_ctx) => {
 						throw APIError.from(
 							"BAD_REQUEST",

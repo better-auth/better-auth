@@ -32,3 +32,9 @@ export {
 	toResourceList,
 	validateClientScopes,
 } from "./utils";
+export {
+	isLocalCapacityRefusal,
+	isTransientAbort,
+	isTransientHttpStatus,
+	isTransientNetworkError,
+} from "./utils/transient-fetch-failure";

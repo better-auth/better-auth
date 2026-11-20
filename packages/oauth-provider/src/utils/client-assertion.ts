@@ -20,46 +20,330 @@ import { validatePublicClientJwks } from "../client-jwks";
 import { getClientDiscoveries } from "../extensions";
 import { PUSHED_AUTHORIZATION_REQUEST_PATH } from "../par";
 import type {
+	ClientDiscovery,
 	ClientMetadataResourceFetch,
 	OAuthOptions,
 	SchemaClient,
 	Scope,
 } from "../types";
 import { challengeHeaders, getAuthEndpointUrl, getClient } from "./index";
+import {
+	isLocalCapacityRefusal,
+	isTransientAbort,
+	isTransientHttpStatus,
+	isTransientNetworkError,
+} from "./transient-fetch-failure";
 
-type JwksCache = Map<string, { jwks: JSONWebKeySet; fetchedAt: number }>;
 type FetchedJwksResult =
 	| { valid: true; jwks: JSONWebKeySet }
 	| { valid: false };
+type JwksCacheEntry = {
+	jwks: JSONWebKeySet;
+	fetchedAt: number;
+	sequence: number;
+};
+type JwksFetch = {
+	promise: Promise<FetchedJwksResult>;
+	startedAt: number;
+	/** Start order of this fetch; finer than `startedAt`, which ties within a millisecond. */
+	sequence: number;
+};
+/** How the last failed fetch of a `jwks_uri` failed, since its last success. */
+type JwksFetchFailure =
+	| { transient: true; failedAt: number; reason: string }
+	| { transient: false };
+type JwksCache = {
+	/** Last valid key set per `jwks_uri`. */
+	sets: Map<string, JwksCacheEntry>;
+	/** Fetch in flight per `jwks_uri`, kept apart so failures never evict a set. */
+	fetches: Map<string, JwksFetch>;
+	/** Evicting a terminal failure also evicts its key set. */
+	failures: Map<string, JwksFetchFailure & { sequence: number }>;
+	/** Sequence the next fetch takes. */
+	nextSequence: number;
+};
 
 // Provider-scoped JWKS URI caches with 5-minute TTL and bounded size.
 const jwksCaches = new WeakMap<OAuthOptions<Scope[]>, JwksCache>();
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
 const JWKS_CACHE_MAX_ENTRIES = 500;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
+// A transport that honors the abort settles the fetch before this backstop, so
+// its classification of the timeout wins. The backstop settles one that ignores
+// the signal.
+const JWKS_FETCH_SETTLE_DEADLINE_MS = JWKS_FETCH_TIMEOUT_MS + 1_000;
 const MAX_JWKS_RESPONSE_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
+const MAX_JWKS_STALE_IF_ERROR_SECONDS = 24 * 60 * 60;
+const JWKS_STALE_REFETCH_INTERVAL_MS = 60_000;
+const JWKS_STALE_REFUSAL_WINDOW_MS = 5 * 60_000;
 
-function setJwksCache(
-	jwksCache: JwksCache,
-	cacheKey: string,
-	jwks: JSONWebKeySet,
-	fetchedAt: number,
-) {
-	jwksCache.set(cacheKey, { jwks, fetchedAt });
-	if (jwksCache.size > JWKS_CACHE_MAX_ENTRIES) {
-		// Evict oldest entry (Map iterates in insertion order)
-		const oldest = jwksCache.keys().next().value;
-		if (oldest !== undefined) jwksCache.delete(oldest);
+const transientJwksFetchFailures = new WeakSet<Error>();
+
+function createTransientJwksFetchFailure(
+	message: string,
+	cause?: unknown,
+): Error {
+	const failure = new Error(message, { cause });
+	transientJwksFetchFailures.add(failure);
+	return failure;
+}
+
+function isTransientJwksFetchFailure(error: unknown): error is Error {
+	return error instanceof Error && transientJwksFetchFailures.has(error);
+}
+
+// Without an error code, a failed connection and a refused address look the
+// same, so these are neither transient nor terminal.
+const jwksTransportErrors = new WeakSet<Error>();
+
+function isJwksTransportError(error: unknown): boolean {
+	return error instanceof Error && jwksTransportErrors.has(error);
+}
+
+function createJwksTransportError(message: string, cause?: unknown): Error {
+	const failure = new Error(message, { cause });
+	jwksTransportErrors.add(failure);
+	return failure;
+}
+
+function classifyJwksTransportError(
+	error: unknown,
+	signal: AbortSignal,
+): unknown {
+	const reason = error instanceof Error ? error.message : String(error);
+	if (isTransientAbort(error, signal) || isTransientNetworkError(error)) {
+		return createTransientJwksFetchFailure(
+			`JWKS fetch failed: ${reason}`,
+			error,
+		);
 	}
+	if (isLocalCapacityRefusal(error)) return error;
+	return createJwksTransportError(`JWKS fetch failed: ${reason}`, error);
 }
 
 function getJwksCache(opts: OAuthOptions<Scope[]>): JwksCache {
-	const existingCache = jwksCaches.get(opts);
-	if (existingCache) return existingCache;
-	const cache: JwksCache = new Map();
-	jwksCaches.set(opts, cache);
+	let cache = jwksCaches.get(opts);
+	if (!cache) {
+		cache = {
+			sets: new Map(),
+			fetches: new Map(),
+			failures: new Map(),
+			nextSequence: 0,
+		};
+		jwksCaches.set(opts, cache);
+	}
 	return cache;
+}
+
+// Map iterates in insertion order, so re-inserting an entry on each read and
+// write keeps the least recently used key set first in line for eviction.
+function readJwksCache(
+	cache: JwksCache,
+	cacheKey: string,
+): JwksCacheEntry | undefined {
+	const entry = cache.sets.get(cacheKey);
+	if (!entry) return undefined;
+	cache.sets.delete(cacheKey);
+	cache.sets.set(cacheKey, entry);
+	return entry;
+}
+
+function getJwksStaleIfErrorMs(discovery: ClientDiscovery | undefined): number {
+	const seconds = discovery?.jwksStaleIfError;
+	if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0) {
+		return 0;
+	}
+	return Math.min(seconds, MAX_JWKS_STALE_IF_ERROR_SECONDS) * 1000;
+}
+
+function toJwksFetchFailure(
+	error: unknown,
+): JwksFetchFailure | "transport-error" | null {
+	if (isLocalCapacityRefusal(error)) return null;
+	if (isJwksTransportError(error)) return "transport-error";
+	return isTransientJwksFetchFailure(error)
+		? { transient: true, failedAt: Date.now(), reason: error.message }
+		: { transient: false };
+}
+
+function recordJwksFetchFailure(
+	cache: JwksCache,
+	cacheKey: string,
+	failure: JwksFetchFailure | "transport-error" | null,
+	sequence: number,
+): void {
+	if (!failure) return;
+	// A fetch that started before the cached set's fetch says nothing about it.
+	const cached = cache.sets.get(cacheKey);
+	if (cached && cached.sequence > sequence) return;
+	const terminal = failure !== "transport-error" && !failure.transient;
+	if (!terminal && cache.failures.get(cacheKey)?.transient === false) return;
+	cache.failures.delete(cacheKey);
+	if (failure === "transport-error") return;
+	cache.failures.set(cacheKey, { ...failure, sequence });
+	if (cache.failures.size > JWKS_CACHE_MAX_ENTRIES) {
+		const oldest = cache.failures.keys().next().value;
+		if (oldest !== undefined) {
+			if (cache.failures.get(oldest)?.transient === false) {
+				cache.sets.delete(oldest);
+			}
+			cache.failures.delete(oldest);
+		}
+	}
+}
+
+function setJwksCache(
+	cache: JwksCache,
+	cacheKey: string,
+	jwks: JSONWebKeySet,
+	fetchedAt: number,
+	sequence: number,
+): JSONWebKeySet {
+	const current = cache.sets.get(cacheKey);
+	if (current && current.sequence > sequence) return current.jwks;
+	cache.sets.delete(cacheKey);
+	cache.sets.set(cacheKey, { jwks, fetchedAt, sequence });
+	if (cache.sets.size > JWKS_CACHE_MAX_ENTRIES) {
+		const leastRecentlyUsed = cache.sets.keys().next().value;
+		if (leastRecentlyUsed !== undefined) cache.sets.delete(leastRecentlyUsed);
+	}
+	return jwks;
+}
+
+// A fetch older than its own timeout is dead: some runtimes cancel a
+// request's I/O when that request ends, so its promise may never settle.
+function isFetching(fetch: JwksFetch | undefined, now: number): boolean {
+	return fetch !== undefined && now - fetch.startedAt < JWKS_FETCH_TIMEOUT_MS;
+}
+
+/**
+ * Loads a key set, sharing one request per `jwks_uri` between callers. A
+ * caller joins a fetch in flight only when `canJoin` accepts it, so a request
+ * can require a fetch that started after it did. Each caller bounds its own
+ * wait, since the request that started a fetch may end before it settles.
+ * A caller whose joined fetch throws or returns an invalid key set makes one
+ * fetch of its own, as it would without sharing, so a failure that is not its
+ * own does not fail it.
+ */
+async function loadJwks(
+	cache: JwksCache,
+	cacheKey: string,
+	jwksUri: string,
+	fetchClientMetadataResource: ClientMetadataResourceFetch | undefined,
+	{
+		canJoin = () => true,
+		recordsFailures = false,
+	}: {
+		canJoin?: (fetch: JwksFetch) => boolean;
+		recordsFailures?: boolean;
+	} = {},
+): Promise<FetchedJwksResult> {
+	const start = (joinable: (fetch: JwksFetch) => boolean) => {
+		const now = Date.now();
+		// On runtimes that cancel a request's I/O, a fetch past its timeout may
+		// never settle and run its own cleanup, so its entry is dropped here.
+		for (const [key, fetch] of cache.fetches) {
+			if (!isFetching(fetch, now)) cache.fetches.delete(key);
+		}
+		const current = cache.fetches.get(cacheKey);
+		if (current && isFetching(current, now) && joinable(current)) {
+			return { fetch: current, joined: true };
+		}
+		const startedAt = Date.now();
+		const sequence = cache.nextSequence++;
+		const fetch: JwksFetch = {
+			startedAt,
+			sequence,
+			promise: fetchJwksFromUri(jwksUri, fetchClientMetadataResource)
+				.then((result): FetchedJwksResult => {
+					if (!result.valid) return result;
+					// A fetch that started before the failed fetch cannot clear its failure.
+					const failure = cache.failures.get(cacheKey);
+					if (!failure || sequence > failure.sequence) {
+						cache.failures.delete(cacheKey);
+					}
+					// A newer fetch may have stored its set while this one ran; answer
+					// with that one rather than the older set.
+					return {
+						valid: true,
+						jwks: setJwksCache(
+							cache,
+							cacheKey,
+							result.jwks,
+							startedAt,
+							sequence,
+						),
+					};
+				})
+				.finally(() => {
+					if (cache.fetches.get(cacheKey) === fetch) {
+						cache.fetches.delete(cacheKey);
+					}
+				}),
+		};
+		cache.fetches.set(cacheKey, fetch);
+		return { fetch, joined: false };
+	};
+	const settle = async (fetch: JwksFetch): Promise<FetchedJwksResult> => {
+		let timeout: ReturnType<typeof setTimeout> | undefined;
+		try {
+			return await Promise.race([
+				fetch.promise,
+				new Promise<never>((_, reject) => {
+					timeout = setTimeout(
+						() => reject(createJwksTransportError("JWKS fetch timed out")),
+						Math.max(
+							0,
+							fetch.startedAt + JWKS_FETCH_SETTLE_DEADLINE_MS - Date.now(),
+						),
+					);
+				}),
+			]);
+		} finally {
+			clearTimeout(timeout);
+			if (
+				cache.fetches.get(cacheKey) === fetch &&
+				!isFetching(fetch, Date.now())
+			) {
+				cache.fetches.delete(cacheKey);
+			}
+		}
+	};
+
+	const answer = async (fetch: JwksFetch): Promise<FetchedJwksResult> => {
+		if (!recordsFailures) return settle(fetch);
+		try {
+			const result = await settle(fetch);
+			if (!result.valid) {
+				recordJwksFetchFailure(
+					cache,
+					cacheKey,
+					{ transient: false },
+					fetch.sequence,
+				);
+			}
+			return result;
+		} catch (error) {
+			recordJwksFetchFailure(
+				cache,
+				cacheKey,
+				toJwksFetchFailure(error),
+				fetch.sequence,
+			);
+			throw error;
+		}
+	};
+
+	const first = start(canJoin);
+	if (!first.joined) return answer(first.fetch);
+	try {
+		const result = await settle(first.fetch);
+		if (result.valid) return result;
+	} catch {}
+	return answer(
+		start((fetch) => fetch !== first.fetch && canJoin(fetch)).fetch,
+	);
 }
 
 function getJwksCacheKey(client: SchemaClient<Scope[]>): string {
@@ -96,11 +380,34 @@ export function isPrivateHostname(hostname: string): boolean {
 	return !isPublicRoutableHost(hostname);
 }
 
-function validateJwksUri(
+/**
+ * Asks the discovery that owns a client whether its `jwks_uri` may use an
+ * origin the default rule rejects. Only a resolved `true` allows it; a throw
+ * or rejection is logged and denies.
+ */
+export async function isCrossOriginJwksUriAllowedByDiscovery(
+	ctx: GenericEndpointContext,
+	discovery: ClientDiscovery | undefined,
+	input: { clientId: string; jwksUri: string },
+): Promise<boolean> {
+	if (!discovery?.isCrossOriginJwksUriAllowed) return false;
+	try {
+		return (await discovery.isCrossOriginJwksUriAllowed(input, ctx)) === true;
+	} catch (error) {
+		ctx.context.logger.error(
+			`oauth-provider: client discovery "${discovery.id}" isCrossOriginJwksUriAllowed failed`,
+			error,
+		);
+		return false;
+	}
+}
+
+async function validateJwksUri(
 	ctx: GenericEndpointContext,
 	jwksUri: string,
-	clientIdUrlOrigin?: string,
-): void {
+	client: SchemaClient<Scope[]>,
+	discovery: ClientDiscovery | undefined,
+): Promise<void> {
 	const parsed = new URL(jwksUri);
 	if (parsed.protocol !== "https:") {
 		throw new APIError("BAD_REQUEST", {
@@ -131,15 +438,28 @@ function validateJwksUri(
 	// Trust a jwks_uri that shares origin with a URL-format client_id: the
 	// discovery that installed the client has already verified the
 	// client_id URL, and same-origin jwks_uri is part of that verification.
+	const clientIdUrlOrigin = client.clientDiscoveryId
+		? urlClientIdOrigin(client.clientId)
+		: undefined;
 	if (clientIdUrlOrigin && parsed.origin === clientIdUrlOrigin) {
 		return;
 	}
-	if (!ctx.context.isTrustedOrigin(parsed.href)) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client jwks_uri is not trusted",
-			error: "invalid_client",
-		});
+	if (ctx.context.isTrustedOrigin(parsed.href)) {
+		return;
 	}
+	if (
+		client.clientDiscoveryId &&
+		(await isCrossOriginJwksUriAllowedByDiscovery(ctx, discovery, {
+			clientId: client.clientId,
+			jwksUri,
+		}))
+	) {
+		return;
+	}
+	throw new APIError("BAD_REQUEST", {
+		error_description: "client jwks_uri is not trusted",
+		error: "invalid_client",
+	});
 }
 
 function urlClientIdOrigin(clientId: string): string | undefined {
@@ -154,7 +474,10 @@ function urlClientIdOrigin(clientId: string): string | undefined {
 	}
 }
 
-async function readBoundedResponseBody(response: Response): Promise<string> {
+/** Resolves to `null` when the body exceeds 64 KiB. */
+async function readBoundedResponseBody(
+	response: Response,
+): Promise<string | null> {
 	const contentLength = response.headers.get("content-length");
 	if (
 		contentLength !== null &&
@@ -162,7 +485,7 @@ async function readBoundedResponseBody(response: Response): Promise<string> {
 		Number(contentLength) > MAX_JWKS_RESPONSE_BYTES
 	) {
 		await response.body?.cancel();
-		throw new Error("JWKS response exceeds 64 KiB");
+		return null;
 	}
 
 	if (!response.body) {
@@ -178,7 +501,7 @@ async function readBoundedResponseBody(response: Response): Promise<string> {
 		totalBytes += value.byteLength;
 		if (totalBytes > MAX_JWKS_RESPONSE_BYTES) {
 			await reader.cancel();
-			throw new Error("JWKS response exceeds 64 KiB");
+			return null;
 		}
 		chunks.push(value);
 	}
@@ -199,13 +522,24 @@ async function fetchJwksFromUri(
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), JWKS_FETCH_TIMEOUT_MS);
 	try {
-		const response = await fetchClientMetadataResource(jwksUri, {
-			signal: controller.signal,
-			headers: { accept: "application/json" },
-			redirect: "error",
-		});
+		let response: Response;
+		try {
+			response = await fetchClientMetadataResource(jwksUri, {
+				signal: controller.signal,
+				headers: { accept: "application/json" },
+				// Not "error": Workers rejects it. The status check refuses 3xx and opaque redirects.
+				redirect: "manual",
+			});
+		} catch (error) {
+			throw classifyJwksTransportError(error, controller.signal);
+		}
 		if (response.redirected) {
 			throw new Error("JWKS fetch redirected");
+		}
+		if (isTransientHttpStatus(response.status)) {
+			throw createTransientJwksFetchFailure(
+				`JWKS fetch returned ${response.status}`,
+			);
 		}
 		if (response.status !== 200) {
 			throw new Error(`JWKS fetch returned ${response.status}`);
@@ -214,7 +548,18 @@ async function fetchJwksFromUri(
 		if (!contentType || !JSON_CONTENT_TYPE.test(contentType)) {
 			throw new Error("JWKS response must use a JSON media type");
 		}
-		const responseBody = await readBoundedResponseBody(response);
+		let responseBody: string | null;
+		try {
+			responseBody = await readBoundedResponseBody(response);
+		} catch (error) {
+			// The host answered, so a timeout while reading the body is transient.
+			throw controller.signal.aborted
+				? createTransientJwksFetchFailure("JWKS fetch timed out", error)
+				: classifyJwksTransportError(error, controller.signal);
+		}
+		if (responseBody === null) {
+			throw new Error("JWKS response exceeds 64 KiB");
+		}
 		let parsedBody: unknown;
 		try {
 			parsedBody = JSON.parse(responseBody);
@@ -228,6 +573,9 @@ async function fetchJwksFromUri(
 		return { valid: true, jwks: result.jwks };
 	} finally {
 		clearTimeout(timeout);
+		// A refused response may still be streaming; aborting lets the transport
+		// release its connection instead of holding it until the server closes it.
+		controller.abort();
 	}
 }
 
@@ -266,48 +614,87 @@ async function fetchClientJwks(
 			error: "invalid_client",
 		});
 	}
-	validateJwksUri(
-		ctx,
-		client.jwksUri,
-		client.clientDiscoveryId ? urlClientIdOrigin(client.clientId) : undefined,
-	);
+	await validateJwksUri(ctx, client.jwksUri, client, discovery);
 
 	const now = Date.now();
 	const cacheKey = getJwksCacheKey(client);
-	const jwksCache = getJwksCache(opts);
-	const cached = jwksCache.get(cacheKey);
+	const cache = getJwksCache(opts);
+	const cached = readJwksCache(cache, cacheKey);
 	if (cached && now - cached.fetchedAt < JWKS_CACHE_TTL_MS) {
 		return cached.jwks;
 	}
 
+	// Return stale cache on transient failures, but only within a grace period.
+	// After 2x the TTL, stale keys are no longer trusted (prevents accepting
+	// revoked keys indefinitely when the JWKS endpoint is down) unless the
+	// discovery's `jwksStaleIfError` still covers them.
+	const staleLimitMs = JWKS_CACHE_TTL_MS * 2;
+	const staleIfErrorMs = getJwksStaleIfErrorMs(discovery);
+	const serveStaleKeys = (keys: JwksCacheEntry, reason: string) => {
+		ctx.context.logger.warn(
+			`oauth-provider is verifying client ${client.clientId} with cached keys from ${client.jwksUri} because refreshing them failed: ${reason}`,
+		);
+		return keys.jwks;
+	};
+	const lastFailure = cache.failures.get(cacheKey);
+	if (
+		cached &&
+		lastFailure?.transient &&
+		now - cached.fetchedAt >= staleLimitMs &&
+		now - cached.fetchedAt <= staleIfErrorMs &&
+		now - lastFailure.failedAt < JWKS_STALE_REFETCH_INTERVAL_MS
+	) {
+		return serveStaleKeys(cached, lastFailure.reason);
+	}
+
 	let result: FetchedJwksResult;
 	try {
-		result = await fetchJwksFromUri(
+		result = await loadJwks(
+			cache,
+			cacheKey,
 			client.jwksUri,
 			discovery?.fetchClientMetadataResource,
+			{ recordsFailures: staleIfErrorMs > 0 },
 		);
-	} catch {
-		// Return stale cache on transient failures, but only within a grace period.
-		// After 2x the TTL, stale keys are no longer trusted (prevents accepting
-		// revoked keys indefinitely when the JWKS endpoint is down).
-		const staleLimitMs = JWKS_CACHE_TTL_MS * 2;
+	} catch (error) {
 		if (cached && now - cached.fetchedAt < staleLimitMs) {
 			return cached.jwks;
+		}
+		const failedAt = Date.now();
+		if (
+			cached &&
+			cache.failures.get(cacheKey)?.transient !== false &&
+			failedAt - cached.fetchedAt <= staleIfErrorMs
+		) {
+			if (isTransientJwksFetchFailure(error)) {
+				return serveStaleKeys(cached, error.message);
+			}
+			if (
+				isLocalCapacityRefusal(error) &&
+				lastFailure?.transient &&
+				failedAt - lastFailure.failedAt <= JWKS_STALE_REFUSAL_WINDOW_MS
+			) {
+				return serveStaleKeys(cached, lastFailure.reason);
+			}
 		}
 		throw createClientJwksFetchError();
 	}
 	if (!result.valid) throw createClientJwksFetchError();
-	setJwksCache(jwksCache, cacheKey, result.jwks, now);
 	return result.jwks;
 }
 
 /**
  * Refetch JWKS from jwks_uri when signature verification fails with cached keys.
  * Handles key rotation: the client may have published a new key that isn't in our cache yet.
+ *
+ * Only a fetch that started after the assertion arrived is shared, that is one
+ * whose sequence is at least `requestedSequence`. An earlier one may predate the
+ * key the assertion names, so it cannot answer for it.
  */
 async function refetchClientJwks(
 	opts: OAuthOptions<Scope[]>,
 	client: SchemaClient<Scope[]>,
+	requestedSequence: number,
 ): Promise<JSONWebKeySet | null> {
 	if (!client.jwksUri) return null;
 	const discovery = client.clientDiscoveryId
@@ -319,18 +706,17 @@ async function refetchClientJwks(
 		return null;
 	}
 	try {
-		const result = await fetchJwksFromUri(
-			client.jwksUri,
-			discovery?.fetchClientMetadataResource,
-		);
-		if (!result.valid) return null;
-		setJwksCache(
+		const result = await loadJwks(
 			getJwksCache(opts),
 			getJwksCacheKey(client),
-			result.jwks,
-			Date.now(),
+			client.jwksUri,
+			discovery?.fetchClientMetadataResource,
+			{
+				canJoin: (fetch) => fetch.sequence >= requestedSequence,
+				recordsFailures: getJwksStaleIfErrorMs(discovery) > 0,
+			},
 		);
-		return result.jwks;
+		return result.valid ? result.jwks : null;
 	} catch {
 		return null;
 	}
@@ -619,6 +1005,7 @@ export async function verifyClientAssertion(
 		assertClient?: (client: SchemaClient<Scope[]>) => void;
 	},
 ): Promise<{ clientId: string; client: SchemaClient<Scope[]> }> {
+	const requestedSequence = getJwksCache(opts).nextSequence;
 	if (clientAssertionType !== CLIENT_ASSERTION_TYPE) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "unsupported client_assertion_type",
@@ -725,7 +1112,11 @@ export async function verifyClientAssertion(
 			verifyErr instanceof Error &&
 			/no matching key|no applicable key/i.test(verifyErr.message);
 		if (isKeyError) {
-			const refreshed = await refetchClientJwks(opts, client);
+			const refreshed = await refetchClientJwks(
+				opts,
+				client,
+				requestedSequence,
+			);
 			if (refreshed) {
 				try {
 					({ payload } = await jwtVerify(

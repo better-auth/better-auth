@@ -1592,6 +1592,7 @@ describe("CIMD - RP-initiated logout for metadata document clients", async () =>
 		});
 		allowEndSession = false;
 		await authorize(clientId);
+		await authorize(clientId);
 		const readClient = async () => {
 			const stored = await storedClient(clientId);
 			if (!stored) throw new Error(`${clientId} was not stored`);
