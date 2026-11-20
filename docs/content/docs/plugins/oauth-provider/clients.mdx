@@ -471,7 +471,7 @@ oauthProvider({
 
 The provider also puts the organization in the access token as the [`reference_id` claim](/docs/plugins/oauth-provider/tokens#consent-reference-claim). A client can also name the organization in its authorization request, or your consent page can ask for it. See [Organization from the request or the consent page](/docs/plugins/oauth-provider/sign-in-flow#organization-from-the-request-or-the-consent-page).
 
-Deleting a consent removes only that organization's consent and does not revoke issued tokens. To add organization claims per client, see [Client-specific access token claims](/docs/plugins/oauth-provider/tokens#client-specific-access-token-claims).
+Deleting a consent removes only that organization's consent, and revokes only the tokens issued under it. See [Revoke tokens with a consent](/docs/plugins/oauth-provider/tokens#revoke-tokens-with-a-consent). To add organization claims per client, see [Client-specific access token claims](/docs/plugins/oauth-provider/tokens#client-specific-access-token-claims).
 
 ### An organization owns the client
 
