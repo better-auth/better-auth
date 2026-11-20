@@ -12,7 +12,7 @@ import {
 	decideDeviceCode,
 	deviceAuthorization,
 	findDeviceCodeByUserCode,
-	redeemDeviceCode,
+	prepareDeviceCodeRedemption,
 } from "better-auth/plugins/device-authorization";
 import * as z from "zod";
 import { extendOAuthProvider } from "./extensions";
@@ -121,10 +121,11 @@ async function exchangeOAuthDeviceCode(
 	});
 	const {
 		authorizationContext: { client, scopes },
-		claimedDeviceCode,
+		deviceCode: approvedDeviceCode,
 		redemptionContext: { resources, confirmation },
 		user,
-	} = await redeemDeviceCode<
+		claim,
+	} = await prepareDeviceCodeRedemption<
 		OAuthDeviceCodeFields,
 		ClientAuthorization,
 		{
@@ -222,14 +223,19 @@ async function exchangeOAuthDeviceCode(
 		scopes,
 		user,
 		resources,
-		referenceId: claimedDeviceCode.referenceId ?? undefined,
-		authTime: normalizeTimestampValue(claimedDeviceCode.authTime),
-		acr: claimedDeviceCode.acr ?? undefined,
-		amr: claimedDeviceCode.amr ?? undefined,
+		referenceId: approvedDeviceCode.referenceId ?? undefined,
+		authTime: normalizeTimestampValue(approvedDeviceCode.authTime),
+		acr: approvedDeviceCode.acr ?? undefined,
+		amr: approvedDeviceCode.amr ?? undefined,
 		// Seed refresh tokens with every approved resource, not the narrowed poll.
-		originalResources: claimedDeviceCode.resources ?? undefined,
+		originalResources: approvedDeviceCode.resources ?? undefined,
 		// Resolved before the claim: client-auth proof or the poll's DPoP proof.
 		confirmation,
+		grantRequest: approvedDeviceCode,
+		// The claim waits for `beforeTokenIssuance`, so a refusal keeps the code.
+		consumeCredential: async () => {
+			await claim();
+		},
 	});
 }
 

@@ -15,7 +15,8 @@ import type { ResolvedCibaOptions } from "./types";
 /**
  * Token-endpoint handler for the CIBA poll (CIBA §10.1, §11). Polling at the
  * fixed `interval`, expiry, and denial follow the device authorization grant;
- * an approved request is claimed once, atomically, before tokens are issued.
+ * an approved request is claimed once, atomically, after
+ * `beforeTokenIssuance` accepts and before tokens are stored.
  */
 export const createCibaGrantHandler =
 	(options: ResolvedCibaOptions): OAuthExtensionGrantHandler =>
@@ -151,24 +152,6 @@ export const createCibaGrantHandler =
 			resources,
 			confirmation,
 		});
-		const claimed = await adapter.consumeOne<CibaRequest>({
-			model: "cibaRequest",
-			where: [
-				...where,
-				{ field: "status", value: "approved" },
-				{ field: "expiresAt", operator: "gt", value: new Date() },
-			],
-		});
-		if (!claimed) {
-			if (request.expiresAt <= new Date()) {
-				oauthError(
-					"expired_token",
-					CIBA_ERROR_CODES.EXPIRED_AUTH_REQ_ID.message,
-				);
-			}
-			oauthError("invalid_grant", CIBA_ERROR_CODES.INVALID_AUTH_REQ_ID.message);
-		}
-
 		return provider.issueTokens({
 			client,
 			scopes,
@@ -178,14 +161,39 @@ export const createCibaGrantHandler =
 			originalResources: approvedResources.length
 				? approvedResources
 				: undefined,
-			referenceId: claimed.referenceId ?? undefined,
-			authTime: claimed.authTime ?? undefined,
-			acr: claimed.acr ?? undefined,
-			amr: claimed.amr ?? undefined,
+			referenceId: request.referenceId ?? undefined,
+			grantRequest: request,
+			authTime: request.authTime ?? undefined,
+			acr: request.acr ?? undefined,
+			amr: request.amr ?? undefined,
 			// A DPoP proof on this poll, or a sender-constraint proved at client
 			// authentication, binds the issued token.
 			confirmation: binding,
 			authorizationDetails,
 			act: actor,
+			// The claim waits for `beforeTokenIssuance`, so a refusal keeps the
+			// approved request for another poll.
+			consumeCredential: async () => {
+				const claimed = await adapter.consumeOne<CibaRequest>({
+					model: "cibaRequest",
+					where: [
+						...where,
+						{ field: "status", value: "approved" },
+						{ field: "expiresAt", operator: "gt", value: new Date() },
+					],
+				});
+				if (!claimed) {
+					if (request.expiresAt <= new Date()) {
+						oauthError(
+							"expired_token",
+							CIBA_ERROR_CODES.EXPIRED_AUTH_REQ_ID.message,
+						);
+					}
+					oauthError(
+						"invalid_grant",
+						CIBA_ERROR_CODES.INVALID_AUTH_REQ_ID.message,
+					);
+				}
+			},
 		});
 	};
