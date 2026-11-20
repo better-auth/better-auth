@@ -1690,8 +1690,9 @@ function refreshTokenReplayWaitDeadline(
  * `REFRESH_TOKEN_REPLAY_MAX_WAIT_MS` elapses. The polls back off from 25 ms to
  * 400 ms, and the last delay stops at that deadline.
  *
- * Mismatched replay requests fail immediately. Coordination is through the
- * adapter so overlapping grants on different instances can still recover.
+ * The stored replay supplies the scopes and resources for comparison, so a
+ * mismatched request can also wait. Coordination is through the adapter so
+ * overlapping grants on different instances can still recover.
  */
 async function waitForRefreshTokenRotationReplay(
 	ctx: GenericEndpointContext,
