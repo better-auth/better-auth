@@ -140,6 +140,59 @@ describe("secret rotation keeps signed session cookies valid", () => {
 		expect(session?.user.email).toBe("cache-rotate@example.com");
 	});
 
+	it("re-signs compact cookie-cache with the current secret on read", async () => {
+		const db: Record<string, any[]> = {
+			user: [],
+			session: [],
+			account: [],
+			verification: [],
+		};
+		const make = (secrets: Array<{ version: number; value: string }>) =>
+			betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memoryAdapter(db),
+				emailAndPassword: { enabled: true },
+				secrets,
+				session: {
+					cookieCache: {
+						enabled: true,
+						strategy: "compact",
+						maxAge: 60 * 5,
+						refreshCache: false,
+					},
+				},
+			});
+
+		const signUp = await make([v1]).api.signUpEmail({
+			body: {
+				email: "cache-resign@example.com",
+				password: "password1234",
+				name: "CacheResign",
+			},
+			asResponse: true,
+		});
+		const oldCookies = cookieHeaderFromResponse(signUp);
+
+		const rotated = await make([v2, v1]).api.getSession({
+			headers: new Headers({ cookie: oldCookies }),
+			asResponse: true,
+		});
+		expect(rotated.status).toBe(200);
+		const setCookies = parseSetCookieHeader(
+			rotated.headers.get("set-cookie") || "",
+		);
+		expect(setCookies.get("better-auth.session_data")?.value).toBeTruthy();
+
+		// Drop the DB row so only the rewritten cookie cache can answer.
+		db.session.length = 0;
+		const afterDrop = await make([v2]).api.getSession({
+			headers: new Headers({
+				cookie: cookieHeaderFromResponse(rotated),
+			}),
+		});
+		expect(afterDrop?.user.email).toBe("cache-resign@example.com");
+	});
+
 	it("verifies jwt cookie-cache signed with a prior secret", async () => {
 		const db: Record<string, any[]> = {
 			user: [],

@@ -179,6 +179,11 @@ async function resignSignedCookieWithCurrentSecret(
 			break;
 		}
 	}
+	// multiSession stores archived sessions as `${sessionToken.name}_multi-*`
+	// with the same attributes as session_token; renew those too on rotation.
+	if (!attributes && key.startsWith(`${cookies.sessionToken.name}_multi-`)) {
+		attributes = { ...cookies.sessionToken.attributes };
+	}
 	if (!attributes) {
 		return;
 	}

@@ -279,16 +279,35 @@ export async function setCookieCache(
 export async function decodeCookieCache(
 	ctx: GenericEndpointContext,
 	value: string,
-): Promise<{ session: CookieCachePayload; expiresAt: number } | null> {
+): Promise<{
+	session: CookieCachePayload;
+	expiresAt: number;
+	/** True when the cache verified only under a prior secret and should be rewritten. */
+	needsResign: boolean;
+} | null> {
 	const strategy =
 		ctx.context.options.session?.cookieCache?.strategy || "compact";
 
 	if (strategy === "jwe") {
-		const decoded = await symmetricDecodeJWT<JWTPayload>(
-			value,
-			ctx.context.secretConfig,
-			"better-auth-session",
-		);
+		const secrets = getSecretValues(ctx.context.secretConfig);
+		const current = secrets[0];
+		let decoded: JWTPayload | null = null;
+		let needsResign = false;
+		if (current) {
+			decoded = await symmetricDecodeJWT<JWTPayload>(
+				value,
+				current,
+				"better-auth-session",
+			);
+		}
+		if (!decoded && secrets.length > 1) {
+			decoded = await symmetricDecodeJWT<JWTPayload>(
+				value,
+				ctx.context.secretConfig,
+				"better-auth-session",
+			);
+			needsResign = !!decoded;
+		}
 		const payload = parseCookieCachePayload(decoded);
 		if (!payload) {
 			return null;
@@ -296,6 +315,7 @@ export async function decodeCookieCache(
 		return {
 			session: payload,
 			expiresAt: decoded?.exp ? decoded.exp * 1000 : Date.now(),
+			needsResign,
 		};
 	}
 
@@ -309,14 +329,17 @@ export async function decodeCookieCache(
 			return {
 				session: verified.payload,
 				expiresAt: verified.expiresAt,
+				needsResign: false,
 			};
 		}
 
 		const secrets = getSecretValues(ctx.context.secretConfig);
 		let decoded: JWTPayload | null = null;
-		for (const secret of secrets) {
-			decoded = await verifySecretJWT<JWTPayload>(value, secret);
+		let needsResign = false;
+		for (let i = 0; i < secrets.length; i++) {
+			decoded = await verifySecretJWT<JWTPayload>(value, secrets[i]!);
 			if (decoded) {
+				needsResign = i > 0;
 				break;
 			}
 		}
@@ -327,6 +350,7 @@ export async function decodeCookieCache(
 		return {
 			session: payload,
 			expiresAt: decoded?.exp ? decoded.exp * 1000 : Date.now(),
+			needsResign,
 		};
 	}
 
@@ -344,9 +368,11 @@ export async function decodeCookieCache(
 		expiresAt: parsed.expiresAt,
 	});
 	let valid = false;
-	for (const secret of secrets) {
-		valid = await hmac.verify(secret, signedPayload, parsed.signature);
+	let needsResign = false;
+	for (let i = 0; i < secrets.length; i++) {
+		valid = await hmac.verify(secrets[i]!, signedPayload, parsed.signature);
 		if (valid) {
+			needsResign = i > 0;
 			break;
 		}
 	}
@@ -359,6 +385,7 @@ export async function decodeCookieCache(
 		? {
 				session: payload,
 				expiresAt: parsed.expiresAt,
+				needsResign,
 			}
 		: null;
 }
