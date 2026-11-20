@@ -1579,7 +1579,11 @@ async function handleOIDCCallback(
 			if (e instanceof DiscoveryError) {
 				return redirectOIDCError("invalid_provider", e.message);
 			}
-			throw e;
+			ctx.context.logger.error("Error fetching user info", e);
+			return redirectOIDCError(
+				"invalid_provider",
+				getOIDCErrorDescription(e, "userinfo_response_error"),
+			);
 		});
 		if (userInfoResponse.error) {
 			return redirectOIDCError(
