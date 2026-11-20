@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { isUniqueViolation } from "@better-auth/core/db/internal";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
 import * as z from "zod";
@@ -636,7 +637,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			// Use atomic verification to prevent race conditions
 			await atomicVerifyOTP(ctx, opts, toOTPIdentifier("sign-in", email), otp);
 
-			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			let user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				if (opts.disableSignUp) {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
@@ -646,27 +647,41 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					rest,
 					"create",
 				);
-				const newUser = await ctx.context.internalAdapter.createUser(
-					{
-						...additionalFields,
-						email,
-						emailVerified: true,
-						name: name || "",
-						image,
-					},
-					{ method: "email-otp" },
-				);
-				const session = await ctx.context.internalAdapter.createSession(
-					newUser.id,
-				);
-				await setSessionCookie(ctx, {
-					session,
-					user: newUser,
-				});
-				return ctx.json({
-					token: session.token,
-					user: parseUserOutput(ctx.context.options, newUser),
-				});
+				const { newUser, error } = await ctx.context.internalAdapter
+					.createUser(
+						{
+							...additionalFields,
+							email,
+							emailVerified: true,
+							name: name || "",
+							image,
+						},
+						{ method: "email-otp" },
+					)
+					.then(
+						(newUser) => ({ newUser, error: undefined }),
+						(error: unknown) => ({ newUser: undefined, error }),
+					);
+				if (newUser) {
+					const session = await ctx.context.internalAdapter.createSession(
+						newUser.id,
+					);
+					await setSessionCookie(ctx, {
+						session,
+						user: newUser,
+					});
+					return ctx.json({
+						token: session.token,
+						user: parseUserOutput(ctx.context.options, newUser),
+					});
+				}
+				// Another request created this user after the lookup above. Sign it
+				// in as an existing user, so an unverified row is promoted first.
+				if (!isUniqueViolation(error)) throw error;
+				user = await ctx.context.internalAdapter
+					.findUserByEmail(email)
+					.catch(() => null);
+				if (!user) throw error;
 			}
 
 			let verifiedUser = user.user;

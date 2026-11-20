@@ -3124,3 +3124,93 @@ describe("email-otp send origin/CSRF protection", async () => {
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12094
+ */
+describe("email-otp sign-in when another writer creates the user first", () => {
+	it("signs in the user created between the lookup and the insert", async () => {
+		const email = "created-concurrently@example.com";
+		let otp = "";
+		let competing = true;
+		let createCompetingUser = async () => {};
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP(data) {
+							otp = data.otp;
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							async before(user) {
+								if (!competing || user.email !== email) return;
+								competing = false;
+								// Stands in for a concurrent request that inserts the same
+								// email after this sign-in found no user.
+								await createCompetingUser();
+							},
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		createCompetingUser = async () => {
+			await auth.api.signUpEmail({
+				body: { email, name: "Competing", password: "competing-password" },
+			});
+		};
+		await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
+
+		const signIn = auth.api.signInEmailOTP({ body: { email, otp } });
+
+		await expect(signIn).resolves.toMatchObject({
+			token: expect.any(String),
+			user: { email, emailVerified: true },
+		});
+		const ctx = await auth.$context;
+		const existing = await ctx.internalAdapter.findUserByEmail(email, {
+			includeAccounts: true,
+		});
+		expect((await signIn).user.id).toBe(existing?.user.id);
+		// The competing row was never email-verified, so its password must not
+		// survive the proof of email ownership.
+		expect(existing?.accounts).toEqual([]);
+	});
+
+	it("reports a user.create.after hook failure instead of signing in", async () => {
+		const email = "after-hook-failure@example.com";
+		let otp = "";
+		const hookFailure = new Error("after hook failed");
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP(data) {
+							otp = data.otp;
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							async after() {
+								throw hookFailure;
+							},
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
+
+		await expect(
+			auth.api.signInEmailOTP({ body: { email, otp } }),
+		).rejects.toBe(hookFailure);
+	});
+});

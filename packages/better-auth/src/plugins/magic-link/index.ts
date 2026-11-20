@@ -4,6 +4,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { isUniqueViolation } from "@better-auth/core/db/internal";
 import * as z from "zod";
 import { formCsrfMiddleware, originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -422,30 +423,40 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 					if (!user) {
 						if (!opts.disableSignUp) {
-							let newUser: Awaited<
-								ReturnType<typeof ctx.context.internalAdapter.createUser>
-							> | null;
-							try {
-								newUser = await ctx.context.internalAdapter.createUser(
+							const { newUser, error } = await ctx.context.internalAdapter
+								.createUser(
 									{
 										email: email,
 										emailVerified: true,
 										name: name || "",
 									},
 									{ method: "magic-link" },
+								)
+								.then(
+									(newUser) => ({ newUser, error: undefined }),
+									(error: unknown) => ({ newUser: undefined, error }),
 								);
-							} catch (e) {
+							if (error) {
 								// Browser flow: forward a gate rejection's code to the error
 								// URL instead of surfacing a raw API error.
-								if (isAPIError(e) && e.body?.code) {
-									redirectWithError(e.body.code, e.body.message);
+								if (isAPIError(error) && error.body?.code) {
+									redirectWithError(error.body.code, error.body.message);
 								}
-								throw e;
-							}
-							isNewUser = true;
-							user = newUser;
-							if (!user) {
-								redirectWithError("failed_to_create_user");
+								// Another request created this user after the lookup above.
+								// Sign it in as an existing user, so an unverified row is
+								// promoted first.
+								if (!isUniqueViolation(error)) throw error;
+								const existing = await ctx.context.internalAdapter
+									.findUserByEmail(email)
+									.catch(() => null);
+								if (!existing) throw error;
+								user = existing.user;
+							} else {
+								isNewUser = true;
+								user = newUser;
+								if (!user) {
+									redirectWithError("failed_to_create_user");
+								}
 							}
 						} else {
 							redirectWithError("new_user_signup_disabled");

@@ -1071,3 +1071,96 @@ describe("magic link with ObjectId primary keys", () => {
 		expect(result.user.emailVerified).toBe(true);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12094
+ */
+describe("magic link verify when another writer creates the user first", () => {
+	it("signs in the user created between the lookup and the insert", async () => {
+		const email = "created-concurrently@example.com";
+		let token = "";
+		let competing = true;
+		let createCompetingUser = async () => {};
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							token = data.token;
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							async before(user) {
+								if (!competing || user.email !== email) return;
+								competing = false;
+								// Stands in for a concurrent request that inserts the same
+								// email after this verification found no user.
+								await createCompetingUser();
+							},
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		createCompetingUser = async () => {
+			await auth.api.signUpEmail({
+				body: { email, name: "Competing", password: "competing-password" },
+			});
+		};
+		await auth.api.signInMagicLink({ body: { email }, headers: new Headers() });
+
+		const verify = auth.api.magicLinkVerify({
+			query: { token },
+			headers: new Headers(),
+		});
+
+		await expect(verify).resolves.toMatchObject({
+			token: expect.any(String),
+			user: { email, emailVerified: true },
+		});
+		const ctx = await auth.$context;
+		const existing = await ctx.internalAdapter.findUserByEmail(email, {
+			includeAccounts: true,
+		});
+		expect((await verify).user.id).toBe(existing?.user.id);
+		// The competing row was never email-verified, so its password must not
+		// survive the proof of email ownership.
+		expect(existing?.accounts).toEqual([]);
+	});
+
+	it("reports a user.create.after hook failure instead of signing in", async () => {
+		const email = "after-hook-failure@example.com";
+		let token = "";
+		const hookFailure = new Error("after hook failed");
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							token = data.token;
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							async after() {
+								throw hookFailure;
+							},
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		await auth.api.signInMagicLink({ body: { email }, headers: new Headers() });
+
+		await expect(
+			auth.api.magicLinkVerify({ query: { token }, headers: new Headers() }),
+		).rejects.toBe(hookFailure);
+	});
+});
