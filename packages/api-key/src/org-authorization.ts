@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import type { OrganizationOptions } from "better-auth/plugins/organization";
 import { API_KEY_ERROR_CODES as ERROR_CODES } from ".";
@@ -70,7 +71,9 @@ export async function checkOrgApiKeyPermission(
 	}
 
 	// Query the member table to check if user is a member of the organization
-	const member = await ctx.context.adapter.findOne<Member>({
+	const member = await (
+		await getCurrentAdapter(ctx.context.adapter)
+	).findOne<Member>({
 		model: "member",
 		where: [
 			{
