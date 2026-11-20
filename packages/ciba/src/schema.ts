@@ -110,6 +110,15 @@ export const schema = {
 				required: false,
 			},
 			/**
+			 * Set when the user approved on the consent page, which stored a
+			 * consent. Redeeming the request then needs that consent to still cover
+			 * it. `completeCibaRequest` stores no consent and leaves this unset.
+			 */
+			approvedViaConsent: {
+				type: "boolean",
+				required: false,
+			},
+			/**
 			 * Creation time of the approving session, or the time server-side
 			 * completion states, issued as `auth_time`.
 			 */
@@ -162,6 +171,7 @@ export interface CibaRequest {
 	encryptedClientNotificationToken?: string | null;
 	encryptedAuthReqId?: string | null;
 	referenceId?: string | null;
+	approvedViaConsent?: boolean | null;
 	authTime?: Date | null;
 	acr?: string | null;
 	amr?: string[] | null;

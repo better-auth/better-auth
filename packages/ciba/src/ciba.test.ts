@@ -15,6 +15,7 @@ import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CibaNotification, CibaOptions } from "./index";
 import { CIBA_GRANT_TYPE, ciba } from "./index";
+import type { CibaRequest } from "./schema";
 
 const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
 vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
@@ -1122,6 +1123,161 @@ describe("ciba server-side completion", () => {
 				},
 			}),
 		).rejects.toMatchObject({ body: { error: "invalid_request" } });
+	});
+});
+
+/**
+ * A request the user approves from the link follows the consent that approval
+ * stored, as an approved device code does. `completeCibaRequest` stores no
+ * consent, so its approvals are not checked.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11318
+ */
+describe("ciba approvals follow their consent", () => {
+	async function findStoredConsent(client: OAuthClient) {
+		const session = await auth.api.getSession({ headers });
+		const ctx = await auth.$context;
+		return ctx.adapter.findOne<{ id: string }>({
+			model: "oauthConsent",
+			where: [
+				{ field: "clientId", value: client.client_id },
+				{ field: "userId", value: session!.user.id },
+			],
+		});
+	}
+
+	async function deleteStoredConsent(client: OAuthClient) {
+		const consent = await findStoredConsent(client);
+		expect(consent?.id).toBeTruthy();
+		await auth.api.deleteOAuthConsent({ headers, body: { id: consent!.id } });
+	}
+
+	async function findStoredRequest(authReqId: string) {
+		const ctx = await auth.$context;
+		return ctx.adapter.findOne<CibaRequest>({
+			model: "cibaRequest",
+			where: [{ field: "authReqId", value: await hashAuthReqId(authReqId) }],
+		});
+	}
+
+	it("rejects a link approval after the user deletes the consent, and keeps the request", async () => {
+		const client = await createClient(POLL);
+		const { authReqId, url } = await start({}, client);
+		await approve(url);
+		expect((await findStoredRequest(authReqId))?.approvedViaConsent).toBe(true);
+		await deleteStoredConsent(client);
+
+		const refused = await poll(authReqId, client);
+		expect(refused).toMatchObject({
+			status: 400,
+			body: { error: "invalid_grant", error_description: "consent revoked" },
+		});
+		expect((await findStoredRequest(authReqId))?.status).toBe("approved");
+	});
+
+	it("rejects a link approval after the user narrows the consent below it", async () => {
+		const client = await createClient(POLL);
+		const { authReqId, url } = await start({ scope: "openid profile" }, client);
+		await approve(url);
+		const consent = await findStoredConsent(client);
+		await auth.api.updateOAuthConsent({
+			headers,
+			body: { id: consent!.id, update: { scopes: ["openid"] } },
+		});
+
+		expect(await poll(authReqId, client)).toMatchObject({
+			status: 400,
+			body: {
+				error: "invalid_grant",
+				error_description: "consent no longer covers this authorization",
+			},
+		});
+		expect((await findStoredRequest(authReqId))?.status).toBe("approved");
+	});
+
+	it("redeems both link approvals when a narrower approval follows a wider one", async () => {
+		const client = await createClient(POLL);
+		const wide = await start({ scope: "openid profile" }, client);
+		await approve(wide.url);
+		const narrow = await start({ scope: "openid" }, client);
+		await approve(narrow.url);
+
+		const wideIssued = await poll(wide.authReqId, client);
+		expect(wideIssued.status).toBe(200);
+		expect(wideIssued.body.scope).toBe("openid profile");
+		const narrowIssued = await poll(narrow.authReqId, client);
+		expect(narrowIssued.status).toBe(200);
+		expect(narrowIssued.body.scope).toBe("openid");
+	});
+
+	it("rejects an earlier link approval once a later approval declines a scope it needs, and keeps the request", async () => {
+		const client = await createClient(POLL);
+		const first = await start({ scope: "openid profile" }, client);
+		await approve(first.url);
+		const second = await start({ scope: "openid profile" }, client);
+		const consent = await openLink(second.url);
+		await answerConsent(consent, true, headers, "openid");
+
+		expect(await poll(first.authReqId, client)).toMatchObject({
+			status: 400,
+			body: {
+				error: "invalid_grant",
+				error_description: "consent no longer covers this authorization",
+			},
+		});
+		expect((await findStoredRequest(first.authReqId))?.status).toBe("approved");
+		const issued = await poll(second.authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.scope).toBe("openid");
+	});
+
+	it("redeems a link approval after another request gives the consent again", async () => {
+		const client = await createClient(POLL);
+		const first = await start({}, client);
+		await approve(first.url);
+		await deleteStoredConsent(client);
+		expect((await poll(first.authReqId, client)).body.error_description).toBe(
+			"consent revoked",
+		);
+
+		const second = await start({}, client);
+		await approve(second.url);
+		const issued = await poll(first.authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.access_token).toEqual(expect.any(String));
+	});
+
+	it("redeems a request approved with completeCibaRequest after the user deletes the consent", async () => {
+		const client = await createClient(POLL);
+		const linked = await start({}, client);
+		await approve(linked.url);
+		const { authReqId } = await start({}, client);
+		const { requestId, user } = lastNotification!;
+		await auth.api.completeCibaRequest({
+			body: { requestId, userId: user.id, decision: "approved" },
+		});
+		expect(
+			(await findStoredRequest(authReqId))?.approvedViaConsent,
+		).toBeFalsy();
+		await deleteStoredConsent(client);
+
+		const issued = await poll(authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.access_token).toEqual(expect.any(String));
+		expect((await poll(linked.authReqId, client)).body.error_description).toBe(
+			"consent revoked",
+		);
+	});
+
+	it("does not check a link approval of a client that skips consent", async () => {
+		const client = await createClient(POLL, { skip_consent: true });
+		const { authReqId, url } = await start({}, client);
+		await approve(url);
+		await deleteStoredConsent(client);
+
+		const issued = await poll(authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.access_token).toEqual(expect.any(String));
 	});
 });
 
