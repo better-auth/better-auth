@@ -765,6 +765,43 @@ describe("secondary storage - bulk revocation when cache writes fail", () => {
 			expect(revoked.error?.status).toBe(500);
 		},
 	);
+
+	it("runs the user delete.after hooks when the cache eviction fails", async () => {
+		const store = new Map<string, string>();
+		const storage = createStringSecondaryStorage(store);
+		let rejectWrites = false;
+		const deletedUsers: string[] = [];
+		const { auth, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: {
+				...storage,
+				set(key, value, ttl) {
+					if (rejectWrites) throw new Error("READONLY replica");
+					return storage.set(key, value, ttl);
+				},
+				delete(key) {
+					if (rejectWrites) throw new Error("READONLY replica");
+					return storage.delete(key);
+				},
+			},
+			databaseHooks: {
+				user: {
+					delete: {
+						async after(user) {
+							deletedUsers.push(user.id);
+						},
+					},
+				},
+			},
+		});
+		const { user } = await signInWithTestUser();
+		const { internalAdapter } = await auth.$context;
+
+		rejectWrites = true;
+		await expect(internalAdapter.deleteUser(user.id)).rejects.toThrow(
+			"READONLY replica",
+		);
+		expect(deletedUsers).toEqual([user.id]);
+	});
 });
 
 /**

@@ -115,7 +115,8 @@ export const runWithAdapter = async <
  * path goes to `onAfterCommitHookError`, or is logged when none is given.
  *
  * Otherwise, without `onAfterCommitHookError`, the first hook failure is
- * rethrown and later hooks are skipped, except those queued with `onError`.
+ * rethrown once the queue ends. A failed hook without `onError` skips the later
+ * hooks that have none.
  */
 export const runWithTransaction = async <
 	R,
@@ -163,14 +164,16 @@ export const runWithTransaction = async <
 			}
 			const runPendingHooks = async (unhandledErrors: "throw" | "log") => {
 				const failures: unknown[] = [];
+				let skipUnhandled = false;
 				for (const { run, handled } of pendingHooks) {
-					if (failures.length && !handled) continue;
+					if (skipUnhandled && !handled) continue;
 					try {
 						await run();
 					} catch (hookError) {
 						if (!options?.onAfterCommitHookError) {
 							if (unhandledErrors === "throw") {
 								failures.push(hookError);
+								skipUnhandled ||= !handled;
 								continue;
 							}
 							try {
