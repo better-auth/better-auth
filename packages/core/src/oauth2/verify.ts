@@ -532,7 +532,10 @@ async function getJwksForVerification(
 		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
 	} catch (error) {
 		const failedAt = Date.now();
-		entry.refetchedAt = failedAt;
+		// A set fetched after this attempt is not cooled by its failure.
+		if (entry.fetchedAt < now) {
+			entry.refetchedAt = failedAt;
+		}
 		// An earlier fetch that outlived its wait can land while this one fails.
 		// Its set replaces the one read above, which may still hold a key the
 		// issuer has since dropped, so the entry is read again and each set is

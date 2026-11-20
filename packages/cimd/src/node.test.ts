@@ -347,7 +347,10 @@ describe("Node CIMD metadata transport", () => {
 						consentPage: "/consent",
 						scopes: ["openid"],
 					}),
-					cimd({ fetchClientMetadataResource }),
+					cimd({
+						fetchClientMetadataResource,
+						metadataFetchPolicy: { minimumFetchInterval: "1m" },
+					}),
 				],
 			});
 			const { headers } = await signInWithTestUser();
