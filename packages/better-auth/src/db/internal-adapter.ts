@@ -257,11 +257,9 @@ export const createInternalAdapter = (
 		await queueAfterTransactionHook(
 			() => deleteCachedUserSessions(userId, references, revokedAt),
 			{
+				// Queued with onError so it runs after another hook fails, then rethrown.
 				onError(error) {
-					logger.error(
-						"Failed to delete committed user sessions from secondary storage",
-						error,
-					);
+					throw error;
 				},
 			},
 		);

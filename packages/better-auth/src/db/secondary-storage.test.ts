@@ -721,6 +721,53 @@ describe("secondary storage - session cached while the user read missed", () => 
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/issues/11326
+ */
+describe("secondary storage - bulk revocation when cache writes fail", () => {
+	it.each([
+		{ storeSessionInDatabase: false, preserveSessionInDatabase: false },
+		{ storeSessionInDatabase: true, preserveSessionInDatabase: false },
+		{ storeSessionInDatabase: true, preserveSessionInDatabase: true },
+	])(
+		"does not report success while the cached session stays usable (storeSessionInDatabase: $storeSessionInDatabase, preserveSessionInDatabase: $preserveSessionInDatabase)",
+		async ({ storeSessionInDatabase, preserveSessionInDatabase }) => {
+			const store = new Map<string, string>();
+			const storage = createStringSecondaryStorage(store);
+			let rejectWrites = false;
+			const { client, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: {
+					...storage,
+					set(key, value, ttl) {
+						if (rejectWrites) throw new Error("READONLY replica");
+						return storage.set(key, value, ttl);
+					},
+					delete(key) {
+						if (rejectWrites) throw new Error("READONLY replica");
+						return storage.delete(key);
+					},
+				},
+				session: { storeSessionInDatabase, preserveSessionInDatabase },
+				rateLimit: { enabled: false },
+			});
+			const { headers } = await signInWithTestUser();
+
+			rejectWrites = true;
+			const revoked = await client.revokeSessions({
+				fetchOptions: { headers },
+			});
+			const session = await client.getSession({
+				query: { disableCookieCache: true },
+				fetchOptions: { headers },
+			});
+
+			expect(session.data).not.toBeNull();
+			expect(revoked.data?.status).not.toBe(true);
+			expect(revoked.error?.status).toBe(500);
+		},
+	);
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-2vg6-77g8-24mp
  */
 describe("secondary storage - admin removeUser cleans up sessions", async () => {
