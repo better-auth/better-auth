@@ -281,6 +281,8 @@ To verify DPoP-bound tokens in your API, see [Protect your API](/docs/plugins/oa
 
 `better-auth/oauth2/dpop-client` signs proofs and handles nonces for a client app, such as a single-page app, a native app, a CLI, or an MCP client. It uses only the standard Web Crypto and Fetch APIs, which browsers, Node.js, Bun, Deno, and Cloudflare Workers provide, so it adds no server code to a client bundle. The same module is also available as `@better-auth/core/oauth2/dpop-client`.
 
+An app or SDK that is not a Better Auth server can depend on `@better-auth/core` alone and import that path. Package managers do not install the package's peer dependencies, such as `better-call` and `kysely`, because they are optional and the DPoP client uses none of them.
+
 Create a key pair once, then send token and API requests through `createDpopFetch`:
 
 ```ts title="dpop.ts"
@@ -322,6 +324,16 @@ On a redirect to another origin, `fetch` drops the `Authorization` header but st
 
 `generateDpopKeyPair` creates an ES256 key whose private half cannot be exported. Tokens issued for a key only work with that key, so keep the key pair for as long as you keep the tokens. In a browser, store the `CryptoKeyPair` in IndexedDB, which preserves a non-exportable key. To use another algorithm, pass a key pair from `crypto.subtle.generateKey` for one that Better Auth accepts by default: ECDSA P-256 (`ES256`) or P-521 (`ES512`), Ed25519 (`EdDSA`), or an RSA key with SHA-256 and either PKCS #1 v1.5 (`RS256`) or PSS (`PS256`) padding. Its public key must be exportable, which it is by default.
 
+To keep a key across restarts outside a browser, such as in a CLI or on a server, store the private key as a JWK in a secret store, and load it with `importDpopKeyPair`:
+
+```ts title="dpop-key.ts"
+import { importDpopKeyPair } from "better-auth/oauth2/dpop-client";
+
+const keyPair = await importDpopKeyPair(JSON.parse(process.env.DPOP_PRIVATE_JWK!));
+```
+
+The JWK is the private key. Anyone who has it and a token bound to it can use that token. Store it as a secret. It can be any key type listed above. An RSA JWK must also set `alg` to `RS256` or `PS256`, because the key alone does not say which padding to sign with. To create a JWK, generate an exportable key pair once with `crypto.subtle.generateKey`, then store the result of `crypto.subtle.exportKey("jwk", keyPair.privateKey)`. `importDpopKeyPair` imports the private key as non-exportable.
+
 To bind the authorization code to the key before the token request, send the key's thumbprint as `dpop_jkt` on the authorization request ([§10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)):
 
 ```ts
@@ -332,7 +344,7 @@ authorizationUrl.searchParams.set("dpop_jkt", await deriveDpopKeyJkt(keyPair));
 
 To send requests your own way, use the building blocks `createDpopFetch` uses:
 
-* `await createDpopProof({ keyPair, method, url, accessToken, nonce })` returns a proof for the `DPoP` header.
+* `await createDpopProof({ keyPair, method, url, accessToken, nonce })` returns a proof for the `DPoP` header. Its `htu` claim is `url` without the query and fragment, as [RFC 9449 §4.2](https://datatracker.ietf.org/doc/html/rfc9449#section-4.2) defines it. A fragment never reaches the server. A URL that has one, such as `location.href`, still gets a valid proof.
 * `await isDpopNonceChallenge(response)` tells whether a response asks for a retry with the nonce in its `DPoP-Nonce` header.
 * `createDpopNonceCache()` keeps the latest nonce for each origin. Pass your own `{ get, set }` object as `nonceCache` to keep nonces somewhere else, such as IndexedDB.
 

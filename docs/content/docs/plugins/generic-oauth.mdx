@@ -651,19 +651,17 @@ With `dpop` set, Better Auth:
 
 A provider can still return a `Bearer` token, for example when it does not support DPoP. Better Auth then uses it as a `Bearer` token. A custom `getToken` or `getUserInfo` replaces the request Better Auth would send, so it must send its own proofs.
 
-Tokens bound to a key only work with that key. Use one key pair that survives restarts and is the same on every server instance, and keep it for as long as stored tokens live. A key from `generateDpopKeyPair` lives only in memory. To load a stored key instead, import a private EC P-256 JWK from your secret store:
+Tokens bound to a key only work with that key. Use one key pair that survives restarts and is the same on every server instance, and keep it for as long as stored tokens live. A key from `generateDpopKeyPair` lives only in memory. To load a stored key instead, keep a private JWK in your secret store and import it with `importDpopKeyPair`:
 
 ```ts title="dpop-key.ts"
-export async function loadDpopKeyPair() {
-    const jwk = JSON.parse(process.env.DPOP_PRIVATE_JWK!);
-    const publicJwk = { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y };
-    const algorithm = { name: "ECDSA", namedCurve: "P-256" };
-    return {
-        privateKey: await crypto.subtle.importKey("jwk", jwk, algorithm, false, ["sign"]),
-        publicKey: await crypto.subtle.importKey("jwk", publicJwk, algorithm, true, ["verify"]),
-    };
+import { importDpopKeyPair } from "better-auth/oauth2/dpop-client";
+
+export function loadDpopKeyPair() {
+    return importDpopKeyPair(JSON.parse(process.env.DPOP_PRIVATE_JWK!));
 }
 ```
+
+Use a key whose algorithm the provider lists in its `dpop_signing_alg_values_supported` metadata. [Send DPoP requests from a client](/docs/plugins/oauth-provider/tokens#send-dpop-requests-from-a-client) lists the key types `importDpopKeyPair` accepts and how to create a JWK.
 
 To call the provider's APIs with a DPoP-bound access token from `getAccessToken`, send the request through `createDpopFetch` with the same key pair, and use the `DPoP` scheme:
 
