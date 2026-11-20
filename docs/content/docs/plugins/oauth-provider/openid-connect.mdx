@@ -339,7 +339,7 @@ await auth.api.adminCreateOAuthClient({
 
 * Recipients are found through the opaque access tokens and refresh tokens stored for the session. A client that holds only a JWT access token for it, such as after a `resource` request without `offline_access`, is not notified.
 * Logout Tokens carry `typ: logout+jwt`, always include `sid`, and live for 120 seconds. The JWT plugin signs them, so a client verifies them with your JWKS. Each [request](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest) has a 5 second timeout and is not retried.
-* When a session is deleted, Better Auth revokes the session's access tokens and its refresh tokens without `offline_access`, whether or not any client registered a `backchannel_logout_uri`. Introspection and UserInfo then reject those access tokens, but a resource server that verifies JWT access tokens locally keeps accepting them until they expire. An opaque access token issued by a refresh that runs while sign-out is in progress can also stay active until it expires, on databases that enforce the session foreign key. Refresh tokens with `offline_access` survive, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows. Tokens from the device authorization and [CIBA](/docs/plugins/ciba) grants have no associated session and survive sign-out.
+* When a session is deleted, Better Auth revokes the session's access tokens and its refresh tokens without `offline_access`, whether or not any client registered a `backchannel_logout_uri`. Introspection and UserInfo then reject those access tokens, but a resource server that verifies JWT access tokens locally keeps accepting them until they expire. An opaque access token issued by a refresh that runs while sign-out is in progress can also stay active until it expires, on databases that enforce the session foreign key. Refresh tokens with `offline_access` survive, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows. A [password reset](#password-reset) can revoke those refresh tokens too. Tokens from the device authorization and [CIBA](/docs/plugins/ciba) grants have no associated session and survive sign-out.
 * A new grant gets a refresh token only when it includes `offline_access`, and that token survives the end of the session. [RFC 10017 §6.3.2.3](https://www.rfc-editor.org/rfc/rfc10017.html#section-6.3.2.3) says authorization servers should link the lifetime of a refresh token to the user's authenticated session when the client is a browser-based app. The provider has no option that binds every refresh token to the session. A browser-based app whose tokens must end with the session has two choices. It can omit `offline_access`, which means it gets no refresh token and must authorize again when its access token expires. Or it can keep its tokens on a server that handles back-channel logout.
 * `backchannel_logout_uri` must be a public `https` URL with no credentials or fragment. Loopback, private, and metadata hosts are rejected with `invalid_client_metadata`. The check does not resolve DNS, so a public name that resolves to a private address passes. If untrusted parties can register clients on your server, block outbound requests from the auth server to private networks.
 * Clients registered through [CIMD](/docs/plugins/cimd) cannot use back-channel logout.
@@ -351,6 +351,18 @@ await auth.api.adminCreateOAuthClient({
 <Callout type="info">
   Delivery runs through `advanced.backgroundTasks.handler` when one is set, so a slow client cannot delay sign-out. Without a handler it runs before the sign-out response returns, so set one if you deploy to serverless runtimes.
 </Callout>
+
+## Password reset
+
+A password reset is recovery from a compromised credential, so Better Auth revokes every access and refresh token stored for the user, including `offline_access` grants that no session holds. A grant created during the compromise would otherwise outlive the reset.
+
+* It applies when [`emailAndPassword.revokeSessionsOnPasswordReset`](/docs/authentication/email-password#revoking-sessions-on-password-reset) is on and `revokeGrantsOnPasswordReset` is not `false`, for `/reset-password` and the reset endpoints of the [email OTP](/docs/plugins/email-otp) and [phone number](/docs/plugins/phone-number) plugins.
+* It runs from the reset itself, so it covers a user with no live session. A client that refreshes afterwards gets `400 invalid_grant` and must start a new authorization request.
+* JWT access tokens stay valid until they expire, or until the session they carry as `sid` ended, which the reset does. With [`revocableJwtAccessTokens`](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens), those of a grant that has a stored refresh token or opaque access token are revoked too. A JWT issued without a refresh token has no stored record to find.
+* Signing out and revoking all sessions keep `offline_access` grants, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows. A password reset revokes them.
+* Set `revokeGrantsOnPasswordReset: false` to keep a user's tokens across a reset. The reset still ends the user's sessions.
+
+The revocation also fails a refresh that is still issuing tokens for a revoked grant. A pending authorization code fails at redemption, because the reset ended the session it was issued for, unless that redemption already passed its session check.
 
 ## Front-channel logout
 

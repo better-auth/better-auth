@@ -8,7 +8,7 @@ import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
 import type { BetterAuthPluginDBSchema } from "../db";
 import type { RawError } from "../utils/error-codes";
-import type { AuthContext } from "./context";
+import type { AuthContext, GenericEndpointContext } from "./context";
 import type { Awaitable, LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
 
@@ -87,6 +87,21 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 		  ) => Promise<{
 				response: Response;
 		  } | void>)
+		| undefined;
+	/**
+	 * Called after a user's credential password was reset, through
+	 * `/reset-password` or a plugin's reset endpoint such as
+	 * `/email-otp/reset-password` and `/phone-number/reset-password`.
+	 *
+	 * It runs once the new password is saved and, when
+	 * `emailAndPassword.revokeSessionsOnPasswordReset` is on, the user's
+	 * sessions are revoked. It runs for a user with no live session too. An
+	 * error it throws fails the request, but the password stays changed. The
+	 * hooks of the other plugins still run, and the first error is rethrown
+	 * after the last one.
+	 */
+	onPasswordReset?:
+		| ((data: { userId: string }, ctx: GenericEndpointContext) => Promise<void>)
 		| undefined;
 	hooks?:
 		| {

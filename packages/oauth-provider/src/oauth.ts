@@ -62,7 +62,7 @@ import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { DEFAULT_CODE_EXPIRES_IN, readSignedOAuthQuery } from "./signed-query";
 import { STANDARD_CLAIM_NAMES, STANDARD_CLAIMS } from "./standard-claims";
-import { tokenEndpoint } from "./token";
+import { revokeUserTokens, tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
 	clientRegistrationRequestSchema,
@@ -583,6 +583,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		version: PACKAGE_VERSION,
 		options: opts as NoInfer<O>,
 		onRequest: handleIssuerMetadataRequest,
+		async onPasswordReset({ userId }, ctx) {
+			if (opts.revokeGrantsOnPasswordReset === false) return;
+			if (
+				!ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset
+			) {
+				return;
+			}
+			await revokeUserTokens(ctx, opts, userId);
+		},
 		init: async (ctx) => {
 			// OAuth provider performs adapter-level session lookups by id, so it
 			// currently requires DB-backed sessions whenever secondary storage is enabled.
