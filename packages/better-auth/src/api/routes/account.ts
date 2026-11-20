@@ -599,6 +599,19 @@ const accountSelectionSchema = z.union([
 	}),
 ]);
 
+// Query strings carry `useAccountCookie=true` as a string.
+const accountSelectionQuerySchema = z.union([
+	accountSelectionSchema.options[0],
+	accountSelectionSchema.options[1].extend({
+		useAccountCookie: z
+			.union([z.literal(true), z.literal("true")])
+			.transform(() => true as const)
+			.meta({
+				description: "Select the current OAuth account from its signed cookie",
+			}),
+	}),
+]);
+
 type AccountSelection = { accountId: string } | { useAccountCookie: true };
 
 function matchesAccountSelection(
@@ -1049,7 +1062,7 @@ export const accountInfo = createAuthEndpoint(
 				},
 			},
 		},
-		query: accountSelectionSchema,
+		query: accountSelectionQuerySchema,
 	},
 	async (ctx) => {
 		const { userId } = ctx.query;

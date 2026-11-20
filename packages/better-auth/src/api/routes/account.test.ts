@@ -3000,6 +3000,91 @@ describe("account selector validation", async () => {
 			message: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND.message,
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10911
+	 */
+	describe("account cookie selector in the accountInfo query", () => {
+		const signInWithAccountCookie = async () => {
+			const instance = await getTestInstance(
+				{
+					socialProviders: {
+						google: { clientId: "test", clientSecret: "test" },
+					},
+					account: { storeAccountCookie: true },
+				},
+				{ disableTestUser: true },
+			);
+			const headers = new Headers();
+			email = "account-info-query@test.com";
+			const signIn = await instance.client.signIn.social({
+				provider: "google",
+				callbackURL: "/callback",
+				fetchOptions: { onSuccess: instance.cookieSetter(headers) },
+			});
+			assert(signIn.data?.url, "expected an authorization URL");
+			const state = new URL(signIn.data.url).searchParams.get("state");
+			assert(state, "expected an OAuth state");
+			await instance.client.$fetch("/callback/google", {
+				query: { state, code: "test" },
+				headers,
+				method: "GET",
+				onError: instance.cookieSetter(headers),
+			});
+			const accounts = await instance.client.listAccounts({
+				fetchOptions: { headers },
+			});
+			const account = accounts.data?.find(
+				(candidate) => candidate.providerId === "google",
+			);
+			assert(account, "expected the OAuth callback to link an account");
+			return { ...instance, headers, account };
+		};
+
+		it("selects the account cookie from an HTTP query string", async () => {
+			const { auth, headers, account } = await signInWithAccountCookie();
+
+			const response = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/account-info?useAccountCookie=true",
+					{ headers },
+				),
+			);
+
+			expect(response.status).toBe(200);
+			expect(await response.json()).toMatchObject({
+				account: { id: account.id, providerId: "google" },
+				user: { email: "account-info-query@test.com" },
+			});
+		});
+
+		it("selects the account cookie through the client", async () => {
+			const { client, headers, account } = await signInWithAccountCookie();
+
+			const info = await client.accountInfo({
+				query: { useAccountCookie: true },
+				fetchOptions: { headers },
+			});
+
+			expect(info.error).toBeNull();
+			expect(info.data).toMatchObject({
+				account: { id: account.id, providerId: "google" },
+			});
+		});
+
+		it("rejects a false account cookie selector in the query string", async () => {
+			const { auth, headers } = await signInWithAccountCookie();
+
+			const response = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/account-info?useAccountCookie=false",
+					{ headers },
+				),
+			);
+
+			expect(response.status).toBe(400);
+		});
+	});
 });
 
 /**
