@@ -115,4 +115,40 @@ describe("withRefListLock", () => {
 		expect(r2).toBe("res2");
 		expect(order).toEqual([1, 2, 3]);
 	});
+
+	it("keeps two writers ordered after skipping a stalled holder on Workers", async () => {
+		vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+		vi.useFakeTimers();
+
+		void withRefListLock("key-queue", () => new Promise<never>(() => {}));
+
+		const order: string[] = [];
+		let resolveB!: () => void;
+		const bHold = new Promise<void>((resolve) => {
+			resolveB = resolve;
+		});
+
+		const pB = withRefListLock("key-queue", async () => {
+			order.push("B-start");
+			await bHold;
+			order.push("B-end");
+			return "B";
+		});
+		const pC = withRefListLock("key-queue", async () => {
+			order.push("C");
+			return "C";
+		});
+
+		await vi.advanceTimersByTimeAsync(5_000);
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(order).toEqual(["B-start"]);
+		resolveB();
+
+		const [rB, rC] = await Promise.all([pB, pC]);
+		expect(rB).toBe("B");
+		expect(rC).toBe("C");
+		expect(order).toEqual(["B-start", "B-end", "C"]);
+	});
 });
