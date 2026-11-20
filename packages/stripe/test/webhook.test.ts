@@ -3383,16 +3383,16 @@ describe("stripe webhook", () => {
 			const checkoutSession = createCheckoutSession({
 				customer: "cus_propagation",
 				subscription: "sub_propagation",
-				metadata: { referenceId: "user_propagation" },
 			});
 			const event = {
 				...createCheckoutSessionCompletedEvent(),
 				data: { object: checkoutSession },
 			} as Stripe.Event;
-			const linkRow = (subscriptionId: string) => {
+			const linkRow = (row: Pick<Subscription, "id" | "referenceId">) => {
 				checkoutSession.metadata = {
 					...checkoutSession.metadata,
-					subscriptionId,
+					referenceId: row.referenceId,
+					subscriptionId: row.id,
 				};
 			};
 			return { event, linkRow };
@@ -3422,15 +3422,18 @@ describe("stripe webhook", () => {
 				[checkout.event, checkout.event],
 				{ onSubscriptionComplete },
 			);
-			const { id } = await createRow({
+			const row = await createRow({
 				stripeSubscriptionId: undefined,
 				status: "incomplete",
 			});
-			checkout.linkRow(id);
+			checkout.linkRow(row);
 
 			expect((await send()).status).toBe(400);
 			expect(onEvent).not.toHaveBeenCalled();
-			expect((await findRow(id))?.status).toBe("active");
+			expect(await findRow(row.id)).toMatchObject({
+				referenceId: row.referenceId,
+				status: "active",
+			});
 
 			expect((await send()).status).toBe(200);
 			expect(onSubscriptionComplete).toHaveBeenCalledTimes(2);
@@ -3472,11 +3475,11 @@ describe("stripe webhook", () => {
 					],
 				},
 			);
-			const { id } = await createRow({
+			const row = await createRow({
 				stripeSubscriptionId: undefined,
 				status: "incomplete",
 			});
-			checkout.linkRow(id);
+			checkout.linkRow(row);
 
 			expect((await send()).status).toBe(400);
 			expect(onEvent).not.toHaveBeenCalled();
