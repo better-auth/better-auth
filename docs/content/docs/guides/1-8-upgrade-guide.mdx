@@ -436,6 +436,12 @@ These provider features are new or opt-in, and need no action when you upgrade:
 
 This section applies if you verify access tokens with `verifyAccessTokenRequest` from `better-auth/oauth2` or the resource client, answer with `createResourceServerChallenge` from `@better-auth/oauth-provider`, use the MCP handler, or call `getProtectedResourceMetadata`.
 
+### `requireMcpAuth` checks tokens against the provider's records
+
+When the OAuth provider runs in the same process, `requireMcpAuth` now checks each access token against its records instead of verifying JWT signatures alone. It accepts opaque access tokens, and an opaque token that was revoked, whose session ended, or whose client is disabled fails on the next request. A JWT access token fails once revoked only with `revocableJwtAccessTokens: true`, and a JWT whose session ended or whose client is disabled fails on the next request. The handler's claims carry the `sub` the token carries: for a client with `subject_type: "pairwise"`, an opaque token's pairwise subject, and a JWT's pairwise subject when you set `accessTokenSubject: "pairwise"`.
+
+**What to do:** expect a database read per request. Set `jwksUrl` to keep verifying JWT signatures alone, which rejects opaque access tokens. If a handler looks users up by `sub`, keep its clients on `subject_type: "public"`, or map pairwise subjects yourself.
+
 ### Unsupported `Authorization` schemes have no error code
 
 `verifyAccessTokenRequest` now rejects an `Authorization` header with no scheme, or with a scheme other than `Bearer` or `DPoP`, such as `Basic`, the same way as a request with no header. The thrown 401 no longer has `error: "invalid_token"` or `error_description` in its `body`. `createResourceServerChallenge` and the MCP handler answer it as they answer a request without a token: with a `Bearer` and a `DPoP` challenge, each with only its `resource_metadata` link and `scope`, and with `algs` on the `DPoP` challenge.
@@ -451,12 +457,6 @@ This section applies if you verify access tokens with `verifyAccessTokenRequest`
 * `verifyResourceRequest` has no `resourceMetadataMappings` option and never throws for a missing entry. Without `audience`, or when `audience` is not a URL, its challenges leave out `resource_metadata`.
 
 **What to do:** if you call `createResourceServerChallenge`, add a `resourceMetadataMappings` entry for each resource identifier that is not a URL. Clients and tests that compare the whole header value must expect the `DPoP` challenge too.
-
-### `requireMcpAuth` checks tokens against the provider's records
-
-When the OAuth provider runs in the same process, `requireMcpAuth` now checks each access token against its records instead of verifying JWT signatures alone. It accepts opaque access tokens, and an opaque token that was revoked, whose session ended, or whose client is disabled fails on the next request. A JWT access token fails once revoked only with `revocableJwtAccessTokens: true`, and a JWT whose session ended or whose client is disabled fails on the next request. The handler's claims carry the `sub` the token carries: for a client with `subject_type: "pairwise"`, an opaque token's pairwise subject, and a JWT's pairwise subject when you set `accessTokenSubject: "pairwise"`.
-
-**What to do:** expect a database read per request. Set `jwksUrl` to keep verifying JWT signatures alone, which rejects opaque access tokens. If a handler looks users up by `sub`, keep its clients on `subject_type: "public"`, or map pairwise subjects yourself.
 
 ### `authorization_details_types_supported` is a list
 
