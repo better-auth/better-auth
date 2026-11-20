@@ -519,8 +519,34 @@ async function assertConnectionOwnsUsers(
 
 type GroupMembershipAdapter = Pick<
 	DBAdapter,
-	"count" | "create" | "deleteMany" | "findMany"
+	"count" | "createMany" | "deleteMany" | "findMany"
 >;
+
+async function createGroupMemberships(
+	adapter: Pick<DBAdapter, "createMany">,
+	input: {
+		connectionId: string;
+		groupId: string;
+		scimUserIds: readonly string[];
+		createdAt: Date;
+	},
+): Promise<SCIMGroupMember[]> {
+	if (input.scimUserIds.length === 0) return [];
+	return adapter.createMany<Omit<SCIMGroupMember, "id">, SCIMGroupMember>({
+		model: "scimGroupMember",
+		data: input.scimUserIds.map((scimUserId) => ({
+			connectionId: input.connectionId,
+			groupId: input.groupId,
+			scimUserId,
+			membershipKey: createGroupMembershipKey(
+				input.connectionId,
+				input.groupId,
+				scimUserId,
+			),
+			createdAt: input.createdAt,
+		})),
+	});
+}
 
 async function deleteGroupMemberships(
 	adapter: Pick<DBAdapter, "deleteMany">,
@@ -611,27 +637,12 @@ async function applyIncrementalGroupMembershipPatch(
 		removedMemberships,
 	);
 
-	const addedMemberships: SCIMGroupMember[] = [];
-	for (const scimUserId of addedSCIMUserIds) {
-		const membership = await adapter.create<
-			Omit<SCIMGroupMember, "id">,
-			SCIMGroupMember
-		>({
-			model: "scimGroupMember",
-			data: {
-				connectionId: input.connectionId,
-				groupId: input.groupId,
-				scimUserId,
-				membershipKey: createGroupMembershipKey(
-					input.connectionId,
-					input.groupId,
-					scimUserId,
-				),
-				createdAt: input.createdAt,
-			},
-		});
-		addedMemberships.push(membership);
-	}
+	const addedMemberships = await createGroupMemberships(adapter, {
+		connectionId: input.connectionId,
+		groupId: input.groupId,
+		scimUserIds: addedSCIMUserIds,
+		createdAt: input.createdAt,
+	});
 
 	return { addedMemberships, removedMemberships };
 }
@@ -675,28 +686,14 @@ async function replaceGroupMemberships(
 		removedMemberships,
 	);
 
-	const addedMemberships: SCIMGroupMember[] = [];
-	for (const scimUserId of input.scimUserIds) {
-		if (existingMemberIds.has(scimUserId)) continue;
-		const membership = await adapter.create<
-			Omit<SCIMGroupMember, "id">,
-			SCIMGroupMember
-		>({
-			model: "scimGroupMember",
-			data: {
-				connectionId: input.connectionId,
-				groupId: input.groupId,
-				scimUserId,
-				membershipKey: createGroupMembershipKey(
-					input.connectionId,
-					input.groupId,
-					scimUserId,
-				),
-				createdAt: input.createdAt,
-			},
-		});
-		addedMemberships.push(membership);
-	}
+	const addedMemberships = await createGroupMemberships(adapter, {
+		connectionId: input.connectionId,
+		groupId: input.groupId,
+		scimUserIds: input.scimUserIds.filter(
+			(scimUserId) => !existingMemberIds.has(scimUserId),
+		),
+		createdAt: input.createdAt,
+	});
 
 	return { addedMemberships, removedMemberships };
 }

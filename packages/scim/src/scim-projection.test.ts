@@ -118,6 +118,47 @@ type SCIMConnectionBindingRow = {
 
 type IncrementOneRequest = Parameters<DBAdapter["incrementOne"]>[0];
 
+function createGrantWriteCountingAdapter(data: MemoryDB) {
+	const createManyRowCounts: number[] = [];
+	let createCalls = 0;
+	const interceptWrites = <Adapter extends DBAdapter | DBTransactionAdapter>(
+		adapter: Adapter,
+	): Pick<Adapter, "create" | "createMany"> => ({
+		create: async (input) => {
+			if (input.model === "scimProjectionGrant") createCalls += 1;
+			return adapter.create(input);
+		},
+		createMany: async (input) => {
+			if (input.model === "scimProjectionGrant") {
+				createManyRowCounts.push(input.data.length);
+			}
+			return adapter.createMany(input);
+		},
+	});
+	return {
+		database: (options: BetterAuthOptions): DBAdapter => {
+			const adapter = memoryAdapter(data)(options);
+			return {
+				...adapter,
+				...interceptWrites(adapter),
+				transaction: async <Result>(
+					callback: (transaction: DBTransactionAdapter) => Promise<Result>,
+				) =>
+					adapter.transaction(async (transaction) =>
+						callback({
+							...transaction,
+							...interceptWrites(transaction),
+						}),
+					),
+			};
+		},
+		createManyRowCounts,
+		countCreateCalls() {
+			return createCalls;
+		},
+	};
+}
+
 function createBindingLockingMemoryAdapter(
 	data: MemoryDB,
 	callbacks: {
@@ -334,6 +375,82 @@ describe("SCIM role projection", () => {
 				body: { provisioningDomainId: "workspace-acme" },
 			}),
 		).rejects.toThrow("SCIM role mapping failed");
+	});
+
+	it("inserts projection grants with one createMany call", async () => {
+		const data = {
+			user: [] as User[],
+			session: [] as { id: string }[],
+			verification: [] as { id: string }[],
+			account: [] as { id: string }[],
+			scimConnectionBinding: [] as { id: string }[],
+			organization: [] as { id: string }[],
+			member: [] as { id: string }[],
+			scimConnection: [] as { id: string }[],
+			scimCredential: [] as { id: string }[],
+			scimIdentityTombstone: [] as { id: string }[],
+			scimSubject: [] as { id: string; userId: string }[],
+			scimUser: [] as SCIMUserRow[],
+			scimGroup: [] as SCIMGroupRow[],
+			scimGroupMember: [] as SCIMGroupMemberRow[],
+			scimProjectionGrant: [] as ProjectionGrantRow[],
+		};
+		const writes = createGrantWriteCountingAdapter(data);
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: writes.database,
+			plugins: [
+				scim({
+					connections: [
+						{
+							id: "workforce",
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
+							provisioningDomainId: "workspace-acme",
+						},
+					],
+					projection: {
+						roles: {
+							map: () => ["billing-manager", "auditor"],
+							exists: ({ role }: RoleExistsInput) =>
+								role === "billing-manager" || role === "auditor",
+						},
+						reconcileUser: () => {},
+					},
+				}),
+			],
+		});
+		const authorization = { authorization: "Bearer test-scim-token" };
+		const createdUser = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "ada@example.com",
+			},
+			headers: authorization,
+		});
+		writes.createManyRowCounts.length = 0;
+
+		await auth.api.createSCIMGroup({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+				externalId: "finance-admins",
+				displayName: "Finance administrators",
+				members: [{ value: createdUser.id }],
+			},
+			headers: authorization,
+		});
+
+		expect(writes.createManyRowCounts).toEqual([2]);
+		expect(writes.countCreateCalls()).toBe(0);
+		expect(data.scimProjectionGrant.map((grant) => grant.role).sort()).toEqual([
+			"auditor",
+			"billing-manager",
+		]);
 	});
 
 	it("reconciles complete User lifecycle state without Groups", async () => {
