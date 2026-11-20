@@ -44,13 +44,17 @@ export async function querySCIMFilteredCollection<
 	}
 
 	const orderById = new Map<string, string>();
-	for (const filter of filters) {
-		const keys = await adapter.findMany<{ id: string; orderKey: string }>({
-			model,
-			where: createWhere(connectionId, [filter]),
-			select: ["id", "orderKey"],
-			limit: SCIM_UNBOUNDED_ROW_LIMIT,
-		});
+	const keyBatches = await Promise.all(
+		filters.map((filter) =>
+			adapter.findMany<{ id: string; orderKey: string }>({
+				model,
+				where: createWhere(connectionId, [filter]),
+				select: ["id", "orderKey"],
+				limit: SCIM_UNBOUNDED_ROW_LIMIT,
+			}),
+		),
+	);
+	for (const keys of keyBatches) {
 		for (const key of keys) {
 			if (!orderById.has(key.id)) orderById.set(key.id, key.orderKey);
 		}
@@ -67,15 +71,19 @@ export async function querySCIMFilteredCollection<
 	if (pageIds.length === 0) return { totalResults, rows: [] };
 
 	const byId = new Map<string, Row>();
-	for (const filter of filters) {
-		const matches = await adapter.findMany<Row>({
-			model,
-			where: [
-				...createWhere(connectionId, [filter]),
-				{ field: "id", value: pageIds, operator: "in" },
-			],
-			limit: pageIds.length,
-		});
+	const matchBatches = await Promise.all(
+		filters.map((filter) =>
+			adapter.findMany<Row>({
+				model,
+				where: [
+					...createWhere(connectionId, [filter]),
+					{ field: "id", value: pageIds, operator: "in" },
+				],
+				limit: pageIds.length,
+			}),
+		),
+	);
+	for (const matches of matchBatches) {
 		for (const row of matches) byId.set(row.id, row);
 	}
 	return {
