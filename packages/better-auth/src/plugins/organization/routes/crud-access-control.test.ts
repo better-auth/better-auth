@@ -389,6 +389,68 @@ describe("dynamic access control", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11303
+	 */
+	it("should not allow a role name that contains the list separator", async () => {
+		// `,` is the separator used to store multiple roles on a member, so a role
+		// whose name contains one could be created but never be assigned.
+		const created = await authClient.organization.createRole(
+			{
+				role: "comma,role",
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#000000",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(created.data).toBeNull();
+		expect(created.error?.status).toBe(400);
+		expect(created.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.INVALID_ROLE_NAME.message,
+		);
+
+		const ctx = await auth.$context;
+		const persisted = await ctx.adapter.findOne<{ role: string }>({
+			model: "organizationRole",
+			where: [{ field: "role", value: "comma,role" }],
+		});
+		expect(persisted).toBeNull();
+
+		// Renaming an existing role into a comma-containing name is rejected too.
+		const role = await authClient.organization.createRole(
+			{
+				role: `rename-target-${crypto.randomUUID()}`,
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#000000",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		if (!role.data) throw role.error;
+		await expect(
+			auth.api.updateOrgRole({
+				body: {
+					roleName: role.data.roleData.role,
+					data: {
+						roleName: "comma,renamed",
+					},
+				},
+				headers,
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.INVALID_ROLE_NAME.message);
+	});
+
 	it("should delete a role by id", async () => {
 		const testRole = await authClient.organization.createRole(
 			{
