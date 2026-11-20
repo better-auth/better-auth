@@ -131,6 +131,20 @@ describe("oauth signed query signatures", () => {
 		return params;
 	};
 
+	// RFC 4648 section 5: swap the alphabet and drop the padding.
+	const base64ToBase64Url = (value: string) =>
+		value.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+	const createSignedParamsWithPlusInSig = async (secret: string) => {
+		for (let attempt = 0; attempt < 256; attempt++) {
+			const params = await createSignedParams(secret, (candidate) => {
+				candidate.set("state", `state-${attempt}`);
+			});
+			if (params.get("sig")?.includes("+")) return params;
+		}
+		throw new Error("Expected a signature that contains +");
+	};
+
 	it("should verify signed params when query params are reordered", async () => {
 		const signedParams = await createSignedParams("test-secret");
 		const reordered = new URLSearchParams();
@@ -169,9 +183,80 @@ describe("oauth signed query signatures", () => {
 		).toBe(false);
 	});
 
+	/**
+	 * A `sig` in the base64url alphabet is unchanged by a url decode, so the
+	 * signed query still verifies when something in front of the auth server
+	 * decodes it once.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10427
+	 * @see https://datatracker.ietf.org/doc/html/rfc4648#section-5
+	 */
+	it("should verify a base64url signature after the query is url-decoded once", async () => {
+		const signedParams = await createSignedParams("test-secret");
+		signedParams.set("sig", base64ToBase64Url(signedParams.get("sig") ?? ""));
+		const decodedOnce = decodeURIComponent(signedParams.toString());
+
+		expect(await verifyOAuthQueryParams(decodedOnce, "test-secret")).toBe(true);
+	});
+
+	/**
+	 * The signer issues a standard base64 `sig`, so an unmodified one must keep
+	 * verifying.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10427
+	 */
+	it("should verify signed params carrying a standard base64 signature", async () => {
+		const signedParams = await createSignedParams("test-secret");
+
+		expect(signedParams.get("sig")).toMatch(/=$/);
+		expect(
+			await verifyOAuthQueryParams(signedParams.toString(), "test-secret"),
+		).toBe(true);
+	});
+
+	/**
+	 * A standard base64 `sig` can carry `+`. After something in front of the
+	 * auth server decodes the query, the `+` is a literal character that
+	 * `URLSearchParams` reads back as a space.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10427
+	 * @see https://url.spec.whatwg.org/#urlencoded-parsing
+	 */
+	it("should verify a standard base64 signature with + after the query is url-decoded once", async () => {
+		const signedParams = await createSignedParamsWithPlusInSig("test-secret");
+		const decodedOnce = decodeURIComponent(signedParams.toString());
+
+		expect(new URLSearchParams(decodedOnce).get("sig")).toContain(" ");
+		expect(await verifyOAuthQueryParams(decodedOnce, "test-secret")).toBe(true);
+	});
+
+	it("should reject signed params without a signature", async () => {
+		const signedParams = await createSignedParams("test-secret");
+		signedParams.delete("sig");
+
+		await expect(
+			verifyOAuthQueryParams(signedParams.toString(), "test-secret"),
+		).resolves.toBe(false);
+	});
+
 	it("should reject duplicate signature params", async () => {
 		const signedParams = await createSignedParams("test-secret");
 		signedParams.append("sig", "extra-sig");
+
+		expect(
+			await verifyOAuthQueryParams(signedParams.toString(), "test-secret"),
+		).toBe(false);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10427
+	 */
+	it("should reject duplicate signature params that are both valid", async () => {
+		const signedParams = await createSignedParams("test-secret");
+		signedParams.append(
+			"sig",
+			base64ToBase64Url(signedParams.get("sig") ?? ""),
+		);
 
 		expect(
 			await verifyOAuthQueryParams(signedParams.toString(), "test-secret"),

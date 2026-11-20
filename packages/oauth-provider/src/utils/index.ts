@@ -21,7 +21,7 @@ import {
 	isExtensionTokenEndpointAuthMethod,
 } from "../extensions";
 import type { oauthProvider } from "../oauth";
-import { canonicalizeOAuthQueryParams } from "../signed-query";
+import { canonicalizeOAuthQueryParams, toBase64Url } from "../signed-query";
 import type {
 	ClientDiscovery,
 	Confirmation,
@@ -390,10 +390,16 @@ export async function verifyOAuthQueryParams(
 		canonicalizeOAuthQueryParams(queryParams).toString(),
 		secret,
 	);
+	// A standard base64 `sig` can carry `+`, which reads back as a space once
+	// something in front of the server decodes the query. Restore it, then
+	// compare both sides in base64url so either alphabet matches.
 	return (
 		sigs.length === 1 &&
 		!!sig &&
-		constantTimeEqual(sig, verifySig) &&
+		constantTimeEqual(
+			toBase64Url(sig.replace(/ /g, "+")),
+			toBase64Url(verifySig),
+		) &&
 		new Date(exp * 1000) >= new Date()
 	);
 }
