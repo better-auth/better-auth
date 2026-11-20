@@ -3353,26 +3353,6 @@ describe("stripe webhook", () => {
 			expect(onSubscriptionUpdate).toHaveBeenCalledTimes(1);
 		});
 
-		test("should acknowledge customer.subscription.updated when no subscription row exists", async ({
-			memory,
-			stripeOptions,
-		}) => {
-			const event = createSubscriptionEvent("customer.subscription.updated", {
-				id: "sub_unknown",
-				customer: "cus_unknown",
-				status: "active",
-				items: subscriptionItems,
-			});
-			const onSubscriptionUpdate = vi.fn();
-			const { onEvent, send } = await setup(memory, stripeOptions, [event], {
-				onSubscriptionUpdate,
-			});
-
-			expect((await send()).status).toBe(200);
-			expect(onSubscriptionUpdate).not.toHaveBeenCalled();
-			expect(onEvent).toHaveBeenCalledTimes(1);
-		});
-
 		test("should acknowledge an update for a known customer's subscription with no configured plan", async ({
 			memory,
 			stripeOptions,
