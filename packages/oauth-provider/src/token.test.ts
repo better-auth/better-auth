@@ -6601,6 +6601,7 @@ describe("oauth client IDs outside RFC 6749 VSCHAR", async () => {
 		Array.isArray(value)
 			? value.some(hasNul)
 			: typeof value === "string" && value.includes("\0");
+	const clientLookups: unknown[] = [];
 	const { client } = await getTestInstance({
 		database: (options) => {
 			for (const model of Object.keys(getAuthTables(options))) {
@@ -6615,6 +6616,9 @@ describe("oauth client IDs outside RFC 6749 VSCHAR", async () => {
 			return {
 				...adapter,
 				findOne: (async (args) => {
+					if (args.model === "oauthClient") {
+						clientLookups.push(...args.where.map((clause) => clause.value));
+					}
 					rejectNul(args.where);
 					return adapter.findOne(args);
 				}) as DBAdapter["findOne"],
@@ -6669,9 +6673,11 @@ describe("oauth client IDs outside RFC 6749 VSCHAR", async () => {
 		async (path, basic) => {
 			const unknown = await send(path, "ab", basic);
 			expect(unknown).toMatchObject({ error: "invalid_client" });
+			expect(clientLookups).toContain("ab");
 
 			for (const clientId of ["a\0b", "a\tb", "a\u00e9b"]) {
 				expect(await send(path, clientId, basic)).toEqual(unknown);
+				expect(clientLookups).not.toContain(clientId);
 			}
 		},
 	);
