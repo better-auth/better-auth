@@ -80,23 +80,21 @@ describe("hasExpectedRefreshParentState", () => {
 	const now = new Date(1774295570569);
 
 	it("accepts an active parent when issuance did not rotate it", () => {
-		expect(
-			hasExpectedRefreshParentState({}, false),
-		).toBe(true);
+		expect(hasExpectedRefreshParentState({}, false)).toBe(true);
 	});
 
 	it("accepts a rotation that still has its rotation marker", () => {
-		expect(hasExpectedRefreshParentState({ revoked: now, rotatedAt: now }, true)).toBe(
-			true,
-		);
+		expect(
+			hasExpectedRefreshParentState({ revoked: now, rotatedAt: now }, true),
+		).toBe(true);
 	});
 
 	it.each([false, true])(
 		"rejects a revoked or missing parent when rotation is %s",
 		(rotated) => {
-			expect(
-				hasExpectedRefreshParentState({ revoked: now }, rotated),
-			).toBe(false);
+			expect(hasExpectedRefreshParentState({ revoked: now }, rotated)).toBe(
+				false,
+			);
 			expect(hasExpectedRefreshParentState(null, rotated)).toBe(false);
 		},
 	);
