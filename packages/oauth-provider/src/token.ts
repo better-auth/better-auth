@@ -65,6 +65,7 @@ import {
 	getStoredToken,
 	isInvalidJwtError,
 	isPKCERequired,
+	isRefreshParentActive,
 	isSessionActive,
 	isSessionBoundRefreshToken,
 	normalizeTimestampValue,
@@ -574,7 +575,10 @@ async function createOpaqueAccessToken(
 		});
 		throw grantRevokedDuringIssuance();
 	}
-	return (opts.prefix?.opaqueAccessToken ?? "") + token;
+	return {
+		id: accessTokenId,
+		token: (opts.prefix?.opaqueAccessToken ?? "") + token,
+	};
 }
 
 async function refreshTokenExists(
@@ -1403,7 +1407,7 @@ async function createUserTokens(
 		: undefined;
 
 	// Create access token and refresh token in parallel
-	const [accessToken, refreshToken] = await Promise.all([
+	const [issuedAccessToken, refreshToken] = await Promise.all([
 		isJwtAccessToken
 			? createJwtAccessToken(
 					ctx,
@@ -1465,6 +1469,10 @@ async function createUserTokens(
 				: undefined,
 	]);
 
+	const accessToken =
+		typeof issuedAccessToken === "string"
+			? issuedAccessToken
+			: issuedAccessToken.token;
 	// ID token created after access token so at_hash can be computed
 	const idToken = isIdToken
 		? await createIdToken(
@@ -1511,10 +1519,12 @@ async function createUserTokens(
 				error,
 			);
 		}
+	}
+	if (existingRefreshToken?.id) {
 		// A revoke-all sweep clears rotatedAt on every parent, including one
 		// already consumed by this request. Check after all token inserts and
 		// replay writes, so a sweep between the parent CAS and either insert
-		// cannot leave an active replacement behind. A later sweep sees all of
+		// cannot leave newly issued tokens active. A later sweep sees all of
 		// these rows and revokes them itself (refresh rows before access rows).
 		const parent = await ctx.context.adapter.findOne<
 			OAuthRefreshToken<Scope[]>
@@ -1522,22 +1532,26 @@ async function createUserTokens(
 			model: "oauthRefreshToken",
 			where: [{ field: "id", value: existingRefreshToken.id }],
 		});
-		if (!parent?.rotatedAt) {
+		if (!isRefreshParentActive(parent, !!refreshToken?.id)) {
 			const revokedAt = new Date();
-			await ctx.context.adapter.updateMany({
-				model: "oauthRefreshToken",
-				where: [{ field: "id", value: refreshToken.id }],
-				update: {
-					revoked: revokedAt,
-					rotatedAt: null,
-					rotationReplayExpiresAt: null,
-				},
-			});
-			await ctx.context.adapter.updateMany({
-				model: "oauthAccessToken",
-				where: [{ field: "refreshId", value: refreshToken.id }],
-				update: { revoked: revokedAt },
-			});
+			if (refreshToken?.id) {
+				await ctx.context.adapter.updateMany({
+					model: "oauthRefreshToken",
+					where: [{ field: "id", value: refreshToken.id }],
+					update: {
+						revoked: revokedAt,
+						rotatedAt: null,
+						rotationReplayExpiresAt: null,
+					},
+				});
+			}
+			if (typeof issuedAccessToken !== "string") {
+				await ctx.context.adapter.updateMany({
+					model: "oauthAccessToken",
+					where: [{ field: "id", value: issuedAccessToken.id }],
+					update: { revoked: revokedAt },
+				});
+			}
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_grant",
 				error_description: "invalid refresh token",

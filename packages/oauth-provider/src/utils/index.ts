@@ -271,6 +271,17 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 	);
 }
 
+/** Check the parent state expected after issuance, with or without rotation. */
+export function isRefreshParentActive(
+	parent:
+		| Pick<OAuthRefreshToken<Scope[]>, "revoked" | "rotatedAt">
+		| null
+		| undefined,
+	rotated: boolean,
+): boolean {
+	return !!parent && (rotated ? !!parent.rotatedAt : !parent.revoked);
+}
+
 /** A session ends at its expiration timestamp. */
 export function isSessionActive<T extends Pick<Session, "expiresAt">>(
 	session: T | null | undefined,

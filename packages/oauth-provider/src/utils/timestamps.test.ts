@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	isRefreshParentActive,
 	isSessionActive,
 	normalizeTimestampValue,
 	resolveSessionAuthTime,
@@ -73,4 +74,30 @@ describe("isSessionActive", () => {
 	it("rejects a missing session", () => {
 		expect(isSessionActive(null, now)).toBe(false);
 	});
+});
+
+describe("isRefreshParentActive", () => {
+	const now = new Date(1774295570569);
+
+	it("accepts an active parent when issuance did not rotate it", () => {
+		expect(
+			isRefreshParentActive({ revoked: null, rotatedAt: null }, false),
+		).toBe(true);
+	});
+
+	it("accepts a rotation that still has its rotation marker", () => {
+		expect(isRefreshParentActive({ revoked: now, rotatedAt: now }, true)).toBe(
+			true,
+		);
+	});
+
+	it.each([false, true])(
+		"rejects a revoked or missing parent when rotation is %s",
+		(rotated) => {
+			expect(
+				isRefreshParentActive({ revoked: now, rotatedAt: null }, rotated),
+			).toBe(false);
+			expect(isRefreshParentActive(null, rotated)).toBe(false);
+		},
+	);
 });
