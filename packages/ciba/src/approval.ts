@@ -15,6 +15,7 @@ import {
 	validateAuthorizationDetails,
 } from "./authorization-details";
 import { APPROVAL_PARAMETER } from "./constants";
+import type { IsConfiguredOrigin } from "./delivery";
 import { pingClient } from "./delivery";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
 import type { CibaRequest } from "./schema";
@@ -32,6 +33,7 @@ const unknownRequest = () =>
  */
 async function recordDecision(
 	ctx: GenericEndpointContext,
+	isConfiguredOrigin: IsConfiguredOrigin,
 	id: string,
 	userId: string,
 	fields: Partial<CibaRequest>,
@@ -48,7 +50,7 @@ async function recordDecision(
 		set: fields,
 	});
 	if (!decided) return unknownRequest();
-	await pingClient(ctx, decided);
+	await pingClient(ctx, decided, isConfiguredOrigin);
 }
 
 /**
@@ -58,6 +60,7 @@ async function recordDecision(
  */
 export function cibaApprovalRequest(
 	resultPage: string,
+	isConfiguredOrigin: IsConfiguredOrigin,
 ): OAuthInteractionRequestHandler {
 	const resultURL = (ctx: GenericEndpointContext, status?: string) => {
 		const url = new URL(resultPage, ctx.context.baseURL).toString();
@@ -109,21 +112,29 @@ export function cibaApprovalRequest(
 					if (!parseScopes(scope).includes("openid")) {
 						oauthError("invalid_scope", CIBA_ERROR_CODES.INVALID_SCOPE.message);
 					}
-					await recordDecision(ctx, request.id, approval.userId, {
-						status: "approved",
-						scope,
-						referenceId: approval.referenceId ?? null,
-						authTime: new Date(approval.authTime),
-						acr: approval.acr ?? null,
-						amr: approval.amr ?? null,
-					});
+					await recordDecision(
+						ctx,
+						isConfiguredOrigin,
+						request.id,
+						approval.userId,
+						{
+							status: "approved",
+							scope,
+							referenceId: approval.referenceId ?? null,
+							authTime: new Date(approval.authTime),
+							acr: approval.acr ?? null,
+							amr: approval.amr ?? null,
+						},
+					);
 					return resultURL(ctx, "approved");
 				},
 			};
 		},
 		deny: async ({ ctx, value, userId }) => {
 			if (!userId) unknownRequest();
-			await recordDecision(ctx, value, userId, { status: "denied" });
+			await recordDecision(ctx, isConfiguredOrigin, value, userId, {
+				status: "denied",
+			});
 			return resultURL(ctx, "denied");
 		},
 		errorPage: ({ ctx }) => resultURL(ctx),
@@ -136,7 +147,10 @@ export function cibaApprovalRequest(
  * decided and how they authenticated; the provider checks that it is the
  * hinted user and that the scopes stay within the request.
  */
-export const createCompleteCibaRequest = (options: ResolvedCibaOptions) =>
+export const createCompleteCibaRequest = (
+	options: ResolvedCibaOptions,
+	isConfiguredOrigin: IsConfiguredOrigin,
+) =>
 	createAuthEndpoint.serverOnly(
 		{
 			method: "POST",
@@ -167,7 +181,9 @@ export const createCompleteCibaRequest = (options: ResolvedCibaOptions) =>
 		async (ctx) => {
 			const { requestId, userId, decision, acr, amr } = ctx.body;
 			if (decision === "denied") {
-				await recordDecision(ctx, requestId, userId, { status: "denied" });
+				await recordDecision(ctx, isConfiguredOrigin, requestId, userId, {
+					status: "denied",
+				});
 				return ctx.json({ status: true });
 			}
 			const request = await ctx.context.adapter.findOne<CibaRequest>({
@@ -220,7 +236,7 @@ export const createCompleteCibaRequest = (options: ResolvedCibaOptions) =>
 				);
 				authorizationDetails = storeAuthorizationDetails(granted);
 			}
-			await recordDecision(ctx, requestId, userId, {
+			await recordDecision(ctx, isConfiguredOrigin, requestId, userId, {
 				status: "approved",
 				scope: scopes.join(" "),
 				authTime: ctx.body.authTime ?? null,

@@ -1,5 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError, getSessionFromCtx } from "better-auth/api";
+import {
+	APIError,
+	getAuthoritativeSessionFromCtx,
+	getSessionFromCtx,
+} from "better-auth/api";
 import {
 	formatErrorURL,
 	getAPIErrorURL,
@@ -88,14 +92,34 @@ export async function consentEndpoint<Result>(
 		});
 	}
 
-	const session = await getSessionFromCtx(ctx);
+	const interaction = getExtensionInteractionRequest(
+		opts,
+		searchParamsToQuery(query),
+	);
+	// An extension request records a decision for the extension, so only a
+	// session that is still active in the store may answer it. This read gates
+	// the consent write and the denial below. Approval is gated separately, in
+	// the interaction runner in authorize.ts, because it can also be reached
+	// without consent.
+	const session = interaction
+		? await getAuthoritativeSessionFromCtx(ctx)
+		: await getSessionFromCtx(ctx);
+	if (interaction && !session) {
+		return {
+			redirect: true,
+			url: getAPIErrorURL(
+				ctx,
+				new APIError("UNAUTHORIZED", {
+					error: "access_denied",
+					error_description: "session is no longer active",
+				}),
+				interaction.handler.errorPage?.({ ctx, value: interaction.value }),
+			),
+		};
+	}
 	// Consent not accepted (ensure it's strictly boolean true)
 	const accepted = ctx.body.accept === true;
 	if (!accepted) {
-		const interaction = getExtensionInteractionRequest(
-			opts,
-			searchParamsToQuery(query),
-		);
 		if (interaction) {
 			return {
 				redirect: true,
