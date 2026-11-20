@@ -862,6 +862,16 @@ function getSeededOptions(ctx: AuthContext): WeakSet<object> {
 }
 
 /**
+ * `resources` entries seeded in this process, for
+ * {@link OAuthOptions.resourceSeedScope} `"process"`. Keyed per entry by what
+ * its seed writes, so instances built per request (each with its own adapter)
+ * share the mark, an entry one instance's `identifierValidator` skipped is
+ * still seeded by another, and a failed seed retries only what didn't finish.
+ * An entry the validator rejects is never marked, so each call checks it again.
+ */
+let seededEntries = new Set<string>();
+
+/**
  * Resets the lazy-seed state. Used by tests to force re-seeding between
  * cases — should not be called from production code.
  *
@@ -869,6 +879,7 @@ function getSeededOptions(ctx: AuthContext): WeakSet<object> {
  */
 export function resetSeedStateForTests(): void {
 	seededOptions = new WeakMap<object, WeakSet<object>>();
+	seededEntries = new Set<string>();
 }
 
 /**
@@ -894,14 +905,17 @@ export function resetSeedStateForTests(): void {
  * {@link seedResourcesOnce}, which stays incomplete after a failure so the
  * next resource access retries (e.g. after migrations run).
  *
- * Idempotent: safe to call multiple times.
+ * Idempotent: safe to call multiple times. `isComplete` reports an entry
+ * another seed already finished, which is skipped; `onSeeded` hears each
+ * entry this call finishes.
  *
  * @internal
  */
 export async function seedResources(
 	ctx: AuthContext,
 	opts: OAuthOptions<Scope[]>,
-	isComplete?: () => boolean,
+	isComplete?: (input: OAuthResourceInput) => boolean,
+	onSeeded?: (input: OAuthResourceInput) => void,
 ): Promise<void> {
 	const inputs = collectResourceInputs(opts);
 	if (inputs.length === 0) return;
@@ -910,6 +924,7 @@ export async function seedResources(
 	const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
 
 	for (const rawInput of inputs) {
+		if (isComplete?.(rawInput)) continue;
 		// Apply the same RFC 8707 §2 identifier validation as the admin CRUD
 		// path. A typo in `resources` config should not silently produce a row
 		// the AS will later refuse to issue against — but it shouldn't brick
@@ -952,6 +967,7 @@ export async function seedResources(
 					model: modelName,
 					data: buildSeedRow(input, now),
 				});
+				onSeeded?.(rawInput);
 				continue;
 			} catch (err) {
 				// A concurrent boot inserted the row between our findOne and create.
@@ -966,16 +982,20 @@ export async function seedResources(
 
 		// Reached for existing rows, and for a row a concurrent boot inserted,
 		// so `merge` and `overwrite` still apply this config.
-		if (mode === "insertOnly") continue;
+		if (mode === "insertOnly") {
+			onSeeded?.(rawInput);
+			continue;
+		}
 		// Skip once another seed in this process has finished, so a late write
 		// does not undo an edit made since then.
-		if (isComplete?.()) return;
+		if (isComplete?.(rawInput)) continue;
 
 		await ctx.adapter.update({
 			model: modelName,
 			where,
 			update: buildSeedUpdate(input, mode, now),
 		});
+		onSeeded?.(rawInput);
 	}
 }
 
@@ -992,6 +1012,19 @@ export async function seedResourcesOnce(
 	ctx: AuthContext,
 	opts: OAuthOptions<Scope[]>,
 ): Promise<void> {
+	if (opts.resourceSeedScope === "process") {
+		const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
+		const mode = opts.resourceSeedMode ?? "insertOnly";
+		const key = (input: OAuthResourceInput) =>
+			JSON.stringify([modelName, mode, input]);
+		await seedResources(
+			ctx,
+			opts,
+			(input) => seededEntries.has(key(input)),
+			(input) => seededEntries.add(key(input)),
+		);
+		return;
+	}
 	const seeded = getSeededOptions(ctx);
 	if (seeded.has(opts)) return;
 	await seedResources(ctx, opts, () => seeded.has(opts));

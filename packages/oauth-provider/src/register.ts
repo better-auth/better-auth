@@ -19,6 +19,7 @@ import { toExpJWT } from "better-auth/plugins";
 import { assertValidClientJwks } from "./client-jwks";
 import { stripReservedOAuthClientMetadataExtensions } from "./client-metadata";
 import {
+	getClientDiscoveries,
 	getSupportedAuthMethods,
 	getSupportedGrantTypes,
 	isExtensionTokenEndpointAuthMethod,
@@ -30,6 +31,7 @@ import {
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import { assertResourcePrivileges } from "./oauthResource/privileges";
 import { getResource } from "./resources";
+import { schema as oauthProviderSchema } from "./schema";
 import type {
 	ClientRegistrationRequest,
 	OAuthClientAdministrativeResponse,
@@ -47,7 +49,10 @@ import {
 	parseClientMetadata,
 	storeClientSecret,
 } from "./utils";
-import { isPrivateHostname } from "./utils/client-assertion";
+import {
+	isCrossOriginJwksUriAllowedByDiscovery,
+	isPrivateHostname,
+} from "./utils/client-assertion";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
 const DEFAULT_REGISTRATION_GRANT_TYPES = [
@@ -133,6 +138,42 @@ function applyOAuthClientRegistrationDefaults(
 		grant_types: grantTypes,
 		response_types: resolveRegistrationResponseTypes(client, grantTypes),
 	};
+}
+
+/**
+ * Client fields that a metadata document sets and a refresh clears when it
+ * omits them. `subjectType` is not listed: changing it changes every user's
+ * `sub` for the client (OIDC Core §8), so an omitted value keeps the stored
+ * one. A document that states another value still changes it.
+ */
+const METADATA_DOCUMENT_CLIENT_FIELDS = [
+	"name",
+	"uri",
+	"icon",
+	"tos",
+	"policy",
+	"contacts",
+	"jwks",
+	"jwksUri",
+	"softwareId",
+	"softwareVersion",
+	"softwareStatement",
+	"postLogoutRedirectUris",
+	"responseTypes",
+	"dpopBoundAccessTokens",
+] as const satisfies readonly (keyof SchemaClient<Scope[]>)[];
+
+/**
+ * The value a refresh stores for a document field the document omits. Some
+ * adapters store a list field in a non-nullable array column, so a list is
+ * cleared to an empty list instead of `null`.
+ */
+function clearedDocumentFieldValue(
+	field: (typeof METADATA_DOCUMENT_CLIENT_FIELDS)[number],
+): [] | null {
+	return oauthProviderSchema.oauthClient.fields[field].type === "string[]"
+		? []
+		: null;
 }
 
 function isCustomSchemeWithHost(redirectUri: string): boolean {
@@ -418,6 +459,8 @@ export async function checkOAuthClient(
 	opts: OAuthOptions<Scope[]>,
 	settings?: {
 		registrationSource?: "dynamic" | "managed" | "clientMetadataDocument";
+		/** Discovery that owns a `clientMetadataDocument` registration. */
+		clientDiscoveryId?: string;
 		ctx?: GenericEndpointContext;
 	},
 ) {
@@ -687,7 +730,21 @@ export async function checkOAuthClient(
 						clientId !== undefined &&
 						URL.canParse(clientId) &&
 						new URL(clientId).origin === uri.origin;
-					if (!isSameOriginClientMetadataDocumentKey) {
+					const isAllowedCrossOriginClientMetadataDocumentKey =
+						!isSameOriginClientMetadataDocumentKey &&
+						isClientMetadataDocument &&
+						clientId !== undefined &&
+						(await isCrossOriginJwksUriAllowedByDiscovery(
+							settings.ctx,
+							getClientDiscoveries(opts).find(
+								(discovery) => discovery.id === settings.clientDiscoveryId,
+							),
+							{ clientId, jwksUri: clientWithDefaults.jwks_uri },
+						));
+					if (
+						!isSameOriginClientMetadataDocumentKey &&
+						!isAllowedCrossOriginClientMetadataDocumentKey
+					) {
 						throw new APIError("BAD_REQUEST", {
 							error: "invalid_client_metadata",
 							error_description:
@@ -897,6 +954,10 @@ async function persistOAuthClientRegistration(
 	// Check if client parameters are valid combination
 	await checkOAuthClient(body, opts, {
 		registrationSource: input.registrationSource,
+		clientDiscoveryId:
+			input.registrationSource === "clientMetadataDocument"
+				? input.clientDiscoveryId
+				: undefined,
 		ctx,
 	});
 
@@ -1013,6 +1074,14 @@ async function persistOAuthClientRegistration(
 					enableEndSession: _enableEndSession,
 					...refreshed
 				} = schema;
+				// An update skips undefined values, so a field the document no longer
+				// lists is cleared explicitly.
+				const omittedDocumentFields = Object.fromEntries(
+					METADATA_DOCUMENT_CLIENT_FIELDS.map((field) => [
+						field,
+						refreshed[field] ?? clearedDocumentFieldValue(field),
+					]),
+				);
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
 					model: clientModel,
 					where: [
@@ -1024,6 +1093,7 @@ async function persistOAuthClientRegistration(
 					],
 					update: {
 						...refreshed,
+						...omittedDocumentFields,
 						createdAt: existingClient.createdAt,
 						updatedAt: new Date(iat * 1000),
 					},
@@ -1262,34 +1332,63 @@ export async function registerClientMetadataDocument(
 	}
 }
 
-function isUniqueConstraintError(error: unknown): boolean {
-	if (!error || typeof error !== "object") return false;
+function isUniqueConstraintError(
+	error: unknown,
+	depth = 0,
+	seen = new Set<unknown>(),
+): boolean {
+	if (!error || typeof error !== "object" || depth > 4 || seen.has(error)) {
+		return false;
+	}
+	seen.add(error);
 	const candidate = error as {
 		code?: unknown;
+		errcode?: unknown;
 		errno?: unknown;
+		number?: unknown;
 		name?: unknown;
 		message?: unknown;
+		cause?: unknown;
 	};
-	const code = String(candidate.code ?? candidate.errno ?? "");
+	const identifiers = [
+		candidate.code,
+		candidate.errcode,
+		candidate.errno,
+		candidate.number,
+	];
 	if (
-		[
-			"1062",
-			"11000",
-			"23505",
-			"ER_DUP_ENTRY",
-			"P2002",
-			"SQLITE_CONSTRAINT_UNIQUE",
-		].includes(code)
+		identifiers.some((identifier) =>
+			[
+				"1062",
+				"11000",
+				"2067",
+				"23505",
+				"2601",
+				"2627",
+				"ER_DUP_ENTRY",
+				"P2002",
+				"SQLITE_CONSTRAINT_UNIQUE",
+			].includes(String(identifier)),
+		)
 	) {
 		return true;
 	}
-	if (candidate.name === "MongoServerError" && candidate.code === 11000) {
+	if (
+		candidate.name === "MongoServerError" &&
+		(candidate.code === 11000 || candidate.code === "11000")
+	) {
 		return true;
 	}
-	return (
+	if (
 		typeof candidate.message === "string" &&
 		/(?:duplicate|unique constraint|unique key)/i.test(candidate.message)
-	);
+	) {
+		return true;
+	}
+	if ("cause" in candidate && candidate.cause) {
+		return isUniqueConstraintError(candidate.cause, depth + 1, seen);
+	}
+	return false;
 }
 
 export function createOAuthClientEndpoint(

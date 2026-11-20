@@ -7,7 +7,7 @@ description: Discover OAuth clients from HTTPS metadata documents.
 
 `OAuth2` `MCP`
 
-The [Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02) lets an OAuth client identify itself without registering first. The client's `client_id` is the exact HTTPS URL of a metadata document it hosts. Better Auth validates the document and persists the client through the OAuth Provider's canonical registration path.
+The [Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02) lets an OAuth client identify itself without registering first. The client's `client_id` is the exact HTTPS URL of a metadata document it hosts. Better Auth validates the document and persists the client through the OAuth Provider's canonical registration path. Validation follows draft-02; where [draft-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03) changed a rule, this page cites the draft-03 section it follows.
 
 MCP 2026-07-28 normatively references CIMD draft-00. Use `metadataProfile: "mcp-2026-07-28"` when composing `cimd()` with `mcp()`. This explicit profile adds MCP's required `client_name` and `redirect_uris` fields without imposing those draft-00 restrictions on generic draft-02 clients.
 
@@ -49,7 +49,7 @@ MCP 2026-07-28 normatively references CIMD draft-00. Use `metadataProfile: "mcp-
   </Step>
 </Steps>
 
-`fetchClientMetadataResource` is required. Node.js deployments can use the `@better-auth/cimd/node` implementation shown above. It resolves the original hostname once, rejects the request if any DNS result is not public-routable, connects only to the validated addresses on an isolated connection and tries the next one when an address is unreachable, preserves the original Host and TLS certificate identity, and never follows redirects. A metadata URL whose host is a public IP literal, such as `https://[2606:2800:220:1:248:1893:25c8:1946]/client.json`, skips DNS and connects to that address directly. The certificate must then name the IP address, and a non-public literal is rejected. This transport intentionally supports only `GET` and `HEAD`, which are the methods CIMD uses to retrieve metadata resources.
+`fetchClientMetadataResource` is required. Node.js deployments can use the `@better-auth/cimd/node` implementation shown above. It resolves the original hostname once, rejects the request if any DNS result is not public-routable, connects only to the validated addresses on an isolated connection and tries the next one when an address is unreachable, preserves the original Host and TLS certificate identity, and never follows redirects. A metadata URL whose host is a public IP literal, such as `https://[2606:2800:220:1:248:1893:25c8:1946]/client.json`, skips DNS and connects to that address directly. The certificate must then name the IP address, and a non-public literal is rejected. The transport also stops waiting for DNS when the abort signal fires. The system resolver cannot cancel a lookup it has started, so the lookup keeps running until the resolver answers or times out. To bound that work, at most 16 lookups can be outstanding in the process, abandoned ones included. While 16 are outstanding, a fetch to any hostname fails at once. The plugin answers that refusal like a limit of the [metadata fetch governor](#persistence-and-refresh), with HTTP 429 `temporarily_unavailable`, and starts no `minimumFetchInterval` backoff for the client. The refused fetch still counts against the rolling fetch budgets. This transport intentionally supports only `GET` and `HEAD`, which are the methods CIMD uses to retrieve metadata resources.
 
 Bun, Deno, Workers, and other runtimes must provide the equivalent secure transport at their network boundary. The same transport is used for the metadata document and discovery-owned resources such as `jwks_uri`.
 
@@ -97,7 +97,7 @@ cimd({
     maximumFetchesPerMinute: 120,
     maximumFetchesPerOriginPerMinute: 30,
   },
-  originBoundFields: ["post_logout_redirect_uris", "client_uri"],
+  originBoundFields: ["post_logout_redirect_uris"],
   isMetadataDocumentUrlAllowed(clientIdUrl) {
     return new URL(clientIdUrl).hostname.endsWith(".trusted.example");
   },
@@ -132,6 +132,11 @@ export const cimdOptionsType = {
 		description:
 			"Maximum and fallback cache freshness lifetime. Expired entries are revalidated on the next client resolution; no periodic or background fetch runs. Number values are seconds; strings are duration expressions.",
 	},
+	metadataStaleIfError: {
+		type: "number | string",
+		description:
+			"How long after its last validation a stored client is still served when refreshing its metadata document fails transiently. At most 24 hours. Number values are seconds; strings are duration expressions.",
+	},
 	maxCacheEntries: {
 		type: "number",
 		default: "1000",
@@ -147,15 +152,21 @@ export const cimdOptionsType = {
 	},
 	originBoundFields: {
 		type: "string[]",
-		default: '["post_logout_redirect_uris", "client_uri"]',
+		default: '["post_logout_redirect_uris"]',
 		description:
-			"Metadata URL fields that must share the client_id origin. Redirect URIs are excluded by default because authorization still requires exact matching. Authority-free private-use URIs such as com.example.app:/logout have no origin and are exempt; host-bearing custom-scheme URIs in post_logout_redirect_uris must still match the client_id origin.",
+			"Metadata URL fields that must share the client_id origin. Only post_logout_redirect_uris is bound by default. redirect_uris is excluded because authorization still requires exact redirect URI matching. The informative URIs client_uri, logo_uri, tos_uri, and policy_uri are never bound by default. Authority-free private-use URIs such as com.example.app:/logout have no origin and are exempt; host-bearing custom-scheme URIs in post_logout_redirect_uris must still match the client_id origin.",
 	},
 	isMetadataDocumentUrlAllowed: {
 		type: "(clientIdUrl, context) => boolean | Promise<boolean>",
 		default: "always allow",
 		description:
 			"Optional application policy evaluated before the required transport runs.",
+	},
+	isCrossOriginJwksUriAllowed: {
+		type: "({ clientId, jwksUri }, context) => boolean | Promise<boolean>",
+		default: "always reject",
+		description:
+			"Allows a jwks_uri that is on neither the client_id origin nor a trusted origin. Called only for such a jwks_uri: at registration, on refresh, when an administrator updates the client, and before each client assertion. Only a resolved true allows it. See Key set origin.",
 	},
 	onClientCreated: {
 		type: "(event: CimdClientCreatedEvent) => void | Promise<void>",
@@ -170,6 +181,14 @@ export const cimdOptionsType = {
 
 <TypeTable type={cimdOptionsType} />
 
+### Origin-bound fields
+
+`originBoundFields` stops a metadata document from claiming URIs on a domain other than its own. By default, only `post_logout_redirect_uris` must share the `client_id` origin.
+
+The informative URIs `client_uri`, `logo_uri`, `tos_uri`, and `policy_uri` are not origin-bound by default. An application's website is often hosted apart from its metadata document. [CIMD draft-03 §4.4](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-4.4) forbids an authorization server from requiring `client_uri` to share the origin of the `client_id` or of any redirect URI. If you add `client_uri` to `originBoundFields`, that is your own policy, and it contradicts the draft. Clients whose website is on another origin then fail to register.
+
+Each informative URI must still be a credential-free HTTP(S) URL on a public host, whether or not it is origin-bound.
+
 ## Draft-02 validation
 
 Generic CIMD validation follows draft-02:
@@ -180,7 +199,7 @@ Generic CIMD validation follows draft-02:
 * The OAuth Provider remains authoritative for supported grants, response types, redirect policy, and authentication capability.
 * Declaring `client_credentials` does not grant machine scopes. New discovered clients persist an empty server-owned `clientCredentialsScopes` ceiling and cannot use the grant until an administrator assigns approved scopes. Metadata refresh preserves that ceiling and cannot create, widen, or clear it.
 * Better Auth supports `none` and `private_key_jwt` for discovered clients. Inline `jwks` must use the RFC 7517 `{ "keys": [...] }` object shape. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. Bare arrays, symmetric secret methods, secret fields, private JWK material, other curves, and declared algorithms that do not match the key type and curve are rejected.
-* `client_uri`, `logo_uri`, `tos_uri`, and `policy_uri` must be credential-free public HTTP(S) URLs. Better Auth does not fetch or render remote logos.
+* `client_uri`, `logo_uri`, `tos_uri`, and `policy_uri` must be credential-free public HTTP(S) URLs. Better Auth does not fetch or render remote logos. `client_name` and these URLs are claims by the client, not proof of its identity. On your consent page, show the `client_id` host, and serve a logo only from a copy you fetched and trust. See [Sign-in and consent screens](/docs/plugins/oauth-provider/sign-in-flow#consent-page).
 * `backchannel_logout_uri` and `backchannel_logout_session_required` are rejected because they would authorize an OP-side POST outside the injected GET transport.
 * Server-owned fields, including resource links and administrative controls, cannot be supplied by the document.
 * Unknown members are ignored and never persisted. Nonstandard camel-case storage aliases and both spellings of client-credentials scope authority are stripped; recognized credential, privilege, and server-control fields remain fatal.
@@ -194,15 +213,80 @@ Generic CIMD validation follows draft-02:
 }
 ```
 
+## Key set origin
+
+By default, a discovered client's `jwks_uri` must be on the origin of its `client_id` URL or on one of your [`trustedOrigins`](/docs/reference/options#trustedorigins). Otherwise Better Auth rejects the client with `jwks_uri must belong to a trusted origin or the Client ID Metadata Document origin`.
+
+Anyone can publish a metadata document, and Better Auth fetches the `jwks_uri` that the document names. That fetch does not go through `isMetadataDocumentUrlAllowed` or `metadataFetchPolicy`. The origin rule is what limits where a document can make your server send requests ([CIMD draft-03 §4.4](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-4.4), [§10.7](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-10.7)).
+
+Some clients publish their document on one host and their keys on another. To accept such a client, return `true` from `isCrossOriginJwksUriAllowed` for that client origin and key origin:
+
+```ts title="auth.ts"
+cimd({
+  fetchClientMetadataResource,
+  isCrossOriginJwksUriAllowed: ({ clientId, jwksUri }) =>
+    new URL(clientId).origin === "https://client.example.com" &&
+    new URL(jwksUri).origin === "https://keys.example.com",
+});
+```
+
+Match the client origin and the key origin together. A function that allows a key origin for every `client_id` lets any document make your server fetch any URL on that origin.
+
+Do not add the key origin to `trustedOrigins` instead. `trustedOrigins` applies to the whole app, so that origin would also be trusted for redirects and request-origin checks.
+
+Better Auth calls `isCrossOriginJwksUriAllowed` only for a `jwks_uri` that the default rule rejects. It calls it at these points:
+
+* when the document is first registered
+* each time the document is refreshed
+* when an administrator updates the client, such as setting its `client_credentials_scopes`
+* before each client assertion is verified, so keep it fast
+
+Only a resolved `true` allows the key set. `false`, a thrown error, or a rejected promise keeps the rejection with the same error. The other `jwks_uri` checks still run first: HTTPS, no credentials, no fragment, and a public host. The keys are still fetched through `fetchClientMetadataResource`.
+
 ## Persistence and refresh
 
 Discovered clients are stored in `oauthClient` with `clientDiscoveryId: "cimd"`. This nullable provenance field prevents an existing managed or DCR client from being taken over merely because its identifier begins with `https://`, including during a fixed-ID registration race. After a process restart, a CIMD-owned record is fetched and refreshed only by the matching discovery. Managed records are returned without invoking CIMD, while a discovery-owned record fails closed if its owner is unavailable or cannot resolve it. Server-owned `clientCredentialsScopes` is never read from the document and is preserved exactly during refresh.
 
+For the fields the document owns, a refresh stores what the current document lists. When the document stops listing one of them, such as `client_name`, `contacts`, `jwks`, `jwks_uri`, `post_logout_redirect_uris`, or `dpop_bound_access_tokens`, the refresh clears the stored value. A key or post-logout redirect URI that the client removes from its document therefore stops working after the next refresh. A field that registration fills with a default gets that default again instead of being cleared: an omitted `token_endpoint_auth_method` becomes `none`, an omitted `grant_types` becomes `authorization_code`, and an omitted `response_types` becomes `code` while the grants include `authorization_code`, and is cleared otherwise.
+
+A refresh keeps some stored values when the document omits them. A stored `subject_type` stays when the document omits it, because changing it would give every user a different `sub` for the client. A document that states another `subject_type` still changes it. Server-owned settings such as `disabled`, `skipConsent`, `enableEndSession`, `requirePKCE`, and `clientCredentialsScopes` are never read from the document, and a refresh keeps them.
+
 Valid documents follow shared-cache semantics. `s-maxage` takes precedence over `max-age` and `Expires`; validators support conditional revalidation. `Cache-Control: no-store`, `private`, and `Vary: *` prevent cache insertion. A `304` is accepted only when the request sent `If-None-Match` or `If-Modified-Since` for an existing validated entry. Modified responses must be exactly `200`.
 
-The metadata fetch governor is independent from HTTP freshness. Fresh-cache hits and concurrent callers joining the same client fetch consume no budget. Every new fetch consumes its concurrency and rolling-window budget when it starts, and excess work is rejected instead of queued. A successful fetch clears its per-client pacing record, so a response that cannot be cached or is immediately stale can be fetched again while origin and global budgets continue to apply. Failed fetches retain the `minimumFetchInterval` backoff. The metadata cache, client pacing records, and origin budget records are each bounded by `maxCacheEntries`. The governor evicts only inactive records; if every record still protects a live interval, rolling window, or fetch, a new client or origin fails closed.
+The metadata fetch governor is independent from HTTP freshness. Fresh-cache hits and concurrent callers joining the same client fetch consume no budget. Every new fetch consumes its concurrency and rolling-window budget when it starts, and excess work is rejected instead of queued. A successful fetch clears its per-client pacing record, so a response that cannot be cached or is immediately stale can be fetched again while origin and global budgets continue to apply. Failed fetches retain the `minimumFetchInterval` backoff. So does a fetched document that a caller fails to save, and the document is also dropped from the cache, so the next request fetches it again. The metadata cache, client pacing records, and origin budget records are each bounded by `maxCacheEntries`. The governor evicts only inactive records; if every record still protects a live interval, rolling window, or fetch, a new client or origin fails closed.
 
-Refresh remains fail closed. A network, validation, or persistence failure preserves the previous database/cache state but rejects the current OAuth request. `onClientRefreshed` receives `previousClient`; operators can compare security-sensitive metadata and choose whether to revoke grants, tokens, or consent.
+A fetched document that can be cached is cached once it is validated, before it is saved. The caller that started the fetch and every caller that joined it each save it with their own context, and no caller waits for another caller's save. Until one of those saves succeeds, a caller that finds the document in the cache saves it too, so a caller that ends mid-save cannot leave an older stored client in use for the cache lifetime. Saves are not ordered across callers, so when an older save lands after a newer document was saved, the newer document is saved again on its next cache hit. Each of these saves runs `onClientRefreshed` when it updates a stored client. Once one save succeeds, a cache hit for a caller that already has a stored client returns it without writing it.
+
+A caller that joins another caller's fetch waits at most 10 seconds for that fetch. If the fetch has not finished by then, the caller discards it. A fetch that has run for 10 seconds is also discarded when any new fetch starts. This keeps a fetch that never finishes from holding other clients at the concurrency limit or its pacing record from filling the `maxCacheEntries` bound. A discarded fetch neither caches nor saves its document, and its failure is not reported to any caller. The one exception is a fetch discarded after running for 10 seconds that finishes before any newer fetch for that client has started: its document is then the newest available, so it is saved, and cached when its response allows, as if it had not been discarded. Otherwise, the caller that started a discarded fetch resolves the client again when the fetch finishes. A caller that joined it resolves the client again when the fetch finishes or its own 10-second wait ends, whichever comes first. When it resolves again, the caller saves the fresh document that a newer fetch cached. Without one, the caller joins a newer fetch with a new 10-second wait, or starts a new fetch under the same limits. That new fetch fails with `temporarily_unavailable` when no concurrency slot is free, even if the discarded fetch succeeded.
+
+Refresh remains fail closed unless `metadataStaleIfError` applies, as described in the next section. A network or validation failure preserves the previous database and cache state, and a persistence failure preserves the database state and drops the document it failed to save from the cache. Each rejects the current OAuth request. `onClientRefreshed` receives `previousClient`; operators can compare security-sensitive metadata and choose whether to revoke grants, tokens, or consent.
+
+### Transient refresh failures
+
+By default, a failed refresh rejects the request, so a short outage at a client's metadata host stops its users from signing in. CIMD draft-03 §6.1 says a transient failure should not invalidate a client's established trust. Set `metadataStaleIfError`, modeled on RFC 5861 §4 stale-if-error, to keep serving the stored client through such failures:
+
+```ts title="auth.ts"
+cimd({
+  fetchClientMetadataResource,
+  metadataStaleIfError: "6h",
+});
+```
+
+A failed refresh then returns the stored client unchanged and logs a warning when its `updatedAt` is within `metadataStaleIfError` and the failure is transient:
+
+* The plugin's 5-second fetch timeout, when the transport reports that its request had reached the host. The Node transport does. A custom transport does so by rejecting with an error whose `code` is `ERR_CIMD_REQUEST_ABORTED`, and only after DNS resolution: other client IDs can delay lookups, for example by holding Node's shared DNS threads, so a timeout during resolution says nothing about the host.
+* HTTP 500, 502, 503, or 504.
+* A connection failure whose error, or an error in its `cause` chain, has the code `EAI_AGAIN`, `ECONNRESET`, `ECONNREFUSED`, `ETIMEDOUT`, `EHOSTUNREACH`, `ENETUNREACH`, `EPIPE`, `UND_ERR_CONNECT_TIMEOUT`, `UND_ERR_HEADERS_TIMEOUT`, `UND_ERR_BODY_TIMEOUT`, or `UND_ERR_SOCKET`. On runtimes whose `fetch` errors carry no code, only the timeout and the four statuses count.
+
+Only a successful refresh advances `updatedAt`. An administrator's edit of the client, such as setting its `client_credentials_scopes`, does not, so it cannot extend the bound. While it serves a stored client, Better Auth fetches the document at most once a minute. The document's cache directives, including `no-store`, do not apply, because the stored client is a registration rather than a cached response.
+
+Every other failure rejects the request as before. A terminal failure also stops this instance from serving the stored client until a refresh succeeds, so an owner can revoke a client by removing its document. A failure is terminal when a document was retrieved and rejected (any other status, a redirect, or an invalid document), when the OAuth provider refuses to save the refreshed document, or when the `client_id` URL is refused. Other transport errors, such as `ENOTFOUND`, reject the request without stopping stale serving. A `metadataFetchPolicy` limit or the Node transport's DNS lookup limit serves the stored client only within 5 minutes of its last transient failure.
+
+<Callout type="warn">
+While a stored client is served, changes to its document, such as new redirect URIs, keys, or a new domain owner, are not seen. Terminal failures are recorded in memory, so another instance or a restarted one can still serve the stored client. Choose the shortest bound that covers the outages you expect.
+</Callout>
+
+For a `private_key_jwt` client with a `jwks_uri`, the option also keeps its cached keys in use under the same rules, counted from the last successful key fetch. Keys are cached in memory only, so after a restart they must be fetched before the client can authenticate. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).
 
 ## Security boundary
 
@@ -231,4 +315,5 @@ oauthProvider({
 
 * [OAuth Provider plugin](./oauth-provider)
 * [IETF Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02)
+* [IETF Client ID Metadata Document draft-03](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03)
 * [MCP authorization spec: draft-00 CIMD profile](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents)

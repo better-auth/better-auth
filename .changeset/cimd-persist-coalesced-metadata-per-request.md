@@ -1,0 +1,5 @@
+---
+"@better-auth/cimd": patch
+---
+
+Concurrent requests for the same Client ID Metadata Document now each save the client in their own database context. Before, a request that joined an in-flight fetch received the client saved by the first request, so on runtimes that build a context per request it could resolve a client its own database never stored, and one request's database error failed the others. A request that finds the fetched document in the cache before any request has finished saving it now saves it too, so a request that ends mid-save cannot leave the older client in use. A failed save now also drops the fetched document from the cache and paces the next fetch for that client like a failed fetch. Because each request saves, `onClientRefreshed` can run once for each concurrent request that saves a refreshed document.

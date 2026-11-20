@@ -367,6 +367,43 @@ describe("resource server challenge", () => {
 		});
 
 		it.each([
+			[
+				"an invalid proof",
+				new APIError("UNAUTHORIZED", {
+					message: "DPoP proof header is required",
+					error: "invalid_dpop_proof",
+					error_description: "DPoP proof header is required",
+				}),
+				'DPoP error="invalid_dpop_proof", error_description="DPoP proof header is required", algs="ES256"',
+			],
+			[
+				"a DPoP-bound token",
+				new APIError("UNAUTHORIZED", {
+					message: "DPoP proof required",
+					error: "invalid_token",
+					error_description: "DPoP proof required for DPoP-bound token",
+				}),
+				'DPoP error="invalid_token", error_description="DPoP proof required for DPoP-bound token", algs="ES256"',
+			],
+		])(
+			"answers a Bearer request that fails on %s with a DPoP challenge",
+			(_, error, expected) => {
+				const challenge = createResourceServerChallenge(
+					error,
+					"https://api.example.com",
+					{
+						dpopSigningAlgorithms: ["ES256"],
+						request: { authorizationHeader: "Bearer access-token" },
+					},
+				) as APIError;
+				expect(challenge.statusCode).toBe(401);
+				expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+					expected,
+				);
+			},
+		);
+
+		it.each([
 			["a Bearer request", "Bearer access-token"],
 			["a request without credentials", null],
 			["an unknown scheme", "Basic dXNlcjpwYXNz"],

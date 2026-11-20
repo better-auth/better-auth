@@ -125,6 +125,31 @@ export interface ClientDiscovery {
 	 */
 	fetchClientMetadataResource?: ClientMetadataResourceFetch;
 	/**
+	 * Allows a client owned by this discovery to use a `jwks_uri` whose origin
+	 * is neither a trusted origin nor the `client_id` URL's origin, which the
+	 * provider rejects by default.
+	 *
+	 * Consulted only for such a `jwks_uri`, when the client is registered or
+	 * refreshed and before each of its client assertions is verified. Only a
+	 * resolved `true` allows it; `false`, a throw, or a rejection keeps the
+	 * rejection. Every other `jwks_uri` check still applies first, and the keys
+	 * are still fetched through {@link fetchClientMetadataResource}.
+	 */
+	isCrossOriginJwksUriAllowed?: (
+		input: { clientId: string; jwksUri: string },
+		context: GenericEndpointContext,
+	) => Awaitable<boolean>;
+	/**
+	 * Seconds after the last successful fetch that cached `jwks_uri` keys of
+	 * this discovery's clients keep verifying assertions while refetching them
+	 * fails transiently: a timeout after DNS resolution, a connection failure
+	 * with a known error code, or HTTP 500, 502, 503, or 504. Capped at 24
+	 * hours. Values under the default 10-minute fallback do not shorten it.
+	 *
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/clients#private-key-jwt
+	 */
+	jwksStaleIfError?: number;
+	/**
 	 * Fields merged into `/.well-known/oauth-authorization-server` and
 	 * `/.well-known/openid-configuration` responses. Useful for advertising
 	 * RFC-registered discovery flags like
@@ -520,6 +545,27 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
+	 * Require every request to `/oauth2/authorize` to include the `openid`
+	 * scope, so the provider only serves OpenID Connect requests there.
+	 *
+	 * Once the client and `redirect_uri` are validated, a request without
+	 * `openid`, including one with no `scope` parameter at all, is redirected to
+	 * the `redirect_uri` with `invalid_scope`. Without this option, a request
+	 * without `openid` is served as plain OAuth, unless it carries the OpenID
+	 * Connect `claims` parameter, which is rejected without `openid`. A request
+	 * with no `scope` falls back to the client's registered `scopes`, then to the provider's
+	 * `scopes`.
+	 *
+	 * The option does not apply to a device authorization request at
+	 * `/device/code`.
+	 *
+	 * Requires `openid` to be in `scopes`.
+	 *
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+	 * @default false
+	 */
+	requireOpenId?: boolean;
+	/**
 	 * Validates an OAuth authorization request's redirect URI. Without this
 	 * option, the URI must match one registered for the client, except that
 	 * a registered native HTTP loopback URI may use a different port.
@@ -643,6 +689,28 @@ export interface OAuthOptions<
 	 * @default "insertOnly"
 	 */
 	resourceSeedMode?: "insertOnly" | "merge" | "overwrite";
+	/**
+	 * How long a finished `resources` seed is remembered, so later requests
+	 * skip its database read.
+	 *
+	 * - `"adapter"` (default): per database adapter object. An instance built
+	 *   once and reused seeds once.
+	 * - `"process"`: for the life of the process, per seeded entry. Use it
+	 *   when Better Auth is built per request with a new database client each
+	 *   time (for example on Cloudflare Workers), where `"adapter"` reads the
+	 *   table on every request. Only safe when every instance in the process
+	 *   uses the same database: an instance on another database with the same
+	 *   `resources` skips its seed.
+	 *
+	 * This option is a stopgap. It is superseded by the planned change that
+	 * stops `init` from accessing the database to seed configured resources,
+	 * and can be removed when that ships. The `next` branch (1.8) carries the
+	 * same option with the same name, type, and default.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 * @default "adapter"
+	 */
+	resourceSeedScope?: "adapter" | "process";
 	/**
 	 * Opt-in cache membership for resources by `identifier`. Mirrors the
 	 * {@link OAuthOptions.cachedTrustedClients} pattern.
@@ -1356,9 +1424,11 @@ export interface OAuthOptions<
 		verificationValue?: VerificationValue;
 	}) => Awaitable<Record<string, unknown>>;
 	/**
-	 * Overwrite specific /.well-known/openid-configuration
-	 * values so they are not available publicly.
-	 * This may be important if not all clients need specific scopes.
+	 * Overrides values in the /.well-known/openid-configuration and
+	 * /.well-known/oauth-authorization-server discovery documents. It can hide
+	 * values, such as scopes not every client needs, and add values the
+	 * provider would not derive on its own. It does not change what the server
+	 * accepts.
 	 */
 	advertisedMetadata?: {
 		/**
@@ -1374,6 +1444,36 @@ export interface OAuthOptions<
 		 * ["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"]
 		 */
 		claims_supported?: string[];
+		/**
+		 * Advertised token_endpoint_auth_methods_supported located at
+		 * /.well-known/oauth-authorization-server and
+		 * /.well-known/openid-configuration
+		 *
+		 * Lists exactly these methods, in this order, and advertises public-client
+		 * support when the list includes `"none"`. Every method must be one the
+		 * server supports: the built-in confidential methods, `"none"`, or a
+		 * method contributed through `clientAuthentication` by an entry in
+		 * `extensions` or by a companion plugin via `extendOAuthProvider`. The
+		 * list cannot be empty or repeat a method, and the plugin throws at
+		 * startup when it does. An unsupported method throws when discovery
+		 * metadata is built, because companion plugins register their methods
+		 * after this plugin is created.
+		 *
+		 * Use it when the server accepts public clients at the token endpoint but
+		 * registers them itself, so `allowUnauthenticatedClientRegistration` is
+		 * `false` and discovery would otherwise leave `"none"` out. Clients that
+		 * follow RFC 8414 read that omission as "public clients are unsupported".
+		 *
+		 * Changes only what discovery advertises. It does not change which
+		 * clients the token endpoint accepts, and it does not open
+		 * `POST /oauth2/register`. The introspection and revocation lists are
+		 * not affected.
+		 *
+		 * @default derived: `"none"` is listed when
+		 * `allowUnauthenticatedClientRegistration` is `true` or an extension
+		 * contributes a `clientDiscovery`
+		 */
+		token_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 	};
 	/**
 	 * Attach prefixes to returned token types.

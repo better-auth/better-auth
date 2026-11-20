@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type {
 	OAuthClientMetadata,
 	OAuthOptions,
@@ -10,13 +11,34 @@ import { toExpJWT } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { MetadataDocumentResponseCacheHeaders } from "./client-store";
 import {
+	FETCH_TIMEOUT_MS,
 	fetchClientMetadataDocument,
+	isMetadataFetchCapacityRefusal,
+	isMetadataTransportError,
+	isTransientMetadataFetchFailure,
 	persistMetadataDocumentClient,
 } from "./client-store";
 import type { CimdOptions } from "./types";
 import { isCimdClientIdUrlCandidate } from "./validate-metadata-document";
 
 const FETCH_BUDGET_WINDOW_MS = 60_000;
+// A request that joins a fetch stops waiting for it after twice the fetch
+// timeout. The request that started the fetch enforces that timeout on the
+// network fetch only, so a URL policy callback that runs longer than the wait
+// counts as a stuck fetch.
+const JOINED_FETCH_WAIT_MS = FETCH_TIMEOUT_MS * 2;
+// A fetch holds its concurrency permit on a lease of the same length. Only the
+// fetch's own request or a request for the same client can otherwise return
+// the permit, so a fetch whose request the runtime ended would hold it forever.
+const FETCH_PERMIT_LEASE_MS = JOINED_FETCH_WAIT_MS;
+const MAX_METADATA_STALE_IF_ERROR_MS = 24 * 60 * 60 * 1000;
+// While a stored client stands in for a document that failed to refresh, the
+// document is fetched at most this often, so an outage does not spend the
+// origin's fetch budget.
+const STALE_CLIENT_REFETCH_INTERVAL_MS = 60_000;
+// How recent a transient failure must be for the stored client to stand in
+// when a local fetch limit refuses the fetch instead.
+const STALE_CLIENT_REFUSAL_WINDOW_MS = 5 * 60_000;
 const DEFAULT_METADATA_FETCH_POLICY = {
 	minimumFetchInterval: 1,
 	maximumConcurrentFetches: 16,
@@ -37,6 +59,31 @@ interface CimdMetadataCacheEntry {
 	etag?: string;
 	lastModified?: string;
 	responseCacheHeaders: MetadataDocumentResponseCacheHeaders;
+	/**
+	 * Whether a request has saved this document. The entry is cached before any
+	 * request saves it, and a request that ends mid-save leaves it unsaved, so a
+	 * cache hit returns the stored client unchanged only once this is set.
+	 */
+	saved: boolean;
+}
+
+interface FetchedMetadata {
+	metadata: OAuthClientMetadata;
+	nextEntry: CimdMetadataCacheEntry | null;
+}
+
+interface InFlightMetadataFetch {
+	fetched: Promise<FetchedMetadata>;
+	startedAtMs: number;
+	/** Retires the fetch and returns its permit. Calling it again does nothing. */
+	abandon: () => void;
+	/**
+	 * Whether the fetch was retired and its outcome is not used. A retired
+	 * fetch's document may be older than the document of the fetch that
+	 * replaced it, so nobody saves it, and its failure is not reported. A fetch
+	 * retired by the lease with no replacement is used when it answers late.
+	 */
+	isDiscarded: () => boolean;
 }
 
 interface ResolvedMetadataFetchPolicy {
@@ -59,11 +106,62 @@ function invalidClient(description: string): APIError {
 	});
 }
 
+const metadataFetchRefusals = new WeakSet<object>();
+
 function createMetadataFetchUnavailableError(description: string): APIError {
-	return new APIError("TOO_MANY_REQUESTS", {
+	const error = new APIError("TOO_MANY_REQUESTS", {
 		error: "temporarily_unavailable",
 		error_description: description,
 	});
+	metadataFetchRefusals.add(error);
+	return error;
+}
+
+function isMetadataFetchRefusal(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		metadataFetchRefusals.has(error)
+	);
+}
+
+function describeFetchFailure(error: unknown): string {
+	const description = isAPIError(error)
+		? error.body?.error_description
+		: undefined;
+	if (typeof description === "string") return description;
+	return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Validate `metadataStaleIfError` and return it in milliseconds, or `null`
+ * when it is unset.
+ */
+export function resolveMetadataStaleIfErrorMs(
+	value: number | string | undefined,
+): number | null {
+	if (value === undefined) return null;
+	let durationMs: number;
+	if (typeof value === "number") {
+		durationMs = value * 1000;
+	} else {
+		try {
+			const nowSeconds = Math.floor(Date.now() / 1000);
+			durationMs = (toExpJWT(value, nowSeconds) - nowSeconds) * 1000;
+		} catch {
+			durationMs = Number.NaN;
+		}
+	}
+	if (
+		!Number.isFinite(durationMs) ||
+		durationMs < 0 ||
+		durationMs > MAX_METADATA_STALE_IF_ERROR_MS
+	) {
+		throw new BetterAuthError(
+			"cimd metadataStaleIfError must be a non-negative number of seconds or duration string of at most 24 hours",
+		);
+	}
+	return durationMs;
 }
 
 function parseDurationMs(value: number | string, optionName: string): number {
@@ -287,6 +385,7 @@ function createCacheEntry(
 		etag: cacheHeaders.etag,
 		lastModified: cacheHeaders.lastModified,
 		responseCacheHeaders: cacheHeaders,
+		saved: false,
 	};
 }
 
@@ -306,11 +405,25 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		);
 	}
 	const fetchPolicy = resolveMetadataFetchPolicy(cimdOptions);
+	const staleIfErrorMs = resolveMetadataStaleIfErrorMs(
+		cimdOptions.metadataStaleIfError,
+	);
 	const metadataCache = new Map<string, CimdMetadataCacheEntry>();
-	const inFlightResolutionByClientId = new Map<
+	// Evicting a transient record only makes the next request fetch.
+	const transientFailureByClientId = new Map<
 		string,
-		Promise<SchemaClient<Scope[]> | null>
+		{ failedAtMs: number; reason: string }
 	>();
+	// Evicting a terminal record moves the watermark, so stored clients
+	// validated before it are not served stale and eviction cannot resume
+	// stale serving.
+	const terminalFailureAtMsByClientId = new Map<string, number>();
+	let terminalFailureEvictedAtMs = Number.NEGATIVE_INFINITY;
+	const inFlightMetadataByClientId = new Map<string, InFlightMetadataFetch>();
+	// The latest fetch the lease retired for a client, until it settles or a
+	// newer fetch for that client starts. Only this fetch may be used late, and
+	// an evicted marker makes the late document unusable, which is safe.
+	const leaseRetiredFetchByClientId = new Map<string, InFlightMetadataFetch>();
 	const lastFetchStartAtMsByClientId = new Map<string, number>();
 	const fetchStateByOrigin = new Map<string, OriginFetchState>();
 	const globalFetchStartTimesMs: number[] = [];
@@ -334,6 +447,59 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		metadataCache.set(clientId, entry);
 	};
 
+	const recordFetchSuccess = (clientId: string) => {
+		transientFailureByClientId.delete(clientId);
+		terminalFailureAtMsByClientId.delete(clientId);
+	};
+
+	const recordFetchFailure = (clientId: string, failure: unknown) => {
+		if (
+			staleIfErrorMs === null ||
+			isMetadataFetchCapacityRefusal(failure) ||
+			isTransientMetadataFetchFailure(failure)
+		) {
+			return;
+		}
+		transientFailureByClientId.delete(clientId);
+	};
+
+	const recordTransientFailure = (clientId: string, failure: unknown) => {
+		transientFailureByClientId.delete(clientId);
+		while (transientFailureByClientId.size >= maxCacheEntries) {
+			const oldestClientId = transientFailureByClientId.keys().next().value;
+			if (typeof oldestClientId !== "string") break;
+			transientFailureByClientId.delete(oldestClientId);
+		}
+		transientFailureByClientId.set(clientId, {
+			failedAtMs: Date.now(),
+			reason: describeFetchFailure(failure),
+		});
+	};
+
+	// Callers record only for a servable stored client, so unknown client IDs
+	// cannot fill the records.
+	const recordTerminalFailure = (clientId: string) => {
+		if (staleIfErrorMs === null) return;
+		const nowMs = Date.now();
+		terminalFailureAtMsByClientId.delete(clientId);
+		if (terminalFailureAtMsByClientId.size >= maxCacheEntries) {
+			for (const [
+				candidateClientId,
+				failedAtMs,
+			] of terminalFailureAtMsByClientId) {
+				if (nowMs - failedAtMs <= staleIfErrorMs) break;
+				terminalFailureAtMsByClientId.delete(candidateClientId);
+			}
+		}
+		while (terminalFailureAtMsByClientId.size >= maxCacheEntries) {
+			const oldestClientId = terminalFailureAtMsByClientId.keys().next().value;
+			if (typeof oldestClientId !== "string") break;
+			terminalFailureAtMsByClientId.delete(oldestClientId);
+			terminalFailureEvictedAtMs = nowMs;
+		}
+		terminalFailureAtMsByClientId.set(clientId, nowMs);
+	};
+
 	const ensureClientFetchStateCapacity = (clientId: string, nowMs: number) => {
 		if (lastFetchStartAtMsByClientId.has(clientId)) return;
 		while (lastFetchStartAtMsByClientId.size >= maxCacheEntries) {
@@ -342,7 +508,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				candidateClientId,
 				candidateLastFetchStartAtMs,
 			] of lastFetchStartAtMsByClientId) {
-				if (inFlightResolutionByClientId.has(candidateClientId)) {
+				if (inFlightMetadataByClientId.has(candidateClientId)) {
 					continue;
 				}
 				if (
@@ -403,8 +569,43 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		return createdState;
 	};
 
-	const acquireMetadataFetchPermit = (clientId: string): (() => void) => {
-		const nowMs = Date.now();
+	// A fetch started by a request that the runtime then ends never settles, and
+	// its permit is never released. Retiring it removes it from the in-flight
+	// map and returns its pacing record and permit. It can no longer record a
+	// failure, and the requests that wait on it re-enter resolution instead of
+	// using its outcome, so later requests fetch again. Only a fetch the lease
+	// retired can still publish its document, while nothing has replaced it.
+	const retireFetch = (clientId: string, inFlight: InFlightMetadataFetch) => {
+		if (inFlightMetadataByClientId.get(clientId) === inFlight) {
+			inFlightMetadataByClientId.delete(clientId);
+			lastFetchStartAtMsByClientId.delete(clientId);
+			// A retired fetch that never settles never reaches its own cleanup.
+			fetchStartMarkByClientId.delete(clientId);
+		}
+		inFlight.abandon();
+	};
+
+	const retireFetchesPastLease = (nowMs: number) => {
+		for (const [clientId, inFlight] of inFlightMetadataByClientId) {
+			if (nowMs - inFlight.startedAtMs < FETCH_PERMIT_LEASE_MS) continue;
+			retireFetch(clientId, inFlight);
+			leaseRetiredFetchByClientId.delete(clientId);
+			while (leaseRetiredFetchByClientId.size >= maxCacheEntries) {
+				const oldestClientId = leaseRetiredFetchByClientId.keys().next().value;
+				if (typeof oldestClientId !== "string") break;
+				leaseRetiredFetchByClientId.delete(oldestClientId);
+			}
+			leaseRetiredFetchByClientId.set(clientId, inFlight);
+		}
+	};
+
+	const acquireMetadataFetchPermit = (
+		clientId: string,
+		nowMs: number,
+	): (() => void) => {
+		// Retiring first also frees the client and origin records that fetches
+		// past their lease hold, before the capacity checks below count them.
+		retireFetchesPastLease(nowMs);
 		const lastFetchStartAtMs = lastFetchStartAtMsByClientId.get(clientId);
 		if (
 			fetchPolicy.minimumFetchIntervalMs > 0 &&
@@ -464,37 +665,77 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		};
 	};
 
-	return async (ctx, clientId, existingClient) => {
-		if (!isCimdClientIdUrlCandidate(clientId)) {
-			return null;
-		}
+	// The mark of each client's fetch in flight. A failed fetch or save writes a
+	// new mark, so a capacity refusal that ends later can tell that the pacing
+	// record is no longer its own.
+	const fetchStartMarkByClientId = new Map<string, number>();
+	let lastFetchStartMark = 0;
 
-		const provider = ctx.context.getPlugin("oauth-provider");
-		if (!provider) {
-			throw new BetterAuthError(
-				"cimd discovery invoked without the oauth-provider plugin installed",
-			);
-		}
-		const oauthOptions = provider.options as OAuthOptions<Scope[]>;
-		const cachedEntry = readCacheEntry(clientId);
+	const recordFailedFetch = (clientId: string) => {
 		const nowMs = Date.now();
-
-		if (cachedEntry && cachedEntry.expiresAt > nowMs) {
-			if (existingClient) return existingClient;
-			return persistMetadataDocumentClient(
-				ctx,
-				clientId,
-				cachedEntry.metadata,
-				cimdOptions,
-				oauthOptions,
-			);
+		if (fetchStartMarkByClientId.has(clientId)) {
+			lastFetchStartMark += 1;
+			fetchStartMarkByClientId.set(clientId, lastFetchStartMark);
 		}
+		lastFetchStartAtMsByClientId.delete(clientId);
+		try {
+			ensureClientFetchStateCapacity(clientId, nowMs);
+		} catch {
+			// The state map is full of clients still inside their backoff. Skip
+			// the backoff for this client rather than outgrow the bound or replace
+			// the error being reported.
+			return;
+		}
+		lastFetchStartAtMsByClientId.set(clientId, nowMs);
+	};
 
-		const inFlightResolution = inFlightResolutionByClientId.get(clientId);
-		if (inFlightResolution !== undefined) return inFlightResolution;
+	// Resolves to `undefined` when the request stopped waiting or the fetch's
+	// outcome, a document or a failure, is not used.
+	const joinFetch = async (
+		clientId: string,
+		inFlight: InFlightMetadataFetch,
+	): Promise<FetchedMetadata | undefined> => {
+		let giveUp: (value: undefined) => void = () => {};
+		const gaveUp = new Promise<undefined>((resolve) => {
+			giveUp = resolve;
+		});
+		const timer = setTimeout(giveUp, JOINED_FETCH_WAIT_MS);
+		let fetched: FetchedMetadata | undefined;
+		try {
+			fetched = await Promise.race([inFlight.fetched, gaveUp]);
+		} catch (error) {
+			if (inFlight.isDiscarded()) return undefined;
+			throw error;
+		} finally {
+			clearTimeout(timer);
+		}
+		if (fetched === undefined) {
+			retireFetch(clientId, inFlight);
+			return undefined;
+		}
+		return inFlight.isDiscarded() ? undefined : fetched;
+	};
 
-		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
-		const resolution = (async () => {
+	// Resolves to `undefined` when the fetch was retired before it settled and
+	// its outcome, a document or a failure, is not used.
+	const startFetch = async (
+		ctx: GenericEndpointContext,
+		clientId: string,
+		cachedEntry: CimdMetadataCacheEntry | undefined,
+	): Promise<FetchedMetadata | undefined> => {
+		const startedAtMs = Date.now();
+		const previousFetchStartAtMs = lastFetchStartAtMsByClientId.get(clientId);
+		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(
+			clientId,
+			startedAtMs,
+		);
+		lastFetchStartMark += 1;
+		const startMark = lastFetchStartMark;
+		fetchStartMarkByClientId.set(clientId, startMark);
+		let abandoned = false;
+		let acceptedLate = false;
+		let startedFetch: InFlightMetadataFetch | undefined;
+		const metadataFetch = (async (): Promise<FetchedMetadata> => {
 			const fetched = await fetchClientMetadataDocument(
 				ctx,
 				clientId,
@@ -517,15 +758,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				fetched.status === "modified"
 					? fetched.metadata
 					: (cachedEntry as CimdMetadataCacheEntry).metadata;
-			const storedClient = await persistMetadataDocumentClient(
-				ctx,
-				clientId,
-				metadata,
-				cimdOptions,
-				oauthOptions,
-				existingClient ?? undefined,
-			);
-
 			const cacheHeaders =
 				fetched.status === "modified"
 					? fetched.cacheHeaders
@@ -539,28 +771,232 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				metadataRevalidationInterval,
 				Date.now(),
 			);
-			if (nextEntry) {
-				storeCacheEntry(clientId, nextEntry);
-			} else {
-				metadataCache.delete(clientId);
+			// A retired fetch leaves the cache and pacing to the fetch that replaced
+			// it. When the lease retired it and no fetch for the client started
+			// since, its document is the newest there is, so it is used instead of
+			// spending another fetch on the same document. The marker records the
+			// replacement directly, because a document that cannot be cached leaves
+			// no cache entry to compare.
+			if (
+				abandoned &&
+				leaseRetiredFetchByClientId.get(clientId) === startedFetch &&
+				!inFlightMetadataByClientId.has(clientId) &&
+				metadataCache.get(clientId) === cachedEntry
+			) {
+				acceptedLate = true;
 			}
-			// Successful fetches are governed by HTTP freshness and origin/global
-			// budgets. Keep the per-client interval only as failed-fetch backoff.
-			lastFetchStartAtMsByClientId.delete(clientId);
-			return storedClient;
+			if (!abandoned || acceptedLate) {
+				if (nextEntry) {
+					storeCacheEntry(clientId, nextEntry);
+				} else {
+					metadataCache.delete(clientId);
+				}
+				// Successful fetches are governed by HTTP freshness and origin/global
+				// budgets. Keep the per-client interval only as failed-fetch backoff.
+				lastFetchStartAtMsByClientId.delete(clientId);
+				recordFetchSuccess(clientId);
+			}
+			return { metadata, nextEntry };
 		})();
-		inFlightResolutionByClientId.set(clientId, resolution);
+		const inFlight: InFlightMetadataFetch = {
+			fetched: metadataFetch,
+			startedAtMs,
+			abandon() {
+				abandoned = true;
+				releaseMetadataFetchPermit();
+			},
+			isDiscarded: () => abandoned && !acceptedLate,
+		};
+		startedFetch = inFlight;
+		leaseRetiredFetchByClientId.delete(clientId);
+		inFlightMetadataByClientId.set(clientId, inFlight);
 		try {
-			return await resolution;
+			const fetched = await metadataFetch;
+			return inFlight.isDiscarded() ? undefined : fetched;
 		} catch (error) {
-			lastFetchStartAtMsByClientId.delete(clientId);
-			lastFetchStartAtMsByClientId.set(clientId, Date.now());
+			if (inFlight.isDiscarded()) return undefined;
+			if (isMetadataFetchCapacityRefusal(error)) {
+				// Nothing reached the host, so the refusal undoes only its own start
+				// mark. A record written since, such as a failed save's backoff, stays.
+				if (fetchStartMarkByClientId.get(clientId) === startMark) {
+					if (previousFetchStartAtMs === undefined) {
+						lastFetchStartAtMsByClientId.delete(clientId);
+					} else {
+						lastFetchStartAtMsByClientId.set(clientId, previousFetchStartAtMs);
+					}
+				}
+			} else {
+				recordFailedFetch(clientId);
+			}
+			recordFetchFailure(clientId, error);
 			throw error;
 		} finally {
-			if (inFlightResolutionByClientId.get(clientId) === resolution) {
-				inFlightResolutionByClientId.delete(clientId);
+			if (inFlightMetadataByClientId.get(clientId) === inFlight) {
+				inFlightMetadataByClientId.delete(clientId);
+			}
+			if (leaseRetiredFetchByClientId.get(clientId) === inFlight) {
+				leaseRetiredFetchByClientId.delete(clientId);
+			}
+			if (!inFlightMetadataByClientId.has(clientId)) {
+				fetchStartMarkByClientId.delete(clientId);
 			}
 			releaseMetadataFetchPermit();
+		}
+	};
+
+	return async (ctx, clientId, existingClient) => {
+		if (!isCimdClientIdUrlCandidate(clientId)) {
+			return null;
+		}
+
+		const provider = ctx.context.getPlugin("oauth-provider");
+		if (!provider) {
+			throw new BetterAuthError(
+				"cimd discovery invoked without the oauth-provider plugin installed",
+			);
+		}
+		const oauthOptions = provider.options as OAuthOptions<Scope[]>;
+
+		// Each request saves the fetched document with its own context, and no
+		// request waits for another request's save. A request that ends mid-save
+		// could leave that save pending forever, and a runtime that bounds I/O to
+		// the request that started it cannot await the save from another request.
+		// Saves are not ordered across requests, so a save that lands after a
+		// newer document was cached may have overwritten that document's save.
+		// The newer entry is then saved again on its next cache hit.
+		const markSaved = (entry: CimdMetadataCacheEntry | null) => {
+			if (entry) entry.saved = true;
+			const current = metadataCache.get(clientId);
+			if (current && current !== entry) current.saved = false;
+		};
+
+		const persistFetchedMetadata = async ({
+			metadata,
+			nextEntry,
+		}: FetchedMetadata) => {
+			try {
+				const storedClient = await persistMetadataDocumentClient(
+					ctx,
+					clientId,
+					metadata,
+					cimdOptions,
+					oauthOptions,
+					existingClient ?? undefined,
+				);
+				markSaved(nextEntry);
+				return storedClient;
+			} catch (error) {
+				if (nextEntry && metadataCache.get(clientId) === nextEntry) {
+					metadataCache.delete(clientId);
+				}
+				recordFailedFetch(clientId);
+				// A storage failure says nothing about the document.
+				if (
+					isAPIError(error) &&
+					error.status === "BAD_REQUEST" &&
+					storedClientWithinStaleBound()
+				) {
+					recordTerminalFailure(clientId);
+				}
+				throw error;
+			}
+		};
+
+		// Only the stored row stands in, never an instance's cached document.
+		const storedClientWithinStaleBound = () => {
+			if (
+				!existingClient?.updatedAt ||
+				staleIfErrorMs === null ||
+				terminalFailureAtMsByClientId.has(clientId)
+			) {
+				return null;
+			}
+			const validatedAtMs = new Date(existingClient.updatedAt).getTime();
+			if (validatedAtMs <= terminalFailureEvictedAtMs) return null;
+			return Date.now() - validatedAtMs <= staleIfErrorMs
+				? existingClient
+				: null;
+		};
+		const serveStoredClient = (
+			storedClient: SchemaClient<Scope[]>,
+			reason: string,
+		) => {
+			ctx.context.logger.warn(
+				`cimd is serving the stored client ${clientId} because its metadata document could not be refreshed: ${reason}`,
+			);
+			return storedClient;
+		};
+
+		// A request resolves again only after a fetch it waited on was retired. A
+		// fresh cache entry found then came from a later fetch, so the stored
+		// client the request started with can be older than it.
+		let resolvingAgain = false;
+		while (true) {
+			const cachedEntry = readCacheEntry(clientId);
+			if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+				if (existingClient && cachedEntry.saved && !resolvingAgain) {
+					return existingClient;
+				}
+				// The stored client can be missing or older than this entry. Later
+				// cache hits return it once the entry is saved, so a failed save must
+				// not leave this entry behind.
+				return persistFetchedMetadata({
+					metadata: cachedEntry.metadata,
+					nextEntry: cachedEntry,
+				});
+			}
+
+			const transientFailure = transientFailureByClientId.get(clientId);
+			if (
+				transientFailure &&
+				Date.now() - transientFailure.failedAtMs <
+					STALE_CLIENT_REFETCH_INTERVAL_MS
+			) {
+				const storedClient = storedClientWithinStaleBound();
+				if (storedClient) {
+					return serveStoredClient(storedClient, transientFailure.reason);
+				}
+			}
+
+			const sharedFetch = inFlightMetadataByClientId.get(clientId);
+			let fetched: FetchedMetadata | undefined;
+			try {
+				fetched = sharedFetch
+					? await joinFetch(clientId, sharedFetch)
+					: await startFetch(ctx, clientId, cachedEntry);
+			} catch (error) {
+				const storedClient = storedClientWithinStaleBound();
+				if (storedClient && isTransientMetadataFetchFailure(error)) {
+					recordTransientFailure(clientId, error);
+					return serveStoredClient(storedClient, describeFetchFailure(error));
+				}
+				if (
+					storedClient &&
+					!isMetadataFetchRefusal(error) &&
+					!isMetadataFetchCapacityRefusal(error) &&
+					!isMetadataTransportError(error)
+				) {
+					recordTerminalFailure(clientId);
+				}
+				const lastFailure = transientFailureByClientId.get(clientId);
+				if (
+					storedClient &&
+					lastFailure &&
+					Date.now() - lastFailure.failedAtMs <=
+						STALE_CLIENT_REFUSAL_WINDOW_MS &&
+					(isMetadataFetchRefusal(error) ||
+						isMetadataFetchCapacityRefusal(error))
+				) {
+					return serveStoredClient(storedClient, lastFailure.reason);
+				}
+				throw error;
+			}
+			// Only a fetch whose outcome is used saves its document. A retired
+			// fetch's document can be older than its replacement's, and saving it
+			// would put the stored client behind a fresh cache entry that later
+			// requests trust, so this request resolves again instead.
+			if (fetched) return persistFetchedMetadata(fetched);
+			resolvingAgain = true;
 		}
 	};
 }
