@@ -25,6 +25,8 @@ export interface SCIMEqualityFilter<Attribute extends string> {
 	value: string;
 }
 
+export type SCIMFilterCombinator = "and" | "or";
+
 export interface SCIMClassicPagination {
 	/** One-based index of the first requested resource. */
 	startIndex: number;
@@ -117,6 +119,7 @@ export type SCIMQueryParseResult<Value> =
 
 export interface SCIMCollectionQuery<Attribute extends string> {
 	filters: readonly SCIMEqualityFilter<Attribute>[];
+	filterCombinator: SCIMFilterCombinator;
 	pagination: SCIMClassicPagination;
 	projection: SCIMAttributeProjection;
 }
@@ -287,6 +290,11 @@ function scanSCIMFilterTopLevel(
 			bracketDepth -= 1;
 			continue;
 		}
+		if (character === "(" || character === ")") {
+			return invalidFilterSyntax(
+				"filter grouping with parentheses is not supported",
+			);
+		}
 		if (bracketDepth !== 0 || !character || !/[A-Za-z]/.test(character)) {
 			continue;
 		}
@@ -345,7 +353,7 @@ function parseSCIMEqualityFilter(
 ): SCIMQueryParseResult<
 	SCIMEqualityFilter<SCIMGroupFilterAttribute> | undefined
 >;
-/** Parse the deliberately small P0 equality-filter grammar. */
+/** Parse one equality expression from the supported collection-filter grammar. */
 function parseSCIMEqualityFilter(
 	resourceType: SCIMResourceType,
 	filter?: string,
@@ -420,31 +428,41 @@ function parseSCIMEqualityFilter(
 	};
 }
 
-function splitFilterConjunction(
-	filter: string,
-): SCIMQueryParseResult<readonly string[]> {
+function splitFilterLogicalExpressions(filter: string): SCIMQueryParseResult<{
+	combinator: SCIMFilterCombinator;
+	expressions: readonly string[];
+}> {
 	const scan = scanSCIMFilterTopLevel(filter);
 	if (!scan.ok) return scan;
 	const expressions: string[] = [];
 	let expressionStart = 0;
+	let combinator: SCIMFilterCombinator | undefined;
 
 	for (const word of scan.value) {
+		const logical = word.value.toLowerCase();
+		if (logical !== "and" && logical !== "or") continue;
 		const before = filter[word.start - 1];
 		const after = filter[word.end];
 		if (
-			word.value.toLowerCase() === "and" &&
-			before !== undefined &&
-			after !== undefined &&
-			/\s/.test(before) &&
-			/\s/.test(after)
+			before === undefined ||
+			after === undefined ||
+			!/\s/.test(before) ||
+			!/\s/.test(after)
 		) {
-			const expression = filter.slice(expressionStart, word.start).trim();
-			if (!expression) {
-				return invalidFilterSyntax("filter contains an invalid conjunction");
-			}
-			expressions.push(expression);
-			expressionStart = word.end;
+			continue;
 		}
+		if (combinator && combinator !== logical) {
+			return invalidFilterSyntax(
+				"filter cannot mix and and or without parentheses",
+			);
+		}
+		combinator = logical;
+		const expression = filter.slice(expressionStart, word.start).trim();
+		if (!expression) {
+			return invalidFilterSyntax("filter contains an invalid conjunction");
+		}
+		expressions.push(expression);
+		expressionStart = word.end;
 	}
 
 	const finalExpression = filter.slice(expressionStart).trim();
@@ -457,32 +475,42 @@ function splitFilterConjunction(
 		);
 	}
 	expressions.push(finalExpression);
-	return { ok: true, value: expressions };
+	return {
+		ok: true,
+		value: { combinator: combinator ?? "and", expressions },
+	};
 }
 
 function parseSCIMFilter(
 	resourceType: "User",
 	filter?: string,
-): SCIMQueryParseResult<readonly SCIMEqualityFilter<SCIMUserFilterAttribute>[]>;
+): SCIMQueryParseResult<{
+	combinator: SCIMFilterCombinator;
+	filters: readonly SCIMEqualityFilter<SCIMUserFilterAttribute>[];
+}>;
 function parseSCIMFilter(
 	resourceType: "Group",
 	filter?: string,
-): SCIMQueryParseResult<
-	readonly SCIMEqualityFilter<SCIMGroupFilterAttribute>[]
->;
-/** Parse the supported conjunction of case-insensitive equality expressions. */
+): SCIMQueryParseResult<{
+	combinator: SCIMFilterCombinator;
+	filters: readonly SCIMEqualityFilter<SCIMGroupFilterAttribute>[];
+}>;
+/** Parse a uniform and/or of case-insensitive equality expressions. */
 function parseSCIMFilter(
 	resourceType: SCIMResourceType,
 	filter?: string,
-): SCIMQueryParseResult<readonly SCIMEqualityFilter<SCIMFilterAttribute>[]> {
+): SCIMQueryParseResult<{
+	combinator: SCIMFilterCombinator;
+	filters: readonly SCIMEqualityFilter<SCIMFilterAttribute>[];
+}> {
 	if (filter === undefined || filter.trim() === "") {
-		return { ok: true, value: [] };
+		return { ok: true, value: { combinator: "and", filters: [] } };
 	}
-	const expressions = splitFilterConjunction(filter);
+	const expressions = splitFilterLogicalExpressions(filter);
 	if (!expressions.ok) return expressions;
 
 	const filters: SCIMEqualityFilter<SCIMFilterAttribute>[] = [];
-	for (const expression of expressions.value) {
+	for (const expression of expressions.value.expressions) {
 		const parsed =
 			resourceType === "User"
 				? parseSCIMEqualityFilter("User", expression)
@@ -490,7 +518,10 @@ function parseSCIMFilter(
 		if (!parsed.ok) return parsed;
 		if (parsed.value) filters.push(parsed.value);
 	}
-	return { ok: true, value: filters };
+	return {
+		ok: true,
+		value: { combinator: expressions.value.combinator, filters },
+	};
 }
 
 function normalizeAttributeList(
@@ -611,7 +642,8 @@ export function parseSCIMCollectionQuery(
 	return {
 		ok: true,
 		value: {
-			filters: filters.value,
+			filters: filters.value.filters,
+			filterCombinator: filters.value.combinator,
 			pagination: pagination.value,
 			projection: projection.value,
 		},

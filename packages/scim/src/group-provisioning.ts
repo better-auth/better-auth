@@ -10,6 +10,7 @@ import type {
 	SCIMAttributeProjection,
 	SCIMCollectionQueryInput,
 	SCIMEqualityFilter,
+	SCIMFilterCombinator,
 	SCIMGroupFilterAttribute,
 } from "./collection-query";
 import {
@@ -148,6 +149,55 @@ function createGroupCollectionWhere(
 	}
 
 	return where;
+}
+
+async function queryFilteredSCIMGroups(
+	adapter: Pick<DBAdapter, "count" | "findMany">,
+	connectionId: string,
+	filters: readonly SCIMEqualityFilter<SCIMGroupFilterAttribute>[],
+	combinator: SCIMFilterCombinator,
+	pagination: { count: number; offset: number },
+) {
+	// Evaluate `or` as the ordered union of connection-scoped equalities so
+	// totalResults and pagination stay exact without a mixed adapter OR.
+	if (combinator !== "or" || filters.length <= 1) {
+		const where = createGroupCollectionWhere(connectionId, filters);
+		const totalResults = await adapter.count({
+			model: "scimGroup",
+			where,
+		});
+		const groups =
+			pagination.count === 0
+				? []
+				: await adapter.findMany<SCIMGroup>({
+						model: "scimGroup",
+						where,
+						limit: pagination.count,
+						offset: pagination.offset,
+						sortBy: { field: "orderKey", direction: "asc" },
+					});
+		return { totalResults, groups };
+	}
+
+	const matches = new Map<string, SCIMGroup>();
+	for (const filter of filters) {
+		const rows = await adapter.findMany<SCIMGroup>({
+			model: "scimGroup",
+			where: createGroupCollectionWhere(connectionId, [filter]),
+			limit: SCIM_UNBOUNDED_ROW_LIMIT,
+		});
+		for (const row of rows) matches.set(row.id, row);
+	}
+	const groups = [...matches.values()].sort((left, right) =>
+		left.orderKey.localeCompare(right.orderKey),
+	);
+	return {
+		totalResults: groups.length,
+		groups:
+			pagination.count === 0
+				? []
+				: groups.slice(pagination.offset, pagination.offset + pagination.count),
+	};
 }
 
 async function assertGroupConnectionDomainStable(
@@ -1146,27 +1196,17 @@ export function listSCIMGroups(authMiddleware: SCIMConnectionMiddleware) {
 			}
 			const {
 				filters,
+				filterCombinator,
 				pagination,
 				projection: attributeProjection,
 			} = parsedQuery.value;
-			const where = createGroupCollectionWhere(
+			const { totalResults, groups } = await queryFilteredSCIMGroups(
+				adapter,
 				ctx.context.scimConnection.id,
 				filters,
+				filterCombinator,
+				pagination,
 			);
-			const totalResults = await adapter.count({
-				model: "scimGroup",
-				where,
-			});
-			const groups =
-				pagination.count === 0
-					? []
-					: await adapter.findMany<SCIMGroup>({
-							model: "scimGroup",
-							where,
-							limit: pagination.count,
-							offset: pagination.offset,
-							sortBy: { field: "orderKey", direction: "asc" },
-						});
 			const resources = await createProjectedGroupResources(
 				adapter,
 				ctx.context.baseURL,

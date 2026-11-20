@@ -11,6 +11,7 @@ import type {
 	SCIMAttributeProjection,
 	SCIMCollectionQueryInput,
 	SCIMEqualityFilter,
+	SCIMFilterCombinator,
 	SCIMUserFilterAttribute,
 } from "./collection-query";
 import {
@@ -161,6 +162,59 @@ function createUserCollectionWhere(
 	}
 
 	return where;
+}
+
+async function queryFilteredSCIMUsers(
+	adapter: Pick<DBAdapter, "count" | "findMany">,
+	connectionId: string,
+	filters: readonly SCIMEqualityFilter<SCIMUserFilterAttribute>[],
+	combinator: SCIMFilterCombinator,
+	pagination: { count: number; offset: number },
+) {
+	// Adapter where[] can AND a connection scope with an OR group on SQL
+	// adapters, but that mix is not portable enough for collection counts.
+	// Each equality stays connection-scoped; the page is the ordered union.
+	if (combinator !== "or" || filters.length <= 1) {
+		const where = createUserCollectionWhere(connectionId, filters);
+		const totalResults = await adapter.count({
+			model: "scimUser",
+			where,
+		});
+		const scimUsers =
+			pagination.count === 0
+				? []
+				: await adapter.findMany<SCIMUser>({
+						model: "scimUser",
+						where,
+						limit: pagination.count,
+						offset: pagination.offset,
+						sortBy: { field: "orderKey", direction: "asc" },
+					});
+		return { totalResults, scimUsers };
+	}
+
+	const matches = new Map<string, SCIMUser>();
+	for (const filter of filters) {
+		const rows = await adapter.findMany<SCIMUser>({
+			model: "scimUser",
+			where: createUserCollectionWhere(connectionId, [filter]),
+			limit: SCIM_UNBOUNDED_ROW_LIMIT,
+		});
+		for (const row of rows) matches.set(row.id, row);
+	}
+	const scimUsers = [...matches.values()].sort((left, right) =>
+		left.orderKey.localeCompare(right.orderKey),
+	);
+	return {
+		totalResults: scimUsers.length,
+		scimUsers:
+			pagination.count === 0
+				? []
+				: scimUsers.slice(
+						pagination.offset,
+						pagination.offset + pagination.count,
+					),
+	};
 }
 
 function createUserResource(baseURL: string, scimUser: SCIMUser) {
@@ -905,27 +959,17 @@ export function listSCIMUsers(authMiddleware: SCIMConnectionMiddleware) {
 			}
 			const {
 				filters,
+				filterCombinator,
 				pagination,
 				projection: attributeProjection,
 			} = parsedQuery.value;
-			const where = createUserCollectionWhere(
+			const { totalResults, scimUsers } = await queryFilteredSCIMUsers(
+				adapter,
 				ctx.context.scimConnection.id,
 				filters,
+				filterCombinator,
+				pagination,
 			);
-			const totalResults = await adapter.count({
-				model: "scimUser",
-				where,
-			});
-			const scimUsers =
-				pagination.count === 0
-					? []
-					: await adapter.findMany<SCIMUser>({
-							model: "scimUser",
-							where,
-							limit: pagination.count,
-							offset: pagination.offset,
-							sortBy: { field: "orderKey", direction: "asc" },
-						});
 
 			const resources = scimUsers.map((scimUser) =>
 				projectSCIMResourceAttributes(
