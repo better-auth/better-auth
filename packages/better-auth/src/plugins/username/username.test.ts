@@ -1,6 +1,10 @@
 import { UnsecuredJWT } from "jose";
 import { assert, describe, expect, it, vi } from "vitest";
+import { memoryAdapter } from "../../adapters/memory-adapter";
+import { betterAuth } from "../../auth/full";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { bearer } from "../bearer";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
 
@@ -205,6 +209,29 @@ describe("username", async () => {
 			},
 		});
 		expect(res.error?.status).toBe(400);
+	});
+
+	it("should require a session in update-user before checking whether the username is taken", async () => {
+		await client.signUp.email({
+			email: "signed-out-check@gmail.com",
+			username: "signed_out_check",
+			password: "new_password",
+			name: "signed-out-check",
+		});
+
+		const taken = await client.updateUser({
+			username: "signed_out_check",
+		});
+		expect(taken.error?.status).toBe(401);
+
+		// The username format is still checked before the session.
+		const tooShort = await client.updateUser({
+			username: "abc",
+		});
+		expect(tooShort.error?.status).toBe(400);
+		expect(tooShort.error?.code).toBe(
+			USERNAME_ERROR_CODES.USERNAME_TOO_SHORT.code,
+		);
 	});
 
 	it("should succeed on duplicate username in update-user if user is the same", async () => {
@@ -1326,3 +1353,127 @@ describe("username with a request that has no body", async () => {
 		expect(response.status).toBe(400);
 	});
 });
+
+/**
+ * `getTestInstance` always registers its own `bearer()` first, so these
+ * instances are built directly to control the plugin order.
+ */
+describe.each(["bearer listed first", "username listed first"])(
+	"immutable username with a bearer token (%s)",
+	async (order) => {
+		const immutableUsername = username({
+			immutableUsername: true,
+		});
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			}),
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins:
+				order === "bearer listed first"
+					? [bearer(), immutableUsername]
+					: [immutableUsername, bearer()],
+		});
+
+		const signUp = await auth.api.signUpEmail({
+			body: {
+				email: "immutable-bearer@example.com",
+				username: "first_name",
+				password: "password123",
+				name: "Immutable Bearer",
+			},
+			returnHeaders: true,
+		});
+		const token = signUp.headers.get("set-auth-token") ?? "";
+		const sessionCookie = parseSetCookieHeader(
+			signUp.headers.get("set-cookie") ?? "",
+		).get("better-auth.session_token");
+		const cookie = `better-auth.session_token=${sessionCookie?.value}`;
+
+		const updateUsername = async (
+			headers: Record<string, string>,
+			value: string,
+		) => {
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/update-user", {
+					method: "POST",
+					headers: {
+						...headers,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						username: value,
+					}),
+				}),
+			);
+			const body = (await res.json()) as {
+				code?: string;
+			};
+			return res.ok ? "ok" : body.code;
+		};
+
+		const currentUsername = async () => {
+			const session = await auth.api.getSession({
+				headers: new Headers({
+					cookie,
+				}),
+			});
+			return session?.user.username;
+		};
+
+		it("should accept the user's own username sent with a bearer token", async () => {
+			const result = await updateUsername(
+				{
+					authorization: `Bearer ${token}`,
+				},
+				"first_name",
+			);
+			expect(result).toBe("ok");
+		});
+
+		it("should refuse a username change sent with the session cookie", async () => {
+			const result = await updateUsername(
+				{
+					cookie,
+				},
+				"second_name",
+			);
+			expect(result).toBe(USERNAME_ERROR_CODES.USERNAME_IS_IMMUTABLE.code);
+		});
+
+		it("should refuse the same username change sent with a bearer token", async () => {
+			const result = await updateUsername(
+				{
+					authorization: `Bearer ${token}`,
+				},
+				"second_name",
+			);
+			expect(result).toBe(USERNAME_ERROR_CODES.USERNAME_IS_IMMUTABLE.code);
+			expect(await currentUsername()).toBe("first_name");
+		});
+
+		it("should refuse the same username change through auth.api with a bearer token", async () => {
+			await expect(
+				auth.api.updateUser({
+					body: {
+						username: "third_name",
+					},
+					headers: new Headers({
+						authorization: `Bearer ${token}`,
+					}),
+				}),
+			).rejects.toMatchObject({
+				body: {
+					code: USERNAME_ERROR_CODES.USERNAME_IS_IMMUTABLE.code,
+				},
+			});
+			expect(await currentUsername()).toBe("first_name");
+		});
+	},
+);

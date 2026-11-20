@@ -8,7 +8,6 @@ import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
-import { getSessionFromCtx } from "../../api/routes/session";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
@@ -305,6 +304,37 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 									const skipValidation =
 										currentPath &&
 										pathsWithHttpHookValidation.includes(currentPath);
+
+									if (username && currentPath === "/update-user") {
+										const session = context?.context?.session;
+										const normalizedUsername = normalizer(username);
+										if (
+											options?.immutableUsername &&
+											session?.user.username &&
+											session.user.username !== normalizedUsername
+										) {
+											throw APIError.from(
+												"BAD_REQUEST",
+												ERROR_CODES.USERNAME_IS_IMMUTABLE,
+											);
+										}
+										const adapter = await getCurrentAdapter(ctx.adapter);
+										const existingUser = await adapter.findOne<User>({
+											model: "user",
+											where: [
+												{
+													field: "username",
+													value: normalizedUsername,
+												},
+											],
+										});
+										if (existingUser && existingUser.id !== session?.user.id) {
+											throw APIError.from(
+												"BAD_REQUEST",
+												ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+											);
+										}
+									}
 
 									if (username) {
 										if (!skipValidation) {
@@ -629,43 +659,19 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 							if (validationError) {
 								throw APIError.from("BAD_REQUEST", validationError);
 							}
-							const normalizedUsername = normalizer(username);
-							const session =
-								ctx.path === "/update-user"
-									? await getSessionFromCtx(ctx)
-									: null;
-
-							if (ctx.path === "/update-user" && options?.immutableUsername) {
-								const hasUsername = !!session?.user.username;
-								const usernamesDiffer =
-									session?.user.username !== normalizedUsername;
-								if (hasUsername && usernamesDiffer) {
-									throw APIError.from(
-										"BAD_REQUEST",
-										ERROR_CODES.USERNAME_IS_IMMUTABLE,
-									);
-								}
-							}
-
-							const existingUser = await ctx.context.adapter.findOne<User>({
-								model: "user",
-								where: [
-									{
-										field: "username",
-										value: normalizedUsername,
-									},
-								],
-							});
-
-							if (ctx.path === "/sign-up/email" && existingUser) {
-								throw APIError.from(
-									"BAD_REQUEST",
-									ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
-								);
-							}
-
-							if (ctx.path === "/update-user" && existingUser) {
-								if (!session || existingUser.id !== session.user.id) {
+							// `/update-user` checks the username against the session in the
+							// user update hook, where the endpoint has already resolved it.
+							if (ctx.path === "/sign-up/email") {
+								const existingUser = await ctx.context.adapter.findOne<User>({
+									model: "user",
+									where: [
+										{
+											field: "username",
+											value: normalizer(username),
+										},
+									],
+								});
+								if (existingUser) {
 									throw APIError.from(
 										"BAD_REQUEST",
 										ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
