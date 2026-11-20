@@ -16,9 +16,11 @@ description: Control which tokens the provider issues, for which APIs, and for h
 | `private_key_jwt`     | A signed JWT assertion. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt). |
 | `none`                | Public client. PKCE is required.                                                                     |
 
-To get a JWT access token, include a `resource` in the request and enable the JWT plugin. The token's `aud` is that resource. When the scopes also include `openid`, `aud` is an array that also holds the UserInfo endpoint URL. If either is missing, the access token is opaque. A JWT access token's header has `typ: at+jwt` ([RFC 9068 §2.1](https://datatracker.ietf.org/doc/html/rfc9068#section-2.1)). Introspection, revocation, UserInfo, and token exchange accept a JWT as an access token only with that type, so other JWTs signed with the same keys never pass as one. Error codes are listed in [Token errors](/docs/plugins/oauth-provider/reference#token-errors).
+To get a JWT access token, include a `resource` in the request and enable the JWT plugin. The token's `aud` is that resource. When the scopes also include `openid`, `aud` is an array that also holds the UserInfo endpoint URL. If either is missing, the access token is opaque. Error codes are listed in [Token errors](/docs/plugins/oauth-provider/reference#token-errors).
 
 An `authorization_code` request that omits `resource` uses the resources bound to the authorization code, and a refresh request uses the resources stored on the refresh token. When no resource is named or bound, including on `client_credentials` requests that omit `resource`, the access token is opaque with no `aud` claim, and the provider applies no default resource. [RFC 8707 §2.1](https://datatracker.ietf.org/doc/html/rfc8707#section-2.1) says a provider can process an authorization request that omits `resource` without a specific resource, use a default resource, or fail the request with `invalid_target`. Better Auth processes it without a resource. A resource server that sets `audience` rejects the resulting token.
+
+The OAuth provider sets `typ: at+jwt` on JWT access tokens. Introspection, revocation, UserInfo, and token exchange require that header type when accepting a JWT as an access token. [RFC 9068 §2.1](https://datatracker.ietf.org/doc/html/rfc9068#section-2.1)
 
 ## Scopes
 
