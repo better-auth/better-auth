@@ -15,12 +15,13 @@ The `oauthProviderClient` plugin adds `oauth_query` to a request, other than GET
 
 The authorize endpoint runs these steps in order and stops at the first one that needs the user:
 
-1. No session, a session older than `max_age`, or `prompt=login`: redirect to `loginPage`. `prompt=create` redirects to the [sign-up page](#sign-up-account-screen) instead.
-2. `prompt=select_account`, or `selectAccount.shouldRedirect` returns `true`: redirect to the [select account page](#select-account-screen).
-3. `signup.shouldRedirect` returns `true` or a path: redirect to the [sign-up page](#sign-up-account-screen).
-4. `postLogin.shouldRedirect` returns `true`: redirect to the [post login page](#post-login-screen).
-5. `prompt=consent`, or the client lacks `skip_consent` and stored consent does not cover the requested scopes, claims, and resources: redirect to `consentPage`.
-6. Redirect to the client's `redirect_uri` with the authorization code.
+1. [`beforeAuthorization`](#authorization-policy) refuses the request or asks for a new sign-in.
+2. No session, a session older than `max_age`, or `prompt=login`: redirect to `loginPage`. `prompt=create` redirects to the [sign-up page](#sign-up-account-screen) instead.
+3. `prompt=select_account`, or `selectAccount.shouldRedirect` returns `true`: redirect to the [select account page](#select-account-screen).
+4. `signup.shouldRedirect` returns `true` or a path: redirect to the [sign-up page](#sign-up-account-screen).
+5. `postLogin.shouldRedirect` returns `true`: redirect to the [post login page](#post-login-screen).
+6. `prompt=consent`, or the client lacks `skip_consent` and stored consent does not cover the requested scopes, claims, and resources: redirect to `consentPage`.
+7. Redirect to the client's `redirect_uri` with the authorization code.
 
 With `prompt=none`, any step that needs the user returns an error such as `login_required` or `consent_required` to the client instead of redirecting.
 
@@ -32,6 +33,63 @@ Better Auth also applies these rules to the authorize request ([OAuth 2.1 §4.1.
 * `state` is optional and echoed back when sent. Clients should still send it ([RFC 6749 §10.12](https://datatracker.ietf.org/doc/html/rfc6749#section-10.12)).
 * Every success and error response includes `iss` ([RFC 9207 §2](https://datatracker.ietf.org/doc/html/rfc9207#section-2)).
 * `resource` restricts the tokens to a resource server ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)). See [Resources](/docs/plugins/oauth-provider/tokens#resources).
+
+## Authorization policy
+
+Some requests need more than a signed-in user before the provider may continue. For example, a client may ask for a stronger sign-in with `acr_values`, which OIDC Core treats as a preference, not a requirement. To enforce your own rules on each authorization request, set `beforeAuthorization`. The provider calls it after it validates the request, on the first visit and on each later visit, such as the one after sign-in:
+
+```ts title="auth.ts"
+import { oauthProvider } from "@better-auth/oauth-provider";
+
+const MFA = "urn:example:acr:mfa";
+
+oauthProvider({
+  loginPage: "/sign-in",
+  consentPage: "/consent",
+  beforeAuthorization: ({ query, session }) => { // [!code highlight]
+    const wantsMfa = query.acr_values?.split(" ").includes(MFA); // [!code highlight]
+    // `twoFactorVerified` is a session field your app sets after the second factor.
+    if (wantsMfa && session?.session.twoFactorVerified !== true) { // [!code highlight]
+      return { prompt: "login" }; // [!code highlight]
+    } // [!code highlight]
+  }, // [!code highlight]
+})
+```
+
+The input holds the request, the client, and the session:
+
+* `query` is a copy of the validated authorization request, after the provider resolves a `request_uri`. It includes parameters the client added. It never holds client credentials or the `request_uri`.
+* `pushed` is `true` only when your server's own [`/oauth2/par`](#pushed-authorization-requests) stored the request. A request that your `requestUriResolver` returns reports `false` on every visit, even if your resolver reads pushed requests from your own store, and so does every `issueAuthorizationCode` call.
+* `client` is the client's registration.
+* `session` is the user's session on this visit, or `null` before sign-in.
+* `headers` and `ctx` belong to the request being handled: the visit to `/oauth2/authorize`, or the plugin endpoint that calls `issueAuthorizationCode`.
+
+The hook decides in one of three ways:
+
+* Return nothing to continue through the [steps above](#how-the-redirect-works).
+* Return `{ prompt: "login" }` to send the user to `loginPage`, even when they are signed in. The provider treats the request as if the client had sent `prompt=login`. With `prompt=none`, the client receives `login_required` instead.
+* Throw an `APIError` with an OAuth `error` to refuse the request.
+
+The hook runs again after the user signs in. Return `{ prompt: "login" }` only while the session fails your rule, as in the example. Otherwise the user lands on the sign-in page again after each sign-in. Your sign-in page must also let the user meet the rule, for example by asking for the second factor.
+
+To refuse, throw an `APIError` with an `error` and an `error_description`:
+
+```ts
+import { APIError } from "better-auth/api";
+
+throw new APIError("BAD_REQUEST", {
+  error: "interaction_required",
+  error_description: "this client requires a managed device",
+});
+```
+
+The provider redirects to the validated `redirect_uri` with `error`, `error_description`, and `iss` in the query. If the client sent `state`, the provider echoes it. A refusal issues no code and does not consume a request the provider loaded from `/oauth2/par`. If you use `requestUriResolver`, your resolver controls whether its URI can be used again. Use an error from [OIDC Core §3.1.2.6](https://openid.net/specs/openid-connect-core-1_0.html#AuthError) or [RFC 6749 §4.1.2.1](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1), such as `login_required`, `interaction_required`, `consent_required`, or `access_denied`. When the user cannot meet an authentication requirement at all, `unmet_authentication_requirements` from [OpenID Connect Unmet Authentication Requirements 1.0](https://openid.net/specs/openid-connect-unmet-authentication-requirements-1_0.html) tells the client so. Any other error, such as a redirect thrown with `ctx.redirect`, passes through unchanged.
+
+A plugin registered as a [provider extension](/docs/plugins/oauth-provider/reference#provider-extensions) can set `beforeAuthorization` too. Extension hooks run first, in registration order, and then your own. Every hook runs unless one throws. A hook that throws ends the request even when another one asked for a sign-in.
+
+The hook also runs for codes a plugin endpoint issues with [`issueAuthorizationCode`](#issue-codes-from-your-own-endpoint), with `pushed: false`, so a plugin cannot skip your rules. There, a thrown OAuth error fails the call with that error. `{ prompt: "login" }` always fails it with `login_required`, even when the endpoint signed the user in during that request. At `/oauth2/authorize`, the hook runs again after sign-in and decides on the new session. A plugin endpoint runs the hook once, with the session you pass, so a `{ prompt: "login" }` policy can never be satisfied there.
+
+The hook does not run for device codes, [CIBA](/docs/plugins/ciba) requests, or other extension interaction requests, which the provider's pages also approve.
 
 ## Pushed authorization requests
 
@@ -156,9 +214,10 @@ The provider then checks the request as `/oauth2/authorize` does: the client, sc
 * `consent_required`: the user has not consented to the request.
 * `login_required`: the session expired. Also returned when the request asks for a new sign-in, with `prompt=login` or a `max_age` the session is older than, and your endpoint did not sign the user in during this request.
 * `interaction_required`: the request has a `prompt` other than `none` or `login`, or `signup.shouldRedirect` or `postLogin.shouldRedirect` returns a redirect.
+* The error that [`beforeAuthorization`](#authorization-policy) throws, or `login_required` when it asks for a sign-in.
 * `access_denied`: the session cannot meet an essential `acr` the request names.
 
-Send the user to `/oauth2/authorize` when you get one of these errors. Request validation errors, such as `invalid_client` or `invalid_scope`, mean the request itself is invalid, as they do at `/oauth2/authorize`. Errors your own hooks throw, such as from `consentReferenceId`, pass through unchanged.
+Send the user to `/oauth2/authorize` if signing in, giving consent, or completing another interaction can satisfy the request. If your policy denies the request outright, return its error to the client. Request validation errors, such as `invalid_client` or `invalid_scope`, mean the request itself is invalid, as they do at `/oauth2/authorize`. Errors your own hooks throw, such as from `consentReferenceId`, pass through unchanged.
 
 Pass the request parameters themselves. A `request_uri` fails with `invalid_request`, including one from `/oauth2/par`. That reference is for the browser step of `/oauth2/authorize`. A `request` object fails with `request_not_supported`.
 
@@ -212,7 +271,9 @@ const { query, client } = await provider.validateAuthorizationRequest({
 // issueAuthorizationCode on the last request.
 ```
 
-The method runs the checks that `/oauth2/authorize` and `issueAuthorizationCode` run on the request: the client, `response_type`, the `redirect_uri` when present, scopes, claims, resources, and PKCE. An invalid request fails with a 400 error carrying the code `/oauth2/authorize` reports for the same request, such as `invalid_scope` or `invalid_target`. The method never redirects, issues no code, stores no pushed request, and records no DPoP proof. Looking up the client and resources can still write, as it does for `/oauth2/authorize`: a client discovered from a client ID metadata document is saved, and `onClientCreated` runs for it. It needs no session.
+The method runs the request checks that `/oauth2/authorize` and `issueAuthorizationCode` run: the client, `response_type`, the `redirect_uri` when present, scopes, claims, resources, and PKCE. An invalid request fails with a 400 error carrying the code `/oauth2/authorize` reports for the same request, such as `invalid_scope` or `invalid_target`. The method never redirects, issues no code, stores no pushed request, and records no DPoP proof. Looking up the client and resources can still write, as it does for `/oauth2/authorize`: a client discovered from a client ID metadata document is saved, and `onClientCreated` runs for it. It needs no session.
+
+The method does not run [`beforeAuthorization`](#authorization-policy), because that policy looks at the session as well as the request. On a plugin endpoint the policy runs inside `issueAuthorizationCode`, after your endpoint has checked the user's credentials, so a refusal can arrive later than it does at `/oauth2/authorize`.
 
 The request must name its client with `client_id`. A `request_uri` fails with `invalid_request`, and a `request` object fails with `request_not_supported`, as with `issueAuthorizationCode`.
 
@@ -221,7 +282,7 @@ The result holds two values:
 * `query`: the request after validation, with the client's default scopes filled in when the request named none. Client credentials such as `client_secret` are left out. Pass it to `issueAuthorizationCode` unchanged.
 * `client`: the fields a sign-in page may show, such as `name` and `icon`, plus `tokenEndpointAuthMethod` and `applicationType`. Call `getClient` for the full registration.
 
-The result is advisory. `validateAuthorizationRequest` does not authenticate the client, so your endpoint must still authenticate a confidential client, for example with [`authenticateClient`](/docs/plugins/oauth-provider/reference#provider-extensions). `issueAuthorizationCode` checks the request again on the last request, together with the session, consent, `prompt`, and `max_age`.
+The result is advisory. `validateAuthorizationRequest` does not authenticate the client, so your endpoint must still authenticate a confidential client, for example with [`authenticateClient`](/docs/plugins/oauth-provider/reference#provider-extensions). `issueAuthorizationCode` checks the request again on the last request, together with the session, consent, `prompt`, `max_age`, and `beforeAuthorization`.
 
 ### Report how the user signed in
 

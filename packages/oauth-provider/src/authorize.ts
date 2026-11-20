@@ -21,7 +21,10 @@ import {
 	getRequestedUserInfoClaims,
 	isValidOidcClaimsRequest,
 } from "./claims-request";
-import { getExtensionInteractionRequest } from "./extensions";
+import {
+	getBeforeAuthorizationHooks,
+	getExtensionInteractionRequest,
+} from "./extensions";
 import { oauthAuthorizationServerMetadata } from "./metadata";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
@@ -49,6 +52,7 @@ import type {
 	OAuthAuthenticationContext,
 	OAuthAuthorizationQuery,
 	OAuthAuthorizationRequestClient,
+	OAuthBeforeAuthorizationInput,
 	OAuthInteractionQuery,
 	OAuthInteractionRequest,
 	OAuthOptions,
@@ -628,6 +632,7 @@ export async function authorizeEndpoint(
 
 	// Resolve request_uri (PAR) before processing. A resumed request carries
 	// the parameters this server signed after resolving it.
+	let fromParStore = settings?.isAuthorize !== true && requestUri !== undefined;
 	if (requestUri !== undefined && settings?.isAuthorize === true) {
 		const clientId = getStringParameter(query.client_id);
 		if (!clientId) {
@@ -667,11 +672,13 @@ export async function authorizeEndpoint(
 		// Only client_id is carried from the authorization URL. A request_uri
 		// from /oauth2/par stays in the query, so code issuance can use it up.
 		const urlClientId = query.client_id;
-		query = { ...resolvedParams } as unknown as OAuthAuthorizationQuery;
+		const { request_uri: _resolvedUri, ...parameters } = resolvedParams;
+		query = parameters as unknown as OAuthAuthorizationQuery;
 		if (urlClientId) {
 			query.client_id = urlClientId;
 		}
 		if (pushed.status === "found") {
+			fromParStore = true;
 			query.request_uri = requestUri;
 		}
 	}
@@ -742,6 +749,13 @@ export async function authorizeEndpoint(
 			),
 		);
 	}
+	const policy = await runBeforeAuthorization(ctx, opts, headers, {
+		query,
+		client,
+		pushed: fromParStore,
+	});
+	if ("redirect" in policy) return policy.redirect;
+	query = policy.query;
 	return runAuthorizationInteraction(ctx, opts, headers, settings, {
 		query,
 		client,
@@ -753,6 +767,114 @@ export async function authorizeEndpoint(
 				resource: toResourceList(approval.query.resource) ?? [],
 			}),
 	});
+}
+
+/**
+ * Runs the `beforeAuthorization` hooks on a validated authorization request.
+ * Returns the OAuth error a hook refused it with, or whether a hook asked
+ * for a new sign-in. Errors without an OAuth `error` are rethrown.
+ */
+async function evaluateBeforeAuthorization(
+	opts: OAuthOptions<Scope[]>,
+	input: Omit<OAuthBeforeAuthorizationInput, "query"> & {
+		query: StoredAuthorizationQuery;
+	},
+): Promise<
+	| { refused: { error: OAuthErrorCode; error_description: string } }
+	| { requiresLogin: boolean }
+> {
+	const { query, ...context } = input;
+	const {
+		request_uri: _requestUri,
+		request: _requestObject,
+		...requestParameters
+	} = withoutClientAuthentication(
+		query as unknown as Record<string, unknown>,
+	) as unknown as StoredAuthorizationQuery;
+	let requiresLogin = false;
+	for (const hook of getBeforeAuthorizationHooks(opts)) {
+		try {
+			const result = await hook({
+				...context,
+				// Each hook gets its own copy, so one cannot change what the next sees.
+				query: structuredClone(
+					requestParameters,
+				) as OAuthBeforeAuthorizationInput["query"],
+			});
+			if (result?.prompt === "login") requiresLogin = true;
+		} catch (error) {
+			const body = isAPIError(error)
+				? (error.body as
+						| { error?: unknown; error_description?: unknown }
+						| undefined)
+				: undefined;
+			if (typeof body?.error !== "string") throw error;
+			return {
+				refused: {
+					error: body.error,
+					error_description:
+						typeof body.error_description === "string"
+							? body.error_description
+							: "the authorization request was refused",
+				},
+			};
+		}
+	}
+	return { requiresLogin };
+}
+
+/**
+ * Applies `beforeAuthorization` at `/oauth2/authorize`. A refusal goes to the
+ * client's redirect URI in the query, as every error after validation does,
+ * before anything is consumed. A request the policy sends to sign in gets the `login` prompt,
+ * which the sign-in clears as it does for a client's own.
+ */
+async function runBeforeAuthorization(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	headers: Headers,
+	request: {
+		query: OAuthAuthorizationQuery;
+		client: SchemaClient<Scope[]>;
+		pushed: boolean;
+	},
+): Promise<
+	{ query: OAuthAuthorizationQuery } | { redirect: OAuthRedirectResult }
+> {
+	const { query } = request;
+	if (!getBeforeAuthorizationHooks(opts).length) return { query };
+	const session = await getSessionFromCtx(ctx);
+	const outcome = await evaluateBeforeAuthorization(opts, {
+		...request,
+		session: session ? { session: session.session, user: session.user } : null,
+		headers,
+		ctx,
+	});
+	const promptSet = query.prompt ? parsePrompt(query.prompt) : undefined;
+	const toClient = (error: OAuthErrorCode, description: string) => ({
+		redirect: redirectWithAuthorizationError(
+			ctx,
+			opts,
+			query,
+			error,
+			description,
+		),
+	});
+	if ("refused" in outcome) {
+		return toClient(outcome.refused.error, outcome.refused.error_description);
+	}
+	if (!outcome.requiresLogin) return { query };
+	if (promptSet?.has("none")) {
+		return toClient("login_required", "authentication required");
+	}
+	const prompts = new Set(promptSet ?? []);
+	prompts.delete("login");
+	const forced = {
+		...query,
+		prompt: ["login", ...prompts].join(" "),
+	} as OAuthAuthorizationQuery;
+	ctx.query = forced;
+	return { query: forced };
 }
 
 /**
@@ -1082,9 +1204,10 @@ export async function parseAuthorizationRequest(
 
 /**
  * Validates an authorization request for a plugin endpoint before any
- * session exists, through the same checks `issueAuthorizationCode` runs.
- * Authenticates no client, issues no code, and stores no pushed request or
- * DPoP `jti`.
+ * session exists, through the request checks `issueAuthorizationCode` runs.
+ * It does not run `beforeAuthorization`, which `issueAuthorizationCode`
+ * runs on the session. Authenticates no client, issues no code, and stores
+ * no pushed request or DPoP `jti`.
  */
 export async function validateAuthorizationRequestParams(
 	ctx: GenericEndpointContext,
@@ -1432,6 +1555,9 @@ export async function issueAuthorizationCode(
 	const { client } = validation;
 	let query: StoredAuthorizationQuery = validation.query;
 	await bindDpopProof(query);
+	// The policy sees the request as validated, before the satisfied `prompt`
+	// and `max_age` are dropped from the stored copy.
+	const policyQuery = query;
 
 	const promptSet = query.prompt ? parsePrompt(query.prompt) : undefined;
 	if (
@@ -1470,6 +1596,31 @@ export async function issueAuthorizationCode(
 	}
 
 	const headers = ctx.request?.headers ?? ctx.headers ?? new Headers();
+	const policy = await evaluateBeforeAuthorization(opts, {
+		query: policyQuery,
+		pushed: false,
+		client,
+		session: params.session,
+		headers,
+		ctx,
+	});
+	if ("refused" in policy) {
+		tokenError(
+			"BAD_REQUEST",
+			policy.refused.error,
+			policy.refused.error_description,
+		);
+	}
+	// Unlike `prompt=login`, a session created in this request does not
+	// satisfy the policy: at `/oauth2/authorize` the hook runs again after
+	// sign-in and decides on the new session, which cannot happen here.
+	if (policy.requiresLogin) {
+		tokenError(
+			"BAD_REQUEST",
+			"login_required",
+			"beforeAuthorization requires a new sign-in",
+		);
+	}
 	const scopes = parseScopes(query.scope);
 	const resources = toResourceList(query.resource) ?? [];
 	// Each hook gets its own copy of the query.

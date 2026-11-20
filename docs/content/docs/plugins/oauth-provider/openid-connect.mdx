@@ -131,10 +131,16 @@ export const auth = betterAuth({
 });
 ```
 
+The `claims` parameter requires `openid` in the effective scopes, including any defaults applied when the client omits `scope`. If those scopes omit `openid`, claims validation returns `invalid_request`. With `requireOpenId` enabled, the client must send `openid` explicitly or scope validation returns `invalid_scope` first.
+
 How a request for a class is handled depends on whether it is essential:
 
 * An essential request (`claims={"id_token":{"acr":{"essential":true,"value":"…"}}}`) that the session does not satisfy fails with `access_denied` at the client's redirect URI. If no value in `acrValuesSupported` could satisfy it, the request fails before sign-in. The [Unmet Authentication Requirements specification](https://openid.net/specs/openid-connect-unmet-authentication-requirements-1_0.html) specifies `unmet_authentication_requirements` for this failure.
-* A voluntary request (`acr_values`, or an `acr` claim without `essential`) never fails. The ID token reports the session's current `acr`.
+* A voluntary request (`acr_values`, or an `acr` claim without `essential`) can succeed even when the session has a different authentication class. The ID token reports the session's current `acr`.
+
+For authorization-code requests, use [`beforeAuthorization`](/docs/plugins/oauth-provider/sign-in-flow#authorization-policy) to require a class the client asks for with `acr_values`. At `/oauth2/authorize`, the hook can send the user to sign in again before consent or refuse the request.
+
+For device and CIBA approvals on the provider's pages with the `openid` scope, use `authenticationContext.resolve` to refuse a session that does not meet your rule. If your own app approves CIBA requests, enforce the rule before calling [`completeCibaRequest`](/docs/plugins/ciba#decide-from-your-own-app).
 
 `resolve` must return an `acr` from `acrValuesSupported`, or omit it to use `"0"`. `amr` must be an array of strings. Any other result fails the authorization with `server_error`.
 
