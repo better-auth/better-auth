@@ -728,6 +728,40 @@ describe("delete user", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11667
+	 */
+	it("does not report success or sign out when a hook keeps the user", async () => {
+		const afterDelete = vi.fn();
+		const { client, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+					afterDelete,
+				},
+			},
+			session: {
+				freshAge: 1000,
+			},
+			databaseHooks: {
+				user: {
+					delete: {
+						before: async () => false,
+					},
+				},
+			},
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.deleteUser();
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.code).toBe("FAILED_TO_DELETE_USER");
+			const session = await client.getSession();
+			expect(session.data).not.toBeNull();
+		});
+		expect(afterDelete).not.toHaveBeenCalled();
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8173
 	 */
 	it("should require password when session is no longer fresh", async () => {

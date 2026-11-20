@@ -1672,8 +1672,17 @@ export const removeUser = (opts: AdminOptions) =>
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
+			// After the user delete, so a failed or vetoed delete keeps the sessions.
+			const deleted = await ctx.context.internalAdapter.deleteUser(
+				ctx.body.userId,
+			);
+			if (!deleted) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.FAILED_TO_DELETE_USER,
+				);
+			}
 			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
-			await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
 			return ctx.json({
 				success: true,
 			});

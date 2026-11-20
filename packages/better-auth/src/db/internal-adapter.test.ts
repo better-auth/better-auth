@@ -2780,3 +2780,261 @@ describe("internal adapter test", async () => {
 		});
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11667
+ */
+describe("deleteUser atomicity", () => {
+	type AdapterMethod = "findMany" | "delete";
+
+	/** A SQLite store with transactions whose adapter calls throw while `fail` says so. */
+	async function makeFailingAdapter(
+		extraOptions: Omit<BetterAuthOptions, "database"> = {},
+	) {
+		const database = new DatabaseSync(":memory:");
+		await (await getMigrations({ database })).runMigrations();
+		const db = new Kysely<Record<string, never>>({
+			dialect: new NodeSqliteDialect({ database }),
+		});
+		let fail: (method: AdapterMethod, model: string) => boolean = () => false;
+		const failing = <
+			A extends {
+				findMany: (...args: never[]) => unknown;
+				delete: (...args: never[]) => unknown;
+			},
+		>(
+			base: A,
+		): A => ({
+			...base,
+			findMany: (async (data: { model: string }) => {
+				if (fail("findMany", data.model)) {
+					throw new Error(`findMany ${data.model} failed`);
+				}
+				return (base.findMany as (data: unknown) => unknown)(data);
+			}) as unknown as A["findMany"],
+			delete: (async (data: { model: string }) => {
+				if (fail("delete", data.model)) {
+					throw new Error(`delete ${data.model} failed`);
+				}
+				return (base.delete as (data: unknown) => unknown)(data);
+			}) as unknown as A["delete"],
+		});
+		const { adapter, internalAdapter } = await init({
+			...extraOptions,
+			database: (options) => {
+				const base = kyselyAdapter(db, {
+					type: "sqlite",
+					transaction: true,
+				})(options);
+				return {
+					...failing(base),
+					transaction: (callback) =>
+						base.transaction((trx) => callback(failing(trx))),
+				};
+			},
+		});
+		const user = await internalAdapter.createUser(
+			{ email: "delete-me@example.com", name: "Delete Me" },
+			{ method: "test" },
+		);
+		await internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "credential",
+			accountId: user.id,
+		});
+		const session = await internalAdapter.createSession(user.id);
+		const remaining = async () => ({
+			user: await internalAdapter.findUserById(user.id),
+			accounts: (await internalAdapter.findAccounts(user.id)).length,
+			sessions: (await internalAdapter.listSessions(user.id)).length,
+		});
+		return {
+			adapter,
+			internalAdapter,
+			userId: user.id,
+			sessionToken: session.token,
+			remaining,
+			failWhen: (next: typeof fail) => {
+				fail = next;
+			},
+		};
+	}
+
+	it("fails instead of skipping the user delete when the user cannot be read", async () => {
+		const { internalAdapter, userId, remaining, failWhen } =
+			await makeFailingAdapter();
+		failWhen((method, model) => method === "findMany" && model === "user");
+
+		await expect(internalAdapter.deleteUser(userId)).rejects.toThrow(
+			"findMany user failed",
+		);
+
+		failWhen(() => false);
+		const left = await remaining();
+		expect(left.user?.id).toBe(userId);
+		expect(left.accounts).toBe(1);
+		expect(left.sessions).toBe(1);
+	});
+
+	it("keeps the sessions and accounts when the user delete fails", async () => {
+		const { internalAdapter, userId, remaining, failWhen } =
+			await makeFailingAdapter();
+		failWhen((method, model) => method === "delete" && model === "user");
+
+		await expect(internalAdapter.deleteUser(userId)).rejects.toThrow(
+			"delete user failed",
+		);
+
+		failWhen(() => false);
+		const left = await remaining();
+		expect(left.user?.id).toBe(userId);
+		expect(left.accounts).toBe(1);
+		expect(left.sessions).toBe(1);
+	});
+
+	it("does not delete accounts without their delete hooks when they cannot be read", async () => {
+		const { internalAdapter, userId, remaining, failWhen } =
+			await makeFailingAdapter();
+		failWhen((method, model) => method === "findMany" && model === "account");
+
+		await expect(internalAdapter.deleteUser(userId)).rejects.toThrow(
+			"findMany account failed",
+		);
+
+		failWhen(() => false);
+		const left = await remaining();
+		expect(left.user?.id).toBe(userId);
+		expect(left.accounts).toBe(1);
+		expect(left.sessions).toBe(1);
+	});
+
+	it("still deletes the user, its accounts and its sessions", async () => {
+		const { internalAdapter, userId, remaining } = await makeFailingAdapter();
+
+		await expect(internalAdapter.deleteUser(userId)).resolves.toBe(true);
+
+		expect(await remaining()).toEqual({ user: null, accounts: 0, sessions: 0 });
+	});
+
+	it.for(["session", "account", "user"] as const)(
+		"keeps everything when a %s delete.before hook vetoes the delete",
+		async (model) => {
+			const { internalAdapter, userId, remaining } = await makeFailingAdapter({
+				databaseHooks: {
+					[model]: { delete: { before: async () => false } },
+				} as BetterAuthOptions["databaseHooks"],
+			});
+
+			await expect(internalAdapter.deleteUser(userId)).resolves.toBe(false);
+
+			const left = await remaining();
+			expect(left.user?.id).toBe(userId);
+			expect(left.accounts).toBe(1);
+			expect(left.sessions).toBe(1);
+		},
+	);
+
+	it("rolls back the caller's transaction when a hook vetoes inside it", async () => {
+		const { adapter, internalAdapter, userId, remaining } =
+			await makeFailingAdapter({
+				databaseHooks: {
+					account: { delete: { before: async () => false } },
+				},
+			});
+
+		// The sessions are deleted before the account veto, in the caller's
+		// transaction, which only the thrown veto can roll back.
+		await expect(
+			runWithTransaction(adapter, () => internalAdapter.deleteUser(userId)),
+		).rejects.toMatchObject({ body: { code: "FAILED_TO_DELETE_USER" } });
+
+		const left = await remaining();
+		expect(left.user?.id).toBe(userId);
+		expect(left.accounts).toBe(1);
+		expect(left.sessions).toBe(1);
+	});
+
+	it("revokes a cached session created while the delete runs", async () => {
+		let createSessionDuringDelete: (() => Promise<void>) | undefined;
+		const { internalAdapter, userId, sessionToken } = await makeFailingAdapter({
+			secondaryStorage: createStringSecondaryStorage(new Map()),
+			databaseHooks: {
+				user: {
+					delete: {
+						// Stands in for a sign-in that lands while the delete runs.
+						before: async () => {
+							await createSessionDuringDelete?.();
+						},
+					},
+				},
+			},
+		});
+		let lateToken = "";
+		createSessionDuringDelete = async () => {
+			lateToken = (await internalAdapter.createSession(userId)).token;
+		};
+
+		await expect(internalAdapter.deleteUser(userId)).resolves.toBe(true);
+
+		expect(lateToken).not.toBe("");
+		expect(await internalAdapter.findSession(sessionToken)).toBeNull();
+		expect(await internalAdapter.findSession(lateToken)).toBeNull();
+	});
+
+	it("revokes cached sessions when reading the session index fails after the delete", async () => {
+		const storage = createStringSecondaryStorage(new Map());
+		let failNextIndexRead = false;
+		const { internalAdapter, userId, sessionToken } = await makeFailingAdapter({
+			secondaryStorage: {
+				...storage,
+				get(key) {
+					if (failNextIndexRead && key.startsWith("active-sessions-")) {
+						failNextIndexRead = false;
+						throw new Error("index read failed");
+					}
+					return storage.get(key);
+				},
+			},
+			databaseHooks: {
+				user: {
+					delete: {
+						// The next index read is the revocation's, after the commit.
+						before: async () => {
+							failNextIndexRead = true;
+						},
+					},
+				},
+			},
+		});
+
+		await expect(internalAdapter.deleteUser(userId)).resolves.toBe(true);
+
+		expect(failNextIndexRead).toBe(false);
+		expect(await internalAdapter.findSession(sessionToken)).toBeNull();
+	});
+
+	it("revokes cached sessions even when a session delete.after hook throws", async () => {
+		const { internalAdapter, userId, sessionToken, remaining } =
+			await makeFailingAdapter({
+				secondaryStorage: createStringSecondaryStorage(new Map()),
+				session: { storeSessionInDatabase: true },
+				databaseHooks: {
+					session: {
+						delete: {
+							after: async () => {
+								throw new Error("session after hook failed");
+							},
+						},
+					},
+				},
+			});
+
+		// The hook runs after the delete committed, so its error still surfaces.
+		await expect(internalAdapter.deleteUser(userId)).rejects.toThrow(
+			"session after hook failed",
+		);
+
+		expect((await remaining()).user).toBeNull();
+		expect(await internalAdapter.findSession(sessionToken)).toBeNull();
+	});
+});

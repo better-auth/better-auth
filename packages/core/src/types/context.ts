@@ -149,7 +149,16 @@ export interface InternalAdapter<
 
 	countTotalUsers(where?: Where[] | undefined): Promise<number>;
 
-	deleteUser(userId: string): Promise<void>;
+	/**
+	 * Deletes the user with its sessions and accounts, in one transaction when
+	 * the adapter supports it.
+	 *
+	 * @returns `true` when the user was deleted, `false` when it did not exist
+	 * or a `delete.before` hook vetoed a delete and everything was kept. Inside
+	 * a caller's transaction a veto throws `FAILED_TO_DELETE_USER` instead, so
+	 * that transaction can roll back the deletes made before it.
+	 */
+	deleteUser(userId: string): Promise<boolean>;
 
 	createSession(
 		userId: string,
