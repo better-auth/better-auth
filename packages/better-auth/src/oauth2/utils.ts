@@ -9,7 +9,10 @@ function isLikelyEncrypted(token: string): boolean {
 	return token.length % 2 === 0 && /^[0-9a-f]+$/i.test(token);
 }
 
-export function decryptOAuthToken(token: string, ctx: AuthContext) {
+export function decryptOAuthToken<T extends string | null | undefined>(
+	token: T,
+	ctx: AuthContext,
+) {
 	if (!token) return token;
 	if (ctx.options.account?.encryptOAuthTokens) {
 		if (!isLikelyEncrypted(token)) {
@@ -52,7 +55,7 @@ export async function encryptAccountTokens(
 	return {
 		accessToken: await setTokenUtil(tokens.accessToken, ctx),
 		refreshToken: await setTokenUtil(tokens.refreshToken, ctx),
-		idToken: tokens.idToken,
+		idToken: await setTokenUtil(tokens.idToken, ctx),
 	};
 }
 

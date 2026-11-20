@@ -734,7 +734,9 @@ async function getValidAccessToken(
 					: account.refreshToken,
 				refreshTokenExpiresAt:
 					newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
-				idToken: newTokens?.idToken || account.idToken,
+				idToken: newTokens?.idToken
+					? await setTokenUtil(newTokens.idToken, ctx.context)
+					: account.idToken,
 			};
 			let updatedAccount: Partial<Account> | null = null;
 			if (account.id) {
@@ -773,7 +775,10 @@ async function getValidAccessToken(
 				(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
 			accessTokenExpiresAt,
 			scopes: parseStoredScopes(account.scope),
-			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
+			idToken:
+				newTokens?.idToken ??
+				(await decryptOAuthToken(account.idToken, ctx.context)) ??
+				undefined,
 		};
 	} catch (_error) {
 		throw APIError.from("BAD_REQUEST", {
@@ -935,7 +940,9 @@ export const refreshToken = createAuthEndpoint(
 				refreshToken: resolvedRefreshToken,
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-				idToken: tokens.idToken || account.idToken,
+				idToken: tokens.idToken
+					? await setTokenUtil(tokens.idToken, ctx.context)
+					: account.idToken,
 			};
 			let updatedAccount: Account | null = null;
 
@@ -968,7 +975,9 @@ export const refreshToken = createAuthEndpoint(
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 				scope: responseScope,
-				idToken: tokens.idToken || account.idToken,
+				idToken:
+					tokens.idToken ||
+					(await decryptOAuthToken(account.idToken, ctx.context)),
 				providerId: account.providerId,
 				accountId: account.id,
 			});

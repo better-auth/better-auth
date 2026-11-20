@@ -3952,3 +3952,324 @@ describe("provider getAccountFields", async () => {
 		);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10757
+ */
+describe("ID token encryption", async () => {
+	const verifyIdToken =
+		vi.fn<(token: string, nonce?: string) => Promise<boolean>>();
+	const { auth, client, cookieSetter, signInWithTestUser, testUser } =
+		await getTestInstance({
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test", verifyIdToken },
+			},
+			account: { encryptOAuthTokens: true },
+		});
+	const ctx = await auth.$context;
+
+	const createIdToken = (subject: string, userEmail: string) => {
+		const now = Math.floor(Date.now() / 1000);
+		return signJWT(
+			{
+				email: userEmail,
+				email_verified: true,
+				name: "First Last",
+				picture: "https://example.com/avatar.png",
+				exp: now + 3600,
+				sub: subject,
+				iat: now,
+				aud: "test",
+				azp: "test",
+				nbf: now,
+				iss: "test",
+				locale: "en",
+				jti: crypto.randomUUID(),
+				given_name: "First",
+				family_name: "Last",
+			} satisfies GoogleProfile,
+			DEFAULT_SECRET,
+		);
+	};
+
+	const useGoogleTokens = (tokens: {
+		idToken: string;
+		refreshedIdToken?: string;
+		expiresIn?: number;
+	}) => {
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async ({ request }) => {
+				const params = new URLSearchParams(await request.text());
+				if (params.get("grant_type") === "refresh_token") {
+					return HttpResponse.json({
+						access_token: "refreshed-access-token",
+						refresh_token: "refreshed-refresh-token",
+						expires_in: 3600,
+						id_token: tokens.refreshedIdToken,
+					});
+				}
+				return HttpResponse.json({
+					access_token: "initial-access-token",
+					refresh_token: "initial-refresh-token",
+					expires_in: tokens.expiresIn ?? 3600,
+					id_token: tokens.idToken,
+				});
+			}),
+		);
+	};
+
+	const completeGoogleCallback = async (
+		headers: Headers,
+		start: () => Promise<{ data: { url?: string | undefined } | null }>,
+	) => {
+		const started = await start();
+		assert(started.data?.url, "expected an authorization URL");
+		const state = new URL(started.data.url).searchParams.get("state");
+		assert(state, "expected an OAuth state");
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.headers.get("location")).not.toContain(
+					"error=",
+				);
+				cookieSetter(headers)(context);
+			},
+		});
+	};
+
+	const signInWithGoogle = async (headers = new Headers()) => {
+		await completeGoogleCallback(headers, () =>
+			client.signIn.social({
+				provider: "google",
+				callbackURL: "/callback",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			}),
+		);
+		return headers;
+	};
+
+	const findGoogleAccount = async (subject: string) => {
+		const account = await ctx.adapter.findOne<Account>({
+			model: "account",
+			where: [
+				{ field: "providerId", value: "google" },
+				{ field: "accountId", value: subject },
+			],
+		});
+		assert(account, "expected a stored Google account");
+		return account;
+	};
+
+	const readIdToken = async (headers: Headers, accountId: string) => {
+		const tokens = await auth.api.getAccessToken({
+			headers,
+			body: { accountId },
+		});
+		return tokens.idToken;
+	};
+
+	it("encrypts the ID token stored by a social sign-up", async () => {
+		const idToken = await createIdToken(
+			"encrypt-sign-up",
+			"encrypt-sign-up@test.com",
+		);
+		useGoogleTokens({ idToken });
+
+		const headers = await signInWithGoogle();
+		const account = await findGoogleAccount("encrypt-sign-up");
+
+		expect(account.idToken).not.toBe(idToken);
+		expect(await readIdToken(headers, account.id)).toBe(idToken);
+	});
+
+	it("encrypts the ID token updated by a returning social sign-in", async () => {
+		useGoogleTokens({
+			idToken: await createIdToken(
+				"encrypt-returning",
+				"encrypt-returning@test.com",
+			),
+		});
+		await signInWithGoogle();
+		const idToken = await createIdToken(
+			"encrypt-returning",
+			"encrypt-returning@test.com",
+		);
+		useGoogleTokens({ idToken });
+
+		const headers = await signInWithGoogle();
+		const account = await findGoogleAccount("encrypt-returning");
+
+		expect(account.idToken).not.toBe(idToken);
+		expect(await readIdToken(headers, account.id)).toBe(idToken);
+	});
+
+	it("encrypts the ID token stored when a social sign-in links an existing user", async () => {
+		const user = await ctx.internalAdapter.createUser(
+			{
+				email: "encrypt-implicit-link@test.com",
+				emailVerified: true,
+				name: "Existing User",
+			},
+			{ method: "test" },
+		);
+		const idToken = await createIdToken("encrypt-implicit-link", user.email);
+		useGoogleTokens({ idToken });
+
+		const headers = await signInWithGoogle();
+		const account = await findGoogleAccount("encrypt-implicit-link");
+
+		expect(account.userId).toBe(user.id);
+		expect(account.idToken).not.toBe(idToken);
+		expect(await readIdToken(headers, account.id)).toBe(idToken);
+	});
+
+	it("encrypts the ID token stored when a signed-in user links a provider", async () => {
+		const { headers } = await signInWithTestUser();
+		const idToken = await createIdToken("encrypt-link", testUser.email);
+		useGoogleTokens({ idToken });
+
+		await completeGoogleCallback(headers, () =>
+			client.linkSocial(
+				{ provider: "google", callbackURL: "/callback" },
+				{ headers, onSuccess: cookieSetter(headers) },
+			),
+		);
+		const account = await findGoogleAccount("encrypt-link");
+
+		expect(account.idToken).not.toBe(idToken);
+		expect(await readIdToken(headers, account.id)).toBe(idToken);
+	});
+
+	it("encrypts the ID token stored when a signed-in user links an ID token", async () => {
+		const { headers } = await signInWithTestUser();
+		const idToken = await createIdToken(
+			"encrypt-id-token-link",
+			testUser.email,
+		);
+		verifyIdToken.mockResolvedValueOnce(true);
+
+		const linked = await client.linkSocial(
+			{ provider: "google", idToken: { token: idToken } },
+			{ headers },
+		);
+		expect(linked.error).toBeNull();
+		const account = await findGoogleAccount("encrypt-id-token-link");
+
+		expect(account.idToken).not.toBe(idToken);
+		expect(await readIdToken(headers, account.id)).toBe(idToken);
+	});
+
+	it("encrypts the ID token updated when a signed-in user links the same provider account again", async () => {
+		const { headers } = await signInWithTestUser();
+		const linkGoogle = () =>
+			completeGoogleCallback(headers, () =>
+				client.linkSocial(
+					{ provider: "google", callbackURL: "/callback" },
+					{ headers, onSuccess: cookieSetter(headers) },
+				),
+			);
+		useGoogleTokens({
+			idToken: await createIdToken("encrypt-relink", testUser.email),
+		});
+		await linkGoogle();
+		const idToken = await createIdToken("encrypt-relink", testUser.email);
+		useGoogleTokens({ idToken });
+
+		await linkGoogle();
+		const account = await findGoogleAccount("encrypt-relink");
+
+		expect(account.idToken).not.toBe(idToken);
+		expect(await readIdToken(headers, account.id)).toBe(idToken);
+	});
+
+	it("encrypts the ID token updated when a signed-in user links the same ID token account again", async () => {
+		const { headers } = await signInWithTestUser();
+		const linkIdToken = async (token: string) => {
+			verifyIdToken.mockResolvedValueOnce(true);
+			const linked = await client.linkSocial(
+				{ provider: "google", idToken: { token } },
+				{ headers },
+			);
+			expect(linked.error).toBeNull();
+		};
+		await linkIdToken(
+			await createIdToken("encrypt-id-token-relink", testUser.email),
+		);
+		const idToken = await createIdToken(
+			"encrypt-id-token-relink",
+			testUser.email,
+		);
+
+		await linkIdToken(idToken);
+		const account = await findGoogleAccount("encrypt-id-token-relink");
+
+		expect(account.idToken).not.toBe(idToken);
+		expect(await readIdToken(headers, account.id)).toBe(idToken);
+	});
+
+	it.for(["getAccessToken", "refreshToken"] as const)(
+		"encrypts the ID token persisted by %s after a refresh",
+		async (method) => {
+			const refreshedIdToken = await createIdToken(
+				`encrypt-refresh-${method}`,
+				`encrypt-refresh-${method}@test.com`,
+			);
+			useGoogleTokens({
+				idToken: await createIdToken(
+					`encrypt-refresh-${method}`,
+					`encrypt-refresh-${method}@test.com`,
+				),
+				refreshedIdToken,
+				expiresIn: 1,
+			});
+			const headers = await signInWithGoogle();
+			const { id } = await findGoogleAccount(`encrypt-refresh-${method}`);
+
+			const refreshed = await auth.api[method]({
+				headers,
+				body: { accountId: id },
+			});
+			const account = await findGoogleAccount(`encrypt-refresh-${method}`);
+
+			expect(refreshed.idToken).toBe(refreshedIdToken);
+			expect(account.idToken).not.toBe(refreshedIdToken);
+			expect(await readIdToken(headers, id)).toBe(refreshedIdToken);
+		},
+	);
+
+	it.for(["getAccessToken", "refreshToken"] as const)(
+		"keeps the stored ID token when %s refreshes without a new one",
+		async (method) => {
+			const subject = `encrypt-keep-${method}`;
+			const idToken = await createIdToken(subject, `${subject}@test.com`);
+			useGoogleTokens({ idToken, expiresIn: 1 });
+			const headers = await signInWithGoogle();
+			const { id, idToken: storedIdToken } = await findGoogleAccount(subject);
+
+			const refreshed = await auth.api[method]({
+				headers,
+				body: { accountId: id },
+			});
+			const account = await findGoogleAccount(subject);
+
+			expect(refreshed.idToken).toBe(idToken);
+			expect(account.idToken).toBe(storedIdToken);
+		},
+	);
+
+	it("returns an ID token stored before encryption was enabled", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const idToken = await createIdToken("encrypt-legacy", user.email);
+		const account = await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: "encrypt-legacy",
+			accessToken: "legacy-access-token",
+			idToken,
+		});
+
+		expect(await readIdToken(headers, account.id)).toBe(idToken);
+	});
+});

@@ -1,6 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { deleteSessionCookie } from "../../cookies";
+import { decryptOAuthToken } from "../../oauth2/utils";
 
 const signOutBodySchema = z
 	.object({
@@ -130,7 +131,7 @@ export const signOut = createAuthEndpoint(
 					const provider = providersById.get(account.providerId);
 					try {
 						const url = await provider?.createEndSessionURL?.({
-							idToken: account.idToken,
+							idToken: await decryptOAuthToken(account.idToken, ctx.context),
 							postLogoutRedirectURI,
 							state: ctx.body?.state,
 						});
