@@ -726,6 +726,19 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
+			// Same guard as getInvitation: a removed inviter must not still grant
+			// the role they stored on the invitation. (#12278)
+			const inviterMember = await adapter.findMemberByOrgId({
+				userId: invitation.inviterId,
+				organizationId: invitation.organizationId,
+			});
+			if (!inviterMember) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION,
+				);
+			}
+
 			const limit =
 				typeof membershipLimit === "number"
 					? membershipLimit
