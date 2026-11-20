@@ -1,5 +1,13 @@
 # @better-auth/core
 
+## 1.8.0-beta.11
+
+### Minor Changes
+
+- [#12738](https://github.com/better-auth/better-auth/pull/12738) [`4dcff54`](https://github.com/better-auth/better-auth/commit/4dcff5447c470b7531310b41326295da6b4e9aae) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A plugin can now act when a user's password is reset by declaring `onPasswordReset`. It receives the `userId` and the endpoint context after `/reset-password`, `/email-otp/reset-password`, or `/phone-number/reset-password` saves the new password. It runs after the user's sessions are revoked when `emailAndPassword.revokeSessionsOnPasswordReset` is on, and also for a user with no live session, which a session hook cannot see. When a hook throws, the other plugins' hooks still run, and the request then fails with the first error. The reset has already taken effect.
+
+- [#12746](https://github.com/better-auth/better-auth/pull/12746) [`ca2b94f`](https://github.com/better-auth/better-auth/commit/ca2b94f6d55b6a2ea33dedaa3f1b1684de559713) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Social providers now accept `tokenEndpoint`, `userInfoEndpoint`, and `jwksEndpoint` next to `authorizationEndpoint`, so you can point a provider at a local OAuth emulator or a sandbox. WeChat also accepts `refreshTokenEndpoint`. The `tokenEndpoint` override is the audience of a `private_key_jwt` client assertion, and `jwksEndpoint` changes only where ID token signing keys come from, so the provider's own issuer is still required.
+
 ## 1.8.0-beta.10
 
 ### Minor Changes

@@ -1,5 +1,13 @@
 # @better-auth/cimd
 
+## 1.8.0-beta.11
+
+### Minor Changes
+
+- [#12744](https://github.com/better-auth/better-auth/pull/12744) [`b4d43de`](https://github.com/better-auth/better-auth/commit/b4d43deaf9379ec402913aac0d4cdaf1413c589d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A flood of refused `client_id` URLs can no longer use up the metadata fetch budget and make allowed clients fail with `temporarily_unavailable`. A URL that URL validation or `isMetadataDocumentUrlAllowed` refuses is now refused before the budget applies, so it always answers `invalid_client` with status 400, where it could previously answer 429 once the budget was spent. `isMetadataDocumentUrlAllowed` now runs once for each request that needs a fetch, including requests that join a fetch already in flight, and still does not run on a fresh cache hit.
+
+- [#12745](https://github.com/better-auth/better-auth/pull/12745) [`eb4d642`](https://github.com/better-auth/better-auth/commit/eb4d64208ab6c4418659dc68f75f510019fd2ed1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `createCimdMetadataResolver` lets a runtime that builds its auth instance for each request share one metadata cache, one set of fetch limits, and in-flight fetches between those instances. Create the resolver once with the transport and the fetch and validation options, then pass it to `cimd({ metadataResolver })`: each request still saves the client with its own context, and a request waits at most 10 seconds for each fetch that another request started. Setting `fetchClientMetadataResource` or another resolver option next to `metadataResolver` is a type error and throws when the plugin is created.
+
 ## 1.8.0-beta.10
 
 ### Patch Changes

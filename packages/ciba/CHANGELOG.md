@@ -1,5 +1,39 @@
 # @better-auth/ciba
 
+## 1.8.0-beta.11
+
+### Minor Changes
+
+- [#12712](https://github.com/better-auth/better-auth/pull/12712) [`a136236`](https://github.com/better-auth/better-auth/commit/a136236f0ac726473fe002df528547d8437dcbaa) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - CIBA deployments can now approve requests only on their own page or app, with the new `approvalPage` option, so the provider's consent page can no longer approve a request and skip that path's checks.
+
+  Set `approvalPage` to a path or URL to send users there with the request as `ciba_request_id`, or to `false` to send no link, as when your own app shows the request. With either value, `/oauth2/authorize` no longer approves CIBA requests, and your server records each decision with `auth.api.completeCibaRequest`. `resultPage` is required only without `approvalPage`, and TypeScript rejects it alongside `approvalPage`. Without `approvalPage`, requests are approved through the provider's pages as before.
+
+  `CibaOptions` is now a type alias instead of an interface, so code that extends it with `interface` must use an intersection type instead.
+
+  `CibaNotification.url` is now optional: it is absent when `approvalPage: false`. A `sendNotification` that uses `url` as a string must check for `undefined` to typecheck, even though the default configuration always sets it.
+
+- [#12801](https://github.com/better-auth/better-auth/pull/12801) [`128541d`](https://github.com/better-auth/better-auth/commit/128541d6a2c52692b5d8e1aa287d0f3a13119c2e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A CIBA request the user approved from the link can no longer be redeemed after the user deletes or narrows the consent that approval stored. The client's poll gets `invalid_grant`. Because the link records one decision, only a consent given again through another request, for the same client, scopes, and reference, makes it redeemable. Requests approved with `completeCibaRequest` and requests of a client with `skip_consent` are not checked.
+
+  The `cibaRequest` model has a new `approvedViaConsent` column. Run `npx auth@latest migrate`, or `npx auth@latest generate` and apply the schema with your ORM, before you upgrade.
+
+- [#12712](https://github.com/better-auth/better-auth/pull/12712) [`a136236`](https://github.com/better-auth/better-auth/commit/a136236f0ac726473fe002df528547d8437dcbaa) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - CIBA can now issue delegated access tokens that name the user as `sub` and an agent or other actor as the RFC 8693 `act` claim.
+
+  Return the actor from the new `resolveActor` option, which runs at `/oauth2/bc-authorize` after the client authenticates and the user is found. Return only an actor your server has verified, such as the authenticated client, and set `sub_profile: "service"` on a client or agent actor so pairwise clients do not read its `sub` as a pairwise subject. Throw an `APIError` from `resolveActor` to refuse the request. `sendNotification` receives the actor as `actor`, and the consent page receives it as JSON in the `actor` query parameter. A JWT access token carries `act`, and introspection of an opaque access token returns it. A delegated token gets no refresh token, and its returned `scope` leaves out `offline_access`. Without `resolveActor`, tokens are issued as before.
+
+  The `cibaRequest` model has a new `actor` column. Run `npx auth@latest migrate` with the built-in Kysely adapter, or run `npx auth@latest generate` and apply the schema with your ORM, before you upgrade.
+
+- [#12712](https://github.com/better-auth/better-auth/pull/12712) [`a136236`](https://github.com/better-auth/better-auth/commit/a136236f0ac726473fe002df528547d8437dcbaa) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - CIBA deployments can now read a pending request on their own approval page with the new server-only `auth.api.getCibaRequest({ body: { requestId, userId } })`. It returns what to show the user (client, scopes, resources, binding message, ACR values, authorization details, actor, and expiry), or `null` when `completeCibaRequest` would refuse the request as unknown, such as a decided or expired request or one for another user, and when the client no longer exists. `sendNotification` now also receives the requested `resources`.
+
+- [#12712](https://github.com/better-auth/better-auth/pull/12712) [`a136236`](https://github.com/better-auth/better-auth/commit/a136236f0ac726473fe002df528547d8437dcbaa) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Removed the `allowPublicClients` option. CIBA requires client authentication at the backchannel and token endpoints (CIBA §7.1), so clients registered with `token_endpoint_auth_method: "none"` are now always rejected with `invalid_client`. If you set `allowPublicClients` during the beta, remove it and register those clients with a secret or with `private_key_jwt`.
+
+### Patch Changes
+
+- [#12712](https://github.com/better-auth/better-auth/pull/12712) [`a136236`](https://github.com/better-auth/better-auth/commit/a136236f0ac726473fe002df528547d8437dcbaa) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `/oauth2/bc-authorize` now answers `invalid_client` with status 401 and a `WWW-Authenticate` challenge, as CIBA §13 requires, instead of 400 when the client sent no credentials, used body credentials, or named no client. A request with no `client_id` now answers `invalid_client` instead of `invalid_request`. The description is unchanged.
+
+- [#12690](https://github.com/better-auth/better-auth/pull/12690) [`ef8cf42`](https://github.com/better-auth/better-auth/commit/ef8cf42641499e7524e01f1a129970b4bcfd7744) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - CIBA ping mode now checks the stored `backchannel_client_notification_endpoint` again, and resolves its host name, before each ping. If the host resolves to a loopback, private, link-local, or other address that is not publicly routable, or the lookup fails, the server skips the ping and logs a warning. The decision is kept, and the client can still poll the token endpoint. Registration only checked the host name as written, so a public-looking name could still resolve to an internal address. The ping cannot be pinned to the address that was checked, so restrict outbound network access where you need a strict guarantee. On runtimes with no working DNS lookup, such as Cloudflare Workers, only the host name check applies. Clients whose endpoint resolves only to public addresses are unaffected. An endpoint whose origin is listed in `trustedOrigins` at initialization skips the lookup, so a client on an internal network keeps receiving pings.
+
+- [#12690](https://github.com/better-auth/better-auth/pull/12690) [`ef8cf42`](https://github.com/better-auth/better-auth/commit/ef8cf42641499e7524e01f1a129970b4bcfd7744) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - CIBA clients can now receive ping notifications from providers running on Cloudflare Workers. The provider sends the notification only to the registered endpoint and treats a redirect as a failed delivery.
+
 ## 1.8.0-beta.10
 
 ### Minor Changes
