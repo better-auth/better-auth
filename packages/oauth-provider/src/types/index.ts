@@ -595,7 +595,7 @@ export interface OAuthProviderApi {
 	 * - `interaction_required` for a `prompt` other than `none` or `login`, or
 	 *   a `signup` or `postLogin` redirect.
 	 * - The error `beforeAuthorization` throws, or `login_required` when it
-	 *   asks for a sign-in this request did not perform.
+	 *   asks for a sign-in, even if the endpoint created the session in this request.
 	 * - `access_denied` when the session cannot meet an essential `acr`.
 	 *
 	 * Errors are HTTP 400 `APIError`s with these OAuth error codes, with
