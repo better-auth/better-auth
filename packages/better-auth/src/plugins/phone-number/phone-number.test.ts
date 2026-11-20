@@ -5,6 +5,7 @@ import {
 	expect,
 	expectTypeOf,
 	it,
+	onTestFinished,
 	vi,
 } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -756,6 +757,68 @@ describe("verify phone-number race condition protection", async () => {
 			`phone-number-otp-${phoneNumber}`,
 		);
 		expect(consumed).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12091
+	 */
+	it("does not revive a code that was replaced while a wrong code was being checked", async () => {
+		const phoneNumber = "+251900000003";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		const firstCode = otp;
+
+		// Hold the wrong code's check after it consumed the row, while a new
+		// code is sent.
+		const { internalAdapter } = authCtx;
+		const consumeVerificationValue = internalAdapter.consumeVerificationValue;
+		let signalConsumed: () => void = () => {};
+		const rowConsumed = new Promise<void>((resolve) => {
+			signalConsumed = resolve;
+		});
+		let releaseCheck: () => void = () => {};
+		const checkReleased = new Promise<void>((resolve) => {
+			releaseCheck = resolve;
+		});
+		const consume = vi
+			.spyOn(internalAdapter, "consumeVerificationValue")
+			.mockImplementationOnce(async (identifier) => {
+				const row = await consumeVerificationValue(identifier);
+				signalConsumed();
+				await checkReleased;
+				return row;
+			});
+		const guess = client.phoneNumber.verify({
+			phoneNumber,
+			code: firstCode === "000000" ? "111111" : "000000",
+		});
+		await rowConsumed;
+		consume.mockRestore();
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		const secondCode = otp;
+		// A write-back of the old code would be newer than the new code.
+		onTestFinished(() => {
+			vi.useRealTimers();
+		});
+		vi.setSystemTime(Date.now() + 1000);
+		releaseCheck();
+
+		expect((await guess).error?.message).toBe("Invalid OTP");
+		const stored = await internalAdapter.findVerificationValue(
+			`phone-number-otp-${phoneNumber}`,
+		);
+		// The wrong code was checked against the old code, so it costs the new
+		// one nothing.
+		expect(stored?.value).toBe(`${secondCode}:0`);
+		const withFirstCode = await client.phoneNumber.verify({
+			phoneNumber,
+			code: firstCode,
+		});
+		expect(withFirstCode.error?.message).toBe("Invalid OTP");
+		const withSecondCode = await client.phoneNumber.verify({
+			phoneNumber,
+			code: secondCode,
+		});
+		expect(withSecondCode.data?.status).toBe(true);
 	});
 });
 

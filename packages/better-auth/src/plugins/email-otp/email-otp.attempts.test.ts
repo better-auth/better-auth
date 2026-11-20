@@ -1,6 +1,6 @@
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { getTestInstance } from "better-auth/test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { emailOTP } from ".";
 import { emailOTPClient } from "./client";
 import { splitAtLastColon, toOTPIdentifier } from "./utils";
@@ -358,4 +358,100 @@ describe("email OTP preflight attempt accounting", () => {
 			).data?.token,
 		).toBeDefined();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12091
+	 */
+	it.for(["database", "secondary", "mirrored"] as const)(
+		"does not revive a code that was replaced while a wrong guess was being checked (%s)",
+		async (storage) => {
+			const codes = ["111111", "222222"];
+			let holdGuess = false;
+			let releaseGuess: () => void = () => {};
+			const guessReleased = new Promise<void>((resolve) => {
+				releaseGuess = resolve;
+			});
+			let signalGuess: () => void = () => {};
+			const guessStarted = new Promise<void>((resolve) => {
+				signalGuess = resolve;
+			});
+			const { client, auth, testUser } = await getTestInstance(
+				{
+					...(storage === "database"
+						? {}
+						: {
+								secondaryStorage: createSecondaryStorage(),
+								...(storage === "mirrored"
+									? { verification: { storeInDatabase: true } }
+									: {}),
+							}),
+					plugins: [
+						emailOTP({
+							generateOTP: () => codes.shift(),
+							async sendVerificationOTP() {},
+							storeOTP: {
+								async hash(otp) {
+									if (holdGuess && otp === "999999") {
+										holdGuess = false;
+										signalGuess();
+										await guessReleased;
+									}
+									return `stored-${otp}`;
+								},
+							},
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [emailOTPClient()] } },
+			);
+			const email = testUser.email;
+			await client.emailOtp.sendVerificationOtp({
+				email,
+				type: "sign-in",
+			});
+
+			holdGuess = true;
+			const guess = client.signIn.emailOtp({
+				email,
+				otp: "999999",
+			});
+			await guessStarted;
+			await client.emailOtp.sendVerificationOtp({
+				email,
+				type: "sign-in",
+			});
+			// A write-back of the old code would be newer than the new code.
+			onTestFinished(() => {
+				vi.useRealTimers();
+			});
+			vi.setSystemTime(Date.now() + 1000);
+			releaseGuess();
+
+			expect((await guess).error?.code).toBe("INVALID_OTP");
+			const row = await (
+				await auth.$context
+			).internalAdapter.findVerificationValue(
+				toOTPIdentifier("sign-in", email),
+			);
+			// The wrong guess was checked against the old code, so it costs the new
+			// one nothing.
+			expect(row?.value).toBe("stored-222222:0");
+			expect(
+				(
+					await client.signIn.emailOtp({
+						email,
+						otp: "111111",
+					})
+				).error?.code,
+			).toBe("INVALID_OTP");
+			expect(
+				(
+					await client.signIn.emailOtp({
+						email,
+						otp: "222222",
+					})
+				).data?.token,
+			).toBeDefined();
+		},
+	);
 });

@@ -908,7 +908,8 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
  * within the attempt budget, the row is recreated with the same value and
  * expiry and an incremented attempt counter. Once the budget is exhausted the
  * row is not recreated. With `"restore"`, a correct code is written back
- * unchanged so a follow-up call can spend it.
+ * unchanged so a follow-up call can spend it. Neither is written back when a
+ * new code was sent while this one was being checked.
  */
 async function verifyPhoneNumberOTP(
 	ctx: GenericEndpointContext,
@@ -957,21 +958,22 @@ async function verifyPhoneNumberOTP(
 			PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 		);
 	}
-	if (otpValue !== providedCode) {
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: `${otpValue}:${attempts + 1}`,
-			identifier,
-			expiresAt: consumed.expiresAt,
-		});
-		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
-	}
-	if (successDisposition === "consume") return;
+	const verified = otpValue === providedCode;
+	if (verified && successDisposition === "consume") return;
 
 	// A code issued while this one was being checked replaces it, so writing
 	// the old code back would revive it over the new one.
 	const replacement =
 		await ctx.context.internalAdapter.findVerificationValue(identifier);
 	if (replacement) {
+		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
+	}
+	if (!verified) {
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: `${otpValue}:${attempts + 1}`,
+			identifier,
+			expiresAt: consumed.expiresAt,
+		});
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
 	const restored = await ctx.context.internalAdapter.createVerificationValue({

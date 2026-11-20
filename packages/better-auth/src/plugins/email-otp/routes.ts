@@ -1274,8 +1274,9 @@ const defaultOTPGenerator = (options: EmailOTPOptions) =>
  * only one caller at a time can compare a guess. Credential routes leave a
  * successful OTP consumed. The optional preflight restores it unchanged so
  * the documented follow-up call can use it. A wrong guess restores it with
- * one additional attempt and the original expiry. An exhausted record stays
- * consumed, locking the identifier out.
+ * one additional attempt and the original expiry. Neither restore happens
+ * when a new code was issued while this one was being checked. An exhausted
+ * record stays consumed, locking the identifier out.
  */
 async function atomicVerifyOTP(
 	ctx: GenericEndpointContext,
@@ -1318,6 +1319,16 @@ async function atomicVerifyOTP(
 
 	const verified = await verifyStoredOTP(ctx, opts, otpValue, providedOTP);
 
+	if (verified && successDisposition === "consume") return;
+
+	// A code issued while this one was being checked replaces it, so writing
+	// the old code back would revive it over the new one.
+	const replacement =
+		await ctx.context.internalAdapter.findVerificationValue(identifier);
+	if (replacement) {
+		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+	}
+
 	if (!verified) {
 		await ctx.context.internalAdapter.createVerificationValue({
 			value: `${otpValue}:${usedAttempts + 1}`,
@@ -1327,15 +1338,6 @@ async function atomicVerifyOTP(
 		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 	}
 
-	if (successDisposition === "consume") return;
-
-	// A code issued while this one was being checked replaces it, so writing
-	// the old code back would revive it over the new one.
-	const replacement =
-		await ctx.context.internalAdapter.findVerificationValue(identifier);
-	if (replacement) {
-		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
-	}
 	const restored = await ctx.context.internalAdapter.createVerificationValue({
 		value: consumed.value,
 		identifier,
