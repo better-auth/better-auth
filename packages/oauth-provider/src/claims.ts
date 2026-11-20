@@ -149,6 +149,8 @@ export interface AccessTokenClaimsInput {
 	perRequestClaims: Record<string, unknown> | undefined;
 	/** Per-resource `customClaims` from `resolveResourcePolicy` (raw, not yet stripped). */
 	resourcePolicyClaims: Record<string, unknown>;
+	/** See {@link OAuthClaimExtensionInput.grantId}. */
+	grantId?: string;
 }
 
 /**
@@ -186,6 +188,7 @@ export async function resolveAccessTokenClaims(
 		sessionId,
 		perRequestClaims,
 		resourcePolicyClaims,
+		grantId,
 	} = input;
 	const extensionClaims = await collectExtensionAccessTokenClaims(opts, {
 		ctx,
@@ -198,6 +201,7 @@ export async function resolveAccessTokenClaims(
 		sessionId,
 		resources,
 		metadata,
+		grantId,
 	});
 	const pluginClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
@@ -206,6 +210,7 @@ export async function resolveAccessTokenClaims(
 				resources,
 				referenceId,
 				metadata,
+				grantId,
 			})
 		: {};
 	const claims = stripReservedClaims(

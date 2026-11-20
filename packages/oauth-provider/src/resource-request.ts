@@ -74,6 +74,7 @@ export async function verifyResourceRequest(
 ): Promise<{
 	payload: ActiveAccessTokenPayload;
 	requestedUserInfoClaims: string[];
+	grantId?: string;
 }> {
 	if (params.audience !== undefined && !params.audience) {
 		throw new TypeError("audience must be a non-empty resource identifier");

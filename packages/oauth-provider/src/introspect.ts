@@ -24,7 +24,11 @@ import type {
 	OpaqueAccessTokenRecord,
 	RefreshTokenRecord,
 } from "./token-lookup";
-import { findAccessToken, findToken } from "./token-lookup";
+import {
+	authorizationCodeGrantId,
+	findAccessToken,
+	findToken,
+} from "./token-lookup";
 import type {
 	ActiveAccessTokenPayload,
 	Confirmation,
@@ -64,6 +68,11 @@ interface ValidatedAccessToken {
 	payload: JWTPayload;
 	/** Empty for JWT access tokens, which resolve UserInfo claims by scope. */
 	requestedUserInfoClaims: string[];
+	/**
+	 * The token's grant ID. A JWT access token carries it only with
+	 * `revocableJwtAccessTokens`, which makes `grant_id` an AS-owned claim.
+	 */
+	grantId?: string;
 }
 
 function inactiveAccessToken(): ValidatedAccessToken {
@@ -290,6 +299,7 @@ async function validateOpaqueAccessToken(
 	// `grantType` is not persisted on the opaque row, so extension claims are
 	// re-derived grant-type-stable. Per-issuance claims come from the row, so
 	// they keep the precedence they have in a JWT.
+	const grantId = await opaqueAccessTokenGrantId(accessToken);
 	const accessTokenClaims = client
 		? await resolveAccessTokenClaims({
 				ctx,
@@ -304,6 +314,7 @@ async function validateOpaqueAccessToken(
 				metadata: parseClientMetadata(client.metadata),
 				perRequestClaims: accessToken.accessTokenClaims ?? undefined,
 				resourcePolicyClaims,
+				grantId,
 			})
 		: {};
 
@@ -332,7 +343,22 @@ async function validateOpaqueAccessToken(
 			...(accessToken.confirmation ? { cnf: accessToken.confirmation } : {}),
 		} as JWTPayload,
 		requestedUserInfoClaims: accessToken.requestedUserInfoClaims ?? [],
+		grantId,
 	};
+}
+
+/**
+ * The grant ID the opaque token was issued under. A row stores it only with a
+ * refresh token; a token redeemed from an authorization code without one has
+ * the ID derived from its code, the same as at issuance.
+ */
+async function opaqueAccessTokenGrantId(
+	accessToken: OpaqueAccessTokenRecord,
+): Promise<string | undefined> {
+	if (accessToken.grantId) return accessToken.grantId;
+	return accessToken.authorizationCodeId
+		? authorizationCodeGrantId(accessToken.authorizationCodeId)
+		: undefined;
 }
 
 /**
@@ -421,9 +447,21 @@ async function validateFoundAccessToken(
 	if (found.type === "opaque") {
 		return validateOpaqueAccessToken(ctx, opts, found.record, clientId);
 	}
+	const payload = await validateJwtAccessToken(
+		ctx,
+		opts,
+		found.payload,
+		clientId,
+	);
 	return {
-		payload: await validateJwtAccessToken(ctx, opts, found.payload, clientId),
+		payload,
 		requestedUserInfoClaims: [],
+		grantId:
+			opts.revocableJwtAccessTokens &&
+			"grant_id" in payload &&
+			typeof payload.grant_id === "string"
+				? payload.grant_id
+				: undefined,
 	};
 }
 
@@ -575,13 +613,15 @@ export async function requireActiveAccessTokenWithClaims(
 ): Promise<{
 	payload: ActiveAccessTokenPayload;
 	requestedUserInfoClaims: string[];
+	grantId?: string;
 }> {
-	const { payload, requestedUserInfoClaims } =
+	const { payload, requestedUserInfoClaims, grantId } =
 		await resolveAccessTokenValidation(ctx, opts, token, clientId);
 	if (payload.active) {
 		return {
 			payload: payload as ActiveAccessTokenPayload,
 			requestedUserInfoClaims,
+			grantId,
 		};
 	}
 	throw createInvalidAccessTokenError();
