@@ -572,4 +572,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/mailkite.png",
 		},
 	},
+	{
+		name: "irondome-gates",
+		url: "https://www.npmjs.com/package/irondome-gates",
+		description:
+			"Disposable-email screening and tenant-scoped, PostgreSQL-backed claims on canonicalized email addresses for Better Auth.",
+		author: {
+			name: "IronDome",
+			github: "IrondomeDev",
+			avatar: "https://github.com/IrondomeDev.png",
+		},
+	},
 ];
