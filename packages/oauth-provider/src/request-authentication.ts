@@ -1,54 +1,54 @@
-import type { GenericEndpointContext } from "@better-auth/core";
-import { defineRequestState } from "@better-auth/core/context";
+import type {
+	GenericEndpointContext,
+	InternalAdapter,
+} from "@better-auth/core";
+import { getCurrentRequestState } from "@better-auth/core/context";
 import type { VerifiedDpopProof } from "better-auth/oauth2";
 import type { OAuthAuthenticatedClient } from "./types";
 
-/**
- * What `authenticateClient` and `verifyDpopProof` proved earlier in this
- * request. Request state is private to the provider, so a caller cannot
- * supply these results itself; it can only make the provider verify them.
- *
- * Request state is shared by nested calls to another auth instance, so each
- * result is kept with the instance that proved it and is read back only by
- * that instance. Another instance can hold a different client under the same
- * `client_id`.
- */
-interface Recorded<T> {
-	instance: object;
-	value: T;
+interface RequestChecks {
+	clients: WeakMap<
+		InternalAdapter,
+		Pick<OAuthAuthenticatedClient, "clientId" | "method">
+	>;
+	proofs: WeakMap<InternalAdapter, Pick<VerifiedDpopProof, "jkt">>;
 }
-const authenticatedClientState = defineRequestState<Recorded<
-	Pick<OAuthAuthenticatedClient, "clientId" | "method">
-> | null>(() => null);
-const verifiedDpopProofState = defineRequestState<Recorded<
-	Pick<VerifiedDpopProof, "jkt">
-> | null>(() => null);
 
-// The internal adapter is built once per auth context and survives the
-// per-request copy that dynamic base URLs make of it. Unlike `adapter`, which
-// a `database` factory may hand to several instances, it is never shared.
-const instanceOf = (ctx: GenericEndpointContext): object =>
-	ctx.context.internalAdapter;
+const requestChecksKey = {};
 
-export const recordAuthenticatedClient = (
+// Nested calls share request state. Each auth instance has its own internal
+// adapter, including when dynamic base URLs make a copy of its context.
+async function getRequestChecks() {
+	const request = await getCurrentRequestState();
+	let checks: RequestChecks | undefined = request.get(requestChecksKey);
+	if (!checks) {
+		checks = { clients: new WeakMap(), proofs: new WeakMap() };
+		request.set(requestChecksKey, checks);
+	}
+	return checks;
+}
+
+export const recordAuthenticatedClient = async (
 	ctx: GenericEndpointContext,
 	{ clientId, method }: OAuthAuthenticatedClient,
-) =>
-	authenticatedClientState.set({
-		instance: instanceOf(ctx),
-		value: { clientId, method },
-	});
+) => {
+	const { clients } = await getRequestChecks();
+	clients.set(ctx.context.internalAdapter, { clientId, method });
+};
 export const getRecordedAuthenticatedClient = async (
 	ctx: GenericEndpointContext,
 ) => {
-	const recorded = await authenticatedClientState.get();
-	return recorded?.instance === instanceOf(ctx) ? recorded.value : null;
+	const { clients } = await getRequestChecks();
+	return clients.get(ctx.context.internalAdapter) ?? null;
 };
-export const recordVerifiedDpopProof = (
+export const recordVerifiedDpopProof = async (
 	ctx: GenericEndpointContext,
 	{ jkt }: VerifiedDpopProof,
-) => verifiedDpopProofState.set({ instance: instanceOf(ctx), value: { jkt } });
+) => {
+	const { proofs } = await getRequestChecks();
+	proofs.set(ctx.context.internalAdapter, { jkt });
+};
 export const getRecordedDpopProof = async (ctx: GenericEndpointContext) => {
-	const recorded = await verifiedDpopProofState.get();
-	return recorded?.instance === instanceOf(ctx) ? recorded.value : null;
+	const { proofs } = await getRequestChecks();
+	return proofs.get(ctx.context.internalAdapter) ?? null;
 };

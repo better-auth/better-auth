@@ -1,3 +1,4 @@
+import { runWithRequestState } from "@better-auth/core/context";
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { generateCodeChallenge } from "better-auth/oauth2";
@@ -28,6 +29,10 @@ const endpointUrl = `${baseURL}/api/auth/test/checked-issue-code`;
  * @see https://github.com/better-auth/better-auth/issues/10414
  */
 describe("provider.issueAuthorizationCode after authenticateClient and verifyDpopProof", async () => {
+	const pending = new Map<
+		string,
+		{ clientId: string; query: Record<string, string> }
+	>();
 	const issuer = {
 		id: "test-checked-code-issuer",
 		endpoints: {
@@ -39,17 +44,20 @@ describe("provider.issueAuthorizationCode after authenticateClient and verifyDpo
 						ctx,
 						ctx.context.getPlugin("oauth-provider")!.options,
 					);
-					const { expected_client_id, expected_jkt, ...query } =
-						ctx.body as Record<string, string>;
+					const { handle, expected_jkt, ...query } = ctx.body as Record<
+						string,
+						string
+					>;
+					const saved = handle ? pending.get(handle) : undefined;
 					const authenticated = await provider.authenticateClient({
-						clientId: expected_client_id,
+						clientId: saved?.clientId,
 						requireCredentials: false,
 					});
 					const proof = expected_jkt
 						? await provider.verifyDpopProof({ expectedJkt: expected_jkt })
 						: await provider.verifyDpopProof();
 					const issued = await provider.issueAuthorizationCode({
-						query,
+						query: saved?.query ?? query,
 						session: ctx.context.session,
 					});
 					return ctx.json({
@@ -61,17 +69,28 @@ describe("provider.issueAuthorizationCode after authenticateClient and verifyDpo
 					});
 				},
 			),
+			testRecordedChecks: createAuthEndpoint(
+				"/test/recorded-checks",
+				{ method: "GET" },
+				async (ctx) =>
+					ctx.json({
+						client: await getRecordedAuthenticatedClient(ctx),
+						proof: await getRecordedDpopProof(ctx),
+					}),
+			),
 		},
 	} satisfies BetterAuthPlugin;
 
-	const { auth, client, signInWithTestUser } = await getTestInstance({
-		baseURL: `${baseURL}/api/auth`,
-		plugins: [
-			issuer,
-			jwt({ jwt: { issuer: baseURL } }),
-			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
-		],
-	});
+	const createInstance = () =>
+		getTestInstance({
+			baseURL: `${baseURL}/api/auth`,
+			plugins: [
+				issuer,
+				jwt({ jwt: { issuer: baseURL } }),
+				oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			],
+		});
+	const { auth, client, signInWithTestUser } = await createInstance();
 	const { headers } = await signInWithTestUser();
 	const context = await auth.$context;
 
@@ -134,15 +153,19 @@ describe("provider.issueAuthorizationCode after authenticateClient and verifyDpo
 		} as Record<string, string>;
 	}
 
-	function send(body: Record<string, string>, dpop?: string) {
-		return client.$fetch<{
+	function send(
+		body: Record<string, string>,
+		dpop?: string,
+		target = { client, headers },
+	) {
+		return target.client.$fetch<{
 			code: string;
 			separateClientRecord: boolean;
 			separateProofRecord?: boolean;
 		}>("/test/checked-issue-code", {
 			method: "POST",
 			headers: {
-				...Object.fromEntries(headers),
+				...Object.fromEntries(target.headers),
 				...(dpop ? { DPoP: dpop } : {}),
 			},
 			body,
@@ -163,7 +186,6 @@ describe("provider.issueAuthorizationCode after authenticateClient and verifyDpo
 	it("issues a code for a client the endpoint authenticated with private_key_jwt", async () => {
 		const issued = await send({
 			...(await codeRequest(keyClient.client_id)),
-			expected_client_id: keyClient.client_id,
 			client_assertion_type:
 				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
 			client_assertion: await assertion(keyClient.client_id),
@@ -177,7 +199,6 @@ describe("provider.issueAuthorizationCode after authenticateClient and verifyDpo
 		const issued = await send(
 			{
 				...(await codeRequest(publicClient.client_id)),
-				expected_client_id: publicClient.client_id,
 				expected_jkt: key.jkt,
 			},
 			await createDpopProof(key, { url: endpointUrl }),
@@ -198,27 +219,73 @@ describe("provider.issueAuthorizationCode after authenticateClient and verifyDpo
 		});
 	});
 
+	it("preserves each instance's client and proof across nested calls", async () => {
+		const secondary = await createInstance();
+		const secondaryHeaders = (await secondary.signInWithTestUser()).headers;
+		const secondaryClient = await secondary.auth.api.adminCreateOAuthClient({
+			headers: secondaryHeaders,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "none",
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+		const primaryKey = await createDpopKey();
+		const secondaryKey = await createDpopKey();
+
+		await runWithRequestState(new WeakMap(), async () => {
+			const primary = await send(
+				await codeRequest(publicClient.client_id),
+				await createDpopProof(primaryKey, { url: endpointUrl }),
+			);
+			expect(primary.error).toBeNull();
+			const inner = await send(
+				await codeRequest(secondaryClient.client_id),
+				await createDpopProof(secondaryKey, { url: endpointUrl }),
+				{ client: secondary.client, headers: secondaryHeaders },
+			);
+			expect(inner.error).toBeNull();
+			expect(await auth.api.testRecordedChecks()).toEqual({
+				client: { clientId: publicClient.client_id, method: "none" },
+				proof: { jkt: primaryKey.jkt },
+			});
+			expect(await secondary.auth.api.testRecordedChecks()).toEqual({
+				client: { clientId: secondaryClient.client_id, method: "none" },
+				proof: { jkt: secondaryKey.jkt },
+			});
+		});
+		expect(await auth.api.testRecordedChecks()).toEqual({
+			client: null,
+			proof: null,
+		});
+	});
+
 	it("rejects a query that names another client than the one authenticated", async () => {
+		const handle = generateRandomString(16);
+		pending.set(handle, {
+			clientId: keyClient.client_id,
+			query: await codeRequest(publicClient.client_id),
+		});
 		const issued = await send({
-			...(await codeRequest(publicClient.client_id)),
-			expected_client_id: keyClient.client_id,
+			handle,
+			client_id: keyClient.client_id,
 			client_assertion_type:
 				"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
 			client_assertion: await assertion(keyClient.client_id),
 		});
-		expect(errorCode(issued)).toBe("invalid_client");
+		expect(issued.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client_id does not match the authenticated client",
+		});
 	});
 
 	it("rejects a dpop_jkt that differs from the verified proof's key", async () => {
 		const key = await createDpopKey();
 		const other = await createDpopKey();
 		const issued = await send(
-			{
-				...(await codeRequest(publicClient.client_id, {
-					dpop_jkt: other.jkt,
-				})),
-				expected_client_id: publicClient.client_id,
-			},
+			await codeRequest(publicClient.client_id, { dpop_jkt: other.jkt }),
 			await createDpopProof(key, { url: endpointUrl }),
 		);
 		expect(errorCode(issued)).toBe("invalid_dpop_proof");

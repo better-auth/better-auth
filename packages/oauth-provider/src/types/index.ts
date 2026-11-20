@@ -714,9 +714,10 @@ export interface OAuthProviderApi {
 	 * because its `htm` cannot be checked.
 	 *
 	 * Call it before consuming a one-time credential, so the client's retry
-	 * with the nonce can still redeem it. Do not also call it on a request that
-	 * reaches `issueTokens` or `resolveConfirmation`: they verify the proof
-	 * themselves, and a second verification rejects its `jti` as replayed.
+	 * with the nonce can still redeem it. When you call `issueTokens` or
+	 * `resolveConfirmation` without a `confirmation`, let that method verify
+	 * the proof. Verifying it twice rejects its `jti` as replayed. A supplied
+	 * `confirmation` replaces the proof for those methods.
 	 * `issueAuthorizationCode` reuses a proof this method verified on the same
 	 * request instead of verifying it again.
 	 */
