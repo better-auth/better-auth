@@ -632,6 +632,7 @@ export async function authorizeEndpoint(
 
 	// Resolve request_uri (PAR) before processing. A resumed request carries
 	// the parameters this server signed after resolving it.
+	let fromParStore = settings?.isAuthorize !== true && requestUri !== undefined;
 	if (requestUri !== undefined && settings?.isAuthorize === true) {
 		const clientId = getStringParameter(query.client_id);
 		if (!clientId) {
@@ -671,11 +672,13 @@ export async function authorizeEndpoint(
 		// Only client_id is carried from the authorization URL. A request_uri
 		// from /oauth2/par stays in the query, so code issuance can use it up.
 		const urlClientId = query.client_id;
-		query = { ...resolvedParams } as unknown as OAuthAuthorizationQuery;
+		const { request_uri: _resolvedUri, ...parameters } = resolvedParams;
+		query = parameters as unknown as OAuthAuthorizationQuery;
 		if (urlClientId) {
 			query.client_id = urlClientId;
 		}
 		if (pushed.status === "found") {
+			fromParStore = true;
 			query.request_uri = requestUri;
 		}
 	}
@@ -749,6 +752,7 @@ export async function authorizeEndpoint(
 	const policy = await runBeforeAuthorization(ctx, opts, headers, {
 		query,
 		client,
+		pushed: fromParStore,
 	});
 	if ("redirect" in policy) return policy.redirect;
 	query = policy.query;
@@ -772,7 +776,7 @@ export async function authorizeEndpoint(
  */
 async function evaluateBeforeAuthorization(
 	opts: OAuthOptions<Scope[]>,
-	input: Omit<OAuthBeforeAuthorizationInput, "query" | "pushed"> & {
+	input: Omit<OAuthBeforeAuthorizationInput, "query"> & {
 		query: StoredAuthorizationQuery;
 	},
 ): Promise<
@@ -781,7 +785,7 @@ async function evaluateBeforeAuthorization(
 > {
 	const { query, ...context } = input;
 	const {
-		request_uri: requestUri,
+		request_uri: _requestUri,
 		request: _requestObject,
 		...requestParameters
 	} = withoutClientAuthentication(
@@ -796,7 +800,6 @@ async function evaluateBeforeAuthorization(
 				query: structuredClone(
 					requestParameters,
 				) as OAuthBeforeAuthorizationInput["query"],
-				pushed: requestUri !== undefined,
 			});
 			if (result?.prompt === "login") requiresLogin = true;
 		} catch (error) {
@@ -830,16 +833,19 @@ async function runBeforeAuthorization(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	headers: Headers,
-	request: { query: OAuthAuthorizationQuery; client: SchemaClient<Scope[]> },
+	request: {
+		query: OAuthAuthorizationQuery;
+		client: SchemaClient<Scope[]>;
+		pushed: boolean;
+	},
 ): Promise<
 	{ query: OAuthAuthorizationQuery } | { redirect: OAuthRedirectResult }
 > {
-	const { query, client } = request;
+	const { query } = request;
 	if (!getBeforeAuthorizationHooks(opts).length) return { query };
 	const session = await getSessionFromCtx(ctx);
 	const outcome = await evaluateBeforeAuthorization(opts, {
-		query,
-		client,
+		...request,
 		session: session ? { session: session.session, user: session.user } : null,
 		headers,
 		ctx,
@@ -1592,6 +1598,7 @@ export async function issueAuthorizationCode(
 	const headers = ctx.request?.headers ?? ctx.headers ?? new Headers();
 	const policy = await evaluateBeforeAuthorization(opts, {
 		query: policyQuery,
+		pushed: false,
 		client,
 		session: params.session,
 		headers,

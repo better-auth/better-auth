@@ -49,7 +49,10 @@ describe("beforeAuthorization", async () => {
 					pushedAuthorizationRequests: { enabled: true },
 					requestUriResolver: async ({ requestUri }) =>
 						requestUri === resolverRequestUri
-							? await requestParams({ acr_values: mfaAcr })
+							? await requestParams({
+									acr_values: mfaAcr,
+									request_uri: requestUri,
+								})
 							: null,
 					authenticationContext: {
 						acrValuesSupported: ["0", mfaAcr],
@@ -99,8 +102,8 @@ describe("beforeAuthorization", async () => {
 		};
 	}
 
-	async function push(params: Record<string, string>) {
-		const response = await customFetchImpl(parEndpoint, {
+	function postPar(params: Record<string, string>) {
+		return customFetchImpl(parEndpoint, {
 			method: "POST",
 			headers: { "content-type": "application/x-www-form-urlencoded" },
 			body: new URLSearchParams({
@@ -108,6 +111,10 @@ describe("beforeAuthorization", async () => {
 				client_secret: client.client_secret!,
 			}).toString(),
 		});
+	}
+
+	async function push(params: Record<string, string>) {
+		const response = await postPar(params);
 		expect(response.status).toBe(201);
 		return ((await response.json()) as { request_uri: string }).request_uri;
 	}
@@ -152,8 +159,9 @@ describe("beforeAuthorization", async () => {
 	}
 
 	it("sees a pushed request with pushed: true and without client credentials", async () => {
+		const preferredAcr = "urn:example:acr:unadvertised";
 		const requestUri = await push(
-			await requestParams({ acr_values: mfaAcr, custom_param: "kept" }),
+			await requestParams({ acr_values: preferredAcr, custom_param: "kept" }),
 		);
 		const location = await authorize({
 			client_id: client.client_id,
@@ -163,7 +171,7 @@ describe("beforeAuthorization", async () => {
 		expect(calls).toHaveLength(1);
 		const [input] = calls;
 		expect(input!.pushed).toBe(true);
-		expect(input!.query.acr_values).toBe(mfaAcr);
+		expect(input!.query.acr_values).toBe(preferredAcr);
 		expect(input!.query).toMatchObject({ custom_param: "kept" });
 		expect(input!.query).not.toHaveProperty("client_secret");
 		expect(input!.query).not.toHaveProperty("request_uri");
@@ -171,16 +179,38 @@ describe("beforeAuthorization", async () => {
 		expect(input!.session?.user.email).toBe("test@test.com");
 	});
 
-	it("sees a request from requestUriResolver with pushed: false", async () => {
-		const location = await authorize({
-			client_id: client.client_id,
-			request_uri: resolverRequestUri,
-		});
-		expect(location.searchParams.get("code")).toEqual(expect.any(String));
-		expect(calls).toHaveLength(1);
+	/**
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#acrSemantics
+	 */
+	it("rejects an unsupported essential acr at PAR before running the policy", async () => {
+		const response = await postPar(
+			await requestParams({
+				claims: JSON.stringify({
+					id_token: {
+						acr: { essential: true, value: "urn:example:acr:unadvertised" },
+					},
+				}),
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ error: "access_denied" });
+		expect(order).toEqual([]);
+	});
+
+	it("keeps pushed false through sign-in when the resolver includes its request_uri", async () => {
+		const login = await authorize(
+			{ client_id: client.client_id, request_uri: resolverRequestUri },
+			new Headers(),
+		);
+		expect(login.pathname).toBe("/login");
 		expect(calls[0]!.pushed).toBe(false);
 		expect(calls[0]!.query.acr_values).toBe(mfaAcr);
 		expect(calls[0]!.query).not.toHaveProperty("request_uri");
+		expect(login.searchParams.has("request_uri")).toBe(false);
+
+		const continued = await signIn(login);
+		expect(continued.searchParams.get("code")).toEqual(expect.any(String));
+		expect(calls.map(({ pushed }) => pushed)).toEqual([false, false]);
 	});
 
 	it("sees a direct request with pushed: false", async () => {
@@ -211,13 +241,17 @@ describe("beforeAuthorization", async () => {
 			session?.session.id === original!.session.id
 				? { prompt: "login" }
 				: undefined;
-		const login = await authorize(await requestParams());
+		const requestUri = await push(await requestParams());
+		const login = await authorize({
+			client_id: client.client_id,
+			request_uri: requestUri,
+		});
 		expect(login.pathname).toBe("/login");
 		expect(login.searchParams.get("prompt")).toBe("login");
 
 		const continued = await signIn(login);
 		expect(continued.searchParams.get("code")).toEqual(expect.any(String));
-		expect(calls).toHaveLength(2);
+		expect(calls.map(({ pushed }) => pushed)).toEqual([true, true]);
 		expect(calls[1]!.session?.session.id).not.toBe(original!.session.id);
 	});
 

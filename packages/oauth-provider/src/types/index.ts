@@ -2618,8 +2618,8 @@ export interface OAuthOptions<
 	 *   `login_required`, `interaction_required`, `consent_required`,
 	 *   `access_denied`, or `unmet_authentication_requirements`, to refuse
 	 *   the request. The client gets it at its `redirect_uri` with
-	 *   `error_description`, `state`, and `iss`, and nothing is consumed:
-	 *   no code is issued and a `request_uri` stays usable. Any other error,
+	 *   `error_description`, `iss`, and any `state` the client sent.
+	 *   No code is issued and a `request_uri` stays usable. Any other error,
 	 *   including a redirect from `ctx.redirect`, passes through unchanged.
 	 *
 	 * `issueAuthorizationCode` runs it too, with `pushed: false`. There, a

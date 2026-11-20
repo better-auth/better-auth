@@ -83,7 +83,7 @@ throw new APIError("BAD_REQUEST", {
 });
 ```
 
-The client receives the error at its validated `redirect_uri`, with `error_description`, `state`, and `iss` in the query, like every other error the provider reports after it validates the request. Nothing is used up: the provider issues no code, and a pushed `request_uri` stays valid until it expires. Use an error from [OIDC Core §3.1.2.6](https://openid.net/specs/openid-connect-core-1_0.html#AuthError) or [RFC 6749 §4.1.2.1](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1), such as `login_required`, `interaction_required`, `consent_required`, or `access_denied`. When the user cannot meet an authentication requirement at all, `unmet_authentication_requirements` from [OpenID Connect Unmet Authentication Requirements 1.0](https://openid.net/specs/openid-connect-unmet-authentication-requirements-1_0.html) tells the client so. Any other error, such as a redirect thrown with `ctx.redirect`, passes through unchanged.
+The provider redirects to the validated `redirect_uri` with `error`, `error_description`, and `iss` in the query. If the client sent `state`, the provider echoes it. Nothing is used up: the provider issues no code, and a pushed `request_uri` stays valid until it expires. Use an error from [OIDC Core §3.1.2.6](https://openid.net/specs/openid-connect-core-1_0.html#AuthError) or [RFC 6749 §4.1.2.1](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1), such as `login_required`, `interaction_required`, `consent_required`, or `access_denied`. When the user cannot meet an authentication requirement at all, `unmet_authentication_requirements` from [OpenID Connect Unmet Authentication Requirements 1.0](https://openid.net/specs/openid-connect-unmet-authentication-requirements-1_0.html) tells the client so. Any other error, such as a redirect thrown with `ctx.redirect`, passes through unchanged.
 
 A plugin registered as a [provider extension](/docs/plugins/oauth-provider/reference#provider-extensions) can set `beforeAuthorization` too. Extension hooks run first, in registration order, and then your own. Every hook runs unless one throws. A hook that throws ends the request even when another one asked for a sign-in.
 
@@ -217,7 +217,7 @@ The provider then checks the request as `/oauth2/authorize` does: the client, sc
 * The error that [`beforeAuthorization`](#authorization-policy) throws, or `login_required` when it asks for a sign-in.
 * `access_denied`: the session cannot meet an essential `acr` the request names.
 
-Send the user to `/oauth2/authorize` when you get one of these errors. Request validation errors, such as `invalid_client` or `invalid_scope`, mean the request itself is invalid, as they do at `/oauth2/authorize`. Errors your own hooks throw, such as from `consentReferenceId`, pass through unchanged.
+Send the user to `/oauth2/authorize` if signing in, giving consent, or completing another interaction can satisfy the request. If your policy denies the request outright, return its error to the client. Request validation errors, such as `invalid_client` or `invalid_scope`, mean the request itself is invalid, as they do at `/oauth2/authorize`. Errors your own hooks throw, such as from `consentReferenceId`, pass through unchanged.
 
 Pass the request parameters themselves. A `request_uri` fails with `invalid_request`, including one from `/oauth2/par`. That reference is for the browser step of `/oauth2/authorize`. A `request` object fails with `request_not_supported`.
 
