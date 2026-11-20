@@ -54,6 +54,7 @@ type CimdResolver = (
 ) => Promise<SchemaClient<Scope[]> | null>;
 
 interface CimdMetadataCacheEntry {
+	fetchMark: number;
 	metadata: OAuthClientMetadata;
 	expiresAt: number;
 	etag?: string;
@@ -68,6 +69,7 @@ interface CimdMetadataCacheEntry {
 }
 
 interface FetchedMetadata {
+	fetchMark: number;
 	metadata: OAuthClientMetadata;
 	nextEntry: CimdMetadataCacheEntry | null;
 }
@@ -372,6 +374,7 @@ function createCacheEntry(
 	cacheHeaders: MetadataDocumentResponseCacheHeaders,
 	metadataRevalidationInterval: number | string,
 	nowMs: number,
+	fetchMark: number,
 ): CimdMetadataCacheEntry | null {
 	const freshness = computeExpiresAt(
 		cacheHeaders,
@@ -380,6 +383,7 @@ function createCacheEntry(
 	);
 	if (!freshness.cacheable) return null;
 	return {
+		fetchMark,
 		metadata,
 		expiresAt: freshness.expiresAt,
 		etag: cacheHeaders.etag,
@@ -417,7 +421,14 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 	// Evicting a terminal record moves the watermark, so stored clients
 	// validated before it are not served stale and eviction cannot resume
 	// stale serving.
-	const terminalFailureAtMsByClientId = new Map<string, number>();
+	const terminalFailures = new Map<
+		string,
+		{
+			failedAtMs: number;
+			/** Only another save of the same validation in the same store can clear a rejected save. */
+			rejectedSave?: { fetchMark: number; adapter: WeakSet<object> };
+		}
+	>();
 	let terminalFailureEvictedAtMs = Number.NEGATIVE_INFINITY;
 	const inFlightMetadataByClientId = new Map<string, InFlightMetadataFetch>();
 	// The latest fetch the lease retired for a client, until it settles or a
@@ -449,7 +460,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 
 	const recordFetchSuccess = (clientId: string) => {
 		transientFailureByClientId.delete(clientId);
-		terminalFailureAtMsByClientId.delete(clientId);
+		terminalFailures.delete(clientId);
 	};
 
 	const recordFetchFailure = (clientId: string, failure: unknown) => {
@@ -478,26 +489,43 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 
 	// Callers record only for a servable stored client, so unknown client IDs
 	// cannot fill the records.
-	const recordTerminalFailure = (clientId: string) => {
+	const recordTerminalFailure = (
+		clientId: string,
+		save?: { adapter: object; fetchMark: number },
+	) => {
 		if (staleIfErrorMs === null) return;
+		const previous = terminalFailures.get(clientId);
+		if (previous) {
+			// A later terminal response or an independent refusal still applies
+			// when a previously rejected save subsequently succeeds.
+			if (
+				!save ||
+				previous.rejectedSave?.fetchMark !== save.fetchMark ||
+				!previous.rejectedSave.adapter.has(save.adapter)
+			) {
+				previous.rejectedSave = undefined;
+			}
+			return;
+		}
 		const nowMs = Date.now();
-		terminalFailureAtMsByClientId.delete(clientId);
-		if (terminalFailureAtMsByClientId.size >= maxCacheEntries) {
-			for (const [
-				candidateClientId,
-				failedAtMs,
-			] of terminalFailureAtMsByClientId) {
+		if (terminalFailures.size >= maxCacheEntries) {
+			for (const [candidateClientId, { failedAtMs }] of terminalFailures) {
 				if (nowMs - failedAtMs <= staleIfErrorMs) break;
-				terminalFailureAtMsByClientId.delete(candidateClientId);
+				terminalFailures.delete(candidateClientId);
 			}
 		}
-		while (terminalFailureAtMsByClientId.size >= maxCacheEntries) {
-			const oldestClientId = terminalFailureAtMsByClientId.keys().next().value;
+		while (terminalFailures.size >= maxCacheEntries) {
+			const oldestClientId = terminalFailures.keys().next().value;
 			if (typeof oldestClientId !== "string") break;
-			terminalFailureAtMsByClientId.delete(oldestClientId);
+			terminalFailures.delete(oldestClientId);
 			terminalFailureEvictedAtMs = nowMs;
 		}
-		terminalFailureAtMsByClientId.set(clientId, nowMs);
+		terminalFailures.set(clientId, {
+			failedAtMs: nowMs,
+			rejectedSave: save
+				? { fetchMark: save.fetchMark, adapter: new WeakSet([save.adapter]) }
+				: undefined,
+		});
 	};
 
 	const ensureClientFetchStateCapacity = (clientId: string, nowMs: number) => {
@@ -770,6 +798,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				cacheHeaders,
 				metadataRevalidationInterval,
 				Date.now(),
+				startMark,
 			);
 			// A retired fetch leaves the cache and pacing to the fetch that replaced
 			// it. When the lease retired it and no fetch for the client started
@@ -796,7 +825,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				lastFetchStartAtMsByClientId.delete(clientId);
 				recordFetchSuccess(clientId);
 			}
-			return { metadata, nextEntry };
+			return { metadata, nextEntry, fetchMark: startMark };
 		})();
 		const inFlight: InFlightMetadataFetch = {
 			fetched: metadataFetch,
@@ -873,7 +902,9 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		const persistFetchedMetadata = async ({
 			metadata,
 			nextEntry,
+			fetchMark,
 		}: FetchedMetadata) => {
+			const adapter = ctx.context.adapter;
 			try {
 				const storedClient = await persistMetadataDocumentClient(
 					ctx,
@@ -884,6 +915,13 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 					existingClient ?? undefined,
 				);
 				markSaved(nextEntry);
+				const rejectedSave = terminalFailures.get(clientId)?.rejectedSave;
+				if (
+					rejectedSave?.fetchMark === fetchMark &&
+					rejectedSave.adapter.has(adapter)
+				) {
+					terminalFailures.delete(clientId);
+				}
 				return storedClient;
 			} catch (error) {
 				if (nextEntry && metadataCache.get(clientId) === nextEntry) {
@@ -894,9 +932,9 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				if (
 					isAPIError(error) &&
 					error.status === "BAD_REQUEST" &&
-					storedClientWithinStaleBound()
+					(terminalFailures.has(clientId) || storedClientWithinStaleBound())
 				) {
-					recordTerminalFailure(clientId);
+					recordTerminalFailure(clientId, { adapter, fetchMark });
 				}
 				throw error;
 			}
@@ -907,7 +945,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			if (
 				!existingClient?.updatedAt ||
 				staleIfErrorMs === null ||
-				terminalFailureAtMsByClientId.has(clientId)
+				terminalFailures.has(clientId)
 			) {
 				return null;
 			}
@@ -943,6 +981,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				return persistFetchedMetadata({
 					metadata: cachedEntry.metadata,
 					nextEntry: cachedEntry,
+					fetchMark: cachedEntry.fetchMark,
 				});
 			}
 
@@ -971,7 +1010,8 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 					return serveStoredClient(storedClient, describeFetchFailure(error));
 				}
 				if (
-					storedClient &&
+					(storedClient || terminalFailures.has(clientId)) &&
+					!isTransientMetadataFetchFailure(error) &&
 					!isMetadataFetchRefusal(error) &&
 					!isMetadataFetchCapacityRefusal(error) &&
 					!isMetadataTransportError(error)
