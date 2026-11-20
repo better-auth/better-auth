@@ -16,7 +16,7 @@ description: Control which tokens the provider issues, for which APIs, and for h
 | `private_key_jwt`     | A signed JWT assertion. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt). |
 | `none`                | Public client. PKCE is required.                                                                     |
 
-To get a JWT access token, include a `resource` in the request and enable the JWT plugin. The token's `aud` is that resource. When the scopes also include `openid`, `aud` is an array that also holds the UserInfo endpoint URL. If either is missing, the access token is opaque. Error codes are listed in [Token errors](/docs/plugins/oauth-provider/reference#token-errors).
+To get a JWT access token, include a `resource` in the request and enable the JWT plugin. The token's `aud` is that resource. When the scopes also include `openid`, `aud` is an array that also holds the UserInfo endpoint URL. If either is missing, or the resource uses [opaque access tokens](#access-token-format), the access token is opaque. Error codes are listed in [Token errors](/docs/plugins/oauth-provider/reference#token-errors).
 
 An `authorization_code` request that omits `resource` uses the resources bound to the authorization code, and a refresh request uses the resources stored on the refresh token. When no resource is named or bound, including on `client_credentials` requests that omit `resource`, the access token is opaque with no `aud` claim, and the provider applies no default resource. [RFC 8707 §2.1](https://datatracker.ietf.org/doc/html/rfc8707#section-2.1) says a provider can process an authorization request that omits `resource` without a specific resource, use a default resource, or fail the request with `invalid_target`. Better Auth processes it without a resource. A resource server that sets `audience` rejects the resulting token.
 
@@ -83,6 +83,7 @@ A string uses the plugin defaults. An object sets per-resource policy:
 | `allowedScopes`                 | Requested scopes are narrowed to this list. If none remain, the request fails with `invalid_scope`. |
 | `accessTokenTtl`                | Access token lifetime in seconds. Defaults to `accessTokenExpiresIn`.                               |
 | `refreshTokenTtl`               | Refresh token lifetime in seconds. Defaults to `refreshTokenExpiresIn`.                             |
+| `accessTokenFormat`             | `"jwt"` or `"opaque"`. Defaults to `resourceDefaults.accessTokenFormat`, then `"jwt"`.              |
 | `signingAlgorithm`              | Access token signing algorithm. When unset, the JWT plugin selects the signing key.                 |
 | `signingKeyId`                  | Key ID to sign this resource's access tokens with.                                                  |
 | `customClaims`                  | Claims added to every access token for this resource. Reserved JWT claims are stripped.             |
@@ -102,6 +103,30 @@ The resources you configure are written to the `oauthResource` table at startup.
 * `overwrite`: replaces existing rows with the config values.
 
 Each instance reads the table once per configured resource to seed it. If you build Better Auth per request, for example on Cloudflare Workers with a database client per request, those reads run on every request. Set `resourceSeedScope: "process"` to remember each seeded entry for the life of the process instead, as long as every instance in the process uses the same database.
+
+### Access token format
+
+A resource gets JWT access tokens by default, when the request names it and the JWT plugin is enabled. Its API can verify a JWT locally with your JWKS, without calling the provider. A JWT stays valid until it expires, unless you turn on `revocableJwtAccessTokens` and the API [introspects](/docs/plugins/oauth-provider/resource-server#introspection) it.
+
+To issue opaque reference tokens for a resource instead, set `accessTokenFormat: "opaque"` on it. The API must then introspect each token, or call `verifyResourceRequest` when the API runs on the auth server. An opaque token keeps the resource as its audience, so introspection reports it in `aud`. Revoking the token or deleting the resource cuts off access on the next introspection.
+
+To change the format for every resource that does not set its own, use `resourceDefaults`:
+
+```ts title="auth.ts"
+oauthProvider({
+  resourceDefaults: { accessTokenFormat: "opaque" },
+  resources: [
+    "https://internal.example.com", // opaque
+    { identifier: "https://api.example.com", accessTokenFormat: "jwt" },
+  ],
+})
+```
+
+A request without a `resource` still gets an opaque token, because a JWT access token needs an audience. When `disableJwtPlugin` is `true`, every access token is opaque.
+
+Startup seeding follows `resourceSeedMode`. With the default, `insertOnly`, adding `accessTokenFormat` to a resource that is already stored has no effect. Change the stored row with `adminUpdateOAuthResource`, or seed with `merge`.
+
+One token cannot be both a JWT and an opaque token. A request for several resources whose formats differ fails with `invalid_target` ([RFC 8707 §2.2](https://datatracker.ietf.org/doc/html/rfc8707#section-2.2)). The client must request them in separate token requests.
 
 ### Manage resources at runtime
 
@@ -745,7 +770,7 @@ curl https://auth.example.com/api/auth/oauth2/token \
 | `actor_token`, `actor_token_type` | Optional, sent together. See [Delegate to an actor](#delegate-to-an-actor)                                                                                                                                                      |
 | `audience`                        | Optional, and may repeat. Each value must equal a registered resource identifier and is treated like `resource`                                                                                                                 |
 
-With the JWT plugin enabled, the exchanged token is a JWT access token whose `aud` is the requested resource. With `disableJwtPlugin: true`, it is opaque and the resource is returned by introspection. The response has no refresh token and no ID token.
+With the JWT plugin enabled, the exchanged token is a JWT access token whose `aud` is the requested resource. With `disableJwtPlugin: true`, or for a resource with [opaque access tokens](#access-token-format), it is opaque and the resource is returned by introspection. The response has no refresh token and no ID token.
 
 ### Exchange as a public client
 

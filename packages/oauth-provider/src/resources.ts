@@ -3,6 +3,7 @@ import { logger } from "@better-auth/core/env";
 import { APIError } from "better-auth/api";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type {
+	AccessTokenFormat,
 	OAuthClientResource,
 	OAuthOptions,
 	OAuthResource,
@@ -41,6 +42,25 @@ const _jwsAlgorithmsCoverageOk: _JwsAlgorithmsCoverage = true;
 void _jwsAlgorithmsCoverageOk;
 
 const JWS_ALGORITHM_SET = new Set<string>(JWS_ALGORITHMS);
+
+/**
+ * Access-token formats a resource can request.
+ *
+ * @internal
+ */
+export const ACCESS_TOKEN_FORMATS = [
+	"jwt",
+	"opaque",
+] as const satisfies readonly AccessTokenFormat[];
+
+const ACCESS_TOKEN_FORMAT_SET = new Set<string>(ACCESS_TOKEN_FORMATS);
+
+/** @internal */
+export function isAccessTokenFormat(
+	value: unknown,
+): value is AccessTokenFormat {
+	return typeof value === "string" && ACCESS_TOKEN_FORMAT_SET.has(value);
+}
 
 /**
  * Upper bound on how many entries are accepted in a JWT's `aud` claim during
@@ -170,6 +190,13 @@ export interface ResolvedResourcePolicy {
 	 */
 	signingAlgorithm: JWSAlgorithms | null;
 	signingKeyId: string | null;
+	/**
+	 * Format of the issued access token. Every requested resource must resolve
+	 * to the same format (its own, else {@link OAuthOptions.resourceDefaults},
+	 * else `"jwt"`); a mix raises `invalid_target`. Requests without a resource
+	 * get an opaque token regardless, because a JWT access token needs `aud`.
+	 */
+	accessTokenFormat: AccessTokenFormat;
 	/**
 	 * Merged custom claims across requested resources, returned RAW: reserved
 	 * RFC 9068 names are NOT stripped here. Feed this into
@@ -311,6 +338,7 @@ export async function resolveResourcePolicy(
 			refreshTokenTtl: null,
 			signingAlgorithm: null,
 			signingKeyId: null,
+			accessTokenFormat: "opaque",
 			rawCustomClaims: {},
 			dpopBoundAccessTokensRequired: false,
 			effectiveScopes: [...params.requestedScopes],
@@ -442,6 +470,27 @@ export async function resolveResourcePolicy(
 	const signingKeyId: string | null =
 		uniqueSigningKids.values().next().value ?? null;
 
+	// RFC 8707 §2.2: one token cannot be both self-contained and a reference,
+	// so a request whose resources disagree on the format is refused. Without
+	// the JWT plugin every token is opaque, so the formats cannot disagree.
+	const defaultFormat = opts.resourceDefaults?.accessTokenFormat ?? "jwt";
+	const formats = new Set<AccessTokenFormat>(
+		resolved.map((row) =>
+			opts.disableJwtPlugin
+				? "opaque"
+				: (row.accessTokenFormat ?? defaultFormat),
+		),
+	);
+	if (formats.size > 1) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_target",
+			error_description:
+				"requested resources need different access token formats; request them separately",
+		});
+	}
+	const accessTokenFormat: AccessTokenFormat =
+		formats.values().next().value ?? defaultFormat;
+
 	// Per-resource custom claims: merge in declared order (later resources win
 	// on key collisions). Returned raw; `resolveAccessTokenClaims` strips
 	// reserved RFC 9068 names from the merged access-token claim set, so the
@@ -468,6 +517,7 @@ export async function resolveResourcePolicy(
 		refreshTokenTtl,
 		signingAlgorithm,
 		signingKeyId,
+		accessTokenFormat,
 		rawCustomClaims: mergedClaims,
 		dpopBoundAccessTokensRequired,
 		effectiveScopes,
@@ -700,6 +750,7 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
 		name: defaultName(input),
 		accessTokenTtl: input.accessTokenTtl ?? null,
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
+		accessTokenFormat: input.accessTokenFormat ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
 		// FIXME(#11725): same null limit as buildResourceRow in
@@ -741,6 +792,8 @@ function buildSeedUpdate(
 		update.accessTokenTtl = input.accessTokenTtl;
 	if (input.refreshTokenTtl !== undefined)
 		update.refreshTokenTtl = input.refreshTokenTtl;
+	if (input.accessTokenFormat !== undefined)
+		update.accessTokenFormat = input.accessTokenFormat;
 	if (input.signingAlgorithm !== undefined)
 		update.signingAlgorithm = input.signingAlgorithm;
 	if (input.signingKeyId !== undefined)
@@ -893,6 +946,19 @@ export async function seedResources(
 		if (!check.ok) {
 			logger.warn(
 				`oauth-provider: skipping resource seed for ${rawInput.identifier} — ${check.reason}`,
+			);
+			continue;
+		}
+		// Falling back to the default format would hand self-contained tokens
+		// to a resource configured for reference tokens, so skip the entry: a
+		// new resource is not created, and an existing row keeps its stored
+		// format.
+		if (
+			rawInput.accessTokenFormat != null &&
+			!isAccessTokenFormat(rawInput.accessTokenFormat)
+		) {
+			logger.warn(
+				`oauth-provider: skipping resource seed for ${rawInput.identifier} — unsupported accessTokenFormat "${rawInput.accessTokenFormat}", must be one of ${ACCESS_TOKEN_FORMATS.join(", ")}`,
 			);
 			continue;
 		}

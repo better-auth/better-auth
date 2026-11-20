@@ -34,6 +34,7 @@ Only the OAuth provider plugins add columns in 1.8. Every `oauthProvider()` setu
   * `acr`, `amr`, and `grantId` on `oauthRefreshToken`
   * `act`, `grantId`, and `accessTokenClaims` on `oauthAccessToken`
   * `expiresAt`, `sectorIdentifier`, `frontchannelLogoutUri`, `frontchannelLogoutSessionRequired`, and `requirePushedAuthorizationRequests` on `oauthClient`
+  * `accessTokenFormat` on `oauthResource`
 * `oauthDeviceAuthorization()` adds `referenceId`, `authTime`, `acr`, and `amr` on `deviceCode`.
 
 Apply the schema, then deploy the 1.8 packages. With the built-in Kysely adapter, run `npx auth@latest migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth@latest generate`, review the output, and apply it with your migration tooling. MongoDB needs no migration.
@@ -538,6 +539,7 @@ These provider features are new or opt-in, and need no action when you upgrade:
 * A pairwise `sub` in JWT access tokens, with `accessTokenSubject: "pairwise"` and `pairwiseSecret`. Resource servers that key on `sub` then see a different value for the same user in each sector.
 * JWT access token revocation, with `revocableJwtAccessTokens: true`. Resource servers that verify tokens locally against the JWKS don't see it, so they must introspect.
 * RP-initiated logout for registered clients, with `clientRegistrationEnableEndSession`.
+* [Opaque access tokens for a resource](/docs/plugins/oauth-provider/tokens#access-token-format), with `accessTokenFormat: "opaque"`, or for every resource that does not set a format, with `resourceDefaults`.
 * `verifyResourceRequest()`, `issueAuthorizationCode()`, and `validateAuthorizationRequest()` on the provider API, for plugin endpoints served by the auth server.
 
 ***
