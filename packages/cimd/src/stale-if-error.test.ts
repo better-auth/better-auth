@@ -433,6 +433,23 @@ describe("CIMD metadataStaleIfError", () => {
 		}
 	});
 
+	/** @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1 */
+	it("ends stale serving when the URL policy withdraws approval during an outage", async () => {
+		let allowed = true;
+		const server = await createAuthorizationServer({
+			metadataStaleIfError: "1h",
+			isMetadataDocumentUrlAllowed: () => allowed,
+		});
+		await server.authorize();
+		server.transport.answer = () => new Response(null, { status: 503 });
+		expect((await server.authorize()).pathname).toBe("/consent");
+
+		allowed = false;
+		expect((await server.authorize()).error).toBe("invalid_client");
+		allowed = true;
+		expect((await server.authorize()).error).toBe("invalid_client");
+	});
+
 	it("fetches the document of a client served this way at most once a minute", async () => {
 		const server = await createAuthorizationServer({
 			metadataStaleIfError: "1h",

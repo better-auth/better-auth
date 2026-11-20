@@ -950,7 +950,13 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			if (!checkedUrl) {
 				// Policy may depend on this request. Check it before joining another
 				// fetch, spending a permit, or serving a stored client during an outage.
-				await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
+				try {
+					await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
+				} catch (error) {
+					recordFetchFailure(clientId, error);
+					if (storedClientWithinStaleBound()) recordTerminalFailure(clientId);
+					throw error;
+				}
 				checkedUrl = true;
 				continue;
 			}
