@@ -267,6 +267,36 @@ export const createInternalAdapter = (
 		);
 	}
 
+	async function revokeCachedUserSessions(
+		userId: string,
+		sessionReferences: readonly ActiveSessionReference[],
+	) {
+		const currentSessionReferences = await getActiveSessionReferences(userId);
+		await queueCachedUserSessionDeletion(userId, [
+			...sessionReferences,
+			...currentSessionReferences,
+		]);
+	}
+
+	// Revoke before the delete.after hooks, which can throw.
+	async function deleteSessionRows(
+		userId: string,
+		onRowsDeleted: () => Promise<void>,
+	) {
+		await deleteManyWithHooks([{ field: "userId", value: userId }], "session", {
+			fn: async (where) => {
+				const currentAdapter = await getCurrentAdapter(adapter);
+				const deleted = await currentAdapter.deleteMany({
+					model: "session",
+					where,
+				});
+				await onRowsDeleted();
+				return deleted;
+			},
+			executeMainFn: false,
+		});
+	}
+
 	async function withVerificationConsumeLock<T>(
 		key: string,
 		fn: () => Promise<T>,
@@ -516,17 +546,10 @@ export const createInternalAdapter = (
 		},
 		deleteUser: async (userId: string) => {
 			const sessionReferences = await getActiveSessionReferences(userId);
+			const revokeCachedSessions = () =>
+				revokeCachedUserSessions(userId, sessionReferences);
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-				await deleteManyWithHooks(
-					[
-						{
-							field: "userId",
-							value: userId,
-						},
-					],
-					"session",
-					undefined,
-				);
+				await deleteSessionRows(userId, revokeCachedSessions);
 			}
 			await deleteManyWithHooks(
 				[
@@ -539,7 +562,8 @@ export const createInternalAdapter = (
 				undefined,
 			);
 
-			const deletedUser = await deleteWithHooks(
+			// Revoke before the delete.after hooks, which can throw.
+			await deleteWithHooks(
 				[
 					{
 						field: "id",
@@ -547,11 +571,18 @@ export const createInternalAdapter = (
 					},
 				],
 				"user",
-				undefined,
+				{
+					fn: async (where) => {
+						const currentAdapter = await getCurrentAdapter(adapter);
+						await currentAdapter.deleteMany({
+							model: "user",
+							where,
+						});
+						await revokeCachedSessions();
+					},
+					executeMainFn: false,
+				},
 			);
-			if (deletedUser !== null) {
-				await queueCachedUserSessionDeletion(userId, sessionReferences);
-			}
 		},
 		createSession: async (
 			userId: string,
@@ -1040,11 +1071,8 @@ export const createInternalAdapter = (
 			// active. The session index is read again at that point: a session
 			// created while delete.before hooks ran is missing from the first read,
 			// and its creation time can equal the cutoff.
-			const revokeCachedSessions = async () =>
-				queueCachedUserSessionDeletion(userId, [
-					...sessionReferences,
-					...(await getActiveSessionReferences(userId)),
-				]);
+			const revokeCachedSessions = () =>
+				revokeCachedUserSessions(userId, sessionReferences);
 			if (ctx.options.session?.preserveSessionInDatabase) {
 				await endPreservedSessions(
 					[{ field: "userId", value: userId }],
@@ -1052,20 +1080,7 @@ export const createInternalAdapter = (
 				);
 				return;
 			}
-			await deleteManyWithHooks(
-				[{ field: "userId", value: userId }],
-				"session",
-				{
-					fn: async (where) => {
-						const deleted = await (await getCurrentAdapter(adapter)).deleteMany(
-							{ model: "session", where },
-						);
-						await revokeCachedSessions();
-						return deleted;
-					},
-					executeMainFn: false,
-				},
-			);
+			await deleteSessionRows(userId, revokeCachedSessions);
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
