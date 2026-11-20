@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeTimestampValue, resolveSessionAuthTime } from "./index";
+import {
+	isSessionActive,
+	normalizeTimestampValue,
+	resolveSessionAuthTime,
+} from "./index";
 
 describe("normalizeTimestampValue", () => {
 	it("parses epoch-millis text values", () => {
@@ -55,5 +59,18 @@ describe("resolveSessionAuthTime", () => {
 
 		expect(directResult).toBeUndefined();
 		expect(nestedResult).toBeUndefined();
+	});
+});
+
+describe("isSessionActive", () => {
+	const now = new Date(1774295570569);
+
+	it.each([-1, 0, 1])("checks expiration %i ms from now", (offset) => {
+		const session = { expiresAt: new Date(now.getTime() + offset) };
+		expect(isSessionActive(session, now)).toBe(offset > 0);
+	});
+
+	it("rejects a missing session", () => {
+		expect(isSessionActive(null, now)).toBe(false);
 	});
 });

@@ -271,6 +271,14 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 	);
 }
 
+/** A session ends at its expiration timestamp. */
+export function isSessionActive<T extends Pick<Session, "expiresAt">>(
+	session: T | null | undefined,
+	now = new Date(),
+): session is T {
+	return !!session && session.expiresAt > now;
+}
+
 /**
  * The session a refresh token was issued in, while it is still active.
  * Refresh tokens outlive the session, so the tokens they mint must not name
@@ -285,7 +293,7 @@ export async function findActiveSessionId(
 		model: "session",
 		where: [{ field: "id", value: sessionId }],
 	});
-	return session && session.expiresAt >= new Date() ? sessionId : undefined;
+	return isSessionActive(session) ? sessionId : undefined;
 }
 
 /**

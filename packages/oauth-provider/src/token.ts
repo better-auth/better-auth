@@ -65,6 +65,7 @@ import {
 	getStoredToken,
 	isInvalidJwtError,
 	isPKCERequired,
+	isSessionActive,
 	isSessionBoundRefreshToken,
 	normalizeTimestampValue,
 	parseClientMetadata,
@@ -1552,7 +1553,7 @@ async function createUserTokens(
 			model: "session",
 			where: [{ field: "id", value: sessionId }],
 		});
-		if (!session || session.expiresAt < new Date()) {
+		if (!isSessionActive(session)) {
 			const revokedAt = new Date();
 			for (const model of ["oauthRefreshToken", "oauthAccessToken"] as const) {
 				await ctx.context.adapter.updateMany({
@@ -1894,7 +1895,7 @@ async function handleAuthorizationCodeGrant(
 			},
 		],
 	});
-	if (!session || session.expiresAt < new Date()) {
+	if (!isSessionActive(session)) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "session no longer exists",
 			error: "invalid_request",
