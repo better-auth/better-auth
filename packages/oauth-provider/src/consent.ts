@@ -17,13 +17,13 @@ import { oAuthState } from "./oauth";
 import { getSupportedClaims } from "./standard-claims";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import {
-	findConsent,
 	getConsentReferenceId,
 	isSessionFreshForSignedQuery,
 	parsePrompt,
 	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
+	updateConsent,
 } from "./utils";
 
 export async function consentEndpoint<Result>(
@@ -157,58 +157,29 @@ export async function consentEndpoint<Result>(
 		return await authorize(ctx);
 	}
 
+	const approvedScopes = requestedScopes ?? originalRequestedScopes;
 	const referenceId = await getConsentReferenceId(opts, {
 		user: session?.user!,
 		session: session?.session!,
-		scopes: requestedScopes ?? originalRequestedScopes,
+		scopes: approvedScopes,
 		query: new URLSearchParams(query),
 		consent: { referenceId: chosenReferenceId },
 	});
-	const foundConsent = await findConsent(
+	await storeConsentApproval(
 		ctx,
-		clientId,
-		session?.user.id!,
-		referenceId,
+		{ clientId, userId: session?.user.id!, referenceId },
+		{
+			offeredScopes: originalRequestedScopes,
+			scopes: approvedScopes,
+			offeredUserInfoClaims: originalRequestedUserInfoClaims,
+			userInfoClaims: acceptedUserInfoClaims,
+			resources: query.getAll("resource"),
+		},
 	);
-	const iat = Math.floor(Date.now() / 1000);
-	const resource = query.getAll("resource");
-	const consent: Omit<OAuthConsent<Scope[]>, "id"> = {
-		clientId: clientId,
-		userId: session?.user.id!,
-		scopes: requestedScopes ?? originalRequestedScopes,
-		requestedUserInfoClaims: acceptedUserInfoClaims,
-		createdAt: new Date(iat * 1000),
-		updatedAt: new Date(iat * 1000),
-		resources: resource.length ? resource : undefined,
-		referenceId,
-	};
-	foundConsent?.id
-		? await ctx.context.adapter.update({
-				model: "oauthConsent",
-				where: [
-					{
-						field: "id",
-						value: foundConsent.id,
-					},
-				],
-				update: {
-					resources: consent.resources,
-					scopes: consent.scopes,
-					requestedUserInfoClaims: consent.requestedUserInfoClaims,
-					updatedAt: new Date(iat * 1000),
-				},
-			})
-		: await ctx.context.adapter.create({
-				model: "oauthConsent",
-				data: {
-					...consent,
-					scopes: consent.scopes,
-				},
-			});
 
 	// Return authorization code
 	if (requestedScopes) {
-		query.set("scope", consent.scopes.join(" "));
+		query.set("scope", approvedScopes.join(" "));
 	}
 	if (acceptedClaims !== undefined) {
 		const claimsRequest = filterClaimsRequestUserInfoClaims(
@@ -234,5 +205,65 @@ export async function consentEndpoint<Result>(
 	return await authorize(ctx, {
 		postLogin: postLoginClearedForThisSession,
 		acceptedConsent: { referenceId },
+	});
+}
+
+/**
+ * Stores an approval from the consent page. A stored consent is what the user
+ * approved for the client under one reference and did not take back, so the
+ * approval adds what it approved and removes only what the page offered and
+ * the user declined. The page cannot decline a resource, so resources only
+ * grow. A client cannot shrink the consent by asking for less.
+ */
+async function storeConsentApproval(
+	ctx: GenericEndpointContext,
+	key: { clientId: string; userId: string; referenceId: string | undefined },
+	approval: {
+		offeredScopes: readonly string[];
+		scopes: readonly string[];
+		offeredUserInfoClaims: readonly string[];
+		userInfoClaims: readonly string[];
+		resources: readonly string[];
+	},
+) {
+	const decide = (
+		stored: readonly string[] | undefined,
+		offered: readonly string[],
+		approved: readonly string[],
+	) => [
+		...new Set([
+			...(stored ?? []).filter(
+				(value) => !offered.includes(value) || approved.includes(value),
+			),
+			...approved,
+		]),
+	];
+	const updated = await updateConsent(ctx, key, (consent) => ({
+		scopes: decide(consent.scopes, approval.offeredScopes, approval.scopes),
+		requestedUserInfoClaims: decide(
+			consent.requestedUserInfoClaims,
+			approval.offeredUserInfoClaims,
+			approval.userInfoClaims,
+		),
+		resources: [
+			...new Set([...(consent.resources ?? []), ...approval.resources]),
+		],
+	}));
+	if (updated) return;
+	// Two first approvals at the same moment can each create a row. Reads
+	// merge them, and the next write keeps only the oldest.
+	const now = new Date(Math.floor(Date.now() / 1000) * 1000);
+	await ctx.context.adapter.create<Omit<OAuthConsent<Scope[]>, "id">>({
+		model: "oauthConsent",
+		data: {
+			...key,
+			scopes: [...approval.scopes],
+			requestedUserInfoClaims: [...approval.userInfoClaims],
+			resources: approval.resources.length
+				? [...approval.resources]
+				: undefined,
+			createdAt: now,
+			updatedAt: now,
+		},
 	});
 }
