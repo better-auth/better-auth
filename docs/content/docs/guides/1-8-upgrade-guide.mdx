@@ -279,7 +279,7 @@ With `refreshTokenReuseInterval` above `0`, two matching requests to refresh the
 
 The second request can wait up to 5 seconds for the first to store its response. It receives that response only if the client, scopes, resources, and DPoP key match. A retry with different but valid scopes or resources can also wait before the provider detects the mismatch. The provider returns `invalid_grant` on a mismatch or if the wait expires.
 
-* The default, `0`, is unchanged. Any reuse of a rotated token is still a replay that revokes the grant.
+* The interval is set when the token rotates. If you enable it during the upgrade, it applies to later rotations. Reusing a token that rotated with the default of `0` still revokes the grant. A token rotated on 1.7 with a reuse window keeps its original deadline.
 * `mcp()` sets the interval to 30 seconds, so MCP clients get this behavior.
 * A DPoP-bound refresh must still use the key it is bound to.
 
