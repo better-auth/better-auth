@@ -6,6 +6,7 @@ import {
 	isReservedOAuthClientMetadataField,
 	stripReservedOAuthClientMetadataExtensions,
 } from "./client-metadata";
+import { RESERVED_TOKEN_RESPONSE_FIELDS } from "./token-response-fields";
 import type {
 	ClientDiscovery,
 	OAuthBeforeTokenIssuanceInput,
@@ -581,6 +582,7 @@ async function collectClaims(
 	run: (
 		extension: OAuthProviderExtension,
 	) => Awaitable<Record<string, unknown> | undefined>,
+	contributionLabel = "claim",
 ) {
 	const extensions = getOAuthProviderExtensions(opts);
 	const claims: Record<string, unknown> = {};
@@ -596,7 +598,7 @@ async function collectClaims(
 			const owner = owners.get(key);
 			if (owner !== undefined) {
 				logger.warn(
-					`oauth-provider: ${describeExtension(extensions, owner)} and ${describeExtension(extensions, extension)} both contributed the claim "${key}"; keeping the value from ${describeExtension(extensions, owner)}.`,
+					`oauth-provider: ${describeExtension(extensions, owner)} and ${describeExtension(extensions, extension)} both contributed the ${contributionLabel} "${key}"; keeping the value from ${describeExtension(extensions, owner)}.`,
 				);
 				continue;
 			}
@@ -622,6 +624,30 @@ export async function runBeforeTokenIssuance(
 		}
 	}
 	if (opts.beforeTokenIssuance) await opts.beforeTokenIssuance(createInput());
+}
+
+/**
+ * Collects every extension's `tokenResponseFields`, first contributor winning
+ * a field, without the fields the provider owns.
+ */
+export async function collectExtensionTokenResponseFields(
+	opts: OAuthOptions<Scope[]>,
+	createInput: () => OAuthBeforeTokenIssuanceInput,
+) {
+	const fields = await collectClaims(
+		opts,
+		(extension) => extension.tokenResponseFields?.(createInput()),
+		"token response field",
+	);
+	for (const key of Object.keys(fields)) {
+		if (RESERVED_TOKEN_RESPONSE_FIELDS.has(key)) {
+			logger.warn(
+				`oauth-provider: an extension contributed the token response field "${key}", which the provider owns; leaving it out.`,
+			);
+			delete fields[key];
+		}
+	}
+	return fields;
 }
 
 export function collectExtensionAccessTokenClaims(
