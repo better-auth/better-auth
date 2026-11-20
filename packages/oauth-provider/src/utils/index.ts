@@ -272,7 +272,7 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 }
 
 /** Check the parent state expected after issuance, with or without rotation. */
-export function isRefreshParentActive(
+export function hasExpectedRefreshParentState(
 	parent:
 		| Pick<OAuthRefreshToken<Scope[]>, "revoked" | "rotatedAt">
 		| null

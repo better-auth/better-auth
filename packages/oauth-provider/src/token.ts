@@ -64,8 +64,8 @@ import {
 	getJwtPlugin,
 	getStoredToken,
 	isInvalidJwtError,
+	hasExpectedRefreshParentState,
 	isPKCERequired,
-	isRefreshParentActive,
 	isSessionActive,
 	isSessionBoundRefreshToken,
 	normalizeTimestampValue,
@@ -1532,7 +1532,7 @@ async function createUserTokens(
 			model: "oauthRefreshToken",
 			where: [{ field: "id", value: existingRefreshToken.id }],
 		});
-		if (!isRefreshParentActive(parent, !!refreshToken?.id)) {
+		if (!hasExpectedRefreshParentState(parent, !!refreshToken?.id)) {
 			const revokedAt = new Date();
 			if (refreshToken?.id) {
 				await ctx.context.adapter.updateMany({
