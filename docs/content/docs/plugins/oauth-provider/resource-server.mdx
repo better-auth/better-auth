@@ -67,7 +67,7 @@ Browsers hide `WWW-Authenticate` from cross-origin scripts unless the response l
 
 RFC 6750 limits `error_description` to printable ASCII without `"` or `\`. To fit a description into that set, `createResourceServerChallenge` replaces each `"` with `'` and each other character outside it with a space. When nothing is left, it leaves `error_description` out. The returned error's `body` keeps the original `error` and `error_description`.
 
-If the API runs in the same process as your auth server, you can use the resource client instead. Its 401 and `insufficient_scope` errors already carry the challenge in `headers`.
+If the API runs in the same process as your auth server, use the resource client instead. With a static base URL, it can check tokens against the provider's records even for routes outside the auth router's `basePath`. Its 401 and `insufficient_scope` errors already carry the challenge in `headers`.
 
 ```ts title="lib/server-client.ts"
 import { createAuthClient } from "better-auth/client";
@@ -82,13 +82,26 @@ export const serverClient = createAuthClient({
 The defaults come from your auth server's resolved base URL. That URL includes `basePath`, such as `https://auth.example.com/api/auth`:
 
 * `issuer` defaults to `jwt.issuer` when the JWT plugin sets it. Otherwise, it defaults to the base URL, which matches the issuer the provider signs.
-* Without `jwksUrl`, the signing keys are read from the auth instance in-process, with no request to its own `/jwks` endpoint. When the JWT plugin sets `jwks.remoteUrl`, the keys are fetched from that URL instead. Set `jwksUrl` to fetch them from another URL. With `disableJwtPlugin`, the provider issues only opaque access tokens, which have no signing keys to read, so verify them with `remoteVerify`, as shown in [JWT or opaque tokens](#jwt-or-opaque-tokens).
 * `audience` defaults to the base URL. See the warning below.
+
+When you set neither `jwksUrl` nor `remoteVerify`, and `baseURL` is static, the resource client checks each token against the provider's records, without a request to its own endpoints:
+
+* JWT and opaque access tokens both verify, so an API in the same process needs no client credentials for opaque tokens.
+* A token fails with `401 invalid_token` when its associated session ends, its client is disabled, or its resource is deleted. Revoked opaque tokens also fail. Checking individual JWT access tokens for revocation requires `revocableJwtAccessTokens: true`. Each verification reads your database.
+* The result is the token's [introspection response](https://datatracker.ietf.org/doc/html/rfc7662#section-2.2), with `active: true`, `client_id`, `scope`, and `token_type` next to the token's claims.
+* For a JWT, `sub` is the subject the token carries: the user ID, the pairwise subject when you set [`accessTokenSubject: "pairwise"`](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens), or the client ID for a `client_credentials` token.
+* For an opaque token, `sub` is the subject `/oauth2/introspect` returns: the pairwise subject for a client with `subject_type: "pairwise"`, and the user ID for a public-subject client. An opaque client-credentials token has no user subject.
+* DPoP proofs are recorded in the same store the provider uses, so a proof replayed at another instance on the same database is rejected. Pass `dpop.replayStore` to use a different shared store.
+* DPoP nonces follow the provider's [`dpop.nonce`](/docs/plugins/oauth-provider/tokens#server-provided-nonces). With `required: true` there, a DPoP request without a current nonce gets a 401 `use_dpop_nonce` with a fresh `DPoP-Nonce`. Pass `dpop.nonce` to override it for this API.
+
+The DPoP proof is checked against the request URL, or the `url` you pass in `{ authorizationHeader, dpopProofJwt, method, url }`. Behind a proxy, pass the public URL the client called.
+
+Set `jwksUrl` to verify JWT access tokens by their signature against the keys at that URL instead, for example to avoid the database reads. A signature check alone does not see revocation, an ended session, or a disabled client, and it rejects opaque tokens. The result is then the JWT payload. Set `remoteVerify` to introspect over HTTP, as shown in [JWT or opaque tokens](#jwt-or-opaque-tokens). Both keep the in-memory replay store unless you pass `dpop.replayStore`.
 
 With a dynamic `baseURL`, the base URL is known only per request, so nothing defaults to it. `jwt.issuer` and `jwks.remoteUrl` still apply when the JWT plugin sets them. Pass `audience`, and any of `issuer` and `jwksUrl` the JWT plugin does not set, explicitly.
 
 <Callout type="warn">
-  Do not rely on the default audience. It is the auth server's URL, not your API's identifier, and it is also the default `aud` of [JWT plugin](/docs/plugins/jwt#oauth-provider-mode) session JWTs. With the defaults, a signed-in user's session JWT can pass as an access token. Set `audience` to your API's resource identifier, and add `typ: "at+jwt"` and `requiredClaims: ["azp"]`. The [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#token-handling) says an MCP server must validate that a token was issued for it as the intended audience, so an MCP server should not use the default.
+  Do not rely on the default audience. It is the auth server's URL, not your API's identifier, and it is also the default `aud` of [JWT plugin](/docs/plugins/jwt#oauth-provider-mode) session JWTs. Set `audience` to your API's resource identifier. The records check rejects a session JWT, which has no `azp` and no `typ: at+jwt`. With `jwksUrl` set, only the signature is checked, so a signed-in user's session JWT can pass as an access token. Add `typ: "at+jwt"` and `requiredClaims: ["azp"]` there. The [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#token-handling) says an MCP server must validate that a token was issued for it as the intended audience, so an MCP server should not use the default.
 </Callout>
 
 ```ts title="api/posts.ts"
@@ -99,12 +112,8 @@ export const POST = async (req: Request) => {
   try {
     const payload = await serverClient.verifyAccessTokenRequest(req, {
       verifyOptions: {
-        issuer: "https://auth.example.com/api/auth",
         audience: "https://api.example.com",
-        typ: "at+jwt",
-        requiredClaims: ["azp"],
       },
-      jwksUrl: "https://auth.example.com/api/auth/jwks",
       requiredScopes: ["write:post"],
     });
     return Response.json({ sub: payload.sub });
@@ -128,7 +137,7 @@ Signing keys are cached for five minutes. If a refetch after that fails or times
   For DPoP-bound tokens:
 
   * The proof is checked against `request.url`. A proxy in front of the API must forward the external scheme, host, and path.
-  * The replay store rejects a proof that was already used. The default store is in memory. It is safe only for a single instance. If your API runs on several instances or on serverless, pass a shared store, as below. The shared store records each proof where your auth instance keeps verification values: in [secondary storage](/docs/concepts/database#secondary-storage) when you configure it without `verification.storeInDatabase`, and otherwise in the database.
+  * The replay store rejects a proof that was already used. The default store of `verifyAccessTokenRequest` is in memory. It is safe only for a single instance. If your API runs on several instances or on serverless, pass a shared store, as below. The resource client in the same process as your auth server already uses the shared store unless you set `jwksUrl` or `remoteVerify`. The shared store records each proof where your auth instance keeps verification values: in [secondary storage](/docs/concepts/database#secondary-storage) when you configure it without `verification.storeInDatabase`, and otherwise in the database.
 </Callout>
 
 ```ts title="api/posts.ts"
@@ -208,7 +217,7 @@ export const GET = async (req: Request) => {
 
 A nonce stays valid for `expiresIn` seconds, 300 by default. It is not bound to one client: any client can use it until it expires. The replay store still rejects each reused proof.
 
-The [resource client](#verify-access-tokens) created with your auth instance takes `dpop: { nonce: { required: true } }`. It uses the auth `secret` and the provider's `dpop.nonce.expiresIn` by default. [`requireMcpAuth`](/docs/plugins/mcp) does the same, and adds the next nonce to the responses of DPoP requests.
+The [resource client](#verify-access-tokens) created with your auth instance takes `dpop: { nonce: { required: true } }`. It uses the auth `secret` and the provider's `dpop.nonce.expiresIn` by default. Without `jwksUrl` or `remoteVerify`, it also requires nonces whenever the provider's `dpop.nonce.required` is `true`. Pass `dpop: { nonce: { required: false } }` to turn them off for one API. [`requireMcpAuth`](/docs/plugins/mcp) does the same, and adds the next nonce to the responses of DPoP requests.
 
 ## JWT or opaque tokens
 
