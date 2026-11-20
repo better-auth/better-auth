@@ -498,8 +498,9 @@ export async function requireActiveAccessToken(
  * tokens, and reports a revoked token, one whose session ended, and one whose
  * client is disabled as inactive. `undefined` without an OAuth provider.
  *
- * With `subject: "user"`, the default, `sub`, `act`, and `may_act` name users
- * by user ID even when the token's own subjects are pairwise. With
+ * With `subject: "user"`, the default, user subjects in `sub`, `act`, and
+ * `may_act` are restored to user IDs when the token's subjects are pairwise;
+ * client and service subjects keep their client IDs. With
  * `subject: "token"`, a JWT returns the subjects it carries, and an opaque
  * token, which stores user IDs, returns the subjects its client sees, as
  * `/oauth2/introspect` does.
@@ -525,7 +526,9 @@ export function getLocalIntrospection(
 		// Validation restores user IDs in the payload it is given, so keep the
 		// subjects the JWT carries first.
 		const carried: Record<string, unknown> | undefined =
-			found.type === "jwt" ? structuredClone(found.payload) : undefined;
+			options?.subject === "token" && found.type === "jwt"
+				? structuredClone(found.payload)
+				: undefined;
 		const { payload } = await validateFoundAccessToken(ctx, opts, found);
 		if (options?.subject !== "token" || !payload.active) return payload;
 		// A verified JWT's subjects are the ones it carries, whether they name a

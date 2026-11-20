@@ -236,7 +236,7 @@ export const oauthProviderResourceClient = <
 				/**
 				 * Performs verification of an access token for your APIs.
 				 *
-				 * With an auth instance that runs the OAuth provider and neither
+				 * With a static `baseURL`, an auth instance running the provider, and neither
 				 * `jwksUrl` nor `remoteVerify`, the token is checked against the
 				 * provider's records, as `/oauth2/introspect` does, and the result is
 				 * its RFC 7662 introspection response. Otherwise a JWT access token is
@@ -286,10 +286,10 @@ export const oauthProviderResourceClient = <
 				 * scheme, DPoP proof, `ath`, and `cnf.jkt` binding. The proof's `htu`
 				 * is the request URL, or `url` in a {@link ResourceRequestInput}.
 				 *
-				 * With an auth instance that runs the OAuth provider and neither
+				 * With a static `baseURL`, an auth instance running the provider, and neither
 				 * `jwksUrl` nor `remoteVerify`, the token is checked against the
-				 * provider's records: opaque tokens verify, and revoked tokens, ended
-				 * sessions, and disabled clients fail. The result is the token's RFC
+				 * provider's records. Opaque tokens verify, and revocation of JWT access
+				 * tokens is checked with `revocableJwtAccessTokens` enabled. The result is the token's RFC
 				 * 7662 introspection response, whose `sub` is the subject the access
 				 * token carries. DPoP proofs then use the provider's shared replay
 				 * store, and nonces follow the provider's `dpop.nonce` unless `dpop`

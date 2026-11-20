@@ -67,7 +67,7 @@ Browsers hide `WWW-Authenticate` from cross-origin scripts unless the response l
 
 RFC 6750 limits `error_description` to printable ASCII without `"` or `\`. To fit a description into that set, `createResourceServerChallenge` replaces each `"` with `'` and each other character outside it with a space. When nothing is left, it leaves `error_description` out. The returned error's `body` keeps the original `error` and `error_description`.
 
-If the API runs in the same process as your auth server, use the resource client instead. It checks each token against the provider's records, so a revoked token fails at once, and it works for routes outside the auth router's `basePath`. Its 401 and `insufficient_scope` errors already carry the challenge in `headers`.
+If the API runs in the same process as your auth server, use the resource client instead. With a static base URL, it can check tokens against the provider's records even for routes outside the auth router's `basePath`. Its 401 and `insufficient_scope` errors already carry the challenge in `headers`.
 
 ```ts title="lib/server-client.ts"
 import { createAuthClient } from "better-auth/client";
@@ -87,10 +87,10 @@ The defaults come from your auth server's resolved base URL. That URL includes `
 When you set neither `jwksUrl` nor `remoteVerify`, and `baseURL` is static, the resource client checks each token against the provider's records, without a request to its own endpoints:
 
 * JWT and opaque access tokens both verify, so an API in the same process needs no client credentials for opaque tokens.
-* A token fails with a 401 `invalid_token` once it is revoked, its session ends, its client is disabled, or its resource is deleted. Each check reads your database on every request.
+* A token fails with `401 invalid_token` when its associated session ends, its client is disabled, or its resource is deleted. Revoked opaque tokens also fail. Checking individual JWT access tokens for revocation requires `revocableJwtAccessTokens: true`. Each verification reads your database.
 * The result is the token's [introspection response](https://datatracker.ietf.org/doc/html/rfc7662#section-2.2), with `active: true`, `client_id`, `scope`, and `token_type` next to the token's claims.
 * For a JWT, `sub` is the subject the token carries: the user ID, the pairwise subject when you set [`accessTokenSubject: "pairwise"`](/docs/plugins/oauth-provider/openid-connect#pairwise-sub-in-jwt-access-tokens), or the client ID for a `client_credentials` token.
-* For an opaque token, `sub` is the subject `/oauth2/introspect` returns: the pairwise subject for a client with `subject_type: "pairwise"`, and the user ID otherwise. An opaque token carries no subject of its own, so the user ID is never revealed to a pairwise client.
+* For an opaque token, `sub` is the subject `/oauth2/introspect` returns: the pairwise subject for a client with `subject_type: "pairwise"`, and the user ID for a public-subject client. An opaque client-credentials token has no user subject.
 * DPoP proofs are recorded in the same store the provider uses, so a proof replayed at another instance on the same database is rejected. Pass `dpop.replayStore` to use a different shared store.
 * DPoP nonces follow the provider's [`dpop.nonce`](/docs/plugins/oauth-provider/tokens#server-provided-nonces). With `required: true` there, a DPoP request without a current nonce gets a 401 `use_dpop_nonce` with a fresh `DPoP-Nonce`. Pass `dpop.nonce` to override it for this API.
 
