@@ -174,6 +174,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			);
 		}
 	}
+	if (options.requireOpenId && !scopes.has("openid")) {
+		throw new BetterAuthError("requireOpenId requires openid in scopes");
+	}
 
 	const configuredResourceIdentifiers = new Set(
 		(options.resources ?? []).map((resource) =>
