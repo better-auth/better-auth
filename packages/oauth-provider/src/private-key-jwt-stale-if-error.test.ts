@@ -523,6 +523,7 @@ describe("jwksStaleIfError on a client discovery", () => {
 		const olderAssertion = verifier.verify("rotated-key");
 		void olderAssertion.catch(() => {});
 		await vi.waitFor(() => expect(verifier.transport).toHaveBeenCalledTimes(2));
+		vi.setSystemTime(Date.now() + MINUTE_MS);
 		verifier.keys.answer = () => new Response(null, { status: 404 });
 		await expect(verifier.verify("rotated-key")).rejects.toMatchObject({
 			body: { error: "invalid_client" },
@@ -556,6 +557,7 @@ describe("jwksStaleIfError on a client discovery", () => {
 		const olderAssertion = verifier.verify("rotated-key");
 		void olderAssertion.catch(() => {});
 		await vi.waitFor(() => expect(verifier.transport).toHaveBeenCalledTimes(2));
+		vi.setSystemTime(Date.now() + MINUTE_MS);
 		verifier.keys.answer = serveKeys;
 		await expect(verifier.verify("rotated-key")).rejects.toMatchObject({
 			body: { error: "invalid_client" },
