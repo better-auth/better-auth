@@ -2369,17 +2369,21 @@ async function createUserTokens(
 			checksGrantMark &&
 			Date.now() - issuanceStartedAt >= grantRevocationWindowMs(opts);
 		if (grantRevoked || refreshTokenGone || markMayHaveExpired) {
+			const deleteToken = (
+				model: "oauthAccessToken" | "oauthRefreshToken",
+				id: string,
+			) =>
+				retryIdempotent(() =>
+					ctx.context.adapter.delete({
+						model,
+						where: [{ field: "id", value: id }],
+					}),
+				);
 			if (accessToken.id) {
-				await ctx.context.adapter.delete({
-					model: "oauthAccessToken",
-					where: [{ field: "id", value: accessToken.id }],
-				});
+				await deleteToken("oauthAccessToken", accessToken.id);
 			}
 			if (refreshToken?.id) {
-				await ctx.context.adapter.delete({
-					model: "oauthRefreshToken",
-					where: [{ field: "id", value: refreshToken.id }],
-				});
+				await deleteToken("oauthRefreshToken", refreshToken.id);
 			}
 			throw grantRevokedDuringIssuance();
 		}
