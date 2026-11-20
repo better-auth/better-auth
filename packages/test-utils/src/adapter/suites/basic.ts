@@ -177,39 +177,6 @@ export const getNormalTestSuiteTests = (
 			});
 			expect(sortModels(found)).toEqual(sortModels(created));
 		},
-		"createMany - should apply default values to fields": async () => {
-			await modifyBetterAuthOptions(
-				{
-					user: {
-						additionalFields: {
-							testField: {
-								type: "string",
-								defaultValue: "test-value",
-							},
-							cbDefaultValueField: {
-								type: "string",
-								defaultValue: () => {
-									return "advanced-test-value";
-								},
-							},
-						},
-					},
-				},
-				true,
-			);
-			const created = await adapter.createMany<
-				User & { testField?: string; cbDefaultValueField?: string }
-			>({
-				model: "user",
-				data: [await generate("user"), await generate("user")],
-				forceAllowId: true,
-			});
-			expect(created).toHaveLength(2);
-			expect(created[0]?.testField).toBe("test-value");
-			expect(created[0]?.cbDefaultValueField).toBe("advanced-test-value");
-			expect(created[1]?.testField).toBe("test-value");
-			expect(created[1]?.cbDefaultValueField).toBe("advanced-test-value");
-		},
 		"create - should use generateId if provided": async () => {
 			const ID = (await customIdGenerator?.()) || "MOCK-ID";
 			await modifyBetterAuthOptions(
@@ -331,6 +298,39 @@ export const getNormalTestSuiteTests = (
 			expect(userResult).toBeDefined();
 			expect(userResult?.testField).toBe("test-value");
 			expect(userResult?.cbDefaultValueField).toBe("advanced-test-value");
+		},
+		"createMany - should apply default values to fields": async () => {
+			await modifyBetterAuthOptions(
+				{
+					user: {
+						additionalFields: {
+							testField: {
+								type: "string",
+								defaultValue: "test-value",
+							},
+							cbDefaultValueField: {
+								type: "string",
+								defaultValue: () => {
+									return "advanced-test-value";
+								},
+							},
+						},
+					},
+				},
+				true,
+			);
+			const created = await adapter.createMany<
+				User & { testField?: string; cbDefaultValueField?: string }
+			>({
+				model: "user",
+				data: [await generate("user"), await generate("user")],
+				forceAllowId: true,
+			});
+			expect(created).toHaveLength(2);
+			expect(created[0]?.testField).toBe("test-value");
+			expect(created[0]?.cbDefaultValueField).toBe("advanced-test-value");
+			expect(created[1]?.testField).toBe("test-value");
+			expect(created[1]?.cbDefaultValueField).toBe("advanced-test-value");
 		},
 		"findOne - should find a model": async () => {
 			const [user] = await insertRandom("user");
