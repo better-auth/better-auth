@@ -5,7 +5,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCimdClientDiscovery } from "./index";
-import type { CimdOptions } from "./types";
+import type { CimdOwnedResolverOptions } from "./types";
 
 let instanceSequence = 0;
 
@@ -84,7 +84,7 @@ async function createRequestContext() {
 	};
 }
 
-function createDiscovery(options: Partial<CimdOptions> = {}) {
+function createDiscovery(options: Partial<CimdOwnedResolverOptions> = {}) {
 	const fetchClientMetadataResource = vi.fn(
 		async (_input: RequestInfo | URL, _init?: RequestInit) =>
 			new Response(null, { status: 500 }),

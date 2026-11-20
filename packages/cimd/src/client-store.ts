@@ -7,14 +7,17 @@ import type {
 	Scope,
 } from "@better-auth/oauth-provider";
 import {
+	getExtensionClientMetadataFields,
 	isLocalCapacityRefusal,
 	isTransientAbort,
 	isTransientHttpStatus,
 	isTransientNetworkError,
+	parseClientMetadata,
 	registerClientMetadataDocument,
+	resolveMetadataDocumentClientLists,
 } from "@better-auth/oauth-provider/internal";
 import { APIError } from "better-call";
-import type { CimdOptions } from "./types";
+import type { CimdMetadataResolverOptions, CimdOptions } from "./types";
 import {
 	validateCimdMetadata,
 	validateClientIdUrl,
@@ -199,7 +202,7 @@ function readResponseCacheHeaders(
 export async function assertClientIdUrlFetchable(
 	ctx: GenericEndpointContext,
 	clientIdUrl: string,
-	cimdOptions: CimdOptions,
+	cimdOptions: CimdMetadataResolverOptions,
 ): Promise<void> {
 	const urlError = validateClientIdUrl(clientIdUrl);
 	if (urlError) throw invalidClient(urlError);
@@ -230,7 +233,7 @@ export async function assertClientIdUrlFetchable(
 export async function fetchClientMetadataDocument(
 	ctx: GenericEndpointContext,
 	clientIdUrl: string,
-	cimdOptions: CimdOptions,
+	cimdOptions: CimdMetadataResolverOptions,
 	validators?: { etag?: string; lastModified?: string },
 	extensionFields?: ReadonlySet<string>,
 ): Promise<ClientMetadataDocumentResult> {
@@ -409,4 +412,119 @@ export async function persistMetadataDocumentClient(
 		}
 	}
 	return result.client;
+}
+
+function sortKeys(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(sortKeys);
+	if (value && typeof value === "object") {
+		return Object.fromEntries(
+			Object.entries(value)
+				.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+				.map(([key, entry]) => [key, sortKeys(entry)]),
+		);
+	}
+	return value;
+}
+
+function parseStoredJson(value: string | undefined): unknown {
+	if (!value) return null;
+	try {
+		return JSON.parse(value);
+	} catch {
+		return value;
+	}
+}
+
+function isSameJson(a: unknown, b: unknown): boolean {
+	return (
+		JSON.stringify(sortKeys(a ?? null)) === JSON.stringify(sortKeys(b ?? null))
+	);
+}
+
+function isSameList(
+	stored: readonly string[] | null | undefined,
+	registered: readonly string[] | null | undefined,
+): boolean {
+	// A client saved with no scopes stores [""], which `"".split(" ")` yields.
+	const storedEntries = new Set((stored ?? []).filter(Boolean));
+	const registeredEntries = new Set((registered ?? []).filter(Boolean));
+	return (
+		storedEntries.size === registeredEntries.size &&
+		[...storedEntries].every((entry) => registeredEntries.has(entry))
+	);
+}
+
+/**
+ * Whether a stored client already carries what a metadata document sets, so a
+ * cached document needs no new save for it.
+ *
+ * A field the document omits must also be empty in the stored client, except
+ * for the server's subject type, which a refresh preserves when omitted.
+ * Grant types, response types, and scopes are compared with what a
+ * save would store, which is the document's own list, the registration default
+ * for a list it omits, and the scopes the server registers every client with.
+ * A stored client that kept an older, wider list is therefore stale even when
+ * the new document no longer names the list.
+ */
+export function isClientCurrentWithMetadata(
+	client: SchemaClient<Scope[]>,
+	metadata: OAuthClientMetadata,
+	oauthOptions: OAuthOptions<Scope[]>,
+): boolean {
+	const verbatimFields: Array<[unknown, unknown]> = [
+		[client.name, metadata.client_name],
+		[client.uri, metadata.client_uri],
+		[client.icon, metadata.logo_uri],
+		[client.tos, metadata.tos_uri],
+		[client.policy, metadata.policy_uri],
+		[client.jwksUri, metadata.jwks_uri],
+		[client.softwareId, metadata.software_id],
+		[client.softwareVersion, metadata.software_version],
+		[client.softwareStatement, metadata.software_statement],
+		[client.frontchannelLogoutUri, metadata.frontchannel_logout_uri],
+		[
+			client.frontchannelLogoutSessionRequired,
+			metadata.frontchannel_logout_session_required,
+		],
+		[client.applicationType, metadata.application_type],
+		[client.dpopBoundAccessTokens, metadata.dpop_bound_access_tokens],
+		[
+			client.requirePushedAuthorizationRequests,
+			metadata.require_pushed_authorization_requests,
+		],
+		[
+			client.tokenEndpointAuthMethod ?? "none",
+			metadata.token_endpoint_auth_method ?? "none",
+		],
+		[client.redirectUris ?? [], metadata.redirect_uris ?? []],
+		[
+			client.postLogoutRedirectUris ?? [],
+			metadata.post_logout_redirect_uris ?? [],
+		],
+		[client.contacts ?? [], metadata.contacts ?? []],
+		[parseStoredJson(client.jwks), metadata.jwks],
+	];
+	if (!verbatimFields.every(([stored, listed]) => isSameJson(stored, listed))) {
+		return false;
+	}
+
+	if (
+		metadata.subject_type !== undefined &&
+		client.subjectType !== metadata.subject_type
+	)
+		return false;
+
+	const registered = resolveMetadataDocumentClientLists(oauthOptions, metadata);
+	if (
+		!isSameList(client.grantTypes, registered.grantTypes) ||
+		!isSameList(client.responseTypes, registered.responseTypes) ||
+		!isSameList(client.scopes, registered.scopes)
+	) {
+		return false;
+	}
+
+	const storedExtensions = parseClientMetadata(client.metadata);
+	return [...getExtensionClientMetadataFields(oauthOptions)].every((field) =>
+		isSameJson(storedExtensions?.[field], metadata[field]),
+	);
 }

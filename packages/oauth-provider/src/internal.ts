@@ -21,6 +21,7 @@ export {
 	type OAuthClientRegistrationResult,
 	type RegisterClientMetadataDocumentInput,
 	registerClientMetadataDocument,
+	resolveMetadataDocumentClientLists,
 } from "./register";
 export { resolveResourcePolicy } from "./resources";
 export {

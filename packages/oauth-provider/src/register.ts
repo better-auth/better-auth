@@ -185,6 +185,36 @@ function clearedDocumentFieldValue(
 		: null;
 }
 
+/**
+ * The grant types, response types, and scopes a client saved from a Client ID
+ * Metadata Document carries. A list the document omits takes the registration
+ * default, and the scopes are the ones this server registers every discovered
+ * client with, whatever the document says.
+ *
+ * @internal
+ */
+export function resolveMetadataDocumentClientLists(
+	opts: OAuthOptions<Scope[]>,
+	metadata: Pick<
+		OAuthClientRegistrationMetadata,
+		"grant_types" | "response_types"
+	>,
+): {
+	grantTypes: GrantType[];
+	responseTypes: OAuthClient["response_types"];
+	scopes: Scope[];
+} {
+	const { grant_types, response_types } = applyOAuthClientRegistrationDefaults(
+		metadata,
+		null,
+	);
+	return {
+		grantTypes: grant_types ?? [],
+		responseTypes: response_types,
+		scopes: resolveClientRegistrationScopes(opts),
+	};
+}
+
 function isCustomSchemeWithHost(redirectUri: string): boolean {
 	const url = new URL(redirectUri);
 	return (
