@@ -409,6 +409,63 @@ describe("checkEndpointConflicts", () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11426
+	 */
+	it("should NOT log an error when a later plugin overrides an endpoint by key", () => {
+		const plugin1: BetterAuthPlugin = {
+			id: "plugin1",
+			endpoints: {
+				getKeys: endpoint("/api/keys", { method: "GET" }, vi.fn()),
+			},
+		};
+
+		const plugin2: BetterAuthPlugin = {
+			id: "plugin2",
+			endpoints: {
+				getKeys: endpoint("/api/keys", { method: "GET" }, vi.fn()),
+			},
+		};
+
+		checkEndpointConflicts({ plugins: [plugin1, plugin2] }, mockLogger);
+
+		expect(mockLogger.error).not.toHaveBeenCalled();
+	});
+
+	it("should still detect a conflict between the overriding endpoint and another key", () => {
+		const plugin1: BetterAuthPlugin = {
+			id: "plugin1",
+			endpoints: {
+				getKeys: endpoint("/api/keys", { method: "GET" }, vi.fn()),
+			},
+		};
+
+		const plugin2: BetterAuthPlugin = {
+			id: "plugin2",
+			endpoints: {
+				getKeys: endpoint("/api/keys", { method: "GET" }, vi.fn()),
+			},
+		};
+
+		const plugin3: BetterAuthPlugin = {
+			id: "plugin3",
+			endpoints: {
+				listKeys: endpoint("/api/keys", { method: "GET" }, vi.fn()),
+			},
+		};
+
+		checkEndpointConflicts(
+			{ plugins: [plugin1, plugin2, plugin3] },
+			mockLogger,
+		);
+
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			expect.stringContaining(
+				'"/api/keys" [GET] used by plugins: plugin2, plugin3',
+			),
+		);
+	});
+
 	it("should handle plugins with no endpoints", () => {
 		const plugin1: BetterAuthPlugin = {
 			id: "plugin1",
