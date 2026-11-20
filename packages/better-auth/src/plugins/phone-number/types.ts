@@ -3,10 +3,10 @@ import type { User } from "../../types";
 import type { InferOptionSchema } from "../../types/plugins";
 import type { schema } from "./schema";
 
-export interface UserWithPhoneNumber extends User {
+export type UserWithPhoneNumber = User & {
 	phoneNumber: string;
 	phoneNumberVerified: boolean;
-}
+};
 
 export interface PhoneNumberOptions {
 	/**
