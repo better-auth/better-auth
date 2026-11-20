@@ -15,6 +15,24 @@ import type {
 	TeamMember,
 } from "./schema";
 
+export type ResolveMembership = (
+	data: {
+		user: User & Record<string, any>;
+		session: (Session & Record<string, any>) | null;
+		organizationId: string;
+		member: (Member & Record<string, any>) | null;
+		purpose: "caller" | "inviter";
+	},
+	ctx: GenericEndpointContext,
+) => Awaitable<
+	| ({
+			role: string;
+			id?: string | undefined;
+			createdAt?: Date | undefined;
+	  } & Record<string, any>)
+	| null
+>;
+
 export interface OrganizationOptions {
 	/**
 	 * Configure whether new users are able to create new organizations.
@@ -57,6 +75,43 @@ export interface OrganizationOptions {
 	 * @default "owner"
 	 */
 	creatorRole?: string | undefined;
+	/**
+	 * Overrides how the plugin resolves the signed-in user's membership in an
+	 * organization. Runs on every lookup of the caller's own membership:
+	 * setting an organization active, reading it, checking permissions, and
+	 * managing members, invitations and teams. `leaveOrganization` is the
+	 * exception: it removes the stored row. Keep it cheap or cached.
+	 *
+	 * `member` is the caller's member row, or `null`. Return the effective
+	 * membership, or `null` to refuse. Return `member` to keep the default;
+	 * forgetting to do so locks real members out. Put elevated grants before
+	 * it, so a user who is also a plain member still gets them. Multiple roles are a
+	 * comma-separated string. Other fields merge over the row; `userId` and
+	 * `organizationId` are always the caller's and the organization's. Nothing
+	 * is written to the member table.
+	 *
+	 * `ctx` is the context of the endpoint being called, so the result can
+	 * depend on the request: `ctx.path`, `ctx.body`, `ctx.headers`.
+	 *
+	 * `purpose` is `"caller"` when resolving the signed-in user, with their
+	 * `session`. It is `"inviter"` when `getInvitation` checks that the sender
+	 * of an invitation, who has no member row, still belongs to the
+	 * organization: `user` is the inviter, `session` is `null`, and `ctx` is
+	 * the invitee's request. Return a membership only if the inviter may still
+	 * invite.
+	 *
+	 * @example
+	 * ```ts
+	 * resolveMembership: ({ user, member }, ctx) => {
+	 *   const paths = ["/organization/update", "/organization/delete"];
+	 *   if (user.role?.split(",").includes("admin") && paths.includes(ctx.path)) {
+	 *     return { role: "owner" };
+	 *   }
+	 *   return member;
+	 * }
+	 * ```
+	 */
+	resolveMembership?: ResolveMembership | undefined;
 	/**
 	 * The maximum number of members allowed in an organization.
 	 *
