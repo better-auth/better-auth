@@ -264,15 +264,19 @@ const REF_LIST_LOCK_WAIT_MS = 5_000;
 
 type RefListLock = {
 	promise: Promise<unknown>;
-	startedAt: number;
+	/** Settles when this writer begins executing `task` (lock acquired). */
+	acquired: Promise<void>;
+	acquiredAt?: number;
 };
 
 const refListLocks = new Map<string, RefListLock>();
 
 /**
- * Wait for `previous` to settle, or until its wait bound elapses on workerd.
- * The caller's own timer must bound the wait: a timer from the prior request
- * is canceled when that request ends.
+ * Wait for `previous` to settle, or until its hold exceeds the workerd bound.
+ * The 5s clock starts when the previous writer acquires the lock — not when it
+ * joins the queue — so healthy writers queued behind a stalled holder stay
+ * ordered with each other. The caller's own timer must bound the wait: a timer
+ * from the prior request is canceled when that request ends.
  */
 function waitForRefListLock(previous: RefListLock | undefined): Promise<void> {
 	if (!previous) return Promise.resolve();
@@ -282,18 +286,26 @@ function waitForRefListLock(previous: RefListLock | undefined): Promise<void> {
 			() => {},
 		);
 	}
-	const remaining = previous.startedAt + REF_LIST_LOCK_WAIT_MS - Date.now();
-	if (remaining <= 0) return Promise.resolve();
 	return new Promise<void>((resolve) => {
 		let settled = false;
+		let timeout: ReturnType<typeof setTimeout> | undefined;
 		const done = () => {
 			if (settled) return;
 			settled = true;
-			clearTimeout(timeout);
+			if (timeout !== undefined) clearTimeout(timeout);
 			resolve();
 		};
-		const timeout = setTimeout(done, remaining);
 		previous.promise.then(done, done);
+		previous.acquired.then(() => {
+			if (settled) return;
+			const start = previous.acquiredAt ?? Date.now();
+			const remaining = start + REF_LIST_LOCK_WAIT_MS - Date.now();
+			if (remaining <= 0) {
+				done();
+				return;
+			}
+			timeout = setTimeout(done, remaining);
+		}, done);
 	});
 }
 
@@ -303,19 +315,27 @@ export function withRefListLock<T>(
 	task: () => Promise<T>,
 ): Promise<T> {
 	const previous = refListLocks.get(refKey);
-	const startedAt = Date.now();
-	const run = waitForRefListLock(previous).then(task);
+	let markAcquired!: () => void;
+	const acquired = new Promise<void>((resolve) => {
+		markAcquired = resolve;
+	});
+	const tracked: RefListLock = {
+		acquired,
+		promise: null as unknown as Promise<unknown>,
+	};
+	const run = waitForRefListLock(previous).then(() => {
+		tracked.acquiredAt = Date.now();
+		markAcquired();
+		return task();
+	});
 	// The map holds the `.finally()` chain, so the cleanup must compare against
 	// that same promise (not `run`) or the entry is never removed and the map
 	// grows without bound.
-	const tracked: RefListLock = {
-		startedAt,
-		promise: run.finally(() => {
-			if (refListLocks.get(refKey) === tracked) {
-				refListLocks.delete(refKey);
-			}
-		}),
-	};
+	tracked.promise = run.finally(() => {
+		if (refListLocks.get(refKey) === tracked) {
+			refListLocks.delete(refKey);
+		}
+	});
 	refListLocks.set(refKey, tracked);
 	return tracked.promise as Promise<T>;
 }
