@@ -301,6 +301,21 @@ describe("passkey", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12859
+	 */
+	it("should not use passkey name query param as WebAuthn user name during registration", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const options = await auth.api.generatePasskeyRegistrationOptions({
+			headers,
+			query: {
+				name: "Work laptop",
+			},
+		});
+
+		expect(options.user.name).toBe(user.email);
+	});
+
 	it("should generate register options without session when resolveUser is provided", async () => {
 		const { auth: preAuth } = await getTestInstance({
 			plugins: [

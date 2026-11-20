@@ -302,4 +302,66 @@ describe("passkey client", () => {
 		expect(listPasskeys.set).toHaveBeenCalled();
 		expect(store.notify).not.toHaveBeenCalledWith("$sessionSignal");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12859
+	 */
+	it("does not pass passkey name in query to generate-register-options", async () => {
+		const fetchMock = vi.fn(async (path: string) => {
+			if (path === "/passkey/generate-register-options") {
+				return {
+					data: {
+						challenge: "challenge",
+						rp: { name: "Test", id: "example.com" },
+						user: { id: "user", name: "user" },
+						pubKeyCredParams: [],
+					},
+				};
+			}
+			if (path === "/passkey/verify-registration") {
+				return {
+					data: {
+						id: "passkey-id",
+						name: "Work laptop",
+						userId: "user",
+					},
+				};
+			}
+			return { data: null };
+		});
+		const listPasskeys = { set: vi.fn() };
+		const store = { notify: vi.fn() };
+		const actions = getPasskeyActions(fetchMock as any, {
+			$listPasskeys: listPasskeys as any,
+			$store: store as any,
+		});
+
+		mocks.startRegistration.mockResolvedValue({
+			clientExtensionResults: {},
+			response: {
+				transports: ["internal"],
+			},
+		});
+
+		await actions.passkey.addPasskey({
+			name: "Work laptop",
+		});
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/passkey/generate-register-options",
+			expect.objectContaining({
+				query: expect.not.objectContaining({
+					name: "Work laptop",
+				}),
+			}),
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/passkey/verify-registration",
+			expect.objectContaining({
+				body: expect.objectContaining({
+					name: "Work laptop",
+				}),
+			}),
+		);
+	});
 });
