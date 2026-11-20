@@ -420,6 +420,9 @@ export function assertNotTrustedClient(
 	}
 }
 
+// RFC 6749 A.1
+const CLIENT_ID = /^[\x20-\x7E]+$/;
+
 /**
  * Get a client by ID, checking trusted clients first, then database
  */
@@ -428,6 +431,7 @@ export async function getClient(
 	options: OAuthOptions<Scope[]>,
 	clientId: string,
 ) {
+	if (!CLIENT_ID.test(clientId)) return null;
 	const trustedClientCache = getTrustedClientCache(options);
 	const trustedClient = trustedClientCache.get(clientId);
 	if (trustedClient && !trustedClient.clientDiscoveryId) {
