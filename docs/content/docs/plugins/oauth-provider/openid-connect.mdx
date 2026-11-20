@@ -172,14 +172,14 @@ Claims follow the granted [scopes](https://openid.net/specs/openid-connect-core-
 | `profile` | `name`, `picture`, `given_name`, `family_name` |
 | `email`   | `email`, `email_verified`                      |
 
-UserInfo omits the `name` claim when the user’s name is empty and the `picture` claim when their image is empty. Each claim is checked independently, following [OpenID Connect Core §5.3.2](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse).
+By default, UserInfo omits `name` when the user’s name is empty and `picture` when their image is empty. Your `customUserInfoClaims` callback can supply either claim, including an empty string. The default follows [OpenID Connect Core §5.3.2](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse).
 
 Better Auth returns a claim from the table above even when its scope was not granted, if all of these are true:
 
 * The client requests the claim through the [`claims.userinfo` parameter](https://openid.net/specs/openid-connect-core-1_0.html#IndividualClaimsRequests).
 * The claim appears in `claims_supported`.
 * Your [consent page](/docs/plugins/oauth-provider/sign-in-flow#consent-page) did not remove the claim. It removes one when it passes a `claims` object to `oauth2.consent` that leaves the claim out.
-* The user has a value for the claim. Better Auth omits missing values instead of returning `null`, and omits empty `name` and `picture` values instead of returning an empty string.
+* The user has a value for the requested standard claim. The built-in resolvers omit missing values and skip empty names and images.
 * The access token is opaque. With a JWT access token, UserInfo returns only the claims its scopes cover.
 
 Better Auth does not fill in other requested names, such as `locale`. To return one on request, list it in `advertisedMetadata.claims_supported` together with the defaults you still want, as in [Discovery metadata](#discovery-metadata). Then read `requestedClaims` in `customUserInfoClaims`, described below.
