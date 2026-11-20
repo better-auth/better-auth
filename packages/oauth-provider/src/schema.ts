@@ -221,8 +221,7 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
-			// Signing — when set, overrides `resourceDefaults` and the JWT plugin's
-			// primary key.
+			// A resource signing pin replaces both resource signing defaults.
 			signingAlgorithm: {
 				type: "string",
 				required: false,

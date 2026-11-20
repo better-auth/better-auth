@@ -2748,16 +2748,14 @@ export interface OAuthResourceDefaults {
 	 */
 	accessTokenFormat?: AccessTokenFormat;
 	/**
-	 * Signing algorithm for JWT access tokens. ID tokens keep the JWT plugin's
-	 * primary key. The JWT plugin must have a key for this algorithm, for
-	 * example through `jwks.keyPairConfigs`.
+	 * Signing algorithm for JWT access tokens. The JWT plugin must have a key
+	 * for this algorithm, for example through `jwks.keyPairConfigs`.
 	 *
-	 * @default the JWT plugin's primary key algorithm
+	 * @default The JWT plugin selects the signing key.
 	 */
 	signingAlgorithm?: JWSAlgorithms;
 	/**
-	 * JWKS key id for JWT access tokens. ID tokens keep the JWT plugin's
-	 * primary key.
+	 * JWKS key id for JWT access tokens.
 	 */
 	signingKeyId?: string;
 }
@@ -2787,14 +2785,12 @@ export interface OAuthResource {
 	 */
 	accessTokenFormat?: AccessTokenFormat | null;
 	/**
-	 * Signing algorithm for JWT access tokens issued for this resource; null
-	 * inherits {@link OAuthOptions.resourceDefaults}, then the JWT plugin's
-	 * primary key.
+	 * Signing algorithm for JWT access tokens. Either signing field on a
+	 * requested resource overrides both {@link OAuthOptions.resourceDefaults} signing fields.
 	 */
 	signingAlgorithm?: JWSAlgorithms | null;
 	/**
-	 * JWKS key id for JWT access tokens issued for this resource; null inherits
-	 * {@link OAuthOptions.resourceDefaults}, then the JWT plugin's primary key.
+	 * JWKS key id for JWT access tokens. See {@link OAuthResource.signingAlgorithm}.
 	 */
 	signingKeyId?: string | null;
 	/**
