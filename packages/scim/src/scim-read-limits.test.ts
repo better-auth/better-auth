@@ -10,7 +10,6 @@ import type { MemoryDB } from "better-auth/adapters/memory";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
-import { SCIM_MAX_GROUP_MEMBERS } from "./group-schemas";
 
 const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
@@ -19,6 +18,8 @@ const ADMIN_GROUP = "Admins";
 const CONNECTION_ID = "workforce";
 
 const LEGACY_SQLITE_BOUND_VARIABLE_LIMIT = 999;
+/** Larger than the former 1,000-member cap and SQLite's 999 bound-variable limit. */
+const LARGE_GROUP_MEMBER_COUNT = 1_001;
 
 function assertBoundVariablesFit(where: readonly Where[] | undefined) {
 	const boundVariables = (where ?? []).reduce(
@@ -473,7 +474,7 @@ describe("SCIM Group writes and role mapping when the database caps bound variab
 			createDatabase: createBoundVariableLimitedAdapter,
 		});
 		const members = Array.from(
-			{ length: SCIM_MAX_GROUP_MEMBERS },
+			{ length: LARGE_GROUP_MEMBER_COUNT },
 			(_, index) => ({
 				value: `member-${index}`,
 			}),
@@ -490,7 +491,15 @@ describe("SCIM Group writes and role mapping when the database caps bound variab
 			body: { schemas: [GROUP_SCHEMA], displayName: "Engineering", members },
 			headers,
 		});
-		expect(data.scimGroupMember).toHaveLength(SCIM_MAX_GROUP_MEMBERS);
+		expect(data.scimGroupMember).toHaveLength(LARGE_GROUP_MEMBER_COUNT);
+		expect(
+			(
+				await auth.api.getSCIMGroup({
+					params: { groupId: group.id },
+					headers,
+				})
+			).members,
+		).toHaveLength(LARGE_GROUP_MEMBER_COUNT);
 		for (const op of ["remove", "add"] as const) {
 			await auth.api.patchSCIMGroup({
 				params: { groupId: group.id },
@@ -501,7 +510,7 @@ describe("SCIM Group writes and role mapping when the database caps bound variab
 				headers,
 			});
 		}
-		expect(data.scimGroupMember).toHaveLength(SCIM_MAX_GROUP_MEMBERS);
+		expect(data.scimGroupMember).toHaveLength(LARGE_GROUP_MEMBER_COUNT);
 
 		await auth.api.replaceSCIMGroup({
 			params: { groupId: group.id },

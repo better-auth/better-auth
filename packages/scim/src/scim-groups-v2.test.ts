@@ -1473,4 +1473,71 @@ describe("SCIM connection-owned Groups", () => {
 				.sort(),
 		).toEqual([memberA.id, memberB.id, memberC.id, memberD.id].sort());
 	});
+
+	it("inserts more than 1000 Group memberships with one createMany call", async () => {
+		const data = {
+			user: [] as User[],
+			session: [] as { id: string }[],
+			verification: [] as { id: string }[],
+			account: [] as { id: string }[],
+			scimConnectionBinding: [] as { id: string }[],
+			organization: [] as { id: string }[],
+			member: [] as { id: string }[],
+			scimConnection: [] as { id: string }[],
+			scimCredential: [] as { id: string }[],
+			scimIdentityTombstone: [] as { id: string }[],
+			scimSubject: [] as { id: string; userId: string }[],
+			scimUser: [] as SCIMUserRow[],
+			scimGroup: [] as SCIMGroupRow[],
+			scimGroupMember: [] as SCIMGroupMemberRow[],
+			scimProjectionGrant: [] as { id: string }[],
+		};
+		const writes = createMembershipWriteCountingAdapter(data);
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: writes.database,
+			plugins: [
+				scim({
+					connections: [
+						{
+							id: "workforce",
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
+						},
+					],
+				}),
+			],
+		});
+		const authorization = { authorization: "Bearer test-scim-token" };
+		const members = Array.from({ length: 1_001 }, (_, index) => ({
+			value: `member-${index}`,
+		}));
+		data.scimUser.push(
+			...members.map((member) => ({
+				id: member.value,
+				connectionId: "workforce",
+				userId: `user-${member.value}`,
+			})),
+		);
+		writes.createManyRowCounts.length = 0;
+
+		const created = await auth.api.createSCIMGroup({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+				displayName: "Engineering",
+				members,
+			},
+			headers: authorization,
+		});
+
+		expect(created.members).toHaveLength(1_001);
+		expect(writes.createManyRowCounts).toEqual([1_001]);
+		expect(writes.countCreateCalls()).toBe(0);
+		expect(data.scimGroupMember).toHaveLength(1_001);
+	});
 });

@@ -21,10 +21,7 @@ import {
 import type { SCIMConnection } from "./configuration";
 import type { SCIMConnectionMiddleware } from "./connection-authentication";
 import { fenceActiveSCIMConnection } from "./connection-state";
-import {
-	SCIM_MAX_GROUP_MEMBERS,
-	SCIMGroupResourceSchema,
-} from "./group-schemas";
+import { SCIMGroupResourceSchema } from "./group-schemas";
 import {
 	acquireSCIMGroupMutationLock,
 	findSCIMGroup,
@@ -238,14 +235,6 @@ function normalizeGroupMemberIds(
 	return [...memberIds];
 }
 
-function assertGroupMemberCount(memberCount: number): void {
-	if (memberCount <= SCIM_MAX_GROUP_MEMBERS) return;
-	throw createSCIMError("BAD_REQUEST", {
-		detail: `Groups cannot contain more than ${SCIM_MAX_GROUP_MEMBERS} direct members`,
-		scimType: "invalidValue",
-	});
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -257,7 +246,6 @@ function readPatchMemberIds(value: unknown): string[] {
 			scimType: "invalidValue",
 		});
 	}
-	assertGroupMemberCount(value.length);
 	const members = value.map((member) => {
 		if (!isRecord(member)) {
 			throw createSCIMError("BAD_REQUEST", {
@@ -494,7 +482,6 @@ function applyGroupPatch(
 
 		applyAttribute(operation.op, path, operation.value);
 	}
-	assertGroupMemberCount(memberIds.size);
 	return { displayName, externalId, memberIds: [...memberIds] };
 }
 
@@ -519,7 +506,7 @@ async function assertConnectionOwnsUsers(
 
 type GroupMembershipAdapter = Pick<
 	DBAdapter,
-	"count" | "createMany" | "deleteMany" | "findMany"
+	"createMany" | "deleteMany" | "findMany"
 >;
 
 async function createGroupMemberships(
@@ -620,16 +607,6 @@ async function applyIncrementalGroupMembershipPatch(
 			([scimUserId, desired]) => desired && !existingByUserId.has(scimUserId),
 		)
 		.map(([scimUserId]) => scimUserId);
-	const existingMemberCount = await adapter.count({
-		model: "scimGroupMember",
-		where: [
-			{ field: "connectionId", value: input.connectionId },
-			{ field: "groupId", value: input.groupId },
-		],
-	});
-	assertGroupMemberCount(
-		existingMemberCount + addedSCIMUserIds.length - removedMemberships.length,
-	);
 	await deleteGroupMemberships(
 		adapter,
 		input.connectionId,
@@ -722,11 +699,6 @@ function createGroupResourceFromMemberships(
 	memberships: readonly SCIMGroupMember[],
 	scimUserById: ReadonlyMap<string, SCIMUser>,
 ) {
-	if (memberships.length > SCIM_MAX_GROUP_MEMBERS) {
-		throw createSCIMError("INTERNAL_SERVER_ERROR", {
-			detail: "Persisted SCIM Group membership exceeds the server limit",
-		});
-	}
 	const members = memberships.flatMap((membership) => {
 		const scimUser = scimUserById.get(membership.scimUserId);
 		return scimUser
@@ -792,14 +764,9 @@ async function createGroupResource(
 			{ field: "connectionId", value: group.connectionId },
 			{ field: "groupId", value: group.id },
 		],
-		limit: SCIM_MAX_GROUP_MEMBERS + 1,
+		limit: SCIM_UNBOUNDED_ROW_LIMIT,
 		sortBy: { field: "createdAt", direction: "asc" },
 	});
-	if (memberships.length > SCIM_MAX_GROUP_MEMBERS) {
-		throw createSCIMError("INTERNAL_SERVER_ERROR", {
-			detail: "Persisted SCIM Group membership exceeds the server limit",
-		});
-	}
 	const scimUserById = await findSCIMUsersForMemberships(
 		adapter,
 		group.connectionId,
@@ -854,37 +821,29 @@ async function createProjectedGroupResources(
 	const [firstGroup] = groups;
 	if (!firstGroup) return [];
 
-	const maximumMembershipRows = groups.length * SCIM_MAX_GROUP_MEMBERS;
-	const memberships = await adapter.findMany<SCIMGroupMember>({
-		model: "scimGroupMember",
-		where: [
-			{ field: "connectionId", value: firstGroup.connectionId },
-			{
-				field: "groupId",
-				value: groups.map((group) => group.id),
-				operator: "in",
-			},
-		],
-		limit: maximumMembershipRows + 1,
-		sortBy: { field: "createdAt", direction: "asc" },
-	});
-	if (memberships.length > maximumMembershipRows) {
-		throw createSCIMError("INTERNAL_SERVER_ERROR", {
-			detail: "Persisted SCIM Group membership exceeds the server limit",
-		});
+	const memberships: SCIMGroupMember[] = [];
+	for (const chunk of chunkSCIMIds(groups.map((group) => group.id))) {
+		memberships.push(
+			...(await adapter.findMany<SCIMGroupMember>({
+				model: "scimGroupMember",
+				where: [
+					{ field: "connectionId", value: firstGroup.connectionId },
+					{
+						field: "groupId",
+						value: chunk,
+						operator: "in",
+					},
+				],
+				limit: SCIM_UNBOUNDED_ROW_LIMIT,
+				sortBy: { field: "createdAt", direction: "asc" },
+			})),
+		);
 	}
 	const membershipsByGroupId = new Map<string, SCIMGroupMember[]>();
 	for (const membership of memberships) {
 		const groupMemberships = membershipsByGroupId.get(membership.groupId) ?? [];
 		groupMemberships.push(membership);
 		membershipsByGroupId.set(membership.groupId, groupMemberships);
-	}
-	for (const groupMemberships of membershipsByGroupId.values()) {
-		if (groupMemberships.length > SCIM_MAX_GROUP_MEMBERS) {
-			throw createSCIMError("INTERNAL_SERVER_ERROR", {
-				detail: "Persisted SCIM Group membership exceeds the server limit",
-			});
-		}
 	}
 	const scimUserById = await findSCIMUsersForMemberships(
 		adapter,
@@ -946,7 +905,6 @@ export function createSCIMGroup(
 				});
 			}
 			const scimUserIds = normalizeGroupMemberIds(ctx.body.members ?? []);
-			assertGroupMemberCount(scimUserIds.length);
 			const externalIdKey = createGroupExternalIdKey(
 				connection.id,
 				ctx.body.externalId,
@@ -1233,7 +1191,6 @@ export function replaceSCIMGroup(
 				});
 			}
 			const scimUserIds = normalizeGroupMemberIds(ctx.body.members ?? []);
-			assertGroupMemberCount(scimUserIds.length);
 			const externalIdKey = createGroupExternalIdKey(
 				connection.id,
 				ctx.body.externalId,
