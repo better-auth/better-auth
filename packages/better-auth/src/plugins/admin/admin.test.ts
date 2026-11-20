@@ -2938,6 +2938,56 @@ describe("admin create-user failures", async () => {
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/issues/12301
+ */
+describe("admin revoke-user-session when the session is not deleted", () => {
+	async function revokeAnotherUsersSession(vetoDeletion: boolean) {
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			plugins: [admin()],
+			databaseHooks: vetoDeletion
+				? { session: { delete: { before: async () => false } } }
+				: {},
+		});
+		const { user, headers } = await signInWithTestUser();
+		await db.update({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+			update: { role: "admin" },
+		});
+		const target = await auth.api.signUpEmail({
+			body: {
+				email: "revoke-target@test.com",
+				password: "password1234",
+				name: "Revoke Target",
+			},
+		});
+		expect(target.token).toEqual(expect.any(String));
+
+		const response = await auth.api.revokeUserSession({
+			body: { sessionToken: target.token! },
+			headers,
+		});
+		const { internalAdapter } = await auth.$context;
+		const remaining = await internalAdapter.findSession(target.token!);
+		return { response, remaining };
+	}
+
+	it("does not report success when a delete.before hook vetoes the deletion", async () => {
+		const { response, remaining } = await revokeAnotherUsersSession(true);
+
+		expect(remaining).not.toBeNull();
+		expect(response.success).not.toBe(true);
+	});
+
+	it("reports success and ends the session when the deletion succeeds", async () => {
+		const { response, remaining } = await revokeAnotherUsersSession(false);
+
+		expect(response).toMatchObject({ success: true });
+		expect(remaining).toBeNull();
+	});
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/issues/11667
  */
 describe("admin remove-user when a user delete.before hook vetoes it", () => {

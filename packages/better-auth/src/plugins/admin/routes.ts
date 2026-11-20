@@ -1504,8 +1504,11 @@ export const revokeUserSession = (opts: AdminOptions) =>
 			}
 
 			await ctx.context.internalAdapter.deleteSession(ctx.body.sessionToken);
+			const remaining = await ctx.context.internalAdapter.findSession(
+				ctx.body.sessionToken,
+			);
 			return ctx.json({
-				success: true,
+				success: !remaining,
 			});
 		},
 	);
