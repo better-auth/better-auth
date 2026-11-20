@@ -199,8 +199,6 @@ export function oidcServerMetadata(
 			? ["public", "pairwise"]
 			: ["public"],
 		acr_values_supported: getAcrValuesSupported(opts),
-		// ID tokens are always signed with the primary key. Algorithms declared
-		// only in keyPairConfigs[] sign per-resource access tokens, not ID tokens.
 		id_token_signing_alg_values_supported: opts.disableJwtPlugin
 			? ["HS256"]
 			: [jwtPluginOptions?.jwks?.keyPairConfig?.alg ?? "EdDSA"],
