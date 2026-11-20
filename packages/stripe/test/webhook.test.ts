@@ -1266,7 +1266,22 @@ describe("stripe webhook", () => {
 		const mockStripeForEvents = {
 			...testOptions.stripeClient,
 			subscriptions: {
-				retrieve: vi.fn().mockResolvedValue(mockSubscription),
+				// Prefer the subscription object from the webhook event under test so
+				// update/cancel assertions match the snapshot Stripe would return after retrieve.
+				retrieve: vi.fn().mockImplementation(async () => {
+					const results =
+						mockStripeForEvents.webhooks.constructEventAsync.mock.results;
+					const last = results[results.length - 1]?.value;
+					const event = last instanceof Promise ? await last : last;
+					if (
+						typeof event?.type === "string" &&
+						event.type.startsWith("customer.subscription.") &&
+						event.data?.object
+					) {
+						return event.data.object;
+					}
+					return mockSubscription;
+				}),
 			},
 			webhooks: {
 				constructEventAsync: vi.fn().mockResolvedValue(completeEvent),
@@ -1591,6 +1606,103 @@ describe("stripe webhook", () => {
 			where: [{ field: "id", value: testSubscriptionId }],
 		});
 		expect(updatedSub?.seats).toBe(5);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12255
+	 */
+	test("does not let a stale subscription.updated overwrite a newer retrieve()", async ({
+		memory,
+		stripeOptions,
+	}) => {
+		const staleEvent = createSubscriptionEvent(
+			"customer.subscription.updated",
+			{
+				id: "sub_stale_order",
+				customer: "cus_stale_order",
+				status: "past_due",
+				items: {
+					object: "list",
+					data: [
+						createSubscriptionItem({
+							price: createPrice({ id: TEST_PRICES.starter }),
+						}),
+					],
+					has_more: false,
+					url: "/v1/subscription_items",
+				},
+			},
+		);
+		const currentSubscription = createSubscription({
+			id: "sub_stale_order",
+			customer: "cus_stale_order",
+			status: "active",
+			items: {
+				object: "list",
+				data: [
+					createSubscriptionItem({
+						price: createPrice({ id: TEST_PRICES.starter }),
+					}),
+				],
+				has_more: false,
+				url: "/v1/subscription_items",
+			},
+		});
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			subscriptions: {
+				...stripeOptions.stripeClient.subscriptions,
+				retrieve: vi.fn().mockResolvedValue(currentSubscription),
+			},
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(staleEvent),
+			},
+		};
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [
+					stripe({
+						...stripeOptions,
+						stripeClient: stripeForTest as unknown as Stripe,
+						stripeWebhookSecret: "test_secret",
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await testAuth.$context;
+		const { id: referenceId } = await ctx.adapter.create({
+			model: "user",
+			data: { email: "stale-order@email.com" },
+		});
+		const { id: subscriptionId } = await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId,
+				stripeCustomerId: "cus_stale_order",
+				stripeSubscriptionId: "sub_stale_order",
+				status: "active",
+				plan: "starter",
+			},
+		});
+
+		const response = await testAuth.handler(
+			new Request("http://localhost:3000/api/auth/stripe/webhook", {
+				method: "POST",
+				headers: { "stripe-signature": "test_signature" },
+				body: JSON.stringify(staleEvent),
+			}),
+		);
+		expect(response.status).toBe(200);
+		expect(stripeForTest.subscriptions.retrieve).toHaveBeenCalledWith(
+			"sub_stale_order",
+		);
+		const saved = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: subscriptionId }],
+		});
+		expect(saved?.status).toBe("active");
 	});
 
 	test("should sync stripeScheduleId from webhook when schedule is present", async ({
