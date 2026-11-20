@@ -363,6 +363,12 @@ The `expectedAudience` strategy input and the `expectedAudience` parameter of `c
 
 **What to do:** a client that calls UserInfo must request the `openid` scope when it authorizes. A client whose access token lacks `openid` must authorize again with that scope. Send the access token as `Authorization: Bearer <token>`, or `DPoP <token>` with a DPoP proof in the `DPoP` header for a DPoP-bound token. Update clients and tests that match on `invalid_scope` from UserInfo.
 
+### Empty `name` and `picture` are left out of UserInfo
+
+`/oauth2/userinfo` now leaves out the standard `name` and `picture` claims when the user's `name` or `image` is an empty string. [OpenID Connect Core §5.3.2](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse) says a claim that is not returned should be omitted, not sent as `null` or an empty string. Before, a user with `name: ""` got `"name": ""`. A value that holds only whitespace is returned as before. `customUserInfoClaims` can still set these claims to an empty string, and `email` and `email_verified` are unchanged.
+
+**What to do:** a client that reads `name: ""` now sees the key absent. Check for a missing `name` or `picture` instead of an empty string, for example `userinfo.name ?? userinfo.email`.
+
 ### Access token claims set to `undefined` are left out
 
 This applies if `customAccessTokenClaims`, a resource's `customClaims`, an extension `claims.accessToken` contributor, or a grant's `accessTokenClaims` sets a claim to `undefined`. That claim is now left out, and a lower-priority claim with the same name keeps its value. Before, the `undefined` removed that claim from the access token.
@@ -379,12 +385,6 @@ oauthProvider({
   }),
 });
 ```
-
-### Empty `name` and `picture` are left out of UserInfo
-
-`/oauth2/userinfo` now leaves out the standard `name` and `picture` claims when the user's `name` or `image` is an empty string. [OpenID Connect Core §5.3.2](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse) says a claim that is not returned should be omitted, not sent as `null` or an empty string. Before, a user with `name: ""` got `"name": ""`. A value that holds only whitespace is returned as before. `customUserInfoClaims` can still set these claims to an empty string, and `email` and `email_verified` are unchanged.
-
-**What to do:** a client that reads `name: ""` now sees the key absent. Check for a missing `name` or `picture` instead of an empty string, for example `userinfo.name ?? userinfo.email`.
 
 ### Extension and API authors
 
