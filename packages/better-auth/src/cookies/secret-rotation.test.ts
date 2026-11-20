@@ -1,6 +1,7 @@
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { describe, expect, it } from "vitest";
 import { betterAuth } from "../auth/full";
+import { multiSession } from "../plugins/multi-session";
 import { parseSetCookieHeader } from "./cookie-utils";
 
 /**
@@ -50,7 +51,7 @@ describe("secret rotation keeps signed session cookies valid", () => {
 		expect(
 			(await make([v2, v1]).api.getSession({ headers }))?.user.email ?? null,
 		).toBe("rotate@example.com");
-		expect(db.session.length).toBe(1);
+		expect(db.session?.length).toBe(1);
 	});
 
 	it("re-signs the session cookie with the current secret on read", async () => {
@@ -136,6 +137,9 @@ describe("secret rotation keeps signed session cookies valid", () => {
 			cookie: cookieHeaderFromResponse(res),
 		});
 
+		// Force cache-only verification: a failed prior-secret cache verify
+		// must not quietly succeed via the DB session row.
+		if (db.session) db.session.length = 0;
 		const session = await make([v2, v1]).api.getSession({ headers });
 		expect(session?.user.email).toBe("cache-rotate@example.com");
 	});
@@ -184,7 +188,7 @@ describe("secret rotation keeps signed session cookies valid", () => {
 		expect(setCookies.get("better-auth.session_data")?.value).toBeTruthy();
 
 		// Drop the DB row so only the rewritten cookie cache can answer.
-		db.session.length = 0;
+		if (db.session) db.session.length = 0;
 		const afterDrop = await make([v2]).api.getSession({
 			headers: new Headers({
 				cookie: cookieHeaderFromResponse(rotated),
@@ -227,7 +231,42 @@ describe("secret rotation keeps signed session cookies valid", () => {
 			cookie: cookieHeaderFromResponse(res),
 		});
 
+		if (db.session) db.session.length = 0;
 		const session = await make([v2, v1]).api.getSession({ headers });
 		expect(session?.user.email).toBe("jwt-rotate@example.com");
+	});
+
+	it("revokes prior-secret multi-session cookies on sign-out via middleware", async () => {
+		const db: Record<string, any[]> = {
+			user: [],
+			session: [],
+			account: [],
+			verification: [],
+		};
+		const make = (secrets: Array<{ version: number; value: string }>) =>
+			betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memoryAdapter(db),
+				emailAndPassword: { enabled: true },
+				secrets,
+				plugins: [multiSession()],
+			});
+
+		const signUp = await make([v1]).api.signUpEmail({
+			body: {
+				email: "multi-rotate@example.com",
+				password: "password1234",
+				name: "Multi",
+			},
+			asResponse: true,
+		});
+		const oldCookies = cookieHeaderFromResponse(signUp);
+		expect(oldCookies).toContain("_multi-");
+		expect(db.session?.length).toBe(1);
+
+		await make([v2, v1]).api.signOut({
+			headers: new Headers({ cookie: oldCookies }),
+		});
+		expect(db.session?.length).toBe(0);
 	});
 });

@@ -68,25 +68,6 @@ export const optionsMiddleware = createMiddleware(async () => {
 	return {} as AuthContext;
 });
 
-export const createAuthMiddleware = createMiddleware.create({
-	use: [
-		optionsMiddleware,
-		/**
-		 * Only use for post hooks
-		 */
-		createMiddleware(async () => {
-			return {} as {
-				returned?: unknown | undefined;
-				responseHeaders?: Headers | undefined;
-			};
-		}),
-	],
-});
-
-const createEndpointWithAuthContext = createEndpoint.create({
-	use: [optionsMiddleware],
-});
-
 type AuthEndpointHandler<
 	Path extends string,
 	Options extends EndpointOptions,
@@ -98,13 +79,17 @@ type PathlessAuthEndpointHandler<
 	R,
 > = AuthEndpointHandler<string, Options, R>;
 
+type SignedCookieEndpointContext = Parameters<
+	AuthEndpointHandler<string, EndpointOptions, unknown>
+>[0];
+
 /**
  * When `secrets` is configured, signed cookies may still carry a prior-key
  * HMAC. Verify newest-first and lazily re-sign with the current secret so
  * rotation does not sign users out (and so the prior key can later be dropped).
  */
 function installSignedCookieSecretRotation(
-	context: Parameters<AuthEndpointHandler<string, EndpointOptions, unknown>>[0],
+	context: SignedCookieEndpointContext,
 ): void {
 	const authContext = context.context as AuthContext | undefined;
 	if (!authContext?.secretConfig || !authContext.secret) {
@@ -155,7 +140,7 @@ function installSignedCookieSecretRotation(
 }
 
 async function resignSignedCookieWithCurrentSecret(
-	context: Parameters<AuthEndpointHandler<string, EndpointOptions, unknown>>[0],
+	context: SignedCookieEndpointContext,
 	authContext: AuthContext,
 	originalGetSignedCookie: (
 		key: string,
@@ -179,13 +164,10 @@ async function resignSignedCookieWithCurrentSecret(
 			break;
 		}
 	}
-	// multiSession stores archived sessions as `${sessionToken.name}_multi-*`
-	// with the same attributes as session_token; renew those too on rotation.
-	if (!attributes && key.startsWith(`${cookies.sessionToken.name}_multi-`)) {
-		attributes = { ...cookies.sessionToken.attributes };
-	}
+	// Plugin cookies (multi-session `_multi-*`, trust_device, …) are not in
+	// `authCookies`; renew with session_token attributes so prior keys can be dropped.
 	if (!attributes) {
-		return;
+		attributes = { ...cookies.sessionToken.attributes };
 	}
 	if (key === cookies.sessionToken.name) {
 		let hasDontRemember = false;
@@ -209,6 +191,28 @@ async function resignSignedCookieWithCurrentSecret(
 	}
 	await context.setSignedCookie(key, value, currentSecret, attributes);
 }
+
+export const createAuthMiddleware = createMiddleware.create({
+	use: [
+		optionsMiddleware,
+		/**
+		 * Rotate prior-secret signed cookies on middleware/hooks too (e.g.
+		 * multi-session sign-out), matching createAuthEndpoint.
+		 * Also carries the post-hook `returned` / `responseHeaders` inference.
+		 */
+		createMiddleware(async (ctx) => {
+			installSignedCookieSecretRotation(ctx as SignedCookieEndpointContext);
+			return {} as {
+				returned?: unknown | undefined;
+				responseHeaders?: Headers | undefined;
+			};
+		}),
+	],
+});
+
+const createEndpointWithAuthContext = createEndpoint.create({
+	use: [optionsMiddleware],
+});
 
 function wrapEndpointHandler<
 	Path extends string,
