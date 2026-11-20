@@ -1118,72 +1118,85 @@ describe("oauth-provider device-code grant", async () => {
 		expect(idToken.aud).toBe(clientId);
 	});
 
-	it("does not redeem a device grant after approval from a revoked cached session", async () => {
-		const {
-			auth: guardedAuth,
-			client: guardedClient,
-			signInWithTestUser: signIn,
-			cookieSetter,
-		} = await getTestInstance(
-			{
-				baseURL,
-				session: { cookieCache: { enabled: true, maxAge: 60 } },
-				plugins: [
-					jwt({ jwt: { issuer: baseURL } }),
-					oauthProvider({
-						loginPage: "/login",
-						consentPage: "/consent",
-						allowDynamicClientRegistration: true,
-						scopes: ["openid", "profile", "email"],
-					}),
-					oauthDeviceAuthorization(),
-				],
-			},
-			{ clientOptions: { plugins: [oauthProviderClient()] } },
-		);
-		const { headers } = await signIn();
-		const registered = await guardedAuth.api.adminCreateOAuthClient({
-			headers,
-			body: {
-				token_endpoint_auth_method: "none",
-				grant_types: [DEVICE_CODE_GRANT_TYPE],
-				scope: "openid profile email",
-				application_type: "native",
-			},
-		});
-		const current = await guardedClient.getSession({
-			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
-		});
-		const { device_code, user_code } = await guardedAuth.api.deviceCode({
-			body: { client_id: registered!.client_id },
-		});
-		const consent = await openDeviceConsent(guardedClient, user_code, headers);
-		const ctx = await guardedAuth.$context;
-		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/12198
+	 */
+	it.each([
+		["approval", true],
+		["denial", false],
+	])(
+		"does not record a device %s from a revoked cached session",
+		async (_, accept) => {
+			const {
+				auth: guardedAuth,
+				client: guardedClient,
+				signInWithTestUser: signIn,
+				cookieSetter,
+			} = await getTestInstance(
+				{
+					baseURL,
+					session: { cookieCache: { enabled: true, maxAge: 60 } },
+					plugins: [
+						jwt({ jwt: { issuer: baseURL } }),
+						oauthProvider({
+							loginPage: "/login",
+							consentPage: "/consent",
+							allowDynamicClientRegistration: true,
+							scopes: ["openid", "profile", "email"],
+						}),
+						oauthDeviceAuthorization(),
+					],
+				},
+				{ clientOptions: { plugins: [oauthProviderClient()] } },
+			);
+			const { headers } = await signIn();
+			const registered = await guardedAuth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					token_endpoint_auth_method: "none",
+					grant_types: [DEVICE_CODE_GRANT_TYPE],
+					scope: "openid profile email",
+					application_type: "native",
+				},
+			});
+			const current = await guardedClient.getSession({
+				fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+			});
+			const { device_code, user_code } = await guardedAuth.api.deviceCode({
+				body: { client_id: registered!.client_id },
+			});
+			const consent = await openDeviceConsent(
+				guardedClient,
+				user_code,
+				headers,
+			);
+			const ctx = await guardedAuth.$context;
+			await ctx.internalAdapter.deleteSession(current.data!.session.token);
 
-		const answered = await fetchRedirect(guardedClient, "/oauth2/consent", {
-			method: "POST",
-			headers,
-			body: { accept: true, oauth_query: consent.toString() },
-		});
-		expect(new URL(answered, baseURL).searchParams.get("status")).not.toBe(
-			"approved",
-		);
-		const polled = await guardedClient.$fetch<Record<string, unknown>>(
-			"/oauth2/token",
-			{
+			const answered = await fetchRedirect(guardedClient, "/oauth2/consent", {
 				method: "POST",
-				body: new URLSearchParams({
-					grant_type: DEVICE_CODE_GRANT_TYPE,
-					device_code,
-					client_id: registered!.client_id,
-				}),
-				headers: FORM_HEADERS,
-			},
-		);
-		expect(polled.data?.access_token).toBeUndefined();
-		expect(polled.error).not.toBeNull();
-	});
+				headers,
+				body: { accept, oauth_query: consent.toString() },
+			});
+			expect(new URL(answered, baseURL).searchParams.get("status")).toBeNull();
+			const polled = await guardedClient.$fetch<Record<string, unknown>>(
+				"/oauth2/token",
+				{
+					method: "POST",
+					body: new URLSearchParams({
+						grant_type: DEVICE_CODE_GRANT_TYPE,
+						device_code,
+						client_id: registered!.client_id,
+					}),
+					headers: FORM_HEADERS,
+				},
+			);
+			expect(polled.data?.access_token).toBeUndefined();
+			expect((polled.error as TokenErrorBody).error).toBe(
+				"authorization_pending",
+			);
+		},
+	);
 
 	it("returns invalid_request when device-code polling omits client_id", async () => {
 		const clientId = await createDeviceClient();
@@ -1537,11 +1550,9 @@ describe("oauth-provider device-code grant", async () => {
 	it("preserves an approved code when user lookup fails before OAuth issuance", async () => {
 		const clientId = await createDeviceClient();
 		const deviceCode = await approvedDeviceCode(clientId);
-		await db.update({
-			model: "deviceCode",
-			where: [{ field: "deviceCode", value: deviceCode }],
-			update: { userId: "missing-user" },
-		});
+		// The user's consent still exists, so the user lookup is what fails.
+		const context = await auth.$context;
+		vi.spyOn(context.internalAdapter, "findUserById").mockResolvedValue(null);
 
 		const response = await pollToken({
 			grant_type: DEVICE_CODE_GRANT_TYPE,
@@ -2065,35 +2076,38 @@ describe("oauth-provider device approval through the consent flow", async () => 
 	const resolveAuthenticationContext =
 		vi.fn<() => OAuthAuthenticationContext | undefined>();
 	const { auth, client, db, signInWithTestUser, signInWithUser } =
-		await getTestInstance({
-			baseURL,
-			plugins: [
-				jwt({ jwt: { issuer: baseURL } }),
-				oauthProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-					resources: [resource],
-					enforcePerClientResources: false,
-					scopes: ["openid", "offline_access"],
-					postLogin: {
-						page: "/select-organization",
-						shouldRedirect: () => needsSelection,
-						consentReferenceId,
-					},
-					customAccessTokenClaims: ({ referenceId }) => ({
-						[referenceClaim]: referenceId,
+		await getTestInstance(
+			{
+				baseURL,
+				plugins: [
+					jwt({ jwt: { issuer: baseURL } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						resources: [resource],
+						enforcePerClientResources: false,
+						scopes: ["openid", "offline_access"],
+						postLogin: {
+							page: "/select-organization",
+							shouldRedirect: () => needsSelection,
+							consentReferenceId,
+						},
+						customAccessTokenClaims: ({ referenceId }) => ({
+							[referenceClaim]: referenceId,
+						}),
+						authenticationContext: {
+							acrValuesSupported: ["0", mfaAcr],
+							resolve: resolveAuthenticationContext,
+						},
 					}),
-					authenticationContext: {
-						acrValuesSupported: ["0", mfaAcr],
-						resolve: resolveAuthenticationContext,
-					},
-				}),
-				oauthDeviceAuthorization({
-					interval: "1s",
-					validateClient: (clientId) => clientId === firstPartyClientId,
-				}),
-			],
-		});
+					oauthDeviceAuthorization({
+						interval: "1s",
+						validateClient: (clientId) => clientId === firstPartyClientId,
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [oauthProviderClient()] } },
+		);
 
 	async function startDevice(clientBody: Record<string, unknown> = {}) {
 		const { headers, user } = await signInWithTestUser();
@@ -2201,6 +2215,65 @@ describe("oauth-provider device approval through the consent flow", async () => 
 		const refreshedIdToken = decodeJwt(refreshed.data!.id_token!);
 		expect(refreshedIdToken.acr).toBe(mfaAcr);
 		expect(refreshedIdToken.amr).toEqual(["pwd", "otp"]);
+	});
+
+	/**
+	 * A device grant has no authorization code, so only its grant ID tells the
+	 * replay teardown which tokens belong to it.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12154
+	 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+	 */
+	it("revokes only the device grant whose rotated refresh token is replayed", async () => {
+		resolveReference = () => "org_1";
+		const first = await startDevice();
+		await answerDeviceConsent(client, first.user_code, first.headers);
+		const replayed = await first.poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: first.device_code,
+		});
+		expect(replayed.error).toBeNull();
+
+		const second = await auth.api.deviceCode({
+			body: {
+				client_id: first.clientId,
+				scope: "openid offline_access",
+				resource,
+			},
+		});
+		await answerDeviceConsent(client, second.user_code, first.headers);
+		const other = await first.poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: second.device_code,
+		});
+		expect(other.error).toBeNull();
+
+		const rotated = await first.poll({
+			grant_type: "refresh_token",
+			refresh_token: replayed.data!.refresh_token!,
+		});
+		expect(rotated.error).toBeNull();
+		const replay = await first.poll({
+			grant_type: "refresh_token",
+			refresh_token: replayed.data!.refresh_token!,
+		});
+		expect((replay.error as TokenErrorBody | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const successor = await first.poll({
+			grant_type: "refresh_token",
+			refresh_token: rotated.data!.refresh_token!,
+		});
+		expect((successor.error as TokenErrorBody | null)?.error).toBe(
+			"invalid_grant",
+		);
+		const survivor = await first.poll({
+			grant_type: "refresh_token",
+			refresh_token: other.data!.refresh_token!,
+		});
+		expect(survivor.error).toBeNull();
+		expect(survivor.data?.refresh_token).toBeDefined();
 	});
 
 	it("runs post-login selection before consent", async () => {
@@ -2460,6 +2533,192 @@ describe("oauth-provider device approval through the consent flow", async () => 
 		});
 		expect(tokens.data?.scope).toBe("openid");
 		expect(tokens.data?.refresh_token).toBeUndefined();
+	});
+
+	/**
+	 * An approved device code follows its consent, as a pending authorization
+	 * code does: redeeming it needs a stored consent that still covers what the
+	 * user approved.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11318
+	 */
+	describe("approved device codes follow their consent", () => {
+		type Device = Awaited<ReturnType<typeof startDevice>>;
+
+		async function approveDevice(
+			clientBody: Record<string, unknown> = {},
+		): Promise<Device> {
+			const device = await startDevice(clientBody);
+			await answerDeviceConsent(client, device.user_code, device.headers);
+			return device;
+		}
+
+		/**
+		 * Requests another device code of the same client for the same user,
+		 * approves it with `accepted` or every requested scope, and returns it.
+		 */
+		async function approveAgain(
+			device: Device,
+			requested = "openid offline_access",
+			accepted?: string,
+		) {
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: device.clientId, scope: requested, resource },
+			});
+			await answerDeviceConsent(client, user_code, device.headers, {
+				accept: true,
+				scope: accepted,
+			});
+			return device_code;
+		}
+
+		function findStoredConsent(device: Device, referenceId: string) {
+			return db.findOne<{ id: string; scopes: string[] }>({
+				model: "oauthConsent",
+				where: [
+					{ field: "clientId", value: device.clientId },
+					{ field: "userId", value: device.user.id },
+					{ field: "referenceId", value: referenceId },
+				],
+			});
+		}
+
+		async function deleteStoredConsent(device: Device, referenceId: string) {
+			const consent = await findStoredConsent(device, referenceId);
+			expect(consent?.id).toBeTruthy();
+			const deleted = await client.oauth2.deleteConsent(
+				{ id: consent!.id },
+				{ headers: device.headers },
+			);
+			expect(deleted.error).toBeNull();
+		}
+
+		function redeem(device: Device, deviceCode = device.device_code) {
+			return device.poll({
+				grant_type: DEVICE_CODE_GRANT_TYPE,
+				device_code: deviceCode,
+			});
+		}
+
+		it("rejects a device code whose consent was deleted after approval", async () => {
+			resolveReference = () => "org_1";
+			const device = await approveDevice();
+			await deleteStoredConsent(device, "org_1");
+
+			const polled = await redeem(device);
+			expect(polled.data?.access_token).toBeUndefined();
+			expect(polled.error).toMatchObject({
+				status: 400,
+				error: "invalid_grant",
+				error_description: "consent revoked",
+			});
+			const where = [
+				{ field: "clientId", value: device.clientId },
+				{ field: "userId", value: device.user.id },
+			];
+			expect(await db.count({ model: "oauthAccessToken", where })).toBe(0);
+			expect(await db.count({ model: "oauthRefreshToken", where })).toBe(0);
+		});
+
+		it("rejects a device code after its consent is narrowed to drop a scope", async () => {
+			resolveReference = () => "org_1";
+			const device = await approveDevice();
+			const consent = await findStoredConsent(device, "org_1");
+			expect(consent?.scopes).toEqual(["openid", "offline_access"]);
+			await db.update({
+				model: "oauthConsent",
+				where: [{ field: "id", value: consent!.id }],
+				update: { scopes: ["openid"] },
+			});
+
+			const polled = await redeem(device);
+			expect(polled.data?.access_token).toBeUndefined();
+			expect(polled.error).toMatchObject({
+				status: 400,
+				error: "invalid_grant",
+				error_description: "consent no longer covers this authorization",
+			});
+		});
+
+		it("redeems both device codes after another device of the client is approved for fewer scopes", async () => {
+			resolveReference = () => "org_1";
+			const device = await approveDevice();
+			const narrower = await approveAgain(device, "openid");
+			// The later approval adds to the consent instead of replacing it.
+			expect((await findStoredConsent(device, "org_1"))?.scopes).toEqual([
+				"openid",
+				"offline_access",
+			]);
+
+			const tokens = await redeem(device);
+			expect(tokens.error).toBeNull();
+			expect(tokens.data?.refresh_token).toBeDefined();
+			const narrowerTokens = await redeem(device, narrower);
+			expect(narrowerTokens.error).toBeNull();
+			expect(narrowerTokens.data?.scope).toBe("openid");
+		});
+
+		it("rejects a device code after the user declines one of its scopes for another device", async () => {
+			resolveReference = () => "org_1";
+			const device = await approveDevice();
+			await approveAgain(device, "openid offline_access", "openid");
+			expect((await findStoredConsent(device, "org_1"))?.scopes).toEqual([
+				"openid",
+			]);
+
+			const polled = await redeem(device);
+			expect(polled.data?.access_token).toBeUndefined();
+			expect(polled.error).toMatchObject({
+				status: 400,
+				error: "invalid_grant",
+				error_description: "consent no longer covers this authorization",
+			});
+		});
+
+		it("redeems a device code after its consent was deleted and given again through another request", async () => {
+			resolveReference = () => "org_1";
+			const device = await approveDevice();
+			await deleteStoredConsent(device, "org_1");
+			const revoked = await redeem(device);
+			expect(revoked.error).toMatchObject({
+				error: "invalid_grant",
+				error_description: "consent revoked",
+			});
+
+			await approveAgain(device);
+			expect(await findStoredConsent(device, "org_1")).not.toBeNull();
+			// Wait out the polling interval the rejected poll started.
+			await new Promise((resolve) => setTimeout(resolve, 1_100));
+
+			const tokens = await redeem(device);
+			expect(tokens.error).toBeNull();
+			expect(tokens.data?.access_token).toBeDefined();
+			expect(tokens.data?.refresh_token).toBeDefined();
+		});
+
+		it("redeems a device code when the user deletes a consent under another reference", async () => {
+			resolveReference = () => "org_1";
+			const device = await approveDevice();
+			resolveReference = () => "org_2";
+			await approveAgain(device);
+			await deleteStoredConsent(device, "org_2");
+
+			const tokens = await redeem(device);
+			expect(tokens.error).toBeNull();
+			expect(decodeJwt(tokens.data!.access_token)).toMatchObject({
+				reference_id: "org_1",
+			});
+		});
+
+		it("does not check the consent of a client that skips consent", async () => {
+			resolveReference = () => "org_1";
+			const device = await approveDevice({ skip_consent: true });
+			await deleteStoredConsent(device, "org_1");
+
+			const tokens = await redeem(device);
+			expect(tokens.error).toBeNull();
+			expect(tokens.data?.access_token).toBeDefined();
+		});
 	});
 
 	it("leaves the code pending when the reference cannot be resolved", async () => {

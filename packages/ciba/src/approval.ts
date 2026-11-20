@@ -1,6 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { appendQueryParams } from "@better-auth/core/utils/url";
-import type { OAuthInteractionRequestHandler } from "@better-auth/oauth-provider";
+import type {
+	OAuthInteractionRequestHandler,
+	SchemaClient,
+	Scope,
+} from "@better-auth/oauth-provider";
 import { getOAuthProviderApi } from "@better-auth/oauth-provider";
 import {
 	getAcrValuesSupported,
@@ -15,10 +19,45 @@ import {
 	validateAuthorizationDetails,
 } from "./authorization-details";
 import { APPROVAL_PARAMETER } from "./constants";
+import type { IsConfiguredOrigin } from "./delivery";
 import { pingClient } from "./delivery";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
 import type { CibaRequest } from "./schema";
-import type { ResolvedCibaOptions } from "./types";
+import type { CibaPendingRequest, ResolvedCibaOptions } from "./types";
+
+/** What the user sees of a pending request, from its stored row. */
+export function toPendingRequest(
+	request: CibaRequest,
+	client: SchemaClient<Scope[]>,
+): CibaPendingRequest {
+	return {
+		requestId: request.id,
+		clientId: request.clientId,
+		clientName: client.name ?? undefined,
+		scopes: parseScopes(request.scope),
+		resources: request.resources?.length ? request.resources : undefined,
+		bindingMessage: request.bindingMessage ?? undefined,
+		acrValues: request.acrValues ?? undefined,
+		authorizationDetails: readAuthorizationDetails(
+			request.authorizationDetails,
+		),
+		actor: request.actor ?? undefined,
+		expiresAt: request.expiresAt,
+	};
+}
+
+/** Whether `userId` may still decide `request`, as completion checks it. */
+function isPendingFor(
+	request: CibaRequest | null,
+	userId: string,
+): request is CibaRequest {
+	return (
+		!!request &&
+		request.userId === userId &&
+		request.status === "pending" &&
+		request.expiresAt > new Date()
+	);
+}
 
 // A missing, decided, or expired request and another user's request fail the
 // same way, so the link reveals nothing to anyone but the user it was sent to.
@@ -32,6 +71,7 @@ const unknownRequest = () =>
  */
 async function recordDecision(
 	ctx: GenericEndpointContext,
+	isConfiguredOrigin: IsConfiguredOrigin,
 	id: string,
 	userId: string,
 	fields: Partial<CibaRequest>,
@@ -48,7 +88,7 @@ async function recordDecision(
 		set: fields,
 	});
 	if (!decided) return unknownRequest();
-	await pingClient(ctx, decided);
+	await pingClient(ctx, decided, isConfiguredOrigin);
 }
 
 /**
@@ -58,6 +98,7 @@ async function recordDecision(
  */
 export function cibaApprovalRequest(
 	resultPage: string,
+	isConfiguredOrigin: IsConfiguredOrigin,
 ): OAuthInteractionRequestHandler {
 	const resultURL = (ctx: GenericEndpointContext, status?: string) => {
 		const url = new URL(resultPage, ctx.context.baseURL).toString();
@@ -73,13 +114,7 @@ export function cibaApprovalRequest(
 				model: "cibaRequest",
 				where: [{ field: "id", value }],
 			});
-			if (
-				!request ||
-				!session ||
-				request.userId !== session.user.id ||
-				request.status !== "pending" ||
-				request.expiresAt <= new Date()
-			) {
+			if (!session || !isPendingFor(request, session.user.id)) {
 				return unknownRequest();
 			}
 			const client = await getOAuthProviderApi(ctx, opts).getClient(
@@ -97,6 +132,8 @@ export function cibaApprovalRequest(
 				acr_values: request.acrValues?.join(" ") || undefined,
 				// For the consent page to show; approval grants the stored details.
 				authorization_details: request.authorizationDetails ?? undefined,
+				// JSON, for the consent page to show who will act for the user.
+				actor: request.actor ? JSON.stringify(request.actor) : undefined,
 			};
 			return {
 				query,
@@ -109,21 +146,30 @@ export function cibaApprovalRequest(
 					if (!parseScopes(scope).includes("openid")) {
 						oauthError("invalid_scope", CIBA_ERROR_CODES.INVALID_SCOPE.message);
 					}
-					await recordDecision(ctx, request.id, approval.userId, {
-						status: "approved",
-						scope,
-						referenceId: approval.referenceId ?? null,
-						authTime: new Date(approval.authTime),
-						acr: approval.acr ?? null,
-						amr: approval.amr ?? null,
-					});
+					await recordDecision(
+						ctx,
+						isConfiguredOrigin,
+						request.id,
+						approval.userId,
+						{
+							status: "approved",
+							scope,
+							referenceId: approval.referenceId ?? null,
+							approvedViaConsent: true,
+							authTime: new Date(approval.authTime),
+							acr: approval.acr ?? null,
+							amr: approval.amr ?? null,
+						},
+					);
 					return resultURL(ctx, "approved");
 				},
 			};
 		},
 		deny: async ({ ctx, value, userId }) => {
 			if (!userId) unknownRequest();
-			await recordDecision(ctx, value, userId, { status: "denied" });
+			await recordDecision(ctx, isConfiguredOrigin, value, userId, {
+				status: "denied",
+			});
 			return resultURL(ctx, "denied");
 		},
 		errorPage: ({ ctx }) => resultURL(ctx),
@@ -136,7 +182,10 @@ export function cibaApprovalRequest(
  * decided and how they authenticated; the provider checks that it is the
  * hinted user and that the scopes stay within the request.
  */
-export const createCompleteCibaRequest = (options: ResolvedCibaOptions) =>
+export const createCompleteCibaRequest = (
+	options: ResolvedCibaOptions,
+	isConfiguredOrigin: IsConfiguredOrigin,
+) =>
 	createAuthEndpoint.serverOnly(
 		{
 			method: "POST",
@@ -167,7 +216,9 @@ export const createCompleteCibaRequest = (options: ResolvedCibaOptions) =>
 		async (ctx) => {
 			const { requestId, userId, decision, acr, amr } = ctx.body;
 			if (decision === "denied") {
-				await recordDecision(ctx, requestId, userId, { status: "denied" });
+				await recordDecision(ctx, isConfiguredOrigin, requestId, userId, {
+					status: "denied",
+				});
 				return ctx.json({ status: true });
 			}
 			const request = await ctx.context.adapter.findOne<CibaRequest>({
@@ -176,14 +227,7 @@ export const createCompleteCibaRequest = (options: ResolvedCibaOptions) =>
 			});
 			// Another user's, a decided, or an expired request fails as an unknown one,
 			// before its scopes are read. recordDecision still guards the write.
-			if (
-				!request ||
-				request.userId !== userId ||
-				request.status !== "pending" ||
-				request.expiresAt <= new Date()
-			) {
-				return unknownRequest();
-			}
+			if (!isPendingFor(request, userId)) return unknownRequest();
 			const requested = parseScopes(request.scope);
 			const scopes = ctx.body.scopes ?? requested;
 			if (scopes.some((scope) => !requested.includes(scope))) {
@@ -220,7 +264,7 @@ export const createCompleteCibaRequest = (options: ResolvedCibaOptions) =>
 				);
 				authorizationDetails = storeAuthorizationDetails(granted);
 			}
-			await recordDecision(ctx, requestId, userId, {
+			await recordDecision(ctx, isConfiguredOrigin, requestId, userId, {
 				status: "approved",
 				scope: scopes.join(" "),
 				authTime: ctx.body.authTime ?? null,
@@ -229,5 +273,38 @@ export const createCompleteCibaRequest = (options: ResolvedCibaOptions) =>
 				authorizationDetails,
 			});
 			return ctx.json({ status: true });
+		},
+	);
+
+/**
+ * Reads a pending request for your own approval page, so it can show the user
+ * what they are asked to approve. Returns `null` when `completeCibaRequest`
+ * would refuse the request as unknown: unknown, already decided, expired, or
+ * for another user. It also returns `null` when the client no longer exists.
+ */
+export const createGetCibaRequest = () =>
+	createAuthEndpoint.serverOnly(
+		{
+			method: "POST",
+			body: z.object({
+				/** `requestId` from `sendNotification`, or `ciba_request_id` from the link. */
+				requestId: z.string().min(1),
+				/** The user your page authenticated; must be the user the `login_hint` identified. */
+				userId: z.string().min(1),
+			}),
+		},
+		async (ctx): Promise<CibaPendingRequest | null> => {
+			const { requestId, userId } = ctx.body;
+			const request = await ctx.context.adapter.findOne<CibaRequest>({
+				model: "cibaRequest",
+				where: [{ field: "id", value: requestId }],
+			});
+			if (!isPendingFor(request, userId)) return null;
+			const oauthOptions = ctx.context.getPlugin("oauth-provider")!.options;
+			const client = await getOAuthProviderApi(ctx, oauthOptions).getClient(
+				request.clientId,
+			);
+			if (!client) return null;
+			return toPendingRequest(request, client);
 		},
 	);

@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
 import { memoryAdapter } from "@better-auth/memory-adapter";
-import { createAuthEndpoint } from "better-auth/api";
+import { APIError, createAuthEndpoint } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import type { ProviderOptions } from "better-auth/oauth2";
@@ -2166,6 +2166,81 @@ describe("oauth token - refresh_token", async () => {
 			return tokens!.refresh_token!;
 		}
 
+		/**
+		 * At the default interval no duplicate waits for a replay, so a rotation
+		 * that fails must not leave replay state on the rotated parent.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12087
+		 */
+		it("stores no replay state when a rotation fails at the default interval", async () => {
+			const context = await authorizationServer.$context;
+			const findRows = () =>
+				context.adapter.findMany<{
+					id: string;
+					revoked?: Date | null;
+					rotationReplayResponse?: string | null;
+				}>({
+					model: "oauthRefreshToken",
+					where: [{ field: "clientId", value: oauthClient!.client_id }],
+					limit: 1000,
+				});
+			const existingIds = new Set((await findRows()).map((row) => row.id));
+			const parentToken = await issueParentRefreshToken();
+			const parentId = (await findRows()).find(
+				(row) => !existingIds.has(row.id),
+			)?.id;
+			expect(parentId).toBeDefined();
+			const create = context.adapter.create.bind(context.adapter);
+			const spy = vi.spyOn(context.adapter, "create");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === "oauthAccessToken") {
+					spy.mockRestore();
+					throw new Error("access token store unavailable");
+				}
+				return create(...args);
+			});
+			try {
+				expect((await refresh(parentToken)).error).not.toBeNull();
+			} finally {
+				spy.mockRestore();
+			}
+
+			const parent = (await findRows()).find((row) => row.id === parentId);
+			expect(parent?.revoked).toBeTruthy();
+			expect(parent?.rotationReplayResponse ?? null).toBeNull();
+		});
+
+		async function readRefreshTokenRows() {
+			const context = await authorizationServer.$context;
+			return context.adapter.findMany<{ id: string; grantId?: string | null }>({
+				model: "oauthRefreshToken",
+				where: [{ field: "clientId", value: oauthClient!.client_id }],
+				limit: 1000,
+			});
+		}
+
+		/** Issues a parent refresh token and returns the ID of the grant it starts. */
+		async function issueParentGrant() {
+			const before = new Set((await readRefreshTokenRows()).map((r) => r.id));
+			const refreshToken = await issueParentRefreshToken();
+			const issued = (await readRefreshTokenRows()).find(
+				(row) => !before.has(row.id),
+			);
+			expect(issued?.grantId).toBeTruthy();
+			return { refreshToken, grantId: issued!.grantId! };
+		}
+
+		async function countGrantRefreshTokens(grantId: string) {
+			const context = await authorizationServer.$context;
+			return context.adapter.count({
+				model: "oauthRefreshToken",
+				where: [
+					{ field: "clientId", value: oauthClient!.client_id },
+					{ field: "grantId", value: grantId },
+				],
+			});
+		}
+
 		it("rotates once and fails the other rotation with invalid_grant", async () => {
 			const parentToken = await issueParentRefreshToken();
 			const cas = await holdNextRefreshTokenCas();
@@ -2226,7 +2301,7 @@ describe("oauth token - refresh_token", async () => {
 		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 		 */
 		it("revokes the refresh token a rotation stores after reuse tore down its family", async () => {
-			const parentToken = await issueParentRefreshToken();
+			const { refreshToken: parentToken, grantId } = await issueParentGrant();
 			const insert = await holdNextInsert(
 				authorizationServer,
 				"oauthRefreshToken",
@@ -2240,14 +2315,8 @@ describe("oauth token - refresh_token", async () => {
 
 				expect(reused.error).toMatchObject({ error: "invalid_grant" });
 				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
-				// The teardown covers every refresh token of this client and user.
-				const context = await authorizationServer.$context;
-				expect(
-					await context.adapter.count({
-						model: "oauthRefreshToken",
-						where: [{ field: "clientId", value: oauthClient!.client_id }],
-					}),
-				).toBe(0);
+				// The teardown covers every refresh token of the grant.
+				expect(await countGrantRefreshTokens(grantId)).toBe(0);
 			} finally {
 				insert.restore();
 			}
@@ -2260,7 +2329,7 @@ describe("oauth token - refresh_token", async () => {
 		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 		 */
 		it("fails a rotation that stores its refresh token after the grant's revocation mark expired", async () => {
-			const parentToken = await issueParentRefreshToken();
+			const { refreshToken: parentToken, grantId } = await issueParentGrant();
 			const insert = await holdNextInsert(
 				authorizationServer,
 				"oauthRefreshToken",
@@ -2295,12 +2364,7 @@ describe("oauth token - refresh_token", async () => {
 				const rotated = await rotating;
 
 				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
-				expect(
-					await context.adapter.count({
-						model: "oauthRefreshToken",
-						where: [{ field: "clientId", value: oauthClient!.client_id }],
-					}),
-				).toBe(0);
+				expect(await countGrantRefreshTokens(grantId)).toBe(0);
 			} finally {
 				vi.useRealTimers();
 				insert.restore();
@@ -2308,7 +2372,7 @@ describe("oauth token - refresh_token", async () => {
 		});
 
 		it("fails the rotation and the revoke closed when the rotation wins the swap", async () => {
-			const parentToken = await issueParentRefreshToken();
+			const { refreshToken: parentToken, grantId } = await issueParentGrant();
 			const cas = await holdNextRefreshTokenCas();
 			try {
 				const revoking = revoke(parentToken);
@@ -2322,13 +2386,7 @@ describe("oauth token - refresh_token", async () => {
 				// 200 and tears down the family.
 				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
 				expect(revoked.error).toBeNull();
-				const context = await authorizationServer.$context;
-				expect(
-					await context.adapter.count({
-						model: "oauthRefreshToken",
-						where: [{ field: "clientId", value: oauthClient!.client_id }],
-					}),
-				).toBe(0);
+				expect(await countGrantRefreshTokens(grantId)).toBe(0);
 				expect((await refresh(parentToken)).error).toMatchObject({
 					error: "invalid_grant",
 				});
@@ -2354,6 +2412,42 @@ describe("oauth token - refresh_token", async () => {
 				});
 			} finally {
 				cas.restore();
+			}
+		});
+
+		/**
+		 * Reuse tears down the grant of the replayed token. A rotation of the
+		 * user's other grant with the same client has nothing to do with it, so
+		 * it keeps the tokens it is still issuing.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12154
+		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+		 */
+		it("keeps the tokens an in-flight rotation of another grant stores while reuse tears down a grant", async () => {
+			const replayedParent = await issueParentRefreshToken();
+			const rotated = await refresh(replayedParent);
+			expect(rotated.error).toBeNull();
+			const otherParent = await issueParentRefreshToken();
+			const insert = await holdNextInsert(
+				authorizationServer,
+				"oauthAccessToken",
+			);
+			try {
+				const rotatingOther = refresh(otherParent);
+				await insert.reached;
+				const reused = await refresh(replayedParent);
+				insert.release();
+				const other = await rotatingOther;
+
+				expect(reused.error).toMatchObject({ error: "invalid_grant" });
+				expect(other.error).toBeNull();
+				expect(other.data?.refresh_token).toBeDefined();
+				expect((await refresh(other.data!.refresh_token!)).error).toBeNull();
+				expect(
+					(await refresh(rotated.data!.refresh_token!)).error,
+				).toMatchObject({ error: "invalid_grant" });
+			} finally {
+				insert.restore();
 			}
 		});
 	});
@@ -2707,6 +2801,8 @@ describe("oauth token - refresh_token reuse interval", async () => {
 	const validAudience = "https://reuse-api.example.com";
 	const otherAudience = "https://other-reuse-api.example.com";
 	let refreshTokenResponseCalls = 0;
+	let refreshTokenResponseFieldsHook: (() => Promise<void> | void) | null =
+		null;
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
@@ -2725,11 +2821,12 @@ describe("oauth token - refresh_token reuse interval", async () => {
 				resources: [validAudience, otherAudience],
 				enforcePerClientResources: false,
 				refreshTokenReuseInterval: 30,
-				customTokenResponseFields({ grantType }) {
+				async customTokenResponseFields({ grantType }) {
 					if (grantType !== "refresh_token") {
 						return {};
 					}
 					refreshTokenResponseCalls += 1;
+					await refreshTokenResponseFieldsHook?.();
 					return {
 						refresh_call: `${refreshTokenResponseCalls}`,
 					};
@@ -2886,6 +2983,369 @@ describe("oauth token - refresh_token reuse interval", async () => {
 	});
 
 	/**
+	 * Two overlapping `refresh_token` grants with the same parent must both
+	 * receive the rotated response inside the reuse interval. The CAS loser
+	 * used to return `invalid_grant` before the winner stored the replay.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("replays the same response for concurrent refresh_token grants inside the reuse interval", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+
+		const [first, second] = await Promise.all([
+			refresh(tokens.refresh_token!),
+			refresh(tokens.refresh_token!),
+		]);
+
+		expect(first.error).toBeNull();
+		expect(second.error).toBeNull();
+		expect(second.data).toMatchObject({
+			access_token: first.data?.access_token,
+			expires_at: first.data?.expires_at,
+			token_type: first.data?.token_type,
+			refresh_token: first.data?.refresh_token,
+			scope: first.data?.scope,
+			id_token: first.data?.id_token,
+			refresh_call: first.data?.refresh_call,
+		});
+		// Both requests can enter `createUserTokens` and run
+		// `customTokenResponseFields` before the CAS; only one rotation
+		// is stored, and the loser replays that response.
+		expect(refreshTokenResponseCalls).toBeGreaterThanOrEqual(1);
+		expect(refreshTokenResponseCalls).toBeLessThanOrEqual(2);
+
+		const next = await refresh(first.data!.refresh_token!);
+		expect(next.error).toBeNull();
+		expect(next.data?.refresh_token).toBeDefined();
+		expect(next.data?.refresh_token).not.toEqual(first.data?.refresh_token);
+	});
+
+	/**
+	 * The second request can also arrive after the parent is already revoked
+	 * but before `storeRefreshTokenRotationReplay` writes. That used to miss
+	 * the replay cache and return `invalid_grant` inside the reuse interval.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("waits for the stored replay when a concurrent refresh arrives mid-rotation", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const originalFindOne = context.adapter.findOne.bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const overlappingRead = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		let holdReplayStore = false;
+		const update = vi.spyOn(context.adapter, "update");
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		update.mockImplementation(async (...args) => {
+			const [params] = args;
+			if (
+				params.model === "oauthRefreshToken" &&
+				Object.prototype.hasOwnProperty.call(
+					params.update,
+					"rotationReplayResponse",
+				)
+			) {
+				holdReplayStore = true;
+				reached.resolve();
+				await released.promise;
+			}
+			return originalUpdate(...args);
+		});
+		findOne.mockImplementation(async (...args) => {
+			const result = await originalFindOne(...args);
+			if (
+				holdReplayStore &&
+				args[0].model === "oauthRefreshToken" &&
+				result &&
+				typeof result === "object" &&
+				"revoked" in result &&
+				result.revoked &&
+				!("rotationReplayResponse" in result && result.rotationReplayResponse)
+			) {
+				overlappingRead.resolve();
+			}
+			return result;
+		});
+
+		try {
+			const rotating = refresh(tokens.refresh_token!);
+			await reached.promise;
+			const overlapping = refresh(tokens.refresh_token!);
+			await overlappingRead.promise;
+			released.resolve();
+			const [first, second] = await Promise.all([rotating, overlapping]);
+
+			expect(first.error).toBeNull();
+			expect(second.error).toBeNull();
+			expect(second.data).toMatchObject({
+				access_token: first.data?.access_token,
+				expires_at: first.data?.expires_at,
+				token_type: first.data?.token_type,
+				refresh_token: first.data?.refresh_token,
+				scope: first.data?.scope,
+				id_token: first.data?.id_token,
+				refresh_call: "1",
+			});
+			expect(refreshTokenResponseCalls).toBe(1);
+		} finally {
+			update.mockRestore();
+			findOne.mockRestore();
+			released.resolve();
+		}
+	});
+
+	/**
+	 * A slow winner still storing its replay is not rejected after a fixed two
+	 * seconds. The wait is capped at five seconds, whatever the reuse interval.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("waits for the stored replay past two seconds while the reuse interval is active", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const originalFindOne = context.adapter.findOne.bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const overlappingRead = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		let holdReplayStore = false;
+		const update = vi.spyOn(context.adapter, "update");
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		update.mockImplementation(async (...args) => {
+			const [params] = args;
+			if (
+				params.model === "oauthRefreshToken" &&
+				Object.prototype.hasOwnProperty.call(
+					params.update,
+					"rotationReplayResponse",
+				)
+			) {
+				holdReplayStore = true;
+				reached.resolve();
+				await released.promise;
+			}
+			return originalUpdate(...args);
+		});
+		findOne.mockImplementation(async (...args) => {
+			const result = await originalFindOne(...args);
+			if (
+				holdReplayStore &&
+				args[0].model === "oauthRefreshToken" &&
+				result &&
+				typeof result === "object" &&
+				"revoked" in result &&
+				result.revoked &&
+				!("rotationReplayResponse" in result && result.rotationReplayResponse)
+			) {
+				overlappingRead.resolve();
+			}
+			return result;
+		});
+
+		try {
+			const rotating = refresh(tokens.refresh_token!);
+			await reached.promise;
+			const overlapping = refresh(tokens.refresh_token!);
+			await overlappingRead.promise;
+			await new Promise<void>((resolve) => {
+				setTimeout(resolve, 2_100);
+			});
+			released.resolve();
+			const [first, second] = await Promise.all([rotating, overlapping]);
+
+			expect(first.error).toBeNull();
+			expect(second.error).toBeNull();
+			expect(second.data).toMatchObject({
+				access_token: first.data?.access_token,
+				refresh_token: first.data?.refresh_token,
+				refresh_call: "1",
+			});
+		} finally {
+			update.mockRestore();
+			findOne.mockRestore();
+			released.resolve();
+		}
+	});
+
+	/**
+	 * `mcp()` sets the reuse interval to 30 seconds. A duplicate must not hold
+	 * its request open that long for a winner that stalls while storing its
+	 * replay.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("stops waiting for a stalled rotation after five seconds, whatever the reuse interval", async () => {
+		oauthClient = await createOAuthClient();
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const originalFindOne = context.adapter.findOne.bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const overlappingRead = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		let holdReplayStore = false;
+		const update = vi.spyOn(context.adapter, "update");
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		update.mockImplementation(async (...args) => {
+			const [params] = args;
+			if (
+				params.model === "oauthRefreshToken" &&
+				Object.prototype.hasOwnProperty.call(
+					params.update,
+					"rotationReplayResponse",
+				)
+			) {
+				holdReplayStore = true;
+				reached.resolve();
+				await released.promise;
+			}
+			return originalUpdate(...args);
+		});
+		findOne.mockImplementation(async (...args) => {
+			const result = await originalFindOne(...args);
+			if (
+				holdReplayStore &&
+				args[0].model === "oauthRefreshToken" &&
+				result &&
+				typeof result === "object" &&
+				"revoked" in result &&
+				result.revoked &&
+				!("rotationReplayResponse" in result && result.rotationReplayResponse)
+			) {
+				overlappingRead.resolve();
+			}
+			return result;
+		});
+
+		try {
+			const rotating = refresh(tokens.refresh_token!);
+			await reached.promise;
+			vi.useFakeTimers({ toFake: ["setTimeout", "Date"] });
+			const overlapping = refresh(tokens.refresh_token!);
+			await overlappingRead.promise;
+			await vi.advanceTimersByTimeAsync(4_900);
+			let settled = false;
+			void overlapping.finally(() => {
+				settled = true;
+			});
+			await vi.advanceTimersByTimeAsync(0);
+			expect(settled).toBe(false);
+
+			// The last poll delay must stop at the cap, not run past it.
+			await vi.advanceTimersByTimeAsync(100);
+			for (let turn = 0; turn < 100 && !settled; turn++) {
+				await new Promise<void>((resolve) => setImmediate(resolve));
+			}
+			expect(settled).toBe(true);
+			const second = await overlapping;
+
+			expect(second.error?.status).toBe(400);
+			expect(second.error).toMatchObject({ error: "invalid_grant" });
+
+			// The slow rotation still completes for the request that won it.
+			vi.useRealTimers();
+			released.resolve();
+			expect((await rotating).error).toBeNull();
+		} finally {
+			vi.useRealTimers();
+			update.mockRestore();
+			findOne.mockRestore();
+			released.resolve();
+		}
+	});
+
+	/**
+	 * Recovering every `invalid_grant` from token issuance would replay the
+	 * winner's tokens over a callback/extension failure.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("does not recover a non-CAS invalid_grant as a rotation replay", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const casWon = Promise.withResolvers<void>();
+		const incrementOne = context.adapter.incrementOne.bind(context.adapter);
+		const spy = vi.spyOn(context.adapter, "incrementOne");
+		spy.mockImplementation(async (...args) => {
+			const result = await incrementOne(...args);
+			if (args[0].model === "oauthRefreshToken" && result) {
+				casWon.resolve();
+			}
+			return result;
+		});
+
+		// The first request waits for the second to read the parent, so neither
+		// rotates before both have read it.
+		const secondReadParent = Promise.withResolvers<void>();
+		let fieldCalls = 0;
+		refreshTokenResponseFieldsHook = async () => {
+			fieldCalls += 1;
+			if (fieldCalls === 1) {
+				await secondReadParent.promise;
+			} else {
+				secondReadParent.resolve();
+				await casWon.promise;
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_grant",
+					error_description: "callback failed",
+				});
+			}
+		};
+
+		try {
+			const [first, second] = await Promise.all([
+				refresh(tokens.refresh_token!),
+				refresh(tokens.refresh_token!),
+			]);
+			const failed = [first, second].find((result) => result.error !== null);
+			const succeeded = [first, second].find((result) => result.error === null);
+
+			expect(succeeded?.data?.refresh_token).toBeDefined();
+			expect((failed?.error as { error?: string } | undefined)?.error).toBe(
+				"invalid_grant",
+			);
+			expect(
+				(failed?.error as { error_description?: string } | undefined)
+					?.error_description,
+			).toBe("callback failed");
+			expect(failed?.data).toBeNull();
+		} finally {
+			refreshTokenResponseFieldsHook = null;
+			spy.mockRestore();
+		}
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8512
 	 */
 	it("replays equivalent requests when scope and resource order differ", async () => {
@@ -2970,6 +3430,105 @@ describe("oauth token - refresh_token reuse interval", async () => {
 		} finally {
 			update.mockRestore();
 			loggerError.mockRestore();
+		}
+	});
+
+	/**
+	 * A failed replay store must not look like an in-flight write. Concurrent
+	 * retries would otherwise poll until the reuse window expires.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("does not wait out the reuse interval when storing the replay cache fails", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const originalFindOne = context.adapter.findOne.bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const overlappingRead = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		let holdReplayStore = false;
+		let replayStoreWrites = 0;
+		let pendingParentReads = 0;
+		const update = vi.spyOn(context.adapter, "update");
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		const loggerError = vi
+			.spyOn(context.logger, "error")
+			.mockImplementation(() => undefined);
+		update.mockImplementation(async (...args) => {
+			const [params] = args;
+			if (
+				params.model === "oauthRefreshToken" &&
+				Object.prototype.hasOwnProperty.call(
+					params.update,
+					"rotationReplayResponse",
+				)
+			) {
+				replayStoreWrites += 1;
+				if (replayStoreWrites === 1) {
+					holdReplayStore = true;
+					reached.resolve();
+					await released.promise;
+					throw new Error("replay cache unavailable");
+				}
+			}
+			return originalUpdate(...args);
+		});
+		findOne.mockImplementation(async (...args) => {
+			const result = await originalFindOne(...args);
+			if (
+				holdReplayStore &&
+				args[0].model === "oauthRefreshToken" &&
+				result &&
+				typeof result === "object" &&
+				"revoked" in result &&
+				result.revoked &&
+				!("rotationReplayResponse" in result && result.rotationReplayResponse)
+			) {
+				pendingParentReads += 1;
+				overlappingRead.resolve();
+			}
+			return result;
+		});
+
+		try {
+			const rotating = refresh(tokens.refresh_token!);
+			await reached.promise;
+			const overlapping = refresh(tokens.refresh_token!);
+			await overlappingRead.promise;
+			released.resolve();
+			const settled = await Promise.race([
+				Promise.all([rotating, overlapping]),
+				new Promise<"timeout">((resolve) => {
+					setTimeout(() => resolve("timeout"), 1_000);
+				}),
+			]);
+			expect(settled).not.toBe("timeout");
+			if (settled === "timeout") {
+				return;
+			}
+			const [first, second] = settled;
+			expect(first.error).toBeNull();
+			expect(first.data?.refresh_token).toBeDefined();
+			expect((second.error as { error?: string } | null)?.error).toBe(
+				"invalid_grant",
+			);
+			expect(pendingParentReads).toBeLessThan(20);
+			expect(loggerError).toHaveBeenCalledWith(
+				"failed to store refresh token rotation replay",
+				expect.any(Error),
+			);
+		} finally {
+			update.mockRestore();
+			findOne.mockRestore();
+			loggerError.mockRestore();
+			released.resolve();
 		}
 	});
 
@@ -4318,6 +4877,146 @@ describe("oauth token - config", async () => {
 		expect(post.status).toBe(400);
 		expect(post.headers.has("WWW-Authenticate")).toBe(false);
 	});
+
+	/**
+	 * Run one authorization_code grant and return the issued tokens.
+	 */
+	async function authorizationCodeTokens(
+		oauthProviderConfig?: Omit<
+			OAuthOptions<Scope[]>,
+			"loginPage" | "consentPage"
+		>,
+	) {
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig,
+		});
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			clientId: oauthClient?.client_id!,
+			clientSecret: oauthClient?.client_secret,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+		const tokens = await client.oauth2.token(
+			{
+				code: url.searchParams.get("code")!,
+				code_verifier: codeVerifier,
+				grant_type: "authorization_code",
+				// Requesting the audience yields a JWT access token, so the tests below
+				// can read `exp`/`iat` back off the token itself and not only trust
+				// `expires_in` in the response body.
+				resource: validResource,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		return { client, oauthClient, tokens };
+	}
+
+	it("accessTokenExpiresIn - a number keeps its existing behaviour", async () => {
+		const { tokens } = await authorizationCodeTokens({
+			accessTokenExpiresIn: 7200,
+		});
+		expect(tokens.data?.expires_in).toBe(7200);
+		const accessToken = decodeJwt(tokens.data?.access_token ?? "");
+		expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(7200);
+	});
+
+	it("accessTokenExpiresIn - a function decides the lifetime per grant", async () => {
+		const { tokens } = await authorizationCodeTokens({
+			accessTokenExpiresIn: () => 1800,
+		});
+		expect(tokens.data?.expires_in).toBe(1800);
+		const accessToken = decodeJwt(tokens.data?.access_token ?? "");
+		expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(1800);
+	});
+
+	it("accessTokenExpiresIn - an async function is awaited", async () => {
+		const { tokens } = await authorizationCodeTokens({
+			accessTokenExpiresIn: async () => {
+				await new Promise((resolve) => setTimeout(resolve, 1));
+				return 900;
+			},
+		});
+		expect(tokens.data?.expires_in).toBe(900);
+	});
+
+	it("accessTokenExpiresIn - the resolver receives the validated grant", async () => {
+		let seen: {
+			userId?: string;
+			clientId?: string;
+			scopes?: string[];
+			grantType?: string;
+		} = {};
+		const { oauthClient } = await authorizationCodeTokens({
+			accessTokenExpiresIn: ({ user, client, scopes, grantType }) => {
+				seen = {
+					userId: user?.id,
+					clientId: client?.clientId,
+					scopes,
+					grantType,
+				};
+				return 1200;
+			},
+		});
+		expect(seen.userId).toBeDefined();
+		expect(seen.clientId).toBe(oauthClient?.client_id);
+		expect(seen.scopes).toContain("openid");
+		expect(seen.grantType).toBe("authorization_code");
+	});
+
+	// A resolver is trusted to throw, but never trusted to return a sane number:
+	// anything that is not finite and positive falls back to the 1 hour default
+	// rather than to a longer lifetime.
+	it.for([
+		{ label: "zero", value: 0 },
+		{ label: "negative", value: -60 },
+		{ label: "NaN", value: Number.NaN },
+		{ label: "Infinity", value: Number.POSITIVE_INFINITY },
+	])(
+		"accessTokenExpiresIn - $label result falls back to the default",
+		async ({ value }) => {
+			const { tokens } = await authorizationCodeTokens({
+				accessTokenExpiresIn: () => value,
+			});
+			expect(tokens.data?.expires_in).toBe(3600);
+		},
+	);
+
+	it("accessTokenExpiresIn - a function does not affect client_credentials", async () => {
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				accessTokenExpiresIn: () => 60,
+				m2mAccessTokenExpiresIn: 7200,
+			},
+		});
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: "read:profile",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(tokens.data?.expires_in).toBe(7200);
+	});
 });
 
 describe("oauth token - client secret validation", async () => {
@@ -4890,6 +5589,461 @@ describe("scope preservation through authorization code flow", async () => {
 			headers: reqHeaders,
 		});
 		expect(tokens.data?.scope).toBe(requestedScopes.join(" "));
+	});
+});
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-3.3
+ */
+describe("authorization code without scopes", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const redirectUri = `${rpBaseUrl}/callback`;
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid", "profile", "members:write"],
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+
+	const { headers } = await signInWithTestUser();
+	async function createClient(
+		options: { skipConsent: boolean; scope?: string } = { skipConsent: true },
+	) {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: options.skipConsent,
+				scope: options.scope ?? "openid profile",
+			},
+		});
+		return oauthClient as typeof oauthClient & {
+			client_id: string;
+			client_secret: string;
+		};
+	}
+
+	async function authorize(clientId: string, scope?: string) {
+		const codeVerifier = generateRandomString(32);
+		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		const codeChallenge = base64url.encode(
+			new Uint8Array(
+				await crypto.subtle.digest(
+					"SHA-256",
+					new TextEncoder().encode(codeVerifier),
+				),
+			),
+		);
+		url.search = new URLSearchParams({
+			response_type: "code",
+			client_id: clientId,
+			redirect_uri: redirectUri,
+			state: "123",
+			code_challenge: codeChallenge,
+			code_challenge_method: "S256",
+			...(scope === undefined ? {} : { scope }),
+		}).toString();
+		let location = "";
+		await client.$fetch(url.toString(), {
+			headers,
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		return { location, codeVerifier };
+	}
+
+	async function exchange(
+		oauthClient: { client_id: string; client_secret: string },
+		code: string,
+		codeVerifier: string,
+	) {
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+	}
+
+	it("exchanges a code issued for an empty scope parameter", async () => {
+		const oauthClient = await createClient();
+		const { location, codeVerifier } = await authorize(
+			oauthClient.client_id,
+			"",
+		);
+		expect(location).toContain("code=");
+		const code = new URL(location).searchParams.get("code")!;
+
+		const tokens = await exchange(oauthClient, code, codeVerifier);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeUndefined();
+		expect(tokens.data?.refresh_token).toBeUndefined();
+		expect(tokens.data?.scope).toBeFalsy();
+	});
+
+	it("exchanges a code issued for an empty scope parameter after consent", async () => {
+		const oauthClient = await createClient({ skipConsent: false });
+		const { location, codeVerifier } = await authorize(
+			oauthClient.client_id,
+			"",
+		);
+		expect(location).toContain("/consent");
+		const consentHeaders = new Headers(headers);
+		consentHeaders.set("accept", "application/json");
+		const consent = await client.$fetch<{ url: string }>("/oauth2/consent", {
+			method: "POST",
+			headers: consentHeaders,
+			body: {
+				accept: true,
+				oauth_query: new URL(location, authServerBaseUrl).search.slice(1),
+			},
+		});
+		expect(consent.error).toBeNull();
+		const code = new URL(consent.data!.url).searchParams.get("code")!;
+
+		const tokens = await exchange(oauthClient, code, codeVerifier);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.scope).toBeFalsy();
+	});
+
+	it("still rejects a code scope the client no longer allows", async () => {
+		const oauthClient = await createClient({
+			skipConsent: true,
+			scope: "openid members:write",
+		});
+		const { location, codeVerifier } = await authorize(
+			oauthClient.client_id,
+			"openid members:write",
+		);
+		expect(location).toContain("code=");
+		const code = new URL(location).searchParams.get("code")!;
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: oauthClient.client_id,
+				update: { scope: "openid profile" },
+			},
+		});
+
+		const tokens = await exchange(oauthClient, code, codeVerifier);
+		expect(tokens.data).toBeNull();
+		expect(tokens.error?.status).toBe(400);
+		expect(tokens.error).toMatchObject({
+			error: "invalid_scope",
+			error_description: "client does not allow scope members:write",
+		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12194
+ */
+describe("oauth token - omitted scope with registration defaults", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const redirectUri = `${rpBaseUrl}/callback`;
+	// RFC 7636 appendix B verifier/challenge pair
+	const codeVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+	const codeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
+	const { auth, signInWithTestUser, client } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({
+					jwt: {
+						issuer: authServerBaseUrl,
+					},
+				}),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					scopes: ["openid", "profile", "members:write"],
+					clientRegistrationDefaultScopes: ["openid", "profile"],
+					clientRegistrationAllowedScopes: [
+						"openid",
+						"profile",
+						"members:write",
+					],
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+
+	const { headers } = await signInWithTestUser();
+	async function registerClient() {
+		const response = await client.oauth2.register(
+			{
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_post",
+				application_type: "native",
+			},
+			{ headers },
+		);
+		expect(response.error).toBeNull();
+		const registered = response.data!;
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: registered.client_id,
+				update: { skip_consent: true },
+			},
+		});
+		return registered;
+	}
+
+	async function authorizeWithoutScope(clientId: string) {
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.search = new URLSearchParams({
+			response_type: "code",
+			client_id: clientId,
+			redirect_uri: redirectUri,
+			state: "123",
+			code_challenge: codeChallenge,
+			code_challenge_method: "S256",
+		}).toString();
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("code=");
+		return new URL(callbackRedirectUrl).searchParams.get("code")!;
+	}
+
+	async function exchangeCode(
+		clientId: string,
+		clientSecret: string,
+		code: string,
+	) {
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId,
+				clientSecret,
+				redirectURI: redirectUri,
+			},
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+	}
+
+	it("exchanges an omitted-scope code for the registration default scopes", async () => {
+		const registered = await registerClient();
+		const code = await authorizeWithoutScope(registered.client_id);
+		const tokens = await exchangeCode(
+			registered.client_id,
+			registered.client_secret!,
+			code,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeDefined();
+		expect(tokens.data?.scope).toBe("openid profile");
+	});
+
+	it("intersects the defaults with the client's current persisted scopes", async () => {
+		const registered = await registerClient();
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: registered.client_id,
+				update: { scope: "openid members:write" },
+			},
+		});
+		const code = await authorizeWithoutScope(registered.client_id);
+		const tokens = await exchangeCode(
+			registered.client_id,
+			registered.client_secret!,
+			code,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeDefined();
+		expect(tokens.data?.scope).toBe("openid");
+	});
+
+	it("exchanges an empty-scope code when persisted scopes no longer cover the defaults", async () => {
+		const registered = await registerClient();
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: registered.client_id,
+				update: { scope: "members:write" },
+			},
+		});
+		const code = await authorizeWithoutScope(registered.client_id);
+		const tokens = await exchangeCode(
+			registered.client_id,
+			registered.client_secret!,
+			code,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeUndefined();
+		expect(tokens.data?.scope).toBeFalsy();
+	});
+
+	it("still honors an explicit scope parameter", async () => {
+		const registered = await registerClient();
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.search = new URLSearchParams({
+			response_type: "code",
+			client_id: registered.client_id,
+			redirect_uri: redirectUri,
+			state: "123",
+			scope: "openid members:write",
+			code_challenge: codeChallenge,
+			code_challenge_method: "S256",
+		}).toString();
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("code=");
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const tokens = await exchangeCode(
+			registered.client_id,
+			registered.client_secret!,
+			code,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.scope).toBe("openid members:write");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12194
+ */
+describe("oauth token - omitted scope with empty registration defaults", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const redirectUri = `${rpBaseUrl}/callback`;
+	// RFC 7636 appendix B verifier/challenge pair
+	const codeVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+	const codeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
+	const { auth, signInWithTestUser, client } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({
+					jwt: {
+						issuer: authServerBaseUrl,
+					},
+				}),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					scopes: ["openid"],
+					clientRegistrationDefaultScopes: [],
+					clientRegistrationAllowedScopes: ["openid"],
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+
+	const { headers } = await signInWithTestUser();
+	it("exchanges an empty-scope code instead of rejecting it with invalid_scope", async () => {
+		const response = await client.oauth2.register(
+			{
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_post",
+				application_type: "native",
+			},
+			{ headers },
+		);
+		expect(response.error).toBeNull();
+		const registered = response.data!;
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: registered.client_id,
+				update: { skip_consent: true },
+			},
+		});
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.search = new URLSearchParams({
+			response_type: "code",
+			client_id: registered.client_id,
+			redirect_uri: redirectUri,
+			state: "123",
+			code_challenge: codeChallenge,
+			code_challenge_method: "S256",
+		}).toString();
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("code=");
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: registered.client_id,
+				clientSecret: registered.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokens = await client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeUndefined();
+		expect(tokens.data?.scope).toBeFalsy();
 	});
 });
 
@@ -6498,6 +7652,261 @@ describe("oauth token - DPoP", async () => {
 		);
 	});
 
+	/**
+	 * Concurrent DPoP refresh grants present distinct proofs (different `jti`).
+	 * The CAS loser already consumed its proof during issuance; recovery must
+	 * not verify that consumed proof a second time.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("replays concurrent DPoP-bound refresh grants with distinct proofs", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const issueProof = await createDpopProof(dpopKey, {
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "concurrent-dpop-issue-proof",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			issueProof,
+		);
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		async function refresh(dpopProof: string) {
+			const { body, headers: reqHeaders } = await refreshAccessTokenRequest({
+				refreshToken: tokens.data!.refresh_token!,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const refreshHeaders = new Headers(reqHeaders);
+			refreshHeaders.set("DPoP", dpopProof);
+			return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: refreshHeaders,
+			});
+		}
+
+		const [firstProof, secondProof] = await Promise.all([
+			createDpopProof(dpopKey, {
+				method: "POST",
+				url: tokenEndpoint,
+				jti: "concurrent-dpop-refresh-proof-1",
+			}),
+			createDpopProof(dpopKey, {
+				method: "POST",
+				url: tokenEndpoint,
+				jti: "concurrent-dpop-refresh-proof-2",
+			}),
+		]);
+		const [first, second] = await Promise.all([
+			refresh(firstProof),
+			refresh(secondProof),
+		]);
+
+		expect(first.error).toBeNull();
+		expect(second.error).toBeNull();
+		expect(first.data?.token_type).toBe("DPoP");
+		expect(second.data).toMatchObject({
+			access_token: first.data?.access_token,
+			expires_at: first.data?.expires_at,
+			token_type: "DPoP",
+			refresh_token: first.data?.refresh_token,
+			scope: first.data?.scope,
+			id_token: first.data?.id_token,
+		});
+	});
+
+	/**
+	 * The CAS loser already verified its DPoP proof during issuance. Recovery
+	 * must reuse that binding; re-checking iat can exceed proofMaxAgeSeconds
+	 * while the winner is still storing the replay.
+	 *
+	 * Isolated from the suite default so other DPoP tests keep the 300s
+	 * proof window. A 1s limit on the shared instance would expire proofs
+	 * minted before slower authorization flows.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	describe("concurrent DPoP refresh after proof max age", async () => {
+		const {
+			auth: agedAuth,
+			client: agedClient,
+			signInWithTestUser: agedSignIn,
+		} = await getTestInstance(
+			{
+				baseURL: `${authServerBaseUrl}/api/auth/`,
+				advanced: { skipTrailingSlashes: true },
+				plugins: [
+					jwt({ jwt: { issuer: authServerBaseUrl } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						refreshTokenReuseInterval: 30,
+						dpop: {
+							proofMaxAgeSeconds: 1,
+						},
+						resources: [
+							jwtResource,
+							{
+								identifier: dpopRequiredResource,
+								dpopBoundAccessTokensRequired: true,
+							},
+						],
+						enforcePerClientResources: false,
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [oauthProviderClient()] } },
+		);
+		const { headers: agedHeaders } = await agedSignIn();
+		const agedOauthClient = await agedAuth.api.adminCreateOAuthClient({
+			headers: agedHeaders,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["authorization_code", "refresh_token"],
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+
+		it("recovers a concurrent DPoP refresh after the proof max age elapses", async () => {
+			const dpopKey = await createDpopKey();
+			const codeVerifier = generateRandomString(32);
+			const authUrl = await createAuthorizationURL({
+				id: providerId,
+				options: {
+					clientId: agedOauthClient!.client_id,
+					clientSecret: agedOauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+				redirectURI: "",
+				authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+				state: "123",
+				scopes: ["openid", "offline_access"],
+				codeVerifier,
+				additionalParams: { dpop_jkt: dpopKey.jkt },
+			});
+			authUrl.searchParams.set("resource", jwtResource);
+			let callbackRedirectUrl = "";
+			await agedClient.$fetch(authUrl.toString(), {
+				headers: agedHeaders,
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+			const issueProof = await createDpopProof(dpopKey, {
+				method: "POST",
+				url: tokenEndpoint,
+				jti: "stale-dpop-issue-proof",
+			});
+			const { body: issueBody, headers: issueHeaders } =
+				await authorizationCodeRequest({
+					code,
+					codeVerifier,
+					redirectURI: redirectUri,
+					resource: jwtResource,
+					options: {
+						clientId: agedOauthClient!.client_id,
+						clientSecret: agedOauthClient!.client_secret!,
+						redirectURI: redirectUri,
+					},
+				});
+			const issueTokenHeaders = new Headers(issueHeaders);
+			issueTokenHeaders.set("DPoP", issueProof);
+			const tokens = await agedClient.$fetch<OAuthTokenResponse>(
+				"/oauth2/token",
+				{
+					method: "POST",
+					body: issueBody,
+					headers: issueTokenHeaders,
+				},
+			);
+			expect(tokens.data?.refresh_token).toBeDefined();
+
+			async function refresh(dpopProof: string) {
+				const { body, headers: reqHeaders } = await refreshAccessTokenRequest({
+					refreshToken: tokens.data!.refresh_token!,
+					options: {
+						clientId: agedOauthClient!.client_id,
+						clientSecret: agedOauthClient!.client_secret!,
+						redirectURI: redirectUri,
+					},
+				});
+				const refreshHeaders = new Headers(reqHeaders);
+				refreshHeaders.set("DPoP", dpopProof);
+				return agedClient.$fetch<OAuthTokenResponse>("/oauth2/token", {
+					method: "POST",
+					body,
+					headers: refreshHeaders,
+				});
+			}
+
+			const context = await agedAuth.$context;
+			const incrementOne = context.adapter.incrementOne.bind(context.adapter);
+			const bothCas = Promise.withResolvers<void>();
+			const releaseCas = Promise.withResolvers<void>();
+			let casCalls = 0;
+			const spy = vi.spyOn(context.adapter, "incrementOne");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === "oauthRefreshToken") {
+					casCalls += 1;
+					if (casCalls === 2) {
+						bothCas.resolve();
+					}
+					await releaseCas.promise;
+				}
+				return incrementOne(...args);
+			});
+
+			try {
+				const [firstProof, secondProof] = await Promise.all([
+					createDpopProof(dpopKey, {
+						method: "POST",
+						url: tokenEndpoint,
+						jti: "stale-dpop-refresh-proof-1",
+					}),
+					createDpopProof(dpopKey, {
+						method: "POST",
+						url: tokenEndpoint,
+						jti: "stale-dpop-refresh-proof-2",
+					}),
+				]);
+				const rotating = refresh(firstProof);
+				const overlapping = refresh(secondProof);
+				await bothCas.promise;
+				await new Promise<void>((resolve) => {
+					setTimeout(resolve, 2_100);
+				});
+				releaseCas.resolve();
+				const [first, second] = await Promise.all([rotating, overlapping]);
+
+				expect(first.error).toBeNull();
+				expect(second.error).toBeNull();
+				expect(second.data).toMatchObject({
+					access_token: first.data?.access_token,
+					token_type: "DPoP",
+					refresh_token: first.data?.refresh_token,
+				});
+			} finally {
+				spy.mockRestore();
+				releaseCas.resolve();
+			}
+		});
+	});
+
 	it("rejects a replayed DPoP proof at the token endpoint", async () => {
 		const dpopKey = await createDpopKey();
 		// One proof (a single jti) reused across two authorization codes. The
@@ -6799,48 +8208,174 @@ describe("oauth token - in-flight issuance without foreign keys", async () => {
 		}
 	});
 
-	it("revokes every access token in a family larger than the findMany limit", async () => {
-		const { code, codeVerifier } = await authorize();
-		const issued = await redeem(code, codeVerifier);
-		const parentToken = issued.data!.refresh_token!;
-		const context = await auth.$context;
-		const [family] = database.oauthRefreshToken as {
-			clientId: string;
-			userId: string;
-		}[];
-		for (let i = 0; i < 101; i++) {
-			const sibling = await context.adapter.create<{ id: string }>({
-				model: "oauthRefreshToken",
-				data: {
-					token: `sibling-refresh-${i}`,
-					clientId: family!.clientId,
-					userId: family!.userId,
-					scopes: ["openid", "offline_access"],
-					createdAt: new Date(),
-					expiresAt: new Date(Date.now() + 60_000),
-				},
-			});
-			await context.adapter.create({
-				model: "oauthAccessToken",
-				data: {
-					token: `sibling-access-${i}`,
-					clientId: family!.clientId,
-					userId: family!.userId,
-					refreshId: sibling.id,
-					scopes: ["openid"],
-					createdAt: new Date(),
-					expiresAt: new Date(Date.now() + 60_000),
-				},
-			});
+	it.each([
+		{ title: "with a grant ID", legacy: false },
+		{ title: "without a grant ID", legacy: true },
+	])(
+		"revokes every access token in a family larger than the findMany limit $title",
+		async ({ legacy }) => {
+			const { code, codeVerifier } = await authorize();
+			const issued = await redeem(code, codeVerifier);
+			const parentToken = issued.data!.refresh_token!;
+			const context = await auth.$context;
+			const [family] = database.oauthRefreshToken as {
+				clientId: string;
+				userId: string;
+				grantId: string;
+			}[];
+			for (let i = 0; i < 101; i++) {
+				const sibling = await context.adapter.create<{ id: string }>({
+					model: "oauthRefreshToken",
+					data: {
+						token: `sibling-refresh-${i}`,
+						clientId: family!.clientId,
+						userId: family!.userId,
+						grantId: family!.grantId,
+						scopes: ["openid", "offline_access"],
+						createdAt: new Date(),
+						expiresAt: new Date(Date.now() + 60_000),
+					},
+				});
+				await context.adapter.create({
+					model: "oauthAccessToken",
+					data: {
+						token: `sibling-access-${i}`,
+						clientId: family!.clientId,
+						userId: family!.userId,
+						grantId: family!.grantId,
+						refreshId: sibling.id,
+						scopes: ["openid"],
+						createdAt: new Date(),
+						expiresAt: new Date(Date.now() + 60_000),
+					},
+				});
+			}
+
+			const rotated = await refresh(parentToken);
+			expect(rotated.error).toBeNull();
+			if (legacy) {
+				for (const model of ["oauthRefreshToken", "oauthAccessToken"]) {
+					await context.adapter.updateMany({
+						model,
+						where: [{ field: "clientId", value: family!.clientId }],
+						update: { grantId: null },
+					});
+				}
+			}
+			const reused = await refresh(parentToken);
+
+			expect(reused.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthRefreshToken).toHaveLength(0);
+			expect(database.oauthAccessToken).toHaveLength(0);
+		},
+	);
+
+	/**
+	 * A refresh gives the rotated legacy token the grant ID, but not the access
+	 * tokens issued before it. Without foreign keys, deleting the refresh rows
+	 * does not remove them.
+	 */
+	describe("an access token issued before grant IDs", () => {
+		async function dropGrantIds() {
+			const context = await auth.$context;
+			for (const model of ["oauthRefreshToken", "oauthAccessToken"]) {
+				await context.adapter.updateMany({
+					model,
+					where: [{ field: "clientId", value: oauthClient.client_id }],
+					update: { grantId: null },
+				});
+			}
+			return context;
 		}
 
-		const rotated = await refresh(parentToken);
-		expect(rotated.error).toBeNull();
-		const reused = await refresh(parentToken);
+		it("is deleted when a replay revokes the grant its refresh token joined", async () => {
+			const { code, codeVerifier } = await authorize();
+			const issued = await redeem(code, codeVerifier);
+			const legacyToken = issued.data!.refresh_token!;
+			await dropGrantIds();
+			expect((await refresh(legacyToken)).error).toBeNull();
 
-		expect(reused.error).toMatchObject({ error: "invalid_grant" });
-		expect(database.oauthRefreshToken).toHaveLength(0);
-		expect(database.oauthAccessToken).toHaveLength(0);
+			const replay = await refresh(legacyToken);
+
+			expect(replay.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthRefreshToken).toHaveLength(0);
+			expect(database.oauthAccessToken).toHaveLength(0);
+		});
+
+		it("is deleted when its refresh row is past the findMany limit", async () => {
+			const { code, codeVerifier } = await authorize();
+			const issued = await redeem(code, codeVerifier);
+			const legacyToken = issued.data!.refresh_token!;
+			const context = await dropGrantIds();
+			expect((await refresh(legacyToken)).error).toBeNull();
+			const [family] = database.oauthRefreshToken as {
+				id: string;
+				clientId: string;
+				userId: string;
+				grantId: string;
+			}[];
+			for (let i = 0; i < 101; i++) {
+				// Zero-led IDs sort before the legacy row's ID, which pushes that row
+				// onto the second page of the teardown's ID-ordered read.
+				const sibling = await context.adapter.create<{ id: string }>({
+					model: "oauthRefreshToken",
+					forceAllowId: true,
+					data: {
+						id: `${"0".repeat(24)}${String(i).padStart(3, "0")}`,
+						token: `sibling-refresh-${i}`,
+						clientId: family!.clientId,
+						userId: family!.userId,
+						grantId: family!.grantId,
+						scopes: ["openid", "offline_access"],
+						createdAt: new Date(),
+						expiresAt: new Date(Date.now() + 60_000),
+					},
+				});
+				await context.adapter.create({
+					model: "oauthAccessToken",
+					data: {
+						token: `sibling-access-${i}`,
+						clientId: family!.clientId,
+						userId: family!.userId,
+						refreshId: sibling.id,
+						scopes: ["openid"],
+						createdAt: new Date(),
+						expiresAt: new Date(Date.now() + 60_000),
+					},
+				});
+			}
+			const ordered = await context.adapter.findMany<{ id: string }>({
+				model: "oauthRefreshToken",
+				sortBy: { field: "id", direction: "asc" },
+				limit: 1000,
+			});
+			expect(
+				ordered.findIndex((row) => row.id === family!.id),
+			).toBeGreaterThanOrEqual(100);
+
+			const replay = await refresh(legacyToken);
+
+			expect(replay.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthRefreshToken).toHaveLength(0);
+			expect(database.oauthAccessToken).toHaveLength(0);
+		});
+
+		it("leaves the access tokens of the user's other grant", async () => {
+			const first = await authorize();
+			const legacyToken = (await redeem(first.code, first.codeVerifier)).data!
+				.refresh_token!;
+			await dropGrantIds();
+			expect((await refresh(legacyToken)).error).toBeNull();
+			const second = await authorize();
+			const other = await redeem(second.code, second.codeVerifier);
+
+			const replay = await refresh(legacyToken);
+
+			expect(replay.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthRefreshToken).toHaveLength(1);
+			expect(database.oauthAccessToken).toHaveLength(1);
+			expect((await refresh(other.data!.refresh_token!)).error).toBeNull();
+		});
 	});
 
 	it("removes an access token stored between the revocation's deletes", async () => {

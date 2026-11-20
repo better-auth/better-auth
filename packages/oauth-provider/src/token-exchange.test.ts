@@ -7,6 +7,7 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth/types";
 import { decodeJwt, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it, vi } from "vitest";
 import { extendOAuthProvider } from "./extensions";
+import { getLocalIntrospection } from "./internal";
 import { oauthProvider } from "./oauth";
 import { resetSeedStateForTests, seedResourcesOnce } from "./resources";
 import { createDpopKey, createDpopProof } from "./test-utils/dpop";
@@ -3001,5 +3002,70 @@ describe("oauthTokenExchange delegation with pairwise subjects", () => {
 		expect((await delegateAsUser()).error).toBeNull();
 		state.mayAct = { sub: actorUser.id };
 		expect((await delegateAsUser()).error).toBeNull();
+	});
+
+	it("returns the act and may_act subjects a JWT carries to subject: token", async () => {
+		const state: { mayAct?: unknown } = {};
+		const {
+			auth,
+			service,
+			actorUser,
+			actorToken,
+			actorSubFor,
+			userTokenForMcp,
+			exchangeAs,
+			actorParams,
+		} = await bootUserActor({
+			providerOptions: {
+				accessTokenSubject: "pairwise",
+				customAccessTokenClaims: () =>
+					state.mayAct === undefined ? {} : { may_act: state.mayAct },
+			},
+		});
+		const actorSub = await actorSubFor(service);
+		expect(actorSub).not.toBe(actorUser.id);
+		state.mayAct = { sub: actorUser.id };
+		const subject = await userTokenForMcp({
+			requester: service,
+			scope: "openid read",
+		});
+		const { data, error } = await exchangeAs(
+			service,
+			subject.access_token,
+			actorParams(actorToken.access_token),
+		);
+		expect(error).toBeNull();
+		const carried = decodeJwt(data!.access_token);
+		expect(carried.act).toEqual({ sub: actorSub, sub_profile: "user" });
+		const introspectLocally = async (
+			token: string,
+			subjectOption: "user" | "token",
+		) =>
+			getLocalIntrospection(
+				(await auth.$context) as unknown as AuthContext,
+				undefined,
+				{
+					subject: subjectOption,
+				},
+			)!(token);
+
+		const asToken = await introspectLocally(data!.access_token, "token");
+		expect(asToken).toMatchObject({
+			active: true,
+			sub: carried.sub,
+			act: carried.act,
+		});
+		const asUser = await introspectLocally(data!.access_token, "user");
+		expect(asUser.sub).not.toBe(carried.sub);
+		expect(asUser.act).toEqual({ sub: actorUser.id, sub_profile: "user" });
+
+		const subjectAsToken = await introspectLocally(
+			subject.access_token,
+			"token",
+		);
+		expect(subjectAsToken.may_act).toEqual({ sub: actorSub });
+		expect(subjectAsToken.act).toBeUndefined();
+		const subjectAsUser = await introspectLocally(subject.access_token, "user");
+		expect(subjectAsUser.may_act).toEqual({ sub: actorUser.id });
 	});
 });

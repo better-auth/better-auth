@@ -484,6 +484,29 @@ describe("oauth-provider - onTokenRevoked without revocable JWT access tokens", 
 	});
 });
 
+it("does not report a client retry that returns the cached rotation response", async () => {
+	const server = await setup({ refreshTokenReuseInterval: 30 });
+	const tokens = await authorize(server);
+	const first = await refresh(server, tokens.refresh_token!);
+	const retry = await refresh(server, tokens.refresh_token!);
+	expect(first.data?.refresh_token).toEqual(expect.any(String));
+	expect(retry.data).toEqual(first.data);
+	expect(takeEvents(server)).toEqual([]);
+});
+
+it("reports the configured grant ceiling when access-token lifetimes vary", async () => {
+	const server = await setup({
+		accessTokenExpiresIn: () => 30,
+		accessTokenMaxExpiresIn: 600,
+	});
+	const tokens = await authorize(server);
+	const start = Date.now();
+	await revoke(server, tokens.refresh_token!);
+	const [event] = takeEvents(server);
+	expect(event?.expiresAt.getTime()).toBeGreaterThanOrEqual(start + 600_000);
+	expect(event?.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 601_000);
+});
+
 /**
  * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#rfc.section.2.7
  */
@@ -611,9 +634,10 @@ describe("oauth-provider - onTokenRevoked for causes it does not report", () => 
 		expect(takeEvents(server)).toEqual([]);
 	});
 
-	it("does not report a deleted consent", async () => {
+	it("does not report tokens revoked by a deleted consent", async () => {
 		const server = await setup();
-		await authorize(server);
+		const tokens = await authorize(server);
+		expect(await isActive(server, tokens.access_token)).toBe(true);
 		const ctx = await server.auth.$context;
 		const consent = await ctx.adapter.create<{ id: string }>({
 			model: "oauthConsent",
@@ -631,10 +655,11 @@ describe("oauth-provider - onTokenRevoked for causes it does not report", () => 
 			body: { id: consent.id },
 		});
 
+		expect(await isActive(server, tokens.access_token)).toBe(false);
 		expect(takeEvents(server)).toEqual([]);
 	});
 
-	it("reports only the replayed refresh token's grant, though the user's other grants lose their refresh tokens", async () => {
+	it("reports only the replayed refresh token's grant and leaves the user's other grant usable", async () => {
 		const server = await setup();
 		const replayed = await authorize(server);
 		const other = await authorize(server);
@@ -656,9 +681,8 @@ describe("oauth-provider - onTokenRevoked for causes it does not report", () => 
 			},
 		]);
 		expect(await isActive(server, other.access_token)).toBe(true);
-		expect((await refresh(server, other.refresh_token!)).error).toMatchObject({
-			error: "invalid_grant",
-		});
+		expect((await refresh(server, other.refresh_token!)).error).toBeNull();
+		expect(takeEvents(server)).toEqual([]);
 	});
 
 	it("still reports a reused authorization code when deleting its tokens fails", async () => {

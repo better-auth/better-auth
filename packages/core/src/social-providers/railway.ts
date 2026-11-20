@@ -65,7 +65,7 @@ export const railway = (options: RailwayOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 				authentication: "basic",
 			});
 		},
@@ -79,7 +79,7 @@ export const railway = (options: RailwayOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 						authentication: "basic",
 					});
 				},
@@ -88,7 +88,7 @@ export const railway = (options: RailwayOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<RailwayProfile>(
-				userinfoEndpoint,
+				options.userInfoEndpoint ?? userinfoEndpoint,
 				{ headers: { authorization: `Bearer ${token.accessToken}` } },
 			);
 			if (error || !profile) {

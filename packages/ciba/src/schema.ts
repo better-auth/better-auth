@@ -1,4 +1,5 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import type { OAuthActorClaim } from "@better-auth/oauth-provider";
 
 /**
  * A backchannel authentication request.
@@ -66,6 +67,14 @@ export const schema = {
 				type: "string[]",
 				required: false,
 			},
+			/**
+			 * RFC 8693 `act` claim `resolveActor` returned for the request, issued in
+			 * the access token so it names the user as `sub` and the actor as `act`.
+			 */
+			actor: {
+				type: "json",
+				required: false,
+			},
 			/** One of `pending`, `approved`, `denied`. */
 			status: {
 				type: "string",
@@ -98,6 +107,15 @@ export const schema = {
 			/** Consent reference the approval recorded, such as an organization. */
 			referenceId: {
 				type: "string",
+				required: false,
+			},
+			/**
+			 * Set when the user approved on the consent page, which stored a
+			 * consent. Redeeming the request then needs that consent to still cover
+			 * it. `completeCibaRequest` stores no consent and leaves this unset.
+			 */
+			approvedViaConsent: {
+				type: "boolean",
 				required: false,
 			},
 			/**
@@ -147,11 +165,13 @@ export interface CibaRequest {
 	/** A JSON array of {@link OAuthAuthorizationDetail}. */
 	authorizationDetails?: string | null;
 	resources?: string[] | null;
+	actor?: OAuthActorClaim | null;
 	status: "pending" | "approved" | "denied";
 	clientNotificationEndpoint?: string | null;
 	encryptedClientNotificationToken?: string | null;
 	encryptedAuthReqId?: string | null;
 	referenceId?: string | null;
+	approvedViaConsent?: boolean | null;
 	authTime?: Date | null;
 	acr?: string | null;
 	amr?: string[] | null;

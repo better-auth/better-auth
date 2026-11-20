@@ -1,7 +1,14 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
+import { revokeConsentTokens } from "../token";
 import type { OAuthConsent, OAuthOptions, Scope } from "../types";
-import { getClient } from "../utils";
+import {
+	deleteConsent,
+	findConsent,
+	getClient,
+	mergeConsentsByReference,
+	updateConsent,
+} from "../utils";
 
 async function getConsent(
 	ctx: GenericEndpointContext & { query: { id: string } },
@@ -44,7 +51,14 @@ export async function getConsentEndpoint(
 	if (consent.userId !== session.user.id) {
 		throw new APIError("UNAUTHORIZED");
 	}
-	return consent;
+	return (
+		(await findConsent(
+			ctx,
+			consent.clientId,
+			consent.userId,
+			consent.referenceId || undefined,
+		)) ?? consent
+	);
 }
 
 export async function getConsentsEndpoint(
@@ -54,7 +68,7 @@ export async function getConsentsEndpoint(
 	const session = await getSessionFromCtx(ctx);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
-	return await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
+	const rows = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
 		model: "oauthConsent",
 		where: [
 			{
@@ -63,6 +77,7 @@ export async function getConsentsEndpoint(
 			},
 		],
 	});
+	return mergeConsentsByReference(rows);
 }
 
 export async function deleteConsentEndpoint(
@@ -89,15 +104,15 @@ export async function deleteConsentEndpoint(
 	}
 	if (consent.userId !== session.user.id) throw new APIError("UNAUTHORIZED");
 
-	await ctx.context.adapter.delete({
-		model: "oauthConsent",
-		where: [
-			{
-				field: "id",
-				value: id,
-			},
-		],
+	// Revoke first: a failed revocation leaves the consent in place, so the
+	// user can retry instead of keeping tokens with no consent to delete.
+	await revokeConsentTokens(ctx, opts, {
+		clientId: consent.clientId,
+		userId: consent.userId,
+		referenceId: consent.referenceId,
 	});
+	// Another row stored for the same reference would keep the consent.
+	await deleteConsent(ctx, consent);
 }
 
 export async function updateConsentEndpoint(
@@ -145,18 +160,6 @@ export async function updateConsentEndpoint(
 		});
 	}
 
-	const iat = Math.floor(Date.now() / 1000);
-	return await ctx.context.adapter.update<OAuthConsent<Scope[]>>({
-		model: "oauthConsent",
-		where: [
-			{
-				field: "id",
-				value: id,
-			},
-		],
-		update: {
-			...updates,
-			updatedAt: new Date(iat * 1000),
-		},
-	});
+	// Narrowing leaves issued tokens valid; deleting the consent revokes them.
+	return await updateConsent(ctx, consent, () => (scopes ? { scopes } : {}));
 }

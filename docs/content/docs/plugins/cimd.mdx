@@ -49,7 +49,7 @@ MCP 2026-07-28 normatively references CIMD draft-00. Use `metadataProfile: "mcp-
   </Step>
 </Steps>
 
-`fetchClientMetadataResource` is required. Node.js deployments can use the `@better-auth/cimd/node` implementation shown above. It resolves the original hostname once, rejects the request if any DNS result is not public-routable, connects only to the validated addresses on an isolated connection and tries the next one when an address is unreachable, preserves the original Host and TLS certificate identity, and never follows redirects. A metadata URL whose host is a public IP literal, such as `https://[2606:2800:220:1:248:1893:25c8:1946]/client.json`, skips DNS and connects to that address directly. The certificate must then name the IP address, and a non-public literal is rejected. The transport also stops waiting for DNS when the abort signal fires. The system resolver cannot cancel a lookup it has started, so the lookup keeps running until the resolver answers or times out. To bound that work, at most 16 lookups can be outstanding in the process, abandoned ones included. While 16 are outstanding, a fetch to any hostname fails at once. The plugin answers that refusal like a limit of the [metadata fetch governor](#persistence-and-refresh), with HTTP 429 `temporarily_unavailable`, and starts no `minimumFetchInterval` backoff for the client. The refused fetch still counts against the rolling fetch budgets. This transport intentionally supports only `GET` and `HEAD`, which are the methods CIMD uses to retrieve metadata resources.
+Pass `fetchClientMetadataResource` to the plugin or to the shared resolver you create with `createCimdMetadataResolver`. Node.js deployments can use the `@better-auth/cimd/node` implementation shown above. It resolves the original hostname once, rejects the request if any DNS result is not public-routable, connects only to the validated addresses on an isolated connection and tries the next one when an address is unreachable, preserves the original Host and TLS certificate identity, and never follows redirects. A metadata URL whose host is a public IP literal, such as `https://[2606:2800:220:1:248:1893:25c8:1946]/client.json`, skips DNS and connects to that address directly. The certificate must then name the IP address, and a non-public literal is rejected. The transport also stops waiting for DNS when the abort signal fires. The system resolver cannot cancel a lookup it has started, so the lookup keeps running until the resolver answers or times out. To bound that work, at most 16 lookups can be outstanding in the process, abandoned ones included. While 16 are outstanding, a fetch to any hostname fails at once. The plugin answers that refusal like a limit of the [metadata fetch governor](#persistence-and-refresh), with HTTP 429 `temporarily_unavailable`, and starts no `minimumFetchInterval` backoff for the client. The refused fetch still counts against the rolling fetch budgets. This transport intentionally supports only `GET` and `HEAD`, which are the methods CIMD uses to retrieve metadata resources.
 
 Bun, Deno, Workers, and other runtimes must provide the equivalent secure transport at their network boundary. The same transport is used for the metadata document and discovery-owned resources such as `jwks_uri`.
 
@@ -116,6 +116,10 @@ cimd({
 ```
 
 export const cimdOptionsType = {
+	metadataResolver: {
+		type: "CimdMetadataResolver",
+		description: "Share the cache, document fetch policy, and transport from createCimdMetadataResolver across plugin instances.",
+	},
 	fetchClientMetadataResource: {
 		type: "(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>",
 		description:
@@ -160,7 +164,7 @@ export const cimdOptionsType = {
 		type: "(clientIdUrl, context) => boolean | Promise<boolean>",
 		default: "always allow",
 		description:
-			"Optional application policy evaluated before the required transport runs.",
+			"Optional application policy evaluated before the required transport runs and before any fetch budget is consumed. It runs for each request that needs the document fetched (including requests that join an in-flight fetch) and is skipped on fresh cache hits; keep it cheap or cache its decisions if it consults an external service.",
 	},
 	isCrossOriginJwksUriAllowed: {
 		type: "({ clientId, jwksUri }, context) => boolean | Promise<boolean>",
@@ -253,7 +257,7 @@ A refresh keeps some stored values when the document omits them. A stored `subje
 
 Valid documents follow shared-cache semantics. `s-maxage` takes precedence over `max-age` and `Expires`; validators support conditional revalidation. `Cache-Control: no-store`, `private`, and `Vary: *` prevent cache insertion. A `304` is accepted only when the request sent `If-None-Match` or `If-Modified-Since` for an existing validated entry. Modified responses must be exactly `200`.
 
-The metadata fetch governor is independent from HTTP freshness. Fresh-cache hits and concurrent callers joining the same client fetch consume no budget. Every new fetch consumes its concurrency and rolling-window budget when it starts, and excess work is rejected instead of queued. A successful fetch clears its per-client pacing record, so a response that cannot be cached or is immediately stale can be fetched again while origin and global budgets continue to apply. Failed fetches retain the `minimumFetchInterval` backoff. So does a fetched document that a caller fails to save, and the document is also dropped from the cache, so the next request fetches it again. The metadata cache, client pacing records, and origin budget records are each bounded by `maxCacheEntries`. The governor evicts only inactive records; if every record still protects a live interval, rolling window, or fetch, a new client or origin fails closed.
+The metadata fetch governor is independent from HTTP freshness. Fresh-cache hits and concurrent callers joining the same client fetch consume no budget. `client_id` URLs rejected by URL validation or `isMetadataDocumentUrlAllowed` consume no budget. Every new fetch consumes its concurrency and rolling-window budget when it starts, and excess work is rejected instead of queued. A successful fetch clears its per-client pacing record, so a response that cannot be cached or is immediately stale can be fetched again while origin and global budgets continue to apply. Failed fetches retain the `minimumFetchInterval` backoff. An instance with its own resolver also drops a document it fails to save and applies this backoff. A shared resolver keeps the document so each request can save it to its own database. The metadata cache, client pacing records, and origin budget records are each bounded by `maxCacheEntries`. The governor evicts only inactive records; if every record still protects a live interval, rolling window, or fetch, a new client or origin fails closed.
 
 A fetched document that can be cached is cached once it is validated, before it is saved. The caller that started the fetch and every caller that joined it each save it with their own context, and no caller waits for another caller's save. Until one of those saves succeeds, a caller that finds the document in the cache saves it too, so a caller that ends mid-save cannot leave an older stored client in use for the cache lifetime. Saves are not ordered across callers, so when an older save lands after a newer document was saved, the newer document is saved again on its next cache hit. Each of these saves runs `onClientRefreshed` when it updates a stored client. Once one save succeeds, a cache hit for a caller that already has a stored client returns it without writing it.
 
@@ -310,6 +314,42 @@ oauthProvider({
 ```
 
 `ClientDiscovery.id` is persisted as client provenance. A discovery can also provide the focused `fetchClientMetadataResource` seam used for metadata-owned resources.
+
+### Share one metadata cache across requests
+
+Some runtimes build the auth instance for each request, because the database handle belongs to the request. A plugin created inside that function starts every request with an empty metadata cache, no fetch budget history, and no in-flight fetches, so each request fetches the document again.
+
+To keep them across requests, create the metadata resolver once, outside the per-request code, and pass it to each plugin:
+
+```ts title="auth.ts"
+import { cimd, createCimdMetadataResolver } from "@better-auth/cimd";
+
+const metadataResolver = createCimdMetadataResolver({
+  fetchClientMetadataResource,
+  metadataFetchPolicy: { maximumFetchesPerMinute: 60 },
+  isMetadataDocumentUrlAllowed(clientIdUrl) {
+    return new URL(clientIdUrl).hostname.endsWith(".trusted.example");
+  },
+});
+
+export function createAuth(env: Env) {
+  return betterAuth({
+    // Database and the rest of your configuration for this request.
+    plugins: [
+      oauthProvider({
+        // ...
+      }),
+      cimd({ metadataResolver }),
+    ],
+  });
+}
+```
+
+The resolver fetches, validates, and caches documents. It never writes to a database. Requests that need the same document share one fetch, and each request then saves the client with its own context. No request waits for another request's save.
+
+Each request waits up to ten seconds for each fetch it joins. A cache hit compares the validated document with the client in that request's database. A missing or outdated client is saved through that request's adapter.
+
+Use the same metadata trust policy and OAuth provider extensions across instances that share a resolver. Configure the transport, `metadataStaleIfError`, and the other document fetch options on the resolver. Each plugin takes its discovery-owned `jwks_uri` transport and stale-key window from the resolver. Set `isCrossOriginJwksUriAllowed` and the client persistence callbacks on each plugin.
 
 ## Related
 

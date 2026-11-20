@@ -212,7 +212,7 @@ The [resource client](#verify-access-tokens) created with your auth instance tak
 
 ## JWT or opaque tokens
 
-Your provider issues a JWT access token when the request names a `resource` and the JWT plugin is enabled. If either is missing, it issues an opaque token.
+Your provider issues a JWT access token when the request names a `resource` and the JWT plugin is enabled. If either is missing, or the resource uses [opaque access tokens](/docs/plugins/oauth-provider/tokens#access-token-format), it issues an opaque token.
 
 |                         | JWT access token                               | Opaque access token                                                                                              |
 | ----------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -228,7 +228,7 @@ If your API also receives opaque tokens, have it introspect them:
 2. [Link it to the resource](#introspection).
 3. Pass its credentials as `remoteVerify`.
 
-With `remoteVerify` set, the provider introspects tokens and checks any associated session. For JWTs, keep the local signature check and set `typ: "at+jwt"` to require the access-token header. With `force: true`, the resource server skips this check. The introspection response contains claims only, and the provider identifies JWT access tokens by their `azp` claim without checking the original header. Reserve `azp` for OAuth access tokens when you use the [JWT plugin](/docs/plugins/jwt#oauth-provider-mode) to sign other tokens.
+With `remoteVerify` set, the provider introspects tokens and checks any associated session. Set `typ: "at+jwt"` to check the JWT access-token header locally as well. With `force: true`, the resource server skips local signature and header checks. The Better Auth provider still requires both `typ: at+jwt` and `azp` during introspection.
 
 ```ts title="api/posts.ts"
 const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
@@ -298,6 +298,8 @@ It returns the token's claims in [introspection](#introspection) form, including
 | Missing, invalid, or replayed DPoP proof              | 401    | `DPoP` with `invalid_dpop_proof`                       |
 | Missing or expired DPoP nonce                         | 401    | `DPoP` with `use_dpop_nonce` and a `DPoP-Nonce` header |
 | Missing scopes                                        | 403    | `insufficient_scope`, naming every missing scope       |
+
+The table describes the `WWW-Authenticate` challenge. A request with no token also gets a 401 body, `{ error: "invalid_request", error_description: "access token not found" }`, which does not match the challenge. Branch on the status and the challenge, not on the body `error`.
 
 When `audience` is a URL, the `Bearer` and `DPoP` challenges also point to its [protected resource metadata](#protected-resource-metadata). Without `audience`, or when `audience` is not a URL, such as a `urn:`, the challenges leave out `resource_metadata`. `verifyResourceRequest` does not read `resourceMetadataMappings`, so it never throws for a missing mapping. With `scopes`, the challenge for a request without a token names them in `scope`. Every challenge lists `WWW-Authenticate` in `Access-Control-Expose-Headers`.
 

@@ -91,6 +91,9 @@ function createTTLCache<K, V extends { expiresAt?: Date | null }>(): TTLCache<
 	};
 }
 
+/** RFC 9068 §2.1 media type of a JWT access token, set as its `typ` header. */
+export const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
+
 /**
  * Gets the oAuth Provider Plugin
  * @internal
@@ -968,7 +971,7 @@ export function validateClientScopes(
 	}
 }
 
-function throwInvalidClient(
+export function throwInvalidClient(
 	errorDescription: string,
 	authentication?: {
 		method?: TokenEndpointAuthMethod;
@@ -1587,7 +1590,8 @@ export async function getConsentReferenceId(
 
 /**
  * Finds the consent stored for exactly this reference. Without a reference,
- * only consent stored without one (missing, null, or empty) matches.
+ * only consent stored without one (missing, null, or empty) matches. Several
+ * rows for the same reference read as one consent; see `mergeConsentRows`.
  *
  * @internal
  */
@@ -1597,17 +1601,276 @@ export async function findConsent(
 	userId: string,
 	referenceId: string | undefined,
 ): Promise<OAuthConsent<Scope[]> | null> {
-	const findByReference = (value: string | null) =>
-		ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
+	return mergeConsentRows(
+		await findConsentRows(ctx, { clientId, userId, referenceId }),
+	);
+}
+
+type ConsentKey = {
+	clientId: string;
+	userId: string;
+	referenceId?: string | null;
+};
+
+/** The stored `referenceId` values that mean this reference. */
+function consentReferenceValues(referenceId: string | null | undefined) {
+	return referenceId ? [referenceId] : [null, ""];
+}
+
+const CONSENT_PAGE_SIZE = 100;
+
+/**
+ * Finds every consent row of a user and client stored for exactly this
+ * reference, oldest first. Without a reference, only rows stored without one
+ * (missing, null, or empty) match. The schema does not make the user, client,
+ * and reference unique, so two first approvals at the same moment can each
+ * create a row. It reads a page at a time, because `findMany` would cap the
+ * rows at `defaultFindManyLimit`.
+ */
+async function findConsentRows(
+	ctx: GenericEndpointContext,
+	key: ConsentKey,
+): Promise<OAuthConsent<Scope[]>[]> {
+	const rows = new Map<string, OAuthConsent<Scope[]>>();
+	for (const referenceId of consentReferenceValues(key.referenceId)) {
+		for (let offset = 0; ; offset += CONSENT_PAGE_SIZE) {
+			const page = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
+				model: "oauthConsent",
+				where: [
+					{ field: "clientId", value: key.clientId },
+					{ field: "userId", value: key.userId },
+					{ field: "referenceId", value: referenceId },
+				],
+				limit: CONSENT_PAGE_SIZE,
+				offset,
+				sortBy: { field: "id", direction: "asc" },
+			});
+			for (const row of page) rows.set(row.id, row);
+			if (page.length < CONSENT_PAGE_SIZE) break;
+		}
+	}
+	return sortConsentRows([...rows.values()]);
+}
+
+function sortConsentRows(rows: OAuthConsent<Scope[]>[]) {
+	const createdAt = (row: OAuthConsent<Scope[]>) =>
+		normalizeTimestampValue(row.createdAt)?.getTime() ?? 0;
+	return rows.sort(
+		(a, b) => createdAt(a) - createdAt(b) || (a.id < b.id ? -1 : 1),
+	);
+}
+
+/**
+ * Reads the rows of one user, client, and reference as one consent: the oldest
+ * row, holding the scopes, resources, and UserInfo claims of all of them. Each
+ * row records approvals the user gave and did not take back.
+ */
+function mergeConsentRows(
+	rows: readonly OAuthConsent<Scope[]>[],
+): OAuthConsent<Scope[]> | null {
+	const [oldest, ...others] = rows;
+	if (!oldest || !others.length) return oldest ?? null;
+	const union = (values: (readonly string[] | null | undefined)[]) => [
+		...new Set(values.flatMap((value) => value ?? [])),
+	];
+	return {
+		...oldest,
+		scopes: union(rows.map((row) => row.scopes)),
+		resources: union(rows.map((row) => row.resources)),
+		requestedUserInfoClaims: union(
+			rows.map((row) => row.requestedUserInfoClaims),
+		),
+	};
+}
+
+/**
+ * Reads a user's consent rows as consents: the rows of one client and
+ * reference become one, as `findConsent` reads them. The list keeps the order
+ * of each consent's first row.
+ *
+ * @internal
+ */
+export function mergeConsentsByReference(
+	rows: readonly OAuthConsent<Scope[]>[],
+): OAuthConsent<Scope[]>[] {
+	const consents = new Map<string, OAuthConsent<Scope[]>[]>();
+	for (const row of rows) {
+		const key = JSON.stringify([row.clientId, row.referenceId || null]);
+		const group = consents.get(key);
+		if (group) group.push(row);
+		else consents.set(key, [row]);
+	}
+	return [...consents.values()].map(
+		(group) => mergeConsentRows(sortConsentRows(group))!,
+	);
+}
+
+/**
+ * Deletes every row of a user's consent for one client and reference.
+ *
+ * @internal
+ */
+export async function deleteConsent(
+	ctx: GenericEndpointContext,
+	key: ConsentKey,
+) {
+	for (const referenceId of consentReferenceValues(key.referenceId)) {
+		await ctx.context.adapter.deleteMany({
 			model: "oauthConsent",
 			where: [
-				{ field: "clientId", value: clientId },
-				{ field: "userId", value: userId },
-				{ field: "referenceId", value },
+				{ field: "clientId", value: key.clientId },
+				{ field: "userId", value: key.userId },
+				{ field: "referenceId", value: referenceId },
 			],
 		});
-	if (referenceId) return findByReference(referenceId);
-	return (await findByReference(null)) ?? findByReference("");
+	}
+}
+
+const CONSENT_WRITE_ATTEMPTS = 5;
+
+function consentContention() {
+	return new APIError("SERVICE_UNAVAILABLE", {
+		error: "temporarily_unavailable",
+		error_description: "consent changed while saving, try again",
+	});
+}
+
+/**
+ * Changes the consent of a user, client, and reference, and returns the row
+ * written, or `null` when none is stored.
+ *
+ * The oldest row holds the consent. Every other row of the reference is
+ * consumed first, and what it held is written into the oldest together with
+ * `change`. Only the write that consumed a row carries its values, so a row
+ * that another write read before it was consumed cannot bring back a value
+ * that `change` removed. A read that pages can miss a row when another request
+ * removes one between pages, so the rows are read again until no other row is
+ * left: a row left in place would bring back what `change` removed.
+ *
+ * The write is guarded by the `updatedAt` it read, and moves it to a later
+ * whole second. If another write lands first, the guard misses and `change`
+ * runs again on the newer consent, so concurrent writes do not lose each
+ * other's changes. Whole seconds stay exact on stores that drop milliseconds.
+ * Every write carries the guard. After `CONSENT_WRITE_ATTEMPTS` misses, the
+ * change fails, and so does a read that still finds other rows after that
+ * many passes.
+ *
+ * The write that lands first did not see the rows this one consumed, and may
+ * have removed what they held. A missed write therefore drops those values
+ * instead of carrying them into the newer consent: the user is asked again
+ * for them rather than granted what they took back.
+ *
+ * @internal
+ */
+export async function updateConsent(
+	ctx: GenericEndpointContext,
+	key: ConsentKey,
+	change: (
+		consent: OAuthConsent<Scope[]>,
+	) => Partial<
+		Pick<
+			OAuthConsent<Scope[]>,
+			"scopes" | "resources" | "requestedUserInfoClaims"
+		>
+	>,
+): Promise<OAuthConsent<Scope[]> | null> {
+	for (let attempt = 1; ; attempt++) {
+		const [stored, ...duplicates] = await findConsentRows(ctx, key);
+		if (!stored) return null;
+		const consumed: OAuthConsent<Scope[]>[] = [];
+		for (let pass = 1, pending = duplicates; pending.length; pass++) {
+			if (pass > CONSENT_WRITE_ATTEMPTS) throw consentContention();
+			for (const duplicate of pending) {
+				const row = await ctx.context.adapter.consumeOne<OAuthConsent<Scope[]>>(
+					{
+						model: "oauthConsent",
+						where: [{ field: "id", value: duplicate.id }],
+					},
+				);
+				if (row) consumed.push(row);
+			}
+			const rows = await findConsentRows(ctx, key);
+			// Without the stored row, the write misses its guard and starts over.
+			pending = rows.some(({ id }) => id === stored.id)
+				? rows.filter(({ id }) => id !== stored.id)
+				: [];
+		}
+		const consent = mergeConsentRows([stored, ...consumed])!;
+		const changed = { ...consent, ...change(consent) };
+		const updatedAt = normalizeTimestampValue(stored.updatedAt)?.getTime();
+		const now = Math.floor(Date.now() / 1000);
+		const after =
+			updatedAt === undefined ? now : Math.floor(updatedAt / 1000) + 1;
+		const written = await ctx.context.adapter.incrementOne<
+			OAuthConsent<Scope[]>
+		>({
+			model: "oauthConsent",
+			where: [
+				{ field: "id", value: stored.id },
+				{ field: "updatedAt", value: stored.updatedAt ?? null },
+			],
+			increment: {},
+			set: {
+				scopes: changed.scopes,
+				...(changed.requestedUserInfoClaims
+					? { requestedUserInfoClaims: changed.requestedUserInfoClaims }
+					: {}),
+				...(changed.resources?.length ? { resources: changed.resources } : {}),
+				updatedAt: new Date(Math.max(now, after) * 1000),
+			},
+		});
+		if (written) return written;
+		if (attempt >= CONSENT_WRITE_ATTEMPTS) throw consentContention();
+	}
+}
+
+/**
+ * An authorization code, device code, or other request the user approved on
+ * the consent page follows its consent. Redeeming it needs a stored consent
+ * that still covers what the user approved, so one approved before the user
+ * deleted or narrowed their consent mints nothing. A consent given again for
+ * the same client, consent reference, and access leaves it valid, because the
+ * user approved that access again. A client that skips consent is not checked.
+ *
+ * @internal
+ */
+export async function assertConsentStillCovers(
+	ctx: GenericEndpointContext,
+	client: Pick<SchemaClient<Scope[]>, "clientId" | "skipConsent">,
+	approved: {
+		userId: string;
+		referenceId?: string;
+		scopes: readonly string[];
+		resources: readonly string[];
+		userInfoClaims: readonly string[];
+	},
+) {
+	if (client.skipConsent) return;
+	const consent = await findConsent(
+		ctx,
+		client.clientId,
+		approved.userId,
+		approved.referenceId,
+	);
+	if (!consent) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "consent revoked",
+			error: "invalid_grant",
+		});
+	}
+	if (
+		!consentCovers(
+			consent,
+			approved.scopes,
+			approved.resources,
+			approved.userInfoClaims,
+		)
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "consent no longer covers this authorization",
+			error: "invalid_grant",
+		});
+	}
 }
 
 /**

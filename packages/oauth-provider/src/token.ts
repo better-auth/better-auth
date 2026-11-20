@@ -38,16 +38,22 @@ import {
 	getSupportedGrantTypes,
 } from "./extensions";
 import { isUserDelegatedScope } from "./oauthClient/client-credentials";
+import {
+	recordAuthenticatedClient,
+	recordVerifiedDpopProof,
+} from "./request-authentication";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
 import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
 import {
 	authorizationCodeGrantId,
+	DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
 	findRefreshToken,
 	grantRevocationExpiresAt,
 	grantRevocationWindowMs,
 	isGrantRevoked,
 	markGrantRevoked,
+	maxAccessTokenExpiresIn,
 	notifyTokenRevoked,
 } from "./token-lookup";
 import type {
@@ -74,6 +80,7 @@ import {
 } from "./types/zod";
 import {
 	assertConfirmation,
+	assertConsentStillCovers,
 	clientAllowsGrant,
 	decryptStoredClientSecret,
 	destructureCredentials,
@@ -85,6 +92,7 @@ import {
 	isPKCERequired,
 	isPublicClient,
 	isSessionBoundRefreshToken,
+	JWT_ACCESS_TOKEN_TYPE,
 	normalizeTimestampValue,
 	parseClientMetadata,
 	resolveAccessTokenSubject,
@@ -115,8 +123,6 @@ const ID_TOKEN_SCOPE_CLAIM_GUARDS: Record<string, undefined> =
 export function confirmationTokenType(confirmation?: Confirmation): TokenType {
 	return getConfirmationJkt(confirmation) ? "DPoP" : "Bearer";
 }
-
-const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
 
 /**
  * Handles the /oauth2/token endpoint by delegating
@@ -222,16 +228,24 @@ export function getOAuthProviderApi(
 				grantType,
 				authMethod,
 			);
-			return {
+			const authenticated = {
 				clientId,
 				client,
 				method: authMethod,
 				confirmation,
 			};
+			await recordAuthenticatedClient(ctx, authenticated);
+			return authenticated;
 		},
 		issueAuthorizationCode: async (params) => {
 			const { issueAuthorizationCode } = await import("./authorize");
 			return issueAuthorizationCode(ctx, opts, params);
+		},
+		validateAuthorizationRequest: async (params) => {
+			const { validateAuthorizationRequestParams } = await import(
+				"./authorize"
+			);
+			return validateAuthorizationRequestParams(ctx, opts, params);
 		},
 		issueTokens: (params: OAuthTokenIssueParams) => {
 			if (!grantType) {
@@ -263,12 +277,14 @@ export function getOAuthProviderApi(
 		},
 		// One implementation serves every overload: with `required: true` or an
 		// `expectedJkt`, it throws instead of returning `undefined`.
-		verifyDpopProof: ((params?: { required?: boolean; expectedJkt?: string }) =>
-			verifyEndpointDpopProof(
-				ctx,
-				opts,
-				params,
-			)) as OAuthProviderApi["verifyDpopProof"],
+		verifyDpopProof: (async (params?: {
+			required?: boolean;
+			expectedJkt?: string;
+		}) => {
+			const proof = await verifyEndpointDpopProof(ctx, opts, params);
+			if (proof) await recordVerifiedDpopProof(ctx, proof);
+			return proof;
+		}) as OAuthProviderApi["verifyDpopProof"],
 		issueDpopNonce: () => issueEndpointDpopNonce(ctx, opts),
 		challengeDpopNonce: () => challengeEndpointDpopNonce(ctx, opts),
 		hashToken: (token: string, type: StoreTokenType) =>
@@ -299,9 +315,9 @@ async function createJwtAccessToken(
 	client: SchemaClient<Scope[]>,
 	audienceClaim: string | string[],
 	scopes: string[],
-	overrides?: {
-		iat?: number;
-		exp?: number;
+	overrides: {
+		iat: number;
+		exp: number;
 		sid?: string;
 		/** Consent reference from `postLogin.consentReferenceId`. */
 		referenceId?: string;
@@ -329,8 +345,7 @@ async function createJwtAccessToken(
 		grantId?: string;
 	},
 ) {
-	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
-	const exp = overrides?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
+	const { iat, exp } = overrides;
 
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 	// RFC 9068 §2.2 requires `sub` on every JWT access token. For
@@ -557,7 +572,7 @@ async function createOpaqueAccessToken(
 	user: User | undefined,
 	client: SchemaClient<Scope[]>,
 	scopes: string[],
-	payload: JWTPayload,
+	payload: { iat: number; exp: number; sid?: string },
 	resources?: string[],
 	referenceId?: string,
 	authorizationCodeId?: string,
@@ -571,8 +586,7 @@ async function createOpaqueAccessToken(
 	} = {},
 ) {
 	const { confirmation, requestedUserInfoClaims, act, grantId } = issuance;
-	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
-	const exp = payload?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
+	const { iat, exp } = payload;
 	const token = opts.generateOpaqueAccessToken
 		? await opts.generateOpaqueAccessToken()
 		: generateRandomString(32, "A-Z", "a-z");
@@ -639,36 +653,56 @@ function grantRevokedDuringIssuance() {
 }
 
 /**
- * Marks the grant revoked, then runs `deleteTokens`. A failed mark does not
- * stop the delete, and is rethrown after it, so the request fails rather than
- * leave the grant's JWT access tokens active unnoticed.
+ * Marks every grant revoked, then runs `deleteTokens`. A failed mark does not
+ * stop the delete, and the first one is rethrown after it, so the request
+ * fails rather than leave a grant's JWT access tokens active unnoticed.
+ *
+ * With `keepTokensOnFailedMark`, a failed mark skips the delete instead. The
+ * stored tokens are the only record of their grant IDs, so a caller that
+ * retries needs them to mark the grants again.
  */
 async function revokeGrantTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	grant: { grantId?: string | null; clientId: string },
+	grants: readonly { grantId?: string | null; clientId: string }[],
 	deleteTokens: () => Promise<void>,
+	{ keepTokensOnFailedMark = false } = {},
 ) {
-	let markFailure: { error: unknown } | undefined;
-	try {
-		await markGrantRevoked(ctx, opts, grant);
-	} catch (error) {
-		markFailure = { error };
-	}
+	const marks = await Promise.allSettled(
+		grants.map((grant) => markGrantRevoked(ctx, opts, grant)),
+	);
+	const failed = marks.find((mark) => mark.status === "rejected");
+	if (failed && keepTokensOnFailedMark) throw failed.reason;
 	await deleteTokens();
-	if (markFailure) throw markFailure.error;
+	if (failed) throw failed.reason;
 }
 
 /**
- * Tear down the entire refresh-token family for a (client, user) pair, plus
- * any access tokens that reference those refresh rows, per RFC 9700 §4.14.
- * Access tokens are deleted first so the parent rows' foreign-key children
- * do not block the refresh-row delete.
+ * Tears down the grant of a replayed refresh token: its refresh tokens and the
+ * access tokens linked to them, per RFC 9700 §4.14.2. The client's other
+ * grants for the same user stay valid. The grant ID keys the teardown because
+ * every grant has one, including those a device code or a CIBA request
+ * started, which have no authorization code. Access tokens are deleted first
+ * so the parent rows' foreign-key children do not block the refresh-row
+ * delete.
+ *
+ * A refresh gives the rotated token its grant ID but leaves the access tokens
+ * issued before it without one. They are deleted through the grant's refresh
+ * rows, because an adapter without the `refreshId` foreign key would not
+ * remove them with those rows. A token rotated before grant IDs existed, and
+ * before the token that was refreshed after the upgrade, has none either. When
+ * the grant started from an authorization code, those rows are found by the
+ * code and removed the same way.
+ *
+ * A refresh token stored without a grant ID, because it was rotated before
+ * grant IDs existed, names no grant. Its teardown covers every refresh token
+ * of the client and user, and the access tokens linked to them.
  *
  * A rotation of the presented token's grant that is still storing its tokens
- * fails on the grant's revocation mark (see `markGrantRevoked`). A rotation
- * of another grant of the pair, or of a grant stored without a grant ID, can
- * still store a refresh token after the delete.
+ * fails on the grant's revocation mark (see `markGrantRevoked`). A token
+ * stored without a grant ID marks no grant, so on that broader teardown any
+ * in-flight rotation of the client and user can still store a refresh token
+ * after the delete.
  *
  * @internal
  */
@@ -676,26 +710,63 @@ export async function invalidateRefreshFamily(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	clientId: string,
-	refreshToken: Pick<OAuthRefreshToken<Scope[]>, "userId" | "grantId">,
+	refreshToken: Pick<
+		OAuthRefreshToken<Scope[]>,
+		"userId" | "grantId" | "authorizationCodeId"
+	>,
 	reason: "revocation_request" | "reuse_detected",
 ) {
-	const { userId } = refreshToken;
-	// Every access token linked to this family's refresh rows carries the same
-	// client and user, so the delete needs no list of refresh IDs, which
-	// `findMany` would cap at `defaultFindManyLimit`.
+	const { userId, grantId, authorizationCodeId } = refreshToken;
+	const pair = [
+		{ field: "clientId", value: clientId },
+		{ field: "userId", value: userId },
+	];
+	const familyWhere = grantId
+		? [...pair, { field: "grantId", value: grantId }]
+		: pair;
+	// An access token of a grant carries its ID, and one without a grant ID is
+	// linked to a refresh row, so neither delete needs a list of refresh IDs,
+	// which `findMany` would cap at `defaultFindManyLimit`.
 	const deleteLinkedAccessTokens = () =>
 		ctx.context.adapter.deleteMany({
 			model: "oauthAccessToken",
-			where: [
-				{ field: "clientId", value: clientId },
-				{ field: "userId", value: userId },
-				{ field: "refreshId", operator: "ne", value: null },
-			],
+			where: grantId
+				? familyWhere
+				: [...pair, { field: "refreshId", operator: "ne", value: null }],
 		});
+	const refreshWheres: TokenScope[] = [familyWhere];
+	if (grantId && authorizationCodeId) {
+		refreshWheres.push([
+			...pair,
+			{ field: "authorizationCodeId", value: authorizationCodeId },
+			{ field: "grantId", value: null },
+		]);
+	}
+	const deletePreGrantAccessTokens = async () => {
+		for (const where of refreshWheres) {
+			await forEachTokenPage<{ id: string }>(
+				ctx,
+				"oauthRefreshToken",
+				where,
+				["id"],
+				(rows) =>
+					ctx.context.adapter.deleteMany({
+						model: "oauthAccessToken",
+						where: [
+							{
+								field: "refreshId",
+								operator: "in",
+								value: rows.map((row) => row.id),
+							},
+						],
+					}),
+			);
+		}
+	};
 	await revokeGrantTokens(
 		ctx,
 		opts,
-		{ grantId: refreshToken.grantId, clientId },
+		[{ grantId, clientId }],
 		// On MySQL, the refresh-row delete can lose a deadlock to a concurrent
 		// access-token insert of the same pair, which holds a foreign-key lock
 		// on its refresh row. Every delete here is idempotent, so retry them
@@ -703,13 +774,13 @@ export async function invalidateRefreshFamily(
 		() =>
 			retryIdempotent(async () => {
 				await deleteLinkedAccessTokens();
-				await ctx.context.adapter.deleteMany({
-					model: "oauthRefreshToken",
-					where: [
-						{ field: "clientId", value: clientId },
-						{ field: "userId", value: userId },
-					],
-				});
+				if (grantId) await deletePreGrantAccessTokens();
+				for (const where of refreshWheres) {
+					await ctx.context.adapter.deleteMany({
+						model: "oauthRefreshToken",
+						where,
+					});
+				}
 				// Without a foreign key, an in-flight issuance can store an access
 				// token between the two deletes above. See `createOpaqueAccessToken`.
 				await deleteLinkedAccessTokens();
@@ -724,6 +795,152 @@ export async function invalidateRefreshFamily(
 		expiresAt: grantRevocationExpiresAt(opts),
 		ctx,
 	});
+}
+
+const TOKEN_PAGE_SIZE = 100;
+
+type TokenScope = { field: string; value: string | null }[];
+
+/**
+ * Hands every token row a scope matches to `handle`, a page at a time, because
+ * `findMany` would cap the list at `defaultFindManyLimit` and leave the rows
+ * past the cap out.
+ */
+async function forEachTokenPage<Row extends { id: string }>(
+	ctx: GenericEndpointContext,
+	model: "oauthAccessToken" | "oauthRefreshToken",
+	where: TokenScope,
+	select: (keyof Row & string)[],
+	handle: (rows: Row[]) => Promise<unknown> | unknown,
+) {
+	for (let offset = 0; ; offset += TOKEN_PAGE_SIZE) {
+		const rows = await ctx.context.adapter.findMany<Row>({
+			model,
+			where,
+			select,
+			limit: TOKEN_PAGE_SIZE,
+			offset,
+			sortBy: { field: "id", direction: "asc" },
+		});
+		if (rows.length) await handle(rows);
+		if (rows.length < TOKEN_PAGE_SIZE) return;
+	}
+}
+
+/**
+ * The grants, as grant ID to client ID, of the tokens a scope matches. A grant
+ * past the `findMany` cap would stay unmarked, so it reads every page.
+ */
+async function findGrants(
+	ctx: GenericEndpointContext,
+	model: "oauthAccessToken" | "oauthRefreshToken",
+	where: TokenScope,
+	grants: Map<string, string>,
+) {
+	await forEachTokenPage<{
+		id: string;
+		clientId: string;
+		grantId?: string | null;
+	}>(ctx, model, where, ["id", "clientId", "grantId"], (rows) => {
+		for (const row of rows) {
+			if (row.grantId) grants.set(row.grantId, row.clientId);
+		}
+	});
+}
+
+/**
+ * Revokes the access and refresh tokens that any of `scopes` matches. Each
+ * grant of those tokens is marked revoked before they are deleted, so a
+ * rotation that is still storing its tokens fails with the mark, and the JWT
+ * access tokens of the grant are revoked with `revocableJwtAccessTokens`. A
+ * token stored without a grant ID, such as an opaque access token issued
+ * without a refresh token, is deleted by the scope alone. A JWT access token
+ * issued without a refresh token has no stored row to find, so it stays valid
+ * until it expires.
+ *
+ * With `keepTokensOnFailedMark`, a grant that cannot be marked deletes no
+ * token and the call throws, so a retry still finds the grant IDs on the
+ * stored tokens.
+ */
+async function revokeTokensInScopes(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	scopes: TokenScope[],
+	{ keepTokensOnFailedMark = false } = {},
+) {
+	const grants = new Map<string, string>();
+	for (const where of scopes) {
+		for (const model of ["oauthRefreshToken", "oauthAccessToken"] as const) {
+			await findGrants(ctx, model, where, grants);
+		}
+	}
+	await revokeGrantTokens(
+		ctx,
+		opts,
+		[...grants].map(([grantId, clientId]) => ({ grantId, clientId })),
+		// See `invalidateRefreshFamily` for the retry and the second delete of
+		// access tokens.
+		() =>
+			retryIdempotent(async () => {
+				for (const where of scopes) {
+					await ctx.context.adapter.deleteMany({
+						model: "oauthAccessToken",
+						where,
+					});
+					await ctx.context.adapter.deleteMany({
+						model: "oauthRefreshToken",
+						where,
+					});
+					await ctx.context.adapter.deleteMany({
+						model: "oauthAccessToken",
+						where,
+					});
+				}
+			}),
+		{ keepTokensOnFailedMark },
+	);
+}
+
+/**
+ * Revokes the tokens issued under one consent: those stored for its client,
+ * user, and reference. The same user's tokens for the client under another
+ * reference stay valid. When a grant cannot be marked revoked, no token is
+ * deleted, so the caller can retry.
+ *
+ * @internal
+ */
+export async function revokeConsentTokens(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	consent: { clientId: string; userId: string; referenceId?: string | null },
+) {
+	// A consent stored without a reference matches tokens whose reference is
+	// null or empty, as `findConsent` does.
+	const references = consent.referenceId ? [consent.referenceId] : [null, ""];
+	await revokeTokensInScopes(
+		ctx,
+		opts,
+		references.map((referenceId) => [
+			{ field: "clientId", value: consent.clientId },
+			{ field: "userId", value: consent.userId },
+			{ field: "referenceId", value: referenceId },
+		]),
+		{ keepTokensOnFailedMark: true },
+	);
+}
+
+/**
+ * Revokes every access and refresh token a user holds, for every client and
+ * reference, including `offline_access` grants that no session holds.
+ *
+ * @internal
+ */
+export async function revokeUserTokens(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	userId: string,
+) {
+	await revokeTokensInScopes(ctx, opts, [[{ field: "userId", value: userId }]]);
 }
 
 const IDEMPOTENT_RETRY_ATTEMPTS = 3;
@@ -766,7 +983,7 @@ async function revokeTokensIssuedForAuthorizationCode(
 	};
 
 	const grantId = await authorizationCodeGrantId(authorizationCodeId);
-	await revokeGrantTokens(ctx, opts, { grantId, clientId }, async () => {
+	await revokeGrantTokens(ctx, opts, [{ grantId, clientId }], async () => {
 		await deleteIssuedTokens("oauthAccessToken");
 		await deleteIssuedTokens("oauthRefreshToken");
 		// Without a foreign key, an in-flight redemption can store an access
@@ -795,7 +1012,7 @@ function consumedAuthorizationCodeIdentifier(authorizationCodeId: string) {
  */
 function consumedAuthorizationCodeExpiresAt(opts: OAuthOptions<Scope[]>) {
 	const lifetimeSeconds = Math.max(
-		opts.accessTokenExpiresIn ?? 3600,
+		maxAccessTokenExpiresIn(opts),
 		opts.refreshTokenExpiresIn ?? 2592000,
 	);
 	return new Date(Date.now() + lifetimeSeconds * 1000);
@@ -965,9 +1182,10 @@ async function createRefreshToken(
 	// Rotation: atomic compare-and-swap on the parent row. Concurrent
 	// rotations against the same parent both observe `revoked === null` on
 	// the read in `handleRefreshTokenGrant`, but only one wins this update.
-	// The loser fails closed with `invalid_grant`; the parent row is now
-	// revoked, so any subsequent reuse of the original refresh token is handled
-	// by the replay/invalid-grant path in `handleRefreshTokenGrant`.
+	// Without a reuse interval the loser fails closed with `invalid_grant`.
+	// When `refreshTokenReuseInterval` is set, the loser is recovered by the
+	// replay wait in `handleRefreshTokenGrant` once the winner stores the
+	// rotated response.
 	//
 	// FIXME(strict-family-invalidation): RFC 9700 §4.14 prescribes family
 	// invalidation on detected concurrent redemption. The loser does not tear
@@ -1001,26 +1219,40 @@ async function createRefreshToken(
 	});
 
 	if (!won) {
+		if (reuseInterval > 0) {
+			throwRefreshTokenRotationInFlight(confirmation);
+		}
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",
 		});
 	}
 
-	const refreshToken = await ctx.context.adapter.create<
-		OAuthRefreshToken<Scope[]> & { id: string }
-	>({
-		model: "oauthRefreshToken",
-		data: newRow,
-	});
-	if (authorizationCodeId) {
-		await extendConsumedAuthorizationCodeRecord(ctx, opts, authorizationCodeId);
-	}
+	try {
+		const refreshToken = await ctx.context.adapter.create<
+			OAuthRefreshToken<Scope[]> & { id: string }
+		>({
+			model: "oauthRefreshToken",
+			data: newRow,
+		});
+		if (authorizationCodeId) {
+			await extendConsumedAuthorizationCodeRecord(
+				ctx,
+				opts,
+				authorizationCodeId,
+			);
+		}
 
-	return {
-		id: refreshToken.id,
-		token: await encodeRefreshToken(opts, token, sessionId),
-	};
+		return {
+			id: refreshToken.id,
+			token: await encodeRefreshToken(opts, token, sessionId),
+		};
+	} catch (error) {
+		if (reuseInterval > 0) {
+			await markRefreshTokenRotationReplayUnavailable(ctx, originalRefresh);
+		}
+		throw error;
+	}
 }
 
 type CreateUserTokensParams = OAuthTokenIssueParams & {
@@ -1038,6 +1270,7 @@ interface ResourceGrantIssuance {
 	refreshResources?: string[];
 	signingAlgorithm: ResolvedResourcePolicy["signingAlgorithm"];
 	signingKeyId: ResolvedResourcePolicy["signingKeyId"];
+	accessTokenFormat: ResolvedResourcePolicy["accessTokenFormat"];
 	resourceCustomClaims: Record<string, unknown>;
 	dpopBoundAccessTokensRequired: boolean;
 }
@@ -1084,6 +1317,7 @@ async function resolveResourceGrantIssuance(
 			params.resources,
 		signingAlgorithm: resourcePolicy.signingAlgorithm,
 		signingKeyId: resourcePolicy.signingKeyId,
+		accessTokenFormat: resourcePolicy.accessTokenFormat,
 		resourceCustomClaims: resourcePolicy.rawCustomClaims,
 		dpopBoundAccessTokensRequired: resourcePolicy.dpopBoundAccessTokensRequired,
 	};
@@ -1386,6 +1620,8 @@ function isWithinRefreshTokenReuseInterval(
 	);
 }
 
+const REFRESH_TOKEN_ROTATION_REPLAY_UNAVAILABLE = "unavailable";
+
 async function storeRefreshTokenRotationReplay(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -1408,16 +1644,56 @@ async function storeRefreshTokenRotationReplay(
 	});
 }
 
-async function getRefreshTokenRotationReplay(
+async function markRefreshTokenRotationReplayUnavailable(
+	ctx: GenericEndpointContext,
+	refreshToken: OAuthRefreshToken<Scope[]> & { id: string },
+) {
+	try {
+		const latest = await ctx.context.adapter.findOne<
+			OAuthRefreshToken<Scope[]> & { id: string }
+		>({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
+		});
+		if (!latest?.rotatedAt || latest.rotationReplayResponse) {
+			return;
+		}
+		await ctx.context.adapter.update({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
+			update: {
+				rotationReplayResponse: REFRESH_TOKEN_ROTATION_REPLAY_UNAVAILABLE,
+			},
+		});
+	} catch (error) {
+		ctx.context.logger.error(
+			"failed to mark refresh token rotation replay unavailable",
+			error,
+		);
+	}
+}
+
+type RefreshTokenRotationReplayLookup =
+	| { status: "hit"; response: OAuthTokenResponse }
+	| { status: "pending" }
+	| { status: "unavailable" };
+
+async function lookupRefreshTokenRotationReplay(
 	ctx: GenericEndpointContext,
 	refreshToken: OAuthRefreshToken<Scope[]>,
 	request: RefreshTokenRotationReplayRequest,
-) {
+): Promise<RefreshTokenRotationReplayLookup> {
 	if (!isWithinRefreshTokenReuseInterval(refreshToken)) {
-		return undefined;
+		return { status: "unavailable" };
 	}
 	if (!refreshToken.rotationReplayResponse) {
-		return undefined;
+		return { status: "pending" };
+	}
+	if (
+		refreshToken.rotationReplayResponse ===
+		REFRESH_TOKEN_ROTATION_REPLAY_UNAVAILABLE
+	) {
+		return { status: "unavailable" };
 	}
 
 	try {
@@ -1429,13 +1705,155 @@ async function getRefreshTokenRotationReplay(
 			!replay ||
 			!sameRefreshTokenRotationReplayRequest(replay.request, request)
 		) {
-			return undefined;
+			return { status: "unavailable" };
 		}
-		return replay.response;
+		return { status: "hit", response: replay.response };
 	} catch (error) {
 		ctx.context.logger.error("refresh token rotation replay failed", error);
+		return { status: "unavailable" };
+	}
+}
+
+/** The first poll delay of a request waiting on a concurrent rotation. */
+const REFRESH_TOKEN_REPLAY_POLL_INTERVAL_MS = 25;
+/** Polling backs off by doubling the delay, up to this. */
+const REFRESH_TOKEN_REPLAY_MAX_POLL_INTERVAL_MS = 400;
+/**
+ * The longest a request waits for a concurrent rotation, whatever the reuse
+ * interval. `mcp()` sets the interval to 30 seconds, and a request that waits
+ * that long ties up a connection, so a rotation slower than this fails the
+ * duplicate with `invalid_grant`.
+ */
+const REFRESH_TOKEN_REPLAY_MAX_WAIT_MS = 5_000;
+
+const wait = (ms: number) =>
+	new Promise<void>((resolve) => {
+		setTimeout(resolve, ms);
+	});
+
+const refreshTokenRotationInFlightErrors = new WeakSet<object>();
+const refreshTokenRotationInFlightBindings = new WeakMap<
+	object,
+	Confirmation | undefined
+>();
+
+function throwRefreshTokenRotationInFlight(confirmation?: Confirmation): never {
+	const error = new APIError("BAD_REQUEST", {
+		error_description: "invalid refresh token",
+		error: "invalid_grant",
+	});
+	refreshTokenRotationInFlightErrors.add(error);
+	refreshTokenRotationInFlightBindings.set(error, confirmation);
+	throw error;
+}
+
+function isRefreshTokenRotationInFlightError(error: unknown) {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		refreshTokenRotationInFlightErrors.has(error)
+	);
+}
+
+function getRefreshTokenRotationInFlightBinding(error: unknown) {
+	if (typeof error !== "object" || error === null) {
 		return undefined;
 	}
+	return refreshTokenRotationInFlightBindings.get(error);
+}
+
+function refreshTokenReplayWaitDeadline(
+	refreshToken: OAuthRefreshToken<Scope[]>,
+) {
+	return refreshToken.rotationReplayExpiresAt?.getTime() ?? Date.now();
+}
+
+/**
+ * Wait for a concurrent rotation to store its replay. The winner's CAS revokes
+ * the parent before `storeRefreshTokenRotationReplay` runs, so a same-interval
+ * loser must poll the parent row instead of returning `invalid_grant`.
+ *
+ * The wait ends when the replay appears, the request is not pending
+ * (including a rotation marked unavailable after issuance or replay storage
+ * failed), or the shorter of `rotationReplayExpiresAt` and
+ * `REFRESH_TOKEN_REPLAY_MAX_WAIT_MS` elapses. The polls back off from 25 ms to
+ * 400 ms, and the last delay stops at that deadline.
+ *
+ * The stored replay supplies the scopes and resources for comparison, so a
+ * mismatched request can also wait. Coordination is through the adapter so
+ * overlapping grants on different instances can still recover.
+ */
+async function waitForRefreshTokenRotationReplay(
+	ctx: GenericEndpointContext,
+	refreshToken: OAuthRefreshToken<Scope[]> & { id: string },
+	request: RefreshTokenRotationReplayRequest,
+) {
+	const cappedDeadline = Date.now() + REFRESH_TOKEN_REPLAY_MAX_WAIT_MS;
+	let latest = refreshToken;
+	let polled = false;
+	let pollInterval = REFRESH_TOKEN_REPLAY_POLL_INTERVAL_MS;
+	while (true) {
+		const lookup = await lookupRefreshTokenRotationReplay(ctx, latest, request);
+		if (lookup.status === "hit") {
+			return lookup.response;
+		}
+		const deadline = Math.min(
+			refreshTokenReplayWaitDeadline(latest),
+			cappedDeadline,
+		);
+		if (lookup.status !== "pending" || Date.now() >= deadline) {
+			return undefined;
+		}
+		if (polled) {
+			await wait(Math.min(pollInterval, deadline - Date.now()));
+			pollInterval = Math.min(
+				pollInterval * 2,
+				REFRESH_TOKEN_REPLAY_MAX_POLL_INTERVAL_MS,
+			);
+		}
+		polled = true;
+		const next = await ctx.context.adapter.findOne<
+			OAuthRefreshToken<Scope[]> & { id: string }
+		>({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
+		});
+		if (!next) {
+			return undefined;
+		}
+		latest = next;
+	}
+}
+
+async function replayRefreshTokenRotationOrThrow(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		client: SchemaClient<Scope[]>;
+		refreshToken: OAuthRefreshToken<Scope[]> & { id: string };
+		scopes: string[];
+		resources?: string[];
+		verifiedConfirmation?: Confirmation;
+		skipDpopVerification?: boolean;
+	},
+) {
+	const replayRequest = await resolveRefreshTokenRotationReplayRequest(
+		ctx,
+		opts,
+		params,
+	);
+	const replay = await waitForRefreshTokenRotationReplay(
+		ctx,
+		params.refreshToken,
+		replayRequest,
+	);
+	if (replay) {
+		return replayRefreshTokenRotationResponse(ctx, replay);
+	}
+	throw new APIError("BAD_REQUEST", {
+		error_description: "invalid refresh token",
+		error: "invalid_grant",
+	});
 }
 
 async function resolveRefreshTokenRotationReplayRequest(
@@ -1446,6 +1864,8 @@ async function resolveRefreshTokenRotationReplayRequest(
 		refreshToken: OAuthRefreshToken<Scope[]> & { id: string };
 		scopes: string[];
 		resources?: string[];
+		verifiedConfirmation?: Confirmation;
+		skipDpopVerification?: boolean;
 	},
 ) {
 	const iat = Math.floor(Date.now() / 1000);
@@ -1455,13 +1875,15 @@ async function resolveRefreshTokenRotationReplayRequest(
 		resources: params.resources,
 		refreshToken: params.refreshToken,
 		iat,
-		scopeExpiresAtSeconds: iat + (opts.accessTokenExpiresIn ?? 3600),
+		scopeExpiresAtSeconds: iat + maxAccessTokenExpiresIn(opts),
 	});
-	const confirmation = await resolveDpopTokenBinding(ctx, opts, {
-		client: params.client,
-		grantIssuance,
-		refreshToken: params.refreshToken,
-	});
+	const confirmation = params.skipDpopVerification
+		? params.verifiedConfirmation
+		: await resolveDpopTokenBinding(ctx, opts, {
+				client: params.client,
+				grantIssuance,
+				refreshToken: params.refreshToken,
+			});
 	return buildRefreshTokenRotationReplayRequest({
 		effectiveScopes: grantIssuance.effectiveScopes,
 		requestedResources: params.resources,
@@ -1478,6 +1900,49 @@ function replayRefreshTokenRotationResponse(
 		...response,
 		expires_in: Math.max(0, response.expires_at - now),
 	});
+}
+
+/**
+ * Resolves the lifetime of a user access token for one grant.
+ *
+ * A number is used as is. A function gets copies of the grant the provider
+ * already validated and nothing from the request, so a client cannot lengthen
+ * its own token by asking. It may throw, which fails the request. It may not
+ * return an unusable number: a result that is not finite after rounding down to
+ * whole seconds, or is below one second, falls back to the default, and a result
+ * above `accessTokenMaxExpiresIn` is lowered to it, so the windows sized from
+ * that bound always outlast the token.
+ */
+async function resolveAccessTokenExpiresIn(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		user: User;
+		client: SchemaClient<Scope[]>;
+		scopes: string[];
+		grantType: GrantType | undefined;
+	},
+): Promise<number> {
+	const configured = opts.accessTokenExpiresIn;
+	if (typeof configured !== "function") {
+		return configured ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
+	}
+	const max = maxAccessTokenExpiresIn(opts);
+	const result = await configured(structuredClone(params));
+	const resolved = typeof result === "number" ? Math.floor(result) : Number.NaN;
+	if (!Number.isFinite(resolved) || resolved < 1) {
+		ctx.context.logger.warn(
+			"accessTokenExpiresIn returned an unusable lifetime, using the default",
+		);
+		return Math.min(DEFAULT_ACCESS_TOKEN_EXPIRES_IN, max);
+	}
+	if (resolved > max) {
+		ctx.context.logger.warn(
+			`accessTokenExpiresIn returned ${resolved} seconds, above accessTokenMaxExpiresIn, using ${max}`,
+		);
+		return max;
+	}
+	return resolved;
 }
 
 async function createUserTokens(
@@ -1535,7 +2000,12 @@ async function createUserTokens(
 
 	const iat = Math.floor(Date.now() / 1000);
 	const baseExpiry = user
-		? (opts.accessTokenExpiresIn ?? 3600)
+		? await resolveAccessTokenExpiresIn(ctx, opts, {
+				user,
+				client,
+				scopes,
+				grantType,
+			})
 		: (opts.m2mAccessTokenExpiresIn ?? 3600);
 	// Every other access token expiry is min()-ed against this, so the cap holds.
 	const defaultExp = Math.min(
@@ -1604,7 +2074,10 @@ async function createUserTokens(
 			error: "invalid_grant",
 		});
 	}
-	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
+	const isJwtAccessToken =
+		audienceClaim &&
+		grantIssuance.accessTokenFormat === "jwt" &&
+		!opts.disableJwtPlugin;
 	// Kept across rotations, so revoking any refresh token of the grant can
 	// revoke the access tokens it issued. A legacy row without one starts a new
 	// grant ID here. A grant from an authorization code takes its ID from the
@@ -1720,179 +2193,209 @@ async function createUserTokens(
 			})
 		: undefined;
 
-	// Create access token and refresh token in parallel
-	const [accessToken, refreshToken] = await Promise.all([
-		isJwtAccessToken
-			? createJwtAccessToken(
+	const refreshTokenPromise = earlyRefreshToken
+		? Promise.resolve(earlyRefreshToken)
+		: isRefreshToken && user
+			? createRefreshToken(
 					ctx,
 					opts,
 					user,
-					client,
-					audienceClaim,
-					effectiveScopes,
-					{
-						iat,
-						exp,
-						sid: sessionId,
-						referenceId,
-						signingAlgorithm: grantIssuance.signingAlgorithm,
-						signingKeyId: grantIssuance.signingKeyId,
-						accessTokenClaims,
-						confirmation,
-						act: params.act,
-						// Only read back by the JWT revocation check.
-						grantId: opts.revocableJwtAccessTokens ? grantId : undefined,
-					},
-				).then((token) => ({ token, id: undefined }))
-			: createOpaqueAccessToken(
-					ctx,
-					opts,
-					user,
-					client,
-					effectiveScopes,
-					{
-						iat,
-						exp,
-						sid: sessionId,
-					},
-					params?.resources,
 					referenceId,
 					params.authorizationCodeId,
-					earlyRefreshToken?.id,
+					client,
+					effectiveScopes,
 					{
-						confirmation,
-						requestedUserInfoClaims,
-						act: params.act,
-						// Opaque rows carry the grant only with a refresh token, which
-						// is what revokes them by grant.
-						grantId: isRefreshToken ? grantId : undefined,
-						accessTokenClaims: toStoredAccessTokenClaims(
-							perRequestClaims,
-							opts,
-						),
+						iat,
+						exp: refreshTokenExp,
+						sid: sessionId,
 					},
-				),
-		earlyRefreshToken
-			? earlyRefreshToken
-			: isRefreshToken && user
-				? createRefreshToken(
+					existingRefreshToken,
+					authTime,
+					refreshResources,
+					confirmation,
+					requestedUserInfoClaims,
+					authenticationContext,
+					grantId,
+				)
+			: Promise.resolve(undefined);
+
+	try {
+		// Create access token and refresh token in parallel
+		const [accessToken, refreshToken] = await Promise.all([
+			isJwtAccessToken
+				? createJwtAccessToken(
 						ctx,
 						opts,
 						user,
-						referenceId,
-						params.authorizationCodeId,
+						client,
+						audienceClaim,
+						effectiveScopes,
+						{
+							iat,
+							exp,
+							sid: sessionId,
+							referenceId,
+							signingAlgorithm: grantIssuance.signingAlgorithm,
+							signingKeyId: grantIssuance.signingKeyId,
+							accessTokenClaims,
+							confirmation,
+							act: params.act,
+							// Only read back by the JWT revocation check.
+							grantId: opts.revocableJwtAccessTokens ? grantId : undefined,
+						},
+					).then((token) => ({ token, id: undefined }))
+				: createOpaqueAccessToken(
+						ctx,
+						opts,
+						user,
 						client,
 						effectiveScopes,
 						{
 							iat,
-							exp: refreshTokenExp,
+							exp,
 							sid: sessionId,
 						},
-						existingRefreshToken,
-						authTime,
-						refreshResources,
-						confirmation,
-						requestedUserInfoClaims,
-						authenticationContext,
-						grantId,
-					)
-				: undefined,
-	]);
+						params?.resources,
+						referenceId,
+						params.authorizationCodeId,
+						earlyRefreshToken?.id,
+						{
+							confirmation,
+							requestedUserInfoClaims,
+							act: params.act,
+							// Opaque rows carry the grant only with a refresh token, which
+							// is what revokes them by grant.
+							grantId: isRefreshToken ? grantId : undefined,
+							accessTokenClaims: toStoredAccessTokenClaims(
+								perRequestClaims,
+								opts,
+							),
+						},
+					),
+			refreshTokenPromise,
+		]);
 
-	// A revocation of this grant marks it before deleting its tokens, so one
-	// that raced this issuance either deleted the tokens stored above or left
-	// the mark for this check. A grant ID generated by this issuance is not
-	// known to any revocation yet. A revocation without a mark, such as a
-	// logout, deletes the refresh token: adapters that do not enforce the
-	// `refreshId` foreign key, such as the memory and MongoDB adapters, accept
-	// the access token insert after it, and revocation deletes linked access
-	// tokens again after the refresh rows, so an insert it misses sees the
-	// refresh token gone here.
-	const checksGrantMark = !!(
-		(existingRefreshToken || params.authorizationCodeId) &&
-		grantId
-	);
-	const [grantRevoked, refreshTokenGone] = await Promise.all([
-		checksGrantMark && grantId ? isGrantRevoked(ctx, grantId) : false,
-		refreshToken?.id
-			? refreshTokenExists(ctx, refreshToken.id).then((exists) => !exists)
-			: false,
-	]);
-	// A mark written after this issuance consumed its code or token outlives
-	// that consume by `grantRevocationWindowMs`, so a check that finishes later
-	// could miss it and fails instead. A mark written earlier, by
-	// `/oauth2/revoke` or a replay of an older rotated token, can still expire
-	// first: that takes the revocation stalling between its mark and its
-	// delete, and this issuance stalling too.
-	const markMayHaveExpired =
-		checksGrantMark &&
-		Date.now() - issuanceStartedAt >= grantRevocationWindowMs(opts);
-	if (grantRevoked || refreshTokenGone || markMayHaveExpired) {
-		if (accessToken.id) {
-			await ctx.context.adapter.delete({
-				model: "oauthAccessToken",
-				where: [{ field: "id", value: accessToken.id }],
-			});
+		// A revocation of this grant marks it before deleting its tokens, so one
+		// that raced this issuance either deleted the tokens stored above or left
+		// the mark for this check. A grant ID generated by this issuance is not
+		// known to any revocation yet. A revocation without a mark, such as a
+		// logout, deletes the refresh token: adapters that do not enforce the
+		// `refreshId` foreign key, such as the memory and MongoDB adapters, accept
+		// the access token insert after it, and revocation deletes linked access
+		// tokens again after the refresh rows, so an insert it misses sees the
+		// refresh token gone here.
+		const checksGrantMark = !!(
+			(existingRefreshToken || params.authorizationCodeId) &&
+			grantId
+		);
+		const [grantRevoked, refreshTokenGone] = await Promise.all([
+			checksGrantMark && grantId ? isGrantRevoked(ctx, grantId) : false,
+			refreshToken?.id
+				? refreshTokenExists(ctx, refreshToken.id).then((exists) => !exists)
+				: false,
+		]);
+		// A mark written after this issuance consumed its code or token outlives
+		// that consume by `grantRevocationWindowMs`, so a check that finishes later
+		// could miss it and fails instead. A mark written earlier, by
+		// `/oauth2/revoke` or a replay of an older rotated token, can still expire
+		// first: that takes the revocation stalling between its mark and its
+		// delete, and this issuance stalling too.
+		const markMayHaveExpired =
+			checksGrantMark &&
+			Date.now() - issuanceStartedAt >= grantRevocationWindowMs(opts);
+		if (grantRevoked || refreshTokenGone || markMayHaveExpired) {
+			if (accessToken.id) {
+				await ctx.context.adapter.delete({
+					model: "oauthAccessToken",
+					where: [{ field: "id", value: accessToken.id }],
+				});
+			}
+			if (refreshToken?.id) {
+				await ctx.context.adapter.delete({
+					model: "oauthRefreshToken",
+					where: [{ field: "id", value: refreshToken.id }],
+				});
+			}
+			throw grantRevokedDuringIssuance();
 		}
-		if (refreshToken?.id) {
-			await ctx.context.adapter.delete({
-				model: "oauthRefreshToken",
-				where: [{ field: "id", value: refreshToken.id }],
-			});
-		}
-		throw grantRevokedDuringIssuance();
-	}
 
-	// ID token created after access token so at_hash can be computed
-	const idToken = isIdToken
-		? await createIdToken(
-				ctx,
-				opts,
-				user,
-				client,
-				effectiveScopes,
-				nonce,
-				sessionId,
-				authTime,
-				accessToken.token,
-				additionalIdTokenClaims,
-				authenticationContext,
-			)
-		: undefined;
-
-	const responseBody: OAuthTokenResponse = {
-		...customFields,
-		...(params.tokenResponse ?? {}),
-		...(issuedDetails?.length ? grantedClaims : {}),
-		access_token: accessToken.token,
-		expires_in: exp - iat,
-		expires_at: exp,
-		token_type: confirmationTokenType(confirmation),
-		refresh_token: refreshToken?.token,
-		scope: effectiveScopes.join(" "),
-		id_token: idToken,
-	};
-	if (existingRefreshToken?.id && refreshToken?.id) {
-		try {
-			await storeRefreshTokenRotationReplay(
-				ctx,
-				opts,
-				existingRefreshToken,
-				buildRefreshTokenRotationReplayRequest({
+		// ID token created after access token so at_hash can be computed
+		const idToken = isIdToken
+			? await createIdToken(
+					ctx,
+					opts,
+					user,
+					client,
 					effectiveScopes,
-					requestedResources: params.resources,
-					confirmation,
-				}),
-				responseBody,
-			);
-		} catch (error) {
-			ctx.context.logger.error(
-				"failed to store refresh token rotation replay",
-				error,
-			);
+					nonce,
+					sessionId,
+					authTime,
+					accessToken.token,
+					additionalIdTokenClaims,
+					authenticationContext,
+				)
+			: undefined;
+
+		const responseBody: OAuthTokenResponse = {
+			...customFields,
+			...(params.tokenResponse ?? {}),
+			...(issuedDetails?.length ? grantedClaims : {}),
+			access_token: accessToken.token,
+			expires_in: exp - iat,
+			expires_at: exp,
+			token_type: confirmationTokenType(confirmation),
+			refresh_token: refreshToken?.token,
+			scope: effectiveScopes.join(" "),
+			id_token: idToken,
+		};
+		if (existingRefreshToken?.id && refreshToken?.id) {
+			try {
+				await storeRefreshTokenRotationReplay(
+					ctx,
+					opts,
+					existingRefreshToken,
+					buildRefreshTokenRotationReplayRequest({
+						effectiveScopes,
+						requestedResources: params.resources,
+						confirmation,
+					}),
+					responseBody,
+				);
+			} catch (error) {
+				ctx.context.logger.error(
+					"failed to store refresh token rotation replay",
+					error,
+				);
+				await markRefreshTokenRotationReplayUnavailable(
+					ctx,
+					existingRefreshToken,
+				);
+			}
 		}
+		return ctx.json(responseBody);
+	} catch (error) {
+		// A rotation that won the compare-and-swap and then failed leaves no
+		// replay for a concurrent duplicate to wait on, so mark the parent
+		// unavailable and let those duplicates fail now instead of polling. At the
+		// default interval, `0`, no duplicate waits, so no state is written.
+		if (
+			existingRefreshToken?.id &&
+			(opts.refreshTokenReuseInterval ?? 0) > 0 &&
+			!isRefreshTokenRotationInFlightError(error)
+		) {
+			const created = await refreshTokenPromise.then(
+				(token) => token,
+				() => undefined,
+			);
+			if (created?.id) {
+				await markRefreshTokenRotationReplayUnavailable(
+					ctx,
+					existingRefreshToken,
+				);
+			}
+		}
+		throw error;
 	}
-	return ctx.json(responseBody);
 }
 
 /**
@@ -2131,7 +2634,7 @@ async function handleAuthorizationCodeGrant(
 		resources,
 		code_verifier,
 	);
-	const scopes = verificationValue.query.scope?.split(" ");
+	const scopes = verificationValue.query.scope?.split(" ").filter(Boolean);
 	if (!scopes) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error_description: "verification scope unset",
@@ -2142,7 +2645,8 @@ async function handleAuthorizationCodeGrant(
 
 	// Parse scopes from the authorization request
 	const requestedScopes =
-		(verificationValue.query?.scope as string)?.split(" ") || [];
+		(verificationValue.query?.scope as string)?.split(" ").filter(Boolean) ||
+		[];
 
 	// Check if PKCE is required for this client and authorization request
 	const pkceRequired = isPKCERequired(client, {
@@ -2251,6 +2755,13 @@ async function handleAuthorizationCodeGrant(
 		verificationValue.query.claims,
 		getSupportedClaims(opts),
 	);
+	await assertConsentStillCovers(ctx, client, {
+		userId: user.id,
+		referenceId: verificationValue.referenceId,
+		scopes,
+		resources: authorizedResources ?? [],
+		userInfoClaims: requestedUserInfoClaims,
+	});
 
 	const dpop = await checkDpopProofBeforeConsume(ctx, opts, {
 		client,
@@ -2292,7 +2803,7 @@ async function handleAuthorizationCodeGrant(
 
 	return createUserTokens(ctx, opts, {
 		client,
-		scopes: verificationValue.query.scope?.split(" ") ?? [],
+		scopes: verificationValue.query.scope?.split(" ").filter(Boolean) ?? [],
 		user,
 		grantType: "authorization_code",
 		referenceId: verificationValue.referenceId,
@@ -2526,27 +3037,11 @@ async function handleRefreshTokenGrant(
 
 	if (refreshToken.revoked) {
 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
-			const replayRequest = await resolveRefreshTokenRotationReplayRequest(
-				ctx,
-				opts,
-				{
-					client,
-					refreshToken,
-					scopes: requestedScopes ?? scopes,
-					resources: resources ?? refreshToken.resources,
-				},
-			);
-			const replay = await getRefreshTokenRotationReplay(
-				ctx,
+			return replayRefreshTokenRotationOrThrow(ctx, opts, {
+				client,
 				refreshToken,
-				replayRequest,
-			);
-			if (replay) {
-				return replayRefreshTokenRotationResponse(ctx, replay);
-			}
-			throw new APIError("BAD_REQUEST", {
-				error_description: "invalid refresh token",
-				error: "invalid_grant",
+				scopes: requestedScopes ?? scopes,
+				resources: resources ?? refreshToken.resources,
 			});
 		}
 		await invalidateRefreshFamily(
@@ -2578,19 +3073,45 @@ async function handleRefreshTokenGrant(
 			: undefined;
 
 	// Generate new tokens
-	return createUserTokens(ctx, opts, {
-		client,
-		scopes: requestedScopes ?? scopes,
-		user,
-		grantType: "refresh_token",
-		referenceId: refreshToken.referenceId,
-		authorizationCodeId: refreshToken.authorizationCodeId,
-		sessionId: session.sessionId,
-		refreshToken,
-		resources: resources ?? refreshToken.resources,
-		authTime,
-		acr: refreshToken.acr ?? undefined,
-		amr: refreshToken.amr ?? undefined,
-		requestedUserInfoClaims: refreshToken.requestedUserInfoClaims,
-	});
+	try {
+		return await createUserTokens(ctx, opts, {
+			client,
+			scopes: requestedScopes ?? scopes,
+			user,
+			grantType: "refresh_token",
+			referenceId: refreshToken.referenceId,
+			authorizationCodeId: refreshToken.authorizationCodeId,
+			sessionId: session.sessionId,
+			refreshToken,
+			resources: resources ?? refreshToken.resources,
+			authTime,
+			acr: refreshToken.acr ?? undefined,
+			amr: refreshToken.amr ?? undefined,
+			requestedUserInfoClaims: refreshToken.requestedUserInfoClaims,
+		});
+	} catch (error) {
+		if (
+			(opts.refreshTokenReuseInterval ?? 0) <= 0 ||
+			!isRefreshTokenRotationInFlightError(error)
+		) {
+			throw error;
+		}
+		const latest = await ctx.context.adapter.findOne<
+			OAuthRefreshToken<Scope[]> & { id: string }
+		>({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
+		});
+		if (!latest || !isWithinRefreshTokenReuseInterval(latest)) {
+			throw error;
+		}
+		return replayRefreshTokenRotationOrThrow(ctx, opts, {
+			client,
+			refreshToken: latest,
+			scopes: requestedScopes ?? scopes,
+			resources: resources ?? latest.resources,
+			verifiedConfirmation: getRefreshTokenRotationInFlightBinding(error),
+			skipDpopVerification: true,
+		});
+	}
 }

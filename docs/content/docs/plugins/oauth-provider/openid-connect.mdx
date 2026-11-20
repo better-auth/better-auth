@@ -78,7 +78,7 @@ With `disableJwtPlugin: true`, ID tokens are signed with `HS256` using the clien
 To assert a stronger authentication class in `acr`, or the methods the user signed in with in `amr`, set `authenticationContext` with both fields:
 
 * `acrValuesSupported` lists the `acr` values the provider may issue. Discovery advertises it as `acr_values_supported`. Include `"0"` if `resolve` can return no `acr`.
-* `resolve` returns the `acr` and `amr` the current session established. For requests with the `openid` scope, it runs once, when the user approves an authorization request, a device code, or a [CIBA (Client-Initiated Backchannel Authentication)](/docs/plugins/ciba) request on the provider's pages. It receives `user`, `session`, `client`, the approved `scopes`, the request `headers`, and `requestedAcrValues` (from `claims.id_token.acr` and `acr_values`). [`completeCibaRequest`](/docs/plugins/ciba#decide-from-your-own-app) does not call `resolve`, and records the `acr` and `amr` you pass instead.
+* `resolve` returns the `acr` and `amr` the current session established. For requests with the `openid` scope, it runs once, when the user approves an authorization request, a device code, or a [CIBA (Client-Initiated Backchannel Authentication)](/docs/plugins/ciba) request on the provider's pages. It receives `user`, `session`, `client`, the approved `scopes`, the request `headers`, and `requestedAcrValues` (from `claims.id_token.acr` and `acr_values`). For the `openid` scope, it also runs when a plugin endpoint issues a code with [`issueAuthorizationCode`](/docs/plugins/oauth-provider/sign-in-flow#report-how-the-user-signed-in), and then receives the methods that endpoint reported as `amr`. [`completeCibaRequest`](/docs/plugins/ciba#decide-from-your-own-app) does not call `resolve`, and records the `acr` and `amr` you pass instead.
 
 Return only what the session proved. Better Auth does not record how a session signed in, so track it yourself. The example below marks sessions created by a completed two-factor challenge. Sessions created through a trusted device skip that challenge and stay unmarked.
 
@@ -172,17 +172,17 @@ Claims follow the granted [scopes](https://openid.net/specs/openid-connect-core-
 | `profile` | `name`, `picture`, `given_name`, `family_name` |
 | `email`   | `email`, `email_verified`                      |
 
+By default, UserInfo omits `name` when the user’s name is empty and `picture` when their image is empty. Your `customUserInfoClaims` callback can supply either claim, including an empty string. The default follows [OpenID Connect Core §5.3.2](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse).
+
 Better Auth returns a claim from the table above even when its scope was not granted, if all of these are true:
 
 * The client requests the claim through the [`claims.userinfo` parameter](https://openid.net/specs/openid-connect-core-1_0.html#IndividualClaimsRequests).
 * The claim appears in `claims_supported`.
 * Your [consent page](/docs/plugins/oauth-provider/sign-in-flow#consent-page) did not remove the claim. It removes one when it passes a `claims` object to `oauth2.consent` that leaves the claim out.
-* The user has a value for the claim. Better Auth omits missing values instead of returning `null`.
+* The user has a value for the requested standard claim. The built-in resolvers omit missing values and skip empty names and images.
 * The access token is opaque. With a JWT access token, UserInfo returns only the claims its scopes cover.
 
 Better Auth does not fill in other requested names, such as `locale`. To return one on request, list it in `advertisedMetadata.claims_supported` together with the defaults you still want, as in [Discovery metadata](#discovery-metadata). Then read `requestedClaims` in `customUserInfoClaims`, described below.
-
-Better Auth does not treat an empty string as a missing value, so a user whose `name` is `""` gets `name: ""`. [OIDC Core §5.3.2](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse) says a claim that is not returned should be omitted, and should not be present with a null or empty string value.
 
 Better Auth reads only the claim names under `claims.userinfo`. It ignores `essential`, `value`, and `values` there, and it ignores `claims.id_token` requests except `acr`. [OIDC Core §5.5.1](https://openid.net/specs/openid-connect-core-1_0.html#IndividualClaimsRequests) says a claim whose value does not match a requested `value` is left out of the response. It also says a mismatch on `sub` must cause the authentication to fail, and [§3.1.2.2](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequestValidation) says the provider must not reply with a token for a different user. Better Auth ignores a `value` on `sub` too. A client that requests a specific `sub` must check the `sub` it receives.
 
@@ -221,7 +221,7 @@ Changing a client's redirect URIs recomputes its sector, so moving to another ho
 The calculation assumes that user IDs contain no dot. [OIDC Core §8.1](https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg) says different sector identifiers must produce different subject values, and a dot in a user ID can break that. The built-in ID generators (the default, `uuid`, and `serial`) never produce a dot. If a custom [`advanced.database.generateId`](/docs/concepts/database#id-generation) function or your database assigns user IDs, make sure they contain no dot when you use pairwise subjects.
 
 * Pairwise `sub` appears in the ID token, UserInfo, and introspection. Introspection returns the `sub` of the client the token was issued to. For a [delegated token](/docs/plugins/oauth-provider/tokens#delegate-to-an-actor), introspection also names each user in `act` and a user in `may_act` by the `sub` that client sees for that user.
-* JWT access tokens carry the user ID as `sub` by default, so resource servers can look users up. A client can decode its own JWT access tokens, so a pairwise client that requests a `resource` learns the user ID. The provider issues a JWT access token only when the client requests a `resource` and the JWT plugin is enabled; otherwise the token is opaque. To keep the user ID from pairwise clients, set `accessTokenSubject: "pairwise"`, or have them request opaque tokens by omitting `resource`.
+* JWT access tokens carry the user ID as `sub` by default, so resource servers can look users up. A client can decode its own JWT access tokens, so a pairwise client that requests a `resource` learns the user ID. The provider issues a JWT access token only when the client requests a `resource`, the JWT plugin is enabled, and the resource does not use opaque access tokens. Otherwise the token is opaque. To keep the user ID from pairwise clients, set `accessTokenSubject: "pairwise"`, or give the resource [opaque access tokens](/docs/plugins/oauth-provider/tokens#access-token-format).
 
 ### Pairwise `sub` in JWT access tokens
 
@@ -316,7 +316,9 @@ await auth.api.adminUpdateOAuthClient({
 });
 ```
 
-A registrant chooses its own `post_logout_redirect_uris`, so a client allowed to log out must keep them on the origins it already receives authorization responses on. Each URI must share a scheme, host, and port with one of the client's `redirect_uris`. A loopback address such as `localhost` or `127.0.0.1` matches on any port, and a private-use URI such as `com.example.app:/logout` matches on its scheme and authority. A metadata document client may also use the origin of its `client_id` URL. Otherwise registration, or a later metadata document refresh, fails with `invalid_client_metadata`. The code is `invalid_client_metadata`, not the `invalid_redirect_uri` returned for an entry no client may register, such as one with credentials, because the entry is valid on its own and conflicts only with the client's `redirect_uris`. The rule also covers every `post_logout_redirect_uris` entry an owner adds with `updateOAuthClient` to a client allowed to log out, whoever created it. Entries the client already has are kept, so URIs an administrator set stay valid. `adminUpdateOAuthClient` is not limited by the rule, except when it grants `enable_end_session` to a client you do not own: the grant fails with `invalid_client_metadata` if one of the client's stored `post_logout_redirect_uris` breaks it.
+A registrant chooses its own `post_logout_redirect_uris`, so a client allowed to log out must keep them on the origins it already receives authorization responses on. Each URI must share a scheme, host, and port with one of the client's `redirect_uris`. A loopback address such as `localhost` or `127.0.0.1` matches on any port, and a private-use URI such as `com.example.app:/logout` matches on its scheme and authority. A metadata document client may also use the origin of its `client_id` URL. The provider returns `invalid_client_metadata` when an otherwise valid logout URI fails this registration rule. An entry that no client may register, such as a URI containing credentials, fails with `invalid_redirect_uri`.
+
+The [CIMD plugin](/docs/plugins/cimd) holds a metadata document client to a stricter rule on top of this one. Unless you change `originBoundFields`, every entry must share the origin of its `client_id` URL, except for HTTP(S) loopback redirects and hostless reverse-domain private-use logout URIs such as `com.example.app:/logout`, so a metadata document client cannot use a web origin that only its `redirect_uris` have. An entry that breaks this rule is rejected with `invalid_client`, and the client cannot be resolved or refreshed. The `redirect_uris` rule also covers every `post_logout_redirect_uris` entry an owner adds with `updateOAuthClient` to a client allowed to log out, whoever created it. Entries the client already has are kept, so URIs an administrator set stay valid. `adminUpdateOAuthClient` is not limited by that rule, except when it grants `enable_end_session` to a client you do not own: the grant fails with `invalid_client_metadata` if one of the client's stored `post_logout_redirect_uris` breaks it.
 
 <Callout type="warn">
   With [open registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration), anyone can register a client. A client allowed to log out can end the session of any user who signed in to it, using an ID token it received for that user, without the user's browser. Without a hint, the user always confirms on your logout page first.
@@ -338,10 +340,12 @@ await auth.api.adminCreateOAuthClient({
 ```
 
 * Recipients are found through the opaque access tokens and refresh tokens stored for the session. A client that holds only a JWT access token for it, such as after a `resource` request without `offline_access`, is not notified.
-* Logout Tokens carry `typ: logout+jwt`, always include `sid`, and live for 120 seconds. The JWT plugin signs them, so a client verifies them with your JWKS. Each [request](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest) has a 5 second timeout and is not retried.
-* When a session is deleted, Better Auth revokes the session's access tokens and its refresh tokens without `offline_access`, whether or not any client registered a `backchannel_logout_uri`. Introspection and UserInfo then reject those access tokens, but a resource server that verifies JWT access tokens locally keeps accepting them until they expire. An opaque access token issued by a refresh that runs while sign-out is in progress can also stay active until it expires, on databases that enforce the session foreign key. Refresh tokens with `offline_access` survive, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows. Tokens from the device authorization and [CIBA](/docs/plugins/ciba) grants have no associated session and survive sign-out.
+* Logout Tokens carry `typ: logout+jwt`, always include `sid`, and live for 120 seconds. The JWT plugin signs them, so a client verifies them with your JWKS. Each [request](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest) has a 5 second timeout, which includes the DNS lookup, and is not retried.
+* When a session is deleted, Better Auth revokes the session's access tokens and its refresh tokens without `offline_access`, whether or not any client registered a `backchannel_logout_uri`. Introspection and UserInfo then reject those access tokens, but a resource server that verifies JWT access tokens locally keeps accepting them until they expire. An opaque access token issued by a refresh that runs while sign-out is in progress can also stay active until it expires, on databases that enforce the session foreign key. Refresh tokens with `offline_access` survive, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows. A [password reset](#password-reset) can revoke those refresh tokens too. Tokens from the device authorization and [CIBA](/docs/plugins/ciba) grants have no associated session and survive sign-out.
 * A new grant gets a refresh token only when it includes `offline_access`, and that token survives the end of the session. [RFC 10017 §6.3.2.3](https://www.rfc-editor.org/rfc/rfc10017.html#section-6.3.2.3) says authorization servers should link the lifetime of a refresh token to the user's authenticated session when the client is a browser-based app. The provider has no option that binds every refresh token to the session. A browser-based app whose tokens must end with the session has two choices. It can omit `offline_access`, which means it gets no refresh token and must authorize again when its access token expires. Or it can keep its tokens on a server that handles back-channel logout.
-* `backchannel_logout_uri` must be a public `https` URL with no credentials or fragment. Loopback, private, and metadata hosts are rejected with `invalid_client_metadata`. The check does not resolve DNS, so a public name that resolves to a private address passes. If untrusted parties can register clients on your server, block outbound requests from the auth server to private networks.
+* `backchannel_logout_uri` must be a public `https` URL with no credentials or fragment. Loopback, private, and metadata hosts are rejected with `invalid_client_metadata`. This registration check does not resolve DNS.
+* Before each delivery, Better Auth checks the stored URI again and resolves its host name. It skips that client and logs a warning when the lookup fails or any address is loopback, private, link-local (including cloud metadata), or otherwise not publicly routable. The session's tokens are still revoked. This stops a public-looking name whose DNS record points at an internal address from receiving the request.
+* The DNS check applies only on runtimes where `node:dns` resolves names. Elsewhere, only the host name check applies. The `fetch` that sends the request resolves the name again, so a DNS answer that changes between the two lookups, known as DNS rebinding, can still reach an internal address. For a strict guarantee, or if untrusted parties can register clients on your server, restrict outbound requests from the auth server to private networks at the network layer.
 * Clients registered through [CIMD](/docs/plugins/cimd) cannot use back-channel logout.
 
 <Callout type="warn">
@@ -351,6 +355,39 @@ await auth.api.adminCreateOAuthClient({
 <Callout type="info">
   Delivery runs through `advanced.backgroundTasks.handler` when one is set, so a slow client cannot delay sign-out. Without a handler it runs before the sign-out response returns, so set one if you deploy to serverless runtimes.
 </Callout>
+
+### Clients on an internal network
+
+If a client runs on an internal network, its public-looking name can resolve to a private address, as in a split-horizon DNS setup. The delivery check then skips it. To deliver to it, add the origin of its `backchannel_logout_uri` to [`trustedOrigins`](/docs/reference/options#trustedorigins):
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  trustedOrigins: ["https://app.internal.example.com"], // [!code highlight]
+  plugins: [oauthProvider({ /* ... */ }), jwt()],
+});
+```
+
+An origin in `trustedOrigins` skips only the DNS check, because you vouch for where that name points. Registration and delivery still reject a loopback or private IP literal and a name such as `localhost`, so the URI needs a host name or public address that registration accepts.
+
+<Callout type="warn">
+  Clients choose their own `backchannel_logout_uri`. Anyone who can register a client, including through [dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration), can point it at any host that a `trustedOrigins` entry matches, and the server then sends a Logout Token there without checking where the name resolves. Wildcard entries follow the [pattern rules](/docs/reference/options#wildcard-support), so a pattern such as `https://*.example.com`, which other features may already use, covers every host under it. The origin of your configured `baseURL` is always trusted. List exact origins, and never list a pattern that covers a name someone else can create.
+</Callout>
+
+Delivery uses the origins configured at initialization, whether you set them with an array, the `BETTER_AUTH_TRUSTED_ORIGINS` variable, or a callback. A callback runs once without a `Request` for this purpose. An origin that only a request supplies does not count, such as one a callback returns for a particular `Request` or the origin of the `Host` header when you set no `baseURL`, because the sign-out request comes from the party this check guards against.
+
+To find clients that stopped receiving tokens, search your logs for `back-channel logout to client <id> skipped`. The warning names the reason.
+
+## Password reset
+
+A password reset is recovery from a compromised credential, so Better Auth revokes every access and refresh token stored for the user, including `offline_access` grants that no session holds. A grant created during the compromise would otherwise outlive the reset.
+
+* It applies when [`emailAndPassword.revokeSessionsOnPasswordReset`](/docs/authentication/email-password#revoking-sessions-on-password-reset) is on and `revokeGrantsOnPasswordReset` is not `false`, for `/reset-password` and the reset endpoints of the [email OTP](/docs/plugins/email-otp) and [phone number](/docs/plugins/phone-number) plugins.
+* It runs from the reset itself, so it covers a user with no live session. A client that refreshes afterwards gets `400 invalid_grant` and must start a new authorization request.
+* JWT access tokens stay valid until they expire, or until the session they carry as `sid` ended, which the reset does. With [`revocableJwtAccessTokens`](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens), those of a grant that has a stored refresh token or opaque access token are revoked too. A JWT issued without a refresh token has no stored record to find.
+* Signing out and revoking all sessions keep `offline_access` grants, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows. A password reset revokes them.
+* Set `revokeGrantsOnPasswordReset: false` to keep a user's tokens across a reset. The reset still ends the user's sessions.
+
+The revocation also fails a refresh that is still issuing tokens for a revoked grant. A pending authorization code fails at redemption, because the reset ended the session it was issued for, unless that redemption already passed its session check.
 
 ## Front-channel logout
 

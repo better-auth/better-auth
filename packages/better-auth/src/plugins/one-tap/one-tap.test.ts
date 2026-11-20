@@ -2,7 +2,7 @@
 import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import type { BetterFetch } from "@better-fetch/fetch";
-import { createFetch } from "@better-fetch/fetch";
+import { betterFetch, createFetch } from "@better-fetch/fetch";
 import type { oneTap as oneTapFromSubpath } from "better-auth/plugins/one-tap";
 import { jwtVerify } from "jose";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
@@ -128,6 +128,38 @@ describe("one-tap last login method", () => {
 			where: [{ field: "email", value: defaultVerifiedPayload.email }],
 		});
 		expect(user?.lastLoginMethod).toBe("google");
+	});
+});
+
+describe("one-tap jwksEndpoint override", () => {
+	it("fetches signing keys from socialProviders.google.jwksEndpoint", async () => {
+		const jwksEndpoint = "https://emulator.example.com/oauth2/v3/certs";
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					jwksEndpoint,
+				},
+			},
+			plugins: [oneTap()],
+		});
+		vi.mocked(betterFetch).mockClear();
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/one-tap/callback", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(await callbackBody(auth)),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(vi.mocked(betterFetch)).toHaveBeenCalledWith(
+			jwksEndpoint,
+			expect.anything(),
+		);
 	});
 });
 

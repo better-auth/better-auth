@@ -1,7 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
-import { getAuthoritativeSessionFromCtx } from "better-auth/api";
 import type {
 	DeviceAuthorizationGrant,
 	DeviceAuthorizationPluginOptions,
@@ -28,6 +27,7 @@ import type {
 import type { Confirmation } from "./types/oauth";
 import { ResourceUriSchema } from "./types/zod";
 import {
+	assertConsentStillCovers,
 	getAuthEndpointUrl,
 	getClient,
 	getOAuthProviderPlugin,
@@ -181,6 +181,20 @@ async function exchangeOAuthDeviceCode(
 				clientId: authorization.client.clientId,
 				requestedScopes: authorization.scopes,
 			});
+			if (!record.userId) {
+				tokenError("BAD_REQUEST", "invalid_grant", "invalid device code");
+			}
+			// Same for a consent deleted or narrowed since approval: approving that
+			// access again for the same client and consent reference makes the code
+			// redeemable.
+			await assertConsentStillCovers(ctx, authorization.client, {
+				userId: record.userId,
+				referenceId: record.referenceId ?? undefined,
+				scopes: authorization.scopes,
+				// Every approved resource, not the narrowed poll.
+				resources: record.resources ?? [],
+				userInfoClaims: [],
+			});
 			// Same for a rejected DPoP proof: the client can retry with a valid one.
 			// A sender constraint the client-authentication strategy proved takes
 			// precedence over a DPoP proof, as in issuance.
@@ -276,16 +290,6 @@ function deviceApprovalRequest(
 				// RFC 8628 section 5.4: the user who approves must see consent.
 				requireConsent: true,
 				approve: async (approval) => {
-					// Approval hands the device a token, so a session revoked in the
-					// store must not approve on its cookie cache alone.
-					const session = await getAuthoritativeSessionFromCtx(ctx);
-					if (session?.session.id !== approval.sessionId) {
-						tokenError(
-							"UNAUTHORIZED",
-							"access_denied",
-							"The session that approved this device is no longer active",
-						);
-					}
 					await decideDeviceCode(ctx, {
 						deviceCode,
 						userId: approval.userId,

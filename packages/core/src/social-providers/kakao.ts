@@ -176,7 +176,7 @@ export const kakao = (options: KakaoOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -189,13 +189,16 @@ export const kakao = (options: KakaoOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		idToken: {
 			// https://developers.kakao.com/docs/en/kakaologin/rest-api#oidc-find-public-key
 			jwks: createRemoteJWKSet(
-				new URL("https://kauth.kakao.com/.well-known/jwks.json"),
+				new URL(
+					options.jwksEndpoint ??
+						"https://kauth.kakao.com/.well-known/jwks.json",
+				),
 			),
 			issuer: "https://kauth.kakao.com",
 			audience: options.clientId,
@@ -224,7 +227,7 @@ export const kakao = (options: KakaoOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<KakaoProfile>(
-				"https://kapi.kakao.com/v2/user/me",
+				options.userInfoEndpoint ?? "https://kapi.kakao.com/v2/user/me",
 				{
 					headers: {
 						Authorization: `Bearer ${token.accessToken}`,

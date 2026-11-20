@@ -54,6 +54,9 @@ import {
 } from "./par";
 import { registerEndpoint } from "./register";
 import {
+	ACCESS_TOKEN_FORMATS,
+	EMPTY_ALLOWED_SCOPES_MESSAGE,
+	isAccessTokenFormat,
 	logEnforcePerClientResourcesResolution,
 	logStartupSeedFailure,
 	seedResourcesOnce,
@@ -62,7 +65,7 @@ import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { DEFAULT_CODE_EXPIRES_IN, readSignedOAuthQuery } from "./signed-query";
 import { STANDARD_CLAIM_NAMES, STANDARD_CLAIMS } from "./standard-claims";
-import { tokenEndpoint } from "./token";
+import { revokeUserTokens, tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
 	clientRegistrationRequestSchema,
@@ -143,6 +146,10 @@ function getServerContextSignedQueryIssuedAt(value: unknown) {
 	return new Date(issuedAtMs);
 }
 
+// Ten years. The retention windows derived from the bound become expiry dates,
+// which a larger value pushes beyond what a `Date` or a database column holds.
+const MAX_ACCESS_TOKEN_MAX_EXPIRES_IN = 10 * 365 * 24 * 60 * 60;
+
 /**
  * oAuth 2.1 provider plugin for Better Auth.
  *
@@ -219,6 +226,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		}
 	}
 
+	for (const resource of options.resources ?? []) {
+		if (typeof resource === "string") continue;
+		if (resource.allowedScopes?.length === 0) {
+			throw new BetterAuthError(
+				`resources entry ${resource.identifier}: ${EMPTY_ALLOWED_SCOPES_MESSAGE}`,
+			);
+		}
+	}
+
 	// Discovery `claims_supported`: protocol claims that are always present, plus
 	// the standard identity claims whose backing scope is configured. The
 	// identity set is derived from the one claim registry so the advertisement
@@ -270,6 +286,27 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	if (opts.accessTokenSubject === "pairwise" && !opts.pairwiseSecret) {
 		throw new BetterAuthError(
 			'accessTokenSubject: "pairwise" requires pairwiseSecret',
+		);
+	}
+
+	const defaultAccessTokenFormat = opts.resourceDefaults?.accessTokenFormat;
+	if (
+		defaultAccessTokenFormat !== undefined &&
+		!isAccessTokenFormat(defaultAccessTokenFormat)
+	) {
+		throw new BetterAuthError(
+			`resourceDefaults.accessTokenFormat must be one of ${ACCESS_TOKEN_FORMATS.join(", ")}`,
+		);
+	}
+
+	if (
+		opts.accessTokenMaxExpiresIn !== undefined &&
+		(!Number.isSafeInteger(opts.accessTokenMaxExpiresIn) ||
+			opts.accessTokenMaxExpiresIn <= 0 ||
+			opts.accessTokenMaxExpiresIn > MAX_ACCESS_TOKEN_MAX_EXPIRES_IN)
+	) {
+		throw new BetterAuthError(
+			`accessTokenMaxExpiresIn must be a positive integer number of seconds, at most ${MAX_ACCESS_TOKEN_MAX_EXPIRES_IN}`,
 		);
 	}
 
@@ -583,6 +620,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		version: PACKAGE_VERSION,
 		options: opts as NoInfer<O>,
 		onRequest: handleIssuerMetadataRequest,
+		async onPasswordReset({ userId }, ctx) {
+			if (opts.revokeGrantsOnPasswordReset === false) return;
+			if (
+				!ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset
+			) {
+				return;
+			}
+			await revokeUserTokens(ctx, opts, userId);
+		},
 		init: async (ctx) => {
 			// OAuth provider performs adapter-level session lookups by id, so it
 			// currently requires DB-backed sessions whenever secondary storage is enabled.
@@ -645,6 +691,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				} catch (error) {
 					if (!isDynamicBaseURLInit || issuer !== "") throw error;
 				}
+				// Access tokens are recognized by `typ: at+jwt`, which a custom
+				// signer receives in `header` and can drop.
+				if (jwtPluginOptions?.jwt?.sign) {
+					ctx.logger.warn(
+						"oauth-provider: the JWT plugin uses a custom `jwt.sign`. It must apply `header.typ` to the signed JWT, or the access tokens it signs are rejected, because JWT access tokens must carry `typ: at+jwt` (RFC 9068).",
+					);
+				}
 			}
 
 			// The hook must register for every configuration path (including
@@ -695,9 +748,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									await recordFrontchannelLogoutUris(
 										plan.frontchannelLogoutUris,
 									);
+									// `ctx` holds the trusted origins resolved at init. The
+									// hook context holds the ones the request resolved, which
+									// the request's sender can influence.
 									const logoutTask = applySessionLogoutPlan(
 										hookCtx,
 										plan,
+										(url) => ctx.isTrustedOrigin(url),
 									).catch((error) => {
 										hookCtx.context.logger.error(
 											"Logout notification failed after session deletion",

@@ -10,7 +10,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin } from "better-auth/types";
 import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProvider } from "./oauth";
 import { getOAuthProviderApi } from "./token";
@@ -1180,5 +1180,451 @@ describe("provider.issueAuthorizationCode after a sign-in in the same request", 
 				error_description: "the request requires a new sign-in",
 			});
 		}
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10414
+ */
+describe("provider.issueAuthorizationCode with caller-supplied amr", async () => {
+	const redirectUri = "https://client.example.com/callback";
+	const resource = "https://api.example.com";
+
+	const issuer = {
+		id: "test-amr-code-issuer",
+		endpoints: {
+			testIssueCode: createAuthEndpoint(
+				"/test/issue-code",
+				{ method: "POST", use: [sessionMiddleware] },
+				async (ctx) => {
+					const { amr, ...query } = ctx.body as {
+						amr?: string[];
+					} & StoredAuthorizationQuery;
+					const issued = await getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+					).issueAuthorizationCode({
+						query,
+						session: ctx.context.session,
+						amr,
+					});
+					return ctx.json({ code: issued.code });
+				},
+			),
+		},
+	} satisfies BetterAuthPlugin;
+
+	async function setup(
+		authenticationContext?: Parameters<
+			typeof oauthProvider
+		>[0]["authenticationContext"],
+	) {
+		const instance = await getTestInstance({
+			baseURL: "http://localhost:3000/api/auth/",
+			advanced: { skipTrailingSlashes: true },
+			plugins: [
+				issuer,
+				jwt({ jwt: { issuer: "http://localhost:3000" } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					authenticationContext,
+					resources: [resource],
+					enforcePerClientResources: false,
+				}),
+			],
+		});
+		const { headers } = await instance.signInWithTestUser();
+		const oauthClient = await instance.auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "none",
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+		const context = await instance.auth.$context;
+		let verifier = "";
+		return {
+			async issue(scope: string, amr?: unknown) {
+				verifier = generateRandomString(43);
+				const issued = await instance.client.$fetch<{ code: string }>(
+					"/test/issue-code",
+					{
+						method: "POST",
+						headers,
+						body: {
+							response_type: "code",
+							client_id: oauthClient.client_id,
+							scope,
+							resource,
+							code_challenge: await generateCodeChallenge(verifier),
+							code_challenge_method: "S256",
+							amr,
+						},
+					},
+				);
+				return issued;
+			},
+			async redeem(code: string) {
+				const tokens = await instance.client.$fetch<{
+					access_token: string;
+					id_token?: string;
+				}>("/oauth2/token", {
+					method: "POST",
+					headers: { "content-type": "application/x-www-form-urlencoded" },
+					body: new URLSearchParams({
+						grant_type: "authorization_code",
+						client_id: oauthClient.client_id!,
+						code,
+						code_verifier: verifier,
+						resource,
+					}),
+				});
+				expect(tokens.error).toBeNull();
+				return tokens.data!;
+			},
+			async sessionCreatedAt() {
+				const session = await instance.auth.api.getSession({ headers });
+				return new Date(session!.session.createdAt).getTime();
+			},
+			async stored(code: string) {
+				const row = await context.internalAdapter.findVerificationValue(
+					await storeToken("hashed", code, "authorization_code"),
+				);
+				return JSON.parse(row!.value) as {
+					authTime: number;
+					acr?: string;
+					amr?: string[];
+				};
+			},
+		};
+	}
+
+	it("passes the methods to authenticationContext.resolve", async () => {
+		const seen: unknown[] = [];
+		const { issue, stored } = await setup({
+			acrValuesSupported: ["0", "urn:example:mfa"],
+			resolve: ({ amr }) => {
+				seen.push(amr);
+				return amr?.includes("otp")
+					? { acr: "urn:example:mfa", amr }
+					: undefined;
+			},
+		});
+		const issued = await issue("openid", ["pwd", "otp"]);
+		expect(issued.error).toBeNull();
+		expect(seen).toEqual([["pwd", "otp"]]);
+		const row = await stored(issued.data!.code);
+		expect(row.acr).toBe("urn:example:mfa");
+		expect(row.amr).toEqual(["pwd", "otp"]);
+	});
+
+	it("keeps what the resolver returns over the caller's methods", async () => {
+		const { issue, stored } = await setup({
+			acrValuesSupported: ["0"],
+			resolve: () => ({ amr: ["hwk"] }),
+		});
+		const issued = await issue("openid", ["pwd"]);
+		expect((await stored(issued.data!.code)).amr).toEqual(["hwk"]);
+	});
+
+	it("stores the caller's methods when no resolver is configured", async () => {
+		const { issue, stored } = await setup();
+		const issued = await issue("openid", ["pwd", "otp"]);
+		expect(issued.error).toBeNull();
+		const row = await stored(issued.data!.code);
+		expect(row.amr).toEqual(["pwd", "otp"]);
+		expect(row.acr).toBeUndefined();
+	});
+
+	it("puts the methods in the ID token and never in the access token", async () => {
+		const { issue, redeem } = await setup();
+		const issued = await issue("openid", ["pwd", "otp"]);
+		const tokens = await redeem(issued.data!.code);
+		expect(decodeJwt(tokens.id_token!).amr).toEqual(["pwd", "otp"]);
+		expect(decodeJwt(tokens.access_token)).not.toHaveProperty("amr");
+	});
+
+	it("issues no methods for a request without openid", async () => {
+		const { issue, stored, redeem } = await setup();
+		const issued = await issue("profile", ["pwd"]);
+		expect(issued.error).toBeNull();
+		expect((await stored(issued.data!.code)).amr).toBeUndefined();
+		const tokens = await redeem(issued.data!.code);
+		expect(tokens.id_token).toBeUndefined();
+		expect(decodeJwt(tokens.access_token)).not.toHaveProperty("amr");
+	});
+
+	it("rejects methods that are not a string array", async () => {
+		const { issue } = await setup();
+		const issued = await issue("openid", ["pwd", 1]);
+		expect(issued.error?.status).toBe(500);
+	});
+
+	it("keeps auth_time from the session", async () => {
+		const { issue, stored, sessionCreatedAt } = await setup();
+		const issued = await issue("openid", ["pwd"]);
+		expect((await stored(issued.data!.code)).authTime).toBe(
+			await sessionCreatedAt(),
+		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10414
+ */
+describe("provider.issueAuthorizationCode with serverContext", async () => {
+	const redirectUri = "https://client.example.com/callback";
+	const resource = "https://api.example.com";
+
+	const issuer = {
+		id: "test-server-context-code-issuer",
+		endpoints: {
+			testIssueCode: createAuthEndpoint(
+				"/test/issue-code",
+				{ method: "POST", use: [sessionMiddleware] },
+				async (ctx) => {
+					const { serverContext, ...query } = ctx.body as {
+						serverContext?: Record<string, unknown>;
+					} & StoredAuthorizationQuery;
+					const issued = await getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+					).issueAuthorizationCode({
+						query,
+						session: ctx.context.session,
+						amr: ["pwd"],
+						...(serverContext !== undefined ? { serverContext } : {}),
+					});
+					return ctx.json({ code: issued.code });
+				},
+			),
+		},
+	} satisfies BetterAuthPlugin;
+
+	// What `customTokenResponseFields` saw on each authorization_code exchange.
+	const seen: (Record<string, unknown> | undefined)[] = [];
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL: "http://localhost:3000/api/auth/",
+		advanced: { skipTrailingSlashes: true },
+		plugins: [
+			issuer,
+			jwt({ jwt: { issuer: "http://localhost:3000" } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [resource],
+				enforcePerClientResources: false,
+				customTokenResponseFields: ({ grantType, verificationValue }) => {
+					if (grantType !== "authorization_code") return {};
+					seen.push(verificationValue?.serverContext);
+					const handle = verificationValue?.serverContext?.authSessionId;
+					return typeof handle === "string" ? { auth_session: handle } : {};
+				},
+			}),
+		],
+	});
+	const { headers, user } = await signInWithTestUser();
+	const context = await auth.$context;
+
+	let oauthClient: OAuthClient;
+	beforeAll(async () => {
+		oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "none",
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+	});
+
+	async function codeQuery() {
+		const verifier = generateRandomString(43);
+		const query = {
+			response_type: "code",
+			client_id: oauthClient.client_id,
+			scope: "openid",
+			resource,
+			code_challenge: await generateCodeChallenge(verifier),
+			code_challenge_method: "S256",
+		};
+		return { query, verifier };
+	}
+
+	function issue(
+		query: Record<string, unknown>,
+		serverContext?: unknown,
+		extraHeaders: Record<string, string> = {},
+	) {
+		return client.$fetch<{ code: string }>("/test/issue-code", {
+			method: "POST",
+			headers: { ...Object.fromEntries(headers), ...extraHeaders },
+			body: { ...query, serverContext },
+		});
+	}
+
+	async function redeem(code: string, verifier: string) {
+		const tokens = await client.$fetch<{
+			access_token: string;
+			id_token?: string;
+			auth_session?: string;
+		}>("/oauth2/token", {
+			method: "POST",
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				grant_type: "authorization_code",
+				client_id: oauthClient.client_id!,
+				code,
+				code_verifier: verifier,
+				resource,
+			}),
+		});
+		expect(tokens.error).toBeNull();
+		return tokens.data!;
+	}
+
+	async function storedValue(code: string) {
+		const row = await context.internalAdapter.findVerificationValue(
+			await storeToken("hashed", code, "authorization_code"),
+		);
+		return JSON.parse(row!.value) as Record<string, unknown>;
+	}
+
+	it("passes serverContext to the token request that redeems the code", async () => {
+		const { query, verifier } = await codeQuery();
+		const serverContext = { authSessionId: "row-1", round: 2 };
+		const issued = await issue(query, serverContext);
+		expect(issued.error).toBeNull();
+		expect((await storedValue(issued.data!.code)).serverContext).toEqual(
+			serverContext,
+		);
+		seen.length = 0;
+		const tokens = await redeem(issued.data!.code, verifier);
+		expect(seen).toEqual([serverContext]);
+		expect(tokens.auth_session).toBe("row-1");
+	});
+
+	it("cannot replace the fields the provider stores with the code", async () => {
+		const { query, verifier } = await codeQuery();
+		const plain = await issue(query);
+		const serverContext = {
+			type: "other",
+			userId: "attacker",
+			sessionId: "attacker-session",
+			referenceId: "attacker-reference",
+			authTime: 0,
+			acr: "urn:example:forged",
+			amr: ["hwk"],
+			resource: ["https://attacker.example.com"],
+			query: { ...query, scope: "openid offline_access", dpop_jkt: "forged" },
+		};
+		const withContext = await issue(query, serverContext);
+		expect(withContext.error).toBeNull();
+		const { serverContext: stored, ...provided } = await storedValue(
+			withContext.data!.code,
+		);
+		expect(stored).toEqual(serverContext);
+		expect(provided).toEqual(await storedValue(plain.data!.code));
+		expect(provided.userId).toBe(user.id);
+
+		const tokens = await redeem(withContext.data!.code, verifier);
+		const idToken = decodeJwt(tokens.id_token!);
+		expect(idToken.sub).toBe(user.id);
+		expect(idToken.amr).toEqual(["pwd"]);
+		expect(idToken.acr).toBe("0");
+		expect(decodeJwt(tokens.access_token).scope).toBe("openid");
+	});
+
+	it("stores and passes nothing without serverContext", async () => {
+		const { query, verifier } = await codeQuery();
+		const issued = await issue(query);
+		expect(issued.error).toBeNull();
+		expect(await storedValue(issued.data!.code)).not.toHaveProperty(
+			"serverContext",
+		);
+		seen.length = 0;
+		const tokens = await redeem(issued.data!.code, verifier);
+		expect(seen).toEqual([undefined]);
+		expect(tokens).not.toHaveProperty("auth_session");
+	});
+
+	it("gives a code from /oauth2/authorize no serverContext", async () => {
+		const verifier = generateRandomString(43);
+		const query = {
+			response_type: "code",
+			client_id: oauthClient.client_id!,
+			redirect_uri: redirectUri,
+			scope: "openid",
+			resource,
+			code_challenge: await generateCodeChallenge(verifier),
+			code_challenge_method: "S256",
+			// A client cannot set the server-only field through the request.
+			serverContext: JSON.stringify({ authSessionId: "forged" }),
+		};
+		let location = "";
+		await client.$fetch(
+			`/oauth2/authorize?${new URLSearchParams(query).toString()}`,
+			{
+				headers,
+				onError(ctx) {
+					location = ctx.response.headers.get("location") ?? "";
+				},
+			},
+		);
+		const code = new URL(location).searchParams.get("code")!;
+		expect(await storedValue(code)).not.toHaveProperty("serverContext");
+		seen.length = 0;
+		const tokens = await client.$fetch<{ auth_session?: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					client_id: oauthClient.client_id!,
+					code,
+					code_verifier: verifier,
+					redirect_uri: redirectUri,
+					resource,
+				}),
+			},
+		);
+		expect(tokens.error).toBeNull();
+		expect(seen).toEqual([undefined]);
+		expect(tokens.data).not.toHaveProperty("auth_session");
+	});
+
+	it.each([
+		["an array", ["row-1"]],
+		["a string", "row-1"],
+		["null", null],
+	])("rejects %s as serverContext", async (_, serverContext) => {
+		const { query } = await codeQuery();
+		const issued = await issue(query, serverContext);
+		expect(issued.error?.status).toBe(500);
+	});
+
+	it("rejects serverContext before using up the request's DPoP proof", async () => {
+		const key = await createDpopKey();
+		const proof = await createDpopProof(key, issueCodeEndpoint);
+		const { query } = await codeQuery();
+		const rejected = await issue(query, ["row-1"], { DPoP: proof });
+		expect(rejected.error?.status).toBe(500);
+		expect(rejected.data).toBeNull();
+
+		const issued = await issue(
+			query,
+			{ authSessionId: "row-1" },
+			{ DPoP: proof },
+		);
+		expect(issued.error).toBeNull();
+		const stored = await storedValue(issued.data!.code);
+		expect((stored.query as StoredAuthorizationQuery).dpop_jkt).toBe(key.jkt);
 	});
 });

@@ -16,7 +16,12 @@ import type {
 	OAuthTokenRevokedEvent,
 	Scope,
 } from "./types";
-import { getJwksSource, getJwtPlugin, getStoredToken } from "./utils";
+import {
+	getJwksSource,
+	getJwtPlugin,
+	getStoredToken,
+	JWT_ACCESS_TOKEN_TYPE,
+} from "./utils";
 
 /** Signature, issuer, and `azp` are verified; audience and client are not. */
 export type JwtAccessTokenPayload = JWTPayload & { azp: string; sid?: string };
@@ -45,8 +50,9 @@ const jwksInfrastructureErrorCodes = new Set([
  * Verifies a JWT access token issued by this server. Returns `"inactive"` for
  * one that is expired or fails claim validation, so the lookup can stop: it
  * cannot be another token type. Returns `null` for anything else (an opaque
- * token, a malformed or forged JWT, a JWT that is not an access token) so the
- * lookup can continue. Key-set failures still throw.
+ * token, a malformed or forged JWT, a JWT that is not an access token, such as
+ * one without `typ: at+jwt`) so the lookup can continue. Key-set failures
+ * still throw.
  */
 async function verifyJwtAccessToken(
 	ctx: GenericEndpointContext,
@@ -70,8 +76,18 @@ async function verifyJwtAccessToken(
 		// resource identifiers, which each endpoint validates itself.
 		({ payload } = await jwtVerify(token, createLocalJWKSet(jwks), {
 			issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+			// RFC 9068 §4: other JWTs signed with these keys, such as session or
+			// app JWTs, must not pass as access tokens. jose compares media
+			// types, so `application/at+jwt` and any letter case also match.
+			typ: JWT_ACCESS_TOKEN_TYPE,
 		}));
 	} catch (error) {
+		if (
+			error instanceof joseErrors.JWTClaimValidationFailed &&
+			error.claim === "typ"
+		) {
+			return null;
+		}
 		// jose checks claims only after the signature verifies. `JWTExpired` is
 		// not a subclass of `JWTClaimValidationFailed`, so both are listed.
 		if (
@@ -210,9 +226,24 @@ export function authorizationCodeGrantId(authorizationCodeId: string) {
 	);
 }
 
+export const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
+
+/**
+ * The longest lifetime, in seconds, of a user access token this configuration
+ * can issue: `accessTokenExpiresIn`, or `accessTokenMaxExpiresIn` when that is
+ * a function and the resolver's result is bounded by it. A window that has to
+ * outlast every token, such as a grant's revocation entry or the record of a
+ * redeemed code, sizes itself from this and never from one grant's lifetime.
+ */
+export function maxAccessTokenExpiresIn(opts: OAuthOptions<Scope[]>): number {
+	return typeof opts.accessTokenExpiresIn === "function"
+		? (opts.accessTokenMaxExpiresIn ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN)
+		: (opts.accessTokenExpiresIn ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN);
+}
+
 /** How long a grant's revocation mark lasts, before its one-second margin. */
 export function grantRevocationWindowMs(opts: OAuthOptions<Scope[]>) {
-	return (opts.accessTokenExpiresIn ?? 3600) * 1000;
+	return maxAccessTokenExpiresIn(opts) * 1000;
 }
 
 /**
@@ -247,9 +278,10 @@ export async function notifyTokenRevoked(
  * With `revocableJwtAccessTokens`, the mark also revokes every JWT access token
  * carrying the grant's `grant_id`.
  *
- * The entry lasts `accessTokenExpiresIn`: every user access token expires
- * within that of being issued, so the entry outlives every token the grant
- * issued before it was written. One more second covers a token accepted
+ * The entry lasts the longest access token lifetime (see
+ * `maxAccessTokenExpiresIn`): every user access token expires within that of
+ * being issued, so the entry outlives every token the grant issued before it
+ * was written. One more second covers a token accepted
  * until its `exp` and secondary storage rounding the TTL down. An issuance
  * that reaches its check that long after consuming its grant fails anyway
  * (see `createUserTokens`).

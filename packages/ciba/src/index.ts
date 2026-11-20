@@ -3,7 +3,11 @@ import { extendOAuthProvider } from "@better-auth/oauth-provider";
 import { getAuthEndpointUrl } from "@better-auth/oauth-provider/internal";
 import type { BetterAuthPlugin } from "better-auth";
 import { mergeSchema } from "better-auth/db";
-import { cibaApprovalRequest, createCompleteCibaRequest } from "./approval";
+import {
+	cibaApprovalRequest,
+	createCompleteCibaRequest,
+	createGetCibaRequest,
+} from "./approval";
 import {
 	DETAILS_TYPES_FIELD,
 	validateRegisteredDetailsTypes,
@@ -14,6 +18,7 @@ import {
 	BC_AUTHORIZE_PATH,
 	CIBA_GRANT_TYPE,
 } from "./constants";
+import type { IsConfiguredOrigin } from "./delivery";
 import {
 	DELIVERY_MODE_FIELD,
 	NOTIFICATION_ENDPOINT_FIELD,
@@ -36,9 +41,11 @@ declare module "@better-auth/core" {
 /**
  * OpenID Connect Client-Initiated Backchannel Authentication (CIBA) for
  * `oauthProvider()`. A client names a user with `login_hint` at
- * `/oauth2/bc-authorize`, the user approves on their own device through the
- * provider's sign-in and consent pages, and the client collects tokens at the
- * token endpoint, by polling or after a ping callback (`deliveryModes`).
+ * `/oauth2/bc-authorize`, the user approves on their own device, and the
+ * client collects tokens at the token endpoint, by polling or after a ping
+ * callback (`deliveryModes`). The user approves through the provider's
+ * sign-in and consent pages, or only through your own path with
+ * `approvalPage` and `completeCibaRequest`.
  *
  * Requires the `oauth-provider` and `jwt` plugins.
  *
@@ -51,14 +58,31 @@ export const ciba = (options: CibaOptions) => {
 		expiresIn: options.expiresIn ?? 300,
 		interval: options.interval ?? 5,
 	};
+	// The origins resolved at initialization, per auth instance (keyed by its
+	// schema, which request-scoped contexts share) so one plugin
+	// object can serve several. Ping delivery trusts only these, never the list
+	// a request resolves, which can come from request input such as the Host
+	// header and so from the party the delivery check defends against.
+	const configuredOrigins = new WeakMap<object, (url: string) => boolean>();
+	const isConfiguredOrigin: IsConfiguredOrigin = (ctx, url) =>
+		configuredOrigins.get(ctx.context.tables)?.(url) ?? false;
 	const extension: OAuthProviderExtension = {
 		name: "ciba",
 		grants: {
 			[CIBA_GRANT_TYPE]: createCibaGrantHandler(resolvedOptions),
 		},
-		interactionRequests: {
-			[APPROVAL_PARAMETER]: cibaApprovalRequest(options.resultPage),
-		},
+		// Another approval path turns off the provider's, so its consent page
+		// cannot approve a request and skip that path's checks.
+		...(options.approvalPage === undefined
+			? {
+					interactionRequests: {
+						[APPROVAL_PARAMETER]: cibaApprovalRequest(
+							options.resultPage,
+							isConfiguredOrigin,
+						),
+					},
+				}
+			: {}),
 		clientMetadata: {
 			// CIBA §4 and RFC 9396 §10: clients register these through dynamic
 			// registration or a client metadata document too; they are stored in
@@ -97,11 +121,16 @@ export const ciba = (options: CibaOptions) => {
 		// `mergeSchema` applies overrides in place, so merge into a copy.
 		schema: mergeSchema(structuredClone(schema), options.schema),
 		init(ctx) {
+			configuredOrigins.set(ctx.tables, (url) => ctx.isTrustedOrigin(url));
 			extendOAuthProvider(ctx, extension);
 		},
 		endpoints: {
 			bcAuthorize: createBcAuthorize(resolvedOptions),
-			completeCibaRequest: createCompleteCibaRequest(resolvedOptions),
+			getCibaRequest: createGetCibaRequest(),
+			completeCibaRequest: createCompleteCibaRequest(
+				resolvedOptions,
+				isConfiguredOrigin,
+			),
 		},
 		// Each request notifies a user, so it gets a tighter limit than the
 		// generic per-IP default.
@@ -123,4 +152,5 @@ export type {
 	CibaDeliveryMode,
 	CibaNotification,
 	CibaOptions,
+	CibaPendingRequest,
 } from "./types";

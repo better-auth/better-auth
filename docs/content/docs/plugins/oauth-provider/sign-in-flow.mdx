@@ -131,7 +131,7 @@ The client sends this request directly, so the provider handles it as `/oauth2/p
 
 * A confidential client must send the credentials it uses at the token endpoint, in the request body or the `Authorization` header. The provider reads them from the request your endpoint received, not from `query`. Without this check, anyone who copies the client's requests could start authorization in its name. The provider leaves the credentials out of the stored request. A `client_id` that names another client fails with `invalid_client`.
 * A public client, such as most native apps, is identified by its `client_id` alone. It has no credentials, so its `client_id` does not prove which app sent the request.
-* A `DPoP` proof on the request binds the code to its key ([RFC 9449 §10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)). The client must then prove the same key at the token endpoint. A `dpop_jkt` that names a different key fails with `invalid_dpop_proof`, and the proof stays usable for a corrected request. Do not also call `verifyDpopProof` on this request, because a second verification rejects the proof as replayed.
+* A `DPoP` proof on the request binds the code to its key ([RFC 9449 §10](https://datatracker.ietf.org/doc/html/rfc9449#section-10)). The client must then prove the same key at the token endpoint. A `dpop_jkt` that names a different key fails with `invalid_dpop_proof`, and the proof stays usable for a corrected request. If your endpoint already called `verifyDpopProof` on this request, the provider reuses that result instead of verifying the proof again, and the proof's `jti` is already used up, so a mismatch needs a new proof.
 * With `dpop.nonce.required` on, a proof without a current nonce fails with `use_dpop_nonce` before client authentication. The client's retry can then reuse a one-time client assertion.
 
 If your endpoint accepts `application/x-www-form-urlencoded` bodies, set `cloneRequest: true` in its endpoint options. Client authentication re-reads the raw form body.
@@ -149,7 +149,7 @@ const { code } = await provider.issueAuthorizationCode({
 });
 ```
 
-The request is then authenticated as the stored client. A `client_id`, Basic credentials, or a client assertion for another client fails with `invalid_client`, and a DPoP proof from another key fails with `invalid_dpop_proof`. A request without a proof still gets a code bound to the stored key, so only a token request with a proof from that key can redeem it. Reject an unknown or expired handle before the call, because without a stored client the request is authenticated as whichever client it names. Leave the handle out of `query`, because the provider stores the query with the code. Earlier requests of the flow bind to the same client and key with [`authenticateClient`'s `clientId`](/docs/plugins/oauth-provider/reference#provider-extensions) and [`verifyDpopProof`'s `expectedJkt`](/docs/plugins/oauth-provider/tokens#bind-later-requests-to-a-dpop-key).
+The request is then authenticated as the stored client. A `client_id`, Basic credentials, or a client assertion for another client fails with `invalid_client`, and a DPoP proof from another key fails with `invalid_dpop_proof`. A request without a proof still gets a code bound to the stored key, so only a token request with a proof from that key can redeem it. Reject an unknown or expired handle before the call, because without a stored client the request is authenticated as whichever client it names. Leave the handle out of `query`, because the provider stores the query with the code. To find your record again when the client redeems the code, pass its ID inside an object as [`serverContext`](#carry-your-own-state-to-the-token-request). Earlier requests of the flow bind to the same client and key with [`authenticateClient`'s `clientId`](/docs/plugins/oauth-provider/reference#provider-extensions) and [`verifyDpopProof`'s `expectedJkt`](/docs/plugins/oauth-provider/tokens#bind-later-requests-to-a-dpop-key).
 
 The provider then checks the request as `/oauth2/authorize` does: the client, scopes, claims, resources, and PKCE. The session you pass is the account the code is for, so account selection does not run. It issues the code only when the client has `skip_consent` or the user already consented to everything requested. Any step that would show a page fails instead, with a 400 error:
 
@@ -171,6 +171,107 @@ Your endpoint must authenticate the user before it calls `issueAuthorizationCode
 A client sends `prompt=login` or `max_age=0` to require a new sign-in, even when the user is already signed in ([OIDC Core §3.1.2.1](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest)). To accept these requests, your endpoint checks the user's credentials and creates the session in the same request that calls `issueAuthorizationCode`, for example with `ctx.context.internalAdapter.createSession(user.id)` and then `setSessionCookie(ctx, { session, user })`, imported from `better-auth/cookies`. Then it passes `{ session, user }` to `issueAuthorizationCode`, with only the authorization request parameters as `query`. Without such a session, the error description is `the request requires a new sign-in`. The provider records each session created during a request, and accepts the request only for one of those. A session from an earlier request does not count, even when this request refreshes it. A session created inside a database transaction counts once the transaction commits. The code's `auth_time` is the new session's creation time.
 
 Creating a session is what the provider treats as the new sign-in. Create one only after your endpoint has verified the user's credentials in that request.
+
+### Check the client before the user's credentials
+
+An endpoint that checks a password or another credential should first confirm which client is asking. Otherwise, a request in another client's name, or from another DPoP key, could still learn whether the password is right. Call `challengeDpopNonce`, `authenticateClient`, and `verifyDpopProof` first, then check the user's credentials, then call `issueAuthorizationCode` on the same request. With `dpop.nonce.required` on, `challengeDpopNonce` answers a proof without a current nonce with `use_dpop_nonce` before client authentication uses up a one-time client assertion:
+
+```ts
+await provider.challengeDpopNonce();
+const { clientId } = await provider.authenticateClient({
+  clientId: pending.clientId,
+  // A public client sends no credentials. A confidential client still must.
+  requireCredentials: false,
+});
+await provider.verifyDpopProof({ expectedJkt: pending.dpopJkt });
+
+const user = await verifyPassword(ctx.body); // your own check, throws on failure
+const session = await ctx.context.internalAdapter.createSession(user.id);
+const { code } = await provider.issueAuthorizationCode({
+  query: { ...pending.query, client_id: clientId },
+  session: { session, user },
+});
+```
+
+`issueAuthorizationCode` reuses what those calls proved on this request, instead of checking again. A second check would reject a `private_key_jwt` assertion or a DPoP proof as replayed. The method still requires a match:
+
+* A `client_id` in `query` must name the client that `authenticateClient` returned. Otherwise, the call fails with `invalid_client`.
+* A `dpop_jkt` in `query` must name the key of the proof that `verifyDpopProof` verified. Otherwise, the call fails with `invalid_dpop_proof`. Without a `dpop_jkt`, the code is bound to that proof's key.
+
+Only results the provider produced on the same request count, so your code cannot pass in a client or a proof that was never checked.
+
+### Validate the request before the user signs in
+
+An endpoint that signs the user in over several requests should check the authorization request on the first one. Otherwise, a request error such as an unknown scope appears only after the user has entered their credentials. Call `validateAuthorizationRequest` with the client's request parameters:
+
+```ts
+const { query, client } = await provider.validateAuthorizationRequest({
+  query: ctx.body,
+});
+// Store `query` with the handle you return, then pass it to
+// issueAuthorizationCode on the last request.
+```
+
+The method runs the checks that `/oauth2/authorize` and `issueAuthorizationCode` run on the request: the client, `response_type`, the `redirect_uri` when present, scopes, claims, resources, and PKCE. An invalid request fails with a 400 error carrying the code `/oauth2/authorize` reports for the same request, such as `invalid_scope` or `invalid_target`. The method never redirects, issues no code, stores no pushed request, and records no DPoP proof. Looking up the client and resources can still write, as it does for `/oauth2/authorize`: a client discovered from a client ID metadata document is saved, and `onClientCreated` runs for it. It needs no session.
+
+The request must name its client with `client_id`. A `request_uri` fails with `invalid_request`, and a `request` object fails with `request_not_supported`, as with `issueAuthorizationCode`.
+
+The result holds two values:
+
+* `query`: the request after validation, with the client's default scopes filled in when the request named none. Client credentials such as `client_secret` are left out. Pass it to `issueAuthorizationCode` unchanged.
+* `client`: the fields a sign-in page may show, such as `name` and `icon`, plus `tokenEndpointAuthMethod` and `applicationType`. Call `getClient` for the full registration.
+
+The result is advisory. `validateAuthorizationRequest` does not authenticate the client, so your endpoint must still authenticate a confidential client, for example with [`authenticateClient`](/docs/plugins/oauth-provider/reference#provider-extensions). `issueAuthorizationCode` checks the request again on the last request, together with the session, consent, `prompt`, and `max_age`.
+
+### Report how the user signed in
+
+Your endpoint knows which methods it checked, such as a password and a one-time code. Pass them as `amr`, using the values from [RFC 8176](https://datatracker.ietf.org/doc/html/rfc8176), so the ID token's `amr` claim lists them. List only methods your server verified in this flow. Never copy `amr` values from the client's request, because the ID token asserts them to the client as the provider's own statement:
+
+```ts
+const { code } = await provider.issueAuthorizationCode({
+  query,
+  session,
+  amr: ["pwd", "otp"],
+});
+```
+
+When you configure [`authenticationContext.resolve`](/docs/plugins/oauth-provider/openid-connect#authentication-context), the resolver receives these values as `amr`, and its result decides the code's `acr` and `amr`. Return the `amr` it receives to keep them. Without a resolver, the code carries the methods you pass, and no `acr` beyond the default `"0"`. This matches `issueTokens` and [`completeCibaRequest`](/docs/plugins/ciba#decide-from-your-own-app), which also record the `amr` you pass without calling a resolver.
+
+The methods reach only the ID token, never the access token, so they are ignored for a request without the `openid` scope. The code's `auth_time` always comes from the session's creation time, so your endpoint cannot report an earlier sign-in than the session proves.
+
+### Carry your own state to the token request
+
+An endpoint that keeps its own record for a flow may need that record again when the client redeems the code. For example, an endpoint that gives the client a handle can return a new handle with the tokens. Pass the values you need as `serverContext`:
+
+```ts
+const { code } = await provider.issueAuthorizationCode({
+  query: { ...request, client_id: pending.clientId, dpop_jkt: pending.dpopJkt },
+  session: ctx.context.session,
+  serverContext: { signInId: pending.id },
+});
+```
+
+The provider stores the values with the code. When the client redeems the code, [`customTokenResponseFields`](/docs/plugins/oauth-provider/tokens#custom-token-response-fields) receives them as `verificationValue.serverContext`:
+
+```ts title="auth.ts"
+oauthProvider({
+  customTokenResponseFields: async ({ grantType, verificationValue }) => {
+    const signInId = verificationValue?.serverContext?.signInId;
+    if (grantType !== "authorization_code" || typeof signInId !== "string") {
+      return {};
+    }
+    return { handle: await renewSignInHandle(signInId) }; // your own storage
+  },
+})
+```
+
+Only your server sets `serverContext`, with the same guarantee as the `serverContext` on [Better Auth's OAuth state](/docs/concepts/oauth#passing-server-trusted-data): a request cannot set it. A code from `/oauth2/authorize` has none, and the provider never copies the client's request parameters into it. Set it only from values your server determined, so the callback can trust what it reads. The provider keeps the values apart from the fields it stores with the code. A key such as `userId` or `query` changes nothing about the code or the tokens it issues.
+
+The callback runs for every code a client redeems, whichever endpoint issued it. When more than one endpoint sets `serverContext`, nest each endpoint's values under its own key, so the callback reads only the values that endpoint stored. A plugin that other apps install should use its plugin ID as the key, as in `serverContext: { "my-plugin": { signInId } }`.
+
+Your app's `customTokenResponseFields` is the only reader of `serverContext`. A plugin has no callback of its own for it, so the plugin must document its key, and the app reads that key in `customTokenResponseFields` and returns the fields to add.
+
+The value must be a JSON object. The callback reads it back in its JSON form. For example, a `Date` inside it arrives as a string. Any other value fails with a 500 `server_error`, and no code is issued. The provider stores the values as plain JSON with the code. Store a reference, such as a record ID, rather than a secret or personal data. Refresh requests do not receive the values.
 
 ## Login page
 
@@ -269,6 +370,19 @@ Device approvals and CIBA requests carry no `redirect_uri`. For a client an admi
 The response is `{ redirect: true, url }`. By default, the auth client sends the browser to `url`. If you call the endpoint another way, send the browser to `url` yourself.
 
 With `accept: false`, the user returns to the client with `access_denied`, and any consent given earlier stays unchanged. This redirect happens only while the client is enabled and the `redirect_uri` is still valid for it. If the client was disabled or deleted, or the `redirect_uri` no longer passes redirect URI validation, the `url` points to the server error page instead. Validation fails when the URI was removed from the client's registration under the default policy, or when `allowInsecureRedirectUri` or `validateRedirectUri` no longer accepts it. When the user denies a device approval, the user returns to the device verification page instead of the client. When the user denies a CIBA request, the user goes to `resultPage`. Both URLs carry `status=denied`. To remove consent, see [Manage consents](#manage-consents).
+
+### Stored consent
+
+When the user accepts, Better Auth stores a consent for that user, client, and [consent reference](#post-login-screen). A stored consent holds the scopes, resources, and UserInfo claims that the user approved for the client and did not take back. Each acceptance updates it:
+
+* The scopes and UserInfo claims the user accepts are added.
+* The scopes and UserInfo claims the page offered and the user left out are removed.
+* The resources the request names are added. The page cannot decline a resource.
+* Everything else stays, including what the user approved on an earlier page that this page did not offer.
+
+A client cannot shrink a stored consent by asking for less. For example, the user approves `openid offline_access` for one device, and then `openid` for a second device of the same client. The consent keeps both scopes. Only the user takes access back: by declining a scope or claim that the consent page offers, by narrowing the consent with `updateOAuthConsent`, or by deleting it. See [Manage consents](#manage-consents).
+
+For an authorization request, the consent page shows again only when the stored consent does not cover it, or when the request sends `prompt=consent`. With `prompt=none`, a request the stored consent does not cover gets `consent_required` instead. A client with `skip_consent` skips the page unless the request sends `prompt=consent`. Device approvals and CIBA approvals from the link show the page every time. When two acceptances for the same client and reference arrive at the same moment, the stored consent keeps what each one added. If other writes keep changing the consent while an acceptance or `updateOAuthConsent` saves it, the request fails with `503` and `temporarily_unavailable` after five attempts. Retry it.
 
 ## Sign-up account screen
 
@@ -452,7 +566,17 @@ To let users list and change their consents, use these endpoints. Each requires 
 | `updateOAuthConsent` | `/oauth2/update-consent` | `POST` | body `{ id, update: { scopes } }` |
 | `deleteOAuthConsent` | `/oauth2/delete-consent` | `POST` | body `{ id }`                     |
 
-Updated scopes must be allowed for the client. Deleting a consent makes the next authorization ask again.
+Two first acceptances at the same moment can each store a row for the same client and consent reference. These endpoints treat such rows as one consent. `getOAuthConsents` lists them once. `getOAuthConsent` and `updateOAuthConsent` return the oldest row with the scopes, resources, and UserInfo claims of all of them, so its `id` can differ from the one you sent. `deleteOAuthConsent` deletes all of them.
+
+`updateOAuthConsent` replaces the consent's scopes with the ones you send, which must be allowed for the client. A later request for a removed scope shows the consent page again. Narrowing does not revoke tokens already issued: they keep their scopes until they expire or are revoked. To revoke the tokens issued under a consent, delete it.
+
+Deleting a consent revokes the refresh tokens and opaque access tokens issued under it. JWT access tokens stay valid until they expire, unless [`revocableJwtAccessTokens`](/docs/plugins/oauth-provider/tokens#revoke-the-access-tokens-of-a-grant) revokes them. Tokens the user holds for the same client under another consent reference stay valid. See [Revoke tokens with a consent](/docs/plugins/oauth-provider/tokens#revoke-tokens-with-a-consent).
+
+After the user deletes a consent, the client's next authorization request under that consent reference shows the consent page again. With `prompt=none`, it gets `consent_required` instead. A client with `skip_consent` is not asked, so it can still get new tokens. To stop such a client, disable or delete it.
+
+A pending authorization code follows the consent. So do an approved [device code](/docs/plugins/device-authorization#approve-the-device) and a [CIBA](/docs/plugins/ciba#approvals-follow-the-consent) request the user approved from the link. Redeeming one needs a stored consent for its user, client, and consent reference that still covers its scopes and resources. For an authorization code, the consent must also cover its UserInfo claims. Once the user deletes the consent, or narrows it below what was approved, redeeming it fails with `invalid_grant`. A later approval for the same client and consent reference [adds to the consent](#stored-consent), so it leaves the code valid. If the user declines one of the code's scopes or claims on that later consent page, the consent no longer covers the code, and redeeming it fails the same way.
+
+If the user deletes the consent and then approves the same access again for the same client and consent reference, the code is valid again. Redemption bypasses this check while the client is configured with `skip_consent`, even if a stored consent exists. A redemption that passed this check just before the consent was deleted can still finish, and the tokens it issues stay valid. A CIBA request approved with [`completeCibaRequest`](/docs/plugins/ciba#decide-from-your-own-app) stores no consent, so it is not checked.
 
 ```ts title="consents.ts"
 const { error } = await authClient.oauth2.updateConsent({

@@ -13,7 +13,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cimd, createCimdClientDiscovery } from "./index";
-import type { CimdOptions } from "./types";
+import type { CimdOwnedResolverOptions } from "./types";
 
 const PKCE_VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 const PKCE_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
@@ -62,7 +62,9 @@ function withCode(message: string, code: string): Error {
 	return Object.assign(new Error(message), { code });
 }
 
-async function createAuthorizationServer(options: Partial<CimdOptions> = {}) {
+async function createAuthorizationServer(
+	options: Partial<CimdOwnedResolverOptions> = {},
+) {
 	instanceSequence += 1;
 	const baseURL = `http://localhost:${3700 + instanceSequence}`;
 	const transport = {
@@ -431,6 +433,23 @@ describe("CIMD metadataStaleIfError", () => {
 				"client_id URL is not permitted by the server's fetch policy",
 			);
 		}
+	});
+
+	/** @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1 */
+	it("ends stale serving when the URL policy withdraws approval during an outage", async () => {
+		let allowed = true;
+		const server = await createAuthorizationServer({
+			metadataStaleIfError: "1h",
+			isMetadataDocumentUrlAllowed: () => allowed,
+		});
+		await server.authorize();
+		server.transport.answer = () => new Response(null, { status: 503 });
+		expect((await server.authorize()).pathname).toBe("/consent");
+
+		allowed = false;
+		expect((await server.authorize()).error).toBe("invalid_client");
+		allowed = true;
+		expect((await server.authorize()).error).toBe("invalid_client");
 	});
 
 	it("fetches the document of a client served this way at most once a minute", async () => {
@@ -962,7 +981,9 @@ describe("CIMD metadataStaleIfError", () => {
  * @see https://github.com/better-auth/better-auth/issues/11875
  */
 describe("CIMD metadataStaleIfError for jwks_uri keys", () => {
-	async function createKeyClientServer(options: Partial<CimdOptions>) {
+	async function createKeyClientServer(
+		options: Partial<CimdOwnedResolverOptions>,
+	) {
 		const { privateKey, publicKey } = (await crypto.subtle.generateKey(
 			{
 				name: "RSASSA-PKCS1-v1_5",

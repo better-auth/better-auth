@@ -174,7 +174,11 @@ async function revokeRefreshToken(
 			ctx,
 			opts,
 			clientId,
-			{ userId: refreshToken.userId, grantId: current?.grantId },
+			{
+				userId: refreshToken.userId,
+				grantId: current?.grantId,
+				authorizationCodeId: refreshToken.authorizationCodeId,
+			},
 			"revocation_request",
 		);
 		return;

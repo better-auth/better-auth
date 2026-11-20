@@ -1,4 +1,6 @@
+import dnsPromises from "node:dns/promises";
 import { createServer } from "node:http";
+import { syncBuiltinESMExports } from "node:module";
 import type { AddressInfo } from "node:net";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import {
@@ -33,6 +35,22 @@ import {
 import * as z from "zod";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+
+/**
+ * The delivery check imports `node:dns/promises` once per target, and targets
+ * run in parallel. `vi.mock` reaches only one of several concurrent dynamic
+ * imports of a built-in module, so the other targets would resolve names
+ * through the real resolver. Replacing `lookup` on the module itself and
+ * syncing its ESM exports applies to every import.
+ */
+const lookupMock = vi.fn();
+
+beforeEach(() => {
+	lookupMock.mockReset();
+	lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+	vi.spyOn(dnsPromises, "lookup").mockImplementation(lookupMock as never);
+	syncBuiltinESMExports();
+});
 
 interface ReceivedLogoutRequest {
 	contentType: string | undefined;
@@ -105,10 +123,14 @@ describe("oauth back-channel logout", async () => {
 	const state = "123";
 	const scopes = ["openid", "email", "profile", "offline_access"];
 	let shouldVetoSessionDeletion = false;
+	// Origins that only a sign-out request resolves as trusted. The callback
+	// returns nothing without a `Request`, so initialization never sees them.
+	let requestTrustedOrigins: string[] = [];
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
 		database: memoryAdapter(database),
+		trustedOrigins: async (request) => (request ? requestTrustedOrigins : []),
 		databaseHooks: {
 			session: {
 				delete: {
@@ -222,6 +244,14 @@ describe("oauth back-channel logout", async () => {
 	});
 	let server: Listener;
 
+	// Delivery trusts the list resolved at initialization, so a test sets that
+	// list on the initialization context.
+	const initContext = await auth.$context;
+	const configuredTrustedOrigins = initContext.trustedOrigins;
+	const trustOrigins = (origins: string[]) => {
+		initContext.trustedOrigins = [...configuredTrustedOrigins, ...origins];
+	};
+
 	let rp: Awaited<ReturnType<typeof startMockRp>>;
 
 	beforeAll(async () => {
@@ -232,6 +262,8 @@ describe("oauth back-channel logout", async () => {
 	});
 	beforeEach(async () => {
 		shouldVetoSessionDeletion = false;
+		requestTrustedOrigins = [];
+		initContext.trustedOrigins = configuredTrustedOrigins;
 		rp = await startMockRp();
 		const networkFetch = globalThis.fetch.bind(globalThis);
 		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
@@ -724,6 +756,338 @@ describe("oauth back-channel logout", async () => {
 				expect(token.revoked).toBeInstanceOf(Date);
 			}
 		}
+	});
+
+	/**
+	 * Registration only classifies the literal hostname, so a public-looking
+	 * name whose DNS answer is internal must be rejected at delivery time.
+	 *
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#Security
+	 */
+	describe("delivery address validation", () => {
+		const resolverOptions = { all: true, verbatim: true };
+
+		async function expectDeliverySkipped() {
+			const oauthClient = await registerClient();
+			await issueTokens({ client: oauthClient });
+			const warn = vi.spyOn((await auth.$context).logger, "warn");
+
+			const result = await client.signOut({ fetchOptions: { headers } });
+			expect(result.error).toBeNull();
+			await vi.waitFor(() =>
+				expect(warn).toHaveBeenCalledWith(
+					expect.stringContaining(
+						`back-channel logout to client ${oauthClient.client_id} skipped`,
+					),
+				),
+			);
+
+			expect(lookupMock).toHaveBeenCalledWith(
+				new URL(rp.publicUrl).hostname,
+				resolverOptions,
+			);
+			expect(rp.received).toHaveLength(0);
+			const tokens = await readClientTokenRevocation(oauthClient.client_id);
+			expect(tokens.accessTokens.length).toBeGreaterThan(0);
+			for (const token of tokens.accessTokens) {
+				expect(token.revoked).toBeInstanceOf(Date);
+			}
+		}
+
+		it.each([
+			["a private address", "10.0.0.5"],
+			["loopback", "127.0.0.1"],
+			["the cloud metadata address", "169.254.169.254"],
+			["an IPv4-mapped IPv6 loopback", "::ffff:127.0.0.1"],
+		])("skips a hostname that resolves to %s", async (_label, address) => {
+			lookupMock.mockResolvedValue([
+				{ address, family: address.includes(":") ? 6 : 4 },
+			]);
+			await expectDeliverySkipped();
+		});
+
+		it("skips a hostname when any resolved address is not public", async () => {
+			lookupMock.mockResolvedValue([
+				{ address: "93.184.216.34", family: 4 },
+				{ address: "10.0.0.5", family: 4 },
+			]);
+			await expectDeliverySkipped();
+		});
+
+		it("skips a hostname that cannot be resolved", async () => {
+			lookupMock.mockRejectedValue(new Error("ENOTFOUND"));
+			await expectDeliverySkipped();
+		});
+
+		/**
+		 * A DNS64 resolver answers a name that only has an A record with the
+		 * address plus a synthesized `64:ff9b::/96` address that embeds it. An
+		 * embedded private IPv4 address must still skip delivery.
+		 *
+		 * @see https://www.rfc-editor.org/rfc/rfc6890.html
+		 */
+		it("skips a hostname when DNS64 synthesizes an address that embeds a private IPv4", async () => {
+			lookupMock.mockResolvedValue([
+				{ address: "93.184.216.34", family: 4 },
+				{ address: "64:ff9b::a00:5", family: 6 },
+			]);
+			await expectDeliverySkipped();
+		});
+
+		it("checks every client's target when one session holds tokens for many clients", async () => {
+			const clients = [];
+			for (let i = 0; i < 5; i++) {
+				const oauthClient = await registerClient();
+				await issueTokens({ client: oauthClient });
+				clients.push(oauthClient);
+			}
+
+			await client.signOut({ fetchOptions: { headers } });
+			await waitForDispatches(clients.length);
+
+			expect(lookupMock).toHaveBeenCalledTimes(clients.length);
+			expect(rp.received).toHaveLength(clients.length);
+		});
+
+		it("delivers to a hostname that resolves only to public addresses", async () => {
+			lookupMock.mockResolvedValue([
+				{ address: "93.184.216.34", family: 4 },
+				{ address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+			]);
+			const oauthClient = await registerClient();
+			await issueTokens({ client: oauthClient });
+
+			await client.signOut({ fetchOptions: { headers } });
+			await waitForDispatches();
+
+			expect(lookupMock).toHaveBeenCalledWith(
+				new URL(rp.publicUrl).hostname,
+				resolverOptions,
+			);
+			expect(rp.received).toHaveLength(1);
+		});
+
+		/**
+		 * Some runtimes expose `node:dns/promises` with a `lookup` that throws. The
+		 * host name check already passed, so the lookup failing must not be read as
+		 * an unresolvable name.
+		 */
+		it("delivers when the runtime's lookup is a stub", async () => {
+			lookupMock.mockRejectedValue(
+				Object.assign(new Error("dns.lookup is not implemented"), {
+					code: "ERR_METHOD_NOT_IMPLEMENTED",
+				}),
+			);
+			const oauthClient = await registerClient();
+			await issueTokens({ client: oauthClient });
+
+			await client.signOut({ fetchOptions: { headers } });
+			await waitForDispatches();
+
+			expect(lookupMock).toHaveBeenCalled();
+			expect(rp.received).toHaveLength(1);
+		});
+
+		it("delivers to a public IP literal without a DNS lookup", async () => {
+			const literalOrigin = "https://93.184.216.34";
+			const networkFetch = globalThis.fetch;
+			vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+				const requestedUrl =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requestedUrl.startsWith(literalOrigin)) {
+					return networkFetch(
+						`${rp.url}${requestedUrl.slice(literalOrigin.length)}`,
+						init,
+					);
+				}
+				return networkFetch(input, init);
+			});
+			const oauthClient = await registerClient({
+				backchannel_logout_uri: `${literalOrigin}/logout/backchannel`,
+			});
+			await issueTokens({ client: oauthClient });
+
+			await client.signOut({ fetchOptions: { headers } });
+			await waitForDispatches();
+
+			expect(lookupMock).not.toHaveBeenCalled();
+			expect(rp.received).toHaveLength(1);
+		});
+
+		it("skips a stored private target that bypassed registration checks", async () => {
+			const oauthClient = await registerClient();
+			await issueTokens({ client: oauthClient });
+			const ctx = await auth.$context;
+			await ctx.adapter.update({
+				model: "oauthClient",
+				where: [{ field: "clientId", value: oauthClient.client_id }],
+				update: { backchannelLogoutUri: `${rp.url}/logout/backchannel` },
+			});
+			const warn = vi.spyOn(ctx.logger, "warn");
+
+			await client.signOut({ fetchOptions: { headers } });
+			await vi.waitFor(() =>
+				expect(warn).toHaveBeenCalledWith(
+					expect.stringContaining(
+						`back-channel logout to client ${oauthClient.client_id} skipped`,
+					),
+				),
+			);
+
+			expect(lookupMock).not.toHaveBeenCalled();
+			expect(rp.received).toHaveLength(0);
+			const tokens = await readClientTokenRevocation(oauthClient.client_id);
+			for (const token of tokens.accessTokens) {
+				expect(token.revoked).toBeInstanceOf(Date);
+			}
+		});
+
+		/**
+		 * An origin the operator lists in `trustedOrigins` is vouched for, so a
+		 * split-horizon name that resolves to a private address still receives
+		 * the Logout Token. Only the DNS answer is skipped: the host name rules
+		 * that registration applies still hold at delivery.
+		 */
+		describe("trusted origins", () => {
+			const privateAnswer = [{ address: "10.0.0.5", family: 4 }];
+
+			it("delivers to a host that resolves to a private address when its origin is trusted", async () => {
+				lookupMock.mockResolvedValue(privateAnswer);
+				trustOrigins([rp.publicUrl]);
+				const oauthClient = await registerClient();
+				await issueTokens({ client: oauthClient });
+
+				await client.signOut({ fetchOptions: { headers } });
+				await waitForDispatches();
+
+				expect(lookupMock).not.toHaveBeenCalled();
+				expect(rp.received).toHaveLength(1);
+			});
+
+			it("skips the same host when its origin is not trusted", async () => {
+				lookupMock.mockResolvedValue(privateAnswer);
+				trustOrigins(["https://other.example.com"]);
+				await expectDeliverySkipped();
+			});
+
+			it("delivers to a trusted host whose lookup fails", async () => {
+				lookupMock.mockRejectedValue(new Error("ENOTFOUND"));
+				trustOrigins([rp.publicUrl]);
+				const oauthClient = await registerClient();
+				await issueTokens({ client: oauthClient });
+
+				await client.signOut({ fetchOptions: { headers } });
+				await waitForDispatches();
+
+				expect(rp.received).toHaveLength(1);
+			});
+
+			/**
+			 * @see https://better-auth.com/docs/reference/options#wildcard-support
+			 */
+			describe("wildcard entries", () => {
+				it.each([
+					["a protocol wildcard", "https://rp-*.example.com"],
+					["a subdomain wildcard", "https://*.example.com"],
+					["a host-only wildcard", "*.example.com"],
+				])("delivers when %s matches the origin", async (_label, pattern) => {
+					lookupMock.mockResolvedValue(privateAnswer);
+					trustOrigins([pattern]);
+					const oauthClient = await registerClient();
+					await issueTokens({ client: oauthClient });
+
+					await client.signOut({ fetchOptions: { headers } });
+					await waitForDispatches();
+
+					expect(rp.received).toHaveLength(1);
+				});
+
+				it.each([
+					["a pattern for another domain", "https://*.example.org"],
+					["a pattern for another scheme", "http://*.example.com"],
+					["an exact origin for the parent domain", "https://example.com"],
+				])("skips when %s does not match", async (_label, pattern) => {
+					lookupMock.mockResolvedValue(privateAnswer);
+					trustOrigins([pattern]);
+					await expectDeliverySkipped();
+				});
+			});
+
+			/**
+			 * Registration rejects these hosts, so they reach delivery only through
+			 * a stored value that bypassed it. Trusting the origin must not let them
+			 * through.
+			 */
+			it.each([
+				["a loopback address", () => `${rp.url}/logout/backchannel`],
+				["a private IP literal", () => "https://10.0.0.5/logout/backchannel"],
+				["a loopback name", () => "https://localhost/logout/backchannel"],
+			])("still skips %s stored on a trusted origin", async (_label, uri) => {
+				const target = uri();
+				trustOrigins([new URL(target).origin]);
+				const oauthClient = await registerClient();
+				await issueTokens({ client: oauthClient });
+				const ctx = await auth.$context;
+				await ctx.adapter.update({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: oauthClient.client_id }],
+					update: { backchannelLogoutUri: target },
+				});
+				const warn = vi.spyOn(ctx.logger, "warn");
+
+				await client.signOut({ fetchOptions: { headers } });
+				await vi.waitFor(() =>
+					expect(warn).toHaveBeenCalledWith(
+						expect.stringContaining(
+							`back-channel logout to client ${oauthClient.client_id} skipped`,
+						),
+					),
+				);
+
+				expect(rp.received).toHaveLength(0);
+			});
+
+			it("still rejects a private host at registration when its origin is trusted", async () => {
+				trustOrigins(["https://10.0.0.5"]);
+				await expect(
+					registerClient({
+						backchannel_logout_uri: "https://10.0.0.5/logout/backchannel",
+					}),
+				).rejects.toMatchObject({
+					body: { error: "invalid_client_metadata" },
+				});
+			});
+
+			it("delivers when sign-out runs without a request", async () => {
+				lookupMock.mockResolvedValue(privateAnswer);
+				trustOrigins([rp.publicUrl]);
+				const oauthClient = await registerClient();
+				await issueTokens({ client: oauthClient });
+
+				await auth.api.signOut({ headers });
+				await waitForDispatches();
+
+				expect(lookupMock).not.toHaveBeenCalled();
+				expect(rp.received).toHaveLength(1);
+			});
+
+			/**
+			 * The sign-out request is sent by the party the check defends against,
+			 * and `trustedOrigins` can resolve from request input, such as the Host
+			 * header when no `baseURL` is configured. Only operator configuration
+			 * vouches for a host, so an origin that just the request resolves as
+			 * trusted still goes through the DNS check.
+			 */
+			it("ignores an origin that only the sign-out request resolves as trusted", async () => {
+				lookupMock.mockResolvedValue(privateAnswer);
+				requestTrustedOrigins = [rp.publicUrl];
+				await expectDeliverySkipped();
+			});
+		});
 	});
 });
 

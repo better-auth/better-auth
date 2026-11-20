@@ -93,6 +93,13 @@ export interface OAuthAuthenticationContextOptions<
 		 * `acr_values`, in order of preference.
 		 */
 		requestedAcrValues: string[];
+		/**
+		 * The Authentication Methods References a plugin endpoint reported to
+		 * `issueAuthorizationCode` as `amr`. Absent for approvals on the
+		 * provider's own pages. Treat it as input: return the `amr` the code
+		 * should carry, which may differ from this value.
+		 */
+		amr?: string[] | undefined;
 	}) => Awaitable<OAuthAuthenticationContext | undefined>;
 }
 
@@ -415,9 +422,8 @@ export interface IssueAuthorizationCodeParams {
 	 * out is authenticated as that client, and one that names another client
 	 * fails with `invalid_client`. On a later request of a flow your endpoint
 	 * started, set it from the state you stored, and set `dpop_jkt` to the key
-	 * the flow started with instead of calling `verifyDpopProof`. Without a
-	 * proof on the request, the code is still bound to that key, so the token
-	 * request must prove it. Client
+	 * the flow started with. Without a proof on the request, the code is still
+	 * bound to that key, so the token request must prove it. Client
 	 * credentials in the query, such as the `client_secret` of a forwarded
 	 * body, are not stored. A `request_uri` or
 	 * `request` object is not accepted; pass the parameters themselves.
@@ -433,6 +439,90 @@ export interface IssueAuthorizationCodeParams {
 		session: Session & Record<string, unknown>;
 		user: User & Record<string, unknown>;
 	};
+	/**
+	 * The Authentication Methods References your server verified itself in
+	 * this flow, such as `["pwd", "otp"]` (RFC 8176). Never copy values from
+	 * the client's request: the ID token asserts them to the relying party.
+	 *
+	 * With `authenticationContext.resolve` configured, the resolver receives
+	 * them as `amr` and its result decides the code's `acr` and `amr`.
+	 * Without a resolver, the code carries this `amr` as given, as
+	 * `issueTokens` and `completeCibaRequest` record theirs. Either way,
+	 * `amr` reaches only the ID token, so it is ignored without the `openid`
+	 * scope.
+	 *
+	 * `auth_time` always comes from the session's creation time, so a caller
+	 * cannot report an earlier sign-in than the session proves.
+	 */
+	amr?: string[];
+	/**
+	 * Values your endpoint stores with the code and reads back on the token
+	 * request that redeems it, such as the ID of a record your endpoint keeps
+	 * for the flow. `customTokenResponseFields` receives them as
+	 * `verificationValue.serverContext`, and it is the only reader: a plugin has
+	 * no callback of its own for them. Refresh requests do not receive them.
+	 *
+	 * Only your server sets them, as with `serverContext` on the OAuth state:
+	 * `/oauth2/authorize` never stores any, and the provider never copies the
+	 * client's request parameters into them. Set them only from values your
+	 * server determined. They are kept apart from the
+	 * fields the provider stores, so a key such as `userId` or `query` changes
+	 * nothing about the code or its tokens.
+	 *
+	 * The token request sees them whichever endpoint issued the code. When
+	 * more than one endpoint sets them, nest each endpoint's values under its
+	 * own key, such as its plugin ID.
+	 *
+	 * The value must be a JSON object, and it is read back in its JSON form. It
+	 * is stored as plain JSON with the code, so store a reference rather than a
+	 * secret or personal data.
+	 */
+	serverContext?: Record<string, unknown>;
+}
+
+/**
+ * Parameters of {@link OAuthProviderApi.validateAuthorizationRequest}.
+ */
+export interface ValidateAuthorizationRequestParams {
+	/**
+	 * The authorization request parameters, as `/oauth2/authorize` accepts
+	 * them, usually your endpoint's request body. `client_id` is required.
+	 * `redirect_uri` is optional, as for `issueAuthorizationCode`. A
+	 * `request_uri` or `request` object is not accepted.
+	 */
+	query: Record<string, unknown>;
+}
+
+/**
+ * The client of a validated authorization request: the fields a sign-in page
+ * may show, plus how the client authenticates. Call `getClient` for the full
+ * registration.
+ */
+export type OAuthAuthorizationRequestClient = Pick<
+	SchemaClient<Scope[]>,
+	| "clientId"
+	| "name"
+	| "uri"
+	| "icon"
+	| "contacts"
+	| "tos"
+	| "policy"
+	| "tokenEndpointAuthMethod"
+	| "applicationType"
+>;
+
+/**
+ * An authorization request checked by
+ * {@link OAuthProviderApi.validateAuthorizationRequest}.
+ */
+export interface ValidatedAuthorizationRequest {
+	/**
+	 * The request after validation, without client credentials, with the
+	 * client's default scopes filled in when it named none. Pass it to
+	 * `issueAuthorizationCode` unchanged.
+	 */
+	query: StoredAuthorizationQuery & { client_id: string };
+	client: OAuthAuthorizationRequestClient;
 }
 
 /**
@@ -519,9 +609,21 @@ export interface OAuthProviderApi {
 	 * another key fails with `invalid_dpop_proof` before its `jti` is used up,
 	 * and a request without a proof still binds the code to that key.
 	 * With `dpop.nonce.required`, the nonce challenge runs before client
-	 * authentication, so a retry can resend a one-time client assertion. An
+	 * authentication, so a retry can resend a one-time client assertion. It is
+	 * skipped when `authenticateClient` already ran on the request, so call
+	 * `challengeDpopNonce` before it. An
 	 * endpoint that accepts form-encoded bodies must set `cloneRequest: true`,
 	 * as for `authenticateClient`.
+	 *
+	 * When your endpoint already called `authenticateClient` or
+	 * `verifyDpopProof` on this request, for example to check the client and
+	 * key before the user's credentials, the method reuses those results
+	 * instead of checking again, which would reject a one-time assertion or
+	 * proof `jti` as replayed. A `client_id` in `query` must then name the
+	 * client `authenticateClient` returned. The verified proof's key binds the
+	 * code, and a `dpop_jkt` must match it; otherwise the call fails with `invalid_client` or
+	 * `invalid_dpop_proof`. Only results the provider produced on this
+	 * request are reused, so a caller cannot supply its own.
 	 *
 	 * A required PAR policy, from `pushedAuthorizationRequests.required` or the
 	 * client's `require_pushed_authorization_requests`, does not apply. It keeps
@@ -540,6 +642,28 @@ export interface OAuthProviderApi {
 	issueAuthorizationCode: (
 		params: IssueAuthorizationCodeParams,
 	) => Promise<IssuedAuthorizationCode>;
+	/**
+	 * Checks an authorization request as `/oauth2/authorize` checks it, without
+	 * a session and without issuing anything, for an endpoint that signs the
+	 * user in over several requests before it calls `issueAuthorizationCode`.
+	 * Call it on the first request, so the client learns about an invalid
+	 * request before the user enters credentials.
+	 *
+	 * It checks the client, the `redirect_uri` when present, `response_type`,
+	 * scopes, claims, resources, and PKCE. It fails with an HTTP 400
+	 * `APIError` carrying the OAuth error `/oauth2/authorize` reports for the
+	 * same request, and it never redirects. It issues no code, stores no pushed
+	 * request, and records no DPoP `jti`. The client lookup can still save a
+	 * client discovered from a client ID metadata document.
+	 *
+	 * The result is advisory. It does not authenticate the client, so your
+	 * endpoint must still authenticate a confidential client, and
+	 * `issueAuthorizationCode` checks the request again, along with the
+	 * session, consent, `prompt`, and `max_age`.
+	 */
+	validateAuthorizationRequest: (
+		params: ValidateAuthorizationRequestParams,
+	) => Promise<ValidatedAuthorizationRequest>;
 	/**
 	 * Resolves the sender-constraint the tokens for this request will carry: the
 	 * `confirmation` the client proved at authentication, or else the DPoP proof
@@ -590,10 +714,12 @@ export interface OAuthProviderApi {
 	 * because its `htm` cannot be checked.
 	 *
 	 * Call it before consuming a one-time credential, so the client's retry
-	 * with the nonce can still redeem it. Do not also call it on a request that
-	 * reaches `issueTokens`, `resolveConfirmation`, or `issueAuthorizationCode`:
-	 * they verify the proof themselves, and a second verification rejects its
-	 * `jti` as replayed.
+	 * with the nonce can still redeem it. When you call `issueTokens` or
+	 * `resolveConfirmation` without a `confirmation`, let that method verify
+	 * the proof. Verifying it twice rejects its `jti` as replayed. A supplied
+	 * `confirmation` replaces the proof for those methods.
+	 * `issueAuthorizationCode` reuses a proof this method verified on the same
+	 * request instead of verifying it again.
 	 */
 	verifyDpopProof: {
 		(params: {
@@ -987,7 +1113,9 @@ export interface OAuthInteractionRequest {
 	requireConsent?: boolean | undefined;
 	/**
 	 * Records the approval once every interaction is complete and returns the
-	 * URL to send the user to.
+	 * URL to send the user to. The provider has already verified that
+	 * `sessionId` is still active in the session store, so a cached session
+	 * that was revoked never reaches this call.
 	 */
 	approve: (approval: {
 		query: OAuthInteractionQuery;
@@ -1016,7 +1144,8 @@ export interface OAuthInteractionRequestHandler {
 	}) => Promise<OAuthInteractionRequest>;
 	/**
 	 * Records a denial from the consent page and returns the URL to send the
-	 * user to.
+	 * user to. The provider has already verified that `userId` belongs to a
+	 * session that is still active in the session store.
 	 */
 	deny: (input: {
 		ctx: GenericEndpointContext;
@@ -1109,6 +1238,32 @@ export interface InitialAccessTokenAuthorization {
 }
 
 /**
+ * What an {@link OAuthOptions.accessTokenExpiresIn} resolver receives when a user
+ * grant is issued. The provider has already validated every field, and it
+ * hands over copies, so changing them affects nothing else. Nothing from the
+ * request is included, so a client cannot ask for a longer lifetime.
+ */
+export interface AccessTokenExpiresInContext<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	/** The authenticated user the grant is issued for. */
+	user: User;
+	/** The authenticated client the grant is issued to. */
+	client: SchemaClient<Scopes>;
+	/** The scopes of the grant. */
+	scopes: Scopes[number][];
+	/** The grant type in play, when the flow provides one. */
+	grantType: GrantType | undefined;
+}
+
+/**
+ * Resolves the user access-token lifetime, in seconds, for a single grant.
+ */
+export type AccessTokenExpiresInResolver<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> = (params: AccessTokenExpiresInContext<Scopes>) => Awaitable<number>;
+
+/**
  * A revocation reported to {@link OAuthOptions.onTokenRevoked}. A refresh
  * token and an authorization code each stand for their grant, so the event
  * names the grant that was revoked. An access token is revoked on its own,
@@ -1119,8 +1274,8 @@ export type OAuthTokenRevokedEvent = {
 	/** The client the revoked tokens were issued to. */
 	clientId: string;
 	/**
-	 * No access token this revocation covers is accepted after this time, so a
-	 * record kept to reject them can be dropped then.
+	 * Keep the revocation record until this time. When an access-token lifetime
+	 * or its per-grant ceiling was lowered, earlier tokens can last longer.
 	 */
 	expiresAt: Date;
 	/**
@@ -1150,10 +1305,9 @@ export type OAuthTokenRevokedEvent = {
 			 * session-bound token after its session ends returns `invalid_grant`
 			 * without an event.
 			 *
-			 * When the token had already been rotated or revoked, or a rotation
-			 * of it raced the revocation, the provider also revokes every other
-			 * refresh token the client holds for the user. The event names only
-			 * this token's grant.
+			 * An identified grant is revoked independently. For a legacy token with
+			 * no grant ID, reuse also revokes the client's other refresh tokens for
+			 * the user, and the event has no grant ID.
 			 */
 			type: "refresh_token";
 			reason: "revocation_request" | "reuse_detected";
@@ -1316,6 +1470,9 @@ export interface OAuthOptions<
 	 *   defaults.
 	 * - Object form: explicit per-resource policy (TTL, signing alg, scope
 	 *   allowlist, custom claims, sender-constraint requirements).
+	 *   `allowedScopes` may be omitted for no scope restriction, or set to a
+	 *   non-empty string array as an allowlist. An empty array (`[]`) is rejected
+	 *   (use `disabled: true` to stop issuing tokens).
 	 *
 	 * Seeding is keyed by `identifier`. Behavior on re-seed is controlled by
 	 * {@link OAuthOptions.resourceSeedMode}.
@@ -1370,6 +1527,21 @@ export interface OAuthOptions<
 	 * @default "adapter"
 	 */
 	resourceSeedScope?: "adapter" | "process";
+	/**
+	 * Access-token format for resources that do not set their own. A resource's
+	 * `accessTokenFormat` replaces the default. A JWT needs a request that names
+	 * a `resource` and the JWT plugin; other requests receive opaque tokens.
+	 *
+	 * @example
+	 * ```ts
+	 * resourceDefaults: { accessTokenFormat: "opaque" },
+	 * resources: [
+	 *   "https://internal.example.com",
+	 *   { identifier: "https://api.example.com", accessTokenFormat: "jwt" },
+	 * ]
+	 * ```
+	 */
+	resourceDefaults?: OAuthResourceDefaults;
 	/**
 	 * Opt-in cache membership for resources by `identifier`. Mirrors the
 	 * {@link OAuthOptions.cachedTrustedClients} pattern.
@@ -1446,9 +1618,44 @@ export interface OAuthOptions<
 	/**
 	 * The amount of time in seconds that the access token is valid for.
 	 *
+	 * May also be a function, evaluated each time a user grant is issued or
+	 * refreshed, so the lifetime can be decided per grant rather than once per
+	 * process. It receives the user, the client, the scopes, and the grant type,
+	 * never anything read from the token request, so a client cannot obtain a
+	 * longer token by asking for one.
+	 *
+	 * The resolver returns a number of seconds. A result that is not a finite
+	 * number of at least one second falls back to 1 hour, or to
+	 * {@link OAuthOptions.accessTokenMaxExpiresIn} when that is lower. A result
+	 * above {@link OAuthOptions.accessTokenMaxExpiresIn} is lowered to it.
+	 * Throwing fails the token request.
+	 *
+	 * Client-credentials (machine-to-machine) grants are unaffected and continue to
+	 * use {@link OAuthOptions.m2mAccessTokenExpiresIn}.
+	 *
 	 * @default 3600 (1 hour) - Industry standard
+	 *
+	 * @example
+	 * ```ts
+	 * accessTokenExpiresIn: ({ scopes }) =>
+	 * 	scopes.includes("write:payments") ? 300 : 3600,
+	 * ```
 	 */
-	accessTokenExpiresIn?: number;
+	accessTokenExpiresIn?: number | AccessTokenExpiresInResolver<Scopes>;
+	/**
+	 * The longest access token lifetime in seconds that an
+	 * {@link OAuthOptions.accessTokenExpiresIn} function may return.
+	 *
+	 * The grant revocation entry and the record of a redeemed authorization code
+	 * must outlast every access token, so they last this long when
+	 * `accessTokenExpiresIn` is a function. Raise it to let the function return
+	 * more than 1 hour. A larger value also keeps those entries longer.
+	 *
+	 * Ignored when `accessTokenExpiresIn` is a number, which is its own bound.
+	 *
+	 * @default 3600 (1 hour)
+	 */
+	accessTokenMaxExpiresIn?: number;
 	/**
 	 * The amount of time in seconds that a client
 	 * credentials grant access token is valid for.
@@ -1475,8 +1682,10 @@ export interface OAuthOptions<
 	 * sender constraint.
 	 *
 	 * Matching reuse inside this interval is treated as refresh-response replay,
-	 * not refresh-token replay. Set to `0` to treat any rotated refresh token
-	 * reuse as replay.
+	 * not refresh-token replay. Overlapping in-flight refresh requests with the
+	 * same token are included: the CAS loser waits for the winner's stored
+	 * replay, for at most 5 seconds, instead of returning `invalid_grant`.
+	 * Set to `0` to treat any rotated refresh token reuse as replay.
 	 *
 	 * @default 0
 	 */
@@ -1644,6 +1853,12 @@ export interface OAuthOptions<
 	 * then persists the deduplicated union of this list and
 	 * {@link OAuthOptions.clientRegistrationAllowedScopes} so a later user
 	 * authorization can step up within the operator-approved capability set.
+	 *
+	 * When set, an authorization request that omits `scope` receives only the
+	 * client's scopes that are also in this list (RFC 6749 §3.3). When unset,
+	 * such a request receives every scope the client may request. With
+	 * {@link OAuthOptions.requireOpenId} enabled, omitting `scope` fails with
+	 * `invalid_scope` before these defaults apply.
 	 *
 	 * @default scopes
 	 */
@@ -2145,7 +2360,9 @@ export interface OAuthOptions<
 		/**
 		 * The authorization code verification value.
 		 * Only present for `authorization_code` grant. Contains the original
-		 * authorization request parameters (`query`), `referenceId`, `sessionId`, etc.
+		 * authorization request parameters (`query`), `referenceId`, `sessionId`,
+		 * and the `serverContext` a plugin endpoint passed to
+		 * `issueAuthorizationCode`.
 		 */
 		verificationValue?: VerificationValue;
 	}) => Awaitable<Record<string, unknown>>;
@@ -2308,6 +2525,27 @@ export interface OAuthOptions<
 	 */
 	revocableJwtAccessTokens?: boolean;
 	/**
+	 * Revokes the access and refresh tokens stored for a user when their
+	 * password is reset, including `offline_access` grants that no session
+	 * holds.
+	 *
+	 * It applies when `emailAndPassword.revokeSessionsOnPasswordReset` is on,
+	 * to `/reset-password` and the reset endpoints of the email OTP and phone
+	 * number plugins, and also for a user with no live session. Ending sessions
+	 * or signing out keeps `offline_access` grants. With
+	 * `revocableJwtAccessTokens`, the JWT access tokens of grants that have a
+	 * stored refresh token or opaque access token are revoked too. A JWT issued
+	 * without a refresh token has no stored record and stays valid until it
+	 * expires.
+	 *
+	 * Set it to `false` to keep a user's tokens across a password reset. The
+	 * reset still ends the user's sessions, and a JWT access token that carries
+	 * the `sid` of an ended session becomes inactive.
+	 *
+	 * @default true
+	 */
+	revokeGrantsOnPasswordReset?: boolean;
+	/**
 	 * Called after the provider revokes a grant or a single access token: when
 	 * a client revokes a token at `/oauth2/revoke`, and when a client presents
 	 * an authorization code or refresh token again after the provider used it.
@@ -2318,7 +2556,9 @@ export interface OAuthOptions<
 	 * revoking one revokes the grant's opaque access tokens, and its JWT access
 	 * tokens too with `revocableJwtAccessTokens`. The event carries the
 	 * `grantId`, which a refresh token stored before 1.8 lacks; revoking such a
-	 * token reaches only the access tokens linked to it. An access token is
+	 * token directly reaches its linked access tokens. Reuse of a legacy token
+	 * without a grant ID also revokes the client's other refresh tokens for the
+	 * user. An access token is
 	 * revoked on its own, and the event carries its `jti`.
 	 *
 	 * It is not called when nothing is revoked, such as for an unknown,
@@ -2334,13 +2574,9 @@ export interface OAuthOptions<
 	 *   tokens as inactive, and a database that enforces the schema's foreign
 	 *   keys deletes the tokens of a deleted client or user.
 	 * - A deleted resource. Introspection reports its tokens as inactive.
-	 * - The other grants of a replayed refresh token. The provider also
-	 *   deletes the client's refresh tokens of the user's other grants, and
-	 *   the event names the replayed token's grant only. The JWT access
-	 *   tokens of those grants stay valid until they expire.
-	 *
-	 * Deleting a consent does not revoke the tokens already issued, so there
-	 * is nothing to report.
+	 * - A deleted consent or a password reset that revokes stored grants.
+	 * - Other grants affected by reuse of a legacy refresh token without a
+	 *   grant ID. Such an event has no grant ID to identify those grants.
 	 *
 	 * Delivery is best effort. The response waits for the callback. The
 	 * tokens are already revoked when it runs, so an error it throws is logged
@@ -2686,6 +2922,26 @@ export interface OAuthAuthorizationQuery {
 }
 
 /**
+ * Format of an access token issued for a resource. A `"jwt"` token is
+ * self-contained and verifiable with the provider's JWKS; an `"opaque"` token
+ * is a reference that resource servers check through introspection.
+ */
+export type AccessTokenFormat = "jwt" | "opaque";
+
+/**
+ * Token policy applied to every resource that does not set its own value.
+ * Field names match {@link OAuthResourceInput}.
+ */
+export interface OAuthResourceDefaults {
+	/**
+	 * Format of access tokens issued for a resource.
+	 *
+	 * @default "jwt"
+	 */
+	accessTokenFormat?: AccessTokenFormat;
+}
+
+/**
  * A persisted protected-resource row as stored in `oauthResource`.
  *
  * `null` on any policy column means "inherit the plugin-level default at
@@ -2704,12 +2960,19 @@ export interface OAuthResource {
 	accessTokenTtl?: number | null;
 	/** Refresh token TTL in seconds; null inherits {@link OAuthOptions.refreshTokenExpiresIn} */
 	refreshTokenTtl?: number | null;
+	/**
+	 * Format of access tokens issued for this resource; null inherits
+	 * {@link OAuthOptions.resourceDefaults}, then `"jwt"`.
+	 */
+	accessTokenFormat?: AccessTokenFormat | null;
 	/** When set, overrides the JWT plugin's getLatestKey() default at signing time. */
 	signingAlgorithm?: JWSAlgorithms | null;
 	signingKeyId?: string | null;
 	/**
-	 * When non-null, requested scopes must intersect this set or the request is
-	 * rejected with `invalid_scope`.
+	 * When set to a non-empty array, requested scopes must intersect this set or
+	 * the request is rejected with `invalid_scope`. `null`, `undefined`, or `[]`
+	 * in the persisted row are all treated as no scope restriction. An empty
+	 * array cannot be written on purpose via public inputs.
 	 */
 	allowedScopes?: string[] | null;
 	/**
@@ -2750,9 +3013,26 @@ export interface OAuthResourceInput {
 	name?: string;
 	accessTokenTtl?: number;
 	refreshTokenTtl?: number;
+	/**
+	 * Issue self-contained JWT access tokens (`"jwt"`) or opaque reference
+	 * tokens that resource servers check through introspection (`"opaque"`).
+	 * Both keep the resource as the token audience. A JWT needs a request that
+	 * names a `resource` and the JWT plugin; other requests receive opaque
+	 * tokens.
+	 *
+	 * @default resourceDefaults.accessTokenFormat, then "jwt"
+	 */
+	accessTokenFormat?: AccessTokenFormat;
 	signingAlgorithm?: JWSAlgorithms;
 	signingKeyId?: string;
-	allowedScopes?: string[];
+	/**
+	 * Omit for no scope restriction; non-empty array is an allowlist.
+	 * In admin endpoints, `null` removes scope restrictions. An empty
+	 * array (`[]`) is rejected — omit the field or pass `null` to allow
+	 * every requested scope, or set `disabled: true` to stop issuing
+	 * tokens for this resource.
+	 */
+	allowedScopes?: string[] | null;
 	customClaims?: Record<string, unknown>;
 	dpopBoundAccessTokensRequired?: boolean;
 	disabled?: boolean;
@@ -2801,6 +3081,11 @@ export interface VerificationValue {
 	authTime?: number;
 	acr?: string;
 	amr?: string[];
+	/**
+	 * The values a plugin endpoint passed to `issueAuthorizationCode` as
+	 * `serverContext`. Absent for codes from `/oauth2/authorize`.
+	 */
+	serverContext?: Record<string, unknown>;
 }
 
 /**

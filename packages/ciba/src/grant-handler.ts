@@ -1,10 +1,12 @@
 import type { OAuthExtensionGrantHandler } from "@better-auth/oauth-provider";
 import {
+	assertConsentStillCovers,
 	parseScopes,
 	resolveResourcePolicy,
 	toResourceList,
 	validateClientScopes,
 } from "@better-auth/oauth-provider/internal";
+import { parseActor } from "./actor";
 import { readAuthorizationDetails } from "./authorization-details";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
 import type { CibaRequest } from "./schema";
@@ -24,9 +26,7 @@ export const createCibaGrantHandler =
 		}
 		// CIBA §10.1: the client authenticates as registered.
 		const { client, clientId, confirmation } =
-			await provider.authenticateClient({
-				requireCredentials: !options.allowPublicClients,
-			});
+			await provider.authenticateClient();
 
 		const { adapter } = ctx.context;
 		const request = await adapter.findOne<CibaRequest>({
@@ -86,10 +86,15 @@ export const createCibaGrantHandler =
 		const authorizationDetails = readAuthorizationDetails(
 			request.authorizationDetails,
 		);
-		// The provider issues no refresh token with authorization details, so
-		// the returned scope leaves out `offline_access`.
+		const actor =
+			request.actor === null || request.actor === undefined
+				? undefined
+				: parseActor(request.actor);
+		// The provider issues no refresh token with authorization details or an
+		// actor, so the returned scope leaves out `offline_access`.
 		const scopes = parseScopes(request.scope).filter(
-			(scope) => !authorizationDetails || scope !== "offline_access",
+			(scope) =>
+				scope !== "offline_access" || (!authorizationDetails && !actor),
 		);
 		validateClientScopes(client, scopes);
 		// RFC 8707 §2.2: the poll may narrow the approved resources.
@@ -126,6 +131,18 @@ export const createCibaGrantHandler =
 				CIBA_ERROR_CODES.USER_NOT_FOUND.message,
 				"INTERNAL_SERVER_ERROR",
 			);
+		}
+		// A link approval stored a consent, so it follows that consent as an
+		// approved device code does. `completeCibaRequest` stores none.
+		if (request.approvedViaConsent) {
+			await assertConsentStillCovers(ctx, client, {
+				userId: request.userId,
+				referenceId: request.referenceId ?? undefined,
+				scopes: parseScopes(request.scope),
+				// Every approved resource, not the narrowed poll.
+				resources: approvedResources,
+				userInfoClaims: [],
+			});
 		}
 		// A rejected DPoP proof also refuses here, before the claim.
 		const binding = await provider.resolveConfirmation({
@@ -169,5 +186,6 @@ export const createCibaGrantHandler =
 			// authentication, binds the issued token.
 			confirmation: binding,
 			authorizationDetails,
+			act: actor,
 		});
 	};

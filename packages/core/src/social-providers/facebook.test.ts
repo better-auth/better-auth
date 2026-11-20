@@ -58,7 +58,7 @@ function mockGraphResponses(responses: {
 	if (responses.me) {
 		graphFetch
 			.calledWith(
-				"https://graph.facebook.com/me?fields=id,name,email,picture",
+				"https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
 				expect.anything(),
 			)
 			.thenResolve(responses.me, { times: 1 });
@@ -135,6 +135,66 @@ describe("facebook.getUserInfo (opaque access token)", () => {
 		const res = await provider.getUserInfo({} as any);
 		expect(res).toBeNull();
 		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+});
+
+describe("facebook userInfoEndpoint override", () => {
+	beforeEach(() => {
+		mockedBetterFetch.mockReset();
+	});
+
+	it("validates the token and reads the profile next to the override", async () => {
+		const graphFetch = vi.when(mockedBetterFetch, { onUnmatched: "throw" });
+		graphFetch
+			.calledWith(
+				"https://emulator.example.com/graph/debug_token",
+				expect.anything(),
+			)
+			.thenResolve(
+				debugTokenResponse({ is_valid: true, app_id: "fb-app", user_id: "u1" }),
+				{ times: 1 },
+			);
+		graphFetch
+			.calledWith(
+				"https://emulator.example.com/graph/me?tenant=a%20b&fields=id%2Cname%2Cemail%2Cpicture",
+				expect.anything(),
+			)
+			.thenResolve(profileResponse(fbProfile("u1")), { times: 1 });
+
+		const res = await facebook({
+			...options,
+			userInfoEndpoint: "https://emulator.example.com/graph/me?tenant=a%20b",
+		}).getUserInfo({ accessToken: "opaque-access-token" });
+
+		expect(res?.user.email).toBe("u1@example.com");
+		expect(graphFetch).toHaveBeenExhausted();
+	});
+
+	it("resolves debug_token as a sibling when the override ends in a slash", async () => {
+		const graphFetch = vi.when(mockedBetterFetch, { onUnmatched: "throw" });
+		graphFetch
+			.calledWith(
+				"https://emulator.example.com/graph/debug_token",
+				expect.anything(),
+			)
+			.thenResolve(
+				debugTokenResponse({ is_valid: true, app_id: "fb-app", user_id: "u1" }),
+				{ times: 1 },
+			);
+		graphFetch
+			.calledWith(
+				"https://emulator.example.com/graph/me/?fields=id%2Cname%2Cemail%2Cpicture",
+				expect.anything(),
+			)
+			.thenResolve(profileResponse(fbProfile("u1")), { times: 1 });
+
+		const res = await facebook({
+			...options,
+			userInfoEndpoint: "https://emulator.example.com/graph/me/",
+		}).getUserInfo({ accessToken: "opaque-access-token" });
+
+		expect(res?.user.email).toBe("u1@example.com");
+		expect(graphFetch).toHaveBeenExhausted();
 	});
 });
 

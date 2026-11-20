@@ -1,18 +1,24 @@
 import type {
+	OAuthActorClaim,
 	OAuthAuthenticationContext,
 	OAuthClient,
 } from "@better-auth/oauth-provider";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import { APIError } from "better-auth/api";
 import { deriveDpopJkt } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { JWK } from "jose";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CibaNotification, CibaOptions } from "./index";
 import { CIBA_GRANT_TYPE, ciba } from "./index";
+import type { CibaRequest } from "./schema";
+
+const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
+vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
 
 const baseURL = "http://localhost:3000";
 const resource = "https://api.example.com";
@@ -54,14 +60,26 @@ const validatePayment = vi.fn((detail: Record<string, unknown>) =>
 	Object.keys(detail).every((key) => PAYMENT_FIELDS.has(key)),
 );
 
+// No actor unless a test returns one, so every other test covers the default.
+const resolveActor = vi.fn<NonNullable<CibaOptions["resolveActor"]>>(
+	() => undefined,
+);
+
 let lastNotification: CibaNotification | undefined;
 const sendNotification = vi.fn((notification: CibaNotification) => {
 	lastNotification = notification;
 });
 
+// What the next request resolves as trusted. Ping delivery ignores it.
+let requestTrustedOrigins: string[] = [];
+
 const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 	await getTestInstance({
 		baseURL,
+		trustedOrigins: async (request) => [
+			baseURL,
+			...(request ? requestTrustedOrigins : []),
+		],
 		plugins: [
 			jwt({ jwt: { issuer: baseURL } }),
 			oauthProvider({
@@ -84,8 +102,8 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 				resultPage: "/ciba",
 				interval: INTERVAL,
 				deliveryModes: ["poll", "ping"],
-				allowPublicClients: true,
 				sendNotification,
+				resolveActor,
 				authorizationDetailsTypes: {
 					[PAYMENT]: { validate: validatePayment },
 					[ACCOUNTS]: { validate: () => true },
@@ -187,7 +205,7 @@ async function start(
 	expect(res.status).toBe(200);
 	return {
 		authReqId: res.body.auth_req_id as string,
-		url: lastNotification!.url,
+		url: lastNotification!.url!,
 	};
 }
 
@@ -303,7 +321,7 @@ describe("ciba poll mode", () => {
 		const authReqId = res.body.auth_req_id as string;
 		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
 
-		const consent = await openLink(lastNotification!.url);
+		const consent = await openLink(lastNotification!.url!);
 		expect(consent.pathname).toBe("/consent");
 		expect(consent.searchParams.get("client_id")).toBe(pollClient.client_id);
 		expect(consent.searchParams.get("scope")).toBe("openid profile");
@@ -563,7 +581,7 @@ describe("ciba poll mode", () => {
 			login_hint: testUser.email,
 			resource: [resource, secondResource],
 		});
-		await approve(lastNotification!.url);
+		await approve(lastNotification!.url!);
 		const issued = await poll(res.body.auth_req_id as string);
 		expect(decodeJwt(issued.body.access_token as string).aud).toEqual(
 			expect.arrayContaining([resource, secondResource]),
@@ -619,6 +637,55 @@ describe("ciba poll mode", () => {
 		expect([decodeJwt(refreshed.access_token).aud].flat()).toContain(
 			secondResource,
 		);
+	});
+
+	/**
+	 * A CIBA grant has no authorization code, so only its grant ID tells the
+	 * replay teardown which tokens belong to it.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12154
+	 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+	 */
+	it("revokes only the CIBA grant whose rotated refresh token is replayed", async () => {
+		const client = await createClient(POLL, {
+			grant_types: [CIBA_GRANT_TYPE, "refresh_token"],
+		});
+		const issueGrant = async () => {
+			const { authReqId, url } = await start(
+				{ scope: "openid offline_access" },
+				client,
+			);
+			await approve(url);
+			return (await poll(authReqId, client)).body;
+		};
+		const refresh = (refreshToken: string) =>
+			customFetchImpl(`${baseURL}/api/auth/oauth2/token`, {
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					...clientAuthentication(client).headers,
+				},
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: refreshToken,
+				}).toString(),
+			}).then((r) => r.json());
+		const replayed = await issueGrant();
+		const other = await issueGrant();
+		expect(replayed.refresh_token).toEqual(expect.any(String));
+		expect(other.refresh_token).toEqual(expect.any(String));
+		const rotated = await refresh(replayed.refresh_token);
+		expect(rotated.error).toBeUndefined();
+
+		expect((await refresh(replayed.refresh_token)).error).toBe("invalid_grant");
+
+		expect((await introspect(replayed.access_token, client)).active).toBe(
+			false,
+		);
+		expect((await introspect(rotated.access_token, client)).active).toBe(false);
+		expect((await refresh(rotated.refresh_token)).error).toBe("invalid_grant");
+		expect((await introspect(other.access_token, client)).active).toBe(true);
+		expect((await refresh(other.refresh_token)).error).toBeUndefined();
 	});
 
 	it("refuses a resource whose policy drops openid", async () => {
@@ -737,16 +804,57 @@ describe("ciba backchannel request validation", () => {
 		expect(res.status).toBe(415);
 	});
 
-	it("rejects an unauthenticated client", async () => {
-		const res = await bcAuthorize(
-			{
-				client_id: pollClient.client_id,
-				scope: "openid",
-				login_hint: testUser.email,
-			},
-			null,
-		);
-		expect(res.body.error).toBe("invalid_client");
+	/**
+	 * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.13
+	 */
+	describe("answers invalid_client with 401 and a challenge", () => {
+		const request = { scope: "openid", login_hint: testUser.email };
+		const expectChallenge = (res: Awaited<ReturnType<typeof bcAuthorize>>) => {
+			expect(res.status).toBe(401);
+			expect(res.body.error).toBe("invalid_client");
+			expect(res.headers.get("www-authenticate")).toBe("Basic");
+			expect(res.headers.get("access-control-expose-headers")).toContain(
+				"WWW-Authenticate",
+			);
+		};
+
+		it("when the client sends no credentials", async () => {
+			expectChallenge(
+				await bcAuthorize(
+					{ client_id: pollClient.client_id, ...request },
+					null,
+				),
+			);
+		});
+
+		it("when the secret sent in the body is wrong", async () => {
+			expectChallenge(
+				await bcAuthorize(
+					{
+						client_id: pollClient.client_id,
+						client_secret: "wrong",
+						...request,
+					},
+					null,
+				),
+			);
+		});
+
+		it("when the secret sent with Basic is wrong", async () => {
+			expectChallenge(
+				await bcAuthorize(request, { ...pollClient, client_secret: "wrong" }),
+			);
+		});
+
+		it("when the request names no client", async () => {
+			expectChallenge(await bcAuthorize(request, null));
+		});
+
+		it("when the client is unknown", async () => {
+			expectChallenge(
+				await bcAuthorize({ client_id: "unknown-client", ...request }, null),
+			);
+		});
 	});
 
 	it.each([
@@ -813,13 +921,18 @@ describe("ciba backchannel request validation", () => {
 		expect(res.status).toBe(200);
 	});
 
-	it("lets a public client complete the flow with allowPublicClients", async () => {
+	it("rejects a public client at both endpoints", async () => {
 		const publicClient = await createClient(POLL, {
 			token_endpoint_auth_method: "none",
 		});
-		const { authReqId, url } = await start({}, publicClient);
-		await approve(url);
-		expect((await poll(authReqId, publicClient)).status).toBe(200);
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: testUser.email },
+			publicClient,
+		);
+		expect(res.status).toBe(401);
+		expect(res.body.error).toBe("invalid_client");
+		const polled = await poll("unknown", publicClient);
+		expect(polled.body.error).toBe("invalid_client");
 	});
 
 	it("caps requested_expiry at the configured lifetime", async () => {
@@ -1010,6 +1123,161 @@ describe("ciba server-side completion", () => {
 				},
 			}),
 		).rejects.toMatchObject({ body: { error: "invalid_request" } });
+	});
+});
+
+/**
+ * A request the user approves from the link follows the consent that approval
+ * stored, as an approved device code does. `completeCibaRequest` stores no
+ * consent, so its approvals are not checked.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11318
+ */
+describe("ciba approvals follow their consent", () => {
+	async function findStoredConsent(client: OAuthClient) {
+		const session = await auth.api.getSession({ headers });
+		const ctx = await auth.$context;
+		return ctx.adapter.findOne<{ id: string }>({
+			model: "oauthConsent",
+			where: [
+				{ field: "clientId", value: client.client_id },
+				{ field: "userId", value: session!.user.id },
+			],
+		});
+	}
+
+	async function deleteStoredConsent(client: OAuthClient) {
+		const consent = await findStoredConsent(client);
+		expect(consent?.id).toBeTruthy();
+		await auth.api.deleteOAuthConsent({ headers, body: { id: consent!.id } });
+	}
+
+	async function findStoredRequest(authReqId: string) {
+		const ctx = await auth.$context;
+		return ctx.adapter.findOne<CibaRequest>({
+			model: "cibaRequest",
+			where: [{ field: "authReqId", value: await hashAuthReqId(authReqId) }],
+		});
+	}
+
+	it("rejects a link approval after the user deletes the consent, and keeps the request", async () => {
+		const client = await createClient(POLL);
+		const { authReqId, url } = await start({}, client);
+		await approve(url);
+		expect((await findStoredRequest(authReqId))?.approvedViaConsent).toBe(true);
+		await deleteStoredConsent(client);
+
+		const refused = await poll(authReqId, client);
+		expect(refused).toMatchObject({
+			status: 400,
+			body: { error: "invalid_grant", error_description: "consent revoked" },
+		});
+		expect((await findStoredRequest(authReqId))?.status).toBe("approved");
+	});
+
+	it("rejects a link approval after the user narrows the consent below it", async () => {
+		const client = await createClient(POLL);
+		const { authReqId, url } = await start({ scope: "openid profile" }, client);
+		await approve(url);
+		const consent = await findStoredConsent(client);
+		await auth.api.updateOAuthConsent({
+			headers,
+			body: { id: consent!.id, update: { scopes: ["openid"] } },
+		});
+
+		expect(await poll(authReqId, client)).toMatchObject({
+			status: 400,
+			body: {
+				error: "invalid_grant",
+				error_description: "consent no longer covers this authorization",
+			},
+		});
+		expect((await findStoredRequest(authReqId))?.status).toBe("approved");
+	});
+
+	it("redeems both link approvals when a narrower approval follows a wider one", async () => {
+		const client = await createClient(POLL);
+		const wide = await start({ scope: "openid profile" }, client);
+		await approve(wide.url);
+		const narrow = await start({ scope: "openid" }, client);
+		await approve(narrow.url);
+
+		const wideIssued = await poll(wide.authReqId, client);
+		expect(wideIssued.status).toBe(200);
+		expect(wideIssued.body.scope).toBe("openid profile");
+		const narrowIssued = await poll(narrow.authReqId, client);
+		expect(narrowIssued.status).toBe(200);
+		expect(narrowIssued.body.scope).toBe("openid");
+	});
+
+	it("rejects an earlier link approval once a later approval declines a scope it needs, and keeps the request", async () => {
+		const client = await createClient(POLL);
+		const first = await start({ scope: "openid profile" }, client);
+		await approve(first.url);
+		const second = await start({ scope: "openid profile" }, client);
+		const consent = await openLink(second.url);
+		await answerConsent(consent, true, headers, "openid");
+
+		expect(await poll(first.authReqId, client)).toMatchObject({
+			status: 400,
+			body: {
+				error: "invalid_grant",
+				error_description: "consent no longer covers this authorization",
+			},
+		});
+		expect((await findStoredRequest(first.authReqId))?.status).toBe("approved");
+		const issued = await poll(second.authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.scope).toBe("openid");
+	});
+
+	it("redeems a link approval after another request gives the consent again", async () => {
+		const client = await createClient(POLL);
+		const first = await start({}, client);
+		await approve(first.url);
+		await deleteStoredConsent(client);
+		expect((await poll(first.authReqId, client)).body.error_description).toBe(
+			"consent revoked",
+		);
+
+		const second = await start({}, client);
+		await approve(second.url);
+		const issued = await poll(first.authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.access_token).toEqual(expect.any(String));
+	});
+
+	it("redeems a request approved with completeCibaRequest after the user deletes the consent", async () => {
+		const client = await createClient(POLL);
+		const linked = await start({}, client);
+		await approve(linked.url);
+		const { authReqId } = await start({}, client);
+		const { requestId, user } = lastNotification!;
+		await auth.api.completeCibaRequest({
+			body: { requestId, userId: user.id, decision: "approved" },
+		});
+		expect(
+			(await findStoredRequest(authReqId))?.approvedViaConsent,
+		).toBeFalsy();
+		await deleteStoredConsent(client);
+
+		const issued = await poll(authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.access_token).toEqual(expect.any(String));
+		expect((await poll(linked.authReqId, client)).body.error_description).toBe(
+			"consent revoked",
+		);
+	});
+
+	it("does not check a link approval of a client that skips consent", async () => {
+		const client = await createClient(POLL, { skip_consent: true });
+		const { authReqId, url } = await start({}, client);
+		await approve(url);
+		await deleteStoredConsent(client);
+
+		const issued = await poll(authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.access_token).toEqual(expect.any(String));
 	});
 });
 
@@ -1320,6 +1588,10 @@ describe("ciba authorization_details", () => {
 });
 
 describe("ciba ping mode", () => {
+	beforeEach(() => {
+		lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+	});
+
 	let pingClient: OAuthClient;
 	const token = "client-token.123";
 
@@ -1345,7 +1617,7 @@ describe("ciba ping mode", () => {
 		expect(ping).toHaveBeenCalledOnce();
 		const [endpoint, init] = ping.mock.calls[0]!;
 		expect(endpoint).toBe(notificationEndpoint);
-		expect(init).toMatchObject({ method: "POST", redirect: "error" });
+		expect(init).toMatchObject({ method: "POST", redirect: "manual" });
 		expect(new Headers(init?.headers).get("authorization")).toBe(
 			`Bearer ${token}`,
 		);
@@ -1424,6 +1696,182 @@ describe("ciba ping mode", () => {
 		await approve(url);
 		expect(ping).not.toHaveBeenCalled();
 	});
+
+	/**
+	 * Registration only checks the host as written, so a public-looking name
+	 * can still resolve to an internal address when the ping is sent.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-10.7
+	 */
+	describe("delivery destination", () => {
+		async function expectPingSkipped(ping: ReturnType<typeof mockPing>) {
+			const warn = vi.spyOn((await auth.$context).logger, "warn");
+			const { authReqId, url } = await startPing();
+			await approve(url);
+
+			expect(ping).not.toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledWith(
+				expect.stringContaining(
+					`CIBA ping to client ${pingClient.client_id} skipped`,
+				),
+			);
+			expect((await poll(authReqId, pingClient)).status).toBe(200);
+		}
+
+		it.each([
+			["a private address", [{ address: "10.0.0.5", family: 4 }]],
+			["loopback", [{ address: "127.0.0.1", family: 4 }]],
+			[
+				"the cloud metadata address",
+				[{ address: "169.254.169.254", family: 4 }],
+			],
+			["a unique local IPv6 address", [{ address: "fd00::1", family: 6 }]],
+			[
+				"an IPv4-mapped IPv6 loopback",
+				[{ address: "::ffff:127.0.0.1", family: 6 }],
+			],
+			[
+				"a public address and a private address",
+				[
+					{ address: "93.184.216.34", family: 4 },
+					{ address: "10.0.0.5", family: 4 },
+				],
+			],
+		])("skips a host that resolves to %s", async (_, answer) => {
+			lookupMock.mockResolvedValue(answer);
+			await expectPingSkipped(mockPing());
+			expect(lookupMock).toHaveBeenCalledWith("client.example.com", {
+				all: true,
+				verbatim: true,
+			});
+		});
+
+		it.each([
+			[
+				"cannot be resolved",
+				() => lookupMock.mockRejectedValue(new Error("ENOTFOUND")),
+			],
+			["resolves to no address", () => lookupMock.mockResolvedValue([])],
+		])("skips a host that %s", async (_, arrange) => {
+			arrange();
+			await expectPingSkipped(mockPing());
+		});
+
+		it("pings a host that resolves only to public addresses", async () => {
+			lookupMock.mockResolvedValue([
+				{ address: "93.184.216.34", family: 4 },
+				{ address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+			]);
+			const ping = mockPing();
+			const { url } = await startPing();
+			await approve(url);
+			expect(ping).toHaveBeenCalledOnce();
+		});
+
+		it("skips a stored endpoint that is no longer public without a lookup", async () => {
+			const ping = mockPing();
+			const warn = vi.spyOn((await auth.$context).logger, "warn");
+			const ctx = await auth.$context;
+			const decide = async (action: "link" | "complete" | "deny") => {
+				const { url } = await startPing();
+				const { requestId, user } = lastNotification!;
+				await ctx.adapter.update({
+					model: "cibaRequest",
+					where: [{ field: "id", value: requestId }],
+					update: { clientNotificationEndpoint: "https://10.0.0.5/ciba" },
+				});
+				if (action === "complete") {
+					await auth.api.completeCibaRequest({
+						body: { requestId, userId: user.id, decision: "approved" },
+					});
+				} else {
+					await answerConsent(await openLink(url), action === "link");
+				}
+			};
+			for (const action of ["link", "complete", "deny"] as const) {
+				await decide(action);
+			}
+			expect(ping).not.toHaveBeenCalled();
+			expect(lookupMock).not.toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledTimes(3);
+		});
+
+		/**
+		 * An origin the operator lists in `trustedOrigins` is vouched for, so a
+		 * name that resolves to a private address on an internal network, as a
+		 * split-horizon name does, still receives the ping. Only the lookup is
+		 * skipped.
+		 */
+		describe("trusted origins", async () => {
+			const initContext = await auth.$context;
+			const configuredTrustedOrigins = initContext.trustedOrigins;
+			const trustOrigins = (...origins: string[]) => {
+				initContext.trustedOrigins = [...configuredTrustedOrigins, ...origins];
+			};
+			const decide = async (action: "link" | "complete" | "deny") => {
+				const { url } = await startPing();
+				const { requestId, user } = lastNotification!;
+				if (action === "complete") {
+					await auth.api.completeCibaRequest({
+						body: { requestId, userId: user.id, decision: "approved" },
+					});
+				} else {
+					await answerConsent(await openLink(url), action === "link");
+				}
+				return requestId;
+			};
+
+			beforeEach(() => {
+				requestTrustedOrigins = [];
+				initContext.trustedOrigins = configuredTrustedOrigins;
+				lookupMock.mockResolvedValue([{ address: "10.0.0.5", family: 4 }]);
+			});
+
+			it.each(["link", "complete", "deny"] as const)(
+				"pings a host that resolves to a private address when its origin is trusted (%s)",
+				async (action) => {
+					trustOrigins("https://client.example.com");
+					const ping = mockPing();
+					await decide(action);
+					expect(ping).toHaveBeenCalledOnce();
+					expect(lookupMock).not.toHaveBeenCalled();
+				},
+			);
+
+			it("skips the same host when its origin is not trusted", async () => {
+				const ping = mockPing();
+				await decide("link");
+				expect(ping).not.toHaveBeenCalled();
+			});
+
+			it("still skips a stored private address when its origin is trusted", async () => {
+				trustOrigins("https://10.0.0.5");
+				const ping = mockPing();
+				const { url } = await startPing();
+				const { requestId } = lastNotification!;
+				await (await auth.$context).adapter.update({
+					model: "cibaRequest",
+					where: [{ field: "id", value: requestId }],
+					update: { clientNotificationEndpoint: "https://10.0.0.5/ciba" },
+				});
+				await approve(url);
+				expect(ping).not.toHaveBeenCalled();
+			});
+
+			/**
+			 * `trustedOrigins` can resolve from request input, such as the Host
+			 * header when no `baseURL` is configured, and the request that decides a
+			 * ping comes from the party the check defends against. Only the list
+			 * resolved at initialization counts.
+			 */
+			it("ignores an origin that only the deciding request resolves as trusted", async () => {
+				requestTrustedOrigins = ["https://client.example.com"];
+				const ping = mockPing();
+				await decide("link");
+				expect(ping).not.toHaveBeenCalled();
+			});
+		});
+	});
 });
 
 it("keeps one instance's schema overrides out of another", () => {
@@ -1435,6 +1883,76 @@ it("keeps one instance's schema overrides out of another", () => {
 	expect(
 		ciba({ resultPage: "/ciba", sendNotification }).schema.cibaRequest,
 	).not.toHaveProperty("modelName");
+});
+
+/**
+ * The origins an operator vouches for belong to one auth instance, so an
+ * instance that reuses a plugin object another instance also initialized
+ * does not take on that instance's trust.
+ */
+describe("ciba ping trust with a plugin object shared by two instances", async () => {
+	const shared = ciba({
+		resultPage: "/ciba",
+		deliveryModes: ["poll", "ping"],
+		sendNotification,
+	});
+	const instance = (trustedOrigins: string[]) =>
+		getTestInstance({
+			baseURL,
+			trustedOrigins,
+			plugins: [
+				jwt({ jwt: { issuer: baseURL } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					allowUnauthenticatedClientRegistration: true,
+				}),
+				shared,
+			],
+		});
+	// Initialized first, then the instance that trusts the client's origin.
+	const untrusting = await instance([baseURL]);
+	await instance([baseURL, "https://client.example.com"]);
+
+	it("does not ping a private address for an instance that does not trust the origin", async () => {
+		lookupMock.mockResolvedValue([{ address: "10.0.0.5", family: 4 }]);
+		const ping = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(async () => new Response(null, { status: 204 }));
+		const { headers: adminHeaders } = await untrusting.signInWithTestUser();
+		const client = await untrusting.auth.api.adminCreateOAuthClient({
+			headers: adminHeaders,
+			body: {
+				client_name: "Support Agent",
+				grant_types: [CIBA_GRANT_TYPE],
+				metadata: PING,
+			},
+		});
+		const authentication = clientAuthentication(client);
+		const res = await untrusting.customFetchImpl(
+			`${baseURL}/api/auth/oauth2/bc-authorize`,
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					...authentication.headers,
+				},
+				body: new URLSearchParams({
+					...authentication.params,
+					scope: "openid",
+					login_hint: untrusting.testUser.email,
+					client_notification_token: "client-token.123",
+				}).toString(),
+			},
+		);
+		expect(res.status).toBe(200);
+		const { requestId, user } = lastNotification!;
+		await untrusting.auth.api.completeCibaRequest({
+			body: { requestId, userId: user.id, decision: "approved" },
+		});
+		expect(ping).not.toHaveBeenCalled();
+	});
 });
 
 describe("ciba completion when acrValuesSupported omits 0", async () => {
@@ -1503,6 +2021,7 @@ describe("ciba defaults", async () => {
 	it("rejects a public client", async () => {
 		const client = await register({ token_endpoint_auth_method: "none" });
 		const res = await bcAuthorize(request, client, instance.customFetchImpl);
+		expect(res.status).toBe(401);
 		expect(res.body.error).toBe("invalid_client");
 	});
 
@@ -1620,5 +2139,387 @@ describe("ciba authorization_details claim ownership", async () => {
 			instance.customFetchImpl,
 		);
 		expect(introspection.authorization_details).toEqual([granted]);
+	});
+});
+
+/**
+ * @see https://www.rfc-editor.org/rfc/rfc8693.html#section-4.1
+ */
+describe("ciba delegated tokens", () => {
+	const agent: OAuthActorClaim = { sub: "agent-1", sub_profile: "service" };
+
+	async function cibaRequestRow(authReqId: string) {
+		const ctx = await auth.$context;
+		return ctx.adapter.findOne<{ id: string; actor?: unknown }>({
+			model: "cibaRequest",
+			where: [{ field: "authReqId", value: await hashAuthReqId(authReqId) }],
+		});
+	}
+
+	it("issues an access token for the user with the actor as act", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start({ resource });
+		expect(resolveActor).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				client: expect.objectContaining({ clientId: pollClient.client_id }),
+				user: expect.objectContaining({ email: testUser.email }),
+				scopes: ["openid", "profile"],
+			}),
+			expect.anything(),
+		);
+		expect(lastNotification!.actor).toEqual(agent);
+		const consent = await openLink(url);
+		expect(JSON.parse(consent.searchParams.get("actor")!)).toEqual(agent);
+		await answerConsent(consent, true);
+
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		const claims = decodeJwt(issued.body.access_token as string);
+		expect(claims.sub).toBe(lastNotification!.user.id);
+		expect(claims.act).toEqual(agent);
+	});
+
+	/**
+	 * CIBA Core §10.1.1 requires an ID token with every successful response, so
+	 * a delegated response must not drop it, and `act` belongs to access tokens.
+	 *
+	 * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#successful_token_response
+	 */
+	it("issues an ID token for the user without act", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start({ resource });
+		await approve(url);
+
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		expect(decodeJwt(issued.body.access_token as string).act).toEqual(agent);
+		const idToken = decodeJwt(issued.body.id_token as string);
+		expect(idToken.sub).toBe(lastNotification!.user.id);
+		expect(idToken.act).toBeUndefined();
+	});
+
+	it("returns the actor at introspection of an opaque access token", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start();
+		await approve(url);
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		const introspection = await introspect(issued.body.access_token);
+		expect(introspection.active).toBe(true);
+		expect(introspection.act).toEqual(agent);
+	});
+
+	it("issues the actor for a request decided through completeCibaRequest", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId } = await start({ resource });
+		await auth.api.completeCibaRequest({
+			body: {
+				requestId: lastNotification!.requestId,
+				userId: lastNotification!.user.id,
+				decision: "approved",
+			},
+		});
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		expect(decodeJwt(issued.body.access_token as string).act).toEqual(agent);
+	});
+
+	it("issues no refresh token and leaves offline_access out of the scope", async () => {
+		const client = await createClient(POLL, {
+			grant_types: [CIBA_GRANT_TYPE, "refresh_token"],
+		});
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start(
+			{ scope: "openid offline_access" },
+			client,
+		);
+		await approve(url);
+		const issued = await poll(authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.refresh_token).toBeUndefined();
+		expect(issued.body.scope).toBe("openid");
+	});
+
+	it("issues no act and keeps the refresh token without an actor", async () => {
+		const client = await createClient(POLL, {
+			grant_types: [CIBA_GRANT_TYPE, "refresh_token"],
+		});
+		const { authReqId, url } = await start(
+			{ scope: "openid offline_access", resource },
+			client,
+		);
+		expect(lastNotification!.actor).toBeUndefined();
+		const consent = await openLink(url);
+		expect(consent.searchParams.get("actor")).toBeNull();
+		await answerConsent(consent, true);
+		const issued = await poll(authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.refresh_token).toEqual(expect.any(String));
+		expect(issued.body.scope).toBe("openid offline_access");
+		expect(decodeJwt(issued.body.access_token as string).act).toBeUndefined();
+	});
+
+	it("refuses the request with the error resolveActor throws", async () => {
+		const notified = sendNotification.mock.calls.length;
+		resolveActor.mockRejectedValueOnce(
+			new APIError("BAD_REQUEST", {
+				error: "access_denied",
+				error_description: "agent attestation failed",
+			}),
+		);
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+		});
+		expect(res.status).toBe(400);
+		expect(res.body).toMatchObject({
+			error: "access_denied",
+			error_description: "agent attestation failed",
+		});
+		expect(sendNotification.mock.calls.length).toBe(notified);
+	});
+
+	it.each([
+		["an actor without sub", { sub_profile: "service" }],
+		["an empty sub", { sub: "" }],
+		["a nested actor without sub", { sub: "agent-1", act: { iss: "x" } }],
+		["a sub_profile that is not a string", { sub: "agent-1", sub_profile: 1 }],
+	])("refuses %s without creating the request", async (_, actor) => {
+		const notified = sendNotification.mock.calls.length;
+		resolveActor.mockResolvedValueOnce(actor as unknown as OAuthActorClaim);
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+		});
+		expect(res.status).toBe(500);
+		expect(res.body.error).toBe("server_error");
+		expect(sendNotification.mock.calls.length).toBe(notified);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8693#section-4.1
+	 */
+	it("refuses a falsy stored actor instead of issuing a token without act", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start();
+		await approve(url);
+		const row = await cibaRequestRow(authReqId);
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "cibaRequest",
+			where: [{ field: "id", value: row!.id }],
+			update: { actor: false as unknown as OAuthActorClaim },
+		});
+		const refused = await poll(authReqId);
+		expect(refused.status).toBe(500);
+		expect(refused.body.error).toBe("server_error");
+	});
+
+	it("keeps the approval when the stored actor is invalid", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start();
+		await approve(url);
+		const row = await cibaRequestRow(authReqId);
+		const ctx = await auth.$context;
+		const where = [{ field: "id", value: row!.id }];
+		await ctx.adapter.update({
+			model: "cibaRequest",
+			where,
+			update: { actor: { sub_profile: "service" } },
+		});
+		const refused = await poll(authReqId);
+		expect(refused.status).toBe(500);
+		expect(refused.body.error).toBe("server_error");
+
+		await ctx.adapter.update({
+			model: "cibaRequest",
+			where,
+			update: { actor: agent },
+		});
+		await waitInterval();
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+	});
+});
+
+describe.each([
+	["your own approval page", "/approve" as const],
+	[
+		"an approval page that already names a request",
+		"/approve?ciba_request_id=stale" as const,
+	],
+	["no approval page", false as const],
+])("ciba with %s", async (_, approvalPage) => {
+	const instance = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			ciba({ approvalPage, sendNotification }),
+		],
+	});
+	const { headers: userHeaders, user } = await instance.signInWithTestUser();
+	const client = await instance.auth.api.adminCreateOAuthClient({
+		headers: userHeaders,
+		body: { grant_types: [CIBA_GRANT_TYPE], metadata: POLL },
+	});
+
+	async function startOwn() {
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: user.email },
+			client,
+			instance.customFetchImpl,
+		);
+		expect(res.status).toBe(200);
+		return {
+			authReqId: res.body.auth_req_id as string,
+			requestId: lastNotification!.requestId,
+		};
+	}
+
+	it("links the notification to the configured page, or to none", async () => {
+		const { requestId } = await startOwn();
+		expect(lastNotification!.url).toBe(
+			approvalPage
+				? `${baseURL}${approvalPage.split("?")[0]}?ciba_request_id=${requestId}`
+				: undefined,
+		);
+	});
+
+	it("does not approve through the provider's consent page", async () => {
+		const { requestId } = await startOwn();
+		const requestHeaders = new Headers(userHeaders);
+		requestHeaders.set("accept", "application/json");
+		const res = await instance.customFetchImpl(
+			`${baseURL}/api/auth/oauth2/authorize?ciba_request_id=${requestId}`,
+			{ headers: requestHeaders },
+		);
+		const body = (await res.json()) as { url: string };
+		// An ordinary authorization request without a client, not a CIBA one.
+		const target = new URL(body.url, baseURL);
+		expect(target.pathname).toBe("/api/auth/error");
+		expect(target.searchParams.get("error")).toBe("invalid_request");
+	});
+
+	it("approves through completeCibaRequest", async () => {
+		const { authReqId, requestId } = await startOwn();
+		await instance.auth.api.completeCibaRequest({
+			body: { requestId, userId: user.id, decision: "approved" },
+		});
+		const issued = await poll(
+			authReqId,
+			client,
+			{},
+			[],
+			instance.customFetchImpl,
+		);
+		expect(issued.status).toBe(200);
+		expect(decodeJwt(issued.body.id_token as string).sub).toBe(user.id);
+	});
+
+	it("reads a pending request for the user it names", async () => {
+		const { requestId } = await startOwn();
+		const {
+			requestId: _,
+			user: notified,
+			url: __,
+			...shown
+		} = lastNotification!;
+		expect(notified.id).toBe(user.id);
+		const pending = await instance.auth.api.getCibaRequest({
+			body: { requestId, userId: user.id },
+		});
+		expect(pending).toEqual({ requestId, ...shown, resources: undefined });
+		expect(pending).toMatchObject({
+			clientId: client.client_id,
+			scopes: ["openid"],
+			expiresAt: expect.any(Date),
+		});
+	});
+
+	it("reads nothing for another user, an unknown id, or a decided or expired request", async () => {
+		const { requestId } = await startOwn();
+		const read = (id: string, userId = user.id) =>
+			instance.auth.api.getCibaRequest({ body: { requestId: id, userId } });
+		expect(await read(requestId, "someone-else")).toBeNull();
+		expect(await read("unknown")).toBeNull();
+
+		await instance.auth.api.completeCibaRequest({
+			body: { requestId, userId: user.id, decision: "denied" },
+		});
+		expect(await read(requestId)).toBeNull();
+
+		const expiring = await startOwn();
+		const ctx = await instance.auth.$context;
+		await ctx.adapter.update({
+			model: "cibaRequest",
+			where: [{ field: "id", value: expiring.requestId }],
+			update: { expiresAt: new Date(Date.now() - 1000) },
+		});
+		expect(await read(expiring.requestId)).toBeNull();
+	});
+
+	it("reads nothing once the client no longer exists", async () => {
+		const removed = await instance.auth.api.adminCreateOAuthClient({
+			headers: userHeaders,
+			body: { grant_types: [CIBA_GRANT_TYPE], metadata: POLL },
+		});
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: user.email },
+			removed,
+			instance.customFetchImpl,
+		);
+		expect(res.status).toBe(200);
+		const { requestId } = lastNotification!;
+		const ctx = await instance.auth.$context;
+		await ctx.adapter.delete({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: removed.client_id }],
+		});
+		expect(
+			await instance.auth.api.getCibaRequest({
+				body: { requestId, userId: user.id },
+			}),
+		).toBeNull();
+	});
+
+	it("requires resultPage without approvalPage", () => {
+		// @ts-expect-error the provider's approval page needs a resultPage.
+		ciba({ sendNotification });
+	});
+
+	it("takes no resultPage", () => {
+		// @ts-expect-error resultPage applies only to the provider's approval page.
+		ciba({ approvalPage, resultPage: "/ciba", sendNotification });
+	});
+});
+
+describe("ciba getCibaRequest", () => {
+	it("shows the actor, details, and resources the page must display", async () => {
+		const agent = { sub: "agent-1", sub_profile: "service" };
+		resolveActor.mockResolvedValueOnce(agent);
+		await start({
+			binding_message: "Code 52",
+			acr_values: mfaAcr,
+			resource,
+			authorization_details: JSON.stringify([payment]),
+		});
+		const { requestId, user } = lastNotification!;
+		const pending = await auth.api.getCibaRequest({
+			body: { requestId, userId: user.id },
+		});
+		expect(pending).toEqual({
+			requestId,
+			clientId: pollClient.client_id,
+			clientName: "Support Agent",
+			scopes: ["openid", "profile"],
+			resources: [resource],
+			bindingMessage: "Code 52",
+			acrValues: [mfaAcr],
+			authorizationDetails: [payment],
+			actor: agent,
+			expiresAt: lastNotification!.expiresAt,
+		});
+		expect(lastNotification!.resources).toEqual([resource]);
 	});
 });

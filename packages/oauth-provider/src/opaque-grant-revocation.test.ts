@@ -224,8 +224,16 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 		 */
 		it("fails a rotation that stores its refresh token after reuse revoked the grant", async () => {
-			const first = await authorize(server);
 			const ctx = await server.auth.$context;
+			const readRows = () =>
+				ctx.adapter.findMany<{ id: string; grantId: string }>({
+					model: "oauthRefreshToken",
+					where: [{ field: "clientId", value: server.options.clientId }],
+					limit: 1000,
+				});
+			const before = new Set((await readRows()).map((row) => row.id));
+			const first = await authorize(server);
+			const [issued] = (await readRows()).filter((row) => !before.has(row.id));
 			const create = ctx.adapter.create.bind(ctx.adapter);
 			const reached = Promise.withResolvers<void>();
 			const released = Promise.withResolvers<void>();
@@ -250,7 +258,10 @@ describe.each(["sqlite", "postgres", "mysql"] as const)(
 				expect(
 					await ctx.adapter.count({
 						model: "oauthRefreshToken",
-						where: [{ field: "clientId", value: server.options.clientId }],
+						where: [
+							{ field: "clientId", value: server.options.clientId },
+							{ field: "grantId", value: issued!.grantId },
+						],
 					}),
 				).toBe(0);
 			} finally {

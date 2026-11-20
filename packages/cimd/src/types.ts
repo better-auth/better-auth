@@ -8,6 +8,42 @@ import type {
 
 export type CimdMetadataProfile = "mcp-2026-07-28";
 
+/** A validated Client ID Metadata Document, ready to be persisted. */
+export interface CimdMetadataResolution {
+	/** Validated document. A copy: changing it does not change the cache. */
+	metadata: OAuthClientMetadata;
+	/**
+	 * Whether an unexpired cache entry answered at once, so the request neither
+	 * fetched nor waited for a fetch. It is `false` when the request fetched the
+	 * document, joined a fetch, or found a document another request cached while
+	 * the URL policy ran.
+	 */
+	fromCache: boolean;
+}
+
+/**
+ * Fetches, validates, and caches Client ID Metadata Documents without touching
+ * the database. Create one with {@link createCimdMetadataResolver} and pass it
+ * to `cimd({ metadataResolver })`.
+ *
+ * Calling it returns `null` when `clientId` is not a Client ID Metadata
+ * Document URL. The context is the request's own: it reaches
+ * `isMetadataDocumentUrlAllowed` and supplies the OAuth provider's extension
+ * fields, and nothing is written through it.
+ */
+export interface CimdMetadataResolver {
+	(
+		context: GenericEndpointContext,
+		clientId: string,
+	): Promise<CimdMetadataResolution | null>;
+	/**
+	 * The transport the resolver fetches documents with. A discovery that uses
+	 * the resolver also fetches its other metadata resources, such as
+	 * `jwks_uri`, with it.
+	 */
+	readonly fetchClientMetadataResource: ClientMetadataResourceFetch;
+}
+
 export interface CimdClientCreatedEvent {
 	/** Newly persisted discovery-owned OAuth client. */
 	client: SchemaClient<Scope[]>;
@@ -67,11 +103,11 @@ export interface CimdMetadataFetchPolicy {
 }
 
 /**
- * Options for the Client ID Metadata Document plugin.
- *
- * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02
+ * Options that govern how metadata documents are fetched, validated, and
+ * cached. Pass them to `cimd()`, or to {@link createCimdMetadataResolver} when
+ * several plugin instances share one resolver.
  */
-export interface CimdOptions {
+export interface CimdMetadataResolverOptions {
 	/**
 	 * Fetch transport for metadata documents and discovery-owned metadata
 	 * resources such as `jwks_uri`.
@@ -162,12 +198,20 @@ export interface CimdOptions {
 	 * substitute for the required transport's resolve-once and connection-
 	 * pinning guarantees; resolving here would introduce a TOCTOU boundary.
 	 *
+	 * It runs for each request that needs the document fetched, including
+	 * requests that would join another request's in-flight fetch, before any
+	 * fetch budget is consumed. Fresh cache hits skip it. Keep it cheap, or cache
+	 * its decisions, if it consults an external service.
+	 *
 	 * @default always allow
 	 */
 	isMetadataDocumentUrlAllowed?: (
 		clientIdUrl: string,
 		context: GenericEndpointContext,
 	) => boolean | Promise<boolean>;
+}
+
+interface CimdDiscoveryOptions {
 	/**
 	 * Allows a client's `jwks_uri` on an origin that is neither a trusted
 	 * origin nor the `client_id` URL's origin. Return `true` to allow it.
@@ -210,3 +254,55 @@ export interface CimdOptions {
 	 */
 	onClientRefreshed?: (event: CimdClientRefreshedEvent) => void | Promise<void>;
 }
+
+/**
+ * Options for a plugin instance that owns its metadata resolver. This is the
+ * half of {@link CimdOptions} that sets the transport and the fetch and
+ * validation options directly.
+ */
+export interface CimdOwnedResolverOptions
+	extends CimdMetadataResolverOptions,
+		CimdDiscoveryOptions {
+	/**
+	 * Share one metadata resolver across several plugin instances instead. See
+	 * {@link createCimdMetadataResolver}.
+	 *
+	 * @default a resolver owned by this plugin instance
+	 */
+	metadataResolver?: undefined;
+}
+
+type ResolverOwnedOptions = {
+	[Option in keyof CimdMetadataResolverOptions]?: never;
+};
+
+/**
+ * Options for a plugin instance that uses a shared metadata resolver. This is
+ * the half of {@link CimdOptions} that takes the transport and every fetch and
+ * validation option from the resolver.
+ */
+export interface CimdSharedResolverOptions
+	extends CimdDiscoveryOptions,
+		ResolverOwnedOptions {
+	/**
+	 * Share one metadata cache, set of fetch budgets, and in-flight fetch map
+	 * across several plugin instances, by passing the result of
+	 * {@link createCimdMetadataResolver}. Each request still saves the client
+	 * with its own context.
+	 *
+	 * The resolver owns the transport and every option that governs fetching
+	 * and validation, so those options are set on it and cannot be set here.
+	 * The plugin fetches discovery-owned resources such as `jwks_uri` with the
+	 * resolver's `fetchClientMetadataResource`.
+	 */
+	metadataResolver: CimdMetadataResolver;
+}
+
+/**
+ * Options for the Client ID Metadata Document plugin: the fetch and validation
+ * options of {@link CimdMetadataResolverOptions}, or a shared
+ * `metadataResolver` that carries them.
+ *
+ * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02
+ */
+export type CimdOptions = CimdOwnedResolverOptions | CimdSharedResolverOptions;

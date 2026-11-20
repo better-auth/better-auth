@@ -224,12 +224,18 @@ export const microsoft = (options: MicrosoftOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 				tokenEndpointAuth,
 			});
 		},
 		idToken: {
-			jwks: (header) => getMicrosoftPublicKey(header.kid!, tenant, authority),
+			jwks: (header) =>
+				getMicrosoftPublicKey(
+					header.kid!,
+					tenant,
+					authority,
+					options.jwksEndpoint,
+				),
 			algorithms: ["RS256"],
 			audience: options.clientId,
 			maxTokenAge: "1h",
@@ -357,7 +363,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 						extraParams: {
 							scope: scopes.join(" "), // Include the scopes in request to microsoft
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 						tokenEndpointAuth,
 					});
 				},
@@ -369,6 +375,7 @@ export const getMicrosoftPublicKey = async (
 	kid: string,
 	tenant: string,
 	authority: string,
+	jwksEndpoint?: string,
 ) => {
 	const { data } = await fetchRefusingRedirects<{
 		keys: Array<{
@@ -381,7 +388,7 @@ export const getMicrosoftPublicKey = async (
 			x5c?: string[];
 			x5t?: string;
 		}>;
-	}>(`${authority}/${tenant}/discovery/v2.0/keys`);
+	}>(jwksEndpoint ?? `${authority}/${tenant}/discovery/v2.0/keys`);
 
 	if (!data?.keys) {
 		throw new APIError("BAD_REQUEST", {

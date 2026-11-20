@@ -216,6 +216,11 @@ export const schema = {
 				type: "number",
 				required: false,
 			},
+			// "jwt" or "opaque"; null inherits `resourceDefaults`, then "jwt".
+			accessTokenFormat: {
+				type: "string",
+				required: false,
+			},
 			// Signing — when set, overrides the JWT plugin's getLatestKey() default.
 			signingAlgorithm: {
 				type: "string",

@@ -490,6 +490,93 @@ describe("private_key_jwt authentication", async () => {
 			expect(fixture.transport).toHaveBeenCalledTimes(1);
 		});
 
+		it("does not refetch again within the cooldown", async () => {
+			vi.useFakeTimers({ toFake: ["Date"] });
+			const fixture = await setup("cooldown-repeat");
+			await fixture.verify("old", fixture.oldKey);
+
+			await expect(
+				fixture.verify("ghost", fixture.oldKey),
+			).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+			await expect(
+				fixture.verify("ghost", fixture.oldKey),
+			).rejects.toBeDefined();
+			await expect(
+				fixture.verify("ghost-2", fixture.oldKey),
+			).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+
+			vi.setSystemTime(Date.now() + 60_000 + 1);
+			await expect(
+				fixture.verify("ghost", fixture.oldKey),
+			).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		it("rejects an assertion signed with a key published during the cooldown, then accepts it after", async () => {
+			vi.useFakeTimers({ toFake: ["Date"] });
+			const fixture = await setup("cooldown-new-key");
+			await fixture.verify("old", fixture.oldKey);
+			await expect(
+				fixture.verify("ghost", fixture.oldKey),
+			).rejects.toBeDefined();
+
+			fixture.publishNewKey();
+			await expect(fixture.verify("new", fixture.newKey)).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+
+			vi.setSystemTime(Date.now() + 60_000 + 1);
+			await expect(
+				fixture.verify("new", fixture.newKey),
+			).resolves.toMatchObject({ clientId: fixture.clientId });
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		it.each([
+			{
+				name: "fails",
+				response: () => new Response("nope", { status: 500 }),
+			},
+			{
+				name: "returns an invalid key set",
+				response: () => Response.json({ keys: "not-an-array" }),
+			},
+		])(
+			"counts a refetch that $name toward the cooldown",
+			async ({ response }) => {
+				const fixture = await setup("cooldown-failed-refetch");
+				await fixture.verify("old", fixture.oldKey);
+				fixture.transport.mockImplementationOnce(() =>
+					Promise.resolve(response()),
+				);
+
+				await expect(
+					fixture.verify("new", fixture.newKey),
+				).rejects.toBeDefined();
+				expect(fixture.transport).toHaveBeenCalledTimes(2);
+
+				fixture.publishNewKey();
+				await expect(
+					fixture.verify("new", fixture.newKey),
+				).rejects.toBeDefined();
+				expect(fixture.transport).toHaveBeenCalledTimes(2);
+			},
+		);
+
+		it("does not start the cooldown for a known kid with a bad signature", async () => {
+			const fixture = await setup("cooldown-known-kid");
+			await fixture.verify("old", fixture.oldKey);
+			await expect(fixture.verify("old", fixture.newKey)).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(1);
+
+			fixture.publishNewKey();
+			await expect(
+				fixture.verify("new", fixture.newKey),
+			).resolves.toMatchObject({ clientId: fixture.clientId });
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+		});
+
 		it("shares one fetch across concurrent assertions on a cold cache", async () => {
 			const fixture = await setup("share-cold");
 			fixture.delayFetches(50);
@@ -510,7 +597,7 @@ describe("private_key_jwt authentication", async () => {
 			expect(fixture.transport).toHaveBeenCalledTimes(2);
 		});
 
-		it("fails the assertions when the shared fetch and the retry both fail", async () => {
+		it("fails simultaneous assertions after one unsuccessful unknown-key refetch", async () => {
 			const fixture = await setup("share-failed");
 			await fixture.verify("old", fixture.oldKey);
 			fixture.publishNewKey();
@@ -521,8 +608,7 @@ describe("private_key_jwt authentication", async () => {
 
 			const results = await fixture.verifyTogether(3, "new", fixture.newKey);
 			expect(results.map((r) => r.status)).toEqual(Array(3).fill("rejected"));
-			// The shared fetch, plus one retry shared by the two joiners.
-			expect(fixture.transport).toHaveBeenCalledTimes(3);
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
 		});
 
 		/**
@@ -543,7 +629,6 @@ describe("private_key_jwt authentication", async () => {
 
 		it("lets a joiner make its own fetch when the shared fetch fails", async () => {
 			const fixture = await setup("share-transient");
-			await fixture.verify("old", fixture.oldKey);
 			fixture.publishNewKey();
 			const fetchJwks = fixture.transport.getMockImplementation()!;
 			fixture.transport.mockImplementationOnce(async () => {
@@ -560,7 +645,7 @@ describe("private_key_jwt authentication", async () => {
 				"fulfilled",
 				"rejected",
 			]);
-			expect(fixture.transport).toHaveBeenCalledTimes(3);
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
 		});
 
 		it("does not join a fetch that started before the assertion arrived", async () => {
@@ -581,11 +666,11 @@ describe("private_key_jwt authentication", async () => {
 			);
 			await new Promise((resolve) => setTimeout(resolve, 5));
 			fixture.publishNewKey();
-			await expect(
-				fixture.verify("new", fixture.newKey),
-			).resolves.toMatchObject({ clientId: fixture.clientId });
+			await expect(fixture.verify("new", fixture.newKey)).rejects.toMatchObject(
+				{ status: "UNAUTHORIZED" },
+			);
 			await ghostResult;
-			expect(fixture.transport).toHaveBeenCalledTimes(3);
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
 		});
 
 		/**
@@ -612,11 +697,11 @@ describe("private_key_jwt authentication", async () => {
 			const ghostResult = expect(ghost).rejects.toBeDefined();
 			await started;
 			fixture.publishNewKey();
-			await expect(
-				fixture.verify("new", fixture.newKey),
-			).resolves.toMatchObject({ clientId: fixture.clientId });
+			await expect(fixture.verify("new", fixture.newKey)).rejects.toMatchObject(
+				{ status: "UNAUTHORIZED" },
+			);
 			await ghostResult;
-			expect(fixture.transport).toHaveBeenCalledTimes(3);
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
 		});
 
 		/**
@@ -624,6 +709,7 @@ describe("private_key_jwt authentication", async () => {
 		 */
 		it("answers with the newer key set when an older overlapping fetch finishes last", async () => {
 			const fixture = await setup("share-stale-finish");
+			vi.useFakeTimers({ toFake: ["Date"] });
 			await fixture.verify("old", fixture.oldKey);
 			const fetchJwks = fixture.transport.getMockImplementation()!;
 			let releaseOlderFetch!: () => void;
@@ -647,6 +733,7 @@ describe("private_key_jwt authentication", async () => {
 			await vi.waitFor(() =>
 				expect(fixture.transport).toHaveBeenCalledTimes(2),
 			);
+			vi.setSystemTime(Date.now() + 60_000);
 			fixture.publishNewKey();
 			await expect(
 				fixture.verify("new", fixture.newKey),
@@ -660,7 +747,6 @@ describe("private_key_jwt authentication", async () => {
 
 		it("lets a joiner make its own fetch when the shared fetch returns an invalid key set", async () => {
 			const fixture = await setup("share-invalid");
-			await fixture.verify("old", fixture.oldKey);
 			fixture.publishNewKey();
 			const fetchJwks = fixture.transport.getMockImplementation()!;
 			fixture.transport.mockImplementationOnce(async () => {
@@ -675,7 +761,7 @@ describe("private_key_jwt authentication", async () => {
 				"fulfilled",
 				"rejected",
 			]);
-			expect(fixture.transport).toHaveBeenCalledTimes(3);
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
 		});
 
 		it("replaces a fetch that outlived its timeout", async () => {
@@ -699,7 +785,9 @@ describe("private_key_jwt authentication", async () => {
 			await vi.advanceTimersByTimeAsync(6_000);
 			await stuckResult;
 
-			// The next assertion starts a new fetch instead of joining the dead one.
+			// A timed-out refetch still consumes the cooldown.
+			await expect(fixture.verify("new", fixture.newKey)).rejects.toBeDefined();
+			await vi.advanceTimersByTimeAsync(54_000);
 			await expect(
 				fixture.verify("new", fixture.newKey),
 			).resolves.toMatchObject({ clientId: fixture.clientId });

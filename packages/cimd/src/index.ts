@@ -5,7 +5,7 @@ import type {
 import { extendOAuthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin } from "better-auth";
 import { CIMD_CLIENT_DISCOVERY_ID } from "./client-store";
-import { createCimdResolver, resolveMetadataStaleIfErrorMs } from "./resolver";
+import { createCimdMetadataResolver, createCimdResolver } from "./resolver";
 import type { CimdOptions } from "./types";
 import { isCimdClientIdUrlCandidate } from "./validate-metadata-document";
 import { PACKAGE_VERSION } from "./version";
@@ -29,18 +29,16 @@ declare module "@better-auth/core" {
 export function createCimdClientDiscovery(
 	options: CimdOptions,
 ): ClientDiscovery {
-	const resolver = createCimdResolver(options);
-	const staleIfErrorMs = resolveMetadataStaleIfErrorMs(
-		options.metadataStaleIfError,
-	);
+	const { resolve, jwksStaleIfError } = createCimdResolver(options);
 	return {
 		id: CIMD_CLIENT_DISCOVERY_ID,
 		matches: isCimdClientIdUrlCandidate,
-		resolve: resolver,
-		fetchClientMetadataResource: options.fetchClientMetadataResource,
+		resolve,
+		fetchClientMetadataResource:
+			options.metadataResolver?.fetchClientMetadataResource ??
+			options.fetchClientMetadataResource,
 		isCrossOriginJwksUriAllowed: options.isCrossOriginJwksUriAllowed,
-		jwksStaleIfError:
-			staleIfErrorMs === null ? undefined : staleIfErrorMs / 1000,
+		jwksStaleIfError,
 		discoveryMetadata: { client_id_metadata_document_supported: true },
 	};
 }
@@ -77,7 +75,12 @@ export type {
 	CimdClientRefreshedEvent,
 	CimdMetadataFetchPolicy,
 	CimdMetadataProfile,
+	CimdMetadataResolution,
+	CimdMetadataResolver,
+	CimdMetadataResolverOptions,
 	CimdOptions,
+	CimdOwnedResolverOptions,
+	CimdSharedResolverOptions,
 } from "./types";
 export type {
 	CimdMetadataValidationOptions,
@@ -88,3 +91,5 @@ export {
 	validateCimdMetadata,
 	validateClientIdUrl,
 } from "./validate-metadata-document";
+
+export { createCimdMetadataResolver };

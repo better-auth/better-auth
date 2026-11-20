@@ -132,7 +132,7 @@ export const dropbox = (options: DropboxOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
+				tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -145,7 +145,7 @@ export const dropbox = (options: DropboxOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint,
+						tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -153,7 +153,8 @@ export const dropbox = (options: DropboxOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<DropboxProfile>(
-				"https://api.dropboxapi.com/2/users/get_current_account",
+				options.userInfoEndpoint ??
+					"https://api.dropboxapi.com/2/users/get_current_account",
 				{
 					method: "POST",
 					headers: {

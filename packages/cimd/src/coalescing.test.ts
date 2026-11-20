@@ -5,7 +5,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCimdClientDiscovery } from "./index";
-import type { CimdOptions } from "./types";
+import type { CimdOwnedResolverOptions } from "./types";
 
 let instanceSequence = 0;
 
@@ -38,6 +38,12 @@ function metadataResponse(
 		},
 		{ headers },
 	);
+}
+
+// Some transports deliver a buffered response after their originating request ended.
+function bufferedResponse(response: Response) {
+	Object.defineProperty(response, "body", { value: null });
+	return response;
 }
 
 /** A cacheable document whose client name tells fetches apart. */
@@ -78,7 +84,7 @@ async function createRequestContext() {
 	};
 }
 
-function createDiscovery(options: Partial<CimdOptions> = {}) {
+function createDiscovery(options: Partial<CimdOwnedResolverOptions> = {}) {
 	const fetchClientMetadataResource = vi.fn(
 		async (_input: RequestInfo | URL, _init?: RequestInit) =>
 			new Response(null, { status: 500 }),
@@ -527,18 +533,14 @@ describe("CIMD in-flight coalescing", () => {
 
 		it("keeps an abandoned fetch that finishes later from overwriting the fetch that replaced it", async () => {
 			const clientId = "https://abandoned-late.example/client.json";
-			const leaderPolicy = deferred<boolean>();
-			const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
-			isMetadataDocumentUrlAllowed.mockImplementationOnce(
-				() => leaderPolicy.promise,
-			);
-			const { discovery, fetchClientMetadataResource } = createDiscovery({
-				isMetadataDocumentUrlAllowed,
-			});
+			const leaderResponse = deferred<Response>();
+			const { discovery, fetchClientMetadataResource } = createDiscovery();
 			const names = ["Replacement", "Abandoned"];
-			fetchClientMetadataResource.mockImplementation(async () =>
-				namedMetadataResponse(clientId, names.shift() ?? "unexpected"),
-			);
+			fetchClientMetadataResource
+				.mockImplementationOnce(() => leaderResponse.promise)
+				.mockImplementation(async () =>
+					namedMetadataResponse(clientId, names.shift() ?? "unexpected"),
+				);
 			const leader = await createRequestContext();
 			const joiner = await createRequestContext();
 			const later = await createRequestContext();
@@ -552,7 +554,9 @@ describe("CIMD in-flight coalescing", () => {
 				name: "Replacement",
 			});
 
-			leaderPolicy.resolve(true);
+			leaderResponse.resolve(
+				bufferedResponse(namedMetadataResponse(clientId, "Abandoned")),
+			);
 			await expect(leaderResolution).resolves.toMatchObject({
 				name: "Replacement",
 			});
@@ -572,22 +576,13 @@ describe("CIMD in-flight coalescing", () => {
 		 */
 		it("keeps an abandoned fetch's older document out of a shared database", async () => {
 			const clientId = "https://abandoned-shared-database.example/client.json";
-			const leaderPolicy = deferred<boolean>();
-			const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
-			isMetadataDocumentUrlAllowed.mockImplementationOnce(
-				() => leaderPolicy.promise,
-			);
-			const { discovery, fetchClientMetadataResource } = createDiscovery({
-				isMetadataDocumentUrlAllowed,
-			});
 			const leaderResponse = deferred<Response>();
-			// The replacement fetches while the leader is still in its policy check.
-			fetchClientMetadataResource.mockImplementationOnce(async () =>
-				namedMetadataResponse(clientId, "New"),
-			);
-			fetchClientMetadataResource.mockImplementationOnce(
-				() => leaderResponse.promise,
-			);
+			const { discovery, fetchClientMetadataResource } = createDiscovery();
+			fetchClientMetadataResource
+				.mockImplementationOnce(() => leaderResponse.promise)
+				.mockImplementationOnce(async () =>
+					namedMetadataResponse(clientId, "New"),
+				);
 			const request = await createRequestContext();
 			vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
@@ -598,9 +593,9 @@ describe("CIMD in-flight coalescing", () => {
 			await expect(joinerResolution).resolves.toMatchObject({ name: "New" });
 			expect((await request.findClient(clientId))?.name).toBe("New");
 
-			leaderPolicy.resolve(true);
-			await vi.advanceTimersByTimeAsync(0);
-			leaderResponse.resolve(namedMetadataResponse(clientId, "Old"));
+			leaderResponse.resolve(
+				bufferedResponse(namedMetadataResponse(clientId, "Old")),
+			);
 			await expect(leaderResolution).resolves.toMatchObject({ name: "New" });
 
 			const stored = await request.findClient(clientId);
@@ -620,24 +615,15 @@ describe("CIMD in-flight coalescing", () => {
 		 */
 		it("saves the replacement's cached document for a request whose fetch was retired", async () => {
 			const clientId = "https://abandoned-stored-client.example/client.json";
-			const leaderPolicy = deferred<boolean>();
-			const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
-			isMetadataDocumentUrlAllowed
-				.mockImplementationOnce(async () => true)
-				.mockImplementationOnce(() => leaderPolicy.promise);
-			const { discovery, fetchClientMetadataResource } = createDiscovery({
-				isMetadataDocumentUrlAllowed,
-			});
+			const leaderResponse = deferred<Response>();
+			const { discovery, fetchClientMetadataResource } = createDiscovery();
 			fetchClientMetadataResource
 				.mockImplementationOnce(async () =>
 					metadataResponse(clientId, { "cache-control": "no-store" }, "Old"),
 				)
-				// The replacement fetches while the leader is still in its policy check.
+				.mockImplementationOnce(() => leaderResponse.promise)
 				.mockImplementationOnce(async () =>
 					namedMetadataResponse(clientId, "New"),
-				)
-				.mockImplementationOnce(async () =>
-					namedMetadataResponse(clientId, "Old"),
 				);
 			const leader = await createRequestContext();
 			const joiner = await createRequestContext();
@@ -657,7 +643,9 @@ describe("CIMD in-flight coalescing", () => {
 			await expect(joinerResolution).resolves.toMatchObject({ name: "New" });
 			expect((await leader.findClient(clientId))?.name).toBe("Old");
 
-			leaderPolicy.resolve(true);
+			leaderResponse.resolve(
+				bufferedResponse(namedMetadataResponse(clientId, "Old")),
+			);
 			await expect(leaderResolution).resolves.toMatchObject({ name: "New" });
 			expect((await leader.findClient(clientId))?.name).toBe("New");
 			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
@@ -672,23 +660,15 @@ describe("CIMD in-flight coalescing", () => {
 		 */
 		it("drops the replacement's cached document when saving it after a retired fetch fails", async () => {
 			const clientId = "https://abandoned-failed-save.example/client.json";
-			const leaderPolicy = deferred<boolean>();
-			const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
-			isMetadataDocumentUrlAllowed
-				.mockImplementationOnce(async () => true)
-				.mockImplementationOnce(() => leaderPolicy.promise);
-			const { discovery, fetchClientMetadataResource } = createDiscovery({
-				isMetadataDocumentUrlAllowed,
-			});
+			const leaderResponse = deferred<Response>();
+			const { discovery, fetchClientMetadataResource } = createDiscovery();
 			fetchClientMetadataResource
 				.mockImplementationOnce(async () =>
 					metadataResponse(clientId, { "cache-control": "no-store" }, "Old"),
 				)
+				.mockImplementationOnce(() => leaderResponse.promise)
 				.mockImplementationOnce(async () =>
 					namedMetadataResponse(clientId, "New"),
-				)
-				.mockImplementationOnce(async () =>
-					namedMetadataResponse(clientId, "Old"),
 				)
 				.mockImplementationOnce(async () =>
 					namedMetadataResponse(clientId, "New"),
@@ -713,7 +693,9 @@ describe("CIMD in-flight coalescing", () => {
 			vi.spyOn(leader.context.adapter, "transaction").mockRejectedValueOnce(
 				new Error("forced client persistence failure"),
 			);
-			leaderPolicy.resolve(true);
+			leaderResponse.resolve(
+				bufferedResponse(namedMetadataResponse(clientId, "Old")),
+			);
 			await expect(leaderResolution).rejects.toThrow(
 				"forced client persistence failure",
 			);
@@ -727,21 +709,20 @@ describe("CIMD in-flight coalescing", () => {
 
 		it("does not let an abandoned fetch that fails later pace the fetch that replaced it", async () => {
 			const clientId = "https://abandoned-failure.example/client.json";
-			let failLeaderPolicy!: (error: Error) => void;
-			const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
-			isMetadataDocumentUrlAllowed.mockImplementationOnce(
-				() =>
-					new Promise<boolean>((_resolve, reject) => {
-						failLeaderPolicy = reject;
-					}),
-			);
+			let rejectLeader!: (error: Error) => void;
 			const { discovery, fetchClientMetadataResource } = createDiscovery({
-				isMetadataDocumentUrlAllowed,
 				metadataFetchPolicy: { minimumFetchInterval: 3_600 },
 			});
-			fetchClientMetadataResource.mockImplementation(async () =>
-				metadataResponse(clientId, { "cache-control": "no-store" }),
-			);
+			fetchClientMetadataResource
+				.mockImplementationOnce(
+					() =>
+						new Promise<Response>((_resolve, reject) => {
+							rejectLeader = reject;
+						}),
+				)
+				.mockImplementation(async () =>
+					metadataResponse(clientId, { "cache-control": "no-store" }),
+				);
 			const leader = await createRequestContext();
 			const joiner = await createRequestContext();
 			const later = await createRequestContext();
@@ -757,12 +738,12 @@ describe("CIMD in-flight coalescing", () => {
 
 			// The retired fetch's failure is not reported: the request that started
 			// it resolves again and fetches, which the failure's pacing would refuse.
-			failLeaderPolicy(new Error("policy service failed"));
+			rejectLeader(new Error("transport failed"));
 			await expect(leaderResolution).resolves.toMatchObject({ clientId });
 			await expect(
 				discovery.resolve(later.ctx, clientId, null),
 			).resolves.toMatchObject({ clientId });
-			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(3);
+			expect(fetchClientMetadataResource).toHaveBeenCalledTimes(4);
 		});
 
 		/**
@@ -776,21 +757,18 @@ describe("CIMD in-flight coalescing", () => {
 			it("uses its late document when no newer fetch for the client started", async () => {
 				const clientId = "https://lease-late.example/client.json";
 				const otherClientId = "https://lease-late-other.example/client.json";
-				const leaderPolicy = deferred<boolean>();
-				const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
-				isMetadataDocumentUrlAllowed.mockImplementationOnce(
-					() => leaderPolicy.promise,
-				);
+				const leaderResponse = deferred<Response>();
 				const { discovery, fetchClientMetadataResource } = createDiscovery({
-					isMetadataDocumentUrlAllowed,
 					metadataFetchPolicy: {
 						minimumFetchInterval: 0,
 						maximumConcurrentFetches: 1,
 					},
 				});
-				fetchClientMetadataResource.mockImplementation(async (input) =>
-					namedMetadataResponse(String(input), "Late"),
-				);
+				fetchClientMetadataResource
+					.mockImplementationOnce(() => leaderResponse.promise)
+					.mockImplementation(async (input) =>
+						namedMetadataResponse(String(input), "Late"),
+					);
 				const leader = await createRequestContext();
 				const other = await createRequestContext();
 				vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
@@ -801,7 +779,9 @@ describe("CIMD in-flight coalescing", () => {
 					discovery.resolve(other.ctx, otherClientId, null),
 				).resolves.toMatchObject({ clientId: otherClientId });
 
-				leaderPolicy.resolve(true);
+				leaderResponse.resolve(
+					bufferedResponse(namedMetadataResponse(clientId, "Late")),
+				);
 				await expect(leaderResolution).resolves.toMatchObject({
 					name: "Late",
 				});
@@ -816,13 +796,8 @@ describe("CIMD in-flight coalescing", () => {
 				const clientId = "https://lease-late-unsaved.example/client.json";
 				const otherClientId =
 					"https://lease-late-unsaved-other.example/client.json";
-				const leaderPolicy = deferred<boolean>();
-				const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
-				isMetadataDocumentUrlAllowed
-					.mockImplementationOnce(async () => true)
-					.mockImplementationOnce(() => leaderPolicy.promise);
+				const leaderResponse = deferred<Response>();
 				const { discovery, fetchClientMetadataResource } = createDiscovery({
-					isMetadataDocumentUrlAllowed,
 					metadataFetchPolicy: {
 						minimumFetchInterval: 0,
 						maximumConcurrentFetches: 1,
@@ -832,6 +807,7 @@ describe("CIMD in-flight coalescing", () => {
 					.mockImplementationOnce(async () =>
 						metadataResponse(clientId, { "cache-control": "no-store" }, "Old"),
 					)
+					.mockImplementationOnce(() => leaderResponse.promise)
 					.mockImplementation(async (input) =>
 						namedMetadataResponse(String(input), "Late"),
 					);
@@ -848,7 +824,9 @@ describe("CIMD in-flight coalescing", () => {
 				vi.spyOn(leader.context.adapter, "transaction").mockImplementationOnce(
 					() => new Promise<never>(() => {}),
 				);
-				leaderPolicy.resolve(true);
+				leaderResponse.resolve(
+					bufferedResponse(namedMetadataResponse(clientId, "Late")),
+				);
 				await vi.advanceTimersByTimeAsync(0);
 
 				await expect(
@@ -862,28 +840,25 @@ describe("CIMD in-flight coalescing", () => {
 				const clientId = "https://lease-replaced.example/client.json";
 				const otherClientId =
 					"https://lease-replaced-other.example/client.json";
-				const leaderPolicy = deferred<boolean>();
-				const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
-				isMetadataDocumentUrlAllowed.mockImplementationOnce(
-					() => leaderPolicy.promise,
-				);
+				const leaderResponse = deferred<Response>();
 				const { discovery, fetchClientMetadataResource } = createDiscovery({
-					isMetadataDocumentUrlAllowed,
 					metadataFetchPolicy: {
 						minimumFetchInterval: 0,
 						maximumConcurrentFetches: 1,
 					},
 				});
-				const names = ["Replacement", "Retired", "Replacement"];
-				fetchClientMetadataResource.mockImplementation(async (input) =>
-					String(input) === clientId
-						? metadataResponse(
-								clientId,
-								{ "cache-control": "no-store" },
-								names.shift(),
-							)
-						: metadataResponse(String(input)),
-				);
+				const names = ["Replacement", "Replacement"];
+				fetchClientMetadataResource
+					.mockImplementationOnce(() => leaderResponse.promise)
+					.mockImplementation(async (input) =>
+						String(input) === clientId
+							? metadataResponse(
+									clientId,
+									{ "cache-control": "no-store" },
+									names.shift(),
+								)
+							: metadataResponse(String(input)),
+					);
 				const leader = await createRequestContext();
 				const later = await createRequestContext();
 				vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
@@ -896,7 +871,9 @@ describe("CIMD in-flight coalescing", () => {
 					discovery.resolve(later.ctx, clientId, null),
 				).resolves.toMatchObject({ name: "Replacement" });
 
-				leaderPolicy.resolve(true);
+				leaderResponse.resolve(
+					bufferedResponse(namedMetadataResponse(clientId, "Abandoned")),
+				);
 				await expect(leaderResolution).resolves.toMatchObject({
 					name: "Replacement",
 				});
@@ -906,24 +883,21 @@ describe("CIMD in-flight coalescing", () => {
 			it("does not report its failure to a request that joined it", async () => {
 				const clientId = "https://lease-failure.example/client.json";
 				const otherClientId = "https://lease-failure-other.example/client.json";
-				let failLeaderPolicy!: (error: Error) => void;
-				const isMetadataDocumentUrlAllowed = vi.fn(async () => true);
-				isMetadataDocumentUrlAllowed.mockImplementationOnce(
-					() =>
-						new Promise<boolean>((_resolve, reject) => {
-							failLeaderPolicy = reject;
-						}),
-				);
+				let rejectLeader!: (error: Error) => void;
 				const { discovery, fetchClientMetadataResource } = createDiscovery({
-					isMetadataDocumentUrlAllowed,
 					metadataFetchPolicy: {
 						minimumFetchInterval: 0,
 						maximumConcurrentFetches: 1,
 					},
 				});
-				fetchClientMetadataResource.mockImplementation(async (input) =>
-					metadataResponse(String(input)),
-				);
+				fetchClientMetadataResource
+					.mockImplementationOnce(
+						() =>
+							new Promise<Response>((_resolve, reject) => {
+								rejectLeader = reject;
+							}),
+					)
+					.mockImplementation(async (input) => metadataResponse(String(input)));
 				const leader = await createRequestContext();
 				const joiner = await createRequestContext();
 				const other = await createRequestContext();
@@ -936,7 +910,7 @@ describe("CIMD in-flight coalescing", () => {
 				// The lease runs out while the joined request still waits.
 				await discovery.resolve(other.ctx, otherClientId, null);
 
-				failLeaderPolicy(new Error("policy service failed"));
+				rejectLeader(new Error("transport failed"));
 				await expect(joinerResolution).resolves.toMatchObject({ clientId });
 				await expect(leaderResolution).resolves.toMatchObject({ clientId });
 				expect(await joiner.findClient(clientId)).toMatchObject({ clientId });

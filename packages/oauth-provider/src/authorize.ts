@@ -4,7 +4,11 @@ import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
 import { INSECURE_REDIRECT_URI_MESSAGE } from "@better-auth/core/utils/redirect-uri";
 import { appendQueryParams } from "@better-auth/core/utils/url";
-import { getSessionFromCtx, isAPIError } from "better-auth/api";
+import {
+	getAuthoritativeSessionFromCtx,
+	getSessionFromCtx,
+	isAPIError,
+} from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import { APIError } from "better-call";
 import {
@@ -27,6 +31,7 @@ import {
 	consumePushedAuthorizationRequest,
 	isPushedAuthorizationRequestEnabled,
 	loadPushedAuthorizationRequest,
+	withoutClientAuthentication,
 } from "./par";
 import { resolveResourcePolicy } from "./resources";
 import {
@@ -43,12 +48,15 @@ import type {
 	IssuedAuthorizationCode,
 	OAuthAuthenticationContext,
 	OAuthAuthorizationQuery,
+	OAuthAuthorizationRequestClient,
 	OAuthInteractionQuery,
 	OAuthInteractionRequest,
 	OAuthOptions,
 	SchemaClient,
 	Scope,
 	StoredAuthorizationQuery,
+	ValidateAuthorizationRequestParams,
+	ValidatedAuthorizationRequest,
 	VerificationValue,
 } from "./types";
 import { authorizationQuerySchema, RedirectUriSyntaxSchema } from "./types/zod";
@@ -575,8 +583,23 @@ export async function authorizeEndpoint(
 		}
 		return runAuthorizationInteraction(ctx, opts, headers, settings, {
 			...interactionRequest,
-			approve: (approval) =>
-				interactionRequest.approve(approval).catch(toErrorURL),
+			approve: async (approval) => {
+				try {
+					// The cookie cache can serve a session the store already revoked, so
+					// confirm it with the store before the decision is recorded.
+					const live = await getAuthoritativeSessionFromCtx(ctx);
+					if (live?.session.id !== approval.sessionId) {
+						tokenError(
+							"UNAUTHORIZED",
+							"access_denied",
+							"session is no longer active",
+						);
+					}
+					return await interactionRequest.approve(approval);
+				} catch (error) {
+					return toErrorURL(error);
+				}
+			},
 			errorURL: toErrorURL,
 		});
 	}
@@ -919,7 +942,16 @@ async function validateAuthorizationRequest(
 	}
 	// Always set default scopes if not originally sent
 	if (!requestedScopes) {
-		requestedScopes = client.scopes ?? opts.scopes ?? [];
+		const persistedScopes = client.scopes ?? opts.scopes ?? [];
+		// The persisted scope list is the client's capability set, not an
+		// authorization grant. When the request omits `scope`, fall back to
+		// the operator's registration default scopes, intersected with what
+		// this client actually holds.
+		requestedScopes = opts.clientRegistrationDefaultScopes
+			? persistedScopes.filter((scope) =>
+					opts.clientRegistrationDefaultScopes?.includes(scope),
+				)
+			: persistedScopes;
 		query.scope = requestedScopes.join(" ");
 	}
 	const openidRequested = requestedScopes.includes("openid");
@@ -1047,6 +1079,78 @@ export async function parseAuthorizationRequest(
 	}
 	return validation;
 }
+
+/**
+ * Validates an authorization request for a plugin endpoint before any
+ * session exists, through the same checks `issueAuthorizationCode` runs.
+ * Authenticates no client, issues no code, and stores no pushed request or
+ * DPoP `jti`.
+ */
+export async function validateAuthorizationRequestParams(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: ValidateAuthorizationRequestParams,
+): Promise<ValidatedAuthorizationRequest> {
+	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
+		tokenError(
+			"BAD_REQUEST",
+			"unsupported_response_type",
+			"the authorization_code grant is disabled",
+		);
+	}
+	const requestQuery = withoutClientAuthentication(params.query ?? {});
+	// Without client authentication, nothing else names the client.
+	if (typeof requestQuery.client_id !== "string" || !requestQuery.client_id) {
+		tokenError("BAD_REQUEST", "invalid_request", "client_id is required");
+	}
+	if (requestQuery.request_uri !== undefined) {
+		tokenError(
+			"BAD_REQUEST",
+			"invalid_request",
+			"pass the authorization request parameters, not a request_uri",
+		);
+	}
+	if (requestQuery.request !== undefined) {
+		tokenError(
+			"BAD_REQUEST",
+			"request_not_supported",
+			"request object not supported",
+		);
+	}
+	const { query, client } = await parseAuthorizationRequest(
+		ctx,
+		opts,
+		requestQuery,
+		{ redirectUriOptional: true },
+	);
+	return {
+		query: query as ValidatedAuthorizationRequest["query"],
+		client: toAuthorizationRequestClient(client),
+	};
+}
+
+function toAuthorizationRequestClient(
+	client: SchemaClient<Scope[]>,
+): OAuthAuthorizationRequestClient {
+	const view: OAuthAuthorizationRequestClient = { clientId: client.clientId };
+	for (const field of AUTHORIZATION_REQUEST_CLIENT_FIELDS) {
+		const value = client[field];
+		// Database rows hold null for unset fields.
+		if (value != null) Object.assign(view, { [field]: value });
+	}
+	return view;
+}
+
+const AUTHORIZATION_REQUEST_CLIENT_FIELDS = [
+	"name",
+	"uri",
+	"icon",
+	"contacts",
+	"tos",
+	"policy",
+	"tokenEndpointAuthMethod",
+	"applicationType",
+] as const satisfies readonly (keyof OAuthAuthorizationRequestClient)[];
 
 /**
  * Sends the user to the next required interaction page, or approves the
@@ -1311,6 +1415,7 @@ export async function issueAuthorizationCode(
 			"the authorization_code grant is disabled",
 		);
 	}
+	const serverContext = readServerContext(params.serverContext);
 	const { session, user } = params.session;
 	// The client sends this request directly, as it would to /oauth2/par, so
 	// it authenticates the same way.
@@ -1421,6 +1526,7 @@ export async function issueAuthorizationCode(
 		scopes,
 		headers,
 		query,
+		amr: params.amr,
 	});
 	// OIDC Core §5.5.1.1: an unmet essential acr is a failed authentication.
 	if (
@@ -1444,6 +1550,7 @@ export async function issueAuthorizationCode(
 		...authenticationContext,
 		referenceId,
 		resource: resources,
+		serverContext,
 	});
 	return {
 		code,
@@ -1458,6 +1565,31 @@ export async function issueAuthorizationCode(
 				)
 			: undefined,
 	};
+}
+
+/**
+ * Reads `serverContext` back from JSON, as the token endpoint will, so a value
+ * that does not survive JSON as an object fails before the request uses up a
+ * client assertion or DPoP proof.
+ */
+function readServerContext(
+	value: unknown,
+): Record<string, unknown> | undefined {
+	if (value === undefined) return undefined;
+	let stored: unknown;
+	try {
+		stored = JSON.parse(JSON.stringify(value));
+	} catch {
+		stored = undefined;
+	}
+	if (!isRecord(stored)) {
+		tokenError(
+			"INTERNAL_SERVER_ERROR",
+			"server_error",
+			"issueAuthorizationCode serverContext must be a JSON object",
+		);
+	}
+	return stored;
 }
 
 function serializeAuthorizationQuery(query: OAuthInteractionQuery) {
@@ -1486,6 +1618,7 @@ type AuthorizationCodeApproval = {
 	amr?: string[];
 	referenceId?: string;
 	resource?: string[];
+	serverContext?: Record<string, unknown>;
 };
 
 /** Stores a single-use authorization code for an approved request. */
@@ -1514,6 +1647,7 @@ async function storeAuthorizationCode(
 			acr: approval.acr,
 			amr: approval.amr,
 			resource: approval.resource,
+			serverContext: approval.serverContext,
 		} satisfies VerificationValue),
 	});
 	return { code, expiresAt };

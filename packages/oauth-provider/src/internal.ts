@@ -21,9 +21,11 @@ export {
 	type OAuthClientRegistrationResult,
 	type RegisterClientMetadataDocumentInput,
 	registerClientMetadataDocument,
+	resolveMetadataDocumentClientLists,
 } from "./register";
 export { resolveResourcePolicy } from "./resources";
 export {
+	assertConsentStillCovers,
 	getAuthEndpointUrl,
 	getLocalJwksSource,
 	parseClientMetadata,
@@ -32,6 +34,7 @@ export {
 	toResourceList,
 	validateClientScopes,
 } from "./utils";
+export { getDeliveryTargetRejection } from "./utils/delivery-target";
 export {
 	isLocalCapacityRefusal,
 	isTransientAbort,

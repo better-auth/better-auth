@@ -12,6 +12,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { appendQueryParams } from "../utils/url";
 
 export interface PayPalProfile {
 	sub?: string | undefined;
@@ -136,7 +137,7 @@ export const paypal = (options: PayPalOptions) => {
 					codeVerifier,
 					redirectURI: options.redirectURI || redirectURI,
 					options: tokenRequestOptions,
-					tokenEndpoint,
+					tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 					tokenEndpointAuth,
 				});
 			} catch (error) {
@@ -152,7 +153,7 @@ export const paypal = (options: PayPalOptions) => {
 						return await refreshAccessToken({
 							refreshToken,
 							options: tokenRequestOptions,
-							tokenEndpoint,
+							tokenEndpoint: options.tokenEndpoint ?? tokenEndpoint,
 							tokenEndpointAuth,
 						});
 					} catch (error) {
@@ -173,7 +174,10 @@ export const paypal = (options: PayPalOptions) => {
 
 			try {
 				const response = await betterFetch<PayPalProfile>(
-					`${userInfoEndpoint}?schema=paypalv1.1`,
+					appendQueryParams(
+						options.userInfoEndpoint ?? userInfoEndpoint,
+						new URLSearchParams({ schema: "paypalv1.1" }),
+					),
 					{
 						headers: {
 							Authorization: `Bearer ${token.accessToken}`,

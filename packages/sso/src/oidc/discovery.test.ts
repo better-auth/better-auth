@@ -1353,6 +1353,49 @@ describe("resolved-address guard", () => {
 			);
 		});
 
+		it("names the endpoint, host, and offending address in the error", async () => {
+			lookupMock.mockResolvedValue([{ address: "10.0.0.5", family: 4 }]);
+			await expect(
+				assertEndpointResolvesPublic(
+					"tokenEndpoint",
+					"https://idp.internal.example/token",
+					notTrusted,
+				),
+			).rejects.toMatchObject({
+				code: "discovery_private_host",
+				message: expect.stringContaining(
+					'The tokenEndpoint host "idp.internal.example" resolves to a non-publicly-routable address (10.0.0.5)',
+				),
+				details: {
+					endpoint: "tokenEndpoint",
+					url: "https://idp.internal.example/token",
+					hostname: "idp.internal.example",
+					resolved: "10.0.0.5",
+				},
+			});
+		});
+
+		it("rejects a host name that is not public by name without claiming it resolved", async () => {
+			await expect(
+				assertEndpointResolvesPublic(
+					"tokenEndpoint",
+					"https://tenant.localhost/token",
+					notTrusted,
+				),
+			).rejects.toMatchObject({
+				code: "discovery_private_host",
+				message: expect.stringContaining(
+					'The tokenEndpoint host "tenant.localhost" is not publicly routable.',
+				),
+				details: {
+					endpoint: "tokenEndpoint",
+					url: "https://tenant.localhost/token",
+					hostname: "tenant.localhost",
+				},
+			});
+			expect(lookupMock).not.toHaveBeenCalled();
+		});
+
 		it("allows an FQDN that resolves to a public address", async () => {
 			lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 			await expect(

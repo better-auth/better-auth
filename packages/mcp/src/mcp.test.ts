@@ -18,7 +18,12 @@ import {
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { createAuthClient } from "better-auth/client";
-import { deriveDpopAth } from "better-auth/oauth2";
+import { generateRandomString } from "better-auth/crypto";
+import {
+	authorizationCodeRequest,
+	createAuthorizationURL,
+	deriveDpopAth,
+} from "better-auth/oauth2";
 import type { Jwk } from "better-auth/plugins/jwt";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -1065,8 +1070,40 @@ describe("requireMcpAuth checks tokens against the provider's records", async ()
 				}),
 			);
 
-		return { issueAccessToken, revoke, callMcp };
+		/** A JWT that app code signs with the provider's keys. */
+		async function signAppJwt() {
+			const { token } = await instance.auth.api.signJWT({
+				body: {
+					payload: {
+						iss: baseURL,
+						aud: baseURL,
+						azp: client.client_id,
+						scope: "mcp:base",
+					},
+				},
+			});
+			return token;
+		}
+
+		return { issueAccessToken, revoke, callMcp, signAppJwt };
 	}
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9068#section-4
+	 */
+	it("rejects an app-signed JWT that carries azp but not typ at+jwt", async () => {
+		const provider = await createProvider({});
+		expect(
+			(await provider.callMcp(await provider.issueAccessToken())).status,
+		).toBe(200);
+
+		const response = await provider.callMcp(await provider.signAppJwt());
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toContain(
+			'error="invalid_token"',
+		);
+	});
 
 	it("accepts an opaque access token", async () => {
 		const provider = await createProvider({ disableJwtPlugin: true });
@@ -1095,5 +1132,123 @@ describe("requireMcpAuth checks tokens against the provider's records", async ()
 		await provider.revoke(accessToken);
 
 		expect((await provider.callMcp(accessToken)).status).toBe(401);
+	});
+});
+
+/**
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ */
+describe("requireMcpAuth with pairwise subjects", () => {
+	const origin = "https://pairwise.example.test";
+	const baseURL = `${origin}/api/auth`;
+
+	async function issueUserToken(options: {
+		disableJwtPlugin?: boolean;
+		accessTokenSubject?: "user" | "pairwise";
+	}) {
+		const instance = await getTestInstance(
+			{
+				baseURL: origin,
+				advanced: { useSecureCookies: false },
+				plugins: [
+					...(options.disableJwtPlugin ? [] : [jwt()]),
+					mcp({
+						loginPage: "/login",
+						consentPage: "/consent",
+						resource: baseURL,
+						scopes: ["openid", "mcp:base"],
+						clientPrivileges: () => true,
+						pairwiseSecret: "test-pairwise-secret-key-32chars!!",
+						...options,
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [oauthProviderClient()] } },
+		);
+		const { headers, user } = await instance.signInWithTestUser();
+		const client = await instance.auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [REDIRECT_URI],
+				token_endpoint_auth_method: "client_secret_post",
+				scope: "openid mcp:base",
+				skip_consent: true,
+				subject_type: "pairwise",
+			},
+		});
+		const oauth = {
+			clientId: client.client_id,
+			clientSecret: client.client_secret!,
+			redirectURI: REDIRECT_URI,
+		};
+		const codeVerifier = generateRandomString(64);
+		const authorizationUrl = await createAuthorizationURL({
+			id: "test",
+			options: oauth,
+			redirectURI: "",
+			authorizationEndpoint: `${baseURL}/oauth2/authorize`,
+			state: "state",
+			scopes: ["openid", "mcp:base"],
+			codeVerifier,
+		});
+		let location = "";
+		await instance.client.$fetch(authorizationUrl.toString(), {
+			headers,
+			onError(context) {
+				location = context.response.headers.get("location") ?? "";
+			},
+		});
+		const code = new URL(location).searchParams.get("code")!;
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: REDIRECT_URI,
+			resource: baseURL,
+			options: oauth,
+		});
+		const tokens = await instance.client.$fetch<{
+			access_token: string;
+			id_token: string;
+		}>("/oauth2/token", { method: "POST", body, headers: tokenHeaders });
+		return { instance, user, tokens: tokens.data! };
+	}
+
+	async function handlerSub(
+		auth: Parameters<typeof requireMcpAuth>[0],
+		accessToken: string,
+	) {
+		let sub: unknown;
+		const response = await requireMcpAuth(auth, (_request, claims) => {
+			sub = claims.sub;
+			return Response.json({ ok: true });
+		})(
+			new Request(`${origin}/mcp`, {
+				headers: { Authorization: `Bearer ${accessToken}` },
+			}),
+		);
+		expect(response.status).toBe(200);
+		return sub;
+	}
+
+	it("passes the pairwise sub of a pairwise JWT access token", async () => {
+		const { instance, user, tokens } = await issueUserToken({
+			accessTokenSubject: "pairwise",
+		});
+		const tokenSub = decodeJwt(tokens.access_token).sub;
+		expect(tokenSub).not.toBe(user.id);
+
+		expect(await handlerSub(instance.auth, tokens.access_token)).toBe(tokenSub);
+	});
+
+	it("passes a pairwise client's opaque token its pairwise sub", async () => {
+		const { instance, user, tokens } = await issueUserToken({
+			disableJwtPlugin: true,
+		});
+		const pairwiseSub = decodeJwt(tokens.id_token).sub;
+		expect(pairwiseSub).not.toBe(user.id);
+
+		expect(await handlerSub(instance.auth, tokens.access_token)).toBe(
+			pairwiseSub,
+		);
 	});
 });

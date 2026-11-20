@@ -1,3 +1,4 @@
+import type { AuthContext } from "@better-auth/core";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
@@ -19,6 +20,7 @@ import {
 	vi,
 } from "vitest";
 import { oauthProviderClient } from "./client";
+import { getLocalIntrospection } from "./internal";
 import { oauthProvider } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
@@ -803,6 +805,7 @@ describe("oauth introspect - config", async () => {
 		});
 
 		return {
+			auth,
 			client,
 			oauthClient: registeredClient,
 		};
@@ -1570,6 +1573,116 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 				status: "UNAUTHORIZED",
 				message: "token inactive",
 			});
+		});
+	});
+});
+
+describe("getLocalIntrospection with subject: token", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const validResource = "https://myapi.example.com";
+	const scopes = ["read:profile"];
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [validResource],
+				enforcePerClientResources: false,
+				scopes,
+				clientPrivileges: () => true,
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+	const formHeaders = {
+		accept: "application/json",
+		"content-type": "application/x-www-form-urlencoded",
+	};
+
+	async function createMachineClient() {
+		return auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_post",
+				client_credentials_scopes: scopes,
+			},
+		});
+	}
+
+	async function clientCredentialsToken(
+		oauthClient: Awaited<ReturnType<typeof createMachineClient>>,
+		resource?: string,
+	) {
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
+				scope: scopes.join(" "),
+				...(resource ? { resource } : {}),
+			},
+			{ headers: formHeaders },
+		);
+		return tokens.data!.access_token!;
+	}
+
+	async function introspectLocally(token: string, subject?: "user" | "token") {
+		const introspect = getLocalIntrospection(
+			(await auth.$context) as unknown as AuthContext,
+			undefined,
+			subject ? { subject } : undefined,
+		);
+		return introspect!(token);
+	}
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9068#section-2.2
+	 */
+	it("keeps the client ID as the sub of a client_credentials JWT", async () => {
+		const oauthClient = await createMachineClient();
+		const token = await clientCredentialsToken(oauthClient, validResource);
+		expect(token.split(".")).toHaveLength(3);
+		for (const subject of ["user", "token"] as const) {
+			expect(await introspectLocally(token, subject)).toMatchObject({
+				active: true,
+				client_id: oauthClient.client_id,
+				sub: oauthClient.client_id,
+			});
+		}
+	});
+
+	it.each([
+		["JWT", validResource],
+		["opaque", undefined],
+	])(
+		"reports a %s access token of a deleted client as inactive",
+		async (_, resource) => {
+			const oauthClient = await createMachineClient();
+			const token = await clientCredentialsToken(oauthClient, resource);
+			expect(await introspectLocally(token, "token")).toMatchObject({
+				active: true,
+			});
+			await (await auth.$context).adapter.delete({
+				model: "oauthClient",
+				where: [{ field: "clientId", value: oauthClient.client_id }],
+			});
+			expect(await introspectLocally(token, "token")).toEqual({
+				active: false,
+			});
+		},
+	);
+
+	it("reports an unknown token as inactive", async () => {
+		expect(await introspectLocally("not-a-token", "token")).toEqual({
+			active: false,
 		});
 	});
 });

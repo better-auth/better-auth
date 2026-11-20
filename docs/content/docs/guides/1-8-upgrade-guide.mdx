@@ -34,6 +34,7 @@ Only the OAuth provider plugins add columns in 1.8. Every `oauthProvider()` setu
   * `acr`, `amr`, and `grantId` on `oauthRefreshToken`
   * `act`, `grantId`, and `accessTokenClaims` on `oauthAccessToken`
   * `expiresAt`, `sectorIdentifier`, `frontchannelLogoutUri`, `frontchannelLogoutSessionRequired`, and `requirePushedAuthorizationRequests` on `oauthClient`
+  * `accessTokenFormat` on `oauthResource`
 * `oauthDeviceAuthorization()` adds `referenceId`, `authTime`, `acr`, and `amr` on `deviceCode`.
 
 Apply the schema, then deploy the 1.8 packages. With the built-in Kysely adapter, run `npx auth@latest migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth@latest generate`, review the output, and apply it with your migration tooling. MongoDB needs no migration.
@@ -267,10 +268,97 @@ oauthProvider({
 Revoking a refresh token at `/oauth2/revoke` now deletes every opaque access token of its grant, including tokens issued before earlier refreshes. Before, only the access tokens issued with that exact refresh token were deleted, so an older token stayed active until it expired.
 
 * Opaque access tokens issued before you upgrade are still deleted only with the refresh token that issued them.
-* Replaying a revoked refresh token works as before. It deletes every refresh token the client holds for that user, and the opaque access tokens linked to them.
+* Replaying a revoked refresh token deletes the refresh tokens of its grant and the opaque access tokens linked to them. See [A refresh token replay revokes one grant](#a-refresh-token-replay-revokes-one-grant).
 * JWT access tokens stay valid until they expire. With `revocableJwtAccessTokens: true`, they are revoked too, but only where the auth server checks the token, such as introspection, UserInfo, or `verifyResourceRequest`, and only for tokens issued after you turned the option on. With secondary storage alone, an evicted entry makes a revoked token valid again. See [JWT revocation](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
 * A refresh of the grant that is still issuing tokens when you revoke it now fails with `invalid_grant`, and the tokens it stored are deleted. This needs a refresh token issued or refreshed since you upgraded.
 * Each grant revocation now writes one row to the verification store, with or without `revocableJwtAccessTokens`. This includes revoking a refresh token, replaying one, and reusing an authorization code. Your `databaseHooks.verification` hooks see these rows. See [Grant revocation entries](/docs/plugins/oauth-provider/tokens#grant-revocation-entries).
+
+### A refresh token replay revokes one grant
+
+Replaying a rotated or revoked refresh token now revokes only the grant the token belongs to: its refresh tokens, and the opaque access tokens issued under them. Before, it revoked every refresh token the client held for that user, so one replayed token ended the user's access on every other device and agent that used the client. A grant is everything one authorization produced, whether an authorization code, a device code, or a CIBA request started it.
+
+* The user's other grants with the same client keep their refresh tokens and access tokens. A refresh on one of them still succeeds.
+* A refresh token with no grant ID, such as one rotated or revoked before you upgraded, names no grant, so a replay of it still deletes every refresh token the client holds for that user and the opaque access tokens linked to them. An unexpired token that was not rotated or revoked yet gets its grant ID at its first refresh after the upgrade. In a grant that a device code or a CIBA request started, the opaque access tokens of tokens rotated before the upgrade stay valid until they expire.
+* A rotated token presented to `/oauth2/revoke` follows the same rule.
+* A refresh of the replayed grant that is still issuing tokens fails with `invalid_grant`, and the tokens it stored are deleted. This needs a replayed token with a grant ID. A refresh of another grant that is still issuing tokens keeps its tokens.
+* JWT access tokens follow the rules in [Revoking a refresh token revokes its grant](#revoking-a-refresh-token-revokes-its-grant).
+
+**What to do:** nothing, unless a client relied on one device's replay ending the user's other grants with it. That no longer happens. See [Refresh tokens](/docs/plugins/oauth-provider/tokens#refresh-tokens).
+
+### Overlapping refreshes get the same response
+
+With `refreshTokenReuseInterval` above `0`, two matching requests to refresh the same token can now receive the same response. Before, the second request failed with `400 invalid_grant`, and a client that sent two refreshes at once lost its session.
+
+The second request can wait up to 5 seconds for the first to store its response. It receives that response only if the client, scopes, resources, and DPoP key match. A retry with different but valid scopes or resources can also wait before the provider detects the mismatch. The provider returns `invalid_grant` on a mismatch or if the wait expires.
+
+* The interval is set when the token rotates. If you enable it during the upgrade, it applies to later rotations. Reusing a token that rotated with the default of `0` still revokes the grant. A token rotated on 1.7 with a reuse window keeps its original deadline.
+* `mcp()` sets the interval to 30 seconds, so MCP clients get this behavior.
+* A DPoP-bound refresh must still use the key it is bound to.
+
+**What to do:** nothing, unless a client relies on the second of two overlapping refreshes failing. See [Refresh tokens](/docs/plugins/oauth-provider/tokens#refresh-tokens).
+
+### A password reset revokes the user's tokens
+
+When `emailAndPassword.revokeSessionsOnPasswordReset` is on, a password reset now also revokes every access and refresh token stored for the user, including `offline_access` grants that no session holds. It runs for `/reset-password`, `/email-otp/reset-password`, and `/phone-number/reset-password`, and for a user with no live session. Before, an `offline_access` refresh token kept working after the reset.
+
+* A client that refreshes after a reset gets `400 invalid_grant` and must start a new authorization request.
+* Signing out and revoking all sessions still keep `offline_access` grants.
+* With `revocableJwtAccessTokens: true`, the JWT access tokens of those grants are revoked too. Otherwise they stay valid until they expire, or until the session they carry as `sid` ends, which the reset does. A JWT issued without a refresh token has no stored record, so only that session rule applies to it.
+* A reset on a deployment that leaves `revokeSessionsOnPasswordReset` off revokes nothing.
+
+**What to do:** if agents or other long-lived clients must survive a reset, set `revokeGrantsOnPasswordReset: false`. See [Password reset](/docs/plugins/oauth-provider/openid-connect#password-reset).
+
+### Back-channel logout resolves the client's host name
+
+Before each delivery, Better Auth now resolves the host name of a client's `backchannel_logout_uri`. If the lookup fails or any address is loopback, private, link-local, or otherwise not publicly routable, it skips that client, logs a warning, and still revokes the session's tokens. Before, only the host name as written was checked, so a public-looking name with an internal DNS record received the Logout Token. The DNS check runs only on runtimes where `node:dns` resolves names.
+
+**What to do:** if a client runs on an internal network and its public-looking name resolves to a private address, add the origin of its `backchannel_logout_uri` to [`trustedOrigins`](/docs/reference/options#trustedorigins) so it keeps receiving Logout Tokens. An origin in `trustedOrigins` skips only the DNS check, and a loopback or private IP literal or a name such as `localhost` is still rejected. Only origins configured at initialization count, so an origin that only a request supplies, such as one a `trustedOrigins` callback returns for a particular `Request`, does not. See [Back-channel logout](/docs/plugins/oauth-provider/openid-connect#back-channel-logout).
+
+### Deleting a consent revokes its tokens
+
+`deleteOAuthConsent` now revokes the access and refresh tokens issued under the consent it deletes, scoped to that user, that client, and the consent's reference. Before, they stayed valid after the consent was gone, and a refresh token kept renewing itself indefinitely.
+
+* A client that refreshes under a deleted consent gets `400 invalid_grant` and must start a new authorization request.
+* Tokens the user holds for the same client under another consent reference stay valid.
+* JWT access tokens stay valid until they expire. With `revocableJwtAccessTokens: true`, those of a grant that has a refresh token are revoked too. A JWT issued without a refresh token is never revoked this way, but one that carries a `sid` also becomes inactive when its session ends.
+* If the revocation fails, the call fails and the consent stays, so the user can delete it again.
+
+**What to do:** if a client relies on tokens that outlive a deleted consent, have it request authorization again. See [Revoke tokens with a consent](/docs/plugins/oauth-provider/tokens#revoke-tokens-with-a-consent).
+
+### Consent approvals add to the stored consent
+
+Accepting the consent page now adds to the user's stored consent for the client and consent reference. Before, each acceptance replaced it, so approving fewer scopes, another resource, or other UserInfo claims dropped what the user had approved earlier.
+
+* A scope or UserInfo claim that the consent page offered and the user left out is still removed.
+* The consent page shows less often. A request for access that the user approved earlier, but that a later consent page did not offer, no longer shows it. With `prompt=none`, such a request now gets a code instead of `consent_required`.
+* `getOAuthConsent` and `getOAuthConsents` return everything the user approved and did not take back, not only the last approval.
+* Two first acceptances at the same moment can each store a row for the same client and consent reference. Better Auth reads such rows as one consent, and `getOAuthConsents` lists them once. The next write merges them into the oldest. `getOAuthConsent` and `updateOAuthConsent` return that oldest row, whose `id` can differ from the one you sent, and `deleteOAuthConsent` deletes every row of the consent.
+* No schema change or migration is needed. An existing consent holds its last approval, and grows from the next one.
+
+**What to do:** nothing, unless you relied on a narrower approval taking back earlier access. To narrow a consent, call `updateOAuthConsent`. To take a consent back, call `deleteOAuthConsent`. It removes the consent for that client and consent reference only, and revokes the refresh tokens and opaque access tokens issued under it. JWT access tokens stay valid until they expire, unless `revocableJwtAccessTokens` revokes them. See [Stored consent](/docs/plugins/oauth-provider/sign-in-flow#stored-consent).
+
+### Pending authorization codes follow the consent
+
+Redeeming an authorization code at `/oauth2/token` now needs a stored consent that still covers the code's scopes, resources, and UserInfo claims. Before, a code stayed valid for its full lifetime, 10 minutes by default, after the user deleted or narrowed the consent it was issued under.
+
+* A redemption after the user deleted the consent, or narrowed it below what the code authorizes, fails with `400 invalid_grant`. Unless the user approves that access again, the client must start a new authorization request.
+* If the user deletes the consent and then approves the same access again for the same client and consent reference, the code is valid again.
+* Codes redeemed while the client is configured with `skip_consent` bypass this check, even if a stored consent exists.
+* A redemption that passed the check just before the user deleted the consent can still finish, and the tokens it issues stay valid.
+
+**What to do:** clients that exchange a code right after the user approves it need no change. See [Manage consents](/docs/plugins/oauth-provider/sign-in-flow#manage-consents).
+
+### Approved device codes follow the consent
+
+Redeeming an approved OAuth device code at `/oauth2/token` now needs a stored consent that still covers the scopes and resources the user approved. Before, an approved code stayed valid for its full lifetime, 30 minutes by default, after the user deleted or narrowed the consent it was approved under.
+
+* A poll after the user deleted the consent, or narrowed it below what they approved, fails with `400 invalid_grant`. Unless the user approves that access again, the device must start a new device authorization request.
+* Approving another device of the same client under the same consent reference adds to that consent and leaves the first device's code valid. The first device's poll fails only if the user declined one of its scopes on the other device's consent page. An approval under another consent reference leaves the first device's consent unchanged.
+* If the user deletes the consent and then approves the same access again for the same client and consent reference, the code is valid again.
+* Device codes redeemed while the client is configured with `skip_consent` bypass this check, even if a stored consent exists.
+* A CIBA request the user approved from the link is checked the same way. One approved with `completeCibaRequest` stores no consent and is not checked.
+
+**What to do:** devices that poll until the user decides redeem the code right after approval and need no change. See [Approve the device](/docs/plugins/device-authorization#approve-the-device).
 
 ### Authorization code reuse revokes tokens only for the issuing client
 
@@ -291,16 +379,29 @@ To stop a request from carrying two values that different parts of the server re
 
 * At `/oauth2/token`, `/oauth2/introspect`, and `/oauth2/revoke`, any repeated form parameter fails, such as `code=a&code=b`. At the token endpoint, `resource` and `audience` may still repeat.
 * A form-encoded POST to `/oauth2/authorize` follows the same rules as a GET request. A repeated `resource` keeps every value instead of only the last one.
-* A parameter sent without a value counts as omitted, so `scope=read&scope=` is the same as `scope=read`, and `resource=` is the same as no `resource`.
+* At `/oauth2/token`, `/oauth2/introspect`, `/oauth2/revoke`, and `/oauth2/par`, a parameter sent without a value counts as omitted, so `scope=read&scope=` is the same as `scope=read`, and `resource=` is the same as no `resource`.
+* `/oauth2/authorize` keeps empty values on GET and POST. At this endpoint, `scope=` requests no scopes, `scope=read&scope=` fails as a repeated parameter, and `resource=` fails with `invalid_target` because an empty value is not an absolute URI. At `/oauth2/par`, an empty `scope` counts as omitted and the default scopes apply. If `requireOpenId` is enabled, both endpoints reject an empty or omitted `scope` with `invalid_scope` before applying defaults.
 * A malformed `resource` at the token endpoint, such as a relative URI, returns `invalid_target` instead of `invalid_request`.
 
 **What to do:** clients that send each parameter once need no change. If your client matches on the error code for a malformed `resource`, match `invalid_target`.
+
+### Authorization requests without `scope` use `clientRegistrationDefaultScopes`
+
+If you enable `requireOpenId`, an authorization request that omits `scope` still fails with `invalid_scope`. Otherwise, an authorization request that omits `scope` now gets only the client's scopes that are also in `clientRegistrationDefaultScopes`. Before, it got every scope the client may request, including scopes you added only through `clientRegistrationAllowedScopes`. When you do not set `clientRegistrationDefaultScopes`, nothing changes, and requests that send `scope` are unaffected.
+
+**What to do:** if you set `clientRegistrationDefaultScopes`, check that clients which send no `scope` still get the scopes they need. A default list without `openid` makes that request plain OAuth, so the client gets no ID token. See [Requests that omit `scope`](/docs/plugins/oauth-provider/tokens#requests-that-omit-scope).
 
 ### Client metadata updates
 
 * Updating a client with an empty `metadata` object now clears its stored metadata. Before, the old metadata stayed.
 * Sending `backchannel_logout_uri: null` or `frontchannel_logout_uri: null` to `/oauth2/update-client` or `adminUpdateOAuthClient` now clears the URI. Before, `null` was rejected.
-* On a client allowed to use RP-initiated logout, `updateOAuthClient` and `/oauth2/update-client` now reject a new `post_logout_redirect_uris` entry with `invalid_client_metadata` unless it shares a scheme, host, and port with one of the client's `redirect_uris`. Loopback hosts match on any port, and private-use URIs match on scheme and authority. Before, the owner could add any origin. Entries the client already has are kept, and `adminUpdateOAuthClient` is not limited, except when it grants logout to a client you do not own: that grant fails with `invalid_client_metadata` if one of the client's stored entries breaks the rule, where a metadata document client may also use the origin of its `client_id`. **What to do:** to send users to another origin after logout, add a redirect URI on that origin in the same update. If an administrator's grant fails, the client's own registration has to change first, because the grant cannot change `redirect_uris` or `post_logout_redirect_uris`: its owner updates them, or a metadata document client publishes a document that fixes them. See [Registered clients](/docs/plugins/oauth-provider/openid-connect#registered-clients).
+* On a client allowed to use RP-initiated logout, `updateOAuthClient` and `/oauth2/update-client` now reject a new `post_logout_redirect_uris` entry with `invalid_client_metadata` unless it shares a scheme, host, and port with one of the client's `redirect_uris`. Loopback hosts match on any port, and private-use URIs match on scheme and authority. Before, the owner could add any origin. Entries the client already has are kept, and `adminUpdateOAuthClient` is not limited, except when it grants logout to a client you do not own: that grant fails with `invalid_client_metadata` if one of the client's stored entries breaks the rule, where a metadata document client may also use the origin of its `client_id`. The CIMD plugin also binds a metadata document's entries to the `client_id` origin by default, so a metadata document client cannot use a web origin that only its `redirect_uris` have. HTTP(S) loopback redirects and hostless reverse-domain private-use logout URIs such as `com.example.app:/logout` are exempt from the CIMD origin check. **What to do:** to send users to another origin after logout, add a redirect URI on that origin in the same update. For a metadata document client using the default `originBoundFields`, use a web logout URI on the `client_id` origin. If an administrator's grant fails, the client's own registration has to change first, because the grant cannot change `redirect_uris` or `post_logout_redirect_uris`: its owner updates them, or a metadata document client publishes a document that fixes them. See [Registered clients](/docs/plugins/oauth-provider/openid-connect#registered-clients).
+
+### Refused metadata document URLs answer 400
+
+This applies if you use `@better-auth/cimd`. A `client_id` URL that URL validation or `isMetadataDocumentUrlAllowed` refuses now answers `invalid_client` with status 400 and uses none of the fetch budget. Before, it could answer 429 with `temporarily_unavailable` once the budget was spent. `isMetadataDocumentUrlAllowed` now runs once for each request that needs a fetch, including requests that join a fetch already in flight. Before, those requests skipped it.
+
+**What to do:** if your `isMetadataDocumentUrlAllowed` consults an external service, keep it cheap or cache its decisions. See [Configuration](/docs/plugins/cimd#configuration).
 
 ### Client secret expiry takes effect
 
@@ -354,6 +455,14 @@ A `clientAuthentication` strategy now receives `acceptedAudiences`, the audience
 
 The `expectedAudience` strategy input and the `expectedAudience` parameter of `consumeClientAssertion` are deprecated. A strategy that checks `aud` against `expectedAudience` accepts different audiences than the built-in `private_key_jwt` method does.
 
+### Client `jwks_uri` keys are refetched once a minute
+
+This applies if a client authenticates with `private_key_jwt` and registers a `jwks_uri`. When an assertion names a key missing from the cached key set, the provider now fetches the `jwks_uri` again at most once every 60 seconds for each cached key set for that URI. Before, every such assertion made a fetch, so anyone who knew a `client_id` could make the provider call the client's endpoint on each request.
+
+An assertion signed with a key missing from the cached key set now fails with `401 invalid_client` if another unknown-key fetch of the same `jwks_uri` started in the last 60 seconds, even when that fetch failed, unless a request has already cached a set that holds the key. Before, the provider could fetch again and retry, which worked only if the endpoint was reachable and already published the key.
+
+**What to do:** tell the clients that rotate keys through a `jwks_uri` to keep it reachable, publish the new key, and wait 5 minutes, the cache lifetime, before they sign with it. A client that gets this error can also retry after 60 seconds. Clients with inline `jwks` are unaffected. See [Rotating `jwks_uri` keys](/docs/plugins/oauth-provider/clients#rotating-jwks_uri-keys).
+
 ### UserInfo errors follow RFC 6750
 
 `/oauth2/userinfo` now reports its errors the way [RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1) describes, as OpenID Connect requires:
@@ -362,6 +471,12 @@ The `expectedAudience` strategy input and the `expectedAudience` parameter of `c
 * An `Authorization` header without the `Bearer` or `DPoP` scheme, such as a bare token, is treated as no credentials and gets a `401` challenge. Before, UserInfo read the whole header value as the token.
 
 **What to do:** a client that calls UserInfo must request the `openid` scope when it authorizes. A client whose access token lacks `openid` must authorize again with that scope. Send the access token as `Authorization: Bearer <token>`, or `DPoP <token>` with a DPoP proof in the `DPoP` header for a DPoP-bound token. Update clients and tests that match on `invalid_scope` from UserInfo.
+
+### Empty `name` and `picture` are left out of UserInfo
+
+`/oauth2/userinfo` now leaves out the standard `name` and `picture` claims when the user's `name` or `image` is an empty string. [OpenID Connect Core §5.3.2](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse) says a claim that is not returned should be omitted, not sent as `null` or an empty string. Before, a user with `name: ""` got `"name": ""`. A value that holds only whitespace is returned as before. `customUserInfoClaims` can still set these claims to an empty string, and `email` and `email_verified` are unchanged.
+
+**What to do:** a client that reads `name: ""` now sees the key absent. Check for a missing `name` or `picture` instead of an empty string, for example `userinfo.name ?? userinfo.email`.
 
 ### Access token claims set to `undefined` are left out
 
@@ -377,6 +492,50 @@ oauthProvider({
     // was: tenant: user?.tenantId, to remove an extension's tenant
     tenant: user?.tenantId ?? null,
   }),
+});
+```
+
+### Custom JWT signers must apply `header.typ`
+
+The provider now accepts a JWT as an access token only when its header has `typ: at+jwt`, as [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) requires. Introspection, revocation, UserInfo, token exchange, and `verifyResourceRequest` all apply the check. Previously, the provider could accept an application-signed JWT with `azp` when it met the other access token checks.
+
+The provider has signed its access tokens with `typ: at+jwt` since 1.7, so tokens it issued keep working. A custom `jwt.sign` in the JWT plugin receives that `typ` in its `header` argument. The provider rejects access tokens from a signer that omits the required header. The provider logs a warning at startup when `jwt.sign` is set.
+
+**What to do:** if you set `jwt.sign`, apply `header` to the signed header, as in [Custom Signing](/docs/plugins/jwt#custom-signing).
+
+```ts title="auth.ts"
+jwt({
+  jwt: {
+    sign: async (payload, header) =>
+      new SignJWT(payload)
+        // was: { alg: "EdDSA", kid, typ: "JWT" }
+        .setProtectedHeader({ typ: "JWT", ...header, alg: "EdDSA", kid })
+        .sign(privateKey),
+  },
+});
+```
+
+### Resource `allowedScopes` treats an empty list as no restriction
+
+This applies if a resource has an empty `allowedScopes`, whether you wrote `allowedScopes: []` or an adapter that cannot store `null` read the value back as `[]`. In 1.7, an empty list was an allowlist with no entries, so every token request for that resource failed with `invalid_scope`. In 1.8, an omitted `allowedScopes`, `null`, and `[]` all allow every requested scope, and `[]` is rejected as input:
+
+* A stored `[]` row now allows every requested scope. Existing rows are not rewritten, and no schema migration is needed. The data change below is still yours to make.
+* A `resources` entry with `allowedScopes: []` makes `oauthProvider()` throw at startup.
+* `adminCreateOAuthResource` and `adminUpdateOAuthResource` reject `allowedScopes: []` with `400`. Omit the field, or pass `null`, to allow every requested scope.
+* The admin endpoints return `null` for a resource with no restriction, including a stored `[]`. Before, they returned the stored value.
+* A new resource you create or seed without `allowedScopes`, and a row re-seeded in `overwrite` mode without it, is stored as `[]`. The `merge` and `insertOnly` seed modes leave an existing row's list unchanged. This lets adapters that cannot store `null`, such as Prisma on PostgreSQL, CockroachDB, or MongoDB, persist it. You no longer need to declare `allowedScopes` on every resource, including the one `mcp()` adds. Code that reads the `oauthResource` table directly must treat `null` and `[]` alike.
+
+**What to do:** before the first 1.8 process starts, find the stored resources whose `allowedScopes` is empty, and set `disabled: true` on each one that relied on denying every scope, or give it real scopes. In 1.8, `adminListOAuthResources` and `adminGetOAuthResource` return `null` for a stored `[]`, so they cannot show these rows afterwards. A database query stops working too once 1.8 creates, seeds, or resets an unrestricted resource, because that row is also stored as `[]` and looks the same as a legacy deny-all row. List the rows first with the 1.7 `adminListOAuthResources` endpoint or a direct database query. Also remove the empty `allowedScopes` from your config. Use `adminUpdateOAuthResource` for a row that already exists. A `disabled: true` in your `resources` config reaches an existing row only with `resourceSeedMode: "merge"` or `"overwrite"`.
+
+`disabled: true` is the supported way to refuse a resource. A token request for a disabled resource fails with `invalid_target`, whatever scopes it asks for, and no new token is issued for it. Access tokens already issued for the resource keep verifying until they expire. A refresh token for a disabled resource fails with `invalid_target`, so the client cannot get a new access token.
+
+Until every instance runs 1.8, a deployment that mixes 1.7 and 1.8 processes reads the same row differently. A stored `[]` denies every scope on 1.7 and allows every scope on 1.8. A resource that a 1.8 process creates, seeds, or resets without scopes is stored as `[]`, so a 1.7 process denies it. Set `disabled: true` first, because both versions refuse a disabled resource.
+
+```ts title="block-resource.ts"
+await auth.api.adminUpdateOAuthResource({
+  params: { identifier: "https://api.example.com" },
+  body: { disabled: true },
+  headers,
 });
 ```
 
@@ -396,7 +555,7 @@ This applies if you build on `extendOAuthProvider()`, call the provider API from
   });
   ```
 
-* Custom `OAuthProviderApi` implementations must add `verifyDpopProof()`, `issueDpopNonce()`, `challengeDpopNonce()`, `resolveConfirmation()`, `resolveSubject()`, `verifyResourceRequest()`, and `issueAuthorizationCode()`.
+* Custom `OAuthProviderApi` implementations must add `verifyDpopProof()`, `issueDpopNonce()`, `challengeDpopNonce()`, `resolveConfirmation()`, `resolveSubject()`, `verifyResourceRequest()`, `issueAuthorizationCode()`, and `validateAuthorizationRequest()`.
 
 * Extension grants now receive every `audience` value instead of only the last one.
 
@@ -426,16 +585,24 @@ These provider features are new or opt-in, and need no action when you upgrade:
 * [Pushed authorization requests](/docs/plugins/oauth-provider/sign-in-flow#pushed-authorization-requests) at `/oauth2/par`, with `pushedAuthorizationRequests: { enabled: true }`.
 * Token exchange with `oauthTokenExchange()`, including DPoP-bound public clients with `publicClients: "dpop-bound"`.
 * A pairwise `sub` in JWT access tokens, with `accessTokenSubject: "pairwise"` and `pairwiseSecret`. Resource servers that key on `sub` then see a different value for the same user in each sector.
+* A per-grant access token lifetime, with `accessTokenExpiresIn` as a function and, to go above 1 hour, `accessTokenMaxExpiresIn`. A number still works as before. Code that reads `accessTokenExpiresIn` from your options now sees `number | function`. See [Per-grant access token lifetime](/docs/plugins/oauth-provider/tokens#per-grant-access-token-lifetime).
 * JWT access token revocation, with `revocableJwtAccessTokens: true`. Resource servers that verify tokens locally against the JWKS don't see it, so they must introspect.
-* A callback for each revoked grant or access token, with `onTokenRevoked`. Use it to pass revocations to other services instead of matching verification identifiers in `databaseHooks.verification`. It does not report ended sessions, disabled or deleted clients, deleted resources, or deleted consent. See [Revocations it does not report](/docs/plugins/oauth-provider/tokens#revocations-it-does-not-report).
+* A callback for each revoked grant or access token, with `onTokenRevoked`. Use it to pass revocations to other services instead of matching verification identifiers in `databaseHooks.verification`. It does not report ended sessions, disabled or deleted clients, deleted resources, deleted consent, or password-reset grant revocation. See [Revocations it does not report](/docs/plugins/oauth-provider/tokens#revocations-it-does-not-report).
 * RP-initiated logout for registered clients, with `clientRegistrationEnableEndSession`.
-* `verifyResourceRequest()` and `issueAuthorizationCode()` on the provider API, for plugin endpoints served by the auth server.
+* [Opaque access tokens for a resource](/docs/plugins/oauth-provider/tokens#access-token-format), with `accessTokenFormat: "opaque"`, or for every resource that does not set a format, with `resourceDefaults`.
+* `verifyResourceRequest()`, `issueAuthorizationCode()`, and `validateAuthorizationRequest()` on the provider API, for plugin endpoints served by the auth server.
 
 ***
 
 ## Resource servers
 
 This section applies if you verify access tokens with `verifyAccessTokenRequest` from `better-auth/oauth2` or the resource client, answer with `createResourceServerChallenge` from `@better-auth/oauth-provider`, use the MCP handler, or call `getProtectedResourceMetadata`.
+
+### `requireMcpAuth` checks tokens against the provider's records
+
+When the OAuth provider runs in the same process, `requireMcpAuth` now checks each access token against its records instead of verifying JWT signatures alone. It accepts opaque access tokens, and an opaque token that was revoked, whose session ended, or whose client is disabled fails on the next request. A JWT access token fails once revoked only with `revocableJwtAccessTokens: true`, and a JWT whose session ended or whose client is disabled fails on the next request. The handler's claims carry the `sub` the token carries: for a client with `subject_type: "pairwise"`, an opaque token's pairwise subject, and a JWT's pairwise subject when you set `accessTokenSubject: "pairwise"`.
+
+**What to do:** expect a database read per request. Set `jwksUrl` to keep verifying JWT signatures alone, which rejects opaque access tokens. If a handler looks users up by `sub`, keep its clients on `subject_type: "public"`, or map pairwise subjects yourself.
 
 ### Unsupported `Authorization` schemes have no error code
 
