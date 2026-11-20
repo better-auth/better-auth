@@ -44,17 +44,18 @@ describe("provider.issueAuthorizationCode after authenticateClient and verifyDpo
 						ctx,
 						ctx.context.getPlugin("oauth-provider")!.options,
 					);
-					const { handle, expected_jkt, ...query } = ctx.body as Record<
-						string,
-						string
-					>;
+					const {
+						handle,
+						expected_jkt: expectedJkt,
+						...query
+					} = ctx.body as Record<string, string>;
 					const saved = handle ? pending.get(handle) : undefined;
 					const authenticated = await provider.authenticateClient({
 						clientId: saved?.clientId,
 						requireCredentials: false,
 					});
-					const proof = expected_jkt
-						? await provider.verifyDpopProof({ expectedJkt: expected_jkt })
+					const proof = expectedJkt
+						? await provider.verifyDpopProof({ expectedJkt })
 						: await provider.verifyDpopProof();
 					const issued = await provider.issueAuthorizationCode({
 						query: saved?.query ?? query,
