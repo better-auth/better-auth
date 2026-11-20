@@ -574,9 +574,9 @@ export const communityPlugins: CommunityPlugin[] = [
 	},
 	{
 		name: "irondome-gates",
-		url: "https://www.npmjs.com/package/irondome-gates",
+		url: "https://github.com/IrondomeDev/GATES",
 		description:
-			"Disposable-email screening and tenant-scoped, PostgreSQL-backed claims on canonicalized email addresses for Better Auth.",
+			"Screens disposable emails and records tenant-scoped, PostgreSQL-backed claims for canonicalized email addresses only after the auth provider verifies the submitted address. Claims do not authenticate users, merge accounts, or prove identity.",
 		author: {
 			name: "IronDome",
 			github: "IrondomeDev",
