@@ -307,10 +307,14 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				}
 				ctx.context.session = session;
 				/**
-				 * We don't need to update the session if the user doesn't want to be remembered
-				 * or if the session refresh is disabled
+				 * We don't need to update the session if the user doesn't want to be remembered,
+				 * if the session refresh is disabled, or if it is an admin impersonation session
 				 */
-				if (dontRememberMe || ctx.query?.disableRefresh) {
+				if (
+					dontRememberMe ||
+					ctx.query?.disableRefresh ||
+					(ctx.context.hasPlugin("admin") && session.session.impersonatedBy)
+				) {
 					// Parse session and user to ensure additionalFields are included
 					const parsedSession = parseSessionOutput(
 						ctx.context.options,
