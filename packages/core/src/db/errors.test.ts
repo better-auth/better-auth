@@ -28,12 +28,32 @@ describe("isUniqueViolation", () => {
 		expect(isUniqueViolation(wrapped)).toBe(true);
 	});
 
+	it("follows a cause chain of any length", () => {
+		const driverError = Object.assign(new Error("violates constraint"), {
+			code: "23505",
+		});
+		const wrapped = Array.from({ length: 8 }).reduce<Error>(
+			(cause) => new Error("Failed query", { cause }),
+			driverError,
+		);
+
+		expect(isUniqueViolation(wrapped)).toBe(true);
+	});
+
 	it("reads the message of the innermost error when it has no code", () => {
 		const wrapped = new Error("D1_ERROR: query failed", {
 			cause: new Error("UNIQUE constraint failed: user.email"),
 		});
 
 		expect(isUniqueViolation(wrapped)).toBe(true);
+	});
+
+	it("reads the unique key constraint wording", () => {
+		expect(
+			isUniqueViolation(
+				new Error("Violation of UNIQUE KEY constraint 'UQ_user_email'."),
+			),
+		).toBe(true);
 	});
 
 	it("does not read the message of a wrapper, which can carry query params", () => {

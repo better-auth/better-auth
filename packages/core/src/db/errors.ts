@@ -11,14 +11,13 @@ const UNIQUE_VIOLATION_CODES = new Set([
 ]);
 
 const UNIQUE_VIOLATION_MESSAGE_PATTERN =
-	/unique constraint|duplicate (?:entry|key)|e11000/i;
+	/unique(?: key)? constraint|duplicate (?:entry|key)|e11000/i;
 
-const MAX_CAUSE_DEPTH = 5;
-
-function hasUniqueViolation(error: unknown, depth: number): boolean {
-	if (typeof error !== "object" || error === null || depth >= MAX_CAUSE_DEPTH) {
+function hasUniqueViolation(error: unknown, seen: Set<object>): boolean {
+	if (typeof error !== "object" || error === null || seen.has(error)) {
 		return false;
 	}
+	seen.add(error);
 	const { code, errcode, errno, number, message, cause } = error as Record<
 		string,
 		unknown
@@ -31,7 +30,7 @@ function hasUniqueViolation(error: unknown, depth: number): boolean {
 		return true;
 	}
 	if (typeof cause === "object" && cause !== null) {
-		return hasUniqueViolation(cause, depth + 1);
+		return hasUniqueViolation(cause, seen);
 	}
 	// Wrappers such as Drizzle's carry the query params in the message, so only the driver's is read.
 	return (
@@ -42,5 +41,5 @@ function hasUniqueViolation(error: unknown, depth: number): boolean {
 
 /** Follows `cause`, where ORMs such as Drizzle keep the driver error. */
 export function isUniqueViolation(error: unknown): boolean {
-	return hasUniqueViolation(error, 0);
+	return hasUniqueViolation(error, new Set());
 }
