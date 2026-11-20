@@ -88,7 +88,7 @@ The defaults come from your auth server's resolved base URL. That URL includes `
 With a dynamic `baseURL`, the base URL is known only per request, so the defaults that use it are empty. Pass `issuer`, `jwksUrl`, and `audience` explicitly.
 
 <Callout type="warn">
-  Do not rely on the default audience. It is the auth server's URL, not your API's identifier, and it is also the default `aud` of [JWT plugin](/docs/plugins/jwt#oauth-provider-mode) session JWTs. With the defaults, a signed-in user's session JWT can pass as an access token. Set `audience` to your API's resource identifier, and add `typ: "at+jwt"` and `requiredClaims: ["azp"]`.
+  Do not rely on the default audience. It is the auth server's URL, not your API's identifier, and it is also the default `aud` of [JWT plugin](/docs/plugins/jwt#oauth-provider-mode) session JWTs. With the defaults, a signed-in user's session JWT can pass as an access token. Set `audience` to your API's resource identifier, and add `typ: "at+jwt"` and `requiredClaims: ["azp"]`. The [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#token-handling) says an MCP server must validate that a token was issued for it as the intended audience, so an MCP server should not use the default.
 </Callout>
 
 ```ts title="api/posts.ts"
