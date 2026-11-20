@@ -38,6 +38,10 @@ import {
 	getSupportedGrantTypes,
 } from "./extensions";
 import { isUserDelegatedScope } from "./oauthClient/client-credentials";
+import {
+	recordAuthenticatedClient,
+	recordVerifiedDpopProof,
+} from "./request-authentication";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
 import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
@@ -220,12 +224,14 @@ export function getOAuthProviderApi(
 				grantType,
 				authMethod,
 			);
-			return {
+			const authenticated = {
 				clientId,
 				client,
 				method: authMethod,
 				confirmation,
 			};
+			await recordAuthenticatedClient(ctx, authenticated);
+			return authenticated;
 		},
 		issueAuthorizationCode: async (params) => {
 			const { issueAuthorizationCode } = await import("./authorize");
@@ -267,12 +273,14 @@ export function getOAuthProviderApi(
 		},
 		// One implementation serves every overload: with `required: true` or an
 		// `expectedJkt`, it throws instead of returning `undefined`.
-		verifyDpopProof: ((params?: { required?: boolean; expectedJkt?: string }) =>
-			verifyEndpointDpopProof(
-				ctx,
-				opts,
-				params,
-			)) as OAuthProviderApi["verifyDpopProof"],
+		verifyDpopProof: (async (params?: {
+			required?: boolean;
+			expectedJkt?: string;
+		}) => {
+			const proof = await verifyEndpointDpopProof(ctx, opts, params);
+			if (proof) await recordVerifiedDpopProof(ctx, proof);
+			return proof;
+		}) as OAuthProviderApi["verifyDpopProof"],
 		issueDpopNonce: () => issueEndpointDpopNonce(ctx, opts),
 		challengeDpopNonce: () => challengeEndpointDpopNonce(ctx, opts),
 		hashToken: (token: string, type: StoreTokenType) =>

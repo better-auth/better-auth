@@ -453,7 +453,7 @@ export const dpopBinding = () =>
 * A proof without a current nonce fails with a 400 `use_dpop_nonce` error and a fresh `DPoP-Nonce`.
 * A verified proof sets the client's next nonce on the response.
 
-Call it before your endpoint consumes a one-time credential, such as a code. The client's retry with the nonce can then still redeem it. Do not call it on a request that also calls `issueTokens` or `resolveConfirmation`. Those verify the proof themselves, and a second check rejects its `jti` as reused. A proof sent through `auth.api` fails, because there is no HTTP method to check against `htm`.
+Call it before your endpoint consumes a one-time credential, such as a code. The client's retry with the nonce can then still redeem it. When you call `issueTokens` or `resolveConfirmation` without a `confirmation`, let that method verify the proof. Verifying it twice rejects its `jti` as reused. A supplied `confirmation` replaces the proof for those methods. A proof sent through `auth.api` fails, because there is no HTTP method to check against `htm`.
 
 An endpoint that only hands out nonces, such as a credential issuer's Nonce Endpoint, calls `provider.issueDpopNonce()`. It sets a nonce only when `dpop.nonce.required` is on. Otherwise it returns `undefined` and sets no header.
 
@@ -489,7 +489,7 @@ await provider.verifyDpopProof({ expectedJkt: pending.dpopJkt });
 
 With `expectedJkt`, the request must carry a proof signed with that key, even without `required: true`. A missing proof, or a proof signed with another key, fails with `invalid_dpop_proof`. With `dpop.nonce.required`, a proof from the expected key without a current nonce gets `use_dpop_nonce`, so the client can retry. When `expectedJkt` is `undefined`, the call behaves as if you had not passed it.
 
-On the request that issues the code with [`issueAuthorizationCode`](/docs/plugins/oauth-provider/sign-in-flow#issue-codes-from-your-own-endpoint), do not call `verifyDpopProof`. Set `dpop_jkt` in `query` to the stored key instead. The method checks a proof on the request against that key, and a second verification would reject the proof as replayed. A request without a proof still gets a code bound to the stored key, so only a token request with a proof from that key can redeem it.
+On the request that issues the code with [`issueAuthorizationCode`](/docs/plugins/oauth-provider/sign-in-flow#issue-codes-from-your-own-endpoint), set `dpop_jkt` in `query` to the stored key. The method checks a proof on the request against that key. If your endpoint already called `verifyDpopProof` on this request, the method reuses that result instead of verifying the proof again. The verified key binds the code, and a `dpop_jkt` in `query` must match it. A request without a proof still gets a code bound to the stored key, so only a token request with a proof from that key can redeem it.
 
 ## Custom claims
 

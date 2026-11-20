@@ -422,9 +422,8 @@ export interface IssueAuthorizationCodeParams {
 	 * out is authenticated as that client, and one that names another client
 	 * fails with `invalid_client`. On a later request of a flow your endpoint
 	 * started, set it from the state you stored, and set `dpop_jkt` to the key
-	 * the flow started with instead of calling `verifyDpopProof`. Without a
-	 * proof on the request, the code is still bound to that key, so the token
-	 * request must prove it. Client
+	 * the flow started with. Without a proof on the request, the code is still
+	 * bound to that key, so the token request must prove it. Client
 	 * credentials in the query, such as the `client_secret` of a forwarded
 	 * body, are not stored. A `request_uri` or
 	 * `request` object is not accepted; pass the parameters themselves.
@@ -610,9 +609,21 @@ export interface OAuthProviderApi {
 	 * another key fails with `invalid_dpop_proof` before its `jti` is used up,
 	 * and a request without a proof still binds the code to that key.
 	 * With `dpop.nonce.required`, the nonce challenge runs before client
-	 * authentication, so a retry can resend a one-time client assertion. An
+	 * authentication, so a retry can resend a one-time client assertion. It is
+	 * skipped when `authenticateClient` already ran on the request, so call
+	 * `challengeDpopNonce` before it. An
 	 * endpoint that accepts form-encoded bodies must set `cloneRequest: true`,
 	 * as for `authenticateClient`.
+	 *
+	 * When your endpoint already called `authenticateClient` or
+	 * `verifyDpopProof` on this request, for example to check the client and
+	 * key before the user's credentials, the method reuses those results
+	 * instead of checking again, which would reject a one-time assertion or
+	 * proof `jti` as replayed. A `client_id` in `query` must then name the
+	 * client `authenticateClient` returned. The verified proof's key binds the
+	 * code, and a `dpop_jkt` must match it; otherwise the call fails with `invalid_client` or
+	 * `invalid_dpop_proof`. Only results the provider produced on this
+	 * request are reused, so a caller cannot supply its own.
 	 *
 	 * A required PAR policy, from `pushedAuthorizationRequests.required` or the
 	 * client's `require_pushed_authorization_requests`, does not apply. It keeps
@@ -703,10 +714,12 @@ export interface OAuthProviderApi {
 	 * because its `htm` cannot be checked.
 	 *
 	 * Call it before consuming a one-time credential, so the client's retry
-	 * with the nonce can still redeem it. Do not also call it on a request that
-	 * reaches `issueTokens`, `resolveConfirmation`, or `issueAuthorizationCode`:
-	 * they verify the proof themselves, and a second verification rejects its
-	 * `jti` as replayed.
+	 * with the nonce can still redeem it. When you call `issueTokens` or
+	 * `resolveConfirmation` without a `confirmation`, let that method verify
+	 * the proof. Verifying it twice rejects its `jti` as replayed. A supplied
+	 * `confirmation` replaces the proof for those methods.
+	 * `issueAuthorizationCode` reuses a proof this method verified on the same
+	 * request instead of verifying it again.
 	 */
 	verifyDpopProof: {
 		(params: {
