@@ -1,10 +1,12 @@
 import type {
+	OAuthActorClaim,
 	OAuthAuthenticationContext,
 	OAuthClient,
 } from "@better-auth/oauth-provider";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import { APIError } from "better-auth/api";
 import { deriveDpopJkt } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -57,6 +59,11 @@ const validatePayment = vi.fn((detail: Record<string, unknown>) =>
 	Object.keys(detail).every((key) => PAYMENT_FIELDS.has(key)),
 );
 
+// No actor unless a test returns one, so every other test covers the default.
+const resolveActor = vi.fn<NonNullable<CibaOptions["resolveActor"]>>(
+	() => undefined,
+);
+
 let lastNotification: CibaNotification | undefined;
 const sendNotification = vi.fn((notification: CibaNotification) => {
 	lastNotification = notification;
@@ -94,8 +101,8 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 				resultPage: "/ciba",
 				interval: INTERVAL,
 				deliveryModes: ["poll", "ping"],
-				allowPublicClients: true,
 				sendNotification,
+				resolveActor,
 				authorizationDetailsTypes: {
 					[PAYMENT]: { validate: validatePayment },
 					[ACCOUNTS]: { validate: () => true },
@@ -197,7 +204,7 @@ async function start(
 	expect(res.status).toBe(200);
 	return {
 		authReqId: res.body.auth_req_id as string,
-		url: lastNotification!.url,
+		url: lastNotification!.url!,
 	};
 }
 
@@ -313,7 +320,7 @@ describe("ciba poll mode", () => {
 		const authReqId = res.body.auth_req_id as string;
 		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
 
-		const consent = await openLink(lastNotification!.url);
+		const consent = await openLink(lastNotification!.url!);
 		expect(consent.pathname).toBe("/consent");
 		expect(consent.searchParams.get("client_id")).toBe(pollClient.client_id);
 		expect(consent.searchParams.get("scope")).toBe("openid profile");
@@ -573,7 +580,7 @@ describe("ciba poll mode", () => {
 			login_hint: testUser.email,
 			resource: [resource, secondResource],
 		});
-		await approve(lastNotification!.url);
+		await approve(lastNotification!.url!);
 		const issued = await poll(res.body.auth_req_id as string);
 		expect(decodeJwt(issued.body.access_token as string).aud).toEqual(
 			expect.arrayContaining([resource, secondResource]),
@@ -747,16 +754,57 @@ describe("ciba backchannel request validation", () => {
 		expect(res.status).toBe(415);
 	});
 
-	it("rejects an unauthenticated client", async () => {
-		const res = await bcAuthorize(
-			{
-				client_id: pollClient.client_id,
-				scope: "openid",
-				login_hint: testUser.email,
-			},
-			null,
-		);
-		expect(res.body.error).toBe("invalid_client");
+	/**
+	 * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.13
+	 */
+	describe("answers invalid_client with 401 and a challenge", () => {
+		const request = { scope: "openid", login_hint: testUser.email };
+		const expectChallenge = (res: Awaited<ReturnType<typeof bcAuthorize>>) => {
+			expect(res.status).toBe(401);
+			expect(res.body.error).toBe("invalid_client");
+			expect(res.headers.get("www-authenticate")).toBe("Basic");
+			expect(res.headers.get("access-control-expose-headers")).toContain(
+				"WWW-Authenticate",
+			);
+		};
+
+		it("when the client sends no credentials", async () => {
+			expectChallenge(
+				await bcAuthorize(
+					{ client_id: pollClient.client_id, ...request },
+					null,
+				),
+			);
+		});
+
+		it("when the secret sent in the body is wrong", async () => {
+			expectChallenge(
+				await bcAuthorize(
+					{
+						client_id: pollClient.client_id,
+						client_secret: "wrong",
+						...request,
+					},
+					null,
+				),
+			);
+		});
+
+		it("when the secret sent with Basic is wrong", async () => {
+			expectChallenge(
+				await bcAuthorize(request, { ...pollClient, client_secret: "wrong" }),
+			);
+		});
+
+		it("when the request names no client", async () => {
+			expectChallenge(await bcAuthorize(request, null));
+		});
+
+		it("when the client is unknown", async () => {
+			expectChallenge(
+				await bcAuthorize({ client_id: "unknown-client", ...request }, null),
+			);
+		});
 	});
 
 	it.each([
@@ -823,13 +871,18 @@ describe("ciba backchannel request validation", () => {
 		expect(res.status).toBe(200);
 	});
 
-	it("lets a public client complete the flow with allowPublicClients", async () => {
+	it("rejects a public client at both endpoints", async () => {
 		const publicClient = await createClient(POLL, {
 			token_endpoint_auth_method: "none",
 		});
-		const { authReqId, url } = await start({}, publicClient);
-		await approve(url);
-		expect((await poll(authReqId, publicClient)).status).toBe(200);
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: testUser.email },
+			publicClient,
+		);
+		expect(res.status).toBe(401);
+		expect(res.body.error).toBe("invalid_client");
+		const polled = await poll("unknown", publicClient);
+		expect(polled.body.error).toBe("invalid_client");
 	});
 
 	it("caps requested_expiry at the configured lifetime", async () => {
@@ -1763,6 +1816,7 @@ describe("ciba defaults", async () => {
 	it("rejects a public client", async () => {
 		const client = await register({ token_endpoint_auth_method: "none" });
 		const res = await bcAuthorize(request, client, instance.customFetchImpl);
+		expect(res.status).toBe(401);
 		expect(res.body.error).toBe("invalid_client");
 	});
 
@@ -1880,5 +1934,387 @@ describe("ciba authorization_details claim ownership", async () => {
 			instance.customFetchImpl,
 		);
 		expect(introspection.authorization_details).toEqual([granted]);
+	});
+});
+
+/**
+ * @see https://www.rfc-editor.org/rfc/rfc8693.html#section-4.1
+ */
+describe("ciba delegated tokens", () => {
+	const agent: OAuthActorClaim = { sub: "agent-1", sub_profile: "service" };
+
+	async function cibaRequestRow(authReqId: string) {
+		const ctx = await auth.$context;
+		return ctx.adapter.findOne<{ id: string; actor?: unknown }>({
+			model: "cibaRequest",
+			where: [{ field: "authReqId", value: await hashAuthReqId(authReqId) }],
+		});
+	}
+
+	it("issues an access token for the user with the actor as act", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start({ resource });
+		expect(resolveActor).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				client: expect.objectContaining({ clientId: pollClient.client_id }),
+				user: expect.objectContaining({ email: testUser.email }),
+				scopes: ["openid", "profile"],
+			}),
+			expect.anything(),
+		);
+		expect(lastNotification!.actor).toEqual(agent);
+		const consent = await openLink(url);
+		expect(JSON.parse(consent.searchParams.get("actor")!)).toEqual(agent);
+		await answerConsent(consent, true);
+
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		const claims = decodeJwt(issued.body.access_token as string);
+		expect(claims.sub).toBe(lastNotification!.user.id);
+		expect(claims.act).toEqual(agent);
+	});
+
+	/**
+	 * CIBA Core §10.1.1 requires an ID token with every successful response, so
+	 * a delegated response must not drop it, and `act` belongs to access tokens.
+	 *
+	 * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#successful_token_response
+	 */
+	it("issues an ID token for the user without act", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start({ resource });
+		await approve(url);
+
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		expect(decodeJwt(issued.body.access_token as string).act).toEqual(agent);
+		const idToken = decodeJwt(issued.body.id_token as string);
+		expect(idToken.sub).toBe(lastNotification!.user.id);
+		expect(idToken.act).toBeUndefined();
+	});
+
+	it("returns the actor at introspection of an opaque access token", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start();
+		await approve(url);
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		const introspection = await introspect(issued.body.access_token);
+		expect(introspection.active).toBe(true);
+		expect(introspection.act).toEqual(agent);
+	});
+
+	it("issues the actor for a request decided through completeCibaRequest", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId } = await start({ resource });
+		await auth.api.completeCibaRequest({
+			body: {
+				requestId: lastNotification!.requestId,
+				userId: lastNotification!.user.id,
+				decision: "approved",
+			},
+		});
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		expect(decodeJwt(issued.body.access_token as string).act).toEqual(agent);
+	});
+
+	it("issues no refresh token and leaves offline_access out of the scope", async () => {
+		const client = await createClient(POLL, {
+			grant_types: [CIBA_GRANT_TYPE, "refresh_token"],
+		});
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start(
+			{ scope: "openid offline_access" },
+			client,
+		);
+		await approve(url);
+		const issued = await poll(authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.refresh_token).toBeUndefined();
+		expect(issued.body.scope).toBe("openid");
+	});
+
+	it("issues no act and keeps the refresh token without an actor", async () => {
+		const client = await createClient(POLL, {
+			grant_types: [CIBA_GRANT_TYPE, "refresh_token"],
+		});
+		const { authReqId, url } = await start(
+			{ scope: "openid offline_access", resource },
+			client,
+		);
+		expect(lastNotification!.actor).toBeUndefined();
+		const consent = await openLink(url);
+		expect(consent.searchParams.get("actor")).toBeNull();
+		await answerConsent(consent, true);
+		const issued = await poll(authReqId, client);
+		expect(issued.status).toBe(200);
+		expect(issued.body.refresh_token).toEqual(expect.any(String));
+		expect(issued.body.scope).toBe("openid offline_access");
+		expect(decodeJwt(issued.body.access_token as string).act).toBeUndefined();
+	});
+
+	it("refuses the request with the error resolveActor throws", async () => {
+		const notified = sendNotification.mock.calls.length;
+		resolveActor.mockRejectedValueOnce(
+			new APIError("BAD_REQUEST", {
+				error: "access_denied",
+				error_description: "agent attestation failed",
+			}),
+		);
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+		});
+		expect(res.status).toBe(400);
+		expect(res.body).toMatchObject({
+			error: "access_denied",
+			error_description: "agent attestation failed",
+		});
+		expect(sendNotification.mock.calls.length).toBe(notified);
+	});
+
+	it.each([
+		["an actor without sub", { sub_profile: "service" }],
+		["an empty sub", { sub: "" }],
+		["a nested actor without sub", { sub: "agent-1", act: { iss: "x" } }],
+		["a sub_profile that is not a string", { sub: "agent-1", sub_profile: 1 }],
+	])("refuses %s without creating the request", async (_, actor) => {
+		const notified = sendNotification.mock.calls.length;
+		resolveActor.mockResolvedValueOnce(actor as unknown as OAuthActorClaim);
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+		});
+		expect(res.status).toBe(500);
+		expect(res.body.error).toBe("server_error");
+		expect(sendNotification.mock.calls.length).toBe(notified);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8693#section-4.1
+	 */
+	it("refuses a falsy stored actor instead of issuing a token without act", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start();
+		await approve(url);
+		const row = await cibaRequestRow(authReqId);
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "cibaRequest",
+			where: [{ field: "id", value: row!.id }],
+			update: { actor: false as unknown as OAuthActorClaim },
+		});
+		const refused = await poll(authReqId);
+		expect(refused.status).toBe(500);
+		expect(refused.body.error).toBe("server_error");
+	});
+
+	it("keeps the approval when the stored actor is invalid", async () => {
+		resolveActor.mockResolvedValueOnce(agent);
+		const { authReqId, url } = await start();
+		await approve(url);
+		const row = await cibaRequestRow(authReqId);
+		const ctx = await auth.$context;
+		const where = [{ field: "id", value: row!.id }];
+		await ctx.adapter.update({
+			model: "cibaRequest",
+			where,
+			update: { actor: { sub_profile: "service" } },
+		});
+		const refused = await poll(authReqId);
+		expect(refused.status).toBe(500);
+		expect(refused.body.error).toBe("server_error");
+
+		await ctx.adapter.update({
+			model: "cibaRequest",
+			where,
+			update: { actor: agent },
+		});
+		await waitInterval();
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+	});
+});
+
+describe.each([
+	["your own approval page", "/approve" as const],
+	[
+		"an approval page that already names a request",
+		"/approve?ciba_request_id=stale" as const,
+	],
+	["no approval page", false as const],
+])("ciba with %s", async (_, approvalPage) => {
+	const instance = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			ciba({ approvalPage, sendNotification }),
+		],
+	});
+	const { headers: userHeaders, user } = await instance.signInWithTestUser();
+	const client = await instance.auth.api.adminCreateOAuthClient({
+		headers: userHeaders,
+		body: { grant_types: [CIBA_GRANT_TYPE], metadata: POLL },
+	});
+
+	async function startOwn() {
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: user.email },
+			client,
+			instance.customFetchImpl,
+		);
+		expect(res.status).toBe(200);
+		return {
+			authReqId: res.body.auth_req_id as string,
+			requestId: lastNotification!.requestId,
+		};
+	}
+
+	it("links the notification to the configured page, or to none", async () => {
+		const { requestId } = await startOwn();
+		expect(lastNotification!.url).toBe(
+			approvalPage
+				? `${baseURL}${approvalPage.split("?")[0]}?ciba_request_id=${requestId}`
+				: undefined,
+		);
+	});
+
+	it("does not approve through the provider's consent page", async () => {
+		const { requestId } = await startOwn();
+		const requestHeaders = new Headers(userHeaders);
+		requestHeaders.set("accept", "application/json");
+		const res = await instance.customFetchImpl(
+			`${baseURL}/api/auth/oauth2/authorize?ciba_request_id=${requestId}`,
+			{ headers: requestHeaders },
+		);
+		const body = (await res.json()) as { url: string };
+		// An ordinary authorization request without a client, not a CIBA one.
+		const target = new URL(body.url, baseURL);
+		expect(target.pathname).toBe("/api/auth/error");
+		expect(target.searchParams.get("error")).toBe("invalid_request");
+	});
+
+	it("approves through completeCibaRequest", async () => {
+		const { authReqId, requestId } = await startOwn();
+		await instance.auth.api.completeCibaRequest({
+			body: { requestId, userId: user.id, decision: "approved" },
+		});
+		const issued = await poll(
+			authReqId,
+			client,
+			{},
+			[],
+			instance.customFetchImpl,
+		);
+		expect(issued.status).toBe(200);
+		expect(decodeJwt(issued.body.id_token as string).sub).toBe(user.id);
+	});
+
+	it("reads a pending request for the user it names", async () => {
+		const { requestId } = await startOwn();
+		const {
+			requestId: _,
+			user: notified,
+			url: __,
+			...shown
+		} = lastNotification!;
+		expect(notified.id).toBe(user.id);
+		const pending = await instance.auth.api.getCibaRequest({
+			body: { requestId, userId: user.id },
+		});
+		expect(pending).toEqual({ requestId, ...shown, resources: undefined });
+		expect(pending).toMatchObject({
+			clientId: client.client_id,
+			scopes: ["openid"],
+			expiresAt: expect.any(Date),
+		});
+	});
+
+	it("reads nothing for another user, an unknown id, or a decided or expired request", async () => {
+		const { requestId } = await startOwn();
+		const read = (id: string, userId = user.id) =>
+			instance.auth.api.getCibaRequest({ body: { requestId: id, userId } });
+		expect(await read(requestId, "someone-else")).toBeNull();
+		expect(await read("unknown")).toBeNull();
+
+		await instance.auth.api.completeCibaRequest({
+			body: { requestId, userId: user.id, decision: "denied" },
+		});
+		expect(await read(requestId)).toBeNull();
+
+		const expiring = await startOwn();
+		const ctx = await instance.auth.$context;
+		await ctx.adapter.update({
+			model: "cibaRequest",
+			where: [{ field: "id", value: expiring.requestId }],
+			update: { expiresAt: new Date(Date.now() - 1000) },
+		});
+		expect(await read(expiring.requestId)).toBeNull();
+	});
+
+	it("reads nothing once the client no longer exists", async () => {
+		const removed = await instance.auth.api.adminCreateOAuthClient({
+			headers: userHeaders,
+			body: { grant_types: [CIBA_GRANT_TYPE], metadata: POLL },
+		});
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: user.email },
+			removed,
+			instance.customFetchImpl,
+		);
+		expect(res.status).toBe(200);
+		const { requestId } = lastNotification!;
+		const ctx = await instance.auth.$context;
+		await ctx.adapter.delete({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: removed.client_id }],
+		});
+		expect(
+			await instance.auth.api.getCibaRequest({
+				body: { requestId, userId: user.id },
+			}),
+		).toBeNull();
+	});
+
+	it("requires resultPage without approvalPage", () => {
+		// @ts-expect-error the provider's approval page needs a resultPage.
+		ciba({ sendNotification });
+	});
+
+	it("takes no resultPage", () => {
+		// @ts-expect-error resultPage applies only to the provider's approval page.
+		ciba({ approvalPage, resultPage: "/ciba", sendNotification });
+	});
+});
+
+describe("ciba getCibaRequest", () => {
+	it("shows the actor, details, and resources the page must display", async () => {
+		const agent = { sub: "agent-1", sub_profile: "service" };
+		resolveActor.mockResolvedValueOnce(agent);
+		await start({
+			binding_message: "Code 52",
+			acr_values: mfaAcr,
+			resource,
+			authorization_details: JSON.stringify([payment]),
+		});
+		const { requestId, user } = lastNotification!;
+		const pending = await auth.api.getCibaRequest({
+			body: { requestId, userId: user.id },
+		});
+		expect(pending).toEqual({
+			requestId,
+			clientId: pollClient.client_id,
+			clientName: "Support Agent",
+			scopes: ["openid", "profile"],
+			resources: [resource],
+			bindingMessage: "Code 52",
+			acrValues: [mfaAcr],
+			authorizationDetails: [payment],
+			actor: agent,
+			expiresAt: lastNotification!.expiresAt,
+		});
+		expect(lastNotification!.resources).toEqual([resource]);
 	});
 });

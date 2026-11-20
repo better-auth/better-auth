@@ -3,7 +3,11 @@ import { extendOAuthProvider } from "@better-auth/oauth-provider";
 import { getAuthEndpointUrl } from "@better-auth/oauth-provider/internal";
 import type { BetterAuthPlugin } from "better-auth";
 import { mergeSchema } from "better-auth/db";
-import { cibaApprovalRequest, createCompleteCibaRequest } from "./approval";
+import {
+	cibaApprovalRequest,
+	createCompleteCibaRequest,
+	createGetCibaRequest,
+} from "./approval";
 import {
 	DETAILS_TYPES_FIELD,
 	validateRegisteredDetailsTypes,
@@ -37,9 +41,11 @@ declare module "@better-auth/core" {
 /**
  * OpenID Connect Client-Initiated Backchannel Authentication (CIBA) for
  * `oauthProvider()`. A client names a user with `login_hint` at
- * `/oauth2/bc-authorize`, the user approves on their own device through the
- * provider's sign-in and consent pages, and the client collects tokens at the
- * token endpoint, by polling or after a ping callback (`deliveryModes`).
+ * `/oauth2/bc-authorize`, the user approves on their own device, and the
+ * client collects tokens at the token endpoint, by polling or after a ping
+ * callback (`deliveryModes`). The user approves through the provider's
+ * sign-in and consent pages, or only through your own path with
+ * `approvalPage` and `completeCibaRequest`.
  *
  * Requires the `oauth-provider` and `jwt` plugins.
  *
@@ -65,12 +71,18 @@ export const ciba = (options: CibaOptions) => {
 		grants: {
 			[CIBA_GRANT_TYPE]: createCibaGrantHandler(resolvedOptions),
 		},
-		interactionRequests: {
-			[APPROVAL_PARAMETER]: cibaApprovalRequest(
-				options.resultPage,
-				isConfiguredOrigin,
-			),
-		},
+		// Another approval path turns off the provider's, so its consent page
+		// cannot approve a request and skip that path's checks.
+		...(options.approvalPage === undefined
+			? {
+					interactionRequests: {
+						[APPROVAL_PARAMETER]: cibaApprovalRequest(
+							options.resultPage,
+							isConfiguredOrigin,
+						),
+					},
+				}
+			: {}),
 		clientMetadata: {
 			// CIBA §4 and RFC 9396 §10: clients register these through dynamic
 			// registration or a client metadata document too; they are stored in
@@ -114,6 +126,7 @@ export const ciba = (options: CibaOptions) => {
 		},
 		endpoints: {
 			bcAuthorize: createBcAuthorize(resolvedOptions),
+			getCibaRequest: createGetCibaRequest(),
 			completeCibaRequest: createCompleteCibaRequest(
 				resolvedOptions,
 				isConfiguredOrigin,
@@ -139,4 +152,5 @@ export type {
 	CibaDeliveryMode,
 	CibaNotification,
 	CibaOptions,
+	CibaPendingRequest,
 } from "./types";
