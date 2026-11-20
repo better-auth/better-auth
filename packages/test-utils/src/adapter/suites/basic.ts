@@ -2199,6 +2199,75 @@ export const getNormalTestSuiteTests = (
 				});
 				expect(after!.image).toBe(image);
 			},
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12067
+		 */
+		"incrementMany - applies per-row guards, omits misses, and rejects duplicate ids":
+			async () => {
+				const users = (await insertRandom("user", 3)).map((row) => row[0]);
+				const first = users[0]!;
+				const second = users[1]!;
+				const third = users[2]!;
+				const image = "https://example.com/batch-avatar.png";
+
+				const updated = await adapter.incrementMany<User>({
+					model: "user",
+					increment: {},
+					set: { image },
+					rows: [
+						{
+							where: [
+								{ field: "id", value: second.id },
+								{ field: "name", value: second.name },
+							],
+						},
+						{
+							where: [
+								{ field: "id", value: first.id },
+								{ field: "name", value: first.name },
+							],
+						},
+						{
+							where: [
+								{ field: "id", value: third.id },
+								{ field: "name", value: "name-that-does-not-match" },
+							],
+						},
+					],
+				});
+				expect(updated).toHaveLength(2);
+				expect(new Set(updated.map((row) => row.id))).toEqual(
+					new Set([first.id, second.id]),
+				);
+				expect(updated.every((row) => row.image === image)).toBe(true);
+
+				const missed = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: third.id }],
+				});
+				expect(missed!.image).not.toBe(image);
+
+				await expect(
+					adapter.incrementMany({
+						model: "user",
+						increment: {},
+						set: { image: "https://example.com/dup.png" },
+						rows: [
+							{ where: [{ field: "id", value: first.id }] },
+							{ where: [{ field: "id", value: first.id }] },
+						],
+					}),
+				).rejects.toThrow(/duplicate ids/);
+
+				expect(
+					await adapter.incrementMany({
+						model: "user",
+						increment: {},
+						set: { image: "https://example.com/empty.png" },
+						rows: [],
+					}),
+				).toEqual([]);
+			},
 		"delete - should delete a model": async () => {
 			const [user] = await insertRandom("user");
 			await adapter.delete({

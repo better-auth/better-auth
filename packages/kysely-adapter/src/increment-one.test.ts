@@ -41,6 +41,7 @@ const options: BetterAuthOptions = {
 let sqlite: DatabaseSync;
 let db: Kysely<TestDatabase>;
 let executedSql: string[];
+let executedParameters: unknown[][];
 
 function buildAdapter() {
 	return kyselyAdapter(db as unknown as Kysely<any>, { type: "sqlite" })(
@@ -56,11 +57,13 @@ beforeEach(() => {
 		)
 		.run();
 	executedSql = [];
+	executedParameters = [];
 	db = new Kysely<TestDatabase>({
 		dialect: new NodeSqliteDialect({ database: sqlite }),
 		log(event) {
 			if (event.level === "query") {
 				executedSql.push(event.query.sql);
+				executedParameters.push([...event.query.parameters]);
 			}
 		},
 	});
@@ -225,5 +228,110 @@ describe("kysely incrementOne native", () => {
 			.executeTakeFirst();
 		expect(row?.remaining).toBe(0);
 		expect(row?.used).toBe(4);
+	});
+});
+
+describe("kysely incrementMany native", () => {
+	it("updates matching rows in one statement and omits guard misses", async () => {
+		await db
+			.insertInto("counters")
+			.values([
+				{
+					id: "c",
+					name: "carol",
+					remaining: 3,
+					used: 0,
+					status: "open",
+				},
+				{
+					id: "a",
+					name: "alice",
+					remaining: 3,
+					used: 0,
+					status: "open",
+				},
+				{
+					id: "b",
+					name: "bob",
+					remaining: 0,
+					used: 0,
+					status: "open",
+				},
+			])
+			.execute();
+		const adapter = buildAdapter();
+
+		const result = await adapter.incrementMany<CountersTable>({
+			model: "counters",
+			increment: { remaining: -1, used: 1 },
+			rows: [
+				{
+					where: [
+						{ field: "id", value: "c" },
+						{ field: "remaining", value: 0, operator: "gt" },
+					],
+				},
+				{
+					where: [
+						{ field: "id", value: "b" },
+						{ field: "remaining", value: 0, operator: "gt" },
+					],
+				},
+				{
+					where: [
+						{ field: "id", value: "a" },
+						{ field: "remaining", value: 0, operator: "gt" },
+					],
+				},
+			],
+		});
+
+		expect(new Set(result.map((row) => row.id))).toEqual(new Set(["a", "c"]));
+		expect(result.every((row) => row.remaining === 2 && row.used === 1)).toBe(
+			true,
+		);
+		const updates = executedSql.filter((sql) => sql.startsWith("update"));
+		expect(updates).toHaveLength(1);
+		expect(updates[0]).toMatch(/returning/i);
+		const bob = await db
+			.selectFrom("counters")
+			.selectAll()
+			.where("id", "=", "b")
+			.executeTakeFirst();
+		expect(bob?.remaining).toBe(0);
+	});
+
+	it("keeps each sqlite update at or below 999 bound parameters", async () => {
+		const values = Array.from({ length: 500 }, (_, index) => ({
+			id: `id-${index.toString().padStart(3, "0")}`,
+			name: `row-${index}`,
+			remaining: 3,
+			used: 0,
+			status: "open",
+		}));
+		await db.insertInto("counters").values(values).execute();
+		const adapter = buildAdapter();
+
+		const result = await adapter.incrementMany<CountersTable>({
+			model: "counters",
+			increment: { remaining: -1, used: 1 },
+			rows: values.map((row) => ({
+				where: [
+					{ field: "id", value: row.id },
+					{ field: "remaining", value: 0, operator: "gt" },
+				],
+			})),
+		});
+
+		expect(result).toHaveLength(500);
+		const updates = executedSql.flatMap((sql, index) =>
+			sql.startsWith("update")
+				? [{ sql, parameters: executedParameters[index] ?? [] }]
+				: [],
+		);
+		expect(updates.length).toBeGreaterThan(1);
+		for (const update of updates) {
+			expect(update.parameters.length).toBeLessThanOrEqual(999);
+		}
 	});
 });

@@ -597,6 +597,46 @@ export const memoryAdapter = (
 						}
 						return target as any;
 					},
+					incrementMany: async ({
+						model,
+						modelKey = model,
+						increment,
+						set,
+						rows,
+					}) => {
+						if (rows.length === 0) return [];
+						const idField = getFieldName({
+							model: modelKey,
+							field: "id",
+						});
+						const sorted = rows.slice().sort((left, right) => {
+							const leftId = left.where.find(
+								(clause) => clause.field === idField,
+							)?.value;
+							const rightId = right.where.find(
+								(clause) => clause.field === idField,
+							)?.value;
+							if (typeof leftId === "number" && typeof rightId === "number") {
+								return leftId - rightId;
+							}
+							return String(leftId ?? "").localeCompare(String(rightId ?? ""));
+						});
+						const updated: unknown[] = [];
+						for (const row of sorted) {
+							const target = convertWhereClause(row.where, model, modelKey)[0];
+							if (!target) continue;
+							for (const [field, delta] of Object.entries(increment)) {
+								const current =
+									typeof target[field] === "number" ? target[field] : 0;
+								target[field] = current + delta;
+							}
+							if (set) {
+								Object.assign(target, set);
+							}
+							updated.push(target);
+						}
+						return updated as any;
+					},
 					updateMany: async ({ model, modelKey = model, where, update }) => {
 						const res = convertWhereClause(where, model, modelKey);
 						res.forEach((record) => {
