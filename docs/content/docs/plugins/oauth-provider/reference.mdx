@@ -153,7 +153,7 @@ Enables registration with an initial access token ([RFC 7591 §3](https://datatr
 
 `clientRegistrationDefaultScopes` <span className="opacity-70">`string[]`</span>
 
-Scopes stored on every dynamically registered client. Defaults to `scopes`, so registered clients get every scope your server defines. Narrow it when you enable open registration.
+Scopes stored on every dynamically registered client. Defaults to `scopes`, so registered clients get every scope your server defines. Narrow it when you enable open registration. With `requireOpenId: true`, an authorization request that omits `scope` fails with `invalid_scope`. Otherwise, the request gets only the client's scopes that are also in this list. When you leave the option unset, such a request gets every scope the client may request. See [Requests that omit `scope`](/docs/plugins/oauth-provider/tokens#requests-that-omit-scope).
 
 `clientRegistrationAllowedScopes` <span className="opacity-70">`string[]`</span>
 

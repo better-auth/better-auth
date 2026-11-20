@@ -1683,6 +1683,12 @@ export interface OAuthOptions<
 	 * {@link OAuthOptions.clientRegistrationAllowedScopes} so a later user
 	 * authorization can step up within the operator-approved capability set.
 	 *
+	 * When set, an authorization request that omits `scope` receives only the
+	 * client's scopes that are also in this list (RFC 6749 §3.3). When unset,
+	 * such a request receives every scope the client may request. With
+	 * {@link OAuthOptions.requireOpenId} enabled, omitting `scope` fails with
+	 * `invalid_scope` before these defaults apply.
+	 *
 	 * @default scopes
 	 */
 	clientRegistrationDefaultScopes?: Scopes;
