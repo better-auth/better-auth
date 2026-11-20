@@ -519,15 +519,12 @@ describe("oauth-provider - onTokenRevoked after the session ends", () => {
 		};
 	}
 
-	it("reports a refresh with the revoked refresh token as reuse", async () => {
-		const { server, refreshToken, event } =
-			await signOutWithRevokedRefreshToken();
+	it("rejects a refresh after session end without reporting reuse", async () => {
+		const { server, refreshToken } = await signOutWithRevokedRefreshToken();
 
-		const reuse = await refresh(server, refreshToken);
-		expect(reuse.error).toMatchObject({ error: "invalid_grant" });
-		expect(takeEvents(server)).toEqual([
-			{ ...event, reason: "reuse_detected" },
-		]);
+		const result = await refresh(server, refreshToken);
+		expect(result.error).toMatchObject({ error: "invalid_grant" });
+		expect(takeEvents(server)).toEqual([]);
 	});
 
 	it("reports a revocation of the revoked refresh token as requested", async () => {
