@@ -1,5 +1,7 @@
 # @better-auth/ciba
 
+## 1.8.0-beta.12
+
 ## 1.8.0-beta.11
 
 ### Minor Changes
