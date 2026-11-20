@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { generateRandomString } from "better-auth/crypto";
 import { APIError } from "better-call";
 import { parseAuthorizationRequest } from "./authorize";
+import { throwInvalidClient } from "./client-authentication";
 import {
 	getDpopProofJwt,
 	throwInvalidDpopProof,
@@ -14,7 +15,7 @@ import {
 import { getSignedQueryExpiresIn } from "./signed-query";
 import { getOAuthProviderApi } from "./token";
 import type { OAuthOptions, Scope } from "./types";
-import { isRecord, storeToken, throwInvalidClient, tokenError } from "./utils";
+import { isRecord, storeToken, tokenError } from "./utils";
 
 export const PUSHED_AUTHORIZATION_REQUEST_PATH = "/oauth2/par";
 

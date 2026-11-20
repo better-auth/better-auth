@@ -3,6 +3,11 @@ import { logger } from "@better-auth/core/env";
 import { isAPIError } from "better-auth/api";
 import { stripAccessTokenAuthorizationScheme } from "better-auth/oauth2";
 import { APIError } from "better-call";
+import {
+	destructureCredentials,
+	extractClientCredentials,
+	validateClientCredentials,
+} from "./client-authentication";
 import { isAudienceClaimAllowed, userInfoResource } from "./resources";
 import { invalidateRefreshFamily } from "./token";
 import type {
@@ -18,14 +23,7 @@ import {
 	notifyTokenRevoked,
 } from "./token-lookup";
 import type { OAuthOptions, OAuthRefreshToken, Scope } from "./types";
-import {
-	challengeHeaders,
-	destructureCredentials,
-	extractClientCredentials,
-	getAuthEndpointUrl,
-	isPublicClient,
-	validateClientCredentials,
-} from "./utils";
+import { challengeHeaders, getAuthEndpointUrl, isPublicClient } from "./utils";
 
 /**
  * Revocation follows RFC 7009
