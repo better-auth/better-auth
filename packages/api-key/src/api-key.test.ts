@@ -1,9 +1,12 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import type { APIError } from "@better-auth/core/error";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
+import { listApiKeys } from "./adapter";
 import { apiKeyClient } from "./client";
+import type { PredefinedApiKeyOptions } from "./routes";
 import type { ApiKey } from "./types";
 import { isAPIError } from "./utils";
 
@@ -5583,23 +5586,34 @@ describe("list API keys beyond the adapter's default findMany limit", async () =
 				apiKey({ storage: "secondary-storage", fallbackToDatabase: true }),
 			],
 		});
-		const { headers } = await signInWithTestUser();
+		const { headers, user } = await signInWithTestUser();
 		const ids = await createKeys((name) =>
 			auth.api.createApiKey({ body: { name }, headers }),
 		);
 
 		// Drop the cached key list so the next read falls back to the database.
-		for (const key of [...store.keys()]) {
-			if (key.startsWith("api-key:by-ref:")) store.delete(key);
-		}
-		const firstPage = await auth.api.listApiKeys({
-			query: { limit: 1 },
-			headers,
-		});
-		expect(firstPage.total).toBe(keyCount);
-		expect(firstPage.apiKeys).toHaveLength(1);
+		const refKey = `api-key:by-ref:${user.id}`;
+		store.delete(refKey);
+
+		// Request one page directly from the storage layer: the list route
+		// always reads every key and paginates afterward.
+		const ctx = {
+			context: await auth.$context,
+		} as unknown as GenericEndpointContext;
+		const page = await listApiKeys(
+			ctx,
+			user.id,
+			{
+				storage: "secondary-storage",
+				fallbackToDatabase: true,
+			} as PredefinedApiKeyOptions,
+			{ limit: 1, offset: 1, sortBy: "name", sortDirection: "asc" },
+		);
+		expect(page.total).toBe(keyCount);
+		expect(page.apiKeys.map((key) => key.name)).toEqual(["limit-key-1"]);
 
 		// The fallback read must not leave a partial key list in the cache.
+		expect(JSON.parse(store.get(refKey)!).sort()).toEqual(ids);
 		const fromCache = await auth.api.listApiKeys({ headers });
 		expect(fromCache.total).toBe(keyCount);
 		expect(fromCache.apiKeys.map((key) => key.id).sort()).toEqual(ids);
