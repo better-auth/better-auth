@@ -4,6 +4,7 @@ import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { APIError } from "@better-auth/core/error";
 import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
+import { DrizzleQueryError } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as z from "zod";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -2246,5 +2247,124 @@ describe("verificationUri option", async () => {
 		expect(response.verification_uri_complete).toContain(
 			`user_code=${response.user_code}`,
 		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12314
+ */
+describe("device code collisions reported through a wrapped database error", () => {
+	async function setup(userCodes: string[]) {
+		const generateUserCode = vi.fn(() => userCodes.shift()!);
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization({ generateUserCode })],
+		});
+		const first = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		generateUserCode.mockClear();
+		const adapter = (await auth.$context).adapter;
+		const create = adapter.create.bind(adapter);
+		// Drizzle's shape: the SQL as the message, the driver error as the cause.
+		const wrapLikeDrizzle = () =>
+			vi.spyOn(adapter, "create").mockImplementation((input) =>
+				create(input).catch((cause: unknown) => {
+					throw new DrizzleQueryError(
+						'insert into "device_code" ("id", "device_code", "user_code") values ($1, $2, $3)',
+						[],
+						cause as Error,
+					);
+				}),
+			);
+		return { auth, adapter, first, generateUserCode, wrapLikeDrizzle };
+	}
+
+	it("retries a collision whose unique violation is on the error cause", async () => {
+		const { auth, first, generateUserCode, wrapLikeDrizzle } = await setup([
+			"USERCODE1",
+			"USERCODE1",
+			"USERCODE2",
+		]);
+		wrapLikeDrizzle();
+
+		expect(first.user_code).toBe("USERCODE1");
+		await expect(
+			auth.api.deviceCode({ body: { client_id: "test-client" } }),
+		).resolves.toMatchObject({ user_code: "USERCODE2" });
+		expect(generateUserCode).toHaveBeenCalledTimes(2);
+	});
+
+	it("returns a controlled server error when every wrapped attempt collides", async () => {
+		const { auth, generateUserCode, wrapLikeDrizzle } = await setup([
+			"USERCODE1",
+			"USERCODE1",
+			"USERCODE1",
+			"USERCODE1",
+		]);
+		wrapLikeDrizzle();
+
+		await expect(
+			auth.api.deviceCode({ body: { client_id: "test-client" } }),
+		).rejects.toMatchObject({
+			body: {
+				error: "server_error",
+				error_description: "Failed to generate a unique device code",
+			},
+		});
+		expect(generateUserCode).toHaveBeenCalledTimes(3);
+	});
+
+	it("does not retry a wrapped failure that is not a unique violation", async () => {
+		const { auth, adapter, generateUserCode } = await setup([
+			"USERCODE1",
+			"USERCODE2",
+			"USERCODE3",
+		]);
+		const failure = new DrizzleQueryError(
+			'insert into "device_code" ("id") values ($1)',
+			[],
+			new Error("Connection terminated unexpectedly"),
+		);
+		vi.spyOn(adapter, "create").mockRejectedValue(failure);
+
+		await expect(
+			auth.api.deviceCode({ body: { client_id: "test-client" } }),
+		).rejects.toBe(failure);
+		expect(generateUserCode).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not read collision words in the wrapped query params as a unique violation", async () => {
+		const { auth, adapter, generateUserCode } = await setup([
+			"USERCODE1",
+			"USERCODE2",
+			"USERCODE3",
+		]);
+		const failure = new DrizzleQueryError(
+			'insert into "device_code" ("id", "scope") values ($1, $2)',
+			["device-id", "duplicate key unique key constraint"],
+			new Error("Connection terminated unexpectedly"),
+		);
+		vi.spyOn(adapter, "create").mockRejectedValue(failure);
+
+		await expect(
+			auth.api.deviceCode({ body: { client_id: "test-client" } }),
+		).rejects.toBe(failure);
+		expect(generateUserCode).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not loop on a cause chain that refers back to itself", async () => {
+		const { auth, adapter, generateUserCode } = await setup([
+			"USERCODE1",
+			"USERCODE2",
+			"USERCODE3",
+		]);
+		const failure = new Error("Connection reset");
+		failure.cause = new Error("Socket closed", { cause: failure });
+		vi.spyOn(adapter, "create").mockRejectedValue(failure);
+
+		await expect(
+			auth.api.deviceCode({ body: { client_id: "test-client" } }),
+		).rejects.toBe(failure);
+		expect(generateUserCode).toHaveBeenCalledTimes(1);
 	});
 });
