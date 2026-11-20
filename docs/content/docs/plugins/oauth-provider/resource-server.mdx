@@ -335,6 +335,10 @@ Scopes describe what a client may request on a user's behalf. Permissions descri
 
 The simplest setup maps each scope to exactly one permission, such as `read:post`. If you need finer control, map each scope to several permissions in your API, and pass `isScopeSatisfied` to change how `requiredScopes` are matched.
 
+## Require a recent sign-in
+
+JWT access tokens issued for a user carry `auth_time` ([RFC 9068 §2.2.1](https://datatracker.ietf.org/doc/html/rfc9068#section-2.2.1)), the time in seconds of the user's original authentication. It has the same value as the ID token's `auth_time`, and refreshed tokens keep it, so it never moves to the time of the refresh. Your API can use it for step-up checks, such as refusing a sensitive operation unless the user authenticated within the last few minutes. Tokens from `client_credentials` have no user authentication and omit it. The server owns this claim: `customAccessTokenClaims` and claim contributors cannot set it.
+
 ## Protected resource metadata
 
 To advertise which authorization server protects your API, serve an [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728#section-3) document at `/.well-known/oauth-protected-resource`. `serverClient.getProtectedResourceMetadata()` builds it for you. Its default `authorization_servers` entry is the same issuer that the resource client verifies by default. With a dynamic `baseURL` and no `jwt.issuer`, it has no default entry, so pass `authorization_servers`. The [MCP plugin](/docs/plugins/mcp) serves this document automatically.
