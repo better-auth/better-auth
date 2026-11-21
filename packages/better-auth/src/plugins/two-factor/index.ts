@@ -381,7 +381,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					}
 					const totpData = {
 						secret: encryptedSecret,
-						backupCodes: backupCodes.encryptedBackupCodes,
+						backupCodes: backupCodes.storedBackupCodes,
 						verified: !!options?.skipVerificationOnEnable,
 					};
 					if (existingTwoFactor) {

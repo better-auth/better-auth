@@ -15,6 +15,7 @@ import { emailOTP } from "../email-otp";
 import { magicLink } from "../magic-link";
 import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
+import { defaultKeyHasher } from "./utils";
 
 describe("two-factor enrollment session authority", () => {
 	it("does not complete TOTP enrollment after the source session is revoked", async () => {
@@ -2766,6 +2767,8 @@ describe("backup codes storage configurations", () => {
 		const [encoded] = data.split(":custom");
 		return Buffer.from(encoded!, "base64").toString("utf-8");
 	};
+	const customHash = async (code: string) => `custom-hash:${code}`;
+	const asStored = async (codes: string[]) => codes;
 
 	const modes = [
 		{
@@ -2773,6 +2776,7 @@ describe("backup codes storage configurations", () => {
 			config: "plain" as const,
 			decodeStored: (raw: string) => JSON.parse(raw) as string[],
 			verifyFormat: (_raw: string) => {},
+			toStored: asStored,
 		},
 		{
 			name: "encrypted",
@@ -2784,6 +2788,7 @@ describe("backup codes storage configurations", () => {
 			verifyFormat: (raw: string) => {
 				expect(() => JSON.parse(raw)).toThrow();
 			},
+			toStored: asStored,
 		},
 		{
 			name: "custom",
@@ -2793,6 +2798,21 @@ describe("backup codes storage configurations", () => {
 			verifyFormat: (raw: string) => {
 				expect(raw).toContain(":custom");
 			},
+			toStored: asStored,
+		},
+		{
+			name: "hashed",
+			config: "hashed" as const,
+			decodeStored: (raw: string) => JSON.parse(raw) as string[],
+			verifyFormat: (_raw: string) => {},
+			toStored: (codes: string[]) => Promise.all(codes.map(defaultKeyHasher)),
+		},
+		{
+			name: "custom hash",
+			config: { hash: customHash },
+			decodeStored: (raw: string) => JSON.parse(raw) as string[],
+			verifyFormat: (_raw: string) => {},
+			toStored: (codes: string[]) => Promise.all(codes.map(customHash)),
 		},
 	];
 
@@ -2837,7 +2857,7 @@ describe("backup codes storage configurations", () => {
 			});
 			mode.verifyFormat(twoFactorBefore!.backupCodes);
 			const storedCodes = await mode.decodeStored(twoFactorBefore!.backupCodes);
-			expect(storedCodes).toEqual(initialCodes);
+			expect(storedCodes).toEqual(await mode.toStored(initialCodes));
 
 			// Use a backup code
 			const signInHeaders = new Headers();
@@ -2873,12 +2893,83 @@ describe("backup codes storage configurations", () => {
 				twoFactorAfter!.backupCodes,
 			);
 			expect(remainingCodes).toHaveLength(9);
-			expect(remainingCodes).not.toContain(usedCode);
 			expect(remainingCodes).toEqual(
-				initialCodes.filter((code) => code !== usedCode),
+				await mode.toStored(initialCodes.filter((code) => code !== usedCode)),
 			);
 		});
 	}
+});
+
+describe("hashed backup codes", async () => {
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				backupCodeOptions: { storeBackupCodes: "hashed" },
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+	const { headers: signInHeaders, user } = await signInWithTestUser();
+	const enableRes = await auth.api.enableTwoFactor({
+		body: { password: testUser.password },
+		headers: signInHeaders,
+		asResponse: true,
+	});
+	const headers = convertSetCookieToCookie(enableRes.headers);
+	const enableData = await enableRes.json();
+
+	async function storedBackupCodes() {
+		const twoFactor = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: user.id }],
+		});
+		return twoFactor!.backupCodes;
+	}
+
+	it("should return plaintext codes once and store only their hashes", async () => {
+		expect(enableData.backupCodes).toHaveLength(10);
+		const stored = await storedBackupCodes();
+		for (const code of enableData.backupCodes) {
+			expect(stored).not.toContain(code);
+		}
+
+		const generated = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		expect(generated.backupCodes).toHaveLength(10);
+		expect(JSON.parse(await storedBackupCodes())).toEqual(
+			await Promise.all(generated.backupCodes.map(defaultKeyHasher)),
+		);
+	});
+
+	it("should accept a code once and reject unknown codes", async () => {
+		const { backupCodes } = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		const verify = (code: string) =>
+			auth.api.verifyBackupCode({
+				body: { code, disableSession: true },
+				headers,
+				asResponse: true,
+			});
+
+		expect((await verify(backupCodes[0]!)).status).toBe(200);
+		expect((await verify(backupCodes[0]!)).status).toBe(401);
+		expect((await verify("wrong-code")).status).toBe(401);
+		expect((await verify(backupCodes[1]!)).status).toBe(200);
+		expect(JSON.parse(await storedBackupCodes())).toHaveLength(8);
+	});
+
+	it("should refuse to view hashed backup codes", async () => {
+		await expect(
+			auth.api.viewBackupCodes({ body: { userId: user.id } }),
+		).rejects.toMatchObject({
+			body: { code: "BACKUP_CODES_NOT_VIEWABLE" },
+		});
+	});
 });
 
 /**
