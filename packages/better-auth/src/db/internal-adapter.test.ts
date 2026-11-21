@@ -2790,5 +2790,25 @@ describe("internal adapter test", async () => {
 			expect(first).toBe(true);
 			expect(second).toBe(true);
 		});
+
+		it("rejects duplicate reservation values on memoryAdapter", async () => {
+			const db = { user: [], session: [], account: [], verification: [] };
+			const ctx = await init({
+				database: memoryAdapter(db),
+			});
+			const adapter = ctx.internalAdapter;
+
+			const marker = {
+				identifier: "reserve:memory-replay",
+				value: "jti-mem-1",
+				expiresAt: new Date(Date.now() + 60_000),
+			};
+
+			const first = await adapter.reserveVerificationValue(marker);
+			const second = await adapter.reserveVerificationValue(marker);
+
+			expect(first).toBe(true);
+			expect(second).toBe(false);
+		});
 	});
 });

@@ -573,3 +573,105 @@ it("gives overlapping transactions from two adapters on one db distinct serial i
 	expect(rowA.id).not.toBe(rowB.id);
 	expect(db.widget!.map((row) => row.name).sort()).toEqual(["a", "b"]);
 });
+
+it("throws an error when inserting a record with an existing id", async () => {
+	const { db, adapter } = setup();
+	await seedWidget(adapter, "w1", "first");
+
+	await expect(
+		adapter.create({
+			model: "widget",
+			data: { id: "w1", name: "second" },
+			forceAllowId: true,
+		}),
+	).rejects.toThrow(/already exists/i);
+
+	expect(db.widget?.filter((r) => r.id === "w1")).toHaveLength(1);
+	expect(db.widget?.[0]?.name).toBe("first");
+});
+
+it("throws an error when inserting a duplicate id inside a transaction", async () => {
+	const { db, adapter } = setup();
+	await seedWidget(adapter, "w1", "first");
+
+	await expect(
+		adapter.transaction(async (tx) => {
+			await tx.create({
+				model: "widget",
+				data: { id: "w1", name: "second" },
+				forceAllowId: true,
+			});
+		}),
+	).rejects.toThrow(/already exists/i);
+
+	expect(db.widget?.filter((r) => r.id === "w1")).toHaveLength(1);
+});
+
+it("rejects committing a transaction when a concurrent operation created the same id", async () => {
+	const { db, adapter } = setup();
+
+	let releaseTx: () => void;
+	const holdTx = new Promise<void>((r) => {
+		releaseTx = r;
+	});
+
+	const inFlight = adapter.transaction(async (tx) => {
+		await tx.create({
+			model: "widget",
+			data: { id: "w-concurrent", name: "from-tx" },
+			forceAllowId: true,
+		});
+		await holdTx;
+	});
+
+	// Concurrent write directly on live db while transaction is in flight
+	await adapter.create({
+		model: "widget",
+		data: { id: "w-concurrent", name: "concurrent-live" },
+		forceAllowId: true,
+	});
+
+	// Now release tx to commit; it should throw conflict on commit
+	releaseTx!();
+	await expect(inFlight).rejects.toThrow(/already exists/i);
+
+	// The live row remains preserved and wasn't overwritten
+	expect(db.widget?.filter((r) => r.id === "w-concurrent")).toHaveLength(1);
+	expect(db.widget?.[0]?.name).toBe("concurrent-live");
+});
+
+it("rejects the transaction that commits last when an overlapping transaction already created the same id", async () => {
+	const { db, adapter } = setup();
+
+	let releaseFirst: () => void;
+	const firstHold = new Promise<void>((r) => {
+		releaseFirst = r;
+	});
+
+	const tx1 = adapter.transaction(async (tx) => {
+		await tx.create({
+			model: "widget",
+			data: { id: "w-overlap", name: "tx1" },
+			forceAllowId: true,
+		});
+		await firstHold;
+	});
+
+	const tx2 = adapter.transaction(async (tx) => {
+		await tx.create({
+			model: "widget",
+			data: { id: "w-overlap", name: "tx2" },
+			forceAllowId: true,
+		});
+	});
+
+	// tx2 commits first
+	await tx2;
+
+	// now release tx1 to commit
+	releaseFirst!();
+	await expect(tx1).rejects.toThrow(/already exists/i);
+
+	expect(db.widget?.filter((r) => r.id === "w-overlap")).toHaveLength(1);
+	expect(db.widget?.[0]?.name).toBe("tx2");
+});
