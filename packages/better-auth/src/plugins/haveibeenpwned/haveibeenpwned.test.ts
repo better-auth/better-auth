@@ -1,5 +1,5 @@
 import { createHash } from "@better-auth/utils/hash";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { admin } from "../admin/admin";
 import { adminClient } from "../admin/client";
@@ -90,6 +90,20 @@ describe("have-i-been-pwned", async () => {
 		);
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toBe(400);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12872
+	 */
+	it("should hash a password outside an endpoint without checking it", async () => {
+		const fetchSpy = vi.spyOn(globalThis, "fetch");
+		onTestFinished(() => fetchSpy.mockRestore());
+		const password = "123456789";
+
+		const hash = await ctx.password.hash(password);
+
+		await expect(ctx.password.verify({ hash, password })).resolves.toBe(true);
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
 	describe("when enabled is false", async () => {

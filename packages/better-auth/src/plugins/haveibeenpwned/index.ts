@@ -1,5 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { getCurrentAuthEndpointContext } from "@better-auth/core/context";
+import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
@@ -138,8 +138,8 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 						async hash(password) {
 							if (options?.enabled === false) return originalHash(password);
 
-							const c = getCurrentAuthEndpointContext();
-							if (!c.path || !paths.includes(c.path)) {
+							const c = tryGetCurrentAuthEndpointContext();
+							if (!c?.path || !paths.includes(c.path)) {
 								return originalHash(password);
 							}
 							await rejectCompromisedPassword(
