@@ -20,8 +20,11 @@ import { emailOTPClient } from "../email-otp/client";
 import { genericOAuth } from "../generic-oauth/index";
 import { magicLink } from "../magic-link";
 import { magicLinkClient } from "../magic-link/client";
+import { phoneNumber } from "../phone-number";
 import { siwe } from "../siwe";
 import { siweClient } from "../siwe/client";
+import { username } from "../username";
+import { usernameClient } from "../username/client";
 import { lastLoginMethod } from ".";
 import { lastLoginMethodClient } from "./client";
 
@@ -168,6 +171,61 @@ describe("lastLoginMethod", async () => {
 
 		const cookies = parseCookies(headers.get("cookie") || "");
 		expect(cookies.get("better-auth.last_used_login_method")).toBe("email-otp");
+	});
+
+	it("should set the last login method cookie for username sign-in", async () => {
+		const { client, cookieSetter } = await getTestInstance(
+			{ plugins: [lastLoginMethod(), username()] },
+			{
+				clientOptions: {
+					plugins: [lastLoginMethodClient(), usernameClient()],
+				},
+			},
+		);
+		await client.signUp.email({
+			email: "uname@test.com",
+			password: "password123",
+			name: "Uname",
+			username: "uname_user",
+		});
+
+		const headers = new Headers();
+		await client.signIn.username(
+			{ username: "uname_user", password: "password123" },
+			{ onSuccess: cookieSetter(headers) },
+		);
+
+		const cookies = parseCookies(headers.get("cookie") || "");
+		expect(cookies.get("better-auth.last_used_login_method")).toBe("username");
+	});
+
+	it("should set the last login method cookie for phone number sign-in", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			plugins: [lastLoginMethod(), phoneNumber()],
+		});
+		const created = await auth.api.signUpEmail({
+			body: {
+				email: "phone@test.com",
+				password: "password123",
+				name: "Phone",
+			},
+		});
+		await (await auth.$context).internalAdapter.updateUser(created.user.id, {
+			phoneNumber: "+251911121314",
+			phoneNumberVerified: true,
+		});
+
+		const headers = new Headers();
+		await client.$fetch("/sign-in/phone-number", {
+			method: "POST",
+			body: { phoneNumber: "+251911121314", password: "password123" },
+			onSuccess: cookieSetter(headers),
+		});
+
+		const cookies = parseCookies(headers.get("cookie") || "");
+		expect(cookies.get("better-auth.last_used_login_method")).toBe(
+			"phone-number",
+		);
 	});
 
 	it("should set the last login method cookie for siwe", async () => {
