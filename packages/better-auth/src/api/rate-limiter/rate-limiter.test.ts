@@ -722,6 +722,40 @@ describe("missing client IP warning", () => {
 		expect(log).toHaveBeenCalledWith("warn", warningMessage);
 	});
 
+	it("should not warn for paths whose custom rule disables rate limiting", async () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("TEST", "false");
+		vi.resetModules();
+
+		const { getTestInstance: getTestInstanceReloaded } = await import(
+			"../../test-utils/test-instance"
+		);
+		const log = vi.fn();
+		const { client } = await getTestInstanceReloaded({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+				customRules: {
+					"/get-session": false,
+				},
+			},
+			logger: {
+				level: "warn",
+				log,
+			},
+		});
+
+		// Exempt paths never use the shared bucket, so a missing IP is harmless.
+		await client.getSession();
+		expect(log).not.toHaveBeenCalled();
+
+		// The one-time warning is still emitted for the first rate-limited path.
+		await client.$fetch("/ok");
+		expect(log).toHaveBeenCalledOnce();
+		expect(log).toHaveBeenCalledWith("warn", warningMessage);
+	});
+
 	it("should fail closed and still enforce the limit when no client IP is available", async () => {
 		vi.stubEnv("NODE_ENV", "production");
 		vi.stubEnv("TEST", "false");
