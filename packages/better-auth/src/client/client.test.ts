@@ -210,6 +210,77 @@ describe("run time proxy", async () => {
 			const res = await client.getSession();
 			expect(res).toMatchObject({ data: null, error: null });
 		});
+
+		it("is an error when the needsRefresh POST returns it", async () => {
+			vi.useFakeTimers();
+			const client = createSolidClient({
+				fetchOptions: {
+					customFetchImpl: async (_, init) =>
+						init?.method === "POST"
+							? htmlFetch()
+							: new Response(
+									JSON.stringify({
+										user: { id: "1" },
+										session: { id: "s1" },
+										needsRefresh: true,
+									}),
+								),
+					baseURL: "http://localhost:3000",
+				},
+			});
+			const res = client.useSession();
+			await vi.runAllTimersAsync();
+			expect(res()).toMatchObject({
+				data: null,
+				error: { status: 200 },
+				isPending: false,
+			});
+			vi.useRealTimers();
+		});
+
+		describe("a custom session with data and error fields, with throw: true", () => {
+			const customSession = {
+				user: { id: "1" },
+				session: { id: "s1" },
+				data: "extra",
+				error: null,
+			};
+			const customSessionClient = <T>(
+				create: (options: {
+					fetchOptions: {
+						customFetchImpl: () => Promise<Response>;
+						baseURL: string;
+						throw: true;
+					};
+				}) => T,
+			) =>
+				create({
+					fetchOptions: {
+						customFetchImpl: async () =>
+							new Response(JSON.stringify(customSession)),
+						baseURL: "http://localhost:3000",
+						throw: true,
+					},
+				});
+
+			it("is returned by getSession", async () => {
+				const client = customSessionClient(createVanillaClient);
+				await expect(client.getSession()).resolves.toEqual(customSession);
+			});
+
+			it("is the useSession data", async () => {
+				vi.useFakeTimers();
+				const client = customSessionClient(createSolidClient);
+				const res = client.useSession();
+				await vi.runAllTimersAsync();
+				expect(res()).toMatchObject({
+					data: customSession,
+					error: null,
+					isPending: false,
+				});
+				vi.useRealTimers();
+			});
+		});
 	});
 
 	it("should hydrate session on an existing client", async () => {

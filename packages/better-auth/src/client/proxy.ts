@@ -14,35 +14,51 @@ import {
 	isSessionPayload,
 } from "./session-atom";
 
+type SuccessfulSessionResponse = {
+	status: number;
+	statusText: string;
+	/** The effective `throw` option of the request, read from the success context. */
+	throws: boolean;
+};
+
 /**
  * `getSession()` returns a body that is not a session as an error, like `useSession()`,
- * so `data` keeps its `{ user, session } | null` type at runtime.
+ * so `data` keeps its `{ user, session } | null` type at runtime. Only a successful
+ * response is checked: a failed one already carries an error.
  */
 function rejectNonSessionPayload(
 	result: unknown,
-	status: number,
-	statusText: string,
+	response: SuccessfulSessionResponse | undefined,
 ): unknown {
-	const isResultObject =
-		typeof result === "object" &&
-		result !== null &&
-		"data" in result &&
-		"error" in result;
-	if (isResultObject) {
-		if (result.error || isSessionPayload(result.data)) {
-			return result;
-		}
-		return {
-			data: null,
-			error: createInvalidSessionPayloadError(status, statusText),
-		};
-	}
-	// With `throw: true` the body is returned directly, and errors are thrown.
-	if (isSessionPayload(result)) {
+	if (!response) {
 		return result;
 	}
-	const error = createInvalidSessionPayloadError(status, statusText);
-	throw new BetterFetchError(status, statusText, error);
+	// With `throw: true` the body is returned directly and errors are thrown; otherwise
+	// the body is the `data` of a `{ data, error }` result.
+	if (response.throws) {
+		if (isSessionPayload(result)) {
+			return result;
+		}
+		throw new BetterFetchError(
+			response.status,
+			response.statusText,
+			createInvalidSessionPayloadError(response.status, response.statusText),
+		);
+	}
+	const data =
+		typeof result === "object" && result !== null && "data" in result
+			? result.data
+			: undefined;
+	if (isSessionPayload(data)) {
+		return result;
+	}
+	return {
+		data: null,
+		error: createInvalidSessionPayloadError(
+			response.status,
+			response.statusText,
+		),
+	};
 }
 
 export function createDynamicPathProxy<T extends Record<string, any>>(
@@ -92,8 +108,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					knownPathMethods[routePath] ||
 					options.method ||
 					(Object.keys(body).length > 0 ? "POST" : "GET");
-				let responseStatus = 200;
-				let responseStatusText = "";
+				let sessionResponse: SuccessfulSessionResponse | undefined;
 				const result = await client(routePath, {
 					...options,
 					body: isPayloadMethod(method)
@@ -105,9 +120,12 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					query: query || options?.query,
 					method,
 					async onSuccess(context) {
-						if (context.response) {
-							responseStatus = context.response.status;
-							responseStatusText = context.response.statusText;
+						if (routePath === "/get-session" && context.response) {
+							sessionResponse = {
+								status: context.response.status,
+								statusText: context.response.statusText,
+								throws: context.request?.throw === true,
+							};
 						}
 						await options?.onSuccess?.(context);
 						if (!atomListeners || options.disableSignal) return;
@@ -139,7 +157,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					},
 				});
 				return routePath === "/get-session"
-					? rejectNonSessionPayload(result, responseStatus, responseStatusText)
+					? rejectNonSessionPayload(result, sessionResponse)
 					: result;
 			},
 		});

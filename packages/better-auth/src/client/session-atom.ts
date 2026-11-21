@@ -58,12 +58,20 @@ type SessionFlight = {
 
 /**
  * Normalize $fetch response: `throw: true` returns data directly,
- * otherwise `{ data, error }`.
+ * otherwise `{ data, error }`. `throws` is the request's effective `throw`
+ * option when a successful response reported it; without it the shape is
+ * inferred from the result.
  */
-function normalizeSessionResponse(res: unknown): {
+function normalizeSessionResponse(
+	res: unknown,
+	throws?: boolean | undefined,
+): {
 	data: SessionResponse | null;
 	error: unknown;
 } {
+	if (throws === true) {
+		return { data: res as SessionResponse, error: null };
+	}
 	if (
 		typeof res === "object" &&
 		res !== null &&
@@ -166,10 +174,15 @@ export function getSessionAtom(
 
 		let responseStatus = 200;
 		let responseStatusText = "";
-		const recordResponse = (context: { response?: Response | undefined }) => {
+		let responseThrows: boolean | undefined;
+		const recordResponse = (context: {
+			response?: Response | undefined;
+			request?: { throw?: boolean | undefined } | undefined;
+		}) => {
 			if (context.response) {
 				responseStatus = context.response.status;
 				responseStatusText = context.response.statusText;
+				responseThrows = context.request?.throw === true;
 			}
 		};
 		const rejectNonSessionPayload = (result: {
@@ -198,7 +211,7 @@ export function getSessionAtom(
 			}
 
 			let { data, error } = rejectNonSessionPayload(
-				normalizeSessionResponse(res),
+				normalizeSessionResponse(res, responseThrows),
 			);
 			let outcome: SessionFetchOutcome = "fresh";
 
@@ -214,7 +227,7 @@ export function getSessionAtom(
 						return "aborted";
 					}
 					({ data, error } = rejectNonSessionPayload(
-						normalizeSessionResponse(refreshRes),
+						normalizeSessionResponse(refreshRes, responseThrows),
 					));
 				} catch {
 					if (signal.aborted) {
