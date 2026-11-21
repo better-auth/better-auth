@@ -31,12 +31,13 @@ export function hydrateSessionAtom(
 		return;
 	}
 	const currentSession = sessionAtom.get();
-	if (currentSession.data !== null || session === null) {
+	const normalizedSession = normalizeSessionData(session);
+	if (currentSession.data !== null || normalizedSession === null) {
 		return;
 	}
 	sessionAtom.set({
 		...currentSession,
-		data: session,
+		data: normalizedSession,
 		error: null,
 		isPending: false,
 	});
@@ -75,11 +76,13 @@ function normalizeSessionResponse(res: unknown): {
 	return { data: res as SessionResponse, error: null };
 }
 
-function normalizeSessionData(
-	data: SessionResponse | null,
+export function normalizeSessionData(
+	data: unknown,
 ): SessionData | null {
-	if (!data) return null;
-	if (data.session === null && data.user === null) return null;
+	if (!data || typeof data !== "object") return null;
+	const candidate = data as Record<string, unknown>;
+	if (candidate.session === null && candidate.user === null) return null;
+	if (!("session" in candidate || "user" in candidate)) return null;
 	return data as SessionData;
 }
 

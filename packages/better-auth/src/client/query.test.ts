@@ -238,6 +238,33 @@ describe("useAuthQuery - error handling", () => {
 		});
 	});
 
+	it("should normalize HTML or non-JSON session responses to null in useSession and getSession", async () => {
+		const client = createAuthClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async () =>
+					new Response("<!DOCTYPE html><html><body>Error</body></html>", {
+						status: 200,
+						headers: { "content-type": "text/html" },
+					}),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		const res = await client.getSession();
+		expect(res.data).toBeNull();
+
+		const throwRes = await client.getSession({
+			fetchOptions: { throw: true },
+		});
+		expect(throwRes).toBeNull();
+
+		const session = client.useSession();
+		await vi.runAllTimersAsync();
+
+		expect(session().data).toBeNull();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9077
 	 */

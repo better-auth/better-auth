@@ -9,6 +9,7 @@ import { isPayloadMethod } from "@better-fetch/fetch";
 import type { Atom } from "nanostores";
 import { isAtom } from "../utils/is-atom";
 import type { ProxyRequest } from "./path-to-object";
+import { normalizeSessionData } from "./session-atom";
 
 export function createDynamicPathProxy<T extends Record<string, any>>(
 	routes: T,
@@ -57,7 +58,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					knownPathMethods[routePath] ||
 					options.method ||
 					(Object.keys(body).length > 0 ? "POST" : "GET");
-				return await client(routePath, {
+				const res = await client(routePath, {
 					...options,
 					body: isPayloadMethod(method)
 						? {
@@ -97,6 +98,18 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						}
 					},
 				});
+				if (routePath === "/get-session") {
+					if (options?.throw) {
+						return normalizeSessionData(res);
+					}
+					if (res && typeof res === "object" && "data" in res) {
+						return {
+							...res,
+							data: normalizeSessionData((res as any).data),
+						};
+					}
+				}
+				return res;
 			},
 		});
 	}
