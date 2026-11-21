@@ -16,6 +16,8 @@ import {
 	deleteSessionCookie,
 	expireCookie,
 	getChunkedCookie,
+	getSignedCookieWithFallback,
+	reSignSessionCookies,
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
@@ -90,10 +92,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			try {
 				const cookieCacheEnabled =
 					ctx.context.options.session?.cookieCache?.enabled === true;
-				const sessionCookieToken = await ctx.getSignedCookie(
+				const sessionCookieResult = await getSignedCookieWithFallback(
+					ctx,
 					ctx.context.authCookies.sessionToken.name,
-					ctx.context.secret,
 				);
+				const sessionCookieToken = sessionCookieResult?.value ?? null;
 
 				if (!sessionCookieToken && cookieCacheEnabled) {
 					return null;
@@ -125,10 +128,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					expireCookie(ctx, ctx.context.authCookies.sessionData);
 				}
 
-				const dontRememberMe = await ctx.getSignedCookie(
+				const dontRememberMeResult = await getSignedCookieWithFallback(
+					ctx,
 					ctx.context.authCookies.dontRememberToken.name,
-					ctx.context.secret,
 				);
+				const dontRememberMe = dontRememberMeResult?.value ?? null;
 
 				/**
 				 * If session data is present in the cookie, check if it should be used or refreshed
@@ -176,6 +180,13 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							ctx.context.sessionConfig.cookieRefreshCache;
 
 						if (cookieRefreshCache === false) {
+							if (
+								sessionCookieResult?.isOldSecret ||
+								dontRememberMeResult?.isOldSecret ||
+								sessionDataPayload.isOldSecret
+							) {
+								await reSignSessionCookies(ctx, session, !!dontRememberMe);
+							}
 							// If refreshCache is disabled, return the session from cookie as-is
 							ctx.context.session = session;
 							// Parse session and user to ensure additionalFields are included
@@ -214,23 +225,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								updatedAt: Date.now(),
 							};
 
-							// Set the refreshed cookie cache
-							await setCookieCache(ctx, refreshedSession, false);
-
-							// Also refresh the session_token cookie expiry
-							const sessionTokenOptions =
-								ctx.context.authCookies.sessionToken.attributes;
-							const sessionTokenMaxAge = dontRememberMe
-								? undefined
-								: ctx.context.sessionConfig.expiresIn;
-							await ctx.setSignedCookie(
-								ctx.context.authCookies.sessionToken.name,
-								session.session.token,
-								ctx.context.secret,
-								{
-									...sessionTokenOptions,
-									maxAge: sessionTokenMaxAge,
-								},
+							// Re-sign session cookies and cookie cache with current secret
+							await reSignSessionCookies(
+								ctx,
+								refreshedSession,
+								!!dontRememberMe,
 							);
 
 							// Parse session and user to ensure additionalFields are included
@@ -260,6 +259,14 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								session: Session<Option["session"], Option["plugins"]>;
 								user: User<Option["user"], Option["plugins"]>;
 							});
+						}
+
+						if (
+							sessionCookieResult?.isOldSecret ||
+							dontRememberMeResult?.isOldSecret ||
+							sessionDataPayload.isOldSecret
+						) {
+							await reSignSessionCookies(ctx, session, !!dontRememberMe);
 						}
 
 						// Parse session and user to ensure additionalFields are included
@@ -311,6 +318,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 * or if the session refresh is disabled
 				 */
 				if (dontRememberMe || ctx.query?.disableRefresh) {
+					if (
+						sessionCookieResult?.isOldSecret ||
+						dontRememberMeResult?.isOldSecret
+					) {
+						await reSignSessionCookies(ctx, session, !!dontRememberMe);
+					}
 					// Parse session and user to ensure additionalFields are included
 					const parsedSession = parseSessionOutput(
 						ctx.context.options,
@@ -352,7 +365,14 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 * return the session without performing writes, but include needsRefresh flag
 				 */
 				if (deferSessionRefresh && !isPostRequest) {
-					await setCookieCache(ctx, session, !!dontRememberMe);
+					if (
+						sessionCookieResult?.isOldSecret ||
+						dontRememberMeResult?.isOldSecret
+					) {
+						await reSignSessionCookies(ctx, session, !!dontRememberMe);
+					} else {
+						await setCookieCache(ctx, session, !!dontRememberMe);
+					}
 					const parsedSession = parseSessionOutput(
 						ctx.context.options,
 						session.session,
@@ -414,7 +434,14 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						user: User<Option["user"], Option["plugins"]>;
 					});
 				}
-				await setCookieCache(ctx, session, !!dontRememberMe);
+				if (
+					sessionCookieResult?.isOldSecret ||
+					dontRememberMeResult?.isOldSecret
+				) {
+					await reSignSessionCookies(ctx, session, !!dontRememberMe);
+				} else {
+					await setCookieCache(ctx, session, !!dontRememberMe);
+				}
 				// Parse session and user to ensure additionalFields are included
 				const parsedSession = parseSessionOutput(
 					ctx.context.options,
