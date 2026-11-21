@@ -70,7 +70,7 @@ When a flow must synthesize an email, use `createPlaceholderEmail` with a stable
 - NEVER create separate clients with `createAuthClient()` in tests
 - Default test DB is SQLite in-memory; use `testWith` for other databases
 - Adapter tests need Docker: `docker compose up -d`
-- For a multi-stage regression, satisfy earlier checks and assert a response detail or stored value that distinguishes the stage under test.
+- In every regression test, assert an outcome that shows the test exercised the behavior it names. In a multi-stage flow, satisfy earlier checks and use a response detail or stored value specific to the stage under test.
 - Regression tests: use `@see` for relevant issues or authoritative sources. Do not reference the current pull request or its review comments:
   ```typescript
   /**
