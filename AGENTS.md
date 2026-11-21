@@ -70,7 +70,7 @@ When a flow must synthesize an email, use `createPlaceholderEmail` with a stable
 - NEVER create separate clients with `createAuthClient()` in tests
 - Default test DB is SQLite in-memory; use `testWith` for other databases
 - Adapter tests need Docker: `docker compose up -d`
-- In a regression test, satisfy earlier checks and assert the response detail or stored state that proves the request reached the behavior named by the test.
+- For a multi-stage regression, satisfy earlier checks and assert a response detail or stored value that distinguishes the stage under test.
 - Regression tests: use `@see` for relevant issues or authoritative sources. Do not reference the current pull request or its review comments:
   ```typescript
   /**
@@ -90,6 +90,6 @@ When a flow must synthesize an email, use `createPlaceholderEmail` with a stable
 - Ensure `pnpm typecheck` passes before finishing
 - DO NOT COMMIT unless the user explicitly asks
 - Conventional Commits: `feat(scope):`, `fix(scope):`, `docs:`, `chore:`. Use `!` for breaking changes (e.g. `feat(auth)!:`)
-- Follow [Branch Targeting](CONTRIBUTING.md#branch-targeting) when choosing between `main` and `next`. Fix beta-only behavior on `next`. Choose the [changeset](CONTRIBUTING.md#changesets) by user impact.
+- Follow [Branch Targeting](CONTRIBUTING.md#branch-targeting) for the PR base and [Changesets](CONTRIBUTING.md#changesets) for the release impact.
 - Write one changeset per user-visible change. A PR that fixes several things adds several changesets, and each becomes its own release-note entry. Start each with a one-sentence summary of what changed for users.
 - When review grows a PR's scope, update its title and changesets to match the final change. Release notes pair each changeset with the title of the PR that added it. A changeset with no PR, such as one committed directly, is titled from its own first line.
