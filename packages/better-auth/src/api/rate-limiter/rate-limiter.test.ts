@@ -252,6 +252,70 @@ describe("atomic concurrent enforcement", () => {
 	}
 });
 
+describe("fixed window", () => {
+	for (const storage of ["memory", "database"] as const) {
+		describe(`${storage} storage`, async () => {
+			const { client, testUser } = await getTestInstance({
+				rateLimit: {
+					enabled: true,
+					storage,
+					customRules: {
+						"/sign-in/email": { window: 10, max: 3 },
+					},
+				},
+			});
+
+			const signIn = () =>
+				client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+
+			afterEach(() => {
+				vi.useRealTimers();
+			});
+
+			it("does not extend the window on allowed requests", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(480000);
+				// Three requests at 0s, 4s and 8s use up the window opened at 0s.
+				for (let i = 0; i < 3; i++) {
+					const response = await signIn();
+					expect(response.error?.status).not.toBe(429);
+					vi.advanceTimersByTime(4000);
+				}
+				// 12s after the first request, the window has elapsed.
+				const allowed = await signIn();
+				expect(allowed.error?.status).not.toBe(429);
+			});
+
+			it("reports the time left in the window in the retry-after header", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(600000);
+				for (let i = 0; i < 3; i++) {
+					await signIn();
+					vi.advanceTimersByTime(3000);
+				}
+				// 9s after the first request, 1s is left in the window.
+				let retryAfter: string | null = null;
+				const blocked = await client.signIn.email(
+					{
+						email: testUser.email,
+						password: testUser.password,
+					},
+					{
+						onError(context) {
+							retryAfter = context.response.headers.get("X-Retry-After");
+						},
+					},
+				);
+				expect(blocked.error?.status).toBe(429);
+				expect(retryAfter).toBe("1");
+			});
+		});
+	}
+});
+
 describe("database rate-limit pruning", async () => {
 	const backgroundTasks: Promise<unknown>[] = [];
 	const { client, db, testUser } = await getTestInstance({
