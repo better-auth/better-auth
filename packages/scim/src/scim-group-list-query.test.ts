@@ -12,6 +12,11 @@ const headers = { authorization: "Bearer test-scim-token" };
 
 interface GroupListData extends MemoryDB {
 	user: User[];
+	scimUser: Array<{
+		id: string;
+		connectionId: string;
+		displayName: string;
+	}>;
 	scimGroupMember: SCIMGroupMember[];
 }
 
@@ -116,7 +121,7 @@ describe("SCIM Group collection queries", () => {
 		expect(queries.countFindManyCalls("scimUser")).toBe(1);
 	});
 
-	it("rejects an over-limit Group in a batched collection response", async () => {
+	it("returns every member of a Group with more than 1000 members in a batched collection response", async () => {
 		const data = createData();
 		const queries = createQueryCountingAdapter(data);
 		const auth = betterAuth({
@@ -139,29 +144,41 @@ describe("SCIM Group collection queries", () => {
 				}),
 			],
 		});
-		const overLimitGroup = await auth.api.createSCIMGroup({
-			body: { schemas: [GROUP_SCHEMA], displayName: "Over limit" },
+		const largeGroup = await auth.api.createSCIMGroup({
+			body: { schemas: [GROUP_SCHEMA], displayName: "Engineering" },
 			headers,
 		});
 		await auth.api.createSCIMGroup({
-			body: { schemas: [GROUP_SCHEMA], displayName: "Within limit" },
+			body: { schemas: [GROUP_SCHEMA], displayName: "Research" },
 			headers,
 		});
 		const createdAt = new Date();
+		const members = Array.from({ length: 1_001 }, (_, index) => ({
+			id: `user-${index}`,
+			connectionId: "workforce",
+			displayName: `user-${index}`,
+		}));
+		data.scimUser.push(...members);
 		data.scimGroupMember.push(
-			...Array.from({ length: 1_001 }, (_, index) => ({
+			...members.map((member, index) => ({
 				id: `membership-${index}`,
 				connectionId: "workforce",
-				groupId: overLimitGroup.id,
-				scimUserId: `user-${index}`,
+				groupId: largeGroup.id,
+				scimUserId: member.id,
 				membershipKey: `membership-key-${index}`,
 				createdAt,
 			})),
 		);
+		queries.reset();
 
-		await expect(auth.api.listSCIMGroups({ headers })).rejects.toMatchObject({
-			statusCode: 500,
-			body: expect.objectContaining({ status: "500" }),
-		});
+		const page = await auth.api.listSCIMGroups({ headers });
+
+		expect(page.Resources).toHaveLength(2);
+		const listedLargeGroup = page.Resources.find(
+			(group) => group.id === largeGroup.id,
+		);
+		expect(listedLargeGroup?.members).toHaveLength(1_001);
+		expect(queries.countFindManyCalls("scimGroupMember")).toBe(1);
+		expect(queries.countFindManyCalls("scimUser")).toBe(3);
 	});
 });

@@ -24,7 +24,7 @@ A Group requires a `displayName` and may include an `externalId`. Members refere
 }
 ```
 
-Groups support direct User members only. Nested Groups and members from another connection are rejected. A Group may contain up to 1,000 unique members, and membership changes are atomic.
+Groups support direct User members only. Nested Groups and members from another connection are rejected. Duplicate member references are collapsed, and membership changes are atomic. There is no server limit on the number of unique direct members.
 
 See the [Group endpoint reference](/docs/plugins/scim/reference#groups) for the supported operations and PATCH paths.
 
