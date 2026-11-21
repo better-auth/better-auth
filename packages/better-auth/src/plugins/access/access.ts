@@ -167,3 +167,67 @@ export function createAccessControl<const TStatements extends Statements>(
 		statements: s,
 	};
 }
+
+/**
+ * Merges multiple roles into a single composite role by unioning their allowed
+ * actions for each resource.
+ */
+export function mergeRoles(
+	roles: (Role<any, any> | undefined)[],
+): Role<Record<string, string[]>> {
+	const mergedStatements: Record<string, string[]> = Object.create(null);
+
+	for (const r of roles) {
+		if (!r?.statements) continue;
+		for (const [resource, actions] of Object.entries(r.statements)) {
+			if (!Array.isArray(actions)) continue;
+			const current = (mergedStatements[resource] ??= []);
+			for (const action of actions) {
+				if (typeof action === "string" && !current.includes(action)) {
+					current.push(action);
+				}
+			}
+		}
+	}
+
+	return role(mergedStatements);
+}
+
+/**
+ * Evaluates whether any assigned role (or their merged composite) grants the
+ * requested permissions. Roles are looked up using `Object.hasOwn` to prevent
+ * prototype property collisions.
+ */
+export function authorizeRoles(
+	roleNames: string[],
+	roleMap: Record<string, Role<any, any> | undefined>,
+	permissions: Record<string, string[]>,
+): boolean {
+	for (const name of roleNames) {
+		if (Object.hasOwn(roleMap, name)) {
+			const r = roleMap[name];
+			if (r?.authorize(permissions)?.success) {
+				return true;
+			}
+		}
+	}
+
+	if (roleNames.length > 1) {
+		const resolvedRoles: Role<any, any>[] = [];
+		for (const name of roleNames) {
+			if (Object.hasOwn(roleMap, name)) {
+				const r = roleMap[name];
+				if (r) {
+					resolvedRoles.push(r);
+				}
+			}
+		}
+
+		if (resolvedRoles.length > 1) {
+			const merged = mergeRoles(resolvedRoles);
+			return merged.authorize(permissions).success;
+		}
+	}
+
+	return false;
+}

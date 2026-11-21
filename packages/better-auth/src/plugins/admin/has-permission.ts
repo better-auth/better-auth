@@ -1,3 +1,4 @@
+import { authorizeRoles } from "../access";
 import { defaultRoles } from "./access";
 import type { AdminOptions } from "./types";
 
@@ -18,14 +19,14 @@ export const hasPermission = (
 	if (!input.permissions) {
 		return false;
 	}
-	const roles = (input.role || input.options?.defaultRole || "user").split(",");
-	const acRoles = input.options?.roles || defaultRoles;
-	for (const role of roles) {
-		const _role = acRoles[role as keyof typeof acRoles];
-		const result = _role?.authorize(input.permissions);
-		if (result?.success) {
-			return true;
-		}
-	}
-	return false;
+	const roles = (input.role || input.options?.defaultRole || "user")
+		.split(",")
+		.map((r) => r.trim())
+		.filter(Boolean);
+	const acRoles = (input.options?.roles || defaultRoles) as Record<
+		string,
+		any
+	>;
+
+	return authorizeRoles(roles, acRoles, input.permissions);
 };
