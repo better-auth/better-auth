@@ -573,3 +573,99 @@ it("gives overlapping transactions from two adapters on one db distinct serial i
 	expect(rowA.id).not.toBe(rowB.id);
 	expect(db.widget!.map((row) => row.name).sort()).toEqual(["a", "b"]);
 });
+
+/**
+ * Mixing default/`AND` conditions with `OR` must apply as
+ * `(AND group) AND (OR group)`. A left-to-right fold lets any matching OR
+ * clause pass a row that fails the AND group (see #12536).
+ */
+describe("memory adapter mixed AND/OR where clauses", () => {
+	async function seedMixedWidgets(adapter: DBAdapter<BetterAuthOptions>) {
+		for (const [id, name, tag] of [
+			["1", "alice", "keep"],
+			["2", "bob", "keep"],
+			["3", "carol", "keep"],
+			["4", "alice", "other"],
+		] as const) {
+			await adapter.create({
+				model: "widget",
+				data: { id, name, tag },
+				forceAllowId: true,
+			});
+		}
+	}
+
+	const mixedWhere = [
+		{ field: "tag", value: "keep" },
+		{ field: "name", value: "alice", connector: "OR" as const },
+		{ field: "name", value: "bob", connector: "OR" as const },
+	];
+
+	it("findMany applies the AND group and the OR group together", async () => {
+		const { adapter } = setup();
+		await seedMixedWidgets(adapter);
+
+		const rows = await adapter.findMany<{ id: string }>({
+			model: "widget",
+			where: mixedWhere,
+		});
+
+		expect(rows.map((r) => r.id).sort()).toEqual(["1", "2"]);
+	});
+
+	it("findOne applies the AND group and the OR group together", async () => {
+		const { adapter } = setup();
+		await seedMixedWidgets(adapter);
+
+		const row = await adapter.findOne<{ id: string }>({
+			model: "widget",
+			where: [
+				{ field: "tag", value: "keep" },
+				{ field: "name", value: "bob", connector: "OR" },
+				{ field: "name", value: "carol", connector: "OR" },
+			],
+		});
+
+		expect(row?.id).toBe("2");
+	});
+
+	it("deleteMany only removes rows matching both the AND and OR groups", async () => {
+		const { adapter } = setup();
+		await seedMixedWidgets(adapter);
+
+		const removed = await adapter.deleteMany({
+			model: "widget",
+			where: mixedWhere,
+		});
+
+		expect(removed).toBe(2);
+		const remaining = await adapter.findMany<{ id: string }>({
+			model: "widget",
+		});
+		expect(remaining.map((r) => r.id).sort()).toEqual(["3", "4"]);
+	});
+
+	it("updateMany only touches rows matching both the AND and OR groups", async () => {
+		const { adapter } = setup();
+		await seedMixedWidgets(adapter);
+
+		const affected = await adapter.updateMany({
+			model: "widget",
+			where: mixedWhere,
+			update: { tag: "claimed" },
+		});
+
+		expect(affected).toBe(2);
+		const claimed = await adapter.findMany<{ id: string }>({
+			model: "widget",
+			where: [{ field: "tag", value: "claimed" }],
+		});
+		expect(claimed.map((r) => r.id).sort()).toEqual(["1", "2"]);
+
+		const carol = await adapter.findOne<{ tag: string }>({
+			model: "widget",
+			where: [{ field: "id", value: "3" }],
+		});
+		expect(carol?.tag).toBe("keep");
+	});
+});
