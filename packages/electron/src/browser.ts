@@ -16,8 +16,7 @@ import {
 	parseProtocolScheme,
 } from "./utils";
 
-const { app, session, protocol, BrowserWindow, ipcMain, webContents } =
-	electron;
+const { app, session, protocol, BrowserWindow, ipcMain } = electron;
 
 export function withGetWindowFallback(
 	win?: (() => Electron.BrowserWindow | null | undefined) | undefined,
@@ -326,23 +325,38 @@ function setupBridges(
 ) {
 	const prefix = getChannelPrefixWithDelimiter(opts.channelPrefix);
 
+	// Refetches repeat the same user, so send only a change. A change made while
+	// no window is open stays pending for the next refetch.
+	let deliveredUser: string | undefined;
 	ctx.$store?.atoms.session?.subscribe(async (state) => {
 		if (state.isPending === true) return;
 
+		const userKey = JSON.stringify(state.data?.user ?? null);
+		if (userKey === deliveredUser) return;
+
 		let user = state.data?.user ?? null;
+		let isSanitized = true;
 		if (user !== null && typeof opts.sanitizeUser === "function") {
 			try {
 				user = await opts.sanitizeUser(user);
 			} catch (error) {
 				console.error("Error while sanitizing user", error);
 				user = null;
+				isSanitized = false;
 			}
 		}
 		if (user !== null) {
 			user = normalizeUserOutput(user, opts);
 		}
 
-		webContents.getFocusedWebContents()?.send(`${prefix}user-updated`, user);
+		const windows = BrowserWindow.getAllWindows();
+		if (windows.length === 0) return;
+		for (const window of windows) {
+			window.webContents.send(`${prefix}user-updated`, user);
+		}
+		if (isSanitized) {
+			deliveredUser = userKey;
+		}
 	});
 
 	ipcMain.handle(`${prefix}getUser`, async () => {

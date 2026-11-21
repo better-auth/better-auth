@@ -1,6 +1,7 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { WritableAtom } from "nanostores";
 import { getGlobalBroadcastChannel } from "./broadcast-channel";
+import { isServer } from "./environment";
 import { getGlobalFocusManager } from "./focus-manager";
 import { getGlobalOnlineManager } from "./online-manager";
 
@@ -13,6 +14,12 @@ const FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
 
 export interface SessionRefreshOptions {
 	fetchSession: () => Promise<void>;
+	/**
+	 * Fetches unless a request is pending or one succeeded within `maxAge`
+	 * milliseconds, and retries once when the pending request fails. Focus and
+	 * reconnect refetches use it so they skip a session that was just loaded.
+	 */
+	revalidateSession?: (maxAge: number) => Promise<void>;
 	shouldPollSession?: () => boolean;
 	sessionSignal: WritableAtom<boolean>;
 	options?: BetterAuthClientOptions | undefined;
@@ -34,6 +41,7 @@ interface SessionRefreshState {
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 	const {
 		fetchSession,
+		revalidateSession,
 		shouldPollSession = () => true,
 		sessionSignal,
 		options = {},
@@ -71,6 +79,11 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		if (event?.event === "poll") {
 			state.lastSessionRequest = now();
 			void fetchSession();
+			return;
+		}
+
+		if (event?.event === "visibilitychange" && revalidateSession) {
+			void revalidateSession(FOCUS_REFETCH_RATE_LIMIT_SECONDS * 1000);
 			return;
 		}
 
@@ -141,7 +154,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 		setupSignalSubscription();
 		// SSR never unmounts, so timers and process-wide listeners would pile up per request.
-		if (typeof window === "undefined") return;
+		if (isServer()) return;
 
 		setupPolling();
 		setupBroadcast();

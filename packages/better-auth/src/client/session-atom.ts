@@ -2,14 +2,12 @@ import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { atom, onMount, STORE_UNMOUNT_DELAY } from "nanostores";
 import type { Session, User } from "../types";
+import { isServer } from "./environment";
 import { isJsonEqual, withEquality } from "./equality";
 import type { AuthQueryAtom, AuthQueryState } from "./query";
 import { createAuthQueryAtom } from "./query-atom";
 import { createSessionRefreshManager } from "./session-refresh";
 import type { SessionQueryParams } from "./types";
-
-// SSR detection
-const isServer = () => typeof window === "undefined";
 
 // Align session request reuse with the nanostores's remount lifecycle.
 const SESSION_MOUNT_DEDUPE_INTERVAL = STORE_UNMOUNT_DELAY;
@@ -27,7 +25,7 @@ export function hydrateSessionAtom(
 ) {
 	// The client is a module-level singleton, so writing during SSR would leak
 	// one request's session into concurrent requests sharing the same process.
-	if (typeof window === "undefined") {
+	if (isServer()) {
 		return;
 	}
 	const currentSession = sessionAtom.get();
@@ -104,6 +102,7 @@ export function getSessionAtom(
 
 	let flight: SessionFlight | undefined;
 	let freshUntil = 0;
+	let lastFetchedAt = 0;
 	let sessionRevision = 0;
 	$signal.listen(() => {
 		sessionRevision++;
@@ -248,12 +247,26 @@ export function getSessionAtom(
 		const settleFlight = (outcome: SessionFetchOutcome) => {
 			if (flight !== request) return;
 			flight = undefined;
+			if (outcome === "fresh" || outcome === "stale") {
+				lastFetchedAt = Date.now();
+			}
 			if (outcome === "fresh" && request.revision === sessionRevision) {
 				freshUntil = getFreshUntil();
 			}
 		};
 		void request.promise.then(settleFlight, () => settleFlight("failed"));
 		return request.promise.then(() => undefined);
+	};
+
+	const revalidateSession = (maxAge: number): Promise<void> => {
+		// A pending request answers the event, unless it fails.
+		if (flight) {
+			return flight.promise.then((outcome) => {
+				if (outcome === "failed") return fetchSession();
+			});
+		}
+		if (Date.now() - lastFetchedAt < maxAge) return Promise.resolve();
+		return fetchSession();
 	};
 
 	const fetchSessionOnMount = (): Promise<void> => {
@@ -279,6 +292,7 @@ export function getSessionAtom(
 
 		const refreshManager = createSessionRefreshManager({
 			fetchSession,
+			revalidateSession,
 			shouldPollSession: () => session.value.data != null,
 			sessionSignal: $signal,
 			options,

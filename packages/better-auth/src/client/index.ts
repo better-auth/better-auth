@@ -6,16 +6,19 @@ import type {
 import { PACKAGE_VERSION } from "../version";
 
 export * from "./broadcast-channel";
+export { setIsServer } from "./environment";
 export * from "./equality";
 export {
 	type FocusListener,
 	type FocusManager,
 	kFocusManager,
+	setFocusManager,
 } from "./focus-manager";
 export {
 	kOnlineManager,
 	type OnlineListener,
 	type OnlineManager,
+	setOnlineManager,
 } from "./online-manager";
 export * from "./parser";
 export * from "./query";

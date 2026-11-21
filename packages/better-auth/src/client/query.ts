@@ -2,12 +2,10 @@ import type { ClientFetchOption } from "@better-auth/core";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
 import type { PreinitializedWritableAtom } from "nanostores";
 import { onMount } from "nanostores";
+import { isServer } from "./environment";
 import { isJsonEqual, withEquality } from "./equality";
 import { createAuthQueryAtom } from "./query-atom";
 import type { SessionQueryParams } from "./types";
-
-// SSR detection
-const isServer = () => typeof window === "undefined";
 
 export type AuthQueryState<T> = {
 	data: null | T;
