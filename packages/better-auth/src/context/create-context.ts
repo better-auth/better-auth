@@ -235,15 +235,14 @@ Most of the features of Better Auth will not work correctly.`,
 				if (config.enabled === false) {
 					return null;
 				}
-				if (!config.clientId) {
+				const provider = socialProviders[key](config as never) as OAuthProvider;
+				if (!config.clientId && provider.protocol !== "openid2") {
 					logger.warn(
 						`Social provider ${key} is missing clientId or clientSecret`,
 					);
 				}
-				const provider = socialProviders[key](config as never);
-				(provider as OAuthProvider).disableImplicitSignUp =
-					config.disableImplicitSignUp;
-				return provider as OAuthProvider;
+				provider.disableImplicitSignUp = config.disableImplicitSignUp;
+				return provider;
 			}),
 		)
 	).filter((x) => x !== null);

@@ -613,6 +613,35 @@ describe("base context creation", () => {
 			});
 			expect(github?.disableImplicitSignUp).toBe(true);
 		});
+
+		it("should warn when a provider has no clientId", async () => {
+			const log = vi.fn();
+			await initBase({
+				logger: { level: "warn", log } as BetterAuthOptions["logger"],
+				socialProviders: { github: {} as never },
+			});
+
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				"Social provider github is missing clientId or clientSecret",
+			);
+		});
+
+		it("should not warn about a missing clientId for an OpenID 2.0 provider", async () => {
+			const log = vi.fn();
+			const res = await initBase({
+				logger: { level: "warn", log } as BetterAuthOptions["logger"],
+				socialProviders: { steam: {} },
+			});
+
+			expect(res.socialProviders.map((provider) => provider.id)).toContain(
+				"steam",
+			);
+			expect(log).not.toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining("missing clientId"),
+			);
+		});
 	});
 
 	describe("trusted origins", () => {

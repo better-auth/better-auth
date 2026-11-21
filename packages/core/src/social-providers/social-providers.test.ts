@@ -85,6 +85,7 @@ describe("OAuth account identity contract", () => {
 		socialProviders.salesforce(providerOptions),
 		socialProviders.slack(providerOptions),
 		socialProviders.spotify(providerOptions),
+		socialProviders.steam(providerOptions),
 		socialProviders.tiktok({
 			clientKey: providerOptions.clientKey,
 			clientSecret: providerOptions.clientSecret,
