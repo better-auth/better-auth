@@ -244,7 +244,7 @@ description: Learn how to configure Better Auth in your project.
       objects and offers helper functions for popular frameworks.
     </Callout>
 
-    <Tabs items={["next-js-app-router", "next-js-pages-router", "nuxt", "svelte-kit", "react-router", "solid-start", "hono", "cloudflare-workers", "express", "elysia", "tanstack-start", "expo"]} defaultValue="next-js-app-router">
+    <Tabs items={["next-js-app-router", "next-js-pages-router", "nuxt", "svelte-kit", "react-router", "solid-start", "hono", "cloudflare-workers", "express", "egg", "elysia", "tanstack-start", "expo"]} defaultValue="next-js-app-router">
       <Tab value="next-js-app-router">
         ```ts title="/app/api/auth/[...all]/route.ts"
         import { auth } from "@/lib/auth"; // path to your auth file
@@ -398,6 +398,27 @@ description: Learn how to configure Better Auth in your project.
             return auth.handler(ctx.request);
         };
         ```
+      </Tab>
+
+      <Tab value="egg">
+        ```ts title="app/router.ts"
+        import type { Application, Context } from "egg";
+        import { toNodeHandler } from "better-auth/node";
+        import { auth } from "../lib/auth.ts"; // path to your auth file
+
+        const handleAuth = toNodeHandler(auth);
+
+        export default (app: Application) => {
+            app.router.all(/^\/api\/auth(?:\/|$)/, async (ctx: Context) => {
+                ctx.respond = false;
+                await handleAuth(ctx.req, ctx.res);
+            });
+        };
+        ```
+
+        <Callout type="warn">
+          Exclude `/api/auth` and its subpaths from Egg's body parser and CSRF middleware before using this handler. See the [Egg.js integration guide](/docs/integrations/egg#configure-middleware) for the required configuration and ESM setup.
+        </Callout>
       </Tab>
 
       <Tab value="elysia">
