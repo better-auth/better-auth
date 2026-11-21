@@ -331,7 +331,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 								if (typeof attr.defaultValue === "function") {
 									if (
 										attr.type === "date" &&
-										attr.defaultValue.toString().includes("new Date()")
+										/\bnew\s+Date\b(?:\s*\(\s*\)|(?!\s*\())/.test(
+											attr.defaultValue.toString(),
+										)
 									) {
 										if (databaseType === "sqlite") {
 											type += `.default(sql\`(cast(unixepoch('subsecond') * 1000 as integer))\`)`;
@@ -708,7 +710,9 @@ function generateImport({
 					field.type === "date" &&
 					field.defaultValue &&
 					typeof field.defaultValue === "function" &&
-					field.defaultValue.toString().includes("new Date()"),
+					/\bnew\s+Date\b(?:\s*\(\s*\)|(?!\s*\())/.test(
+						field.defaultValue.toString(),
+					),
 			),
 		);
 
