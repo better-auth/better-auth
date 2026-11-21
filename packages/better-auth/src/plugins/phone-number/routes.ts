@@ -606,6 +606,25 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					},
 				],
 			});
+			if (user && !user[opts.phoneNumberVerified as keyof typeof user]) {
+				// Guard against phone number claim squatting: if the number is
+				// already registered to an account that has not been verified, the
+				// caller presenting the OTP proved they own the number, but the
+				// account holding it was created by an unproven registrant (e.g. via
+				// requireVerification: false sign-up with someone else's number).
+				// Silently granting them a session into that account would let the
+				// original registrant retain access through their email/password.
+				// Instead, disassociate the number from the unverified squatter so
+				// the legitimate owner can claim it cleanly on a fresh account.
+				await ctx.context.internalAdapter.updateUser<UserWithPhoneNumber>(
+					user.id,
+					{
+						[opts.phoneNumber]: null,
+						[opts.phoneNumberVerified]: false,
+					},
+				);
+				user = null as unknown as UserWithPhoneNumber;
+			}
 			if (!user) {
 				if (opts?.signUpOnVerification) {
 					const {

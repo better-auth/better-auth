@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
 import { PACKAGE_VERSION } from "../../version";
@@ -40,14 +41,15 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 	return {
 		id: "phone-number",
 		version: PACKAGE_VERSION,
-		init() {
+		init(authContext) {
 			return {
 				options: {
 					databaseHooks: {
 						user: {
 							create: {
 								// An unproven number is still unique, so storing one could squat
-								// someone else's number. Only this plugin's verified path sets it.
+								// someone else's number. Only this plugin's verified path sets it,
+								// unless requireVerification is explicitly disabled.
 								async before(data, ctx) {
 									// An empty string is no number, so it is dropped like one.
 									if (
@@ -55,6 +57,63 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 										data[opts.phoneNumberVerified] === true
 									) {
 										return;
+									}
+									if (
+										typeof data[opts.phoneNumber] === "string" &&
+										data[opts.phoneNumber].trim() === ""
+									) {
+										return {
+											data: {
+												...data,
+												[opts.phoneNumber]: null,
+												[opts.phoneNumberVerified]: false,
+											},
+										};
+									}
+									if (opts.requireVerification === false) {
+										if (typeof data[opts.phoneNumber] !== "string") {
+											throw APIError.from(
+												"BAD_REQUEST",
+												PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
+											);
+										}
+										if (opts.phoneNumberValidator) {
+											const isValidNumber = await opts.phoneNumberValidator(
+												data[opts.phoneNumber],
+											);
+											if (!isValidNumber) {
+												throw APIError.from(
+													"BAD_REQUEST",
+													PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
+												);
+											}
+										}
+										const baseAdapter =
+											ctx?.context?.adapter ?? authContext.adapter;
+										if (baseAdapter) {
+											const adapter = await getCurrentAdapter(baseAdapter);
+											const existingUser = await adapter.findOne({
+												model: "user",
+												where: [
+													{
+														field: "phoneNumber",
+														value: data[opts.phoneNumber],
+													},
+												],
+											});
+											if (existingUser) {
+												throw APIError.from(
+													"BAD_REQUEST",
+													PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_EXIST,
+												);
+											}
+										}
+										return {
+											data: {
+												...data,
+												[opts.phoneNumberVerified]: false,
+											},
+										};
 									}
 									if (ctx?.body?.[opts.phoneNumber]) {
 										throw APIError.from(
