@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12806](https://github.com/better-auth/better-auth/pull/12806) [`47a77c0`](https://github.com/better-auth/better-auth/commit/47a77c0fd36b89db20019ecb60223471e6b6f794) Thanks [@bytaesu](https://github.com/bytaesu)! - After-commit hooks queued with `onError` now still run when an earlier queued hook throws.
+
 ## 1.7.27
 
 ### Patch Changes
