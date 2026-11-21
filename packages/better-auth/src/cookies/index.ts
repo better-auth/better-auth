@@ -10,6 +10,7 @@ import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { getSecretValues } from "@better-auth/core/utils/secret";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
@@ -278,16 +279,35 @@ export async function setCookieCache(
 export async function decodeCookieCache(
 	ctx: GenericEndpointContext,
 	value: string,
-): Promise<{ session: CookieCachePayload; expiresAt: number } | null> {
+): Promise<{
+	session: CookieCachePayload;
+	expiresAt: number;
+	/** True when the cache verified only under a prior secret and should be rewritten. */
+	needsResign: boolean;
+} | null> {
 	const strategy =
 		ctx.context.options.session?.cookieCache?.strategy || "compact";
 
 	if (strategy === "jwe") {
-		const decoded = await symmetricDecodeJWT<JWTPayload>(
-			value,
-			ctx.context.secretConfig,
-			"better-auth-session",
-		);
+		const secrets = getSecretValues(ctx.context.secretConfig);
+		const current = secrets[0];
+		let decoded: JWTPayload | null = null;
+		let needsResign = false;
+		if (current) {
+			decoded = await symmetricDecodeJWT<JWTPayload>(
+				value,
+				current,
+				"better-auth-session",
+			);
+		}
+		if (!decoded && secrets.length > 1) {
+			decoded = await symmetricDecodeJWT<JWTPayload>(
+				value,
+				ctx.context.secretConfig,
+				"better-auth-session",
+			);
+			needsResign = !!decoded;
+		}
 		const payload = parseCookieCachePayload(decoded);
 		if (!payload) {
 			return null;
@@ -295,6 +315,7 @@ export async function decodeCookieCache(
 		return {
 			session: payload,
 			expiresAt: decoded?.exp ? decoded.exp * 1000 : Date.now(),
+			needsResign,
 		};
 	}
 
@@ -308,13 +329,20 @@ export async function decodeCookieCache(
 			return {
 				session: verified.payload,
 				expiresAt: verified.expiresAt,
+				needsResign: false,
 			};
 		}
 
-		const decoded = await verifySecretJWT<JWTPayload>(
-			value,
-			ctx.context.secret,
-		);
+		const secrets = getSecretValues(ctx.context.secretConfig);
+		let decoded: JWTPayload | null = null;
+		let needsResign = false;
+		for (let i = 0; i < secrets.length; i++) {
+			decoded = await verifySecretJWT<JWTPayload>(value, secrets[i]!);
+			if (decoded) {
+				needsResign = i > 0;
+				break;
+			}
+		}
 		const payload = parseCookieCachePayload(decoded);
 		if (!payload) {
 			return null;
@@ -322,6 +350,7 @@ export async function decodeCookieCache(
 		return {
 			session: payload,
 			expiresAt: decoded?.exp ? decoded.exp * 1000 : Date.now(),
+			needsResign,
 		};
 	}
 
@@ -332,14 +361,21 @@ export async function decodeCookieCache(
 		return null;
 	}
 
-	const valid = await createHMAC("SHA-256", "base64urlnopad").verify(
-		ctx.context.secret,
-		JSON.stringify({
-			...parsed.session,
-			expiresAt: parsed.expiresAt,
-		}),
-		parsed.signature,
-	);
+	const secrets = getSecretValues(ctx.context.secretConfig);
+	const hmac = createHMAC("SHA-256", "base64urlnopad");
+	const signedPayload = JSON.stringify({
+		...parsed.session,
+		expiresAt: parsed.expiresAt,
+	});
+	let valid = false;
+	let needsResign = false;
+	for (let i = 0; i < secrets.length; i++) {
+		valid = await hmac.verify(secrets[i]!, signedPayload, parsed.signature);
+		if (valid) {
+			needsResign = i > 0;
+			break;
+		}
+	}
 	if (!valid) {
 		return null;
 	}
@@ -349,6 +385,7 @@ export async function decodeCookieCache(
 		? {
 				session: payload,
 				expiresAt: parsed.expiresAt,
+				needsResign,
 			}
 		: null;
 }

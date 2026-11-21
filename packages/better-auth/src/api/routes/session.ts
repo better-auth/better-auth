@@ -171,6 +171,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					if (shouldExpireCookieCache) {
 						expireCookie(ctx, ctx.context.authCookies.sessionData);
 					} else {
+						// Prior-secret caches must be rewritten even when refreshCache is off,
+						// or dropping the old key leaves a stateless session without a cache.
+						if (sessionDataPayload.needsResign) {
+							await setCookieCache(ctx, session, !!dontRememberMe);
+						}
+
 						// Check if the cookie cache needs to be refreshed based on refreshCache
 						const cookieRefreshCache =
 							ctx.context.sessionConfig.cookieRefreshCache;
