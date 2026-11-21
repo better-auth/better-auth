@@ -1,4 +1,9 @@
-import type { User } from "better-auth";
+import type {
+	BetterAuthOptions,
+	DBAdapter,
+	DBTransactionAdapter,
+	User,
+} from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
@@ -25,6 +30,63 @@ type SCIMGroupMemberRow = {
 	groupId: string;
 	scimUserId: string;
 };
+
+function createMembershipWriteCountingAdapter(data: {
+	user: User[];
+	session: { id: string }[];
+	verification: { id: string }[];
+	account: { id: string }[];
+	scimConnectionBinding: { id: string }[];
+	organization: { id: string }[];
+	member: { id: string }[];
+	scimConnection: { id: string }[];
+	scimCredential: { id: string }[];
+	scimIdentityTombstone: { id: string }[];
+	scimSubject: { id: string; userId: string }[];
+	scimUser: SCIMUserRow[];
+	scimGroup: SCIMGroupRow[];
+	scimGroupMember: SCIMGroupMemberRow[];
+	scimProjectionGrant: { id: string }[];
+}) {
+	const createManyRowCounts: number[] = [];
+	let createCalls = 0;
+	const interceptWrites = <Adapter extends DBAdapter | DBTransactionAdapter>(
+		adapter: Adapter,
+	): Pick<Adapter, "create" | "createMany"> => ({
+		create: async (input) => {
+			if (input.model === "scimGroupMember") createCalls += 1;
+			return adapter.create(input);
+		},
+		createMany: async (input) => {
+			if (input.model === "scimGroupMember") {
+				createManyRowCounts.push(input.data.length);
+			}
+			return adapter.createMany(input);
+		},
+	});
+	return {
+		database: (options: BetterAuthOptions): DBAdapter => {
+			const adapter = memoryAdapter(data)(options);
+			return {
+				...adapter,
+				...interceptWrites(adapter),
+				transaction: async <Result>(
+					callback: (transaction: DBTransactionAdapter) => Promise<Result>,
+				) =>
+					adapter.transaction(async (transaction) =>
+						callback({
+							...transaction,
+							...interceptWrites(transaction),
+						}),
+					),
+			};
+		},
+		createManyRowCounts,
+		countCreateCalls() {
+			return createCalls;
+		},
+	};
+}
 
 describe("SCIM connection-owned Groups", () => {
 	it("creates a Group whose membership references a SCIM User resource", async () => {
@@ -1287,5 +1349,128 @@ describe("SCIM connection-owned Groups", () => {
 		);
 		expect(withoutMembers.Resources).toHaveLength(1);
 		expect(withoutMembers.Resources[0]).not.toHaveProperty("members");
+	});
+
+	it("inserts Group memberships with one createMany call", async () => {
+		const data = {
+			user: [] as User[],
+			session: [] as { id: string }[],
+			verification: [] as { id: string }[],
+			account: [] as { id: string }[],
+			scimConnectionBinding: [] as { id: string }[],
+			organization: [] as { id: string }[],
+			member: [] as { id: string }[],
+			scimConnection: [] as { id: string }[],
+			scimCredential: [] as { id: string }[],
+			scimIdentityTombstone: [] as { id: string }[],
+			scimSubject: [] as { id: string; userId: string }[],
+			scimUser: [] as SCIMUserRow[],
+			scimGroup: [] as SCIMGroupRow[],
+			scimGroupMember: [] as SCIMGroupMemberRow[],
+			scimProjectionGrant: [] as { id: string }[],
+		};
+		const writes = createMembershipWriteCountingAdapter(data);
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: writes.database,
+			plugins: [
+				scim({
+					connections: [
+						{
+							id: "workforce",
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
+						},
+					],
+				}),
+			],
+		});
+		const authorization = { authorization: "Bearer test-scim-token" };
+		const memberA = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "ada@example.com",
+			},
+			headers: authorization,
+		});
+		const memberB = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "grace@example.com",
+			},
+			headers: authorization,
+		});
+		writes.createManyRowCounts.length = 0;
+
+		const created = await auth.api.createSCIMGroup({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+				displayName: "Engineering",
+				members: [{ value: memberA.id }, { value: memberB.id }],
+			},
+			headers: authorization,
+		});
+
+		expect(created.members?.map((member) => member.value)).toEqual([
+			memberA.id,
+			memberB.id,
+		]);
+		expect(writes.createManyRowCounts).toEqual([2]);
+		expect(writes.countCreateCalls()).toBe(0);
+		expect(data.scimGroupMember).toEqual([
+			expect.objectContaining({
+				groupId: created.id,
+				scimUserId: memberA.id,
+			}),
+			expect.objectContaining({
+				groupId: created.id,
+				scimUserId: memberB.id,
+			}),
+		]);
+
+		const memberC = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "alan@example.com",
+			},
+			headers: authorization,
+		});
+		const memberD = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "barbara@example.com",
+			},
+			headers: authorization,
+		});
+		writes.createManyRowCounts.length = 0;
+
+		await auth.api.patchSCIMGroup({
+			params: { groupId: created.id },
+			body: {
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+				Operations: [
+					{
+						op: "add",
+						path: "members",
+						value: [{ value: memberC.id }, { value: memberD.id }],
+					},
+				],
+			},
+			headers: authorization,
+		});
+
+		expect(writes.createManyRowCounts).toEqual([2]);
+		expect(writes.countCreateCalls()).toBe(0);
+		expect(
+			data.scimGroupMember
+				.filter((membership) => membership.groupId === created.id)
+				.map((membership) => membership.scimUserId)
+				.sort(),
+		).toEqual([memberA.id, memberB.id, memberC.id, memberD.id].sort());
 	});
 });
