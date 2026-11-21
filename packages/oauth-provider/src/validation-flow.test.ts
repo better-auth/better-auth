@@ -591,6 +591,36 @@ describe("resolveResourcePolicy — enforcePerClientResources", () => {
 		expect(policy.audienceClaim).toBe(id);
 	});
 
+	it("accepts a linked resource past the default findMany limit of 100", async () => {
+		const ids = Array.from(
+			{ length: 120 },
+			(_, i) => `https://api.example.com/bulk/${String(i).padStart(4, "0")}`,
+		);
+		const lastId = ids[ids.length - 1]!;
+		const { ctx, opts } = await bootProvider({
+			resources: ids,
+			enforcePerClientResources: true,
+		});
+		await seedClient(ctx, "client-many-links");
+		const now = new Date();
+		for (const resourceId of ids) {
+			await ctx.adapter.create<Omit<OAuthClientResource, never>>({
+				model: "oauthClientResource",
+				data: {
+					clientId: "client-many-links",
+					resourceId,
+					createdAt: now,
+				} as never,
+			});
+		}
+		const policy = await resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
+			resource: lastId,
+			clientId: "client-many-links",
+			requestedScopes: [],
+		});
+		expect(policy.audienceClaim).toBe(lastId);
+	});
+
 	it("skips linkage check when enforcement is explicitly off", async () => {
 		const id = "https://api.example.com/explicit-off-unlinked";
 		const { ctx, opts } = await bootProvider({
