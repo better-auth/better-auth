@@ -351,30 +351,55 @@ export async function onSubscriptionUpdated(
 					],
 		});
 		if (!subscription) {
+			subscription = await ctx.context.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: subscriptionId
+					? [
+							{
+								field: "stripeSubscriptionId",
+								value: stripeSubscriptionUpdated.id,
+							},
+						]
+					: [
+							{
+								field: "id",
+								value: stripeSubscriptionUpdated.id,
+							},
+						],
+			});
+		}
+		if (!subscription) {
 			const subs = await ctx.context.adapter.findMany<Subscription>({
 				model: "subscription",
 				where: [{ field: "stripeCustomerId", value: customerId }],
 			});
-			if (subs.length > 1) {
-				const activeSub = subs.find((sub: Subscription) =>
+			if (!subs.length) {
+				ctx.context.logger.warn(
+					`Stripe webhook warning: No subscription found for customerId: ${customerId}`,
+				);
+				return;
+			}
+			const unlinkedSubs = subs.filter(
+				(sub: Subscription) => !sub.stripeSubscriptionId,
+			);
+			if (unlinkedSubs.length > 1) {
+				const activeSub = unlinkedSubs.find((sub: Subscription) =>
 					isActiveOrTrialing(sub),
 				);
 				if (!activeSub) {
 					ctx.context.logger.warn(
-						`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no active subscription is found`,
+						`Stripe webhook error: Multiple unlinked subscriptions found for customerId: ${customerId} and no active subscription is found`,
 					);
 					return;
 				}
 				subscription = activeSub;
+			} else if (unlinkedSubs.length === 1) {
+				subscription = unlinkedSubs[0];
 			} else {
-				const [onlySub] = subs;
-				if (!onlySub) {
-					ctx.context.logger.warn(
-						`Stripe webhook warning: No subscription found for customerId: ${customerId}`,
-					);
-					return;
-				}
-				subscription = onlySub;
+				ctx.context.logger.warn(
+					`Stripe webhook warning: Multiple subscriptions found for customerId: ${customerId} and no active subscription is found`,
+				);
+				return;
 			}
 		}
 
