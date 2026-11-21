@@ -357,7 +357,7 @@ export const generatePasskeyRegistrationOptions = (
 				rpName: opts.rpName || ctx.context.appName,
 				rpID: getRpID(opts, baseURLString),
 				userID,
-				userName: ctx.query?.name || user.name || user.id,
+				userName: user.name || user.id,
 				userDisplayName: user.displayName || user.name || user.id,
 				attestationType: "none",
 				excludeCredentials: userPasskeys.map((passkey) => ({
