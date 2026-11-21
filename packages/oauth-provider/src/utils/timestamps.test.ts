@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeTimestampValue, resolveSessionAuthTime } from "./index";
+import {
+	hasExpectedRefreshParentState,
+	isSessionActive,
+	normalizeTimestampValue,
+	resolveSessionAuthTime,
+} from "./index";
 
 describe("normalizeTimestampValue", () => {
 	it("parses epoch-millis text values", () => {
@@ -56,4 +61,41 @@ describe("resolveSessionAuthTime", () => {
 		expect(directResult).toBeUndefined();
 		expect(nestedResult).toBeUndefined();
 	});
+});
+
+describe("isSessionActive", () => {
+	const now = new Date(1774295570569);
+
+	it.each([-1, 0, 1])("checks expiration %i ms from now", (offset) => {
+		const session = { expiresAt: new Date(now.getTime() + offset) };
+		expect(isSessionActive(session, now)).toBe(offset > 0);
+	});
+
+	it("rejects a missing session", () => {
+		expect(isSessionActive(null, now)).toBe(false);
+	});
+});
+
+describe("hasExpectedRefreshParentState", () => {
+	const now = new Date(1774295570569);
+
+	it("accepts an active parent when issuance did not rotate it", () => {
+		expect(hasExpectedRefreshParentState({}, false)).toBe(true);
+	});
+
+	it("accepts a rotation that still has its rotation marker", () => {
+		expect(
+			hasExpectedRefreshParentState({ revoked: now, rotatedAt: now }, true),
+		).toBe(true);
+	});
+
+	it.each([false, true])(
+		"rejects a revoked or missing parent when rotation is %s",
+		(rotated) => {
+			expect(hasExpectedRefreshParentState({ revoked: now }, rotated)).toBe(
+				false,
+			);
+			expect(hasExpectedRefreshParentState(null, rotated)).toBe(false);
+		},
+	);
 });
