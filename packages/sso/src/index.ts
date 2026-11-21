@@ -308,6 +308,20 @@ async function extendSAMLSessionRecords(
 	});
 }
 
+async function deleteSAMLSessionLookup(ctx: AuthContext, sessionId: string) {
+	const sessionLookupKey = `${SAML_SESSION_BY_ID_PREFIX}${sessionId}`;
+	const sessionLookup =
+		await ctx.internalAdapter.findVerificationValue(sessionLookupKey);
+	if (sessionLookup?.value) {
+		await ctx.internalAdapter
+			.deleteVerificationByIdentifier(sessionLookup.value)
+			.catch(() => {});
+		await ctx.internalAdapter
+			.deleteVerificationByIdentifier(sessionLookupKey)
+			.catch(() => {});
+	}
+}
+
 export function sso<
 	O extends SSOOptions & {
 		domainVerification?: { enabled: true };
@@ -389,6 +403,21 @@ export function sso<O extends SSOOptions>(
 				options: {
 					databaseHooks: {
 						session: {
+							delete: {
+								// Runs inside the sign-out endpoint, so it also covers a session
+								// the before hook could not resolve.
+								async before(session, context) {
+									if (!options?.saml?.enableSingleLogout) return;
+									if (context?.path !== "/sign-out") return;
+									// A throw here would keep the session alive.
+									await deleteSAMLSessionLookup(ctx, session.id).catch(
+										(error: unknown) =>
+											ctx.logger.warn("Failed to delete SAML session records", {
+												error,
+											}),
+									);
+								},
+							},
 							update: {
 								async after(session) {
 									if (!options?.saml?.enableSingleLogout) return;
@@ -420,19 +449,7 @@ export function sso<O extends SSOOptions>(
 						if (!session?.session?.id) {
 							return;
 						}
-						const sessionLookupKey = `${SAML_SESSION_BY_ID_PREFIX}${session.session.id}`;
-						const sessionLookup =
-							await ctx.context.internalAdapter.findVerificationValue(
-								sessionLookupKey,
-							);
-						if (sessionLookup?.value) {
-							await ctx.context.internalAdapter
-								.deleteVerificationByIdentifier(sessionLookup.value)
-								.catch(() => {});
-							await ctx.context.internalAdapter
-								.deleteVerificationByIdentifier(sessionLookupKey)
-								.catch(() => {});
-						}
+						await deleteSAMLSessionLookup(ctx.context, session.session.id);
 					}),
 				},
 			],
