@@ -684,7 +684,7 @@ export const auth = betterAuth({
   * `trustedProxies`: IP addresses or CIDR ranges of your reverse proxies. Better Auth reads forwarded addresses from right to left. It skips these proxies and uses the first other address as the client IP.
 * `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
 * `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
-* `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
+* `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk). Defaults to `true` when `NODE_ENV` is `test` or `TEST` is set, which also skips CSRF checks for backward compatibility; set `false` explicitly to keep those checks on in that environment.
 * `crossSubDomainCookies`: Configure cookies to be shared across subdomains
 * `cookies`: Customize cookie names and attributes
 * `defaultCookieAttributes`: Default attributes for all cookies

@@ -398,12 +398,18 @@ Most of the features of Better Auth will not work correctly.`,
 		},
 		publishTelemetry: publish,
 		skipCSRFCheck: !!options.advanced?.disableCSRFCheck,
-		skipOriginCheck:
-			options.advanced?.disableOriginCheck !== undefined
-				? options.advanced.disableOriginCheck
-				: isTest()
-					? true
-					: false,
+		skipOriginCheck: (() => {
+			if (options.advanced?.disableOriginCheck !== undefined) {
+				return options.advanced.disableOriginCheck;
+			}
+			if (isTest()) {
+				logger.warn(
+					"Origin and CSRF checks are disabled because NODE_ENV=test or TEST is set. Set advanced.disableOriginCheck: false to keep them enabled in this environment.",
+				);
+				return true;
+			}
+			return false;
+		})(),
 		runInBackground:
 			options.advanced?.backgroundTasks?.handler ??
 			((p) => {
