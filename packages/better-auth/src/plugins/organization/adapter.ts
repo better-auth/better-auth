@@ -615,6 +615,36 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			);
 			return session as Session;
 		},
+		clearActiveOrganizationFromSessions: async (
+			userId: string,
+			organizationId: string,
+		) => {
+			if (!context.secondaryStorage) {
+				// One conditional write covers every row, with no find-many page
+				// cap, and leaves a session switched to another organization alone.
+				const adapter = await getCurrentAdapter(baseAdapter);
+				await adapter.updateMany({
+					model: "session",
+					where: [
+						{ field: "userId", value: userId },
+						{ field: "activeOrganizationId", value: organizationId },
+					],
+					update: { activeOrganizationId: null },
+				});
+				return;
+			}
+			// Secondary storage has no conditional write, so each session is
+			// re-read just before it is cleared to keep the race window minimal.
+			const sessions = await context.internalAdapter.listSessions(userId);
+			for (const { token } of sessions) {
+				const current = await context.internalAdapter.findSession(token);
+				if (current?.session.activeOrganizationId === organizationId) {
+					await context.internalAdapter.updateSession(token, {
+						activeOrganizationId: null,
+					});
+				}
+			}
+		},
 		findOrganizationById: async (
 			organizationId: string,
 		): Promise<InferOrganization<O> | null> => {

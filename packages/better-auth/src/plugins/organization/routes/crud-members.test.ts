@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AuthQueryAtom } from "../../../client";
 import { createAuthClient } from "../../../client";
 import { getTestInstance } from "../../../test-utils/test-instance";
@@ -930,5 +930,221 @@ describe("inviteMember role validation", async () => {
 
 		expect(error).toBeNull();
 		expect(data).toBeDefined();
+	});
+});
+
+describe("membership removal clears the organization from every session", async () => {
+	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
+		plugins: [organization()],
+	});
+	const ctx = await auth.$context;
+	const { headers: adminHeaders } = await signInWithTestUser();
+	const orgA = await auth.api.createOrganization({
+		body: { name: "org-a", slug: "org-a" },
+		headers: adminHeaders,
+	});
+	const orgB = await auth.api.createOrganization({
+		body: { name: "org-b", slug: "org-b" },
+		headers: adminHeaders,
+	});
+
+	let userCount = 0;
+	async function createMemberWithSessions(activeOrgIds: string[]) {
+		const email = `removal-${userCount++}@test.com`;
+		const password = "password1234";
+		const { user } = await auth.api.signUpEmail({
+			body: { email, password, name: email },
+		});
+		for (const organizationId of [orgA.id, orgB.id]) {
+			await auth.api.addMember({
+				body: { organizationId, userId: user.id, role: "member" },
+			});
+		}
+		const sessions = [];
+		for (const organizationId of activeOrgIds) {
+			const { headers } = await signInWithUser(email, password);
+			await auth.api.setActiveOrganization({
+				body: { organizationId },
+				headers,
+			});
+			const current = await auth.api.getSession({ headers });
+			sessions.push({ headers, token: current!.session.token });
+		}
+		return { user, sessions };
+	}
+
+	async function activeOrganizationOf(token: string) {
+		const found = await ctx.internalAdapter.findSession(token);
+		return found?.session.activeOrganizationId;
+	}
+
+	it("should clear the organization from all sessions of a member removed by an admin", async () => {
+		const { user, sessions } = await createMemberWithSessions([
+			orgA.id,
+			orgA.id,
+		]);
+
+		await auth.api.removeMember({
+			body: { organizationId: orgA.id, memberIdOrEmail: user.email },
+			headers: adminHeaders,
+		});
+
+		for (const { token } of sessions) {
+			expect(await activeOrganizationOf(token)).toBeNull();
+		}
+	});
+
+	it("should clear the organization from all sessions of a member who leaves", async () => {
+		const { sessions } = await createMemberWithSessions([orgA.id, orgA.id]);
+
+		await auth.api.leaveOrganization({
+			body: { organizationId: orgA.id },
+			headers: sessions[0]!.headers,
+		});
+
+		for (const { token } of sessions) {
+			expect(await activeOrganizationOf(token)).toBeNull();
+		}
+	});
+
+	it("should keep sessions active in another organization", async () => {
+		const { sessions } = await createMemberWithSessions([orgA.id, orgB.id]);
+
+		await auth.api.leaveOrganization({
+			body: { organizationId: orgA.id },
+			headers: sessions[0]!.headers,
+		});
+
+		expect(await activeOrganizationOf(sessions[0]!.token)).toBeNull();
+		expect(await activeOrganizationOf(sessions[1]!.token)).toBe(orgB.id);
+	});
+
+	it("should clear sessions beyond the default find-many limit", async () => {
+		const { user } = await createMemberWithSessions([]);
+		for (let i = 0; i < 150; i++) {
+			await ctx.internalAdapter.createSession(user.id, false, {
+				activeOrganizationId: orgA.id,
+			});
+		}
+
+		await auth.api.removeMember({
+			body: { organizationId: orgA.id, memberIdOrEmail: user.email },
+			headers: adminHeaders,
+		});
+
+		const remaining = await ctx.adapter.count({
+			model: "session",
+			where: [
+				{ field: "userId", value: user.id },
+				{ field: "activeOrganizationId", value: orgA.id },
+			],
+		});
+		expect(remaining).toBe(0);
+	});
+
+	it("should keep an organization selected after the removal started", async () => {
+		const { user, sessions } = await createMemberWithSessions([orgA.id]);
+		const token = sessions[0]!.token;
+		let switched = false;
+		const switchToOrgB = async () => {
+			if (switched) return;
+			switched = true;
+			await ctx.adapter.update({
+				model: "session",
+				where: [{ field: "token", value: token }],
+				update: { activeOrganizationId: orgB.id },
+			});
+		};
+		// The switch lands between the removal reading sessions and writing them.
+		const listSessions = ctx.internalAdapter.listSessions;
+		const updateMany = ctx.adapter.updateMany;
+		const listSpy = vi
+			.spyOn(ctx.internalAdapter, "listSessions")
+			.mockImplementation(async (...args) => {
+				const result = await listSessions(...args);
+				await switchToOrgB();
+				return result;
+			});
+		const updateManySpy = vi
+			.spyOn(ctx.adapter, "updateMany")
+			.mockImplementation(async (...args) => {
+				await switchToOrgB();
+				return updateMany(...args);
+			});
+
+		try {
+			await auth.api.removeMember({
+				body: { organizationId: orgA.id, memberIdOrEmail: user.email },
+				headers: adminHeaders,
+			});
+		} finally {
+			listSpy.mockRestore();
+			updateManySpy.mockRestore();
+		}
+
+		expect(switched).toBe(true);
+		expect(await activeOrganizationOf(token)).toBe(orgB.id);
+	});
+});
+
+describe("membership removal with sessions in secondary storage", async () => {
+	const store = new Map<string, string>();
+	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
+		plugins: [organization()],
+		secondaryStorage: {
+			get: (key) => store.get(key) ?? null,
+			set(key, value) {
+				store.set(key, value);
+			},
+			getAndDelete(key) {
+				const value = store.get(key) ?? null;
+				store.delete(key);
+				return value;
+			},
+			increment(key) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		},
+	});
+	const ctx = await auth.$context;
+
+	it("should clear the organization from every stored session", async () => {
+		const { headers: adminHeaders } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: { name: "kv-org", slug: "kv-org" },
+			headers: adminHeaders,
+		});
+		const email = "kv-member@test.com";
+		const password = "password1234";
+		const { user } = await auth.api.signUpEmail({
+			body: { email, password, name: email },
+		});
+		await auth.api.addMember({
+			body: { organizationId: org.id, userId: user.id, role: "member" },
+		});
+		const tokens = [];
+		for (let i = 0; i < 2; i++) {
+			const { headers } = await signInWithUser(email, password);
+			await auth.api.setActiveOrganization({
+				body: { organizationId: org.id },
+				headers,
+			});
+			tokens.push((await auth.api.getSession({ headers }))!.session.token);
+		}
+
+		await auth.api.removeMember({
+			body: { organizationId: org.id, memberIdOrEmail: email },
+			headers: adminHeaders,
+		});
+
+		for (const token of tokens) {
+			const found = await ctx.internalAdapter.findSession(token);
+			expect(found?.session.activeOrganizationId).toBeNull();
+		}
 	});
 });
