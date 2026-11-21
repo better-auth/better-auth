@@ -79,7 +79,7 @@ Returns the signing key for `private_key_jwt`, so keys stay out of the database.
 
 `guardProviderMutation` <span className="opacity-70">`(input, context) => Awaitable<void>`</span>
 
-Runs before a stored provider is updated or deleted. Throw to reject the change, which returns a conflict. Needs native transaction support. See [Manage providers](/docs/plugins/sso#manage-providers).
+Runs before a stored provider is updated or deleted. Throw to reject the change, which returns a conflict. With an adapter that supports native transactions it runs inside the transaction; otherwise it uses optimistic concurrency, must be read-only, and can return 409 `SSO_PROVIDER_CHANGED` when the provider changed concurrently. See [Manage providers](/docs/plugins/sso#manage-providers).
 
 `domainVerification` <span className="opacity-70">`{ enabled?: boolean; tokenPrefix?: string }`</span>
 
