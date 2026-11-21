@@ -1091,4 +1091,181 @@ describe("stripe customer", () => {
 			expect(stripeMock.customers.create).toHaveBeenCalledTimes(1);
 		});
 	});
+
+	/**
+	 * `getCustomerCreateParams`, `onCustomerCreate` and user database hooks
+	 * apply to every user customer the plugin creates, not only on sign-up.
+	 * @see https://www.better-auth.com/docs/plugins/stripe#configuration-options
+	 */
+	describe("user customer created on upgrade", () => {
+		const email = "upgrade-create@example.com";
+
+		async function upgradeWithoutCustomer(
+			options: StripeOptions,
+			{ memory }: { memory: Parameters<typeof getTestInstance>[0]["database"] },
+			databaseHooks?: Parameters<typeof getTestInstance>[0]["databaseHooks"],
+		) {
+			const { client, sessionSetter, auth } = await getTestInstance(
+				{ database: memory, plugins: [stripe(options)], databaseHooks },
+				{
+					disableTestUser: true,
+					clientOptions: { plugins: [stripeClient({ subscription: true })] },
+				},
+			);
+			const { user } = await client.signUp.email(
+				{ email, password: "password", name: "Upgrade User" },
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email, password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+			await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers, throw: true },
+			});
+			return { user, ctx: await auth.$context };
+		}
+
+		test("applies getCustomerCreateParams", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			stripeMock.customers.create.mockResolvedValueOnce({
+				id: "cus_upgrade_params",
+			});
+			stripeMock.subscriptions.list.mockResolvedValue({ data: [] });
+			const getCustomerCreateParams = vi.fn().mockResolvedValue({
+				preferred_locales: ["de"],
+				metadata: { customField: "customValue" },
+			});
+
+			const { user } = await upgradeWithoutCustomer(
+				{
+					...stripeOptions,
+					createCustomerOnSignUp: false,
+					getCustomerCreateParams,
+				},
+				{ memory },
+			);
+
+			expect(getCustomerCreateParams).toHaveBeenCalledTimes(1);
+			expect(getCustomerCreateParams).toHaveBeenCalledWith(
+				expect.objectContaining({ id: user.id, email }),
+				expect.objectContaining({ context: expect.any(Object) }),
+			);
+			expect(stripeMock.customers.create).toHaveBeenCalledTimes(1);
+			expect(stripeMock.customers.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					email,
+					name: "Upgrade User",
+					preferred_locales: ["de"],
+					metadata: expect.objectContaining({
+						userId: user.id,
+						customerType: "user",
+						customField: "customValue",
+					}),
+				}),
+			);
+		});
+
+		test("calls onCustomerCreate with the new customer", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			stripeMock.customers.create.mockResolvedValueOnce({
+				id: "cus_upgrade_callback",
+			});
+			stripeMock.subscriptions.list.mockResolvedValue({ data: [] });
+			const onCustomerCreate = vi.fn();
+
+			const { user } = await upgradeWithoutCustomer(
+				{ ...stripeOptions, createCustomerOnSignUp: false, onCustomerCreate },
+				{ memory },
+			);
+
+			expect(onCustomerCreate).toHaveBeenCalledTimes(1);
+			expect(onCustomerCreate).toHaveBeenCalledWith(
+				{
+					stripeCustomer: expect.objectContaining({
+						id: "cus_upgrade_callback",
+					}),
+					user: expect.objectContaining({
+						id: user.id,
+						stripeCustomerId: "cus_upgrade_callback",
+					}),
+				},
+				expect.objectContaining({ context: expect.any(Object) }),
+			);
+		});
+
+		test("does not call onCustomerCreate or getCustomerCreateParams when reusing a customer", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			stripeMock.customers.search.mockResolvedValueOnce({
+				data: [{ id: "cus_upgrade_existing", email }],
+			});
+			stripeMock.subscriptions.list.mockResolvedValue({ data: [] });
+			const onCustomerCreate = vi.fn();
+			const getCustomerCreateParams = vi.fn().mockResolvedValue({});
+
+			const { user, ctx } = await upgradeWithoutCustomer(
+				{
+					...stripeOptions,
+					createCustomerOnSignUp: false,
+					onCustomerCreate,
+					getCustomerCreateParams,
+				},
+				{ memory },
+				autoVerifyUserHooks,
+			);
+
+			expect(stripeMock.customers.create).not.toHaveBeenCalled();
+			expect(onCustomerCreate).not.toHaveBeenCalled();
+			expect(getCustomerCreateParams).not.toHaveBeenCalled();
+			const stored = await ctx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({ model: "user", where: [{ field: "id", value: user.id }] });
+			expect(stored?.stripeCustomerId).toBe("cus_upgrade_existing");
+		});
+
+		test("stores the customer id through user update hooks", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			stripeMock.customers.create.mockResolvedValueOnce({
+				id: "cus_upgrade_hooks",
+			});
+			stripeMock.subscriptions.list.mockResolvedValue({ data: [] });
+			const updates: Record<string, unknown>[] = [];
+
+			const { user, ctx } = await upgradeWithoutCustomer(
+				{ ...stripeOptions, createCustomerOnSignUp: false },
+				{ memory },
+				{
+					user: {
+						update: {
+							before: async (data) => {
+								updates.push(data);
+							},
+						},
+					},
+				},
+			);
+
+			expect(updates).toContainEqual(
+				expect.objectContaining({ stripeCustomerId: "cus_upgrade_hooks" }),
+			);
+			const stored = await ctx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({ model: "user", where: [{ field: "id", value: user.id }] });
+			expect(stored?.stripeCustomerId).toBe("cus_upgrade_hooks");
+		});
+	});
 });

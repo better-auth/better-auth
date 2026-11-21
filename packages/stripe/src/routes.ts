@@ -496,33 +496,54 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							}
 						}
 
+						let createdCustomer = false;
 						if (!stripeCustomer) {
-							stripeCustomer = await client.customers.create({
-								email: user.email,
-								name: user.name,
-								metadata: customerMetadata.set(
-									{
-										userId: user.id,
-										customerType: "user",
-									},
-									ctx.body.metadata,
-								),
-							});
+							let extraCreateParams: Partial<StripeType.CustomerCreateParams> =
+								{};
+							if (options.getCustomerCreateParams) {
+								extraCreateParams = await options.getCustomerCreateParams(
+									user,
+									ctx,
+								);
+							}
+							// Use defu to merge params (first argument takes priority)
+							const customerParams = defu(
+								{
+									email: user.email,
+									name: user.name,
+									metadata: customerMetadata.set(
+										{
+											userId: user.id,
+											customerType: "user",
+										},
+										ctx.body.metadata,
+									),
+								},
+								extraCreateParams,
+							);
+							stripeCustomer = await client.customers.create(customerParams);
+							createdCustomer = true;
 						}
 
-						// Update local DB with Stripe customer ID
-						await ctx.context.adapter.update({
-							model: "user",
-							update: {
-								stripeCustomerId: stripeCustomer.id,
-							},
-							where: [
-								{
-									field: "id",
-									value: user.id,
-								},
-							],
+						// Update local DB with Stripe customer ID. Going through the
+						// internal adapter runs user update database hooks, as on sign-up.
+						await ctx.context.internalAdapter.updateUser(user.id, {
+							stripeCustomerId: stripeCustomer.id,
 						});
+
+						// Call onCustomerCreate callback only for newly created customers
+						if (createdCustomer) {
+							await options.onCustomerCreate?.(
+								{
+									stripeCustomer,
+									user: {
+										...user,
+										stripeCustomerId: stripeCustomer.id,
+									},
+								},
+								ctx,
+							);
+						}
 
 						customerId = stripeCustomer.id;
 					} catch (e: any) {
