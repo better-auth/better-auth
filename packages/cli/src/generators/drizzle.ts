@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import {
 	getDatabaseFieldIndexName,
 	getDatabaseIndexStringLength,
+	isCurrentDateDefault,
 	resolveDatabaseSchemaIndexes,
 } from "@better-auth/core/db/internal";
 import { toSnakeCase } from "@better-auth/core/utils/string";
@@ -11,18 +12,6 @@ import { getAuthTables } from "better-auth/db";
 import type { BetterAuthOptions } from "better-auth/types";
 import prettier from "prettier";
 import type { SchemaGenerator } from "./types";
-
-function isCurrentDateDefault(value: DBFieldAttribute["defaultValue"]) {
-	if (typeof value !== "function") return false;
-
-	const source = value.toString();
-
-	// Preserve existing detection and accept Bun's printed arrow callback.
-	return (
-		source.includes("new Date()") ||
-		source.split("=>")[1]?.trim() === "new Date"
-	);
-}
 
 function convertToSnakeCase(str: string, camelCase?: boolean) {
 	return camelCase ? str : toSnakeCase(str);

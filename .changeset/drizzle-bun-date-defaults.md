@@ -1,5 +1,6 @@
 ---
 "auth": patch
+"@better-auth/core": patch
 "@better-auth/drizzle-adapter": patch
 ---
 

@@ -14,6 +14,7 @@ import {
 import {
 	getDatabaseFieldIndexName,
 	getDatabaseIndexStringLength,
+	isCurrentDateDefault,
 	resolveDatabaseSchemaIndexes,
 } from "@better-auth/core/db/internal";
 import type { DrizzleAdapterConfig } from ".";
@@ -27,18 +28,6 @@ interface SchemaGenerator {
 		camelCase?: boolean;
 		tables?: BetterAuthDBSchema;
 	}): Promise<DBAdapterSchemaCreation>;
-}
-
-function isCurrentDateDefault(value: DBFieldAttribute["defaultValue"]) {
-	if (typeof value !== "function") return false;
-
-	const source = value.toString();
-
-	// Preserve existing detection and accept Bun's printed arrow callback.
-	return (
-		source.includes("new Date()") ||
-		source.split("=>")[1]?.trim() === "new Date"
-	);
 }
 
 function convertToSnakeCase(str: string, camelCase?: boolean) {
