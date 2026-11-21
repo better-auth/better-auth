@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
+import { symmetricEncodeJWT } from "../../crypto";
 import type { GenericOAuthConfig } from "../../plugins/generic-oauth";
 import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -120,6 +121,46 @@ describe("sign-out", async () => {
 			"id-token",
 		);
 		expect(locationHeader).toBe(res.data!.url);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11991
+	 */
+	it("should use the account cookie for provider logout when the session is unavailable", async () => {
+		const { auth, client, headers, user } = await setupGenericOAuthSignOut(
+			{
+				endSessionEndpoint: "https://idp.example.com/logout",
+			},
+			{ account: { storeAccountCookie: true } },
+		);
+		const context = await auth.$context;
+		const account = await context.internalAdapter.findAccounts(user.id);
+		const accountCookie = await symmetricEncodeJWT(
+			account[0],
+			context.secret,
+			"better-auth-account",
+			60 * 5,
+		);
+		headers.append(
+			"cookie",
+			`${context.authCookies.accountData.name}=${accountCookie}`,
+		);
+		vi.spyOn(context.internalAdapter, "findSession").mockResolvedValueOnce(
+			null,
+		);
+
+		const res = await client.signOut({
+			fetchOptions: { headers },
+		});
+
+		expect(res.data).toMatchObject({
+			success: true,
+			redirect: true,
+			url: expect.stringContaining("https://idp.example.com/logout"),
+		});
+		expect(new URL(res.data!.url!).searchParams.get("id_token_hint")).toBe(
+			"id-token",
+		);
 	});
 
 	it("should keep local-only sign out when provider has no logout endpoint", async () => {

@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { deleteSessionCookie } from "../../cookies";
+import { deleteSessionCookie, getAccountCookie } from "../../cookies";
 
 const signOutBodySchema = z
 	.object({
@@ -100,12 +100,17 @@ export const signOut = createAuthEndpoint(
 		deleteSessionCookie(ctx);
 		const providerLogoutResult = await (async () => {
 			try {
-				if (!currentSession) {
-					return null;
-				}
-				const accounts = await ctx.context.internalAdapter.findAccounts(
-					currentSession.user.id,
-				);
+				const accountCookie =
+					ctx.context.options.account?.storeAccountCookie && !currentSession
+						? await getAccountCookie(ctx)
+						: null;
+				const accounts = currentSession
+					? await ctx.context.internalAdapter.findAccounts(
+							currentSession.user.id,
+						)
+					: accountCookie
+						? [accountCookie]
+						: [];
 				const providersById = new Map(
 					ctx.context.socialProviders.map((provider) => [
 						provider.id,
