@@ -1,5 +1,22 @@
 # better-auth
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12806](https://github.com/better-auth/better-auth/pull/12806) [`47a77c0`](https://github.com/better-auth/better-auth/commit/47a77c0fd36b89db20019ecb60223471e6b6f794) Thanks [@bytaesu](https://github.com/bytaesu)! - Revoked sessions are now removed from secondary storage even when a database `after` hook throws during password reset or user deletion. Before, they could stay valid until they expired.
+
+- [#12853](https://github.com/better-auth/better-auth/pull/12853) [`2ba7622`](https://github.com/better-auth/better-auth/commit/2ba762276c39db0ed5e5de3e8180fd3f85039921) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `/device/code` returning a 500 on a user or device code collision with the Drizzle adapter. The collision is now retried with a new code, as with the other adapters.
+
+- Updated dependencies [[`47a77c0`](https://github.com/better-auth/better-auth/commit/47a77c0fd36b89db20019ecb60223471e6b6f794)]:
+  - @better-auth/core@1.7.28
+  - @better-auth/drizzle-adapter@1.7.28
+  - @better-auth/kysely-adapter@1.7.28
+  - @better-auth/memory-adapter@1.7.28
+  - @better-auth/mongo-adapter@1.7.28
+  - @better-auth/prisma-adapter@1.7.28
+  - @better-auth/telemetry@1.7.28
+
 ## 1.7.27
 
 ### Patch Changes

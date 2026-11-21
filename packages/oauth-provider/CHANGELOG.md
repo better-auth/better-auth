@@ -1,5 +1,17 @@
 # @better-auth/oauth-provider
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12853](https://github.com/better-auth/better-auth/pull/12853) [`2ba7622`](https://github.com/better-auth/better-auth/commit/2ba762276c39db0ed5e5de3e8180fd3f85039921) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix Client ID Metadata Document registration treating a failed insert as a registration race when the query parameters in the wrapped error message contain words such as "duplicate". The original database error is now returned.
+
+- [#12863](https://github.com/better-auth/better-auth/pull/12863) [`dd557b6`](https://github.com/better-auth/better-auth/commit/dd557b6a5739181980aa33a0b2858efb258544ac) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `oauthProviderClient` requests without a body failing with a 415 error on pages with a signed OAuth query. The `oauth_query` body it adds is now sent as `application/json`.
+
+- [#12854](https://github.com/better-auth/better-auth/pull/12854) [`c870302`](https://github.com/better-auth/better-auth/commit/c87030213b959e86c416896f6c7beeeae080e490) Thanks [@bytaesu](https://github.com/bytaesu)! - A client ID with characters outside the range RFC 6749 allows, such as NUL, now gets the same `invalid_client` response as any unknown client, instead of a 500 on PostgreSQL.
+
+- [#12854](https://github.com/better-auth/better-auth/pull/12854) [`c870302`](https://github.com/better-auth/better-auth/commit/c87030213b959e86c416896f6c7beeeae080e490) Thanks [@bytaesu](https://github.com/bytaesu)! - Requesting an OAuth device code without a `resource` no longer fails with a 500 on Prisma with PostgreSQL, CockroachDB or MongoDB, which cannot store `null` in a list column.
+
 ## 1.7.27
 
 ### Patch Changes

@@ -1,5 +1,7 @@
 # @better-auth/cimd
 
+## 1.7.28
+
 ## 1.7.27
 
 ### Patch Changes
