@@ -6,6 +6,7 @@ import { setSessionCookie } from "../../cookies";
 import { resolveOAuthAccountFields } from "../../oauth2/account-fields";
 import { exchangeOAuthCallback } from "../../oauth2/callback";
 import {
+	isOAuthErrorCode,
 	missingEmailLogMessage,
 	OAUTH_CALLBACK_ERROR_CODES,
 } from "../../oauth2/errors";
@@ -98,11 +99,25 @@ export const callbackOAuth = createAuthEndpoint(
 			iss,
 		} = queryOrBody;
 
-		if (state === undefined && code) {
+		if (state === undefined && (code || error)) {
 			const provider = await getAwaitableValue(c.context.socialProviders, {
 				value: c.params.id,
 			});
 			if (provider?.allowIdpInitiated) {
+				// An IdP-initiated error response has no state to echo back
+				// (RFC 6749 section 4.1.2.1), so forward the provider's error code.
+				// Nothing ties this request to a sign-in, so only a code-shaped
+				// `error` is forwarded and `error_description` is only logged.
+				if (error) {
+					c.context.logger.error("IdP-initiated callback failed", {
+						error,
+						error_description,
+					});
+					const params = new URLSearchParams({
+						error: isOAuthErrorCode(error) ? error : "state_not_found",
+					});
+					throw c.redirect(appendQueryParams(defaultErrorURL, params));
+				}
 				const idTokenNonce = generateIdTokenNonce(provider);
 				const { state: freshState, codeVerifier } = await generateState(c, {
 					idTokenNonce,
