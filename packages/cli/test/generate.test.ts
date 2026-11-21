@@ -2730,6 +2730,60 @@ describe("--dialect flag support", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/6231
+ */
+describe("generate: references to models outside the schema", () => {
+	const user = {
+		additionalFields: {
+			roleId: {
+				type: "string",
+				required: false,
+				references: { model: "roles", field: "id" },
+			},
+		},
+	} satisfies BetterAuthOptions["user"];
+
+	it("names the field when drizzle meets a reference outside the schema", async () => {
+		await expect(
+			generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: {
+					id: "drizzle",
+					options: {
+						provider: "pg",
+						schema: {},
+					},
+				} as any,
+				options: {
+					database: {} as any,
+					user,
+				} as BetterAuthOptions,
+			}),
+		).rejects.toThrow(
+			'"user.roleId" references "roles", which is not in the Better Auth schema.',
+		);
+	});
+
+	it("names the field when prisma meets a reference outside the schema", async () => {
+		await expect(
+			generatePrismaSchema({
+				file: "test.prisma",
+				adapter: prismaAdapter(
+					{},
+					{ provider: "postgresql" },
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter({}, { provider: "postgresql" }),
+					user,
+				},
+			}),
+		).rejects.toThrow(
+			'"user.roleId" references "roles", which is not in the Better Auth schema.',
+		);
+	});
+});
+
 describe("generate: declined confirmation", () => {
 	let cwd: string;
 

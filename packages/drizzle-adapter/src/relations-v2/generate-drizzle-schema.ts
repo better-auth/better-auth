@@ -16,6 +16,7 @@ import {
 	getDatabaseIndexStringLength,
 	resolveDatabaseSchemaIndexes,
 } from "@better-auth/core/db/internal";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { DrizzleAdapterConfig } from ".";
 
 interface SchemaGenerator {
@@ -124,6 +125,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		schema: tables,
 		usePlural: adapterConfig?.usePlural,
 	});
+	// Schema keys win over aliases, as in `getDefaultModelName`.
+	const getTable = (model: string) =>
+		tables[model] ??
+		Object.entries(tables).find(
+			([tableKey, table]) =>
+				model === table.modelName || model === getModelName(tableKey),
+		)?.[1];
+	const isMigrationDisabled = (model: string) =>
+		getTable(model)?.disableMigrations === true;
 	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
 		Object.keys(tables)
 			.filter((tableKey) => !tables[tableKey]!.disableMigrations)
@@ -399,11 +409,23 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
+							// No table is generated for these, so the column has nothing to reference.
+							const referencesDisabledModel =
+								attr.references && isMigrationDisabled(attr.references.model);
+							if (
+								attr.references &&
+								!referencesDisabledModel &&
+								!getTable(attr.references.model)
+							) {
+								throw new BetterAuthError(
+									`"${tableKey}.${field}" references "${attr.references.model}", which is not in the Better Auth schema.`,
+								);
+							}
 
 							return `${fieldName}: ${type}${attr.required ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
-								attr.references
+								attr.references && !referencesDisabledModel
 									? `.references(()=> ${getModelName(
 											attr.references.model,
 										)}.${getFieldName({ model: attr.references.model, field: attr.references.field })}, { onDelete: '${
@@ -452,7 +474,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
-			if (tables[referencedModel]?.disableMigrations) continue;
+			if (isMigrationDisabled(referencedModel)) continue;
 			const targetModelName = getModelName(referencedModel);
 			const fromField = getFieldName({ model: tableKey, field: fieldName });
 			const toField = getFieldName({
