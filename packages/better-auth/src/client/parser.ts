@@ -14,7 +14,8 @@ const SPECIAL_VALUES = {
 const ISO_DATE_REGEX =
 	/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,7}))?(?:Z|([+-])(\d{2}):(\d{2}))$/;
 
-const DEFAULT_DATE_KEY_REGEX = /^(?:date|time|timestamp|expires)$/i;
+const DEFAULT_DATE_KEY_REGEX =
+	/^(?:date|time|timestamp|expires|lastRequest|last_request)$/i;
 const SNAKE_DATE_KEY_REGEX = /_(?:at|until|expires|date|time|timestamp)$/i;
 const CAMEL_DATE_KEY_REGEX =
 	/[a-z0-9](?:At|Until|Expires|Date|Time|Timestamp)$/;
@@ -60,7 +61,14 @@ function shouldParseDate(
 		return parseDates(key, value);
 	}
 	if (parseDates instanceof RegExp) {
-		return parseDates.test(key);
+		if (parseDates.global || parseDates.sticky) {
+			parseDates.lastIndex = 0;
+		}
+		const matches = parseDates.test(key);
+		if (parseDates.global || parseDates.sticky) {
+			parseDates.lastIndex = 0;
+		}
+		return matches;
 	}
 	return isDefaultDateKey(key);
 }

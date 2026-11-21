@@ -140,6 +140,8 @@ describe("parseJSON", () => {
 			{ field: "EXPIRES_AT", expected: true },
 			{ field: "periodStart", expected: true },
 			{ field: "trialEnd", expected: true },
+			{ field: "lastRequest", expected: true },
+			{ field: "last_request", expected: true },
 			{ field: "name", expected: false },
 			{ field: "userName", expected: false },
 			{ field: "email", expected: false },
@@ -205,6 +207,22 @@ describe("parseJSON", () => {
 			expect(parsed.customTimestamp).toBeInstanceOf(Date);
 			expect(parsed.expiresAt).toBe(iso);
 			expect(typeof parsed.expiresAt).toBe("string");
+		});
+
+		it("handles stateful RegExp (with global or sticky flag) without dropping matches", () => {
+			const iso = "2026-11-21T12:00:00.000Z";
+			const input = JSON.stringify({
+				timestampA: iso,
+				timestampB: iso,
+			});
+
+			const regex = /timestamp[AB]/g;
+			const parsed = parseJSON<Record<string, unknown>>(input, {
+				parseDates: regex,
+			});
+
+			expect(parsed.timestampA).toBeInstanceOf(Date);
+			expect(parsed.timestampB).toBeInstanceOf(Date);
 		});
 
 		it("supports custom parseDates predicate function", () => {
