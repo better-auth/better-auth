@@ -116,11 +116,14 @@ export function parseSetCookieHeader(
 			const normalizedAttrName = attrName!.trim().toLowerCase();
 
 			switch (normalizedAttrName) {
-				case "max-age":
-					attrObj["max-age"] = attrValue
-						? parseInt(attrValue.trim(), 10)
-						: undefined;
+				case "max-age": {
+					const trimmed = attrValue?.trim();
+					attrObj["max-age"] =
+						trimmed && /^-?\d+$/.test(trimmed)
+							? parseInt(trimmed, 10)
+							: undefined;
 					break;
+				}
 				case "expires":
 					attrObj.expires = attrValue ? new Date(attrValue.trim()) : undefined;
 					break;
