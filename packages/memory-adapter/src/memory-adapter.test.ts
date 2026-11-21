@@ -505,71 +505,91 @@ describe("memory adapter transaction isolation", () => {
 	});
 });
 
-it("does not reuse a stored serial id after a delete", async () => {
-	const db: MemoryDB = { widget: [] };
-	const adapter = memoryAdapter(db)({
-		...options,
-		advanced: { database: { generateId: "serial" } },
+/**
+ * Serial ids follow database sequence semantics: a value is never reused
+ * after a delete and is never handed to two overlapping transactions.
+ *
+ * @see https://www.sqlite.org/autoinc.html
+ * @see https://www.postgresql.org/docs/current/functions-sequence.html
+ */
+describe("memory adapter serial ids", () => {
+	it("does not reuse a stored serial id after a delete", async () => {
+		const db: MemoryDB = { widget: [] };
+		const adapter = memoryAdapter(db)({
+			...options,
+			advanced: { database: { generateId: "serial" } },
+		});
+		const first = await adapter.create({
+			model: "widget",
+			data: { name: "a" },
+		});
+		const second = await adapter.create({
+			model: "widget",
+			data: { name: "b" },
+		});
+		await adapter.delete({
+			model: "widget",
+			where: [{ field: "id", value: first.id }],
+		});
+		const third = await adapter.create({
+			model: "widget",
+			data: { name: "c" },
+		});
+		expect(third.id).not.toBe(second.id);
+		expect(new Set(db.widget!.map((row) => row.id)).size).toBe(
+			db.widget!.length,
+		);
 	});
-	const first = await adapter.create({ model: "widget", data: { name: "a" } });
-	const second = await adapter.create({ model: "widget", data: { name: "b" } });
-	await adapter.delete({
-		model: "widget",
-		where: [{ field: "id", value: first.id }],
-	});
-	const third = await adapter.create({ model: "widget", data: { name: "c" } });
-	expect(third.id).not.toBe(second.id);
-	expect(new Set(db.widget!.map((row) => row.id)).size).toBe(db.widget!.length);
-});
 
-it("gives overlapping transactions distinct serial ids", async () => {
-	const db: MemoryDB = { widget: [] };
-	const adapter = memoryAdapter(db)({
-		...options,
-		advanced: { database: { generateId: "serial" } },
+	it("gives overlapping transactions distinct serial ids", async () => {
+		const db: MemoryDB = { widget: [] };
+		const adapter = memoryAdapter(db)({
+			...options,
+			advanced: { database: { generateId: "serial" } },
+		});
+		let release: () => void = () => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const first = adapter.transaction(async (tx) => {
+			const row = await tx.create({ model: "widget", data: { name: "a" } });
+			await gate;
+			return row;
+		});
+		const second = adapter.transaction(async (tx) => {
+			const row = await tx.create({ model: "widget", data: { name: "b" } });
+			release();
+			return row;
+		});
+		const [a, b] = await Promise.all([first, second]);
+		expect(a.id).not.toBe(b.id);
+		expect(db.widget!.map((row) => row.name).sort()).toEqual(["a", "b"]);
 	});
-	let release: () => void = () => {};
-	const gate = new Promise<void>((resolve) => {
-		release = resolve;
-	});
-	const first = adapter.transaction(async (tx) => {
-		const row = await tx.create({ model: "widget", data: { name: "a" } });
-		await gate;
-		return row;
-	});
-	const second = adapter.transaction(async (tx) => {
-		const row = await tx.create({ model: "widget", data: { name: "b" } });
-		release();
-		return row;
-	});
-	const [a, b] = await Promise.all([first, second]);
-	expect(a.id).not.toBe(b.id);
-	expect(db.widget!.map((row) => row.name).sort()).toEqual(["a", "b"]);
-});
 
-it("gives overlapping transactions from two adapters on one db distinct serial ids", async () => {
-	const db: MemoryDB = { widget: [] };
-	const serialOptions = {
-		...options,
-		advanced: { database: { generateId: "serial" as const } },
-	};
-	const first = memoryAdapter(db)(serialOptions);
-	const second = memoryAdapter(db)(serialOptions);
-	let release: () => void = () => {};
-	const gate = new Promise<void>((resolve) => {
-		release = resolve;
+	it("gives overlapping transactions from two adapters on one db distinct serial ids", async () => {
+		const db: MemoryDB = { widget: [] };
+		const serialOptions = {
+			...options,
+			advanced: { database: { generateId: "serial" as const } },
+		};
+		const first = memoryAdapter(db)(serialOptions);
+		const second = memoryAdapter(db)(serialOptions);
+		let release: () => void = () => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const a = first.transaction(async (tx) => {
+			const row = await tx.create({ model: "widget", data: { name: "a" } });
+			await gate;
+			return row;
+		});
+		const b = second.transaction(async (tx) => {
+			const row = await tx.create({ model: "widget", data: { name: "b" } });
+			release();
+			return row;
+		});
+		const [rowA, rowB] = await Promise.all([a, b]);
+		expect(rowA.id).not.toBe(rowB.id);
+		expect(db.widget!.map((row) => row.name).sort()).toEqual(["a", "b"]);
 	});
-	const a = first.transaction(async (tx) => {
-		const row = await tx.create({ model: "widget", data: { name: "a" } });
-		await gate;
-		return row;
-	});
-	const b = second.transaction(async (tx) => {
-		const row = await tx.create({ model: "widget", data: { name: "b" } });
-		release();
-		return row;
-	});
-	const [rowA, rowB] = await Promise.all([a, b]);
-	expect(rowA.id).not.toBe(rowB.id);
-	expect(db.widget!.map((row) => row.name).sort()).toEqual(["a", "b"]);
 });
