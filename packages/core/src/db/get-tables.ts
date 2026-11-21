@@ -79,6 +79,13 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 					fieldName: options.rateLimit?.fields?.lastRequest || "lastRequest",
 					defaultValue: () => Date.now(),
 				},
+				windowExpiresAt: {
+					type: "number",
+					bigint: true,
+					required: false,
+					fieldName:
+						options.rateLimit?.fields?.windowExpiresAt || "windowExpiresAt",
+				},
 			},
 		},
 	} satisfies BetterAuthDBSchema;
