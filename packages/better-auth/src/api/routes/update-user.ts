@@ -400,14 +400,18 @@ async function deleteUserWithToken(
 	user: User,
 	token: string,
 ) {
-	// Consume the single-use delete token atomically before any
-	// destructive work so concurrent callbacks with the same token can
-	// only delete the account once: the first caller wins, later racers
-	// get null. A wrong-owner token is still burned by this consume.
+	const id = `delete-account-${token}`;
+	const existing =
+		await ctx.context.internalAdapter.findVerificationValue(id);
+	if (
+		!existing ||
+		existing.expiresAt < new Date() ||
+		existing.value !== user.id
+	) {
+		throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
+	}
 	const verification =
-		await ctx.context.internalAdapter.consumeVerificationValue(
-			`delete-account-${token}`,
-		);
+		await ctx.context.internalAdapter.consumeVerificationValue(id);
 	if (!verification || verification.value !== user.id) {
 		throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
 	}
