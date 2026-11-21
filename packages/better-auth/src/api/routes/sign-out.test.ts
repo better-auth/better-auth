@@ -1,8 +1,27 @@
-import { describe, expect, it, vi } from "vitest";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import {
+	afterAll,
+	afterEach,
+	assert,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
+import { nextCookies } from "../../integrations/next-js";
 import type { GenericOAuthConfig } from "../../plugins/generic-oauth";
-import { genericOAuth } from "../../plugins/generic-oauth";
+import { genericOAuth, keycloak } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
+
+const server = setupServer();
+
+beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
 
 describe("sign-out", async () => {
 	const afterSessionDeleted = vi.fn();
@@ -272,5 +291,188 @@ describe("sign-out", async () => {
 			redirect: true,
 			url: expect.stringContaining("https://idp2.example.com/logout"),
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11991
+ */
+describe("provider sign-out with the account cookie", () => {
+	const baseURL = "http://localhost:3000";
+	const issuer = "https://keycloak.example.com/realms/sign-out";
+	const protocolURL = `${issuer}/protocol/openid-connect`;
+	const logoutEndpoint = `${protocolURL}/logout`;
+	const clientId = "sign-out-client";
+
+	const startServer = (
+		options: { stateless?: boolean; encryptOAuthTokens?: boolean } = {},
+	) =>
+		getTestInstance(
+			{
+				baseURL,
+				secret: "stable-secret-across-restarts-for-sign-out",
+				...(options.stateless ? { database: undefined } : {}),
+				account: {
+					storeStateStrategy: "cookie",
+					storeAccountCookie: true,
+					encryptOAuthTokens: options.encryptOAuthTokens,
+				},
+				plugins: [
+					genericOAuth({
+						config: [
+							keycloak({
+								clientId,
+								clientSecret: "sign-out-client-secret",
+								issuer,
+							}),
+						],
+					}),
+					nextCookies(),
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+	const useKeycloak = async () => {
+		const { privateKey, publicKey } = await generateKeyPair("RS256");
+		const jwk = await exportJWK(publicKey);
+		const issued = { nonce: "", idToken: "" };
+		server.use(
+			http.get(`${issuer}/.well-known/openid-configuration`, () =>
+				HttpResponse.json({
+					issuer,
+					authorization_endpoint: `${protocolURL}/auth`,
+					token_endpoint: `${protocolURL}/token`,
+					userinfo_endpoint: `${protocolURL}/userinfo`,
+					end_session_endpoint: logoutEndpoint,
+					jwks_uri: `${protocolURL}/certs`,
+					id_token_signing_alg_values_supported: ["RS256"],
+					response_types_supported: ["code"],
+					subject_types_supported: ["public"],
+				}),
+			),
+			http.get(`${protocolURL}/certs`, () =>
+				HttpResponse.json({
+					keys: [{ ...jwk, kid: "sign-out-key", use: "sig" }],
+				}),
+			),
+			http.post(`${protocolURL}/token`, async () => {
+				issued.idToken = await new SignJWT({
+					nonce: issued.nonce,
+					email: "keycloak-user@example.com",
+					email_verified: true,
+					name: "Keycloak User",
+					sid: "keycloak-session",
+				})
+					.setProtectedHeader({ alg: "RS256", kid: "sign-out-key" })
+					.setIssuer(issuer)
+					.setAudience(clientId)
+					.setSubject("keycloak-user")
+					.setIssuedAt()
+					.setExpirationTime("1h")
+					.sign(privateKey);
+				return HttpResponse.json({
+					access_token: "keycloak-access-token",
+					refresh_token: "keycloak-refresh-token",
+					id_token: issued.idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+					scope: "openid profile email",
+				});
+			}),
+		);
+		return issued;
+	};
+
+	const signIn = async (
+		instance: Awaited<ReturnType<typeof startServer>>,
+		issued: Awaited<ReturnType<typeof useKeycloak>>,
+	) => {
+		const headers = new Headers();
+		const started = await instance.client.signIn.social({
+			provider: "keycloak",
+			callbackURL: `${baseURL}/dashboard`,
+			fetchOptions: { onSuccess: instance.cookieSetter(headers) },
+		});
+		expect(started.data).toMatchObject({ url: expect.any(String) });
+		const authorizationURL = new URL(started.data!.url!);
+		issued.nonce = authorizationURL.searchParams.get("nonce")!;
+		const callbackURL = new URL(
+			authorizationURL.searchParams.get("redirect_uri")!,
+		);
+		callbackURL.searchParams.set(
+			"state",
+			authorizationURL.searchParams.get("state")!,
+		);
+		callbackURL.searchParams.set("code", "keycloak-authorization-code");
+		const callback = await instance.customFetchImpl(callbackURL, { headers });
+		expect(callback.headers.get("location")).toBe(`${baseURL}/dashboard`);
+		instance.cookieSetter(headers)({ response: callback });
+		return { headers, idToken: issued.idToken };
+	};
+
+	const signOut = async (
+		instance: Awaited<ReturnType<typeof startServer>>,
+		headers: Headers,
+	) => {
+		let location: string | null = null;
+		const result = await instance.client.signOut({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					location = context.response.headers.get("location");
+					instance.cookieSetter(headers)(context);
+				},
+			},
+		});
+		await expect(instance.auth.api.getSession({ headers })).resolves.toBeNull();
+		return { ...result, location };
+	};
+
+	it.for([
+		{ restart: true, encryptOAuthTokens: false },
+		{ restart: false, encryptOAuthTokens: false },
+		{ restart: true, encryptOAuthTokens: true },
+		{ restart: false, encryptOAuthTokens: true },
+	])(
+		"returns the provider logout URL without a database (restart: $restart, encrypted: $encryptOAuthTokens)",
+		async ({ restart, encryptOAuthTokens }) => {
+			const issued = await useKeycloak();
+			const original = await startServer({
+				stateless: true,
+				encryptOAuthTokens,
+			});
+			const { headers, idToken } = await signIn(original, issued);
+			// A fresh instance keeps none of the previous one's in-memory records.
+			const active = restart
+				? await startServer({ stateless: true, encryptOAuthTokens })
+				: original;
+
+			const { data, location } = await signOut(active, headers);
+
+			expect(data).toMatchObject({
+				success: true,
+				url: expect.stringContaining(logoutEndpoint),
+				redirect: true,
+			});
+			expect(location).toBe(data?.url);
+			expect(new URL(data!.url!).searchParams.get("id_token_hint")).toBe(
+				idToken,
+			);
+		},
+	);
+
+	it("does not use the account cookie when the database no longer has the session", async () => {
+		const issued = await useKeycloak();
+		const instance = await startServer();
+		const { headers } = await signIn(instance, issued);
+		const session = await instance.auth.api.getSession({ headers });
+		assert(session, "expected a session");
+		const context = await instance.auth.$context;
+		await context.internalAdapter.deleteSession(session.session.token);
+
+		const { data } = await signOut(instance, headers);
+
+		expect(data).toEqual({ success: true });
 	});
 });

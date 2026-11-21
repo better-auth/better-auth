@@ -1,6 +1,8 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { deleteSessionCookie } from "../../cookies";
+import { shouldBindAccountCookieToSessionUser } from "../../context/store-capabilities";
+import { deleteSessionCookie, getAccountCookie } from "../../cookies";
+import { decryptOAuthToken } from "../../oauth2/utils";
 
 const signOutBodySchema = z
 	.object({
@@ -100,12 +102,11 @@ export const signOut = createAuthEndpoint(
 		deleteSessionCookie(ctx);
 		const providerLogoutResult = await (async () => {
 			try {
-				if (!currentSession) {
-					return null;
-				}
-				const accounts = await ctx.context.internalAdapter.findAccounts(
-					currentSession.user.id,
-				);
+				const accounts = currentSession
+					? await ctx.context.internalAdapter.findAccounts(
+							currentSession.user.id,
+						)
+					: [];
 				const providersById = new Map(
 					ctx.context.socialProviders.map((provider) => [
 						provider.id,
@@ -117,6 +118,21 @@ export const signOut = createAuthEndpoint(
 						Boolean(providersById.get(account.providerId)?.createEndSessionURL),
 					)
 					.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+				// Without a database, only the account cookie survives a restart.
+				if (
+					logoutAccounts.length === 0 &&
+					sessionCookieToken &&
+					ctx.context.options.account?.storeAccountCookie &&
+					!shouldBindAccountCookieToSessionUser(ctx.context.options)
+				) {
+					const accountCookie = await getAccountCookie(ctx);
+					if (
+						accountCookie &&
+						providersById.get(accountCookie.providerId)?.createEndSessionURL
+					) {
+						logoutAccounts.push(accountCookie);
+					}
+				}
 				if (logoutAccounts.length === 0) {
 					return null;
 				}
@@ -130,7 +146,7 @@ export const signOut = createAuthEndpoint(
 					const provider = providersById.get(account.providerId);
 					try {
 						const url = await provider?.createEndSessionURL?.({
-							idToken: account.idToken,
+							idToken: await decryptOAuthToken(account.idToken, ctx.context),
 							postLogoutRedirectURI,
 							state: ctx.body?.state,
 						});

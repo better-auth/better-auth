@@ -28,6 +28,7 @@ import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
 import { generateIdTokenNonce, generateState } from "../../oauth2/state";
 import {
 	decryptOAuthToken,
+	encryptAccountTokens,
 	getOAuthCallbackPath,
 	setTokenUtil,
 } from "../../oauth2/utils";
@@ -347,15 +348,14 @@ export const linkSocialAccount = createAuthEndpoint(
 					Object.entries({
 						...accountFields,
 						providerId: provider.id,
-						accessToken: await setTokenUtil(
-							c.body.idToken.accessToken,
+						...(await encryptAccountTokens(
+							{
+								accessToken: c.body.idToken.accessToken,
+								refreshToken: c.body.idToken.refreshToken,
+								idToken: token,
+							},
 							c.context,
-						),
-						idToken: token,
-						refreshToken: await setTokenUtil(
-							c.body.idToken.refreshToken,
-							c.context,
-						),
+						)),
 					}).filter(([_, value]) => value !== undefined),
 				);
 				await c.context.internalAdapter.updateAccount(
@@ -417,15 +417,14 @@ export const linkSocialAccount = createAuthEndpoint(
 					...accountFields,
 					userId: session.user.id,
 					...accountKey,
-					accessToken: await setTokenUtil(
-						c.body.idToken.accessToken,
+					...(await encryptAccountTokens(
+						{
+							accessToken: c.body.idToken.accessToken,
+							refreshToken: c.body.idToken.refreshToken,
+							idToken: token,
+						},
 						c.context,
-					),
-					idToken: token,
-					refreshToken: await setTokenUtil(
-						c.body.idToken.refreshToken,
-						c.context,
-					),
+					)),
 				});
 			} catch {
 				throw APIError.from("EXPECTATION_FAILED", {
@@ -600,6 +599,19 @@ const accountSelectionSchema = z.union([
 	}),
 ]);
 
+// Query strings carry `useAccountCookie=true` as a string.
+const accountSelectionQuerySchema = z.union([
+	accountSelectionSchema.options[0],
+	accountSelectionSchema.options[1].extend({
+		useAccountCookie: z
+			.union([z.literal(true), z.literal("true")])
+			.transform(() => true as const)
+			.meta({
+				description: "Select the current OAuth account from its signed cookie",
+			}),
+	}),
+]);
+
 type AccountSelection = { accountId: string } | { useAccountCookie: true };
 
 function matchesAccountSelection(
@@ -735,7 +747,9 @@ async function getValidAccessToken(
 					: account.refreshToken,
 				refreshTokenExpiresAt:
 					newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
-				idToken: newTokens?.idToken || account.idToken,
+				idToken: newTokens?.idToken
+					? await setTokenUtil(newTokens.idToken, ctx.context)
+					: account.idToken,
 			};
 			let updatedAccount: Partial<Account> | null = null;
 			if (account.id) {
@@ -774,7 +788,10 @@ async function getValidAccessToken(
 				(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
 			accessTokenExpiresAt,
 			scopes: parseStoredScopes(account.scope),
-			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
+			idToken:
+				newTokens?.idToken ??
+				(await decryptOAuthToken(account.idToken, ctx.context)) ??
+				undefined,
 		};
 	} catch (_error) {
 		throw APIError.from("BAD_REQUEST", {
@@ -936,7 +953,9 @@ export const refreshToken = createAuthEndpoint(
 				refreshToken: resolvedRefreshToken,
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-				idToken: tokens.idToken || account.idToken,
+				idToken: tokens.idToken
+					? await setTokenUtil(tokens.idToken, ctx.context)
+					: account.idToken,
 			};
 			let updatedAccount: Account | null = null;
 
@@ -969,7 +988,9 @@ export const refreshToken = createAuthEndpoint(
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 				scope: responseScope,
-				idToken: tokens.idToken || account.idToken,
+				idToken:
+					tokens.idToken ||
+					(await decryptOAuthToken(account.idToken, ctx.context)),
 				providerId: account.providerId,
 				accountId: account.id,
 			});
@@ -1041,7 +1062,7 @@ export const accountInfo = createAuthEndpoint(
 				},
 			},
 		},
-		query: accountSelectionSchema,
+		query: accountSelectionQuerySchema,
 	},
 	async (ctx) => {
 		const { userId } = ctx.query;
