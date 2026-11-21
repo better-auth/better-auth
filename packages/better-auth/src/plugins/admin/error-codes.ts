@@ -36,4 +36,7 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 	PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER:
 		"Password cannot be updated through update-user. Use the set-user-password endpoint instead",
 	USER_ID_CANNOT_BE_UPDATED: "User id cannot be updated",
+	CANNOT_PROVIDE_BOTH_BAN_EXPIRES_AND_BAN_EXPIRES_IN:
+		"Cannot provide both banExpires and banExpiresIn",
+	BAN_EXPIRES_CANNOT_BE_IN_THE_PAST: "banExpires cannot be in the past",
 });

@@ -1098,6 +1098,15 @@ const banUserBodySchema = z.object({
 			description: "The number of seconds until the ban expires",
 		})
 		.optional(),
+	/**
+	 * Date when the ban expires
+	 */
+	banExpires: z.coerce
+		.date()
+		.meta({
+			description: "The date when the ban expires",
+		})
+		.optional(),
 });
 
 /**
@@ -1178,6 +1187,27 @@ export const banUser = (opts: AdminOptions) =>
 					ADMIN_ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
 				);
 			}
+
+			if (
+				ctx.body.banExpiresIn !== undefined &&
+				ctx.body.banExpires !== undefined
+			) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ADMIN_ERROR_CODES.CANNOT_PROVIDE_BOTH_BAN_EXPIRES_AND_BAN_EXPIRES_IN,
+				);
+			}
+
+			if (ctx.body.banExpires !== undefined) {
+				const banExpiresTime = new Date(ctx.body.banExpires).getTime();
+				if (Number.isNaN(banExpiresTime) || banExpiresTime <= Date.now()) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ADMIN_ERROR_CODES.BAN_EXPIRES_CANNOT_BE_IN_THE_PAST,
+					);
+				}
+			}
+
 			const user = await ctx.context.internalAdapter.updateUser(
 				ctx.body.userId,
 				{
@@ -1186,11 +1216,13 @@ export const banUser = (opts: AdminOptions) =>
 						ctx.body.banReason || opts?.defaultBanReason || "No reason",
 					// null (not undefined) so a permanent ban clears any expiration
 					// left over from a previous temporary ban.
-					banExpires: ctx.body.banExpiresIn
-						? getDate(ctx.body.banExpiresIn, "sec")
-						: opts?.defaultBanExpiresIn
-							? getDate(opts.defaultBanExpiresIn, "sec")
-							: null,
+					banExpires: ctx.body.banExpires
+						? new Date(ctx.body.banExpires)
+						: ctx.body.banExpiresIn
+							? getDate(ctx.body.banExpiresIn, "sec")
+							: opts?.defaultBanExpiresIn
+								? getDate(opts.defaultBanExpiresIn, "sec")
+								: null,
 					updatedAt: new Date(),
 				},
 			);
