@@ -23,11 +23,17 @@ export function useStore<
 >(store: SomeStore): DeepReadonly<UnwrapNestedRefs<ShallowRef<Value>>> {
 	const state = shallowRef();
 
-	const unsubscribe = store.subscribe((value) => {
-		state.value = value;
-	});
+	// Scopes are never disposed during SSR, so a subscription would never be removed.
+	// On the server the current value is enough; there is nothing to react to after render.
+	if (typeof window === "undefined") {
+		state.value = store.get();
+	} else {
+		const unsubscribe = store.subscribe((value) => {
+			state.value = value;
+		});
 
-	if (getCurrentScope()) onScopeDispose(unsubscribe);
+		if (getCurrentScope()) onScopeDispose(unsubscribe);
+	}
 
 	if (process.env.NODE_ENV !== "production") {
 		registerStore(store);
