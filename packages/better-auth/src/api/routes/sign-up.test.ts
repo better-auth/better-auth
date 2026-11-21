@@ -1289,3 +1289,64 @@ describe("sign-up side effects run after the commit", async () => {
 		expect(await ctx.internalAdapter.findUserByEmail(email)).not.toBeNull();
 	});
 });
+
+describe("sign-up transaction scope", () => {
+	it("does not hold the database transaction open across password hashing or session cookie signing", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true },
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		const transaction = ctx.adapter.transaction;
+
+		let inTransaction = false;
+		let hashCalledInTransaction = false;
+		let cookieSignedWhileInTransaction = false;
+		let transactionCommitted = false;
+
+		vi.spyOn(ctx.adapter, "transaction").mockImplementation((cb) =>
+			transaction(async (trx) => {
+				inTransaction = true;
+				try {
+					const res = await cb(trx);
+					transactionCommitted = true;
+					return res;
+				} finally {
+					inTransaction = false;
+				}
+			}),
+		);
+
+		const origHash = ctx.password.hash;
+		vi.spyOn(ctx.password, "hash").mockImplementation(async (...args) => {
+			if (inTransaction) {
+				hashCalledInTransaction = true;
+			}
+			return origHash(...args);
+		});
+
+		const origSign = globalThis.crypto.subtle.sign;
+		vi.spyOn(globalThis.crypto.subtle, "sign").mockImplementation(
+			async (...args) => {
+				if (inTransaction) {
+					cookieSignedWhileInTransaction = true;
+				}
+				return origSign.apply(globalThis.crypto.subtle, args);
+			},
+		);
+
+		const email = "transaction-scope@test.com";
+		const res = await auth.api.signUpEmail({
+			body: { email, password: "password123", name: "Transaction Scope" },
+		});
+
+		expect(res).toBeDefined();
+		expect(res.user.email).toBe(email);
+		expect(res.token).toBeDefined();
+		expect(transactionCommitted).toBe(true);
+		expect(hashCalledInTransaction).toBe(false);
+		expect(cookieSignedWhileInTransaction).toBe(false);
+	});
+});
