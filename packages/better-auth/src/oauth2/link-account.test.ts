@@ -26,6 +26,7 @@ import { getMigrations } from "../db/get-migration";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
 import { DEFAULT_SECRET } from "../utils/constants";
+import { OAUTH_CALLBACK_ERROR_CODES } from "./errors";
 
 let mockEmail = "";
 let mockEmailVerified = true;
@@ -147,7 +148,9 @@ describe("oauth2 - email verification on link", async () => {
 
 		// Callback redirects with the documented account_not_linked error code so
 		// the test can't pass on an unrelated redirect (e.g. server-side failure).
-		expect(redirectLocation).toContain("error=account_not_linked");
+		expect(redirectLocation).toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_NOT_LINKED}`,
+		);
 
 		// Link is rejected: no Google account row, local emailVerified untouched
 		const accounts = await ctx.adapter.findMany<{
@@ -553,7 +556,9 @@ describe("oauth2 - account linking without trustedProviders", async () => {
 			},
 		});
 
-		expect(redirectLocation).toContain("error=account_not_linked");
+		expect(redirectLocation).toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_NOT_LINKED}`,
+		);
 
 		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
 			model: "account",
@@ -619,7 +624,9 @@ describe("oauth2 - account linking without trustedProviders", async () => {
 			},
 		});
 
-		expect(redirectLocation).not.toContain("error=account_not_linked");
+		expect(redirectLocation).not.toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_NOT_LINKED}`,
+		);
 
 		const user = await ctx.adapter.findOne<{ id: string }>({
 			model: "user",
@@ -715,7 +722,9 @@ describe("oauth2 - disableImplicitLinking", async () => {
 			},
 		});
 
-		expect(redirectLocation).toContain("error=account_not_linked");
+		expect(redirectLocation).toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_NOT_LINKED}`,
+		);
 
 		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
 			model: "account",
@@ -1698,7 +1707,9 @@ describe("oauth2 - sign-up account creation rollback", async () => {
 			},
 		});
 
-		expect(redirectLocation).toContain("error=unable_to_create_user");
+		expect(redirectLocation).toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_CREATE_USER}`,
+		);
 
 		const user = await ctx.adapter.findOne<User>({
 			model: "user",
@@ -1772,11 +1783,109 @@ describe("oauth2 - sign-up aborted by user.create.before", async () => {
 			},
 		});
 
-		expect(redirectLocation).toContain("error=unable_to_create_user");
+		expect(redirectLocation).toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_CREATE_USER}`,
+		);
 		expect(log).not.toHaveBeenCalledWith(
 			"error",
 			"Unable to create OAuth user",
 			expect.anything(),
+		);
+	});
+});
+
+describe("oauth2 - callback aborted by account and session hooks", async () => {
+	let abortAccountUpdate = false;
+	let abortSessionCreate = false;
+	const { client, cookieSetter } = await getTestInstance(
+		{
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			databaseHooks: {
+				account: {
+					update: {
+						before: async () => (abortAccountUpdate ? false : undefined),
+					},
+				},
+				session: {
+					create: {
+						before: async () => (abortSessionCreate ? false : undefined),
+					},
+				},
+			},
+		},
+		{ disableTestUser: true },
+	);
+
+	afterEach(() => {
+		abortAccountUpdate = false;
+		abortSessionCreate = false;
+	});
+
+	async function signInWithGoogle(sub: string, email: string) {
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					sub,
+					email,
+					email_verified: true,
+					name: "Hook Abort User",
+				} as GoogleProfile;
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: await signJWT(profile, DEFAULT_SECRET),
+				});
+			}),
+		);
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+		return redirectLocation;
+	}
+
+	it("fails with unable_to_update_account when account.update.before aborts", async () => {
+		const email = "oauth-account-update-abort@example.com";
+		const first = await signInWithGoogle("google_account_update_abort", email);
+		expect(first).not.toContain("error=");
+
+		abortAccountUpdate = true;
+		const redirectLocation = await signInWithGoogle(
+			"google_account_update_abort",
+			email,
+		);
+
+		expect(redirectLocation).toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_UPDATE_ACCOUNT}`,
+		);
+	});
+
+	it("fails with unable_to_create_session when session.create.before aborts", async () => {
+		abortSessionCreate = true;
+		const redirectLocation = await signInWithGoogle(
+			"google_session_create_abort",
+			"oauth-session-create-abort@example.com",
+		);
+
+		expect(redirectLocation).toContain(
+			`error=${OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_CREATE_SESSION}`,
 		);
 	});
 });
