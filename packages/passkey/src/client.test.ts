@@ -302,4 +302,108 @@ describe("passkey client", () => {
 		expect(listPasskeys.set).toHaveBeenCalled();
 		expect(store.notify).not.toHaveBeenCalledWith("$sessionSignal");
 	});
+
+	describe("session refresh", () => {
+		const verified = {
+			data: {
+				id: "passkey-id",
+				session: { id: "session" },
+				user: { id: "user" },
+			},
+			error: null,
+		};
+
+		function actions(response: unknown, notify: () => Promise<void>) {
+			mocks.startAuthentication.mockResolvedValue({
+				clientExtensionResults: {},
+			});
+			mocks.startRegistration.mockResolvedValue({
+				clientExtensionResults: {},
+				response: {},
+			});
+			const fetchMock = vi.fn(async (path: string) => {
+				if (path === "/passkey/generate-authenticate-options") {
+					return {
+						data: {
+							challenge: "challenge",
+							rpId: "example.com",
+						},
+					};
+				}
+				if (path === "/passkey/generate-register-options") {
+					return {
+						data: {
+							challenge: "challenge",
+							rp: { name: "Test", id: "example.com" },
+							user: { id: "user", name: "user" },
+							pubKeyCredParams: [],
+						},
+					};
+				}
+				return response;
+			});
+			return getPasskeyActions(fetchMock as any, {
+				$listPasskeys: { set: vi.fn() } as any,
+				$store: { notify } as any,
+			});
+		}
+
+		type Actions = ReturnType<typeof actions>;
+		const calls: [string, (actions: Actions) => Promise<unknown>][] = [
+			["sign-in", (actions) => actions.signIn.passkey()],
+			[
+				"registration with a session",
+				(actions) => actions.passkey.addPasskey({ createSession: true }),
+			],
+		];
+
+		it.for(calls)(
+			"resolves a %s only after the session refresh",
+			async ([, call]) => {
+				let release!: () => void;
+				const notify = vi.fn(
+					() =>
+						new Promise<void>((resolve) => {
+							release = resolve;
+						}),
+				);
+				const pending = call(actions(verified, notify));
+				await vi.waitFor(() => expect(notify).toHaveBeenCalledOnce());
+
+				// A call that did not wait for the refresh resolves within this task.
+				const outcome = await Promise.race([
+					pending.then(() => "resolved"),
+					new Promise((resolve) => setTimeout(resolve, 0, "waiting")),
+				]);
+				expect(outcome).toBe("waiting");
+				release();
+				await pending;
+			},
+		);
+
+		it("does not refresh the session when verification fails", async () => {
+			const notify = vi.fn(async () => {});
+			await actions(
+				{
+					data: null,
+					error: { status: 400, message: "invalid" },
+				},
+				notify,
+			).signIn.passkey();
+
+			expect(notify).not.toHaveBeenCalled();
+		});
+
+		it("does not refresh the session when the signal is disabled", async () => {
+			const notify = vi.fn(async () => {});
+			const passkey = actions(verified, notify);
+			await passkey.signIn.passkey(undefined, { disableSignal: true });
+			await passkey.passkey.addPasskey(
+				{ createSession: true },
+				{ disableSignal: true },
+			);
+
+			expect(notify).not.toHaveBeenCalled();
+		});
+	});
 });

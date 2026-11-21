@@ -7,6 +7,12 @@ export const oneTimeTokenClient = () => {
 		id: "one-time-token",
 		version: PACKAGE_VERSION,
 		$InferServerPlugin: {} as ReturnType<typeof oneTimeToken>,
+		atomListeners: [
+			{
+				matcher: (path) => path === "/one-time-token/verify",
+				signal: "$sessionSignal",
+			},
+		],
 	} satisfies BetterAuthClientPlugin;
 };
 

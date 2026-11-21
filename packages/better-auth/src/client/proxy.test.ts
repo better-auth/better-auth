@@ -44,6 +44,7 @@ describe("createDynamicPathProxy", () => {
 		// session-rotating endpoints that must trigger a refetch
 		expect(matcher("/change-password")).toBe(true);
 		expect(matcher("/revoke-other-sessions")).toBe(true);
+		expect(matcher("/sign-in/social")).toBe(true);
 
 		// non-mutating reads should not toggle the signal
 		expect(matcher("/get-session")).toBe(false);

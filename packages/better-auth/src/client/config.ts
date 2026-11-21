@@ -46,6 +46,7 @@ export const matchesSessionSignal = (path: string) =>
 	path === "/update-session" ||
 	path === "/sign-up/email" ||
 	path === "/sign-in/email" ||
+	path === "/sign-in/social" ||
 	path === "/delete-user" ||
 	path === "/verify-email" ||
 	path === "/revoke-sessions" ||
@@ -157,7 +158,7 @@ export const getClientConfig = (
 	}
 
 	const $store = {
-		notify: (
+		notify: async (
 			signal?: (Omit<string, "$sessionSignal"> | "$sessionSignal") | undefined,
 		) => {
 			const atom = pluginsAtoms[signal as string];
@@ -167,8 +168,9 @@ export const getClientConfig = (
 				atom,
 				classifyAuthChange(pluginsAtoms, [signal as string]),
 			);
-			for (const end of ends) void end();
+			const settled = ends.map((end) => end());
 			atom.set(!atom.get());
+			await Promise.all(settled);
 		},
 		listen: (
 			signal: Omit<string, "$sessionSignal"> | "$sessionSignal",
