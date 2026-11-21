@@ -1622,6 +1622,36 @@ describe("twoFactorTable option", async () => {
 	});
 });
 
+describe("issuer option", async () => {
+	const ISSUER = "My Issuer";
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [twoFactor({ issuer: ISSUER })],
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	it("should use the configured issuer in the TOTP URI from enable and get-totp-uri", async () => {
+		const enabled = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+		});
+		if (enabled.method !== "totp") throw new Error("expected totp");
+
+		const { totpURI } = await auth.api.getTOTPURI({
+			body: { password: testUser.password },
+			headers,
+		});
+
+		for (const uri of [enabled.totpURI, totpURI]) {
+			expect(uri).toMatch(
+				new RegExp(`^otpauth://totp/${encodeURIComponent(ISSUER)}:`),
+			);
+			expect(new URL(uri).searchParams.get("issuer")).toBe(ISSUER);
+		}
+	});
+});
+
 describe("OTP storage modes", async () => {
 	describe("hashed OTP storage", async () => {
 		let OTP = "";
