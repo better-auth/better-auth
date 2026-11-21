@@ -1565,6 +1565,63 @@ describe("verifyBearerToken", () => {
 				return { verify, token, options, fetchedAt, currentKey };
 			}
 
+			/**
+			 * @see https://github.com/better-auth/better-auth/pull/12722
+			 */
+			it("keeps a newer key set available after an older refresh times out", async () => {
+				vi.resetModules();
+				const { verifyBearerToken: verify } = await import("./verify");
+				const oldKey = await createTestJWKS();
+				const currentKey = await createTestJWKS();
+				const rotatedKey = await createTestJWKS();
+				const oldToken = await createSignedToken(oldKey.privateKey, oldKey.kid);
+				const currentToken = await createSignedToken(
+					currentKey.privateKey,
+					currentKey.kid,
+				);
+				const rotatedToken = await createSignedToken(
+					rotatedKey.privateKey,
+					rotatedKey.kid,
+				);
+				const options = { jwksUrl, verifyOptions: { issuer, audience } };
+				mockedFetch.mockImplementationOnce(() =>
+					Promise.resolve(jwksResponse(oldKey.publicJWK)),
+				);
+				await expect(verify(oldToken, options)).resolves.toMatchObject({
+					sub: "user-123",
+				});
+
+				vi.useFakeTimers({ now: Date.now() + 5 * 60 * 1000 + 1 });
+				const slowRefresh = Promise.withResolvers<Response>();
+				mockedFetch.mockReturnValueOnce(slowRefresh.promise);
+				const currentVerification =
+					Promise.withResolvers<Awaited<ReturnType<typeof verify>>>();
+				setTimeout(() => {
+					currentVerification.resolve(verify(currentToken, options));
+				}, 5_000);
+				mockedFetch.mockReturnValueOnce(
+					Promise.resolve(jwksResponse(oldKey.publicJWK, currentKey.publicJWK)),
+				);
+				const oldVerification = verify(oldToken, options);
+
+				await vi.advanceTimersByTimeAsync(5_000);
+				await expect(currentVerification.promise).resolves.toMatchObject({
+					sub: "user-123",
+				});
+				await expect(oldVerification).resolves.toMatchObject({
+					sub: "user-123",
+				});
+
+				mockJWKSResponse(
+					oldKey.publicJWK,
+					currentKey.publicJWK,
+					rotatedKey.publicJWK,
+				);
+				await expect(verify(rotatedToken, options)).resolves.toMatchObject({
+					sub: "user-123",
+				});
+			});
+
 			it("should reject a key the landed set dropped as an invalid token while that set is fresh", async () => {
 				const { verify, token, options, fetchedAt, currentKey } =
 					await seedKeySet();
