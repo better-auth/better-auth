@@ -878,8 +878,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									});
 								}
 							}
-							let orderBy: Record<string, "asc" | "desc"> | undefined =
-								undefined;
+							let orderBy: Record<string, "asc" | "desc"> | undefined;
 							if (sortBy?.field) {
 								const fieldName = getFieldName({
 									model: modelKey,
@@ -1055,9 +1054,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.from(table)
 						.where(...clause)
 						.limit(1);
+					// The guard is repeated on the DELETE itself, mirroring incrementOne
+					// and the kysely adapter. Under READ COMMITTED, PostgreSQL re-evaluates
+					// a DELETE's own WHERE against the new row version after waiting on a
+					// concurrent writer, but not an uncorrelated subquery's (#12618).
 					const deleted = await db
 						.delete(table)
-						.where(inArray(idColumn, targetIds))
+						.where(and(...clause, inArray(idColumn, targetIds)))
 						.returning();
 					return (deleted[0] as any) ?? null;
 				},
