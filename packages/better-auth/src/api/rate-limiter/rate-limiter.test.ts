@@ -1,6 +1,7 @@
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { createRateLimitKey, normalizeIP } from "@better-auth/core/utils/ip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { betterAuth } from "../../auth/full";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { RateLimit } from "../../types";
 
@@ -310,6 +311,150 @@ describe("database rate-limit pruning", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12557
+ */
+describe("database rate-limit pruning on new IP requests", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const { auth, db } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			window: 10,
+			max: 10,
+		},
+		advanced: {
+			ipAddress: {
+				ipAddressHeaders: ["x-forwarded-for"],
+			},
+			backgroundTasks: {
+				handler(promise) {
+					backgroundTasks.push(promise);
+				},
+			},
+		},
+	});
+
+	beforeEach(() => {
+		backgroundTasks.length = 0;
+	});
+
+	it("prunes expired rate-limit rows when a request arrives from a new IP", async () => {
+		const now = Date.now();
+		const staleKey1 = createRateLimitKey("198.51.100.1", "/get-session");
+		const staleKey2 = createRateLimitKey("198.51.100.2", "/get-session");
+
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: staleKey1,
+				count: 1,
+				lastRequest: now - 70_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: staleKey2,
+				count: 1,
+				lastRequest: now - 70_000,
+			},
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { "x-forwarded-for": "198.51.100.3" },
+			}),
+		);
+		expect(response.status).toBe(200);
+		await Promise.all(backgroundTasks);
+
+		const newIpRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [
+				{
+					field: "key",
+					value: createRateLimitKey("198.51.100.3", "/get-session"),
+				},
+			],
+		});
+		expect(newIpRow).not.toBeNull();
+
+		const remainingStale1 = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: staleKey1 }],
+		});
+		expect(remainingStale1).toBeNull();
+
+		const remainingStale2 = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: staleKey2 }],
+		});
+		expect(remainingStale2).toBeNull();
+	});
+
+	it("throttles database rate-limit cleanup across subsequent requests", async () => {
+		const ctx = await auth.$context;
+		const deleteManySpy = vi.spyOn(ctx.adapter, "deleteMany");
+
+		try {
+			await auth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: { "x-forwarded-for": "198.51.100.10" },
+				}),
+			);
+			await Promise.all(backgroundTasks);
+			const callsAfterFirst = deleteManySpy.mock.calls.length;
+
+			const staleKey = createRateLimitKey("198.51.100.99", "/get-session");
+			await db.create({
+				model: "rateLimit",
+				data: {
+					key: staleKey,
+					count: 1,
+					lastRequest: Date.now() - 70_000,
+				},
+			});
+
+			await auth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: { "x-forwarded-for": "198.51.100.11" },
+				}),
+			);
+			await Promise.all(backgroundTasks);
+			expect(deleteManySpy.mock.calls.length).toBe(callsAfterFirst);
+
+			const stillStale = await db.findOne<RateLimit>({
+				model: "rateLimit",
+				where: [{ field: "key", value: staleKey }],
+			});
+			expect(stillStale).not.toBeNull();
+
+			vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 61_000 });
+			try {
+				await auth.handler(
+					new Request("http://localhost:3000/api/auth/get-session", {
+						headers: { "x-forwarded-for": "198.51.100.12" },
+					}),
+				);
+				await Promise.all(backgroundTasks);
+			} finally {
+				vi.useRealTimers();
+			}
+
+			expect(deleteManySpy.mock.calls.length).toBe(callsAfterFirst + 1);
+
+			const prunedStale = await db.findOne<RateLimit>({
+				model: "rateLimit",
+				where: [{ field: "key", value: staleKey }],
+			});
+			expect(prunedStale).toBeNull();
+		} finally {
+			deleteManySpy.mockRestore();
+		}
+	});
+});
+
 describe("database rate-limit pruning with dynamic rules", async () => {
 	const backgroundTasks: Promise<unknown>[] = [];
 	const { client, db, testUser } = await getTestInstance({
@@ -331,6 +476,58 @@ describe("database rate-limit pruning with dynamic rules", async () => {
 
 	beforeEach(() => {
 		backgroundTasks.length = 0;
+	});
+
+	it("preserves unobserved dynamic rules on post-restart requests using safe window bound", async () => {
+		const localTasks: Promise<unknown>[] = [];
+		const { auth: localAuth, db: localDb } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				storage: "database",
+				customRules: {
+					"/long-window-api": () => ({ window: 3600, max: 5 }),
+				},
+			},
+			advanced: {
+				ipAddress: {
+					ipAddressHeaders: ["x-forwarded-for"],
+				},
+				backgroundTasks: {
+					handler(promise) {
+						localTasks.push(promise);
+					},
+				},
+			},
+		});
+		const now = Date.now();
+		const unobservedKey = createRateLimitKey("127.0.0.1", "/long-window-api");
+
+		// Persisted counter for a 1-hour window dynamic rule created 10 minutes ago
+		await localDb.create({
+			model: "rateLimit",
+			data: {
+				key: unobservedKey,
+				count: 5,
+				lastRequest: now - 600_000,
+			},
+		});
+
+		// A request arrives on a route with a short static window from a new IP
+		const response = await localAuth.handler(
+			new Request("http://localhost:3000/api/auth/ok", {
+				headers: { "x-forwarded-for": "198.51.100.99" },
+			}),
+		);
+		expect(response.status).toBe(200);
+		await Promise.all(localTasks);
+
+		// The unobserved dynamic counter must NOT have been pruned!
+		const unobservedRow = await localDb.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: unobservedKey }],
+		});
+		expect(unobservedRow).not.toBeNull();
+		expect(unobservedRow?.count).toBe(5);
 	});
 
 	it("prunes stale rows using the longest observed dynamic window", async () => {
@@ -436,6 +633,76 @@ describe("database rate-limit cleanup scheduling", async () => {
 
 		await request;
 		expect(settledBeforeCleanup).toBe(false);
+	});
+
+	it("routes cleanup tasks to the current auth instance background handler when sharing an adapter", async () => {
+		const backgroundTasksA: Promise<unknown>[] = [];
+		const backgroundTasksB: Promise<unknown>[] = [];
+
+		const { auth: authA } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				storage: "database",
+				window: 10,
+				max: 10,
+			},
+			advanced: {
+				ipAddress: {
+					ipAddressHeaders: ["x-forwarded-for"],
+				},
+				backgroundTasks: {
+					handler(promise) {
+						backgroundTasksA.push(promise);
+					},
+				},
+			},
+		});
+
+		const ctxA = await authA.$context;
+		// Populate cleanup state cache for ctxA.adapter through instance A
+		await authA.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { "x-forwarded-for": "198.51.100.44" },
+			}),
+		);
+		expect(backgroundTasksA.length).toBe(1);
+		await Promise.all(backgroundTasksA);
+
+		// Instantiate authB sharing the exact same adapter instance
+		const authB = betterAuth({
+			...ctxA.options,
+			database: () => ctxA.adapter,
+			advanced: {
+				...ctxA.options.advanced,
+				backgroundTasks: {
+					handler(promise) {
+						backgroundTasksB.push(promise);
+					},
+				},
+			},
+		});
+
+		const ctxB = await authB.$context;
+		expect(ctxB.adapter).toBe(ctxA.adapter);
+
+		// Advance past the 60s cleanup interval so instance B triggers cleanup
+		const realDateNow = Date.now;
+		try {
+			Date.now = () => realDateNow() + 61_000;
+
+			await authB.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: { "x-forwarded-for": "198.51.100.55" },
+				}),
+			);
+
+			// The cleanup task should be delivered to instance B's background handler, not instance A
+			expect(backgroundTasksA.length).toBe(1);
+			expect(backgroundTasksB.length).toBe(1);
+			await Promise.all(backgroundTasksB);
+		} finally {
+			Date.now = realDateNow;
+		}
 	});
 });
 
