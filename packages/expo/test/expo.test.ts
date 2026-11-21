@@ -2129,4 +2129,282 @@ describe("expo authorization proxy", async () => {
 		expect(res.headers.get("location")).toBe(url);
 		expect(res.headers.get("set-cookie")).toBeNull();
 	});
+
+	describe("expo cookie jar memory caching", () => {
+		it("should read cookie from SecureStore only once across repeated getCookie calls", async () => {
+			const backingStore = new Map<string, string>();
+			backingStore.set(
+				"better-auth_cookie",
+				JSON.stringify({
+					"better-auth.session_token": {
+						value: "token-123",
+						expires: new Date(Date.now() + 60000).toISOString(),
+					},
+				}),
+			);
+
+			const getItemAsyncSpy = vi.fn(async (key: string) => backingStore.get(key) || null);
+			const setItemAsyncSpy = vi.fn(async (key: string, value: string) => {
+				backingStore.set(key, value);
+			});
+
+			const storage = {
+				getItem: (key: string) => backingStore.get(key) || null,
+				setItem: (key: string, value: string) => {
+					backingStore.set(key, value);
+				},
+				getItemAsync: getItemAsyncSpy,
+				setItemAsync: setItemAsyncSpy,
+			};
+
+			const plugin = expoClient({ storage });
+			const actions = plugin.getActions!(null, null as any);
+
+			const cookie1 = await actions.getCookie();
+			expect(cookie1).toBe("better-auth.session_token=token-123");
+			expect(getItemAsyncSpy).toHaveBeenCalledTimes(1);
+
+			// Second call should hit the in-memory cache and NOT call getItemAsync again
+			const cookie2 = await actions.getCookie();
+			expect(cookie2).toBe("better-auth.session_token=token-123");
+			expect(getItemAsyncSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it("should share initial load across concurrent callers for the same storage and key", async () => {
+			const backingStore = new Map<string, string>();
+			backingStore.set(
+				"better-auth_cookie",
+				JSON.stringify({
+					"better-auth.session_token": {
+						value: "concurrent-token",
+						expires: new Date(Date.now() + 60000).toISOString(),
+					},
+				}),
+			);
+
+			let resolveRead: () => void;
+			const gate = new Promise<void>((resolve) => {
+				resolveRead = resolve;
+			});
+
+			const getItemAsyncSpy = vi.fn(async (key: string) => {
+				await gate;
+				return backingStore.get(key) || null;
+			});
+
+			const storage = {
+				getItem: (key: string) => backingStore.get(key) || null,
+				setItem: (key: string, value: string) => {
+					backingStore.set(key, value);
+				},
+				getItemAsync: getItemAsyncSpy,
+				setItemAsync: async (key: string, value: string) => {
+					backingStore.set(key, value);
+				},
+			};
+
+			const plugin = expoClient({ storage });
+			const actions = plugin.getActions!(null, null as any);
+
+			const p1 = actions.getCookie();
+			const p2 = actions.getCookie();
+			const p3 = actions.getCookie();
+
+			resolveRead!();
+
+			const [c1, c2, c3] = await Promise.all([p1, p2, p3]);
+			expect(c1).toBe("better-auth.session_token=concurrent-token");
+			expect(c2).toBe("better-auth.session_token=concurrent-token");
+			expect(c3).toBe("better-auth.session_token=concurrent-token");
+			expect(getItemAsyncSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it("should use in-memory jar for native request headers without reading SecureStore again", async () => {
+			const backingStore = new Map<string, string>();
+			backingStore.set(
+				"better-auth_cookie",
+				JSON.stringify({
+					"better-auth.session_token": {
+						value: "request-token",
+						expires: new Date(Date.now() + 60000).toISOString(),
+					},
+				}),
+			);
+
+			const getItemAsyncSpy = vi.fn(async (key: string) => backingStore.get(key) || null);
+			const storage = {
+				getItem: (key: string) => backingStore.get(key) || null,
+				setItem: (key: string, value: string) => {
+					backingStore.set(key, value);
+				},
+				getItemAsync: getItemAsyncSpy,
+				setItemAsync: async (key: string, value: string) => {
+					backingStore.set(key, value);
+				},
+			};
+
+			const plugin = expoClient({ storage, scheme: "myapp" });
+			const fetchPlugin = plugin.fetchPlugins![0];
+
+			// First request: loads into memory
+			const res1 = await fetchPlugin.init!("https://example.com/api/test", {});
+			expect(res1.options.headers).toMatchObject({
+				cookie: "better-auth.session_token=request-token",
+			});
+			expect(getItemAsyncSpy).toHaveBeenCalledTimes(1);
+
+			// Second request: serves from memory without disk read
+			const res2 = await fetchPlugin.init!("https://example.com/api/test", {});
+			expect(res2.options.headers).toMatchObject({
+				cookie: "better-auth.session_token=request-token",
+			});
+			expect(getItemAsyncSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it("should update in-memory jar after Set-Cookie response without disk re-read", async () => {
+			const backingStore = new Map<string, string>();
+			const getItemAsyncSpy = vi.fn(async (key: string) => backingStore.get(key) || null);
+			const storage = {
+				getItem: (key: string) => backingStore.get(key) || null,
+				setItem: (key: string, value: string) => {
+					backingStore.set(key, value);
+				},
+				getItemAsync: getItemAsyncSpy,
+				setItemAsync: async (key: string, value: string) => {
+					backingStore.set(key, value);
+				},
+			};
+
+			const plugin = expoClient({ storage, scheme: "myapp" });
+			const actions = plugin.getActions!(null, null as any);
+			const fetchPlugin = plugin.fetchPlugins![0];
+
+			// Initial getCookie loads empty jar
+			const initialCookie = await actions.getCookie();
+			expect(initialCookie).toBe("");
+			expect(getItemAsyncSpy).toHaveBeenCalledTimes(1);
+
+			// Server responds with Set-Cookie
+			const headers = new Headers();
+			headers.set(
+				"set-cookie",
+				"better-auth.session_token=new-token; Path=/; Expires=" +
+					new Date(Date.now() + 60000).toUTCString(),
+			);
+			await fetchPlugin.hooks!.onSuccess!({
+				request: new Request("https://example.com/api/auth/sign-in"),
+				response: new Response(null, { headers }),
+			} as any);
+
+			// Subsequent getCookie returns the new cookie from memory without re-reading
+			const updatedCookie = await actions.getCookie();
+			expect(updatedCookie).toBe("better-auth.session_token=new-token");
+			// updateItemAsync calls getItemAsync internally once during write planning; but getCookie never reads disk again
+			const readCallsAfterWrite = getItemAsyncSpy.mock.calls.length;
+			const thirdCookie = await actions.getCookie();
+			expect(thirdCookie).toBe("better-auth.session_token=new-token");
+			expect(getItemAsyncSpy.mock.calls.length).toBe(readCallsAfterWrite);
+		});
+
+		it("should clear in-memory jar when sign-out clears the persisted jar", async () => {
+			const backingStore = new Map<string, string>();
+			backingStore.set(
+				"better-auth_cookie",
+				JSON.stringify({
+					"better-auth.session_token": {
+						value: "active-token",
+						expires: new Date(Date.now() + 60000).toISOString(),
+					},
+				}),
+			);
+
+			const storage = {
+				getItem: (key: string) => backingStore.get(key) || null,
+				setItem: (key: string, value: string) => {
+					backingStore.set(key, value);
+				},
+				getItemAsync: async (key: string) => backingStore.get(key) || null,
+				setItemAsync: async (key: string, value: string) => {
+					backingStore.set(key, value);
+				},
+			};
+
+			const plugin = expoClient({ storage, scheme: "myapp" });
+			const actions = plugin.getActions!(null, null as any);
+			const fetchPlugin = plugin.fetchPlugins![0];
+
+			const activeCookie = await actions.getCookie();
+			expect(activeCookie).toBe("better-auth.session_token=active-token");
+
+			// Trigger sign-out
+			await fetchPlugin.init!("https://example.com/api/auth/sign-out", {});
+
+			// Memory jar must be cleared to empty string
+			const afterSignOutCookie = await actions.getCookie();
+			expect(afterSignOutCookie).toBe("");
+		});
+
+		it("should coordinate initial load with writes so an in-flight read cannot restore an old jar", async () => {
+			const backingStore = new Map<string, string>();
+			backingStore.set(
+				"better-auth_cookie",
+				JSON.stringify({
+					"better-auth.session_token": {
+						value: "stale-old-token",
+						expires: new Date(Date.now() + 60000).toISOString(),
+					},
+				}),
+			);
+
+			let resolveInitialRead: () => void;
+			const initialReadGate = new Promise<void>((resolve) => {
+				resolveInitialRead = resolve;
+			});
+			let delayInitialRead = true;
+
+			const storage = {
+				getItem: (key: string) => backingStore.get(key) || null,
+				setItem: (key: string, value: string) => {
+					backingStore.set(key, value);
+				},
+				getItemAsync: async (key: string) => {
+					if (key === "better-auth_cookie" && delayInitialRead) {
+						delayInitialRead = false;
+						await initialReadGate;
+					}
+					return backingStore.get(key) || null;
+				},
+				setItemAsync: async (key: string, value: string) => {
+					backingStore.set(key, value);
+				},
+			};
+
+			const plugin = expoClient({ storage, scheme: "myapp" });
+			const actions = plugin.getActions!(null, null as any);
+			const fetchPlugin = plugin.fetchPlugins![0];
+
+			// Start initial read (suspended at gate)
+			const initialReadPromise = actions.getCookie();
+
+			// Intervening write: sign-in receives Set-Cookie while read is pending
+			const headers = new Headers();
+			headers.set(
+				"set-cookie",
+				"better-auth.session_token=fresh-intervening-token; Path=/; Expires=" +
+					new Date(Date.now() + 60000).toUTCString(),
+			);
+			await fetchPlugin.hooks!.onSuccess!({
+				request: new Request("https://example.com/api/auth/sign-in"),
+				response: new Response(null, { headers }),
+			} as any);
+
+			// Now let the old initial read complete
+			resolveInitialRead!();
+			await initialReadPromise;
+
+			// The in-flight old read must NOT overwrite the fresh intervening token
+			const resultCookie = await actions.getCookie();
+			expect(resultCookie).toBe("better-auth.session_token=fresh-intervening-token");
+		});
+	});
 });

@@ -246,6 +246,45 @@ export function hasBetterAuthCookies(
 	return false;
 }
 
+interface CookieJarCache {
+	jar: string | null;
+	isLoaded: boolean;
+	loadingPromise: Promise<string | null> | null;
+	version: number;
+}
+
+const cookieJarCaches = new WeakMap<object, Map<string, CookieJarCache>>();
+
+function getCookieJarCache(
+	storage: ExpoClientStorage,
+	key: string,
+): CookieJarCache {
+	if (typeof storage !== "object" || storage === null) {
+		return {
+			jar: null,
+			isLoaded: false,
+			loadingPromise: null,
+			version: 0,
+		};
+	}
+	let storageMap = cookieJarCaches.get(storage);
+	if (!storageMap) {
+		storageMap = new Map();
+		cookieJarCaches.set(storage, storageMap);
+	}
+	let cache = storageMap.get(key);
+	if (!cache) {
+		cache = {
+			jar: null,
+			isLoaded: false,
+			loadingPromise: null,
+			version: 0,
+		};
+		storageMap.set(key, cache);
+	}
+	return cache;
+}
+
 export const expoClient = (opts: ExpoClientOptions) => {
 	let store: ClientStore | null = null;
 	const storagePrefix = opts?.storagePrefix || "better-auth";
@@ -255,6 +294,37 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	const isWeb = Platform.OS === "web";
 	const cookiePrefix = opts?.cookiePrefix || "better-auth";
 	let sessionCacheHydration: Promise<void> | undefined;
+
+	const cookieJarCache = getCookieJarCache(opts.storage, cookieName);
+
+	const getCookieJar = async (): Promise<string | null> => {
+		if (cookieJarCache.isLoaded) {
+			return cookieJarCache.jar;
+		}
+		if (cookieJarCache.loadingPromise) {
+			return cookieJarCache.loadingPromise;
+		}
+		const currentVersion = cookieJarCache.version;
+		cookieJarCache.loadingPromise = (async () => {
+			try {
+				const stored = await storage.getItemAsync(cookieName);
+				if (cookieJarCache.version === currentVersion) {
+					cookieJarCache.jar = stored;
+					cookieJarCache.isLoaded = true;
+				}
+				return cookieJarCache.jar;
+			} finally {
+				cookieJarCache.loadingPromise = null;
+			}
+		})();
+		return cookieJarCache.loadingPromise;
+	};
+
+	const setCookieJar = (value: string | null) => {
+		cookieJarCache.version++;
+		cookieJarCache.jar = value;
+		cookieJarCache.isLoaded = true;
+	};
 	const restoreSessionCache = async () => {
 		if (isWeb || opts?.disableCache) {
 			return;
@@ -295,6 +365,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 		return sessionCacheHydration;
 	};
 	const clearSessionCache = async () => {
+		setCookieJar("{}");
 		await storage.setItemAsync(cookieName, "{}");
 		store?.atoms.session?.set({
 			...store.atoms.session.get(),
@@ -335,7 +406,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 				 * ```
 				 */
 				getCookie: async () => {
-					const storedCookie = await storage.getItemAsync(cookieName);
+					const storedCookie = await getCookieJar();
 					return getCookie(storedCookie);
 				},
 			};
@@ -358,6 +429,9 @@ export const expoClient = (opts: ExpoClientOptions) => {
 									(currentValue) =>
 										getSetCookie(setCookie, currentValue ?? undefined),
 								);
+								if (update) {
+									setCookieJar(update.value);
+								}
 								// Only notify $sessionSignal if the session cookie values actually changed
 								// This prevents infinite refetching when the server sends the same cookie with updated expiry
 								if (
@@ -411,7 +485,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								} catch {}
 							}
 
-							const storedCookieJson = await storage.getItemAsync(cookieName);
+							const storedCookieJson = await getCookieJar();
 							const oauthStateValue = getOAuthStateValue(
 								storedCookieJson,
 								cookiePrefix,
@@ -438,6 +512,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 									getSetCookie(cookie, currentValue ?? undefined),
 							);
 							if (update) {
+								setCookieJar(update.value);
 								store?.notify("$sessionSignal");
 							}
 						}
@@ -463,9 +538,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						// ID token sign-in validates the provider token directly. Link-social
 						// still needs the current session cookie, so it also needs an origin
 						// header for the server-side CSRF check.
-						const storedCookie = isLinkSocial
-							? await storage.getItemAsync(cookieName)
-							: null;
+						const storedCookie = isLinkSocial ? await getCookieJar() : null;
 						const cookie = getCookie(storedCookie);
 						options.headers = {
 							...options.headers,
@@ -476,7 +549,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							"x-skip-oauth-proxy": "true",
 						};
 					} else {
-						const storedCookie = await storage.getItemAsync(cookieName);
+						const storedCookie = await getCookieJar();
 						const cookie = getCookie(storedCookie);
 						options.headers = {
 							...options.headers,
