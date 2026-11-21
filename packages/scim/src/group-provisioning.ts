@@ -18,6 +18,7 @@ import {
 	scimAttributeProjectionQuerySchema,
 	scimCollectionQuerySchema,
 } from "./collection-query";
+import { querySCIMFilteredCollection } from "./collection-read";
 import type { SCIMConnection } from "./configuration";
 import type { SCIMConnectionMiddleware } from "./connection-authentication";
 import { fenceActiveSCIMConnection } from "./connection-state";
@@ -1146,27 +1147,21 @@ export function listSCIMGroups(authMiddleware: SCIMConnectionMiddleware) {
 			}
 			const {
 				filters,
+				filterCombinator,
 				pagination,
 				projection: attributeProjection,
 			} = parsedQuery.value;
-			const where = createGroupCollectionWhere(
-				ctx.context.scimConnection.id,
-				filters,
-			);
-			const totalResults = await adapter.count({
+			const { totalResults, rows: groups } = await querySCIMFilteredCollection<
+				SCIMEqualityFilter<SCIMGroupFilterAttribute>,
+				SCIMGroup
+			>(adapter, {
 				model: "scimGroup",
-				where,
+				connectionId: ctx.context.scimConnection.id,
+				filters,
+				combinator: filterCombinator,
+				pagination,
+				createWhere: createGroupCollectionWhere,
 			});
-			const groups =
-				pagination.count === 0
-					? []
-					: await adapter.findMany<SCIMGroup>({
-							model: "scimGroup",
-							where,
-							limit: pagination.count,
-							offset: pagination.offset,
-							sortBy: { field: "orderKey", direction: "asc" },
-						});
 			const resources = await createProjectedGroupResources(
 				adapter,
 				ctx.context.baseURL,

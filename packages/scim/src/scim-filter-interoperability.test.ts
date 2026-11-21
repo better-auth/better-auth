@@ -8,6 +8,25 @@ const BASE_URL = "http://localhost:3000";
 const SCIM_USERS_URL = `${BASE_URL}/api/auth/scim/v2/Users`;
 const SCIM_GROUPS_URL = `${BASE_URL}/api/auth/scim/v2/Groups`;
 
+function listResourceIds(body: unknown): string[] {
+	if (
+		typeof body !== "object" ||
+		body === null ||
+		!("Resources" in body) ||
+		!Array.isArray(body.Resources)
+	) {
+		return [];
+	}
+	return body.Resources.flatMap((resource) =>
+		typeof resource === "object" &&
+		resource !== null &&
+		"id" in resource &&
+		typeof resource.id === "string"
+			? [resource.id]
+			: [],
+	);
+}
+
 async function createFilterFixture() {
 	const data = {
 		user: [] as User[],
@@ -112,19 +131,31 @@ async function createFilterFixture() {
 
 	return {
 		ada,
+		auth,
 		grace,
+		partnerHeaders,
 		partnerPlatformGroup,
 		platformGroup,
 		quotedGroup,
 		quotedGroupName,
-		async listUsers(filter: string) {
+		async listUsers(
+			filter: string,
+			token: "partner-scim-token" | "test-scim-token" = "test-scim-token",
+			pagination?: { count?: string; startIndex?: string },
+		) {
 			const url = new URL(SCIM_USERS_URL);
 			url.searchParams.set("filter", filter);
+			if (pagination?.startIndex) {
+				url.searchParams.set("startIndex", pagination.startIndex);
+			}
+			if (pagination?.count) {
+				url.searchParams.set("count", pagination.count);
+			}
 			const response = await auth.handler(
 				new Request(url, {
 					headers: {
 						accept: "application/scim+json",
-						authorization: "Bearer test-scim-token",
+						authorization: `Bearer ${token}`,
 					},
 				}),
 			);
@@ -264,6 +295,123 @@ describe("SCIM provider filter interoperability", () => {
 			body: { scimType: "invalidFilter" },
 		});
 		expect(invalid).toMatchObject({
+			status: 400,
+			body: { scimType: "invalidFilter" },
+		});
+	});
+
+	it("evaluates a logical or of equality expressions without leaving the connection", async () => {
+		const {
+			ada,
+			auth,
+			grace,
+			listGroups,
+			listUsers,
+			partnerHeaders,
+			partnerPlatformGroup,
+			platformGroup,
+			quotedGroup,
+		} = await createFilterFixture();
+		const partnerAda = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "ada.login@example.com",
+				emails: [
+					{
+						value: "ada.alias@example.com",
+						type: "work",
+						primary: true,
+					},
+				],
+			},
+			headers: partnerHeaders,
+		});
+		const matching = await listUsers(
+			'userName eq "ada.login@example.com" or emails.value eq "grace.work@example.com"',
+		);
+		const firstPage = await listUsers(
+			'userName eq "ada.login@example.com" or emails.value eq "grace.work@example.com"',
+			"test-scim-token",
+			{ count: "1", startIndex: "1" },
+		);
+		const secondPage = await listUsers(
+			'userName eq "ada.login@example.com" or emails.value eq "grace.work@example.com"',
+			"test-scim-token",
+			{ count: "1", startIndex: "2" },
+		);
+		const mismatching = await listUsers(
+			'userName eq "missing@example.com" or emails.value eq "missing.alias@example.com"',
+		);
+		const partner = await listUsers(
+			'userName eq "ada.login@example.com" or emails.value eq "ada.alias@example.com"',
+			"partner-scim-token",
+		);
+		const groups = await listGroups(
+			'displayName eq "MyPlatform BA SCIM - Admins" or displayName eq "Research and Development - \\"Admins\\""',
+		);
+		const mixed = await listUsers(
+			'userName eq "ada.login@example.com" and externalId eq "entra-ada" or emails.value eq "grace.work@example.com"',
+		);
+
+		const matchingIds = listResourceIds(matching.body);
+		const partnerIds = listResourceIds(partner.body);
+		const groupIds = listResourceIds(groups.body);
+
+		expect(matching).toMatchObject({
+			status: 200,
+			body: {
+				totalResults: 2,
+			},
+		});
+		expect(matchingIds).toEqual(expect.arrayContaining([ada.id, grace.id]));
+		expect(matchingIds).toHaveLength(2);
+		expect(matchingIds).not.toContain(partnerAda.id);
+		expect(firstPage).toMatchObject({
+			status: 200,
+			body: {
+				totalResults: 2,
+				startIndex: 1,
+				itemsPerPage: 1,
+			},
+		});
+		expect(listResourceIds(firstPage.body)).toEqual(matchingIds.slice(0, 1));
+		expect(secondPage).toMatchObject({
+			status: 200,
+			body: {
+				totalResults: 2,
+				startIndex: 2,
+				itemsPerPage: 1,
+			},
+		});
+		expect(listResourceIds(secondPage.body)).toEqual(matchingIds.slice(1, 2));
+		expect(mismatching).toMatchObject({
+			status: 200,
+			body: {
+				totalResults: 0,
+				Resources: [],
+			},
+		});
+		expect(partner).toMatchObject({
+			status: 200,
+			body: {
+				totalResults: 1,
+				Resources: [{ id: partnerAda.id }],
+			},
+		});
+		expect(partnerIds).toEqual([partnerAda.id]);
+		expect(partnerIds).not.toContain(ada.id);
+		expect(groups).toMatchObject({
+			status: 200,
+			body: {
+				totalResults: 2,
+			},
+		});
+		expect(groupIds).toEqual(
+			expect.arrayContaining([platformGroup.id, quotedGroup.id]),
+		);
+		expect(groupIds).toHaveLength(2);
+		expect(groupIds).not.toContain(partnerPlatformGroup.id);
+		expect(mixed).toMatchObject({
 			status: 400,
 			body: { scimType: "invalidFilter" },
 		});

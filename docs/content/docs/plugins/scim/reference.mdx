@@ -319,21 +319,26 @@ Each `members[].value` must contain a SCIM User ID from the same connection. Mem
 
 ## Filters and pagination
 
-Collection filters accept from one to 10 equality expressions joined by `and`. Each expression uses `attribute eq "value"`. Attribute names and operators are case-insensitive, and attributes may include the core schema prefix.
+Collection filters accept from one to 10 equality expressions joined by `and` or by `or`. Do not mix `and` and `or` in one filter. Each expression uses `attribute eq "value"`. Attribute names and operators are case-insensitive, and attributes may include the core schema prefix.
 
 | Resource | Supported equality filters                                                     |
 | -------- | ------------------------------------------------------------------------------ |
 | User     | `id`, `userName`, `externalId`, `emails.value`, `emails[type eq "work"].value` |
 | Group    | `id`, `displayName`, `externalId`                                              |
 
-`userName`, email values, and Group `displayName` use case-insensitive matching. `id` and `externalId` use exact matching.
+`userName`, email values, and Group `displayName` use case-insensitive matching. `id` and `externalId` use exact matching. Filters stay inside the authenticated connection.
 
 ```http
 GET /api/auth/scim/v2/Users?filter=userName%20eq%20%22ada.login%40example.com%22
 Authorization: Bearer <token>
 ```
 
-Logical `or` and `not`, presence filters, comparison operators, and parentheses are not supported. Unsupported syntax returns `invalidFilter`.
+```http
+GET /api/auth/scim/v2/Users?filter=userName%20eq%20%22ada.login%40example.com%22%20or%20emails.value%20eq%20%22ada.alias%40example.com%22
+Authorization: Bearer <token>
+```
+
+Logical `not`, presence filters, comparison operators, mixed `and`/`or`, and parentheses are not supported. Unsupported syntax returns `invalidFilter`.
 
 Pagination uses a one-based `startIndex` and a nonnegative `count`. Both collections default to `startIndex=1` and `count=100`. The server caps `count` at 100.
 
@@ -521,7 +526,7 @@ The plugin does not support the following SCIM features:
 * Passwords, instant messaging addresses, photos, or X.509 certificates
 * Nested Groups or non-User Group members
 * Bulk requests, POST-based search, `/Me`, ETags, cursors, or sorting
-* Operators other than equality and logical `and`
+* Operators other than equality and a uniform logical `and` or `or`
 * A built-in OAuth token endpoint, Basic authentication, or mutual TLS
 * HTTP management endpoints, SCIM request audit records, or webhooks
 

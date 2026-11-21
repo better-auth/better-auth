@@ -19,6 +19,7 @@ import {
 	scimAttributeProjectionQuerySchema,
 	scimCollectionQuerySchema,
 } from "./collection-query";
+import { querySCIMFilteredCollection } from "./collection-read";
 import type { SCIMConnection } from "./configuration";
 import type { SCIMConnectionMiddleware } from "./connection-authentication";
 import { fenceActiveSCIMConnection } from "./connection-state";
@@ -905,27 +906,22 @@ export function listSCIMUsers(authMiddleware: SCIMConnectionMiddleware) {
 			}
 			const {
 				filters,
+				filterCombinator,
 				pagination,
 				projection: attributeProjection,
 			} = parsedQuery.value;
-			const where = createUserCollectionWhere(
-				ctx.context.scimConnection.id,
-				filters,
-			);
-			const totalResults = await adapter.count({
-				model: "scimUser",
-				where,
-			});
-			const scimUsers =
-				pagination.count === 0
-					? []
-					: await adapter.findMany<SCIMUser>({
-							model: "scimUser",
-							where,
-							limit: pagination.count,
-							offset: pagination.offset,
-							sortBy: { field: "orderKey", direction: "asc" },
-						});
+			const { totalResults, rows: scimUsers } =
+				await querySCIMFilteredCollection<
+					SCIMEqualityFilter<SCIMUserFilterAttribute>,
+					SCIMUser
+				>(adapter, {
+					model: "scimUser",
+					connectionId: ctx.context.scimConnection.id,
+					filters,
+					combinator: filterCombinator,
+					pagination,
+					createWhere: createUserCollectionWhere,
+				});
 
 			const resources = scimUsers.map((scimUser) =>
 				projectSCIMResourceAttributes(
