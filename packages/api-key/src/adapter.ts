@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { SecondaryStorage } from "@better-auth/core/db";
+import { isWorkerd } from "@better-auth/core/env";
 import { mapConcurrent } from "@better-auth/core/utils/async";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { PredefinedApiKeyOptions } from "./routes";
@@ -253,10 +254,15 @@ async function getApiKeyByIdFromStorage(
  */
 const refListLocks = new Map<string, Promise<unknown>>();
 
-function withRefListLock<T>(
+export function withRefListLock<T>(
 	refKey: string,
 	task: () => Promise<T>,
 ): Promise<T> {
+	// Workers never settle I/O of a request that has ended, so a lock held
+	// by that request would never be released. Subsequent callers chaining onto
+	// `refListLocks` for the same `refKey` would hang indefinitely.
+	if (isWorkerd()) return task();
+
 	const previous = refListLocks.get(refKey) ?? Promise.resolve();
 	const run = previous.then(task, task);
 	// The map holds the `.finally()` chain, so the cleanup must compare against
