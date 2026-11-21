@@ -99,15 +99,18 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					},
 				});
 				if (routePath === "/get-session") {
-					if (options?.throw) {
+					if (
+						!res ||
+						typeof res !== "object" ||
+						Array.isArray(res) ||
+						!("data" in res && "error" in res)
+					) {
 						return normalizeSessionData(res);
 					}
-					if (res && typeof res === "object" && "data" in res) {
-						return {
-							...res,
-							data: normalizeSessionData((res as any).data),
-						};
-					}
+					return {
+						...res,
+						data: normalizeSessionData(res.data),
+					};
 				}
 				return res;
 			},

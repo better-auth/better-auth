@@ -79,10 +79,9 @@ function normalizeSessionResponse(res: unknown): {
 export function normalizeSessionData(
 	data: unknown,
 ): SessionData | null {
-	if (!data || typeof data !== "object") return null;
+	if (!data || typeof data !== "object" || Array.isArray(data)) return null;
 	const candidate = data as Record<string, unknown>;
 	if (candidate.session === null && candidate.user === null) return null;
-	if (!("session" in candidate || "user" in candidate)) return null;
 	return data as SessionData;
 }
 

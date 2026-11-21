@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getGlobalFocusManager } from "./focus-manager";
 import { useAuthQuery } from "./query";
 import { createAuthClient as createReactAuthClient } from "./react";
-import { getSessionAtom } from "./session-atom";
+import { getSessionAtom, normalizeSessionData } from "./session-atom";
 import { createAuthClient } from "./solid";
 import { testClientPlugin } from "./test-plugin";
 
@@ -263,6 +263,29 @@ describe("useAuthQuery - error handling", () => {
 		await vi.runAllTimersAsync();
 
 		expect(session().data).toBeNull();
+	});
+
+	it("should normalize HTML responses to null when throw: true is set at client level", async () => {
+		const client = createAuthClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				throw: true,
+				customFetchImpl: async () =>
+					new Response("<!DOCTYPE html><html><body>Error</body></html>", {
+						status: 200,
+						headers: { "content-type": "text/html" },
+					}),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		const res = await client.getSession();
+		expect(res).toBeNull();
+	});
+
+	it("should preserve custom session objects that omit user or session keys", () => {
+		const customSession = { account: { id: "user_123" }, role: "admin" };
+		expect(normalizeSessionData(customSession)).toEqual(customSession);
 	});
 
 	/**
