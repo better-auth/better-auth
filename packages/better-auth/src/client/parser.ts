@@ -14,6 +14,21 @@ const SPECIAL_VALUES = {
 const ISO_DATE_REGEX =
 	/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,7}))?(?:Z|([+-])(\d{2}):(\d{2}))$/;
 
+const DEFAULT_DATE_KEY_REGEX = /^(?:date|time|timestamp|expires)$/i;
+const SNAKE_DATE_KEY_REGEX = /_(?:at|until|expires|date|time|timestamp)$/i;
+const CAMEL_DATE_KEY_REGEX =
+	/[a-z0-9](?:At|Until|Expires|Date|Time|Timestamp)$/;
+const PERIOD_TRIAL_KEY_REGEX = /(?:period|trial)(?:Start|End|_(?:start|end))$/i;
+
+function isDefaultDateKey(key: string): boolean {
+	return (
+		DEFAULT_DATE_KEY_REGEX.test(key) ||
+		SNAKE_DATE_KEY_REGEX.test(key) ||
+		CAMEL_DATE_KEY_REGEX.test(key) ||
+		PERIOD_TRIAL_KEY_REGEX.test(key)
+	);
+}
+
 type ParseOptions = {
 	/** Throw errors instead of returning the original value */
 	strict?: boolean | undefined;
@@ -21,9 +36,34 @@ type ParseOptions = {
 	warnings?: boolean | undefined;
 	/** Custom reviver function */
 	reviver?: ((key: string, value: any) => any) | undefined;
-	/** Automatically convert ISO date strings to Date objects */
-	parseDates?: boolean | undefined;
+	/**
+	 * Automatically convert ISO date strings to Date objects for date fields.
+	 * Can be boolean (defaults to true), a RegExp testing property keys,
+	 * or a predicate function `(key: string, value: string) => boolean`.
+	 */
+	parseDates?:
+		| boolean
+		| RegExp
+		| ((key: string, value: string) => boolean)
+		| undefined;
 };
+
+function shouldParseDate(
+	key: string,
+	value: string,
+	parseDates: ParseOptions["parseDates"],
+): boolean {
+	if (!parseDates) {
+		return false;
+	}
+	if (typeof parseDates === "function") {
+		return parseDates(key, value);
+	}
+	if (parseDates instanceof RegExp) {
+		return parseDates.test(key);
+	}
+	return isDefaultDateKey(key);
+}
 
 function isValidDate(date: Date): boolean {
 	return date instanceof Date && !isNaN(date.getTime());
@@ -121,7 +161,10 @@ function betterJSONParse<T = unknown>(
 				return undefined;
 			}
 
-			if (parseDates && typeof value === "string") {
+			if (
+				typeof value === "string" &&
+				shouldParseDate(key, value, parseDates)
+			) {
 				const date = parseISODate(value);
 				if (date) {
 					return date;
