@@ -8,6 +8,7 @@ export const tr: TranslationDictionary = {
 	FAILED_TO_CREATE_USER: "Kullanıcı oluşturulamadı",
 	FAILED_TO_CREATE_SESSION: "Oturum oluşturulamadı",
 	FAILED_TO_UPDATE_USER: "Kullanıcı güncellenemedi",
+	FAILED_TO_DELETE_USER: "Kullanıcı silinemedi",
 	FAILED_TO_GET_SESSION: "Oturum alınamadı",
 	INVALID_PASSWORD: "Geçersiz şifre",
 	INVALID_EMAIL: "Geçersiz e-posta adresi",

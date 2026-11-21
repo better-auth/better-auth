@@ -8,6 +8,7 @@ export const id: TranslationDictionary = {
 	FAILED_TO_CREATE_USER: "Gagal membuat pengguna",
 	FAILED_TO_CREATE_SESSION: "Gagal membuat sesi",
 	FAILED_TO_UPDATE_USER: "Gagal memperbarui pengguna",
+	FAILED_TO_DELETE_USER: "Gagal menghapus pengguna",
 	FAILED_TO_GET_SESSION: "Gagal mendapatkan sesi",
 	INVALID_PASSWORD: "Kata sandi tidak valid",
 	INVALID_EMAIL: "Alamat email tidak valid",
