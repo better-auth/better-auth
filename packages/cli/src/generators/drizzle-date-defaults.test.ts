@@ -15,9 +15,13 @@ describe.each(["pg", "mysql", "sqlite"] as const)(
 		it.each([
 			{ source: "() => new Date()", current: true },
 			{ source: "() => new Date", current: true },
-			{ source: "() => { return new Date; }", current: true },
+			{ source: "()=>new Date", current: true },
 			{ source: "() => new Date(0)", current: false },
+			{ source: "() => new Date /* c */ (0)", current: false },
+			{ source: "() => new Date // c\n(0)", current: false },
+			{ source: "() => new Date /* c */ ('2020-01-01')", current: false },
 			{ source: "() => new Date('2020-01-01')", current: false },
+			{ source: "() => new Date.prototype.constructor(0)", current: false },
 		])(
 			"generates the expected default for $source",
 			async ({ source, current }) => {

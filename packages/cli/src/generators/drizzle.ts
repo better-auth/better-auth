@@ -12,6 +12,18 @@ import type { BetterAuthOptions } from "better-auth/types";
 import prettier from "prettier";
 import type { SchemaGenerator } from "./types";
 
+function isCurrentDateDefault(value: DBFieldAttribute["defaultValue"]) {
+	if (typeof value !== "function") return false;
+
+	const source = value.toString();
+
+	// Preserve existing detection and accept Bun's printed arrow callback.
+	return (
+		source.includes("new Date()") ||
+		source.split("=>")[1]?.trim() === "new Date"
+	);
+}
+
 function convertToSnakeCase(str: string, camelCase?: boolean) {
 	return camelCase ? str : toSnakeCase(str);
 }
@@ -331,9 +343,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 								if (typeof attr.defaultValue === "function") {
 									if (
 										attr.type === "date" &&
-										/\bnew\s+Date\b(?:\s*\(\s*\)|(?!\s*\())/.test(
-											attr.defaultValue.toString(),
-										)
+										isCurrentDateDefault(attr.defaultValue)
 									) {
 										if (databaseType === "sqlite") {
 											type += `.default(sql\`(cast(unixepoch('subsecond') * 1000 as integer))\`)`;
@@ -707,12 +717,7 @@ function generateImport({
 		Object.values(tables).some((table) =>
 			Object.values(table.fields).some(
 				(field) =>
-					field.type === "date" &&
-					field.defaultValue &&
-					typeof field.defaultValue === "function" &&
-					/\bnew\s+Date\b(?:\s*\(\s*\)|(?!\s*\())/.test(
-						field.defaultValue.toString(),
-					),
+					field.type === "date" && isCurrentDateDefault(field.defaultValue),
 			),
 		);
 
