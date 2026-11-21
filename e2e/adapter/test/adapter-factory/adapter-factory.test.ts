@@ -110,6 +110,9 @@ async function createTestAdapter<Options extends BetterAuthOptions>(
 				async incrementOne(data) {
 					return x.incrementOne?.(data) ?? null;
 				},
+				async incrementMany(data) {
+					return x.incrementMany?.(data) ?? [];
+				},
 				async findMany(data) {
 					return x.findMany?.(data) ?? [];
 				},
