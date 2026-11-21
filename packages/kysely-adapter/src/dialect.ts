@@ -56,6 +56,27 @@ export function getKyselyDatabaseType(
 	return null;
 }
 
+function isD1Like(value: unknown): boolean {
+	try {
+		return (
+			!!value &&
+			typeof value === "object" &&
+			typeof (value as { batch?: unknown }).batch === "function" &&
+			typeof (value as { prepare?: unknown }).prepare === "function" &&
+			typeof (value as { exec?: unknown }).exec === "function"
+		);
+	} catch {
+		return false;
+	}
+}
+
+function isD1Dialect(value: unknown): boolean {
+	if (!value || typeof value !== "object") return false;
+	if ("isD1" in value && value.isD1 === true) return true;
+	if ("database" in value && isD1Like(value.database)) return true;
+	return isD1Like(value);
+}
+
 function checkSchemaName(
 	schemaName: string | undefined,
 	databaseType: KyselyDatabaseType | null,
@@ -83,6 +104,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			introspectIndexes: undefined,
 			schemaName: undefined,
 			transaction: undefined,
+			isD1: false,
 		};
 	}
 
@@ -95,6 +117,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			introspectIndexes: undefined,
 			schemaName,
 			transaction: db.transaction,
+			isD1: isD1Dialect(db.db),
 		};
 	}
 
@@ -108,12 +131,14 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			introspectIndexes: undefined,
 			schemaName,
 			transaction: db.transaction,
+			isD1: isD1Dialect(db.dialect),
 		};
 	}
 
 	let dialect: Dialect | undefined = undefined;
 	let introspectIndexes: DatabaseIndexIntrospector | undefined = undefined;
 	let transaction: boolean | undefined = undefined;
+	let isD1 = false;
 
 	const databaseType = getKyselyDatabaseType(db);
 
@@ -192,6 +217,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		introspectIndexes = createD1IndexIntrospector(db);
 		// D1 has no interactive transactions; only its batch() API.
 		transaction = false;
+		isD1 = true;
 	}
 
 	return {
@@ -202,5 +228,6 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		// so a schema can only be declared through the object config forms.
 		schemaName: undefined,
 		transaction,
+		isD1,
 	};
 };

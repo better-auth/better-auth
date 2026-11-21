@@ -86,6 +86,9 @@ All you need to do is provide the database logic, and the `createAdapterFactory`
             create: async ({ data, model, select }) => {
               // ...
             },
+            createMany: async ({ data, model, select }) => {
+              // Optional. Without it, Better Auth calls `create` once per row.
+            },
             update: async ({ model, where, update }) => {
               // ...
             },
@@ -182,6 +185,49 @@ parameters:
 create: async ({ model, data, select }) => {
   // Example of inserting data into the database.
   return await db.insert(model).values(data);
+};
+```
+
+### `createMany` method
+
+The `createMany` method inserts multiple rows of one model in one call.
+
+Implement it when your database can insert many rows at once (for example `INSERT ... VALUES (...), (...)`, Prisma `createManyAndReturn`, or MongoDB `insertMany`).
+
+<Callout>
+  `createMany` is optional. Without it, Better Auth inserts the rows one at a time with your `create` method. If you cannot return the inserted rows, omit `createMany`.
+</Callout>
+
+parameters:
+
+* `model`: The model/table name that new data will be inserted into.
+* `data`: The rows to insert.
+* `select`: An array of fields to return from the database.
+
+**Returns** `Promise<T[]>`: the inserted rows, one per input, in the same order as `data`. Insert every row or throw. Do not return a partial batch.
+
+Rows usually already include an `id`. When the user uses serial or database-generated IDs, `id` may be missing — still return each generated `id`.
+
+If your database returns rows in a different order than `data`, reorder them before returning. If you insert and then query the new rows, run both in one transaction.
+
+Do not split `data` yourself. Better Auth already chunks large batches using [`createManyMaxParameters`](#createmanymaxparameters).
+
+<Callout>
+  `forceAllowId` is handled internally, the same as `create`. You do not need to implement it.
+</Callout>
+
+```ts title="Example"
+createMany: async ({ model, data }) => {
+  const created = await db.insert(model).values(data).returning();
+  // Databases may not return rows in insert order. Reorder to match `data`.
+  const byId = new Map(created.map((row) => [String(row.id), row]));
+  return data.map((row) => {
+    const inserted = byId.get(String(row.id));
+    if (!inserted) {
+      throw new Error(`createMany could not read back inserted "${model}" row ${String(row.id)}.`);
+    }
+    return inserted;
+  });
 };
 ```
 
@@ -531,7 +577,7 @@ With `false`, a write is kept even when a later step in the same request fails, 
 
 ### `debugLogs`
 
-Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `consumeOne`, `incrementOne`, `count`.
+Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `createMany`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `consumeOne`, `incrementOne`, `count`.
 If any of the keys are `true`, the debug logs will be enabled for that method.
 
 ```ts title="Example"
@@ -550,6 +596,25 @@ const adapter = myAdapter({
   },
 });
 ```
+
+### `createManyMaxParameters`
+
+The maximum number of bound parameters your database allows in one insert. Better Auth splits large `createMany` batches so they stay at or below this limit. You do not need to chunk inserts in your `createMany` method.
+
+The limit is on parameters, not rows. A bulk insert binds one parameter per column per row, so `INSERT INTO user (id, name, email) VALUES (?, ?, ?), (?, ?, ?)` uses 6 parameters for 2 rows. Better Auth sizes each chunk as `createManyMaxParameters / columnCount`, which means wider rows produce smaller chunks. Column count is the number of distinct keys in the batch, including optional fields that appear on only some rows.
+
+SQL Server also rejects a single `INSERT ... VALUES` statement with more than 1000 rows, even when the parameter count is under 2099. Built-in SQL Server adapters set `createManyMaxRows` to 1000 so those batches are split.
+
+Defaults to `999`, which is safe for SQLite.
+
+Set this when your database's limit is different:
+
+* Cloudflare D1 allows 100 bound parameters. Passing `database: env.DB` or a Drizzle SQLite client that looks like D1 selects 100 automatically. If you wrap D1 in `{ db, type: "sqlite" }`, set `createManyMaxParameters: 100` on the Kysely adapter.
+* PostgreSQL and MySQL typically allow 65535.
+* SQL Server typically allows 2099 parameters and 1000 rows.
+* Databases that do not use SQL bind parameters, such as MongoDB, can use a much higher value so batches are not split.
+
+If you set this higher than your database allows, inserts can fail with a bound-parameter error.
 
 ### `disableIdGeneration`
 

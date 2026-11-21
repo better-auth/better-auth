@@ -2,7 +2,8 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
-	DBAdapter,
+	BuiltInCustomAdapter,
+	BuiltInDBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
@@ -36,6 +37,13 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
+import {
+	chunkByMaxRows,
+	getInsertColumnCount,
+	orderInsertedRowsById,
+	rowsShareKeys,
+} from "./create-many-utils";
+import { isD1SqliteClient } from "./d1-sqlite-client";
 import { fromDriverDate, toDriverDate } from "./date-columns";
 import type { RelationKeysByModel } from "./join-relation-key";
 import {
@@ -181,6 +189,14 @@ export interface DrizzleAdapterConfig {
 	 * @default undefined
 	 */
 	schemaName?: string | undefined;
+	/**
+	 * Maximum number of bound parameters allowed in one `createMany` insert.
+	 * Large batches are split so they stay at or below this limit.
+	 *
+	 * SQLite defaults to 999. Cloudflare D1 is detected automatically and
+	 * uses 100. Set this only when that detection is wrong.
+	 */
+	createManyMaxParameters?: number | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -197,7 +213,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			getDefaultModelName,
 			options,
 			schema: baSchema,
-		}) => {
+		}): BuiltInCustomAdapter => {
 			if (
 				config.provider === "mysql" &&
 				options.advanced?.database?.generateId === false &&
@@ -350,9 +366,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					return null;
 				};
 
-				return inTransaction
-					? fetchInserted(db)
-					: db.transaction(fetchInserted);
+				if (inTransaction) return fetchInserted(db);
+				if (typeof db.transaction === "function") {
+					return db.transaction(fetchInserted);
+				}
+				return fetchInserted(db);
 			};
 			function convertWhereClause(
 				where: Where[],
@@ -802,6 +820,116 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					);
 					return returned;
 				},
+				async createMany<T extends Record<string, any>>({
+					model,
+					modelKey = model,
+					data: values,
+				}: {
+					model: string;
+					modelKey?: string;
+					data: T[];
+				}): Promise<T[]> {
+					const table = getSchema(model);
+					for (const row of values) {
+						checkMissingFields(table, modelKey, row);
+					}
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const hasAllIds = values.every((row) => {
+						const id = row[idField] ?? row.id;
+						return id !== undefined && id !== null;
+					});
+					const createSequentially = async () => {
+						const created: T[] = [];
+						for (const row of values) {
+							created.push(
+								(await withReturning(
+									model,
+									modelKey,
+									db.insert(table).values(row),
+									row,
+								)) as T,
+							);
+						}
+						return created;
+					};
+					if (!hasAllIds) {
+						return createSequentially();
+					}
+					const maxParameters =
+						adapterOptions?.config.createManyMaxParameters ?? 999;
+					const insertAndReadBack = async (tx: DB, chunk: T[]) => {
+						const chunkIds = chunk.map((row) => row[idField] ?? row.id);
+						await tx.insert(table).values(chunk).execute();
+						const rows = (await tx
+							.select()
+							.from(table)
+							.where(inArray(table[idField], chunkIds))) as T[];
+						return orderInsertedRowsById(chunkIds, rows, idField, model);
+					};
+					if (!rowsShareKeys(values)) {
+						if (config.provider !== "mysql") {
+							return createSequentially();
+						}
+						const insertMixedMysql = async (tx: DB) => {
+							const created: T[] = [];
+							for (const row of values) {
+								created.push(...(await insertAndReadBack(tx, [row])));
+							}
+							return created;
+						};
+						if (inTransaction) {
+							return insertMixedMysql(db);
+						}
+						if (typeof db.transaction === "function") {
+							return db.transaction(insertMixedMysql);
+						}
+						return insertMixedMysql(db);
+					}
+					const chunks = chunkByMaxRows(
+						values,
+						Math.floor(maxParameters / getInsertColumnCount(table, values)),
+					);
+					const insertReturning = async (tx: DB, chunk: T[]) => {
+						const chunkIds = chunk.map((row) => row[idField] ?? row.id);
+						const rows = (await tx
+							.insert(table)
+							.values(chunk)
+							.returning()) as T[];
+						return orderInsertedRowsById(chunkIds, rows, idField, model);
+					};
+					if (config.provider !== "mysql") {
+						const insertChunks = async (tx: DB) => {
+							const created: T[] = [];
+							for (const chunk of chunks) {
+								created.push(...(await insertReturning(tx, chunk)));
+							}
+							return created;
+						};
+						if (
+							!inTransaction &&
+							chunks.length > 1 &&
+							typeof db.transaction === "function" &&
+							!isD1SqliteClient(db)
+						) {
+							return db.transaction(insertChunks);
+						}
+						return insertChunks(db);
+					}
+					const insertMysqlChunks = async (tx: DB) => {
+						const created: T[] = [];
+						for (const chunk of chunks) {
+							created.push(...(await insertAndReadBack(tx, chunk)));
+						}
+						return created;
+					};
+					if (inTransaction) {
+						return insertMysqlChunks(db);
+					}
+					if (typeof db.transaction === "function") {
+						return db.transaction(insertMysqlChunks);
+					}
+					return createSequentially();
+				},
 				async findOne({ model, modelKey = model, where, select, join }) {
 					const table = getSchema(model);
 					const clause = convertWhereClause(where, model, modelKey);
@@ -1231,6 +1359,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			createManyMaxParameters:
+				config.createManyMaxParameters ??
+				(config.provider === "sqlite"
+					? isD1SqliteClient(db)
+						? 100
+						: undefined
+					: 65535),
 			supportsUUIDs: config.provider === "pg" ? true : false,
 			supportsJSON:
 				config.provider === "pg" // even though mysql also supports it, mysql requires to pass stringified json anyway.
@@ -1271,7 +1406,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		adapter: createCustomAdapter(db),
 	};
 	const adapter = createAdapterFactory(adapterOptions);
-	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	return (options: BetterAuthOptions): BuiltInDBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		const instance = adapter(options);
 		const schemaCheck = createSchemaCheck(

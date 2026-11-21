@@ -2,7 +2,8 @@ import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
-	DBAdapter,
+	BuiltInCustomAdapter,
+	BuiltInDBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
 	Where,
@@ -68,6 +69,71 @@ function isPrismaNotFoundError(e: any): boolean {
 	return e?.code === "P2025";
 }
 
+const CREATE_MANY_AND_RETURN_PROVIDERS = new Set<PrismaConfig["provider"]>([
+	"postgresql",
+	"cockroachdb",
+	"sqlite",
+]);
+
+function createManyMaxParametersForProvider(
+	provider: PrismaConfig["provider"],
+): number | undefined {
+	if (provider === "sqlite") return undefined;
+	if (provider === "sqlserver") return 2099;
+	return 65535;
+}
+
+const uuidPattern =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function rowId<T extends Record<string, unknown>>(
+	row: T,
+	idField: string,
+): string {
+	return String(row[idField] ?? row.id);
+}
+
+function uuidKey(id: unknown): string | undefined {
+	const value = String(id);
+	return uuidPattern.test(value) ? value.toLowerCase() : undefined;
+}
+
+function orderRowsByIds<T extends Record<string, unknown>>(
+	ids: unknown[],
+	rows: T[],
+	idField: string,
+	model: string,
+): T[] {
+	const byExactId = new Map<string, T>();
+	const byUuid = new Map<string, T>();
+	const ambiguousUuids = new Set<string>();
+
+	for (const row of rows) {
+		const exact = rowId(row, idField);
+		byExactId.set(exact, row);
+		const normalized = uuidKey(exact);
+		if (!normalized || ambiguousUuids.has(normalized)) continue;
+		const existing = byUuid.get(normalized);
+		if (existing && rowId(existing, idField) !== exact) {
+			byUuid.delete(normalized);
+			ambiguousUuids.add(normalized);
+			continue;
+		}
+		byUuid.set(normalized, row);
+	}
+
+	return ids.map((id) => {
+		const exact = String(id);
+		const row = byExactId.get(exact) ?? byUuid.get(uuidKey(id) ?? "");
+		if (!row) {
+			throw new BetterAuthError(
+				`Adapter createMany could not read back inserted "${model}" row ${String(id)}.`,
+			);
+		}
+		return row;
+	});
+}
+
 type PrismaClientInternal = {
 	$transaction: (
 		callback: (db: PrismaClient) => Awaitable<any>,
@@ -98,7 +164,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			getFieldAttributes,
 			getDefaultModelName,
 			schema,
-		}) => {
+		}): BuiltInCustomAdapter => {
 			const db = prisma as PrismaClientInternal;
 
 			const convertSelect = (
@@ -461,6 +527,78 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						select: convertSelect(select, modelKey),
 					});
 					return result;
+				},
+				async createMany<T extends Record<string, any>>({
+					model,
+					modelKey = model,
+					data: values,
+					select,
+				}: {
+					model: string;
+					modelKey?: string;
+					data: T[];
+					select?: string[];
+				}): Promise<T[]> {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+					const selectClause = convertSelect(select, modelKey);
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const orderSelect =
+						selectClause === undefined
+							? undefined
+							: { ...selectClause, [idField]: true };
+					const ids = values.map((row) => row[idField] ?? row.id);
+					const hasAllIds = ids.every((id) => id !== undefined && id !== null);
+					const createSequentially = async () => {
+						const created: T[] = [];
+						for (const row of values) {
+							created.push(
+								await db[model]!.create({
+									data: row,
+									select: selectClause,
+								}),
+							);
+						}
+						return created;
+					};
+					if (!hasAllIds) {
+						return createSequentially();
+					}
+					if (
+						CREATE_MANY_AND_RETURN_PROVIDERS.has(config.provider) &&
+						typeof db[model].createManyAndReturn === "function"
+					) {
+						const created = (await db[model].createManyAndReturn({
+							data: values,
+							select: orderSelect,
+						})) as T[];
+						return orderRowsByIds(ids, created, idField, model);
+					}
+					if (typeof db[model].createMany !== "function") {
+						return createSequentially();
+					}
+					const insertAndReadBack = async (tx: PrismaClient) => {
+						const client = tx as PrismaClientInternal;
+						await client[model]!.createMany({ data: values });
+						const rows = (await client[model]!.findMany({
+							where: { [idField]: { in: ids } },
+							select: orderSelect,
+						})) as T[];
+						return orderRowsByIds(ids, rows, idField, model);
+					};
+					if (config.provider === "mongodb" && !config.transaction) {
+						return createSequentially();
+					}
+					if (inTransaction) {
+						return insertAndReadBack(db);
+					}
+					if (typeof db.$transaction === "function") {
+						return db.$transaction(insertAndReadBack);
+					}
+					return createSequentially();
 				},
 				async findOne({ model, modelKey = model, where, select, join }) {
 					// this is just "JoinOption" type because we disabled join transformation in adapter config
@@ -888,6 +1026,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			adapterName: "Prisma Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			createManyMaxParameters: createManyMaxParametersForProvider(
+				config.provider,
+			),
+			createManyMaxRows: config.provider === "sqlserver" ? 1000 : undefined,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,
 			supportsArrays:
 				config.provider === "postgresql" || config.provider === "mongodb"
@@ -912,7 +1054,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	};
 
 	const adapter = createAdapterFactory(adapterOptions);
-	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	return (options: BetterAuthOptions): BuiltInDBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		const instance = adapter(options);
 		const dataModel = readPrismaDataModel(prisma);

@@ -2,7 +2,8 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
-	DBAdapter,
+	BuiltInCustomAdapter,
+	BuiltInDBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
 	Where,
@@ -33,6 +34,79 @@ import {
 } from "./query-builders";
 import { findSchemaProblems } from "./schema-check";
 import type { KyselyDatabaseType } from "./types";
+
+function createManyMaxParametersForType(
+	type: KyselyDatabaseType | undefined,
+	createManyMaxParameters?: number,
+): number | undefined {
+	if (createManyMaxParameters !== undefined) return createManyMaxParameters;
+	if (type === "postgres" || type === "mysql") return 65535;
+	if (type === "mssql") return 2099;
+	return undefined;
+}
+
+function rowsShareKeys(rows: Record<string, unknown>[]): boolean {
+	const first = rows[0];
+	if (!first || rows.length < 2) return true;
+	const expected = new Set(Object.keys(first));
+	return rows.every((row) => {
+		const keys = Object.keys(row);
+		return (
+			keys.length === expected.size && keys.every((key) => expected.has(key))
+		);
+	});
+}
+
+const uuidPattern =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function rowId<T extends Record<string, unknown>>(
+	row: T,
+	idField: string,
+): string {
+	return String(row[idField] ?? row.id);
+}
+
+function uuidKey(id: unknown): string | undefined {
+	const value = String(id);
+	return uuidPattern.test(value) ? value.toLowerCase() : undefined;
+}
+
+function orderInsertedRowsById<T extends Record<string, unknown>>(
+	ids: unknown[],
+	rows: T[],
+	idField: string,
+	model: string,
+): T[] {
+	const byExactId = new Map<string, T>();
+	const byUuid = new Map<string, T>();
+	const ambiguousUuids = new Set<string>();
+
+	for (const row of rows) {
+		const exact = rowId(row, idField);
+		byExactId.set(exact, row);
+		const normalized = uuidKey(exact);
+		if (!normalized || ambiguousUuids.has(normalized)) continue;
+		const existing = byUuid.get(normalized);
+		if (existing && rowId(existing, idField) !== exact) {
+			byUuid.delete(normalized);
+			ambiguousUuids.add(normalized);
+			continue;
+		}
+		byUuid.set(normalized, row);
+	}
+
+	return ids.map((id) => {
+		const exact = String(id);
+		const row = byExactId.get(exact) ?? byUuid.get(uuidKey(id) ?? "");
+		if (!row) {
+			throw new BetterAuthError(
+				`[Kysely Adapter] createMany could not read back inserted "${model}" row ${String(id)}.`,
+			);
+		}
+		return row;
+	});
+}
 
 interface KyselyAdapterConfig {
 	/**
@@ -72,6 +146,15 @@ interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Maximum number of bound parameters allowed in one `createMany` insert.
+	 * Large batches are split so they stay at or below this limit.
+	 *
+	 * SQLite defaults to 999. Cloudflare D1 allows 100; set this to 100 when
+	 * you pass a D1 database to `kyselyAdapter`. PostgreSQL and MySQL use
+	 * 65535, and SQL Server uses 2099, when `type` is set.
+	 */
+	createManyMaxParameters?: number | undefined;
 }
 
 export const kyselyAdapter = (
@@ -92,7 +175,7 @@ export const kyselyAdapter = (
 			getFieldAttributes,
 			getModelName,
 			options,
-		}) => {
+		}): BuiltInCustomAdapter => {
 			if (
 				config?.type === "mysql" &&
 				options.advanced?.database?.generateId === false &&
@@ -621,6 +704,70 @@ export const kyselyAdapter = (
 					);
 					return returned;
 				},
+				async createMany<T extends Record<string, any>>({
+					data,
+					model,
+					modelKey = model,
+				}: {
+					data: T[];
+					model: string;
+					modelKey?: string;
+				}): Promise<T[]> {
+					const encoded = data.map((row) => encodeJSONArrays(modelKey, row));
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const ids = encoded.map((row) => row[idField] ?? row.id);
+					const hasAllIds = ids.every((id) => id !== undefined && id !== null);
+					const createSequentially = async () => {
+						const created: T[] = [];
+						for (const row of encoded) {
+							created.push(
+								(await withReturning(
+									row,
+									db.insertInto(model).values(row),
+									model,
+									modelKey,
+									[],
+								)) as T,
+							);
+						}
+						return created;
+					};
+					if (!hasAllIds || !rowsShareKeys(encoded)) {
+						return createSequentially();
+					}
+					if (config?.type === "mysql") {
+						const insertAndReadBack = async (trx: Kysely<any>) => {
+							await trx.insertInto(model).values(encoded).execute();
+							const rows = await trx
+								.selectFrom(model)
+								.selectAll()
+								.where(idField, "in", ids)
+								.execute();
+							return orderInsertedRowsById(ids, rows, idField, model) as T[];
+						};
+						if (inTransaction) {
+							return insertAndReadBack(db);
+						}
+						if (typeof db.transaction === "function") {
+							return db.transaction().execute(insertAndReadBack);
+						}
+						return createSequentially();
+					}
+					if (config?.type === "mssql") {
+						const rows = await db
+							.insertInto(model)
+							.values(encoded)
+							.outputAll("inserted")
+							.execute();
+						return orderInsertedRowsById(ids, rows, idField, model) as T[];
+					}
+					const rows = await db
+						.insertInto(model)
+						.values(encoded)
+						.returningAll()
+						.execute();
+					return orderInsertedRowsById(ids, rows, idField, model) as T[];
+				},
 				async findOne({ model, modelKey = model, where, select, join }) {
 					const { and, or } = convertWhereClause(model, modelKey, where);
 					let query: any = db
@@ -1060,6 +1207,11 @@ export const kyselyAdapter = (
 			adapterName: "Kysely Adapter",
 			usePlural: config?.usePlural,
 			debugLogs: config?.debugLogs,
+			createManyMaxParameters: createManyMaxParametersForType(
+				config?.type,
+				config?.createManyMaxParameters,
+			),
+			createManyMaxRows: config?.type === "mssql" ? 1000 : undefined,
 			supportsBooleans:
 				config?.type === "sqlite" ||
 				config?.type === "mssql" ||
@@ -1096,7 +1248,7 @@ export const kyselyAdapter = (
 
 	const adapter = createAdapterFactory(adapterOptions);
 
-	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	return (options: BetterAuthOptions): BuiltInDBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		const instance = adapter(options);
 		const schemaCheck = createSchemaCheck(
