@@ -326,6 +326,14 @@ export interface SecondaryStorage {
 	get: (key: string) => Awaitable<unknown>;
 	/**
 	 * Atomically get a value and delete it from storage.
+	 *
+	 * Single-use verification values are consumed through this primitive, so
+	 * it must be linearizable per key: at most one concurrent caller may
+	 * observe the value. Callers re-issue it after a miss (a miss deletes
+	 * nothing), and a permanent miss fails closed — never weaken that to a
+	 * success. A store without atomic cross-region deletes may double-deliver
+	 * under a concurrent consume; pair such a store with
+	 * `verification.storeInDatabase: true` where single-use matters.
 	 */
 	getAndDelete: (key: string) => Awaitable<unknown>;
 	/**
