@@ -75,6 +75,8 @@ app.get("/docs", Scalar({
 
 ## Configuration
 
+`enabled` - Enable or disable both the Open API schema and reference endpoints. Defaults to `true`.
+
 `path` - The path where the Open API reference is served. Default is `/api/auth/reference`. You can change it to any path you like, but keep in mind that it will be appended to the base path of your auth server.
 
 `disableDefaultReference` - If set to `true`, the default Open API reference UI by Scalar will be disabled. Default is `false`.

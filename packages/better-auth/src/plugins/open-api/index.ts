@@ -71,6 +71,12 @@ const getHTML = (
 
 export interface OpenAPIOptions {
 	/**
+	 * Enable or disable the OpenAPI schema and reference endpoints.
+	 *
+	 * @default true
+	 */
+	enabled?: boolean | undefined;
+	/**
 	 * The path to the OpenAPI reference page
 	 *
 	 * keep in mind that this path will be appended to the base URL `/api/auth` path
@@ -111,6 +117,9 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 					method: "GET",
 				},
 				async (ctx) => {
+					if (options?.enabled === false) {
+						throw new APIError("NOT_FOUND");
+					}
 					const schema = await generator(ctx.context, ctx.context.options);
 					return ctx.json(schema);
 				},
@@ -122,7 +131,7 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 					metadata: HIDE_METADATA,
 				},
 				async (ctx) => {
-					if (options?.disableDefaultReference) {
+					if (options?.enabled === false || options?.disableDefaultReference) {
 						throw new APIError("NOT_FOUND");
 					}
 					const schema = await generator(ctx.context, ctx.context.options);
