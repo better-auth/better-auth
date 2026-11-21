@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -139,6 +140,39 @@ export async function getBackupCodes(
 	}
 
 	return safeJSONParse<string[]>(backupCodes);
+}
+
+/**
+ * Replace a row's backup codes with the codes left after one was used. The
+ * write is guarded on the codes read before verification, so two concurrent
+ * uses of the same code cannot both succeed: the loser gets a `CONFLICT`.
+ */
+export async function storeRemainingBackupCodes(
+	ctx: GenericEndpointContext,
+	twoFactor: TwoFactorTable,
+	remainingCodes: string[],
+	options?: BackupCodeOptions | undefined,
+): Promise<void> {
+	const updated = await ctx.context.adapter.incrementOne({
+		model: "twoFactor",
+		where: [
+			{ field: "id", value: twoFactor.id },
+			{ field: "backupCodes", value: twoFactor.backupCodes },
+		],
+		increment: {},
+		set: {
+			backupCodes: await encodeBackupCodes(
+				remainingCodes,
+				ctx.context.secretConfig,
+				options,
+			),
+		},
+	});
+	if (!updated) {
+		throw APIError.fromStatus("CONFLICT", {
+			message: "Failed to verify backup code. Please try again.",
+		});
+	}
 }
 
 const verifyBackupCodeBodySchema = z.object({
@@ -375,34 +409,12 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						);
 					}
-					const updatedBackupCodes = await encodeBackupCodes(
+					await storeRemainingBackupCodes(
+						ctx,
+						twoFactor,
 						validate.updated,
-						ctx.context.secretConfig,
 						opts,
 					);
-
-					const updated = await ctx.context.adapter.incrementOne({
-						model: twoFactorTable,
-						where: [
-							{
-								field: "id",
-								value: twoFactor.id,
-							},
-							{
-								field: "backupCodes",
-								value: twoFactor.backupCodes,
-							},
-						],
-						increment: {},
-						set: {
-							backupCodes: updatedBackupCodes,
-						},
-					});
-					if (!updated) {
-						throw APIError.fromStatus("CONFLICT", {
-							message: "Failed to verify backup code. Please try again.",
-						});
-					}
 
 					if (isSignIn) {
 						await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
