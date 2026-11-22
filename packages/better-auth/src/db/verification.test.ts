@@ -17,6 +17,25 @@ try {
 	isMysqlAvailable = false;
 }
 
+describe("createOrFindVerification", () => {
+	it("keeps the id from a custom id strategy", async () => {
+		const { auth } = await getTestInstance({
+			advanced: {
+				database: { generateId: () => `custom-${crypto.randomUUID()}` },
+			},
+		});
+		const ctx = { context: await auth.$context } as GenericEndpointContext;
+
+		const created = await createOrFindVerification(ctx, {
+			identifier: "sign-in-otp-custom@example.com",
+			value: "code",
+			expiresAt: new Date(Date.now() + 60_000),
+		});
+
+		expect(created?.id).toMatch(/^custom-/);
+	});
+});
+
 describe.runIf(isMysqlAvailable || Boolean(process.env.CI))(
 	"createOrFindVerification with MySQL",
 	() => {
