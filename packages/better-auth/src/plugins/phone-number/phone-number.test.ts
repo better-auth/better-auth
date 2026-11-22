@@ -2500,7 +2500,7 @@ describe("phone-number verification rows", () => {
 		});
 
 		expect(codes).toHaveLength(2);
-		expect(exhausted.error).not.toBeNull();
+		expect(exhausted.error?.code).toBe("INVALID_OTP");
 		const latest = await client.phoneNumber.verify({
 			phoneNumber: number,
 			code: codes[1]!,
@@ -2511,54 +2511,59 @@ describe("phone-number verification rows", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11181
 	 */
-	it("keeps every delivered code valid when concurrent sends collide on a unique identifier", async () => {
-		const number = "+15550000005";
-		let arrivals = 0;
-		let openBarrier: () => void = () => {};
-		const barrier = new Promise<void>((resolve) => {
-			openBarrier = resolve;
-		});
-		const codes: string[] = [];
-		const { client, auth } = await getTestInstance(
-			{
-				databaseHooks: {
-					verification: {
-						create: {
-							// Hold the first two inserts until both requests reach them.
-							async before() {
-								arrivals++;
-								if (arrivals === 2) openBarrier();
-								if (arrivals <= 2) await barrier;
+	it.for(["default", "unique identifier"] as const)(
+		"keeps every delivered code valid when concurrent sends collide (%s schema)",
+		async (schema) => {
+			const number = "+15550000005";
+			let arrivals = 0;
+			let openBarrier: () => void = () => {};
+			const barrier = new Promise<void>((resolve) => {
+				openBarrier = resolve;
+			});
+			const codes: string[] = [];
+			const { client, auth } = await getTestInstance(
+				{
+					databaseHooks: {
+						verification: {
+							create: {
+								// Hold the first two inserts until both requests reach them.
+								async before() {
+									arrivals++;
+									if (arrivals === 2) openBarrier();
+									if (arrivals <= 2) await barrier;
+								},
 							},
 						},
 					},
+					plugins: [
+						...(schema === "unique identifier"
+							? [uniqueVerificationIdentifier()]
+							: []),
+						phoneNumber({
+							async sendOTP({ code }) {
+								codes.push(code);
+							},
+							signUpOnVerification: {
+								getTempEmail: (phoneNumber) => `${phoneNumber}@example.com`,
+							},
+						}),
+					],
 				},
-				plugins: [
-					uniqueVerificationIdentifier(),
-					phoneNumber({
-						async sendOTP({ code }) {
-							codes.push(code);
-						},
-						signUpOnVerification: {
-							getTempEmail: (phoneNumber) => `${phoneNumber}@example.com`,
-						},
-					}),
-				],
-			},
-			{ clientOptions: { plugins: [phoneNumberClient()] } },
-		);
+				{ clientOptions: { plugins: [phoneNumberClient()] } },
+			);
 
-		await Promise.all([
-			auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } }),
-			auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } }),
-		]);
+			await Promise.all([
+				auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } }),
+				auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } }),
+			]);
 
-		expect(codes).toHaveLength(2);
-		expect(codes[1]).toBe(codes[0]);
-		const res = await client.phoneNumber.verify({
-			phoneNumber: number,
-			code: codes[0]!,
-		});
-		expect(res.data?.status).toBe(true);
-	});
+			expect(codes).toHaveLength(2);
+			expect(codes[1]).toBe(codes[0]);
+			const res = await client.phoneNumber.verify({
+				phoneNumber: number,
+				code: codes[0]!,
+			});
+			expect(res.data?.status).toBe(true);
+		},
+	);
 });

@@ -3426,7 +3426,7 @@ describe("email-otp verification rows", () => {
 			});
 
 			expect(codes).toHaveLength(0);
-			expect(check.error?.status).not.toBe(500);
+			expect(check.error?.code).toBe("INVALID_OTP");
 			const superseded = await client.signIn.emailOtp({
 				email: body.email,
 				otp: "111111",
@@ -3494,53 +3494,58 @@ describe("email-otp verification rows", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11181
 	 */
-	it("leaves one valid code when concurrent hashed sends collide on a unique identifier", async () => {
-		let arrivals = 0;
-		let openBarrier: () => void = () => {};
-		const barrier = new Promise<void>((resolve) => {
-			openBarrier = resolve;
-		});
-		const delivered: string[] = [];
-		const { auth, testUser } = await getTestInstance({
-			databaseHooks: {
-				verification: {
-					create: {
-						async before() {
-							arrivals++;
-							if (arrivals === 2) openBarrier();
-							if (arrivals <= 2) await barrier;
+	it.for(["default", "unique identifier"] as const)(
+		"leaves one valid code when concurrent hashed sends collide (%s schema)",
+		async (schema) => {
+			let arrivals = 0;
+			let openBarrier: () => void = () => {};
+			const barrier = new Promise<void>((resolve) => {
+				openBarrier = resolve;
+			});
+			const delivered: string[] = [];
+			const { auth, testUser } = await getTestInstance({
+				databaseHooks: {
+					verification: {
+						create: {
+							async before() {
+								arrivals++;
+								if (arrivals === 2) openBarrier();
+								if (arrivals <= 2) await barrier;
+							},
 						},
 					},
 				},
-			},
-			plugins: [
-				uniqueVerificationIdentifier(),
-				emailOTP({
-					storeOTP: "hashed",
-					async sendVerificationOTP({ otp }) {
-						delivered.push(otp);
-					},
-				}),
-			],
-		});
-		const body = { email: testUser.email, type: "sign-in" as const };
-
-		await Promise.all([
-			auth.api.sendVerificationOTP({ body }),
-			auth.api.sendVerificationOTP({ body }),
-		]);
-
-		expect(delivered).toHaveLength(2);
-		const statuses: number[] = [];
-		for (const otp of delivered) {
-			const res = await auth.api.checkVerificationOTP({
-				body: { ...body, otp },
-				asResponse: true,
+				plugins: [
+					...(schema === "unique identifier"
+						? [uniqueVerificationIdentifier()]
+						: []),
+					emailOTP({
+						storeOTP: "hashed",
+						async sendVerificationOTP({ otp }) {
+							delivered.push(otp);
+						},
+					}),
+				],
 			});
-			statuses.push(res.status);
-		}
-		expect(statuses.sort()).toEqual([200, 400]);
-	});
+			const body = { email: testUser.email, type: "sign-in" as const };
+
+			await Promise.all([
+				auth.api.sendVerificationOTP({ body }),
+				auth.api.sendVerificationOTP({ body }),
+			]);
+
+			expect(delivered).toHaveLength(2);
+			const statuses: number[] = [];
+			for (const otp of delivered) {
+				const res = await auth.api.checkVerificationOTP({
+					body: { ...body, otp },
+					asResponse: true,
+				});
+				statuses.push(res.status);
+			}
+			expect(statuses.sort()).toEqual([200, 400]);
+		},
+	);
 
 	it("does not read a failed verification create hook as a collision", async () => {
 		let failCreate = true;
@@ -3578,9 +3583,14 @@ describe("email-otp verification rows", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11181
 	 */
-	it.for(["rotate", "reuse"] as const)(
-		"keeps every delivered code valid when concurrent first sends collide on a unique identifier (%s)",
-		async (resendStrategy) => {
+	it.for([
+		["rotate", "default"],
+		["rotate", "unique identifier"],
+		["reuse", "default"],
+		["reuse", "unique identifier"],
+	] as const)(
+		"keeps every delivered code valid when concurrent first sends collide (%s, %s schema)",
+		async ([resendStrategy, schema]) => {
 			let arrivals = 0;
 			let openBarrier: () => void = () => {};
 			const barrier = new Promise<void>((resolve) => {
@@ -3601,7 +3611,9 @@ describe("email-otp verification rows", () => {
 					},
 				},
 				plugins: [
-					uniqueVerificationIdentifier(),
+					...(schema === "unique identifier"
+						? [uniqueVerificationIdentifier()]
+						: []),
 					emailOTP({
 						storeOTP: "encrypted",
 						resendStrategy,

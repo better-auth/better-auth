@@ -998,8 +998,10 @@ async function issuePhoneNumberOTP(
 		stored.expiresAt >= new Date() &&
 		parseVerificationAttempts(attempts) < (opts.allowedAttempts ?? 3);
 	if (reusable && storedCode) return storedCode;
-	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
-	await ctx.context.internalAdapter.createVerificationValue(verification);
+	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
+		value: verification.value,
+		expiresAt: verification.expiresAt,
+	});
 	return code;
 }
 

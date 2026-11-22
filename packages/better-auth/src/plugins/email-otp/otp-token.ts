@@ -136,7 +136,9 @@ export async function issueOTP(
 
 	const reused = await tryReuseOTP(ctx, opts, identifier);
 	if (reused) return reused;
-	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
-	await ctx.context.internalAdapter.createVerificationValue(verification);
+	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
+		value: verification.value,
+		expiresAt: verification.expiresAt,
+	});
 	return otp;
 }
