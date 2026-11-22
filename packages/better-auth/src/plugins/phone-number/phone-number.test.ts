@@ -10,6 +10,7 @@ import {
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { emailOTP } from "../email-otp";
+import type { UserWithPhoneNumber } from ".";
 import { phoneNumber } from ".";
 import { phoneNumberClient } from "./client";
 
@@ -1567,6 +1568,284 @@ describe("phone number at user creation", () => {
 		).toMatchObject({
 			phoneNumberVerified: true,
 		});
+	});
+
+	it("allows a phone number sent with email sign-up when requireVerification is false", async () => {
+		const { client, db } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						requireVerification: false,
+						async sendOTP() {},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		const res = await client.signUp.email({
+			email: "unverified-signup@test.com",
+			password: "password123",
+			name: "unverified",
+			phoneNumber: phoneNumberValue,
+		});
+
+		expect(res.error).toBeNull();
+		expect(
+			await db.findOne({
+				model: "user",
+				where: [{ field: "phoneNumber", value: phoneNumberValue }],
+			}),
+		).toMatchObject({
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: false,
+		});
+
+		const signInRes = await client.signIn.phoneNumber({
+			phoneNumber: phoneNumberValue,
+			password: "password123",
+		});
+		expect(signInRes.error).toBeNull();
+		expect(signInRes.data?.user.phoneNumber).toBe(phoneNumberValue);
+	});
+
+	it("validates phone number with phoneNumberValidator during sign-up when requireVerification is false", async () => {
+		const { client, db } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						requireVerification: false,
+						phoneNumberValidator: (phone) => phone.startsWith("+251"),
+						async sendOTP() {},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		const invalidRes = await client.signUp.email({
+			email: "invalid-phone@test.com",
+			password: "password123",
+			name: "invalid",
+			phoneNumber: "+1234567890",
+		});
+		expect(invalidRes.error?.code).toBe("INVALID_PHONE_NUMBER");
+
+		const validRes = await client.signUp.email({
+			email: "valid-phone@test.com",
+			password: "password123",
+			name: "valid",
+			phoneNumber: phoneNumberValue,
+		});
+		expect(validRes.error).toBeNull();
+		expect(
+			await db.findOne({
+				model: "user",
+				where: [{ field: "phoneNumber", value: phoneNumberValue }],
+			}),
+		).toMatchObject({
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: false,
+		});
+	});
+
+	it("treats an empty phone number on email sign-up as null when requireVerification is false", async () => {
+		const { client, db } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						requireVerification: false,
+						async sendOTP() {},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		const res = await client.signUp.email({
+			email: "empty-unverified@test.com",
+			password: "password123",
+			name: "empty",
+			phoneNumber: "",
+		});
+		expect(res.error).toBeNull();
+		const user = await db.findOne<UserWithPhoneNumber>({
+			model: "user",
+			where: [{ field: "email", value: "empty-unverified@test.com" }],
+		});
+		expect(user).toMatchObject({
+			phoneNumber: null,
+			phoneNumberVerified: false,
+		});
+		expect(
+			await db.findMany({
+				model: "user",
+				where: [{ field: "phoneNumber", value: "" }],
+			}),
+		).toHaveLength(0);
+	});
+
+	it("rejects duplicate phone number during sign-up when requireVerification is false", async () => {
+		const phoneNumberValue = "+1234567890";
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						requireVerification: false,
+						async sendOTP() {},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		await client.signUp.email({
+			email: "first-user@test.com",
+			password: "password123",
+			name: "first",
+			phoneNumber: phoneNumberValue,
+		});
+
+		const duplicateRes = await client.signUp.email({
+			email: "second-user@test.com",
+			password: "password123",
+			name: "second",
+			phoneNumber: phoneNumberValue,
+		});
+		expect(duplicateRes.error?.code).toBe("PHONE_NUMBER_EXIST");
+	});
+
+	it("strips an unverified squatter's number before the legitimate owner verifies", async () => {
+		// SECURITY: when requireVerification is false, a third party (the
+		// "squatter") can register with someone else's phone number. When the
+		// real owner later verifies via OTP, the route must NOT hand them into
+		// the squatter's account. Instead it should disassociate the number
+		// from the unverified account so the legitimate owner claims it cleanly.
+		const targetPhone = "+19998887777";
+		let capturedOTP = "";
+
+		const { client, db } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						requireVerification: false,
+						async sendOTP({ code }) {
+							capturedOTP = code;
+						},
+						signUpOnVerification: {
+							getTempEmail: (phone) => `temp-${phone}@phone.local`,
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		// Squatter registers with the target phone using email+password
+		await client.signUp.email({
+			email: "squatter@test.com",
+			password: "squatter-pass",
+			name: "squatter",
+			// @ts-expect-error - phoneNumber is accepted when requireVerification is false
+			phoneNumber: targetPhone,
+		});
+
+		// Confirm the squatter's account holds the number, unverified
+		const squatterBefore = await db.findOne<UserWithPhoneNumber>({
+			model: "user",
+			where: [{ field: "email", value: "squatter@test.com" }],
+		});
+		expect(squatterBefore?.phoneNumber).toBe(targetPhone);
+		expect(squatterBefore?.phoneNumberVerified).toBe(false);
+
+		// Legitimate owner requests an OTP for that number
+		await client.phoneNumber.sendOtp({ phoneNumber: targetPhone });
+		expect(capturedOTP).not.toBe("");
+
+		// Legitimate owner verifies — the route must NOT create a session into
+		// the squatter's account; instead it should create a fresh verified account
+		// for the owner via signUpOnVerification.
+		const verifyRes = await client.phoneNumber.verify({
+			phoneNumber: targetPhone,
+			code: capturedOTP,
+		});
+		expect(verifyRes.error).toBeNull();
+
+		// The owner's account must exist, be verified, and be distinct from squatter's
+		const ownerAccount = await db.findOne<UserWithPhoneNumber>({
+			model: "user",
+			where: [{ field: "phoneNumber", value: targetPhone }],
+		});
+		expect(ownerAccount).not.toBeNull();
+		expect(ownerAccount?.phoneNumberVerified).toBe(true);
+		expect(ownerAccount?.id).not.toBe(squatterBefore?.id);
+
+		// Critical security property: the squatter's account had its phone stripped
+		const squatterAfter = await db.findOne<UserWithPhoneNumber>({
+			model: "user",
+			where: [{ field: "email", value: "squatter@test.com" }],
+		});
+		expect(squatterAfter?.phoneNumber).toBeNull();
+		expect(squatterAfter?.phoneNumberVerified).toBe(false);
+	});
+
+	it("rejects a phone number sent with email sign-up when requireVerification is true", async () => {
+		const { client, db } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						requireVerification: true,
+						async sendOTP() {},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		const res = await client.signUp.email({
+			email: "claimant-required@test.com",
+			password: "password123",
+			name: "claimant",
+			phoneNumber: phoneNumberValue,
+		});
+
+		expect(res.error?.code).toBe("PHONE_NUMBER_CANNOT_BE_SET");
+		expect(
+			await db.findMany({
+				model: "user",
+				where: [{ field: "phoneNumber", value: phoneNumberValue }],
+			}),
+		).toHaveLength(0);
 	});
 });
 
