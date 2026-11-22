@@ -262,9 +262,11 @@ model Account {
 		const existing = ({
 			sessionModel = "Session",
 			userRelations,
+			sessionRelations = "user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)",
 		}: {
 			sessionModel?: string;
 			userRelations: string;
+			sessionRelations?: string;
 		}) => `generator client {
   provider = "prisma-client-js"
 }
@@ -295,7 +297,7 @@ model ${sessionModel} {
   ipAddress String?
   userAgent String?
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ${sessionRelations}
 
   @@index([userId])
   @@map("session")
@@ -402,15 +404,42 @@ model Verification {
 			expect(again).toBe("");
 		});
 
-		it("adds the back-relation when only a named relation to the model exists", async () => {
+		it("keeps an unnamed back-relation that carries an empty @relation()", async () => {
 			const { code } = await generate(
 				existing({
-					userRelations: `revokedSessions Session[] @relation("revokedBy")
+					userRelations: `userSessions  Session[] @relation()
+  accounts      Account[]`,
+				}),
+			);
+
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
+		it("keeps a back-relation paired with the owning side by relation name", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `userSessions  Session[] @relation("UserSessions")
+  accounts      Account[]`,
+					sessionRelations: `user      User     @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)`,
+				}),
+			);
+
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
+		it("adds the back-relation when only a differently named relation exists", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `revokedSessions Session[] @relation("RevokedBy")
   accounts        Account[]`,
+					sessionRelations: `user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revokedById String?
+  revokedBy   User?    @relation("RevokedBy", fields: [revokedById], references: [id])`,
 				}),
 			);
 
 			expect(code).toMatch(/^\s*sessions\s+Session\[\]\s*$/m);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(2);
 		});
 	});
 
