@@ -10,7 +10,7 @@ import { getDate } from "../../utils/date";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
 
-export async function storeOTP(
+async function storeOTP(
 	ctx: GenericEndpointContext,
 	opts: EmailOTPOptions,
 	otp: string,
