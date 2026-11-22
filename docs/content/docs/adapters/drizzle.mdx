@@ -61,6 +61,33 @@ To generate and apply the migration, run the following commands:
   </Tab>
 </Tabs>
 
+### Reuse a PostgreSQL enum
+
+With the standard PostgreSQL adapter, set `enumFields` to use an existing
+`pgEnum` for a field. Use the Better Auth model and field names as the key.
+The module path is relative to the generated schema file.
+
+```ts title="enums.ts"
+import { pgEnum } from "drizzle-orm/pg-core";
+
+export const memberStatus = pgEnum("member_status", ["active", "inactive"]);
+```
+
+```ts title="auth.ts"
+import { memberStatus } from "./enums";
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    enumFields: { "user.status": { from: "./enums", name: "memberStatus" } },
+  }),
+  user: { additionalFields: { status: { type: memberStatus.enumValues } } },
+});
+```
+
+Run `auth generate` with this adapter configured. The generated column uses
+`pgEnums.memberStatus("status")`. Unmapped enum fields use PostgreSQL `text`.
+
 ## Joins
 
 Database joins are useful when Better-Auth needs to fetch related data from multiple tables in a single query.

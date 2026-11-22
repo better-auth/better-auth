@@ -158,6 +158,11 @@ export interface DrizzleAdapterConfig {
 	 */
 	camelCase?: boolean | undefined;
 	/**
+	 * Map PostgreSQL enum fields by logical "model.field" name to an exported
+	 * Drizzle pgEnum. Relative imports resolve from the generated schema file.
+	 */
+	enumFields?: Record<string, { from: string; name: string }> | undefined;
+	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
 	 * If the database doesn't support transactions,
