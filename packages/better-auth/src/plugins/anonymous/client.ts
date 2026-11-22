@@ -14,7 +14,8 @@ export const anonymousClient = () => {
 		},
 		atomListeners: [
 			{
-				matcher: (path) => path === "/sign-in/anonymous",
+				matcher: (path) =>
+					path === "/sign-in/anonymous" || path === "/delete-anonymous-user",
 				signal: "$sessionSignal",
 			},
 		],

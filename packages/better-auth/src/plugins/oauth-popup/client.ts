@@ -200,7 +200,7 @@ interface SignInPopupDeps {
 	$fetch: BetterFetch;
 	options?: BetterAuthClientOptions | undefined;
 	/** Refreshes the reactive session, as the redirect flow's atom listeners do. */
-	notifySessionSignal: () => void;
+	notifySessionSignal: () => Promise<void>;
 }
 
 function resolveAuthURL(options?: BetterAuthClientOptions): URL {
@@ -325,7 +325,7 @@ export function createSignInPopup({
 			return popupError("POPUP_SIGN_IN_FAILED", session.error?.status);
 		}
 
-		notifySessionSignal();
+		await notifySessionSignal();
 
 		return {
 			data: { success: true },

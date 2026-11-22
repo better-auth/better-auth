@@ -218,7 +218,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 		],
 		getActions: (
 			$fetch: BetterFetch,
-			_$store: ClientStore,
+			$store: ClientStore,
 			_options: BetterAuthClientOptions | undefined,
 		) => {
 			return {
@@ -226,6 +226,8 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					opts?: GoogleOneTapActionOptions | undefined,
 					fetchOptions?: ClientFetchOption | undefined,
 				) => {
+					const disableSignal =
+						fetchOptions?.disableSignal ?? opts?.fetchOptions?.disableSignal;
 					if (isRequestInProgress) {
 						console.warn(
 							"A Google One Tap request is already in progress. Please wait.",
@@ -269,6 +271,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							// not navigate if it rejected the request.
 							if (res?.error) {
 								return;
+							}
+							if (!disableSignal) {
+								await $store.notify("$sessionSignal");
 							}
 
 							if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
@@ -324,6 +329,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						// not navigate if it rejected the request.
 						if (res?.error) {
 							return;
+						}
+						if (!disableSignal) {
+							await $store.notify("$sessionSignal");
 						}
 
 						if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {

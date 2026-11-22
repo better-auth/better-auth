@@ -2,8 +2,17 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import type { oneTap as oneTapFromSubpath } from "better-auth/plugins/one-tap";
+import { Window } from "happy-dom";
 import { jwtVerify } from "jose";
-import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import {
+	afterEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	onTestFinished,
+	vi,
+} from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { lastLoginMethod } from "../last-login-method";
@@ -1167,5 +1176,106 @@ describe("one-tap prompt notifications", () => {
 		const { onPromptNotification } = await runPrompt(notDisplayed);
 
 		expect(onPromptNotification).toHaveBeenCalledExactlyOnceWith(notDisplayed);
+	});
+});
+
+describe("one-tap session refresh", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	async function oneTapInstance() {
+		const instance = await getTestInstance(
+			{ plugins: [oneTap({ clientId: "test-google-client" })] },
+			{
+				clientOptions: {
+					plugins: [oneTapClient({ clientId: "test-google-client" })],
+				},
+			},
+		);
+		let respond:
+			| ((response: { credential: string }) => Promise<void>)
+			| undefined;
+		const window = new Window({ url: "http://localhost:3000" });
+		Object.assign(window, {
+			googleScriptInitialized: true,
+			google: {
+				accounts: {
+					id: {
+						initialize(config: { callback: typeof respond }) {
+							respond = config.callback;
+						},
+						prompt() {},
+					},
+				},
+			},
+		});
+		vi.stubGlobal("window", window);
+		vi.stubGlobal("document", window.document);
+		vi.stubGlobal("navigator", window.navigator);
+		return {
+			...instance,
+			async signInWithOneTap(
+				fetchOptions: Parameters<typeof instance.client.oneTap>[0],
+			) {
+				const oneTap = instance.client.oneTap(fetchOptions);
+				await vi.waitFor(() => {
+					expect(respond).toBeDefined();
+				});
+				await respond?.({ credential: "stub-id-token" });
+				await oneTap;
+			},
+		};
+	}
+
+	it("resolves with the session loaded", async () => {
+		const { client, runWithUser, testUser, sessionSetter, signInWithOneTap } =
+			await oneTapInstance();
+		await runWithUser(testUser.email, testUser.password, async (headers) => {
+			headers.delete("cookie");
+			const session = client.useSession;
+			onTestFinished(session.subscribe(() => {}));
+			await vi.waitFor(() => {
+				expect(session.get().isPending).toBe(false);
+			});
+			expect(session.get().data).toBeNull();
+
+			await signInWithOneTap({
+				fetchOptions: { onSuccess: sessionSetter(headers) },
+			});
+
+			expect(session.get().data?.user.email).toBe(defaultVerifiedPayload.email);
+		});
+	});
+
+	it("does not refresh the session when the signal is disabled", async () => {
+		const { client, runWithUser, testUser, sessionSetter, signInWithOneTap } =
+			await oneTapInstance();
+		await runWithUser(testUser.email, testUser.password, async (headers) => {
+			headers.delete("cookie");
+			const session = client.useSession;
+			onTestFinished(session.subscribe(() => {}));
+			await vi.waitFor(() => {
+				expect(session.get().isPending).toBe(false);
+			});
+			const refetching: boolean[] = [];
+			onTestFinished(
+				session.listen((state) => {
+					refetching.push(state.isRefetching);
+				}),
+			);
+
+			// A refresh would run before the sign-in resolves, so there is
+			// nothing to wait for afterwards.
+			await signInWithOneTap({
+				fetchOptions: {
+					disableSignal: true,
+					onSuccess: sessionSetter(headers),
+				},
+			});
+
+			expect(refetching).toEqual([]);
+			expect(session.get().data).toBeNull();
+		});
 	});
 });

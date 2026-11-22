@@ -15,7 +15,8 @@ export const emailOTPClient = () => {
 				matcher: (path) =>
 					path === "/email-otp/verify-email" ||
 					path === "/sign-in/email-otp" ||
-					path === "/email-otp/request-email-change",
+					path === "/email-otp/request-email-change" ||
+					path === "/email-otp/change-email",
 				signal: "$sessionSignal",
 			},
 		],

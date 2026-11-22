@@ -487,3 +487,10 @@ describe("multi-session", async () => {
 		expect(otherAfter.data?.session.token).toBe(otherToken);
 	});
 });
+
+it("marks revoking a device session as a session change", () => {
+	const listener = multiSessionClient().atomListeners.find(
+		({ signal }) => signal === "$sessionSignal",
+	);
+	expect(listener?.matcher("/multi-session/revoke")).toBe(true);
+});

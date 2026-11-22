@@ -364,7 +364,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 									update &&
 									hasSessionCookieChanged(update.previousValue, update.value)
 								) {
-									store?.notify("$sessionSignal");
+									void store?.notify("$sessionSignal");
 								}
 							}
 						}
@@ -438,7 +438,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 									getSetCookie(cookie, currentValue ?? undefined),
 							);
 							if (update) {
-								store?.notify("$sessionSignal");
+								void store?.notify("$sessionSignal");
 							}
 						}
 					},

@@ -54,7 +54,7 @@ function makeEmbedded() {
  * promise and the nonce the client put in the start URL (so a test can forge a
  * completion message that passes — or fails — the gate).
  */
-function startPopup() {
+function startPopup(notifySessionSignal = vi.fn()) {
 	const open = vi.fn((..._args: unknown[]) => fakePopup());
 	vi.stubGlobal("open", open);
 	const $fetch = vi.fn().mockResolvedValue({
@@ -64,7 +64,7 @@ function startPopup() {
 	const result = createSignInPopup({
 		$fetch: $fetch as unknown as BetterFetch,
 		options: { baseURL: AUTH_ORIGIN },
-		notifySessionSignal: vi.fn(),
+		notifySessionSignal,
 	})({ provider: "google" });
 	const startUrl = new URL(`${open.mock.calls[0]?.[0]}`);
 	return { result, nonce: startUrl.searchParams.get("popupNonce") ?? "" };
@@ -119,6 +119,31 @@ describe("signIn.popup completion gate", () => {
 
 		await result;
 		expect(window.localStorage.getItem(POPUP_TOKEN_STORAGE_KEY)).toBe("real");
+	});
+
+	it("resolves once the session reflects the sign-in", async () => {
+		let release!: () => void;
+		const notify = vi.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					release = resolve;
+				}),
+		);
+		const { result, nonce } = startPopup(notify);
+		post(AUTH_ORIGIN, { type: OAUTH_POPUP_MESSAGE_TYPE, nonce, token: "real" });
+		await vi.waitFor(() => expect(notify).toHaveBeenCalledOnce());
+
+		// A sign-in that did not wait for the refresh resolves within this task.
+		const outcome = await Promise.race([
+			result.then(() => "resolved"),
+			new Promise((resolve) => setTimeout(resolve, 0, "waiting")),
+		]);
+		expect(outcome).toBe("waiting");
+		release();
+		await expect(result).resolves.toEqual({
+			data: { success: true },
+			error: null,
+		});
 	});
 
 	it("relays a completion error from the auth origin", async () => {
