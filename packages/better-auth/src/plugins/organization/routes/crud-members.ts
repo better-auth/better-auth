@@ -334,8 +334,9 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
-			return withLock(`org-member:${organizationId}`, async () => {
-				const adapter = getOrgAdapter<O>(ctx.context, options);
+			const { toBeRemovedMember, userBeingRemoved, organization } =
+				await withLock(`org-member:${organizationId}`, async () => {
+					const adapter = getOrgAdapter<O>(ctx.context, options);
 				const member = await adapter.findMemberByOrgId({
 					userId: session.user.id,
 					organizationId: organizationId,
@@ -453,18 +454,24 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					await adapter.setActiveOrganization(session.session.token, null, ctx);
 				}
 
-				// Run afterRemoveMember hook
-				if (options?.organizationHooks?.afterRemoveMember) {
-					await options?.organizationHooks.afterRemoveMember({
-						member: toBeRemovedMember,
-						user: userBeingRemoved,
-						organization,
-					});
-				}
+				return {
+					toBeRemovedMember,
+					userBeingRemoved,
+					organization,
+				};
+			});
 
-				return ctx.json({
+			// Run afterRemoveMember hook outside the lock to prevent deadlocks
+			if (options?.organizationHooks?.afterRemoveMember) {
+				await options?.organizationHooks.afterRemoveMember({
 					member: toBeRemovedMember,
+					user: userBeingRemoved,
+					organization,
 				});
+			}
+
+			return ctx.json({
+				member: toBeRemovedMember,
 			});
 		},
 	);
@@ -565,8 +572,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				);
 			}
 
-			return withLock(`org-member:${organizationId}`, async () => {
-				const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const { updatedMember, previousRole, userBeingUpdated, organization } =
+				await withLock(`org-member:${organizationId}`, async () => {
+					const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 				const roleToSet = parseRoleList(ctx.body.role);
 
 				if (roleToSet.length === 0) {
@@ -749,17 +757,12 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 							);
 						}
 
-						// Run afterUpdateMemberRole hook
-						if (option?.organizationHooks?.afterUpdateMemberRole) {
-							await option?.organizationHooks.afterUpdateMemberRole({
-								member: updatedMember,
-								previousRole,
-								user: userBeingUpdated,
-								organization,
-							});
-						}
-
-						return ctx.json(updatedMember);
+						return {
+							updatedMember,
+							previousRole,
+							userBeingUpdated,
+							organization,
+						};
 					}
 				}
 
@@ -774,18 +777,25 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					);
 				}
 
-				// Run afterUpdateMemberRole hook
-				if (option?.organizationHooks?.afterUpdateMemberRole) {
-					await option?.organizationHooks.afterUpdateMemberRole({
-						member: updatedMember,
-						previousRole,
-						user: userBeingUpdated,
-						organization,
-					});
-				}
-
-				return ctx.json(updatedMember);
+				return {
+					updatedMember,
+					previousRole,
+					userBeingUpdated,
+					organization,
+				};
 			});
+
+			// Run afterUpdateMemberRole hook outside the lock to prevent deadlocks
+			if (option?.organizationHooks?.afterUpdateMemberRole) {
+				await option?.organizationHooks.afterUpdateMemberRole({
+					member: updatedMember,
+					previousRole,
+					user: userBeingUpdated,
+					organization,
+				});
+			}
+
+			return ctx.json(updatedMember);
 		},
 	);
 
