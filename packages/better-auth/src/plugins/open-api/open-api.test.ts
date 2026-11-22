@@ -440,6 +440,45 @@ describe("open-api", async () => {
 	});
 
 	/**
+	 * @see https://json-schema.org/draft/2020-12/json-schema-validation#section-6.1.1
+	 */
+	it("should map json and enum additionalFields to valid model schemas", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						metadata: {
+							type: "json",
+							required: false,
+						},
+						plan: {
+							type: ["free", "pro"],
+							required: true,
+							defaultValue: "free",
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const schema = await auth.api.generateOpenAPISchema();
+		const schemas = schema.components.schemas as Record<
+			string,
+			Record<string, any>
+		>;
+
+		expect(schemas["User"]!.properties.metadata).toEqual({});
+		expect(schemas["User"]!.properties.plan).toEqual({
+			type: "string",
+			enum: ["free", "pro"],
+			default: "free",
+		});
+		expect(schemas["User"]!.required).not.toContain("metadata");
+		expect(schemas["User"]!.required).toContain("plan");
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10430
 	 */
 	it("should allow every JSON value in additional field request bodies", async () => {
