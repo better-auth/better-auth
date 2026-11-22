@@ -1,9 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import {
 	constantTimeEqual,
+	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
+import { createOrFindVerification } from "../../db/verification";
 import { getDate } from "../../utils/date";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
@@ -111,4 +113,30 @@ export async function tryReuseOTP(
 	});
 
 	return plainOtp;
+}
+
+export const defaultOTPGenerator = (options: EmailOTPOptions) =>
+	generateRandomString(options.otpLength ?? 6, "0-9");
+
+export async function issueOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredEmailOTPOptions,
+	identifier: string,
+	data: Parameters<RequiredEmailOTPOptions["generateOTP"]>[0],
+): Promise<string> {
+	const otp = opts.generateOTP(data, ctx) || defaultOTPGenerator(opts);
+	const verification = {
+		value: `${await storeOTP(ctx, opts, otp)}:0`,
+		identifier,
+		expiresAt: getDate(opts.expiresIn, "sec"),
+	};
+	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
+	const stored = await createOrFindVerification(ctx, verification);
+	if (!stored || stored.value === verification.value) return otp;
+
+	const reused = await tryReuseOTP(ctx, opts, identifier);
+	if (reused) return reused;
+	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
+	await ctx.context.internalAdapter.createVerificationValue(verification);
+	return otp;
 }
