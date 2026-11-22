@@ -109,7 +109,7 @@ describe("stripe schema indexes", () => {
 		db.close();
 	});
 
-	it("should produce no migrations on an existing database that already has the tables without indexes", async () => {
+	it("should produce no migrations (including toBeAddedIndexes) on an existing database that already has the columns without indexes", async () => {
 		const db = new DatabaseSync(":memory:");
 		const baseAuth = betterAuth({
 			baseURL: "http://localhost:3000",
@@ -165,6 +165,18 @@ describe("stripe schema indexes", () => {
 		const migrations = await getMigrations(auth.options);
 		expect(migrations.toBeCreated).toHaveLength(0);
 		expect(migrations.toBeAdded).toHaveLength(0);
+		expect(migrations.toBeAddedIndexes).toHaveLength(0);
+
+		const indexNames = (
+			db
+				.prepare("SELECT name FROM sqlite_master WHERE type='index'")
+				.all() as Array<{ name: string }>
+		).map((i) => i.name);
+		expect(indexNames).not.toContain("subscription_referenceId_idx");
+		expect(indexNames).not.toContain("subscription_stripeCustomerId_idx");
+		expect(indexNames).not.toContain("subscription_stripeSubscriptionId_idx");
+		expect(indexNames).not.toContain("user_stripeCustomerId_idx");
+		expect(indexNames).not.toContain("organization_stripeCustomerId_idx");
 
 		db.close();
 	});
