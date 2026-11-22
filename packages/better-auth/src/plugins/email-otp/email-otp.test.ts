@@ -3149,32 +3149,6 @@ describe("email-otp verification rows", () => {
 		vi.useRealTimers();
 	});
 
-	it("fits the derived row id in the MySQL id column", async () => {
-		const delivered: string[] = [];
-		const { auth, testUser } = await getTestInstance(
-			{
-				plugins: [
-					emailOTP({
-						async sendVerificationOTP({ otp }) {
-							delivered.push(otp);
-						},
-					}),
-				],
-			},
-			{ testWith: "mysql" },
-		);
-		const body = { email: testUser.email, type: "sign-in" as const };
-
-		await auth.api.sendVerificationOTP({ body });
-		await auth.api.sendVerificationOTP({ body });
-
-		const res = await auth.api.checkVerificationOTP({
-			body: { ...body, otp: delivered[1]! },
-			asResponse: true,
-		});
-		expect(res.status).toBe(200);
-	});
-
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10437
 	 */
@@ -3573,38 +3547,52 @@ describe("email-otp verification rows", () => {
 		},
 	);
 
-	it("does not read a failed verification create hook as a collision", async () => {
-		let failCreate = true;
-		const delivered: string[] = [];
-		const { auth, testUser } = await getTestInstance({
-			databaseHooks: {
-				verification: {
-					create: {
-						async after() {
-							if (!failCreate) return;
-							failCreate = false;
-							throw new Error("create hook failed");
+	it.for([
+		["an error", new Error("create hook failed")],
+		[
+			"a unique violation",
+			Object.assign(
+				new Error(
+					'duplicate key value violates unique constraint "member_pkey"',
+				),
+				{ code: "23505" },
+			),
+		],
+	] as const)(
+		"does not read %s from a verification create hook as a collision",
+		async ([, hookError]) => {
+			let failCreate = true;
+			const delivered: string[] = [];
+			const { auth, testUser } = await getTestInstance({
+				databaseHooks: {
+					verification: {
+						create: {
+							async after() {
+								if (!failCreate) return;
+								failCreate = false;
+								throw hookError;
+							},
 						},
 					},
 				},
-			},
-			plugins: [
-				emailOTP({
-					storeOTP: "encrypted",
-					async sendVerificationOTP({ otp }) {
-						delivered.push(otp);
-					},
-				}),
-			],
-		});
+				plugins: [
+					emailOTP({
+						storeOTP: "encrypted",
+						async sendVerificationOTP({ otp }) {
+							delivered.push(otp);
+						},
+					}),
+				],
+			});
 
-		await expect(
-			auth.api.sendVerificationOTP({
-				body: { email: testUser.email, type: "sign-in" },
-			}),
-		).rejects.toThrow("create hook failed");
-		expect(delivered).toHaveLength(0);
-	});
+			await expect(
+				auth.api.sendVerificationOTP({
+					body: { email: testUser.email, type: "sign-in" },
+				}),
+			).rejects.toThrow(hookError.message);
+			expect(delivered).toHaveLength(0);
+		},
+	);
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11181

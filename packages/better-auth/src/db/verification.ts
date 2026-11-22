@@ -49,7 +49,8 @@ export async function createOrFindVerification(
 			const existing = await internalAdapter.findVerificationValue(
 				data.identifier,
 			);
-			if (!existing) throw error;
+			// Our own value means the insert succeeded and a hook threw.
+			if (!existing || existing.value === data.value) throw error;
 			return existing;
 		});
 }

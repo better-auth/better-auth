@@ -1001,6 +1001,7 @@ async function issuePhoneNumberOTP(
 	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
 		value: verification.value,
 		expiresAt: verification.expiresAt,
+		createdAt: new Date(),
 	});
 	return code;
 }

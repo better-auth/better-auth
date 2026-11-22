@@ -139,6 +139,7 @@ export async function issueOTP(
 	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
 		value: verification.value,
 		expiresAt: verification.expiresAt,
+		createdAt: new Date(),
 	});
 	return otp;
 }
