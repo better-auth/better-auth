@@ -407,7 +407,7 @@ await authClient.signIn.email({
 })
 ```
 
-Hooks like `useSession` also return an error object if there was an error fetching the session. On top of that, they also return an `isPending` property to indicate if the request is still pending.
+Hooks like `useSession` also return an error object if there was an error fetching the session. On top of that, they also return an `isPending` property that is `true` until the session is known. Later refetches set `isRefetching` instead.
 
 ```ts
 import { useSession } from "@/lib/auth-client"

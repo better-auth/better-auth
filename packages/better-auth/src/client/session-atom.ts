@@ -2,6 +2,7 @@ import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
 import { atom, onMount, STORE_UNMOUNT_DELAY } from "nanostores";
 import type { Session, User } from "../types";
+import { bindAuthChange } from "./auth-change";
 import { isJsonEqual, withEquality } from "./equality";
 import type { AuthQueryAtom, AuthQueryState } from "./query";
 import { createAuthQueryAtom } from "./query-atom";
@@ -124,6 +125,32 @@ export function getSessionAtom(
 		},
 	);
 	withEquality(session, isSessionAtomEqual);
+	const isIdentityChanging = bindAuthChange(
+		[$signal],
+		session,
+		() => flight?.promise,
+	);
+
+	const settle = (
+		result: Pick<AuthQueryState<SessionData>, "data" | "error">,
+		outcome: SessionFetchOutcome,
+	): SessionFetchOutcome => {
+		// During a sign-in, a signed-out result may predate the new credentials.
+		if (result.data === null && isIdentityChanging()) {
+			session.set({
+				...session.value,
+				isRefetching: false,
+			});
+			return "aborted";
+		}
+		session.set({
+			...result,
+			isPending: false,
+			isRefetching: false,
+			refetch,
+		});
+		return outcome;
+	};
 
 	const executeSessionFetch = async (
 		signal: AbortSignal,
@@ -132,7 +159,6 @@ export function getSessionAtom(
 		const current = session.value;
 		session.set({
 			...current,
-			isPending: current.data === null,
 			isRefetching: true,
 			error: null,
 			refetch,
@@ -174,14 +200,13 @@ export function getSessionAtom(
 			if (error) {
 				const latest = session.value;
 				const isUnauthorized = (error as BetterFetchError)?.status === 401;
-				session.set({
-					data: isUnauthorized ? null : latest.data,
-					error: error as BetterFetchError,
-					isPending: false,
-					isRefetching: false,
-					refetch,
-				});
-				return "failed";
+				return settle(
+					{
+						data: isUnauthorized ? null : latest.data,
+						error: error as BetterFetchError,
+					},
+					"failed",
+				);
 			}
 
 			const sessionData = normalizeSessionData(data);
@@ -192,27 +217,25 @@ export function getSessionAtom(
 				isJsonEqual(current.data, sessionData)
 					? current.data
 					: sessionData;
-			session.set({
-				data: stableData as SessionData | null,
-				error: null,
-				isPending: false,
-				isRefetching: false,
-				refetch,
-			});
-			return outcome;
+			return settle(
+				{
+					data: stableData as SessionData | null,
+					error: null,
+				},
+				outcome,
+			);
 		} catch (fetchError) {
 			if (signal.aborted) {
 				return "aborted";
 			}
 			const latest = session.value;
-			session.set({
-				data: latest.data,
-				error: fetchError as BetterFetchError,
-				isPending: false,
-				isRefetching: false,
-				refetch,
-			});
-			return "failed";
+			return settle(
+				{
+					data: latest.data,
+					error: fetchError as BetterFetchError,
+				},
+				"failed",
+			);
 		}
 	};
 
