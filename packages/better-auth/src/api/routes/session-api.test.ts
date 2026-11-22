@@ -5,6 +5,7 @@ import {
 	runWithRequestState,
 } from "@better-auth/core/context";
 import { memoryAdapter } from "@better-auth/memory-adapter";
+import { base64Url } from "@better-auth/utils/base64";
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 import {
 	afterEach,
@@ -998,6 +999,49 @@ describe("cookie cache", () => {
 
 			const session = await client.getSession({ fetchOptions: { headers } });
 			expect(session.data).toBeNull();
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12891
+	 */
+	it.for([
+		["value", "not base64!"],
+		[
+			"signature",
+			base64Url.encode(
+				JSON.stringify({
+					session: {},
+					expiresAt: Date.now() + 60_000,
+					signature: "not base64!",
+				}),
+				{ padding: false },
+			),
+		],
+	])(
+		"falls back to the database when the cached %s is not base64url",
+		async ([, sessionData]) => {
+			const { client, headers, cookieSetter, findOne } =
+				await createCachedSession();
+			const cached = await client.getSession({ fetchOptions: { headers } });
+			const signedSessionToken = parseCookies(headers.get("cookie") || "").get(
+				"better-auth.session_token",
+			);
+			headers.set(
+				"cookie",
+				`better-auth.session_token=${signedSessionToken}; better-auth.session_data=${sessionData}`,
+			);
+
+			const session = await client.getSession({
+				fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+			});
+			expect(session.error).toBeNull();
+			expect(session.data?.session.token).toBe(cached.data?.session.token);
+			expect(findOne).toHaveBeenCalledOnce();
+
+			const replaced = await client.getSession({ fetchOptions: { headers } });
+			expect(replaced.data).toEqual(session.data);
+			expect(findOne).toHaveBeenCalledOnce();
 		},
 	);
 });

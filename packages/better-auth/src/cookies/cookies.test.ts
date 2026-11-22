@@ -1363,6 +1363,37 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12891
+	 */
+	it.for([
+		["value", "not base64!"],
+		[
+			"signature",
+			base64Url.encode(
+				JSON.stringify({
+					session: {},
+					expiresAt: Date.now() + 60_000,
+					signature: "not base64!",
+				}),
+				{ padding: false },
+			),
+		],
+	])(
+		"should return null when a compact cookie's %s is not base64url",
+		async ([, sessionData]) => {
+			const request = new Request("https://example.com/api/auth/session", {
+				headers: { cookie: `better-auth.session_data=${sessionData}` },
+			});
+
+			const cache = await getCookieCache(request, {
+				secret: "better-auth.secret",
+				strategy: "compact",
+			});
+			expect(cache).toBeNull();
+		},
+	);
+
 	it("should require a secret when helper verification has no JWKS", async () => {
 		const headers = new Headers();
 		headers.set("cookie", "better-auth.session_data=token");
