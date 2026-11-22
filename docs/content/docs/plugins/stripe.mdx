@@ -681,6 +681,7 @@ export const stripeUserTableFields = [
 		type: "string",
 		description: "The Stripe customer ID, set by the server",
 		isOptional: true,
+		isIndexed: true,
 	},
 ];
 
@@ -696,6 +697,7 @@ export const stripeOrganizationTableFields = [
 		type: "string",
 		description: "The Stripe customer ID for the organization, set by the server",
 		isOptional: true,
+		isIndexed: true,
 	},
 ];
 
@@ -723,18 +725,21 @@ export const stripeSubscriptionTableFields = [
 		description:
 			"The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
 		isUnique: false,
+		isIndexed: true,
 	},
 	{
 		name: "stripeCustomerId",
 		type: "string",
 		description: "The Stripe customer ID",
 		isOptional: true,
+		isIndexed: true,
 	},
 	{
 		name: "stripeSubscriptionId",
 		type: "string",
 		description: "The Stripe subscription ID",
 		isOptional: true,
+		isIndexed: true,
 	},
 	{
 		name: "status",
