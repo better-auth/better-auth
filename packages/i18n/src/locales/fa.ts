@@ -8,6 +8,7 @@ export const fa: TranslationDictionary = {
 	FAILED_TO_CREATE_USER: "ایجاد کاربر ناموفق بود",
 	FAILED_TO_CREATE_SESSION: "ایجاد نشست ناموفق بود",
 	FAILED_TO_UPDATE_USER: "به‌روزرسانی کاربر ناموفق بود",
+	FAILED_TO_DELETE_USER: "حذف کاربر ناموفق بود",
 	FAILED_TO_GET_SESSION: "دریافت نشست ناموفق بود",
 	INVALID_PASSWORD: "رمز عبور نامعتبر است",
 	INVALID_EMAIL: "ایمیل نامعتبر است",

@@ -277,6 +277,30 @@ describe("runWithTransaction", () => {
 		);
 	});
 
+	it("runs later hooks when a handled hook rethrows, then rejects with its error", async () => {
+		const { adapter } = createTransactionHarness();
+		const events: string[] = [];
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await queueAfterTransactionHook(
+					async () => {
+						throw new Error("cache unavailable");
+					},
+					{
+						onError(error) {
+							throw error;
+						},
+					},
+				);
+				await queueAfterTransactionHook(async () => {
+					events.push("later hook");
+				});
+			}),
+		).rejects.toThrow("cache unavailable");
+		expect(events).toEqual(["later hook"]);
+	});
+
 	it("reports unhandled after-commit failures and continues later committed hooks", async () => {
 		const { adapter } = createTransactionHarness();
 		const onAfterCommitHookError = vi.fn(() => {

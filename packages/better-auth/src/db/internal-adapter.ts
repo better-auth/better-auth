@@ -17,7 +17,11 @@ import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import type { InternalLogger } from "@better-auth/core/env";
 import { isWorkerd } from "@better-auth/core/env";
-import { APIError, BetterAuthError } from "@better-auth/core/error";
+import {
+	APIError,
+	BASE_ERROR_CODES,
+	BetterAuthError,
+} from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -257,14 +261,25 @@ export const createInternalAdapter = (
 		await queueAfterTransactionHook(
 			() => deleteCachedUserSessions(userId, references, revokedAt),
 			{
+				// Queued with onError so it runs after another hook fails, then rethrown.
 				onError(error) {
-					logger.error(
-						"Failed to delete committed user sessions from secondary storage",
-						error,
-					);
+					throw error;
 				},
 			},
 		);
+	}
+
+	async function findUser(userId: string) {
+		const currentAdapter = await getCurrentAdapter(adapter);
+		return currentAdapter.findOne<User>({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					value: userId,
+				},
+			],
+		});
 	}
 
 	async function revokeCachedUserSessions(
@@ -548,41 +563,41 @@ export const createInternalAdapter = (
 			const sessionReferences = await getActiveSessionReferences(userId);
 			const revokeCachedSessions = () =>
 				revokeCachedUserSessions(userId, sessionReferences);
-			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-				await deleteSessionRows(userId, revokeCachedSessions);
-			}
-			await deleteManyWithHooks(
-				[
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-				"account",
-				undefined,
-			);
-
-			// Revoke before the delete.after hooks, which can throw.
-			await deleteWithHooks(
-				[
-					{
-						field: "id",
-						value: userId,
-					},
-				],
-				"user",
-				{
+			// One transaction, so a failed delete keeps the sessions and accounts.
+			await runWithTransaction(adapter, async () => {
+				// Revoke before the delete.after hooks, which can throw.
+				await deleteWithHooks([{ field: "id", value: userId }], "user", {
 					fn: async (where) => {
+						if (!secondaryStorage || options.session?.storeSessionInDatabase) {
+							await deleteSessionRows(userId, revokeCachedSessions);
+						}
+						await deleteManyWithHooks(
+							[
+								{
+									field: "userId",
+									value: userId,
+								},
+							],
+							"account",
+							undefined,
+						);
 						const currentAdapter = await getCurrentAdapter(adapter);
 						await currentAdapter.deleteMany({
 							model: "user",
 							where,
 						});
+						// A row-level policy or trigger can skip the delete without an error.
+						if (await findUser(userId)) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.FAILED_TO_DELETE_USER,
+							);
+						}
 						await revokeCachedSessions();
 					},
 					executeMainFn: false,
-				},
-			);
+				});
+			});
 		},
 		createSession: async (
 			userId: string,
@@ -740,9 +755,11 @@ export const createInternalAdapter = (
 				if (sessionStringified) {
 					const s = safeJSONParse<{
 						session: Session;
-						user: User;
+						user: User | null;
 					}>(sessionStringified);
 					if (!s || (await isRevokedSession(s.session))) return null;
+					const user = s.user ?? (await findUser(s.session.userId));
+					if (!user) return null;
 					const parsedSession = parseSessionOutput(ctx.options, {
 						...s.session,
 						expiresAt: new Date(s.session.expiresAt),
@@ -750,9 +767,9 @@ export const createInternalAdapter = (
 						updatedAt: new Date(s.session.updatedAt),
 					});
 					const parsedUser = parseUserOutput(ctx.options, {
-						...s.user,
-						createdAt: new Date(s.user.createdAt),
-						updatedAt: new Date(s.user.updatedAt),
+						...user,
+						createdAt: new Date(user.createdAt),
+						updatedAt: new Date(user.updatedAt),
 					});
 					return {
 						session: parsedSession,
@@ -803,6 +820,11 @@ export const createInternalAdapter = (
 				{ session: Session; user: User }
 			>();
 			const missingTokens: string[] = [];
+			const cachedSessions: {
+				token: string;
+				session: Session;
+				user: User | null;
+			}[] = [];
 			const revokedBeforeByUser = new Map<string, number>();
 			if (secondaryStorage) {
 				for (const sessionToken of uniqueTokens) {
@@ -815,7 +837,7 @@ export const createInternalAdapter = (
 									: sessionStringified
 							) as {
 								session: Session;
-								user: User;
+								user: User | null;
 							};
 							if (
 								!s ||
@@ -826,21 +848,11 @@ export const createInternalAdapter = (
 							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
 								continue;
 							}
-							const session = {
-								session: {
-									...s.session,
-									expiresAt: new Date(s.session.expiresAt),
-								},
-								user: {
-									...s.user,
-									createdAt: new Date(s.user.createdAt),
-									updatedAt: new Date(s.user.updatedAt),
-								},
-							} as {
-								session: Session;
-								user: User;
-							};
-							sessionsByToken.set(sessionToken, session);
+							cachedSessions.push({
+								token: sessionToken,
+								session: { ...s.session, expiresAt },
+								user: s.user,
+							});
 						} catch {
 							// Skip invalid/corrupt session data
 							continue;
@@ -849,6 +861,19 @@ export const createInternalAdapter = (
 						missingTokens.push(sessionToken);
 					}
 				}
+			}
+			// Outside the try, so a failed user read is not dropped as corrupt data.
+			for (const cached of cachedSessions) {
+				const user = cached.user ?? (await findUser(cached.session.userId));
+				if (!user) continue;
+				sessionsByToken.set(cached.token, {
+					session: cached.session,
+					user: {
+						...user,
+						createdAt: new Date(user.createdAt),
+						updatedAt: new Date(user.updatedAt),
+					},
+				});
 			}
 
 			const databaseTokens = secondaryStorage ? missingTokens : uniqueTokens;
@@ -1177,16 +1202,7 @@ export const createInternalAdapter = (
 		},
 		findUserById: async (userId: string) => {
 			if (!userId) return null;
-			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-				model: "user",
-				where: [
-					{
-						field: "id",
-						value: userId,
-					},
-				],
-			});
-			return user;
+			return findUser(userId);
 		},
 		linkAccount: async (
 			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &

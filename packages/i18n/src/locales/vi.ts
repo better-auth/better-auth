@@ -8,6 +8,7 @@ export const vi: TranslationDictionary = {
 	FAILED_TO_CREATE_USER: "Tạo người dùng thất bại",
 	FAILED_TO_CREATE_SESSION: "Tạo phiên thất bại",
 	FAILED_TO_UPDATE_USER: "Cập nhật người dùng thất bại",
+	FAILED_TO_DELETE_USER: "Xóa người dùng thất bại",
 	FAILED_TO_GET_SESSION: "Lấy phiên thất bại",
 	INVALID_PASSWORD: "Mật khẩu không hợp lệ",
 	INVALID_EMAIL: "Email không hợp lệ",
