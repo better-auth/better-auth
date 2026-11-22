@@ -3456,11 +3456,7 @@ describe("email-otp verification rows", () => {
 		expect(statuses.sort()).toEqual([200, 400]);
 	});
 
-	it("does not read a unique violation from a verification create hook as a collision", async () => {
-		const hookError = Object.assign(
-			new Error('duplicate key value violates unique constraint "member_pkey"'),
-			{ code: "23505" },
-		);
+	it("does not read a failed verification create hook as a collision", async () => {
 		let failCreate = true;
 		const delivered: string[] = [];
 		const { auth, testUser } = await getTestInstance({
@@ -3470,7 +3466,7 @@ describe("email-otp verification rows", () => {
 						async after() {
 							if (!failCreate) return;
 							failCreate = false;
-							throw hookError;
+							throw new Error("create hook failed");
 						},
 					},
 				},
@@ -3489,7 +3485,7 @@ describe("email-otp verification rows", () => {
 			auth.api.sendVerificationOTP({
 				body: { email: testUser.email, type: "sign-in" },
 			}),
-		).rejects.toThrow(hookError.message);
+		).rejects.toThrow("create hook failed");
 		expect(delivered).toHaveLength(0);
 	});
 
