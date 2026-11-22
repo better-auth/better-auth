@@ -79,11 +79,20 @@ function createMockAdapter(adapterId: string, dialect?: string): DBAdapter {
 	};
 }
 
-function getDefaultSchemaOutputFileName(adapterId: string, now = new Date()) {
+/**
+ * The file name used when `--output` points to an existing directory.
+ *
+ * @internal
+ */
+export function getDefaultSchemaOutputFileName(
+	adapterId: string,
+	now = new Date(),
+) {
 	if (adapterId === "prisma") {
 		return "schema.prisma";
 	}
-	if (adapterId === "kysely") {
+	// Adapters whose `createSchema` writes SQL.
+	if (adapterId === "kysely" || adapterId === "dsql") {
 		return `${now.toISOString().replace(/:/g, "-")}.sql`;
 	}
 	return "auth-schema.ts";

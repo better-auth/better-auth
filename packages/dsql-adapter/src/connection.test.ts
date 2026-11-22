@@ -6,7 +6,7 @@ import { isConnectionError, withConnectionChecks } from "./connection";
 
 type FakeClient = {
 	client: PostgresPoolClient;
-	releases: boolean[];
+	releases: unknown[];
 	checkOut: () => void;
 	kill: () => void;
 	pings: () => number;
@@ -14,7 +14,7 @@ type FakeClient = {
 
 function fakeClient(): FakeClient {
 	let alive = true;
-	const releases: boolean[] = [];
+	const releases: unknown[] = [];
 	const query = vi.fn(async () => {
 		if (!alive) throw new Error("Connection terminated unexpectedly");
 		return { command: "SELECT", rowCount: 1, rows: [] };
@@ -25,7 +25,7 @@ function fakeClient(): FakeClient {
 		releases,
 		// Like node-postgres, set a fresh `release` on every checkout.
 		checkOut: () => {
-			client.release = (destroy?: boolean) => {
+			client.release = (destroy?: unknown) => {
 				releases.push(destroy ?? false);
 			};
 		},
@@ -119,6 +119,19 @@ describe("Aurora DSQL connections", () => {
 		// Released normally the first time, then destroyed after the failed check.
 		expect(a.releases).toEqual([false, true]);
 	});
+
+	it.each([true, new Error("broken")])(
+		"passes release(%s) through so the pool destroys the connection",
+		async (destroy) => {
+			const a = fakeClient();
+			const { pool } = fakePool([a]);
+			const checked = withConnectionChecks(pool);
+			const client: { release(destroy?: unknown): void } =
+				await checked.connect();
+			client.release(destroy);
+			expect(a.releases).toEqual([destroy]);
+		},
+	);
 
 	it("retries opening a connection after a connection error", async () => {
 		const a = fakeClient();

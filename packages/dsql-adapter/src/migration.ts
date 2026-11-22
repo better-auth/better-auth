@@ -20,11 +20,17 @@ import { withDsqlRetry } from "./retry";
  * Plans migrations with the PostgreSQL planner. Before planning, it waits for
  * index builds left over from an interrupted run, and it recreates field
  * indexes that are missing.
+ *
+ * Like the PostgreSQL planner, it refuses a required column without a default
+ * on a populated table with an `UnsafeMigrationError`. Pass
+ * `throwOnUnsafe: false` to get the plan for reading, with the refused changes
+ * in `unsafeChanges`.
  */
 export async function getDsqlMigrations<DB>(
 	options: BetterAuthOptions,
 	connection: Kysely<DB>,
 	config: DsqlAdapterConfig = {},
+	{ throwOnUnsafe = true }: { throwOnUnsafe?: boolean } = {},
 ) {
 	const database = connection as unknown as Kysely<unknown>;
 	assertDsqlDatabase(database);
@@ -87,10 +93,17 @@ export async function getDsqlMigrations<DB>(
 				systemDB.executeQuery<R>(query),
 			);
 	}
-	const plan = await getMigrations({
-		...options,
-		database: { db: database, type: "postgres", schemaName: config.schemaName },
-	});
+	const plan = await getMigrations(
+		{
+			...options,
+			database: {
+				db: database,
+				type: "postgres",
+				schemaName: config.schemaName,
+			},
+		},
+		{ throwOnUnsafe },
+	);
 	const tables = await db.introspection.getTables();
 	const existing = await withDsqlRetry(() =>
 		sql<{
@@ -186,4 +199,24 @@ export async function getDsqlMigrations<DB>(
 			}
 		},
 	};
+}
+
+/**
+ * The warning `auth generate` puts above a script that contains changes the
+ * planner refuses to run, matching the Kysely generator's.
+ *
+ * @internal
+ */
+export function unsafeChangesBanner(unsafeChanges: string[]): string {
+	const rule = `-- ${"-".repeat(77)}`;
+	const lines = [
+		rule,
+		"-- DO NOT RUN THIS SCRIPT AS IT IS.",
+		"-- Applying it to a populated database corrupts the rows it touches:",
+	];
+	for (const change of unsafeChanges) {
+		lines.push("--", `-- ${change}`);
+	}
+	lines.push(rule, "");
+	return lines.join("\n");
 }

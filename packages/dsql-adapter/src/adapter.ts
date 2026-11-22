@@ -3,6 +3,7 @@ import type {
 	DBAdapter,
 	DBAdapterDebugLogOption,
 } from "@better-auth/core/db/adapter";
+import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { kyselyAdapter } from "@better-auth/kysely-adapter";
 import type { Kysely } from "kysely";
@@ -62,13 +63,25 @@ export function dsqlAdapter<DB>(
 			incrementOne: (data) => withDsqlRetry(() => raw.incrementOne(data)),
 			transaction: (cb) => withDsqlRetry(() => raw.transaction(cb)),
 			async createSchema(authOptions, file) {
-				const { getDsqlMigrations } = await import("./migration");
-				const plan = await getDsqlMigrations(authOptions, database, config);
+				const { getDsqlMigrations, unsafeChangesBanner } = await import(
+					"./migration"
+				);
+				// `auth migrate` refuses unsafe changes and points to `auth generate`
+				// to inspect them, so generating only reads the plan.
+				const plan = await getDsqlMigrations(authOptions, database, config, {
+					throwOnUnsafe: false,
+				});
 				if (plan.schemaProblems.length)
 					throw new BetterAuthError(plan.schemaProblems.join("\n"));
-				const code = await plan.compileMigrations();
+				const compiled = await plan.compileMigrations();
+				const code = compiled === ";" ? "" : compiled;
+				const logger = createLogger(authOptions.logger);
+				for (const change of plan.unsafeChanges) logger.warn(change);
 				return {
-					code: code === ";" ? "" : code,
+					code:
+						code && plan.unsafeChanges.length
+							? `${unsafeChangesBanner(plan.unsafeChanges)}${code}`
+							: code,
 					path: file ?? `./better-auth_migrations/${Date.now()}.sql`,
 				};
 			},

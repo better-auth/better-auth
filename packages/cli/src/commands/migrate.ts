@@ -110,7 +110,12 @@ export async function migrateAction(opts: any) {
 			: await getMigrations(config);
 	} catch (error) {
 		spinner.stop();
-		if (!(error instanceof UnsafeMigrationError)) throw error;
+		// An adapter's plan can come from the app's copy of `better-auth`, not
+		// the CLI's, so match on the error's name as well.
+		const unsafe =
+			error instanceof UnsafeMigrationError ||
+			(error instanceof Error && error.name === "UnsafeMigrationError");
+		if (!unsafe) throw error;
 		console.error(chalk.red("The migration was refused, and nothing ran."));
 		console.error(error.message);
 		console.error(

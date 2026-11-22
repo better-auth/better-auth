@@ -498,8 +498,17 @@ function assertExistingTableIndexFits({
  * default value to a populated table. Distinct from the plain
  * {@link BetterAuthError} thrown for index-definition conflicts, so callers
  * can tell the two apart without matching on message text.
+ *
+ * Its `name` is `"UnsafeMigrationError"`, so the CLI can recognize one thrown
+ * by an adapter that loads its own copy of `better-auth`, where `instanceof`
+ * fails.
  */
-export class UnsafeMigrationError extends BetterAuthError {}
+export class UnsafeMigrationError extends BetterAuthError {
+	constructor(message: string, options?: { cause?: unknown | undefined }) {
+		super(message, options);
+		this.name = "UnsafeMigrationError";
+	}
+}
 
 function hasTimestampColumnDefault(
 	field: DBFieldAttribute,

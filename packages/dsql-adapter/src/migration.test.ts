@@ -1,5 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { getMigrations } from "better-auth/db/migration";
+import { getMigrations, UnsafeMigrationError } from "better-auth/db/migration";
 import type {
 	CompiledQuery,
 	DatabaseConnection,
@@ -20,6 +20,8 @@ import { getDsqlMigrations } from "./migration";
 
 function postgres(options?: {
 	tables?: TableMetadata[];
+	/** Tables that already hold rows. */
+	populated?: string[];
 	jobSucceeded?: boolean;
 	pendingJob?: { id: string; index: string; schema?: string };
 	indexes?: {
@@ -31,12 +33,17 @@ function postgres(options?: {
 	}[];
 }) {
 	let indexJobs = 0;
-	// Like the real query, only return the job when it was asked for by index
-	// name (and schema, when the test sets one).
-	const pendingJobRows = (parameters: readonly unknown[]) => {
+	// Applies the query's own predicates to the pending job, like the
+	// database would: a filter the query leaves out excludes nothing.
+	const pendingJobRows = ({ sql, parameters }: CompiledQuery) => {
 		const job = options?.pendingJob;
-		if (!job || !parameters.includes(job.index)) return [];
-		if (job.schema && !parameters.includes(job.schema)) return [];
+		if (!job) return [];
+		const bound = (placeholder: string) =>
+			parameters[Number(placeholder.slice(1)) - 1];
+		const schema = /n\.nspname = (\$\d+)/.exec(sql)?.[1];
+		if (schema && bound(schema) !== (job.schema ?? "public")) return [];
+		const names = /c\.relname in \(([^)]*)\)/.exec(sql)?.[1];
+		if (names && !names.split(", ").map(bound).includes(job.index)) return [];
 		return [{ job_id: job.id }];
 	};
 	// Rows for the catalog query `introspectPostgresTables` runs, one per column.
@@ -60,14 +67,20 @@ function postgres(options?: {
 			const rows = /^create (unique )?index async/.test(query.sql)
 				? [{ job_id: `index-job-${++indexJobs}` }]
 				: query.sql.includes("from sys.jobs")
-					? pendingJobRows(query.parameters)
+					? pendingJobRows(query)
 					: query.sql.startsWith("select t.relname as table_name")
 						? (options?.indexes ?? [])
 						: query.sql.includes("sys.wait_for_job")
 							? [{ succeeded: options?.jobSucceeded ?? true }]
 							: query.sql.includes("FROM pg_catalog.pg_attribute")
 								? tableColumnRows(query.parameters)
-								: [];
+								: (options?.populated ?? []).some((table) =>
+											query.sql.startsWith(
+												`select 1 as "present" from "${table}"`,
+											),
+										)
+									? [{ present: 1 }]
+									: [];
 			return { rows: rows as R[] };
 		},
 		async *streamQuery() {
@@ -129,6 +142,62 @@ describe("Aurora DSQL migrations", () => {
 			expect(plan.schemaProblems.join(" ")).toContain("unexpected");
 			await expect(plan.runMigrations()).rejects.toThrow("unexpected");
 			await expect(adapter.createSchema!({})).rejects.toThrow("unexpected");
+			expect(
+				queries.some(({ sql }) => /^(create|alter|drop) /i.test(sql)),
+			).toBe(false);
+		} finally {
+			await db.destroy();
+		}
+	});
+
+	it("refuses an unsafe change in migrate but prints it from generate", async () => {
+		const column = (name: string, dataType: string, isNullable = false) => ({
+			name,
+			dataType,
+			isNullable,
+			hasDefaultValue: false,
+			isAutoIncrementing: false,
+		});
+		const { dialect, queries } = postgres({
+			tables: [
+				{
+					name: "user",
+					schema: "public",
+					isView: false,
+					columns: [
+						column("id", "text"),
+						column("name", "text"),
+						column("email", "text"),
+						column("emailVerified", "bool"),
+						column("image", "text", true),
+						column("createdAt", "timestamptz"),
+						column("updatedAt", "timestamptz"),
+					],
+				},
+			],
+			populated: ["user"],
+		});
+		const options: BetterAuthOptions = {
+			user: {
+				additionalFields: { nickname: { type: "string", required: true } },
+			},
+		};
+		const db = new Kysely<unknown>({ dialect: withDsqlDialect(dialect) });
+		try {
+			const adapter = dsqlAdapter(db)({});
+			await expect(adapter.getMigrations!(options)).rejects.toBeInstanceOf(
+				UnsafeMigrationError,
+			);
+			const schema = await adapter.createSchema!(options, "migration.sql");
+			expect(schema.code).toMatch(
+				/^-- -+\n-- DO NOT RUN THIS SCRIPT AS IT IS\./,
+			);
+			expect(schema.code).toContain(
+				'Cannot add required column "nickname" to populated table "user"',
+			);
+			expect(schema.code).toContain(
+				'alter table "user" add column "nickname" text not null',
+			);
 			expect(
 				queries.some(({ sql }) => /^(create|alter|drop) /i.test(sql)),
 			).toBe(false);
@@ -217,7 +286,7 @@ describe("Aurora DSQL migrations", () => {
 		expect(queries[resumed + 1]!.parameters).toEqual(["pending-index"]);
 	});
 	it.each([
-		{ index: "unrelated_idx" },
+		{ index: "unrelated_idx", schema: "auth" },
 		{ index: "record_owner_unique", schema: "public" },
 	])("doesn't wait for a pending job on another index (%o)", async (job) => {
 		const { db, queries } = fixture({

@@ -82,11 +82,14 @@ export function withConnectionChecks(pool: PostgresPool): PostgresPool {
 	}
 	const lastReleased = new WeakMap<PostgresPoolClient, number>();
 	const checkOut = (client: PostgresPoolClient) => {
-		// node-postgres sets a new `release` on every checkout.
-		const release = client.release.bind(client);
-		client.release = () => {
-			lastReleased.set(client, Date.now());
-			release();
+		// node-postgres sets a new `release` on every checkout. Kysely's type
+		// leaves out its argument, but `release(true)` or `release(error)`
+		// destroys the connection instead of returning it to the pool.
+		const release: (destroy?: unknown) => void = client.release.bind(client);
+		client.release = (destroy?: unknown) => {
+			if (destroy) lastReleased.delete(client);
+			else lastReleased.set(client, Date.now());
+			release(destroy);
 		};
 		return client;
 	};

@@ -116,6 +116,21 @@ describe("adapter-owned migrations", () => {
 		expect(process.exit).toHaveBeenCalledWith(1);
 	});
 
+	it("refuses an unsafe change thrown by another copy of better-auth", async () => {
+		// What `instanceof` sees when the adapter loads its own `better-auth`.
+		const foreign = Object.assign(new Error("unsafe change"), {
+			name: new UnsafeMigrationError("unsafe change").name,
+		});
+		expect(foreign).not.toBeInstanceOf(UnsafeMigrationError);
+		vi.mocked(adapter.getMigrations!).mockRejectedValue(foreign);
+		await run();
+		expect(console.error).toHaveBeenCalledWith(
+			expect.stringContaining("The migration was refused"),
+		);
+		expect(plan.runMigrations).not.toHaveBeenCalled();
+		expect(process.exit).toHaveBeenCalledWith(1);
+	});
+
 	it("asks for confirmation before executing the adapter plan", async () => {
 		vi.mocked(prompt).mockResolvedValue({ migrate: false });
 		await run(false);
