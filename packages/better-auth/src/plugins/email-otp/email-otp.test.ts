@@ -3149,6 +3149,32 @@ describe("email-otp verification rows", () => {
 		vi.useRealTimers();
 	});
 
+	it("fits the derived row id in the MySQL id column", async () => {
+		const delivered: string[] = [];
+		const { auth, testUser } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp }) {
+							delivered.push(otp);
+						},
+					}),
+				],
+			},
+			{ testWith: "mysql" },
+		);
+		const body = { email: testUser.email, type: "sign-in" as const };
+
+		await auth.api.sendVerificationOTP({ body });
+		await auth.api.sendVerificationOTP({ body });
+
+		const res = await auth.api.checkVerificationOTP({
+			body: { ...body, otp: delivered[1]! },
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10437
 	 */

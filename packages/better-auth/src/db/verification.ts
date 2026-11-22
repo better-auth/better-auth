@@ -33,8 +33,9 @@ export async function createOrFindVerification(
 	const digest = await createHash("SHA-256").digest(
 		new TextEncoder().encode(`verification:${storedIdentifier}`),
 	);
+	// 24 bytes encode to 32 characters, within the `varchar(36)` id column.
 	const id = encodeDeterministicId(
-		new Uint8Array(digest),
+		new Uint8Array(digest).slice(0, 24),
 		ctx.context.options,
 		{
 			adapter: ctx.context.adapter,
