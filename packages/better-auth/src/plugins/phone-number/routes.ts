@@ -605,6 +605,12 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					},
 				],
 			});
+			if (!user && !opts.signUpOnVerification) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_EXIST,
+				);
+			}
 			if (!user) {
 				if (opts?.signUpOnVerification) {
 					const {

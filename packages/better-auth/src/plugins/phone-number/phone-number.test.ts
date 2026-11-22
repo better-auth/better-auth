@@ -2360,6 +2360,31 @@ describe("phone-number verification rows", () => {
 	);
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10449
+	 */
+	it("reports an unregistered number when sign-up on verification is off", async () => {
+		let code = "";
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code: sent }) {
+							code = sent;
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [phoneNumberClient()] } },
+		);
+		const number = "+15550000002";
+		await client.phoneNumber.sendOtp({ phoneNumber: number });
+
+		const res = await client.phoneNumber.verify({ phoneNumber: number, code });
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PHONE_NUMBER_NOT_EXIST");
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11105
 	 */
 	it.for(["default", "unique identifier"] as const)(
