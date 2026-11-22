@@ -707,7 +707,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						name: fieldName,
 						within: prismaModel?.properties,
 					});
-					if (!existingField) {
+					// Users may name the back-relation anything, so match it by type.
+					// Fields with @relation are owning sides or named relations, not this one.
+					const existingBackRelation = prismaModel?.properties.some(
+						(property) =>
+							property.type === "field" &&
+							property.fieldType === relatedModel &&
+							!property.attributes?.some(
+								(attribute) => attribute.name === "relation",
+							),
+					);
+					if (!existingField && !existingBackRelation) {
 						builder
 							.model(modelName)
 							.field(fieldName, `${relatedModel}${isUnique ? "?" : "[]"}`);

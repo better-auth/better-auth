@@ -255,6 +255,165 @@ model Account {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12134
+	 */
+	describe("prisma back-relations that already exist under another name", () => {
+		const existing = ({
+			sessionModel = "Session",
+			userRelations,
+		}: {
+			sessionModel?: string;
+			userRelations: string;
+		}) => `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  ${userRelations}
+
+  @@map("user")
+}
+
+model ${sessionModel} {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+`;
+		const generate = async (
+			schemaPrisma: string,
+			options: Partial<BetterAuthOptions> = {},
+		) => {
+			const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ba-prisma-"));
+			const file = path.join(tmpDir, "schema.prisma");
+			fs.writeFileSync(file, schemaPrisma);
+			try {
+				return await generatePrismaSchema({
+					file,
+					adapter: prismaAdapter(
+						{},
+						{ provider: "postgresql" },
+					)({} as BetterAuthOptions),
+					options: {
+						database: prismaAdapter({}, { provider: "postgresql" }),
+						...options,
+					},
+				});
+			} finally {
+				fs.rmSync(tmpDir, { recursive: true, force: true });
+			}
+		};
+		const userFieldsOfType = (code: string | undefined, type: string) => {
+			const user = code?.match(/model User \{([\s\S]*?)\n\}/)?.[1] ?? "";
+			return user.match(new RegExp(`^\\s*\\w+\\s+${type}\\[\\]`, "gm")) ?? [];
+		};
+
+		it("keeps a camelCase back-relation instead of adding a second one", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `userSessions  Session[]
+  userAccounts  Account[]`,
+				}),
+			);
+
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+			expect(userFieldsOfType(code, "Account")).toHaveLength(1);
+		});
+
+		it("keeps a back-relation to a custom model name with uppercase letters", async () => {
+			const { code } = await generate(
+				existing({
+					sessionModel: "UserSession",
+					userRelations: `userSessions  UserSession[]
+  accounts      Account[]`,
+				}),
+				{ session: { modelName: "UserSession" } },
+			);
+
+			expect(userFieldsOfType(code, "UserSession")).toHaveLength(1);
+			expect(userFieldsOfType(code, "Account")).toHaveLength(1);
+		});
+
+		it("leaves a schema with the generated back-relation names unchanged", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `sessions      Session[]
+  accounts      Account[]`,
+				}),
+			);
+			const { code: again } = await generate(code!);
+
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+			expect(userFieldsOfType(code, "Account")).toHaveLength(1);
+			// An unchanged schema comes back as empty code, so nothing is written.
+			expect(again).toBe("");
+		});
+
+		it("adds the back-relation when only a named relation to the model exists", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `revokedSessions Session[] @relation("revokedBy")
+  accounts        Account[]`,
+				}),
+			);
+
+			expect(code).toMatch(/^\s*sessions\s+Session\[\]\s*$/m);
+		});
+	});
+
 	it("should generate prisma schema", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",
