@@ -18,6 +18,29 @@ try {
 }
 
 describe("createOrFindVerification", () => {
+	it("derives a uuid id for the uuid strategy", async () => {
+		const { auth } = await getTestInstance({
+			advanced: { database: { generateId: "uuid" } },
+		});
+		const ctx = { context: await auth.$context } as GenericEndpointContext;
+		const data = {
+			identifier: "sign-in-otp-uuid@example.com",
+			value: "first",
+			expiresAt: new Date(Date.now() + 60_000),
+		};
+
+		const created = await createOrFindVerification(ctx, data);
+		const found = await createOrFindVerification(ctx, {
+			...data,
+			value: "second",
+		});
+
+		expect(created?.id).toMatch(
+			/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+		);
+		expect(found?.value).toBe("first");
+	});
+
 	it("keeps the id from a custom id strategy", async () => {
 		const { auth } = await getTestInstance({
 			advanced: {
