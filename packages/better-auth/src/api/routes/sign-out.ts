@@ -1,6 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { deleteSessionCookie } from "../../cookies";
+import { isSessionAccepted } from "./session";
 
 const signOutBodySchema = z
 	.object({
@@ -82,15 +83,33 @@ export const signOut = createAuthEndpoint(
 		let currentSession: Awaited<
 			ReturnType<typeof ctx.context.internalAdapter.findSession>
 		> | null = null;
+		let lookupFailed = false;
 		if (sessionCookieToken) {
 			try {
 				currentSession =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
 			} catch (e) {
+				lookupFailed = true;
 				ctx.context.logger.error("Failed to read session from database", e);
 			}
 		}
-		if (sessionCookieToken) {
+		// A session that a plugin rejects, such as one presented without its
+		// device-bound cookie, or one that plugins could not check because its
+		// lookup failed, only signs this browser out: its cookies are cleared
+		// but the session itself is kept.
+		const hasValidators = !!ctx.context.options.plugins?.some(
+			(plugin) => plugin.validateSession,
+		);
+		const keepSession =
+			(lookupFailed && hasValidators) ||
+			(!!currentSession &&
+				!(await isSessionAccepted(ctx, currentSession).catch((e) => {
+					ctx.context.logger.error("Failed to validate session", e);
+					return false;
+				})));
+		if (keepSession) {
+			currentSession = null;
+		} else if (sessionCookieToken) {
 			try {
 				await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
 			} catch (e) {

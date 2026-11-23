@@ -74,6 +74,7 @@ security:
       - 'packages/better-auth/src/api/rate-limiter/**'
       - 'packages/better-auth/src/plugins/captcha/**'
       - 'packages/better-auth/src/plugins/haveibeenpwned/**'
+      - 'packages/dbsc/**'
 
 enterprise:
   - changed-files:

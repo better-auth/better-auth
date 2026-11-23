@@ -43,6 +43,9 @@
       "path": "./packages/passkey/tsconfig.json"
     },
     {
+      "path": "./packages/dbsc/tsconfig.json"
+    },
+    {
       "path": "./packages/sso/tsconfig.json"
     },
     {

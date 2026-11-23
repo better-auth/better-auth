@@ -56,6 +56,7 @@ const SCOPE_TO_DOMAIN = new Map(
 		captcha: "security",
 		haveibeenpwned: "security",
 		"rate-limiter": "security",
+		dbsc: "security",
 
 		// enterprise
 		sso: "enterprise",
@@ -108,6 +109,7 @@ const PATH_TO_DOMAIN = [
 	["packages/better-auth/src/api/rate-limiter/", "security"],
 	["packages/better-auth/src/plugins/captcha/", "security"],
 	["packages/better-auth/src/plugins/haveibeenpwned/", "security"],
+	["packages/dbsc/", "security"],
 	["packages/better-auth/src/plugins/organization/", "organization"],
 	["packages/better-auth/src/plugins/admin/", "organization"],
 	["packages/better-auth/src/plugins/access/", "organization"],
@@ -234,6 +236,7 @@ const SCOPE_TO_PACKAGE = new Map(
 		sso: "@better-auth/sso",
 		scim: "@better-auth/scim",
 		passkey: "@better-auth/passkey",
+		dbsc: "@better-auth/dbsc",
 		"oauth-provider": "@better-auth/oauth-provider",
 		stripe: "@better-auth/stripe",
 		"api-key": "@better-auth/api-key",
@@ -261,6 +264,7 @@ const PATH_TO_PACKAGE = [
 	["packages/sso/", "@better-auth/sso"],
 	["packages/scim/", "@better-auth/scim"],
 	["packages/passkey/", "@better-auth/passkey"],
+	["packages/dbsc/", "@better-auth/dbsc"],
 	["packages/oauth-provider/", "@better-auth/oauth-provider"],
 	["packages/stripe/", "@better-auth/stripe"],
 	["packages/api-key/", "@better-auth/api-key"],

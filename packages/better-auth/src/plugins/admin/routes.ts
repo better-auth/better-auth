@@ -8,7 +8,11 @@ import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getAuthoritativeSessionFromCtx, getSessionFromCtx } from "../../api";
+import {
+	getAuthoritativeSessionFromCtx,
+	getSessionFromCtx,
+	isSessionAccepted,
+} from "../../api";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -1423,6 +1427,9 @@ export const stopImpersonating = () =>
 				throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
 					message: "Failed to find admin session",
 				});
+			}
+			if (!(await isSessionAccepted(ctx, adminSession))) {
+				throw APIError.fromStatus("UNAUTHORIZED");
 			}
 			await ctx.context.internalAdapter.deleteSession(session.session.token);
 			await setSessionCookie(ctx, adminSession, !!dontRememberMeCookie);
