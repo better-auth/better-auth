@@ -2688,20 +2688,35 @@ describe("oauth-proxy mapped user fields", () => {
 			{ disableTestUser: true },
 		);
 
-		async function completeProxy(authorizationURL: string, headers?: Headers) {
+		async function startSignIn() {
+			const signIn = await preview.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{ throw: true },
+			);
+			return signIn.url!;
+		}
+
+		async function relay(authorizationURL: string) {
 			const state = new URL(authorizationURL).searchParams.get("state");
 			if (!state) throw new Error("OAuth state is missing");
-			let proxyCallbackURL: string | null = null;
+			let location: string | null = null;
 			await production.client.$fetch(
 				`/callback/google?code=test&state=${encodeURIComponent(state)}`,
 				{
 					onError(context) {
-						proxyCallbackURL = context.response.headers.get("location");
+						location = context.response.headers.get("location");
 					},
 				},
 			);
-			if (!proxyCallbackURL) throw new Error("Proxy callback URL is missing");
-			const proxyCallback = new URL(proxyCallbackURL);
+			if (!location) throw new Error("Production redirect is missing");
+			return new URL(location);
+		}
+
+		async function completeProxy(authorizationURL: string, headers?: Headers) {
+			const proxyCallback = await relay(authorizationURL);
 			let finalRedirect: string | null = null;
 			await preview.client.$fetch(
 				`${proxyCallback.pathname.replace("/api/auth", "")}${proxyCallback.search}`,
@@ -2716,20 +2731,33 @@ describe("oauth-proxy mapped user fields", () => {
 		}
 
 		async function signInThroughProxy() {
-			const signIn = await preview.client.signIn.social(
-				{
-					provider: "google",
-					callbackURL: "/dashboard",
-				},
-				{ throw: true },
-			);
-			const finalRedirect = await completeProxy(signIn.url!);
+			const authorizationURL = await startSignIn();
+			const finalRedirect = await completeProxy(authorizationURL);
 			const context = await preview.auth.$context;
 			const found = await context.internalAdapter.findUserByEmail(email);
-			return { finalRedirect, user: found?.user };
+			const accounts = found
+				? await context.internalAdapter.findAccounts(found.user.id)
+				: [];
+			return { finalRedirect, user: found?.user, accounts };
 		}
 
-		return { preview, production, completeProxy, signInThroughProxy };
+		async function linkThroughProxy() {
+			const { user, headers } = await preview.signInWithTestUser();
+			const link = await preview.client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/settings",
+				},
+				{ headers, throw: true },
+			);
+			const finalRedirect = await completeProxy(link.url, headers);
+			const context = await preview.auth.$context;
+			const linked = await context.internalAdapter.findUserById(user.id);
+			const accounts = await context.internalAdapter.findAccounts(user.id);
+			return { finalRedirect, user: linked, accounts };
+		}
+
+		return { startSignIn, relay, signInThroughProxy, linkThroughProxy };
 	}
 
 	it.for([
@@ -2816,7 +2844,7 @@ describe("oauth-proxy mapped user fields", () => {
 	});
 
 	it("applies fields from mapProfileToUser on a proxied link with updateUserInfoOnLink", async () => {
-		const { preview, completeProxy } = await createProxyPair({
+		const { linkThroughProxy } = await createProxyPair({
 			options: {
 				user: {
 					additionalFields: {
@@ -2832,27 +2860,17 @@ describe("oauth-proxy mapped user fields", () => {
 			},
 			disableTestUser: false,
 		});
-		const { user, headers } = await preview.signInWithTestUser();
-		const link = await preview.client.linkSocial(
-			{
-				provider: "google",
-				callbackURL: "/settings",
-			},
-			{ headers, throw: true },
-		);
 
-		const finalRedirect = await completeProxy(link.url, headers);
+		const { finalRedirect, user } = await linkThroughProxy();
 
 		expect(finalRedirect).toBe("/settings");
-		const context = await preview.auth.$context;
-		const updated = await context.internalAdapter.findUserById(user.id);
-		expect(updated).toMatchObject({ department: "engineering" });
+		expect(user).toMatchObject({ department: "engineering" });
 	});
 
 	it("stores account fields from getAccountFields on the preview account", async () => {
 		const linkedAt = new Date("2026-11-12T12:00:00.000Z");
 		const accountCreateBefore = vi.fn();
-		const { preview, signInThroughProxy } = await createProxyPair({
+		const { signInThroughProxy } = await createProxyPair({
 			options: {
 				account: {
 					additionalFields: {
@@ -2865,15 +2883,13 @@ describe("oauth-proxy mapped user fields", () => {
 			google: { getAccountFields: () => ({ tenant: "acme", linkedAt }) },
 		});
 
-		const { finalRedirect, user } = await signInThroughProxy();
+		const { finalRedirect, accounts } = await signInThroughProxy();
 
 		expect(finalRedirect).toBe("/dashboard");
 		expect(accountCreateBefore).toHaveBeenCalledWith(
 			expect.objectContaining({ tenant: "acme", linkedAt }),
 			expect.anything(),
 		);
-		const context = await preview.auth.$context;
-		const accounts = await context.internalAdapter.findAccounts(user!.id);
 		expect(accounts[0]).toMatchObject({ tenant: "acme", linkedAt });
 	});
 
@@ -2896,7 +2912,7 @@ describe("oauth-proxy mapped user fields", () => {
 	])(
 		"redirects before relaying when getAccountFields throws $kind",
 		async ({ error, code, description }) => {
-			const { preview, production } = await createProxyPair({
+			const { startSignIn, relay } = await createProxyPair({
 				options: {
 					account: {
 						additionalFields: { tenant: { type: "string", required: false } },
@@ -2908,26 +2924,10 @@ describe("oauth-proxy mapped user fields", () => {
 					},
 				},
 			});
-			const signIn = await preview.client.signIn.social(
-				{
-					provider: "google",
-					callbackURL: "/dashboard",
-				},
-				{ throw: true },
-			);
-			const state = new URL(signIn.url!).searchParams.get("state");
+			const authorizationURL = await startSignIn();
 
-			let location: string | null = null;
-			await production.client.$fetch(
-				`/callback/google?code=test&state=${encodeURIComponent(state!)}`,
-				{
-					onError(context) {
-						location = context.response.headers.get("location");
-					},
-				},
-			);
+			const redirect = await relay(authorizationURL);
 
-			const redirect = new URL(location!);
 			expect(redirect.searchParams.get("error")).toBe(code);
 			expect(redirect.searchParams.get("error_description")).toBe(description);
 			expect(redirect.searchParams.has("profile")).toBe(false);
@@ -2935,7 +2935,7 @@ describe("oauth-proxy mapped user fields", () => {
 	);
 
 	it("stores account fields from getAccountFields on a proxied link", async () => {
-		const { preview, completeProxy } = await createProxyPair({
+		const { linkThroughProxy } = await createProxyPair({
 			options: {
 				account: {
 					additionalFields: { tenant: { type: "string", required: false } },
@@ -2945,71 +2945,51 @@ describe("oauth-proxy mapped user fields", () => {
 			google: { getAccountFields: () => ({ tenant: "acme" }) },
 			disableTestUser: false,
 		});
-		const { user, headers } = await preview.signInWithTestUser();
-		const link = await preview.client.linkSocial(
-			{
-				provider: "google",
-				callbackURL: "/settings",
-			},
-			{ headers, throw: true },
-		);
 
-		const finalRedirect = await completeProxy(link.url, headers);
+		const { finalRedirect, accounts } = await linkThroughProxy();
 
 		expect(finalRedirect).toBe("/settings");
-		const context = await preview.auth.$context;
-		const accounts = await context.internalAdapter.findAccounts(user.id);
 		expect(accounts.find((a) => a.providerId === "google")).toMatchObject({
 			tenant: "acme",
 		});
 	});
 
-	it("keeps account fields the preview schema does not accept off the account", async () => {
-		const { preview, signInThroughProxy } = await createProxyPair({
-			options: {
-				account: {
-					additionalFields: { tier: { type: "string", required: false } },
-				},
-			},
-			previewOptions: {
-				account: {
-					additionalFields: {
-						tier: { type: "string", input: false, defaultValue: "free" },
-					},
-				},
-			},
-			google: { getAccountFields: () => ({ tier: "gold" }) },
-		});
+	it.for<{
+		when: string;
+		production: Record<string, DBFieldAttribute>;
+		preview: Record<string, DBFieldAttribute>;
+		tier: string;
+	}>([
+		{
+			when: "the preview does not accept the field",
+			production: { tier: { type: "string", required: false } },
+			preview: { tier: { type: "string", input: false, defaultValue: "free" } },
+			tier: "free",
+		},
+		{
+			when: "only the preview declares the field",
+			production: {},
+			preview: { tier: { type: "string", required: false } },
+			tier: "gold",
+		},
+	])(
+		"stores account fields by the preview schema when $when",
+		async ({ production, preview, tier }) => {
+			const { signInThroughProxy } = await createProxyPair({
+				options: { account: { additionalFields: production } },
+				previewOptions: { account: { additionalFields: preview } },
+				google: { getAccountFields: () => ({ tier: "gold" }) },
+			});
 
-		const { finalRedirect, user } = await signInThroughProxy();
+			const { finalRedirect, accounts } = await signInThroughProxy();
 
-		expect(finalRedirect).toBe("/dashboard");
-		const context = await preview.auth.$context;
-		const accounts = await context.internalAdapter.findAccounts(user!.id);
-		expect(accounts[0]).toMatchObject({ tier: "free" });
-	});
-
-	it("stores account fields only the preview schema declares", async () => {
-		const { preview, signInThroughProxy } = await createProxyPair({
-			options: {},
-			previewOptions: {
-				account: {
-					additionalFields: { tenant: { type: "string", required: false } },
-				},
-			},
-			google: { getAccountFields: () => ({ tenant: "acme" }) },
-		});
-
-		const { finalRedirect, user } = await signInThroughProxy();
-
-		expect(finalRedirect).toBe("/dashboard");
-		const context = await preview.auth.$context;
-		const accounts = await context.internalAdapter.findAccounts(user!.id);
-		expect(accounts[0]).toMatchObject({ tenant: "acme" });
-	});
+			expect(finalRedirect).toBe("/dashboard");
+			expect(accounts[0]).toMatchObject({ tier });
+		},
+	);
 
 	it("redirects when an account field fails the preview validator", async () => {
-		const { preview, completeProxy } = await createProxyPair({
+		const { signInThroughProxy } = await createProxyPair({
 			options: {
 				account: {
 					additionalFields: { tenant: { type: "string", required: false } },
@@ -3028,20 +3008,11 @@ describe("oauth-proxy mapped user fields", () => {
 			},
 			google: { getAccountFields: () => ({ tenant: "acme" }) },
 		});
-		const signIn = await preview.client.signIn.social(
-			{
-				provider: "google",
-				callbackURL: "/dashboard",
-			},
-			{ throw: true },
-		);
-
-		const finalRedirect = await completeProxy(signIn.url!);
+		const { finalRedirect, user } = await signInThroughProxy();
 
 		const redirect = new URL(finalRedirect!, "http://preview.example.com");
 		expect(redirect.searchParams.get("error")).toBe("VALIDATION_ERROR");
-		const context = await preview.auth.$context;
-		expect(await context.internalAdapter.findUserByEmail(email)).toBeNull();
+		expect(user).toBeUndefined();
 	});
 
 	it("updates a returning user from mapProfileToUser with overrideUserInfoOnSignIn", async () => {
