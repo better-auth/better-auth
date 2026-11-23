@@ -136,6 +136,8 @@ describe("incrementMany helpers", () => {
 				],
 				{ maxParameters: 2, assignmentBinds: 2 },
 			),
-		).toThrow(/cannot fit a row under maxParameters=2/);
+		).toThrow(
+			/cannot fit a row under maxParameters=2: a single-row statement needs 4 binds \(2 assignment \+ 2 per row\)/,
+		);
 	});
 });

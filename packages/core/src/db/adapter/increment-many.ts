@@ -146,7 +146,7 @@ export function chunkIncrementManyRows<T extends IncrementManyRow>(
 	const bindsPerStatement = assignmentBinds + bindsPerRow;
 	if (maxParameters < bindsPerStatement) {
 		throw new BetterAuthError(
-			`incrementMany cannot fit a row under maxParameters=${maxParameters}: each row needs ${bindsPerStatement} binds.`,
+			`incrementMany cannot fit a row under maxParameters=${maxParameters}: a single-row statement needs ${bindsPerStatement} binds (${assignmentBinds} assignment + ${bindsPerRow} per row).`,
 		);
 	}
 	const parameterChunkSize = Math.floor(
