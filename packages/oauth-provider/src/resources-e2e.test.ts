@@ -198,17 +198,8 @@ const bootCodeFlowHarness = async (
 		});
 	};
 
-	const runCodeFlow = async (
-		opts: {
-			authorizeResource?: string | string[];
-			tokenResource?: string | string[];
-			scopes?: string[];
-		} = {},
-	) => {
-		const { url, codeVerifier } = await createAuthUrl({
-			resource: opts.authorizeResource,
-			scopes: opts.scopes,
-		});
+	const requestCode = async (options?: Parameters<typeof createAuthUrl>[0]) => {
+		const { url, codeVerifier } = await createAuthUrl(options);
 		let callbackRedirectUrl = "";
 		await client.$fetch(url.toString(), {
 			headers, // signed-in cookie
@@ -218,15 +209,29 @@ const bootCodeFlowHarness = async (
 		});
 		const codeUrl = new URL(callbackRedirectUrl);
 		const code = codeUrl.searchParams.get("code");
+		return { redirected: callbackRedirectUrl, code, codeVerifier };
+	};
+
+	const runCodeFlow = async (
+		opts: {
+			authorizeResource?: string | string[];
+			tokenResource?: string | string[];
+			scopes?: string[];
+		} = {},
+	) => {
+		const { redirected, code, codeVerifier } = await requestCode({
+			resource: opts.authorizeResource,
+			scopes: opts.scopes,
+		});
 		if (!code) {
-			return { redirected: callbackRedirectUrl, code: null, tokens: null };
+			return { redirected, code: null, tokens: null };
 		}
 		const tokens = await exchangeCode({
 			code,
 			codeVerifier,
 			resource: opts.tokenResource,
 		});
-		return { redirected: callbackRedirectUrl, code, tokens };
+		return { redirected, code, tokens };
 	};
 
 	return {
@@ -235,6 +240,7 @@ const bootCodeFlowHarness = async (
 		oauthClient,
 		headers,
 		authServerBaseUrl,
+		requestCode,
 		runCodeFlow,
 		exchangeCode,
 	};
@@ -835,6 +841,62 @@ describe("repeated `resource` form parameter mints multi-resource tokens", () =>
 });
 
 describe("resource policy downscopes token responses", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("rejects authorization, code redemption, and refresh for a legacy empty allowlist", async () => {
+		const identifier = "https://api.example.com/legacy-scope-policy";
+		const harness = await bootCodeFlowHarness({
+			resources: [identifier],
+			enforcePerClientResources: true,
+		});
+		await harness.auth.api.adminLinkClientResource({
+			params: { identifier, client_id: harness.oauthClient.client_id! },
+			headers: harness.headers,
+		});
+		const initial = await harness.runCodeFlow({
+			authorizeResource: identifier,
+		});
+		const refreshToken = initial.tokens?.data?.refresh_token;
+		expect(refreshToken).toBeDefined();
+		const pending = await harness.requestCode({ resource: identifier });
+		expect(pending.code).toBeTruthy();
+
+		const ctx = await harness.auth.$context;
+		await ctx.adapter.update({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+			update: { allowedScopes: [], policyVersion: 1 },
+		});
+		const denied = await harness.runCodeFlow({ authorizeResource: identifier });
+		expect(new URL(denied.redirected).searchParams.get("error")).toBe(
+			"invalid_scope",
+		);
+		expect(denied.code).toBeNull();
+
+		const redeemed = await harness.exchangeCode({
+			code: pending.code!,
+			codeVerifier: pending.codeVerifier,
+		});
+		const policyError = {
+			error: "invalid_scope",
+			error_description: `none of the requested scopes are allowed for resource ${identifier}`,
+		};
+		expect(redeemed.error).toMatchObject(policyError);
+
+		const refreshed = await harness.client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "refresh_token",
+				refresh_token: refreshToken!,
+				client_id: harness.oauthClient.client_id!,
+				client_secret: harness.oauthClient.client_secret!,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(refreshed.error).toMatchObject(policyError);
+	});
+
 	it("reports the effective scope after allowedScopes narrows the grant", async () => {
 		const identifier = "https://api.example.com/downscope-response";
 		const harness = await bootCodeFlowHarness({

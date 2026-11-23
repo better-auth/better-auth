@@ -3238,10 +3238,10 @@ export interface OAuthResource {
 	signingAlgorithm?: JWSAlgorithms | null;
 	signingKeyId?: string | null;
 	/**
-	 * When set to a non-empty array, requested scopes must intersect this set or
-	 * the request is rejected with `invalid_scope`. `null`, `undefined`, or `[]`
-	 * in the persisted row are all treated as no scope restriction. An empty
-	 * array cannot be written on purpose via public inputs.
+	 * Requested scopes must intersect the allowlist or issuance fails with
+	 * `invalid_scope`. Admin responses return `null` for unrestricted resources
+	 * and `[]` for a legacy empty allowlist. In storage, an empty list at
+	 * policy version 2 represents an unrestricted resource.
 	 */
 	allowedScopes?: string[] | null;
 	/**
@@ -3263,9 +3263,8 @@ export interface OAuthResource {
 	createdAt: Date;
 	updatedAt: Date;
 	/**
-	 * Forward-migration anchor. Lets the runtime branch behavior when claim
-	 * emission or validation semantics change in a future PR without forcing
-	 * every row to migrate. PR 1 ships with `policyVersion = 1`.
+	 * Stored policy format. An empty `allowedScopes` denies every scope in
+	 * version 1 and represents no restriction in version 2.
 	 */
 	policyVersion: number;
 	/** Open-ended extension data — not yet promoted to columns. */

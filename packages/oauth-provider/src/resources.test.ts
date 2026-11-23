@@ -139,7 +139,7 @@ describe("seedResources (integration via plugin init)", () => {
 			identifier: "https://api.example.com",
 			name: "https://api.example.com",
 			disabled: false,
-			policyVersion: 1,
+			policyVersion: 2,
 			accessTokenTtl: null,
 			signingAlgorithm: null,
 			allowedScopes: [],
@@ -257,33 +257,39 @@ describe("seedResources (integration via plugin init)", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11725
 	 */
-	it("merge mode updates allowedScopes to [] when re-seeded with allowedScopes: null", async () => {
-		const identifier = "https://api.example.com/merge-null-scopes";
-
-		const first = await bootWithResourcesOption({
-			resources: [
-				{
+	it.each([
+		{ mode: "insertOnly", allowedScopes: null, policyVersion: 1 },
+		{ mode: "merge", allowedScopes: undefined, policyVersion: 1 },
+		{ mode: "merge", allowedScopes: null, policyVersion: 2 },
+		{ mode: "overwrite", allowedScopes: undefined, policyVersion: 2 },
+	] as const)(
+		"$mode with allowedScopes $allowedScopes leaves an existing empty list at policy version $policyVersion",
+		async ({ mode, allowedScopes, policyVersion }) => {
+			const identifier = "https://api.example.com/legacy-seed";
+			const { auth, opts } = await bootWithResourcesOption({});
+			const ctx = await auth.$context;
+			await ctx.adapter.create({
+				model: "oauthResource",
+				data: {
 					identifier,
-					name: "Original",
-					allowedScopes: ["read"],
+					name: "Legacy resource",
+					allowedScopes: [],
+					policyVersion: 1,
+					createdAt: new Date(),
+					updatedAt: new Date(),
 				},
-			],
-		});
-		const firstCtx = await first.auth.$context;
+			});
 
-		await seedResources(
-			firstCtx as unknown as AuthContext,
-			{
-				loginPage: "/login",
-				consentPage: "/consent",
-				resources: [{ identifier, allowedScopes: null }],
-				resourceSeedMode: "merge",
-			} as OAuthOptions<Scope[]>,
-		);
+			await seedResources(ctx as unknown as AuthContext, {
+				...opts,
+				resources: [{ identifier, allowedScopes }],
+				resourceSeedMode: mode,
+			});
 
-		const row = await readResource(first.auth, identifier);
-		expect(row?.allowedScopes).toEqual([]);
-	});
+			const row = await readResource(auth, identifier);
+			expect(row).toMatchObject({ allowedScopes: [], policyVersion });
+		},
+	);
 
 	it("overwrite mode replaces every field on existing rows", async () => {
 		const identifier = "https://api.example.com/overwrite";

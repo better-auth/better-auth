@@ -30,16 +30,6 @@ const baseResourceBodySchema = z.object({
 	metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
-/**
- * Shared `allowedScopes` field for the admin create and update schemas.
- * Mirrors the seed-path `[]` rejection in `oauthProvider()` (`oauth.ts`):
- * an explicit empty array is rejected at the schema boundary (400) with
- * guidance to pass `null` (or omit the field) for "no restriction", or set
- * `disabled: true` to stop issuing tokens. `null`/omitted still mean
- * unrestricted and are stored as `[]` (see `buildResourceRow`), which keeps
- * reading as unrestricted via `normalizeAllowedScopes`. That branch serves
- * new `[]` rows as well as pre-existing rows, so keep it.
- */
 const allowedScopesField = z
 	.array(z.string())
 	.min(1, EMPTY_ALLOWED_SCOPES_MESSAGE)

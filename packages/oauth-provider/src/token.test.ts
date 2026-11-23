@@ -3647,6 +3647,44 @@ describe("oauth token - client_credentials", async () => {
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	let jwks: ReturnType<typeof createLocalJWKSet>;
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("rejects client credentials for a legacy empty allowlist", async () => {
+		const identifier = "https://myapi.example.com/legacy";
+		const ctx = await auth.$context;
+		await ctx.adapter.create({
+			model: "oauthResource",
+			data: {
+				identifier,
+				name: identifier,
+				allowedScopes: [],
+				policyVersion: 1,
+			},
+		});
+		await auth.api.adminLinkClientResource({
+			headers,
+			params: { identifier, client_id: oauthClient!.client_id! },
+		});
+
+		const { error } = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "client_credentials",
+				resource: identifier,
+				scope: clientScopes[0]!,
+			}),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+				authorization: `Basic ${Buffer.from(`${oauthClient!.client_id}:${oauthClient!.client_secret}`).toString("base64")}`,
+			},
+		});
+		expect(error).toMatchObject({
+			error: "invalid_scope",
+			error_description: `none of the requested scopes are allowed for resource ${identifier}`,
+		});
+	});
+
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
 		const response = await auth.api.adminCreateOAuthClient({

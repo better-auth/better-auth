@@ -928,7 +928,7 @@ export const oauthResourceTableFields = [
   { name: "accessTokenFormat", type: "string", description: "`jwt` or `opaque`", isOptional: true },
   { name: "signingAlgorithm", type: "string", description: "JWS algorithm for access tokens", isOptional: true },
   { name: "signingKeyId", type: "string", description: "Signing key ID for access tokens", isOptional: true },
-  { name: "allowedScopes", type: "string[]", description: "Scopes allowed for this resource. Requested scopes are narrowed to this set. `null` or `[]` means no restriction.", isOptional: true },
+  { name: "allowedScopes", type: "string[]", description: "Scopes allowed for this resource. Requested scopes are narrowed to this set. `null` means unrestricted. In storage, `[]` means unrestricted at policy version 2 and denies every scope at version 1.", isOptional: true },
   { name: "customClaims", type: "json", description: "Claims added to access tokens. Reserved names are stripped.", isOptional: true },
   { name: "dpopBoundAccessTokensRequired", type: "boolean", description: "Whether access tokens must be DPoP-bound. Defaults to `false`.", isOptional: true },
   { name: "disabled", type: "boolean", description: "Stops new issuance. Existing tokens verify until they expire. Defaults to `false`.", isOptional: true },

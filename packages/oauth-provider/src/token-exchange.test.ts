@@ -279,6 +279,27 @@ async function bootScenario(
  * @see https://github.com/better-auth/better-auth/issues/8023
  */
 describe("oauthTokenExchange", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("rejects token exchange into a resource with a legacy empty allowlist", async () => {
+		const { auth, mcpServer, userTokenForMcp, exchangeAs } =
+			await bootScenario();
+		const subject = await userTokenForMcp();
+		const { adapter } = await auth.$context;
+		await adapter.update({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: api }],
+			update: { allowedScopes: [], policyVersion: 1 },
+		});
+
+		const { error } = await exchangeAs(mcpServer, subject.access_token);
+		expect(error).toMatchObject({
+			error: "invalid_scope",
+			error_description: `none of the requested scopes are allowed for resource ${api}`,
+		});
+	});
+
 	it("exchanges an MCP user token for a downstream API token for the same user", async () => {
 		const { mcpServer, userTokenForMcp, exchangeAs } = await bootScenario();
 		const subject = await userTokenForMcp();
