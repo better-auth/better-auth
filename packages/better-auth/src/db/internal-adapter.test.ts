@@ -837,8 +837,10 @@ describe("internal adapter test", async () => {
 			name: "Updated Again",
 		});
 
-		// Should be rounded down to 0
-		expect(capturedTTLs.at(-1)).toBe(0);
+		// Rounds down to 0, and secondary storage reads a zero ttl as no expiry,
+		// so the entry is dropped instead of being stored forever.
+		expect(capturedTTLs).not.toContain(0);
+		expect(mockStorage.has(almostExpiredSession.token)).toBe(false);
 
 		// Test case 3: Large TTL with fractional component
 		capturedTTLs.length = 0; // Clear array

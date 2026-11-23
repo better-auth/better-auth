@@ -142,6 +142,11 @@ export const createInternalAdapter = (
 				if (!parsed) return;
 
 				const sessionTTL = getTTLSeconds(parsed.session.expiresAt, now);
+				// Secondary storage reads a zero ttl as no expiry, so drop the entry.
+				if (sessionTTL <= 0) {
+					await secondaryStorage.delete(token);
+					return;
+				}
 
 				await secondaryStorage.set(
 					token,
