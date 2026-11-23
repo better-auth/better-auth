@@ -85,7 +85,7 @@ A string uses the plugin defaults. An object sets per-resource policy:
 | `refreshTokenTtl`               | Refresh token lifetime in seconds. Defaults to `refreshTokenExpiresIn`.                             |
 | `accessTokenFormat`             | `"jwt"` or `"opaque"`. Defaults to `resourceDefaults.accessTokenFormat`, then `"jwt"`.              |
 | `signingAlgorithm`              | JWS algorithm for this resource's access tokens. See [Access token signing](#access-token-signing). |
-| `signingKeyId`                  | Key ID to sign this resource's access tokens with. Defaults to `resourceDefaults`.                  |
+| `signingKeyId`                  | Key ID for this resource's JWT access tokens. See [key ID defaults](#access-token-signing).         |
 | `customClaims`                  | Claims added to every access token for this resource. Reserved JWT claims are stripped.             |
 | `dpopBoundAccessTokensRequired` | Issue only [DPoP](#dpop)-bound tokens for this resource.                                            |
 | `disabled`                      | Stop issuing tokens for this resource. Tokens already issued still verify until they expire.        |
@@ -132,30 +132,40 @@ One token cannot be both a JWT and an opaque token. A request for several resour
 
 ### Access token signing
 
-By default, the JWT plugin selects the signing key for both access tokens and ID tokens. To sign them with a different key, set `signingAlgorithm` or `signingKeyId` in `resourceDefaults`. They apply to every resource that does not set its own:
+By default, the JWT plugin selects the signing key for both JWT access tokens and ID tokens. To use a different key for JWT access tokens, set `signingAlgorithm` or `signingKeyId` in `resourceDefaults`:
 
 ```ts title="auth.ts"
-jwt({
-  jwks: {
-    keyPairConfig: { alg: "RS256" }, // ID tokens
-    keyPairConfigs: [{ alg: "EdDSA" }, { alg: "ES256" }],
-  },
-}),
-oauthProvider({
-  resourceDefaults: { signingAlgorithm: "EdDSA" },
-  resources: [
-    "https://api.example.com", // EdDSA JWTs
-    { identifier: "https://internal.example.com", accessTokenFormat: "opaque" },
-    { identifier: "https://payments.example.com", signingAlgorithm: "ES256" },
+import { oauthProvider } from "@better-auth/oauth-provider";
+import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    jwt({
+      jwks: {
+        keyPairConfig: { alg: "RS256" }, // ID tokens
+        keyPairConfigs: [{ alg: "EdDSA" }, { alg: "ES256" }],
+      },
+    }),
+    oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      resourceDefaults: { signingAlgorithm: "EdDSA" },
+      resources: [
+        "https://api.example.com", // EdDSA JWTs
+        { identifier: "https://internal.example.com", accessTokenFormat: "opaque" },
+        { identifier: "https://payments.example.com", signingAlgorithm: "ES256" },
+      ],
+    }),
   ],
-})
+});
 ```
 
-These defaults apply only to access tokens. The JWT plugin creates a key for an algorithm in `keyPairConfigs` the first time a token needs it. Any other `signingAlgorithm` fails at signing unless the JWKS already holds a key for it.
+When you set only `signingAlgorithm`, the JWT plugin's JWKS signer can create a key on first use for the primary algorithm or an algorithm in `jwks.keyPairConfigs`. Other algorithms need an existing key. If you pin a `signingKeyId`, provision that key before referencing it. A custom `jwt.sign` receives the requested algorithm and key ID and is responsible for using a matching key.
 
-OpenID Connect discovery advertises the configured primary algorithm (`jwks.keyPairConfig.alg`) for ID tokens. If you supply a custom `adapter.getJwks` keyring, provision a key for that algorithm. When the keyring lacks one, the JWT plugin signs with its newest live key. If you use `jwt.sign`, configure the primary algorithm to match the ID tokens your signer produces.
+With the JWT plugin enabled, OpenID Connect discovery advertises the primary algorithm (`jwks.keyPairConfig.alg`) for ID tokens. If you supply a custom `adapter.getJwks` keyring, keep a live key for that algorithm. When the keyring lacks one, the JWT plugin signs with its newest live key, and clients that check discovery can reject the ID token. If you use `jwt.sign`, configure the primary algorithm to match the ID tokens your signer produces. With `disableJwtPlugin: true`, discovery advertises `HS256` for ID tokens signed with the client secret.
 
-A resource that sets `signingAlgorithm` or `signingKeyId` replaces both signing defaults, so a resource's key is never paired with a default algorithm that key does not use. Signing defaults need the JWT plugin, so setting them with `disableJwtPlugin: true` fails at startup.
+If none of the requested resources sets a signing field, the provider uses `resourceDefaults.signingAlgorithm` and `resourceDefaults.signingKeyId` when configured. Setting either field on a requested resource replaces both signing defaults. With no key ID, the JWKS signer selects a key based on the effective algorithm. Signing defaults require the JWT plugin. Setting them with `disableJwtPlugin: true` fails at startup.
 
 ### Manage resources at runtime
 
