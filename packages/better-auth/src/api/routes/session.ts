@@ -751,6 +751,12 @@ export const revokeSession = createAuthEndpoint(
 					code: "INTERNAL_SERVER_ERROR",
 				});
 			}
+			const remaining = await ctx.context.internalAdapter.findSession(token);
+			if (remaining) {
+				return ctx.json({
+					status: false,
+				});
+			}
 		}
 		if (token === ctx.context.session.session.token) {
 			deleteSessionCookie(ctx);

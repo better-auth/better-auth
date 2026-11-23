@@ -1,3 +1,4 @@
+import type { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import {
@@ -778,6 +779,95 @@ describe("session", async () => {
 
 		expect(refreshedMaxAge).toBeDefined();
 		expect(refreshedMaxAge).toBeLessThanOrEqual(BROWSER_MAX_AGE_CEILING);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12301
+ */
+describe("revoke-session when the session is not deleted", () => {
+	// restoreAllMocks would also undo spies other describes create at collection time.
+	const spies: { mockRestore: () => void }[] = [];
+	afterEach(() => {
+		for (const spy of spies.splice(0)) spy.mockRestore();
+	});
+
+	async function revokeFromAnotherDevice(
+		options: Parameters<typeof getTestInstance>[0] = {},
+		beforeRevoke?: (
+			auth: Awaited<ReturnType<typeof getTestInstance>>["auth"],
+		) => void | Promise<void>,
+	) {
+		const { auth, client, signInWithTestUser } = await getTestInstance(options);
+		const actingDevice = await signInWithTestUser();
+		const targetDevice = await signInWithTestUser();
+		const target = await auth.api.getSession({
+			headers: targetDevice.headers,
+		});
+		expect(target?.session.token).toEqual(expect.any(String));
+
+		await beforeRevoke?.(auth);
+		const response = await client.revokeSession({
+			token: target!.session.token,
+			fetchOptions: { headers: actingDevice.headers },
+		});
+		const remaining = await auth.api.getSession({
+			headers: targetDevice.headers,
+		});
+		return { response, remaining };
+	}
+
+	it("does not report success when a delete.before hook vetoes the deletion", async () => {
+		const { response, remaining } = await revokeFromAnotherDevice({
+			databaseHooks: {
+				session: {
+					delete: {
+						before: async () => false,
+					},
+				},
+			},
+		});
+
+		expect(remaining).not.toBeNull();
+		expect(response.data?.status).not.toBe(true);
+	});
+
+	it("does not report success when the session lookup before the delete fails", async () => {
+		let failed = false;
+		const { response, remaining } = await revokeFromAnotherDevice(
+			{},
+			async (auth) => {
+				// Fail at the driver so the fault reaches the lookup wherever it runs.
+				const { options } = await auth.$context;
+				const sqlite = options.database as DatabaseSync;
+				const prepare = sqlite.prepare.bind(sqlite);
+				const spy = vi
+					.spyOn(sqlite, "prepare")
+					.mockImplementation((sql: string) => {
+						if (
+							!failed &&
+							sql ===
+								'select "primary".* from (select * from "session" where "session"."token" = ? limit ?) as "primary"'
+						) {
+							failed = true;
+							throw new Error("database read timed out");
+						}
+						return prepare(sql);
+					});
+				spies.push(spy);
+			},
+		);
+
+		expect(failed).toBe(true);
+		expect(remaining).not.toBeNull();
+		expect(response.data?.status).not.toBe(true);
+	});
+
+	it("reports success and ends the session when the deletion succeeds", async () => {
+		const { response, remaining } = await revokeFromAnotherDevice();
+
+		expect(response.data).toMatchObject({ status: true });
+		expect(remaining).toBeNull();
 	});
 });
 

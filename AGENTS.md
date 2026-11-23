@@ -56,6 +56,7 @@ When a flow must synthesize an email, use `createPlaceholderEmail` with a stable
 - A reproducible error is not automatically a bug. First prove the behavior violates Better Auth's documented contract, TypeScript contract, or established runtime semantics.
 - Before changing public API behavior, check existing docs, generated/inferred types, endpoint metadata, release history, and git history for the relevant code path. Treat long-standing metadata such as `requireHeaders`, `requireRequest`, endpoint method, schema, and middleware as part of the API contract.
 - For regression claims, compare the exact reported versions or tags. If the behavior existed before the claimed version, classify it as expected behavior, documentation gap, or integration misuse unless another contract proves otherwise.
+- When entry points, defaults, or previously stored records give different results, check the affected cases against the same public contract.
 - Distinguish invalid usage from valid empty state. Example: a server session check without request headers is invalid usage; a server session check with headers but no session cookie is a valid request that returns `null`.
 - Do not weaken TypeScript guidance to make runtime behavior more permissive unless that is the explicit architectural decision. Optional input types can hide integration bugs from users and agents.
 - Prefer docs or clearer error messages over API-contract changes when the current behavior is intentional but confusing.
@@ -69,6 +70,7 @@ When a flow must synthesize an email, use `createPlaceholderEmail` with a stable
 - NEVER create separate clients with `createAuthClient()` in tests
 - Default test DB is SQLite in-memory; use `testWith` for other databases
 - Adapter tests need Docker: `docker compose up -d`
+- In every regression test, assert an outcome that shows the test exercised the behavior it names. In a multi-stage flow, satisfy earlier checks and use a response detail or stored value specific to the stage under test.
 - Regression tests: use `@see` for relevant issues or authoritative sources. Do not reference the current pull request or its review comments:
   ```typescript
   /**
@@ -88,6 +90,6 @@ When a flow must synthesize an email, use `createPlaceholderEmail` with a stable
 - Ensure `pnpm typecheck` passes before finishing
 - DO NOT COMMIT unless the user explicitly asks
 - Conventional Commits: `feat(scope):`, `fix(scope):`, `docs:`, `chore:`. Use `!` for breaking changes (e.g. `feat(auth)!:`)
-- PRs target `main`
+- Follow [Branch Targeting](CONTRIBUTING.md#branch-targeting) for the PR base and [Changesets](CONTRIBUTING.md#changesets) for the release impact.
 - Write one changeset per user-visible change. A PR that fixes several things adds several changesets, and each becomes its own release-note entry. Start each with a one-sentence summary of what changed for users.
 - When review grows a PR's scope, update its title and changesets to match the final change. Release notes pair each changeset with the title of the PR that added it. A changeset with no PR, such as one committed directly, is titled from its own first line.

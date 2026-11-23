@@ -277,6 +277,30 @@ describe("runWithTransaction", () => {
 		);
 	});
 
+	it("runs later hooks when a handled hook rethrows, then rejects with its error", async () => {
+		const { adapter } = createTransactionHarness();
+		const events: string[] = [];
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await queueAfterTransactionHook(
+					async () => {
+						throw new Error("cache unavailable");
+					},
+					{
+						onError(error) {
+							throw error;
+						},
+					},
+				);
+				await queueAfterTransactionHook(async () => {
+					events.push("later hook");
+				});
+			}),
+		).rejects.toThrow("cache unavailable");
+		expect(events).toEqual(["later hook"]);
+	});
+
 	it("reports unhandled after-commit failures and continues later committed hooks", async () => {
 		const { adapter } = createTransactionHarness();
 		const onAfterCommitHookError = vi.fn(() => {
@@ -316,6 +340,36 @@ describe("runWithTransaction", () => {
 				return "committed";
 			}),
 		).rejects.toThrow("legacy hook failure");
+	});
+
+	it("still runs hooks with their own error handler after an unhandled failure", async () => {
+		const { adapter } = createTransactionHarness();
+		const first = new Error("first hook failed");
+		const onError = vi.fn();
+		const events: string[] = [];
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await queueAfterTransactionHook(async () => {
+					throw first;
+				});
+				await queueAfterTransactionHook(async () => {
+					events.push("unhandled hook");
+				});
+				await queueAfterTransactionHook(
+					async () => {
+						events.push("handled hook");
+						throw new Error("handled hook failed");
+					},
+					{ onError },
+				);
+				return "committed";
+			}),
+		).rejects.toBe(first);
+		expect(events).toEqual(["handled hook"]);
+		expect(onError).toHaveBeenCalledWith(
+			expect.objectContaining({ message: "handled hook failed" }),
+		);
 	});
 
 	it("does not retry an immediately executed hook when it fails", async () => {
