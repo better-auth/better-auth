@@ -3,4 +3,4 @@
 "auth": patch
 ---
 
-Allow the Drizzle schema generator to use an existing PostgreSQL enum for selected fields.
+Use the Drizzle adapter's `enumFields` option to map a `model.field` key to an exported `pgEnum` when generating a PostgreSQL schema.

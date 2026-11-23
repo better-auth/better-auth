@@ -1130,6 +1130,57 @@ model Directory_user {
 		},
 	);
 
+	it.each(["mysql", "sqlite"] as const)(
+		"rejects enumFields for the %s provider",
+		async (provider) => {
+			const database = drizzleAdapter(
+				{},
+				{
+					provider,
+					enumFields: {
+						"user.status": { from: "./enums", name: "memberStatus" },
+					},
+				},
+			);
+			const options = {
+				database,
+				user: {
+					additionalFields: { status: { type: ["active", "inactive"] } },
+				},
+			};
+			await expect(
+				generateSchema({ adapter: database(options), options }),
+			).rejects.toThrow(
+				`enumFields requires the "pg" provider. Received "${provider}".`,
+			);
+		},
+	);
+
+	it.each([
+		{ from: "", name: "memberStatus" },
+		{ from: "./enums", name: "" },
+		null,
+		undefined,
+	])("rejects an incomplete enumFields mapping (%j)", async (mapping) => {
+		const database = drizzleAdapter(
+			{},
+			{
+				provider: "pg",
+				// @ts-expect-error JavaScript configs also accept null and undefined.
+				enumFields: { "user.status": mapping },
+			},
+		);
+		const options = {
+			database,
+			user: { additionalFields: { status: { type: ["active", "inactive"] } } },
+		};
+		await expect(
+			generateSchema({ adapter: database(options), options }),
+		).rejects.toThrow(
+			'Missing module or export name for enumFields mapping "user.status".',
+		);
+	});
+
 	it("should generate Drizzle compound indexes with physical field names", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",

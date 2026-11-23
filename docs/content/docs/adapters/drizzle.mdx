@@ -73,6 +73,8 @@ import { pgEnum } from "drizzle-orm/pg-core";
 export const memberStatus = pgEnum("member_status", ["active", "inactive"]);
 ```
 
+Add the enum mapping to your existing auth configuration.
+
 ```ts title="auth.ts"
 import { memberStatus } from "./enums";
 
@@ -87,6 +89,7 @@ export const auth = betterAuth({
 
 Run `auth generate` with this adapter configured. The generated column uses
 `pgEnums.memberStatus("status")`. Unmapped enum fields use PostgreSQL `text`.
+The generator rejects `enumFields` for the MySQL and SQLite providers.
 
 ## Joins
 

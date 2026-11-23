@@ -108,12 +108,17 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	);
 
 	const enumColumns = new Map<string, string>();
-	if (databaseType === "pg" && adapter.options?.enumFields) {
-		const mappings: NonNullable<DrizzleAdapterConfig["enumFields"]> =
-			adapter.options.enumFields;
+	const mappings: DrizzleAdapterConfig["enumFields"] =
+		adapter.options?.enumFields;
+	if (mappings) {
+		if (databaseType !== "pg") {
+			throw new Error(
+				`enumFields requires the "pg" provider. Received "${databaseType}".`,
+			);
+		}
 		const modules = new Map<string, string>();
 		const usedNames = new Set(Object.keys(tables).map(getModelName));
-		for (const [key, { from, name }] of Object.entries(mappings)) {
+		for (const [key, mapping] of Object.entries(mappings)) {
 			const [model, field, extra] = key.split(".");
 			if (
 				!model ||
@@ -126,11 +131,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				);
 			}
 			if (isMigrationDisabled(model)) continue;
-			if (!from || !name) {
+			if (!mapping?.from || !mapping.name) {
 				throw new Error(
 					`Missing module or export name for enumFields mapping "${key}".`,
 				);
 			}
+			const { from, name } = mapping;
 			let alias = modules.get(from);
 			if (!alias) {
 				let suffix = modules.size + 1;
