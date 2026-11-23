@@ -2,6 +2,9 @@ import { DatabaseSync } from "node:sqlite";
 import {
 	DummyDriver,
 	Kysely,
+	MssqlAdapter,
+	MssqlIntrospector,
+	MssqlQueryCompiler,
 	PostgresAdapter,
 	PostgresIntrospector,
 	PostgresQueryCompiler,
@@ -185,30 +188,19 @@ describe("kysely-adapter", () => {
 
 	// cspell:ignore UPDLOCK
 	it("incrementMany locks mssql rows with UPDLOCK instead of FOR UPDATE", async () => {
-		const selectQuery = {
-			select: vi.fn(() => selectQuery),
-			selectAll: vi.fn(() => selectQuery),
-			where: vi.fn(() => selectQuery),
-			orderBy: vi.fn(() => selectQuery),
-			forUpdate: vi.fn(() => selectQuery),
-			execute: vi.fn().mockResolvedValue([]),
-		};
-		const updateQuery = {
-			set: vi.fn(() => updateQuery),
-			where: vi.fn(() => updateQuery),
-			outputAll: vi.fn(() => updateQuery),
-			execute: vi.fn().mockResolvedValue([{ id: "a", remaining: 2 }]),
-		};
-		const trx = {
-			selectFrom: vi.fn(() => selectQuery),
-			updateTable: vi.fn(() => updateQuery),
-		};
-		const db = {
-			transaction: vi.fn(() => ({
-				execute: (fn: (inner: typeof trx) => unknown) => fn(trx),
-			})),
-		} as any;
-		const adapter = kyselyAdapter(db, { type: "mssql" })({
+		const executedSql: string[] = [];
+		const db = new Kysely({
+			dialect: {
+				createAdapter: () => new MssqlAdapter(),
+				createDriver: () => new DummyDriver(),
+				createIntrospector: (inner) => new MssqlIntrospector(inner),
+				createQueryCompiler: () => new MssqlQueryCompiler(),
+			},
+			log(event) {
+				if (event.level === "query") executedSql.push(event.query.sql);
+			},
+		});
+		const adapter = kyselyAdapter(db as never, { type: "mssql" })({
 			plugins: [
 				{
 					id: "counters-test",
@@ -223,18 +215,20 @@ describe("kysely-adapter", () => {
 			],
 		});
 
-		const result = await adapter.incrementMany({
+		await adapter.incrementMany({
 			model: "counters",
 			increment: { remaining: 1 },
 			rows: [{ where: [{ field: "id", value: "a" }] }],
 		});
 
-		expect(result).toEqual([{ id: "a", remaining: 2 }]);
-		expect(db.transaction).toHaveBeenCalledTimes(1);
-		expect(trx.selectFrom).toHaveBeenCalledTimes(1);
-		expect(selectQuery.forUpdate).not.toHaveBeenCalled();
-		expect(selectQuery.orderBy).toHaveBeenCalledTimes(1);
-		expect(updateQuery.outputAll).toHaveBeenCalledWith("inserted");
+		const lock = executedSql.find((sql) => /updlock/i.test(sql));
+		expect(lock).toBeDefined();
+		expect(lock).toMatch(/as "counters" with \(updlock, rowlock\)/i);
+		expect(lock).not.toMatch(/for update/i);
+		expect(lock).not.toMatch(/with \(updlock, rowlock\) as/i);
+		expect(executedSql.some((sql) => /output "inserted"/i.test(sql))).toBe(
+			true,
+		);
 	});
 
 	/**

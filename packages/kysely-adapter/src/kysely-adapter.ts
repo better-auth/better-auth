@@ -1165,8 +1165,10 @@ export const kyselyAdapter = (
 							await applyRowsWhere(
 								trx
 									.selectFrom(
+										// SQL Server wants `FROM table AS alias WITH (UPDLOCK, ROWLOCK)`.
+										// Kysely's `.as()` emits `WITH (...) as alias`, which is invalid.
 										// cspell:ignore UPDLOCK
-										sql`${sql.table(model)} WITH (UPDLOCK, ROWLOCK)`.as(model),
+										sql`${sql.table(model)} as ${sql.table(model)} WITH (UPDLOCK, ROWLOCK)` as never,
 									)
 									.selectAll()
 									.orderBy(sql.ref(`${model}.${idField}`), "asc"),
