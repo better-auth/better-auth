@@ -1628,7 +1628,9 @@ describe("private_key_jwt authentication", async () => {
 			error: "invalid_client",
 			error_description: "client assertion signature verification failed",
 		});
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("should reject assertion that is not yet valid", async () => {
@@ -1661,7 +1663,9 @@ describe("private_key_jwt authentication", async () => {
 			error: "invalid_client",
 			error_description: "client assertion signature verification failed",
 		});
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("should reject assertion with exp too far in the future", async () => {

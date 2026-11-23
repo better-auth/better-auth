@@ -891,11 +891,13 @@ function throwInvalidClient(
 		scheme?: string;
 	},
 ): never {
+	const scheme = authentication?.scheme;
 	const attemptedBasicAuthentication =
+		scheme?.toLowerCase() === "basic" ||
 		authentication?.method === "client_secret_basic";
-	const challengeScheme =
-		authentication?.scheme ??
-		(attemptedBasicAuthentication ? BASIC_CHALLENGE : undefined);
+	const challengeScheme = attemptedBasicAuthentication
+		? BASIC_CHALLENGE
+		: scheme;
 	throw new APIError(
 		challengeScheme ? "UNAUTHORIZED" : "BAD_REQUEST",
 		{
