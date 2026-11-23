@@ -424,6 +424,46 @@ describe("SCIM POST /.search", () => {
 		expect(writeSearch.status).toBe(403);
 	});
 
+	it("canonicalizes SearchRequest member names on HTTP requests", async () => {
+		const { ada, searchUsers } = await createSearchFixture();
+		const searched = await searchUsers({
+			schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+			Filter: 'userName eq "ada.login@example.com"',
+			StartIndex: 1,
+			Count: 100,
+		});
+
+		expect(searched.status).toBe(200);
+		expect(listResourceIds(searched.body)).toEqual([ada.id]);
+	});
+
+	it("rejects SearchRequest members that differ only by letter case", async () => {
+		const { searchUsers } = await createSearchFixture();
+		const searched = await searchUsers({
+			schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+			filter: 'userName eq "ada.login@example.com"',
+			Filter: 'userName eq "grace.login@example.com"',
+		});
+
+		expect(searched).toMatchObject({
+			status: 400,
+			body: { scimType: "invalidSyntax" },
+		});
+	});
+
+	it("rejects string-valued startIndex in the SearchRequest body", async () => {
+		const { searchUsers } = await createSearchFixture();
+		const searched = await searchUsers({
+			schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+			startIndex: "1",
+		});
+
+		expect(searched).toMatchObject({
+			status: 400,
+			body: { scimType: "invalidValue" },
+		});
+	});
+
 	it("does not apply a GET filter query string when the SearchRequest has no filter", async () => {
 		const { ada, grace, searchUsers } = await createSearchFixture();
 		const searched = await searchUsers(

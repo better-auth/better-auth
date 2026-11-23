@@ -6,6 +6,7 @@ import { normalizeSCIMUserEntraCompatibilityRequestBody } from "./active-normali
 import {
 	canonicalizeSCIMPatchRequestBody,
 	canonicalizeSCIMResourceAttributeNames,
+	canonicalizeSCIMSearchRequestAttributeNames,
 } from "./attribute-names";
 import type { SCIMOptions } from "./configuration";
 import {
@@ -333,7 +334,24 @@ function createSCIMPlugin(options: SCIMOptions) {
 				(isGroupCreate ||
 					(["PUT", "PATCH"].includes(request.method) &&
 						!path.endsWith("/Groups")));
+			const isCollectionSearch =
+				request.method === "POST" &&
+				(path.endsWith("/Users/.search") || path.endsWith("/Groups/.search"));
 			let normalizedBody = body;
+			if (isCollectionSearch) {
+				try {
+					normalizedBody = canonicalizeSCIMSearchRequestAttributeNames(body);
+				} catch (error) {
+					if (!isAPIError(error)) throw error;
+					return {
+						response: createSCIMErrorResponse(
+							"BAD_REQUEST",
+							error.message,
+							"invalidSyntax",
+						),
+					};
+				}
+			}
 			if (isUserMutation || isGroupMutation) {
 				try {
 					normalizedBody =

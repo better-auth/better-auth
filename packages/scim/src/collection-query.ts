@@ -72,6 +72,8 @@ export const scimSearchRequestSchema = scimCollectionQuerySchema.extend({
 	schemas: z
 		.array(z.literal(SCIM_SEARCH_REQUEST_SCHEMA))
 		.length(1, "schemas must contain only the SearchRequest schema"),
+	startIndex: z.number().int().optional(),
+	count: z.number().int().optional(),
 });
 
 export type SCIMSearchRequest = z.infer<typeof scimSearchRequestSchema>;

@@ -30,6 +30,18 @@ const SCIM_COMMON_ATTRIBUTES: readonly SCIMAttributeName[] = [
 	{ name: "meta" },
 ];
 
+/** Attributes RFC 7644 Section 3.4.3 defines on SearchRequest. */
+const SCIM_SEARCH_REQUEST_ATTRIBUTES: readonly SCIMAttributeName[] = [
+	{ name: "schemas" },
+	{ name: "attributes" },
+	{ name: "excludedAttributes" },
+	{ name: "filter" },
+	{ name: "sortBy" },
+	{ name: "sortOrder" },
+	{ name: "startIndex" },
+	{ name: "count" },
+];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -151,4 +163,19 @@ export function canonicalizeSCIMResourceAttributeNames(
 ): unknown {
 	if (!isRecord(resource)) return resource;
 	return canonicalizeRecord(resource, readResourceAttributeNames(resourceType));
+}
+
+/**
+ * Rewrite SearchRequest member names to the RFC 7644 declared names without
+ * mutating the body. Duplicate names that differ only by letter case throw
+ * `invalidSyntax`.
+ */
+export function canonicalizeSCIMSearchRequestAttributeNames(
+	body: unknown,
+): unknown {
+	if (!isRecord(body)) return body;
+	return canonicalizeRecord(body, {
+		attributes: SCIM_SEARCH_REQUEST_ATTRIBUTES,
+		extensions: [],
+	});
 }
