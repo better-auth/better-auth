@@ -7,6 +7,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import { accountSchema, userSchema } from "@better-auth/core/db";
 import { defu } from "defu";
 import * as z from "zod";
@@ -18,6 +19,7 @@ import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { EncryptionPurpose } from "../../crypto/purpose";
 import { derivePurposeKey } from "../../crypto/purpose";
+import { parseOAuthAccountFields } from "../../oauth2/account-fields";
 import { exchangeOAuthCallback } from "../../oauth2/callback";
 import { redirectOnError } from "../../oauth2/errors";
 import {
@@ -109,14 +111,17 @@ const passthroughPayloadSchema = z.looseObject({
 	userInfo: z.looseObject(
 		userSchema.omit({ createdAt: true, updatedAt: true }).shape,
 	),
-	account: z.looseObject(
-		accountSchema.omit({
+	account: z.looseObject({
+		...accountSchema.omit({
 			id: true,
 			userId: true,
 			createdAt: true,
 			updatedAt: true,
 		}).shape,
-	),
+		accessTokenExpiresAt: z.coerce.date().nullish(),
+		refreshTokenExpiresAt: z.coerce.date().nullish(),
+	}),
+	accountFields: z.record(z.string(), z.unknown()).nullish(),
 	profile: z.record(z.string(), z.unknown()).optional(),
 	scopes: z.array(z.string()).optional(),
 	state: z.string().min(1),
@@ -128,6 +133,38 @@ const passthroughPayloadSchema = z.looseObject({
 });
 
 type PassthroughPayload = z.infer<typeof passthroughPayloadSchema>;
+
+/**
+ * JSON turns dates into strings, so only the fields this server declares as dates are revived.
+ */
+const reviveDateFields = <T extends Record<string, unknown>>(
+	data: T,
+	fields: Record<string, DBFieldAttribute> = {},
+): T => ({
+	...data,
+	...Object.fromEntries(
+		Object.entries(data).flatMap(([key, value]) =>
+			fields[key]?.type === "date" && typeof value === "string"
+				? [[key, new Date(value)]]
+				: [],
+		),
+	),
+});
+
+/**
+ * Reports a `getAccountFields` failure the way the direct callback does.
+ */
+function redirectOnAccountFieldsError(
+	ctx: GenericEndpointContext,
+	errorURL: string,
+	error: unknown,
+): never {
+	if (isAPIError(error) && error.body?.code) {
+		throw redirectOnError(ctx, errorURL, error.body.code, error.body.message);
+	}
+	ctx.context.logger.error("getAccountFields failed", error);
+	throw redirectOnError(ctx, errorURL, "unable_to_get_user_info");
+}
 
 const restoreOAuthProxyState = async (
 	ctx: GenericEndpointContext,
@@ -210,7 +247,9 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 			let payload: PassthroughPayload;
 			try {
-				payload = passthroughPayloadSchema.parse(parseJSON(decryptedPayload));
+				payload = passthroughPayloadSchema.parse(
+					parseJSON(decryptedPayload, { strict: true, parseDates: false }),
+				);
 			} catch (e) {
 				ctx.context.logger.error("Failed to parse OAuth proxy payload", e);
 				throw redirectOnError(ctx, defaultErrorURL, "invalid_payload");
@@ -239,11 +278,29 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			if (!stateData) {
 				throw redirectOnError(ctx, errorURL, "state_mismatch");
 			}
+			const userInfo = reviveDateFields(
+				payload.userInfo,
+				ctx.context.tables.user?.fields,
+			);
+			let accountFields: Record<string, unknown> | undefined;
+			try {
+				accountFields = parseOAuthAccountFields(
+					ctx,
+					payload.accountFields &&
+						reviveDateFields(
+							payload.accountFields,
+							ctx.context.tables.account?.fields,
+						),
+				);
+			} catch (e) {
+				redirectOnAccountFieldsError(ctx, errorURL, e);
+			}
 			if (stateData.link) {
 				const linkResult = await linkOAuthAccount(ctx, {
 					link: stateData.link,
-					userInfo: payload.userInfo,
+					userInfo,
 					account: payload.account,
+					accountFields,
 					profile: payload.profile ?? {},
 					scopes: payload.scopes ?? payload.account.scope?.split(","),
 				});
@@ -257,13 +314,19 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 				}
 				throw ctx.redirect(payload.callbackURL);
 			}
+			// Sign-in writes here, so this server's provider options decide the override.
+			const provider = ctx.context.socialProviders.find(
+				(p) => p.id === payload.account.providerId,
+			);
 			let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 			try {
 				result = await handleOAuthUserInfo(ctx, {
-					userInfo: payload.userInfo,
+					userInfo,
 					account: payload.account,
+					accountFields,
 					callbackURL: payload.callbackURL,
 					disableSignUp: payload.disableSignUp,
+					overrideUserInfo: provider?.options?.overrideUserInfoOnSignIn,
 					source: {
 						method: "oauth",
 						oauth: {
@@ -527,6 +590,15 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							ctx.context.logger.error("Provider did not return email");
 							throw redirectOnError(ctx, errorURL, "email_not_found");
 						}
+						let accountFields: Record<string, unknown> | null | undefined;
+						try {
+							accountFields = await provider.options?.getAccountFields?.(
+								tokens,
+								userInfo,
+							);
+						} catch (e) {
+							redirectOnAccountFieldsError(ctx, errorURL, e);
+						}
 
 						const proxyCallbackURL = new URL(stateData.callbackURL);
 						const finalCallbackURL =
@@ -535,12 +607,12 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						const payload: PassthroughPayload = {
 							userInfo: {
+								...userInfo,
 								id: accountKey.accountId,
 								email: userInfo.email,
 								name: userInfo.name || "",
-								image: userInfo.image,
-								emailVerified: userInfo.emailVerified,
 							},
+							accountFields,
 							profile: providerProfile,
 							scopes: tokens.scopes,
 							account: {
