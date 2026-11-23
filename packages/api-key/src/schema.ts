@@ -193,7 +193,9 @@ export const apiKeySchema = ({
 						input(value) {
 							return JSON.stringify(value);
 						},
-						output: readApiKeyMetadata,
+						output(value) {
+							return readApiKeyMetadata(value);
+						},
 					},
 				},
 			},

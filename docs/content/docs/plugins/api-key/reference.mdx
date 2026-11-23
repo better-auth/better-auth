@@ -152,7 +152,7 @@ An API Key can represent a valid session, so we can mock a session for the user 
 Controls whether to cache individual API key reads. The `apikey` database table is required in both modes.
 
 * `"database"` (default) reads and writes API keys using the database.
-* `"secondary-storage"` caches reads by ID and by the stored credential used for verification. On a cache miss, the plugin reads the database and fills the cache. Configure [`secondaryStorage`](/docs/concepts/database#secondary-storage) or `customStorage`.
+* `"secondary-storage"` caches reads by ID and by the stored credential used for verification. On a cache miss, the plugin reads the database and caches the key under its own configuration. Keys with double-encoded metadata are cached after normalization. Configure [`secondaryStorage`](/docs/concepts/database#secondary-storage) or `customStorage`.
 
 Listings and usage counters use the database in both modes. Use a shared database when you run multiple auth instances.
 

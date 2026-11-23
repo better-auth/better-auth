@@ -2757,6 +2757,29 @@ describe("api-key", async () => {
 			expect(dbKey).toBeNull();
 		});
 
+		it("caches verification lookups only in the key's configuration", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				secondaryStorage,
+				plugins: [
+					apiKey([
+						{ configId: "default", storage: "secondary-storage" },
+						{ configId: "database-keys" },
+					]),
+				],
+			});
+			const { user } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: { userId: user.id, configId: "database-keys" },
+			});
+			const hash = await defaultKeyHasher(created.key);
+
+			expect(
+				await auth.api.verifyApiKey({ body: { key: created.key } }),
+			).toMatchObject({ valid: true, key: { id: created.id } });
+			expect(store.has(`api-key:${hash}`)).toBe(false);
+			expect(store.has(`api-key:by-id:${created.id}`)).toBe(false);
+		});
+
 		it("invalidates both caches when disabling or deleting a key", async () => {
 			const { headers } = await signInWithTestUser();
 			const { id, key } = await auth.api.createApiKey({ headers, body: {} });
@@ -2840,24 +2863,24 @@ describe("api-key", async () => {
 		});
 
 		it("caps the cache lifetime at the key expiration", async () => {
-			const { headers } = await signInWithTestUser();
-			const expiresIn = 60 * 60 * 24; // 1 day in seconds
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				const { headers } = await signInWithTestUser();
+				const expiresIn = 60 * 60 * 24;
+				const createdKey = await auth.api.createApiKey({
+					headers,
+					body: { expiresIn },
+				});
 
-			const { data: createdKey } = await client.apiKey.create(
-				{ expiresIn },
-				{ headers: headers },
-			);
-
-			expect(createdKey).not.toBeNull();
-			expect(createdKey?.expiresAt).not.toBeNull();
-
-			// Check that TTL was set in expiration map (check by ID key)
-			const storedKey = `api-key:by-id:${createdKey!.id}`;
-			const ttl = expirationMap.get(storedKey);
-			expect(ttl).toBeDefined();
-			expect(ttl).toBeGreaterThan(0);
-			expect(ttl).toBeGreaterThanOrEqual(expiresIn - 1);
-			expect(ttl).toBeLessThanOrEqual(expiresIn);
+				expect(createdKey.expiresAt?.getTime()).toBe(
+					Date.now() + expiresIn * 1000,
+				);
+				expect(expirationMap.get(`api-key:by-id:${createdKey.id}`)).toBe(
+					expiresIn,
+				);
+			} finally {
+				vi.useRealTimers();
+			}
 		});
 
 		it("should handle metadata in secondary storage", async () => {

@@ -655,7 +655,7 @@ export const auth = betterAuth({
 });
 ```
 
-Pass a JSON object in the `metadata` field. Create and update return HTTP 400 for metadata that cannot be read back. If a stored key has unreadable metadata, listings return that key with `metadata: null`.
+Pass a JSON object or array in the `metadata` field. Create and update return HTTP 400 for metadata that cannot be read back. If a stored key has unreadable metadata, listings return that key with `metadata: null`.
 
 ```ts title="create-api-key.ts"
 import { auth } from "@/lib/auth"

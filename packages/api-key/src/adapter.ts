@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import type { Where } from "@better-auth/core/db/adapter";
 import { readApiKeyMetadata } from "./metadata";
 import type { PredefinedApiKeyOptions } from "./routes";
+import { configIdMatches } from "./routes";
 import type { ApiKey } from "./types";
 
 /**
@@ -170,9 +171,14 @@ async function getCachedApiKey(
 	opts?: PredefinedApiKeyOptions,
 ): Promise<ApiKey | null> {
 	const cache = opts && getCache(ctx, opts);
-	if (cache) {
+	if (cache && opts) {
 		const cached = deserializeApiKey(await cache.get(cacheKey));
-		if (cached?.[field] === value) return cached;
+		if (
+			cached?.[field] === value &&
+			configIdMatches(cached.configId, opts.configId)
+		) {
+			return cached;
+		}
 	}
 
 	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
@@ -189,7 +195,13 @@ export async function setApiKey(
 	opts: PredefinedApiKeyOptions,
 ): Promise<void> {
 	const cache = getCache(ctx, opts);
-	if (!cache || needsMetadataMigration(apiKey.metadata)) return;
+	if (
+		!cache ||
+		!configIdMatches(apiKey.configId, opts.configId) ||
+		needsMetadataMigration(apiKey.metadata)
+	) {
+		return;
+	}
 
 	const ttl = apiKey.expiresAt
 		? Math.floor((apiKey.expiresAt.getTime() - Date.now()) / 1000)
