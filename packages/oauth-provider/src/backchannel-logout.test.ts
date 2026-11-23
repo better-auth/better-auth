@@ -733,7 +733,7 @@ describe("oauth back-channel logout", async () => {
 					{ field: "sessionId", value: session!.session.id },
 					{ field: "revoked", value: null },
 				]);
-				expect(query.limit).toEqual(expect.any(Number));
+				expect(query.limit).toBe(100);
 			}
 		} finally {
 			findMany.mockRestore();
