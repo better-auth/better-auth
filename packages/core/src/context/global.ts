@@ -16,8 +16,9 @@ interface BetterAuthGlobal {
 	 */
 	context: Record<string, AsyncLocalStorage<unknown>>;
 	/**
-	 * Schema checks and revisions keyed by database, shared across copies of
-	 * `@better-auth/core`. Absent when an older copy created this object.
+	 * Schema checks keyed by adapter and schema revisions keyed by database,
+	 * shared across copies of `@better-auth/core`. Absent when an older copy
+	 * created this object.
 	 */
 	schemaRegistry?: SchemaRegistry;
 }
