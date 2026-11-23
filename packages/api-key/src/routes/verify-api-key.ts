@@ -192,24 +192,12 @@ async function claimUsageInDatabase({
 	opts: PredefinedApiKeyOptions;
 	hashedKey: string;
 }): Promise<ApiKey> {
-	let row: ApiKey = apiKey;
+	// Rate limit first: a rate-limited request must not spend `remaining`, and
+	// a window slot (unlike quota) is restored when the window rolls over.
+	let row = await consumeRateLimit(ctx, apiKey, opts);
 
-	if (apiKey.remaining !== null) {
-		row = await consumeRemaining(ctx, apiKey);
-	}
-
-	try {
-		row = await consumeRateLimit(ctx, row, opts);
-	} catch (error) {
-		// A rejected request must not spend quota: return the slot claimed above.
-		if (apiKey.remaining !== null) {
-			await ctx.context.adapter.incrementOne<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [{ field: "id", value: apiKey.id }],
-				increment: { remaining: 1 },
-			});
-		}
-		throw error;
+	if (row.remaining !== null) {
+		row = await consumeRemaining(ctx, row);
 	}
 
 	// A final `updatedAt` stamp returns the fully consolidated row, reflecting

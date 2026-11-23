@@ -5263,6 +5263,40 @@ describe("concurrent verification enforces atomic counters", async () => {
 			});
 			expect(stored.requestCount).toBe(2);
 		});
+
+		it("does not let a rate-limited burst consume remaining or delete the key", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: {
+					remaining: 2,
+					rateLimitEnabled: true,
+					rateLimitMax: 1,
+					rateLimitTimeWindow: 60_000,
+					userId: user.id,
+				},
+			});
+
+			// Use the only slot in the window, leaving remaining at 1.
+			await auth.api.verifyApiKey({ body: { key: created.key } });
+
+			gate = createArrivalGate(concurrency);
+			const results = await Promise.all(
+				Array.from({ length: concurrency }, () =>
+					auth.api.verifyApiKey({ body: { key: created.key } }),
+				),
+			);
+
+			for (const r of results) {
+				expect(r.valid).toBe(false);
+				expect(r.error?.code).toBe("RATE_LIMITED");
+			}
+
+			const stored = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(stored.remaining).toBe(1);
+		});
 	});
 
 	describe("secondary storage reference list", async () => {
