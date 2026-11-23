@@ -13,7 +13,11 @@ async function createWriters() {
 	let cacheWrites = 0;
 	const bothWrote = Promise.withResolvers<void>();
 	async function interleaveCacheWrites(key: string) {
-		if (interleave && key.startsWith("api-key:by-id:")) {
+		if (
+			interleave &&
+			key.startsWith("api-key:") &&
+			!key.startsWith("api-key:by-ref:")
+		) {
 			if (++cacheWrites === 2) bothWrote.resolve();
 			await bothWrote.promise;
 		}
@@ -161,7 +165,10 @@ it("paginates default keys with adapters that reject null configuration filters"
 		headers,
 		body: { name: "B", configId: "other" },
 	});
-	const c = await auth.api.createApiKey({ headers, body: { name: "C" } });
+	const thirdKey = await auth.api.createApiKey({
+		headers,
+		body: { name: "C" },
+	});
 
 	const { adapter } = await auth.$context;
 	const originalAdapterId = adapter.id;
@@ -184,7 +191,7 @@ it("paginates default keys with adapters that reject null configuration filters"
 		});
 
 		expect(result.total).toBe(2);
-		expect(result.apiKeys.map(({ id }) => id)).toEqual([c.id]);
+		expect(result.apiKeys.map(({ id }) => id)).toEqual([thirdKey.id]);
 	} finally {
 		countSpy.mockRestore();
 		adapter.id = originalAdapterId;
@@ -299,7 +306,7 @@ it.each([undefined, "serial"] as const)(
 			expect(verified.key).toMatchObject({
 				name: id,
 				remaining: 1,
-				metadata: { since: new Date("2025-06-01T00:00:00Z") },
+				metadata: { since: "2025-06-01T00:00:00Z" },
 			});
 		}
 	},

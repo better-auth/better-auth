@@ -2641,8 +2641,8 @@ describe("api-key", async () => {
 			expect(apiKey).not.toBeNull();
 			expect(apiKey?.key).toBeDefined();
 
-			// Check that API key is stored in secondary storage by ID
-			expect(store.has(`api-key:by-id:${apiKey?.id}`)).toBe(true);
+			const cacheKey = `api-key:${await defaultKeyHasher(apiKey!.key)}`;
+			expect(store.has(cacheKey)).toBe(true);
 
 			const dbKey = await (await auth.$context).adapter.findOne<ApiKey>({
 				model: "apikey",
@@ -2651,14 +2651,14 @@ describe("api-key", async () => {
 			expect(dbKey?.referenceId).toBe(user.id);
 
 			// Verify the stored data can be retrieved
-			const storedData = store.get(`api-key:by-id:${apiKey?.id}`);
+			const storedData = store.get(cacheKey);
 			expect(storedData).toBeDefined();
 			const parsed = JSON.parse(storedData!);
 			expect(parsed.id).toBe(apiKey?.id);
 			expect(parsed.referenceId).toBe(user.id);
 		});
 
-		it("should get API key from secondary storage", async () => {
+		it("gets an API key by ID in secondary-storage mode", async () => {
 			const { headers, user } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
@@ -2690,8 +2690,9 @@ describe("api-key", async () => {
 				{ headers: headers },
 			);
 
-			store.delete(`api-key:by-id:${key1?.id}`);
-			store.delete(`api-key:by-id:${key2?.id}`);
+			const cacheKey = `api-key:${await defaultKeyHasher(key1!.key)}`;
+			store.delete(cacheKey);
+			store.delete(`api-key:${await defaultKeyHasher(key2!.key)}`);
 			const { data: keys } = await client.apiKey.list({
 				fetchOptions: { headers: headers },
 			});
@@ -2700,13 +2701,12 @@ describe("api-key", async () => {
 			expect(keys?.apiKeys?.length).toBeGreaterThanOrEqual(2);
 			expect(keys?.apiKeys?.some((k) => k.id === key1?.id)).toBe(true);
 			expect(keys?.apiKeys?.some((k) => k.id === key2?.id)).toBe(true);
-			expect(store.has(`api-key:by-id:${key1?.id}`)).toBe(false);
+			expect(store.has(cacheKey)).toBe(false);
 			const retrievedKey = await auth.api.getApiKey({
 				headers,
 				query: { id: key1!.id },
 			});
 			expect(retrievedKey.id).toBe(key1!.id);
-			expect(store.has(`api-key:by-id:${key1?.id}`)).toBe(true);
 		});
 
 		it("should update API key in secondary storage", async () => {
@@ -2748,7 +2748,9 @@ describe("api-key", async () => {
 			expect(deleteResult?.success).toBe(true);
 
 			// Verify it's deleted from secondary storage
-			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(false);
+			expect(
+				store.has(`api-key:${await defaultKeyHasher(createdKey!.key)}`),
+			).toBe(false);
 
 			const dbKey = await (await auth.$context).adapter.findOne<ApiKey>({
 				model: "apikey",
@@ -2777,24 +2779,20 @@ describe("api-key", async () => {
 				await auth.api.verifyApiKey({ body: { key: created.key } }),
 			).toMatchObject({ valid: true, key: { id: created.id } });
 			expect(store.has(`api-key:${hash}`)).toBe(false);
-			expect(store.has(`api-key:by-id:${created.id}`)).toBe(false);
 		});
 
-		it("invalidates both caches when disabling or deleting a key", async () => {
+		it("invalidates cached credentials when disabling or deleting a key", async () => {
 			const { headers } = await signInWithTestUser();
 			const { id, key } = await auth.api.createApiKey({ headers, body: {} });
 			const hash = await defaultKeyHasher(key);
 			const hashCacheKey = `api-key:${hash}`;
-			const idCacheKey = `api-key:by-id:${id}`;
 			expect(store.has(hashCacheKey)).toBe(true);
-			expect(store.has(idCacheKey)).toBe(true);
 
 			await auth.api.updateApiKey({
 				headers,
 				body: { keyId: id, enabled: false },
 			});
 			expect(store.has(hashCacheKey)).toBe(false);
-			expect(store.has(idCacheKey)).toBe(false);
 			expect(await auth.api.verifyApiKey({ body: { key } })).toMatchObject({
 				valid: false,
 				error: { code: "KEY_DISABLED" },
@@ -2806,13 +2804,11 @@ describe("api-key", async () => {
 				enabled: false,
 			});
 			expect(store.has(hashCacheKey)).toBe(true);
-			expect(store.has(idCacheKey)).toBe(true);
 
 			expect(
 				await auth.api.deleteApiKey({ headers, body: { keyId: id } }),
 			).toEqual({ success: true });
 			expect(store.has(hashCacheKey)).toBe(false);
-			expect(store.has(idCacheKey)).toBe(false);
 			expect(await auth.api.verifyApiKey({ body: { key } })).toMatchObject({
 				valid: false,
 				error: { code: "INVALID_API_KEY" },
@@ -2823,6 +2819,44 @@ describe("api-key", async () => {
 				body: { code: "KEY_NOT_FOUND" },
 			});
 		});
+
+		/** @see https://github.com/better-auth/better-auth/issues/12874 */
+		it.each(["disable", "delete"])(
+			"ignores a stale cache entry after %s",
+			async (operation) => {
+				const { headers } = await signInWithTestUser();
+				const { id, key } = await auth.api.createApiKey({ headers, body: {} });
+				const credentialEntry = `api-key:${await defaultKeyHasher(key)}`;
+				const snapshot = store.get(credentialEntry);
+				expect(snapshot).toBeDefined();
+
+				if (operation === "disable") {
+					await auth.api.updateApiKey({
+						headers,
+						body: { keyId: id, enabled: false },
+					});
+				} else {
+					await auth.api.deleteApiKey({ headers, body: { keyId: id } });
+				}
+				store.set(credentialEntry, snapshot!);
+				store.set(`api-key:by-id:${id}`, snapshot!);
+
+				const get = auth.api.getApiKey({ headers, query: { id } });
+				if (operation === "disable") {
+					await expect(get).resolves.toMatchObject({ id, enabled: false });
+				} else {
+					await expect(get).rejects.toMatchObject({
+						body: { code: "KEY_NOT_FOUND" },
+					});
+				}
+				expect(await auth.api.verifyApiKey({ body: { key } })).toMatchObject({
+					valid: false,
+					error: {
+						code: operation === "disable" ? "KEY_DISABLED" : "INVALID_API_KEY",
+					},
+				});
+			},
+		);
 
 		it("verifies a key with an empty cache", async () => {
 			const { headers } = await signInWithTestUser();
@@ -2875,12 +2909,34 @@ describe("api-key", async () => {
 				expect(createdKey.expiresAt?.getTime()).toBe(
 					Date.now() + expiresIn * 1000,
 				);
-				expect(expirationMap.get(`api-key:by-id:${createdKey.id}`)).toBe(
-					expiresIn,
-				);
+				expect(
+					expirationMap.get(
+						`api-key:${await defaultKeyHasher(createdKey.key)}`,
+					),
+				).toBe(expiresIn);
 			} finally {
 				vi.useRealTimers();
 			}
+		});
+
+		it("accepts array metadata on create and update", async () => {
+			const { headers } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				headers,
+				body: { metadata: ["first"] },
+			});
+			expect(created.metadata).toEqual(["first"]);
+
+			const updated = await auth.api.updateApiKey({
+				headers,
+				body: { keyId: created.id, metadata: ["second"] },
+			});
+			expect(updated.metadata).toEqual(["second"]);
+			const retrieved = await auth.api.getApiKey({
+				headers,
+				query: { id: created.id },
+			});
+			expect(retrieved.metadata).toEqual(["second"]);
 		});
 
 		it("should handle metadata in secondary storage", async () => {
@@ -3207,7 +3263,7 @@ describe("api-key", async () => {
 		let customSetCalled = false;
 		let customDeleteCalled = false;
 
-		const { client, signInWithTestUser } = await getTestInstance(
+		const { auth, client, signInWithTestUser } = await getTestInstance(
 			{
 				// Don't provide global secondaryStorage
 				plugins: [
@@ -3264,7 +3320,9 @@ describe("api-key", async () => {
 
 			expect(createdKey).not.toBeNull();
 			expect(customSetCalled).toBe(true);
-			expect(customStore.has(`api-key:by-id:${createdKey!.id}`)).toBe(true);
+			expect(
+				customStore.has(`api-key:${await defaultKeyHasher(createdKey!.key)}`),
+			).toBe(true);
 		});
 
 		it("should use custom get method", async () => {
@@ -3277,12 +3335,14 @@ describe("api-key", async () => {
 			expect(createdKey).not.toBeNull();
 			customGetCalled = false;
 
-			const { data: retrievedKey } = await client.apiKey.get(
-				{ query: { id: createdKey!.id } },
-				{ headers: headers },
-			);
+			const verified = await auth.api.verifyApiKey({
+				body: { key: createdKey!.key },
+			});
 
-			expect(retrievedKey).not.toBeNull();
+			expect(verified).toMatchObject({
+				valid: true,
+				key: { id: createdKey!.id },
+			});
 			expect(customGetCalled).toBe(true);
 		});
 
@@ -3303,7 +3363,9 @@ describe("api-key", async () => {
 
 			expect(deleteResult?.success).toBe(true);
 			expect(customDeleteCalled).toBe(true);
-			expect(customStore.has(`api-key:by-id:${createdKey!.id}`)).toBe(false);
+			expect(
+				customStore.has(`api-key:${await defaultKeyHasher(createdKey!.key)}`),
+			).toBe(false);
 		});
 	});
 
@@ -4548,7 +4610,7 @@ describe("verify should not write back stale state", async () => {
 			},
 		);
 
-		it("should not re-enable a key disabled during verification", async () => {
+		it("rejects a key disabled during verification", async () => {
 			const { headers } = await signInWithTestUser();
 			const created = await auth.api.createApiKey({ body: {}, headers });
 
@@ -4562,15 +4624,10 @@ describe("verify should not write back stale state", async () => {
 			const result = await auth.api.verifyApiKey({
 				body: { key: created.key },
 			});
-			// the verification read the key before the disable, so it passes,
-			// but its write-back must not revert the disable
-			expect(result.valid).toBe(true);
-
-			const stored = await auth.api.getApiKey({
-				query: { id: created.id },
-				headers,
+			expect(result).toMatchObject({
+				valid: false,
+				error: { code: "KEY_DISABLED" },
 			});
-			expect(stored.enabled).toBe(false);
 		});
 	});
 
@@ -4616,7 +4673,7 @@ describe("verify should not write back stale state", async () => {
 			store.clear();
 		});
 
-		it("should not re-enable a key disabled during verification", async () => {
+		it("rejects a key disabled during verification", async () => {
 			const { headers } = await signInWithTestUser();
 			const created = await auth.api.createApiKey({ body: {}, headers });
 
@@ -4630,11 +4687,10 @@ describe("verify should not write back stale state", async () => {
 			const result = await auth.api.verifyApiKey({
 				body: { key: created.key },
 			});
-			expect(result.valid).toBe(true);
-
-			const stored = store.get(`api-key:by-id:${created.id}`);
-			expect(stored).toBeDefined();
-			expect(JSON.parse(stored!).enabled).toBe(false);
+			expect(result).toMatchObject({
+				valid: false,
+				error: { code: "KEY_DISABLED" },
+			});
 		});
 
 		it("should not recreate a key deleted during verification", async () => {
@@ -4847,7 +4903,7 @@ describe.each(["string", "parsed"] as const)(
 			expect(listed.apiKeys.map((k) => k.id)).toContain(created!.id);
 		});
 
-		it("keeps date-like strings in name and cached metadata", async () => {
+		it("keeps date-like strings in name and database metadata", async () => {
 			const { headers } = await signInWithTestUser();
 			const created = await auth.api.createApiKey({
 				body: {

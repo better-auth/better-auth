@@ -193,7 +193,7 @@ export function getApiKey({
 			);
 			let apiKey: ApiKey | null = null;
 
-			apiKey = await getApiKeyById(ctx, id, lookupOpts);
+			apiKey = await getApiKeyById(ctx, id);
 
 			if (!apiKey) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);

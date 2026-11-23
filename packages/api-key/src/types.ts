@@ -218,10 +218,10 @@ export interface ApiKeyConfigurationOptions {
 		  }
 		| undefined;
 	/**
-	 * Whether to cache individual API key reads in secondary storage.
+	 * Whether to cache API key verification lookups in secondary storage.
 	 *
 	 * - `"database"`: Store API keys in the database adapter (default)
-	 * - `"secondary-storage"`: Store API keys in the database and cache individual lookups
+	 * - `"secondary-storage"`: Store API keys in the database and cache credential lookups for verification
 	 *
 	 * @default "database"
 	 */

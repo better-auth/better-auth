@@ -437,7 +437,7 @@ Use `apiKey()` with your database adapter. Apply the [API key schema](/docs/plug
 
 #### `"secondary-storage"`
 
-Apply the [API key schema](/docs/plugins/api-key/reference#schema), set `storage: "secondary-storage"`, and provide [secondary storage](/docs/concepts/database#secondary-storage). The plugin looks in the cache for verification and reads by ID. On a cache miss, it reads the key from the database and fills the cache.
+Apply the [API key schema](/docs/plugins/api-key/reference#schema), set `storage: "secondary-storage"`, and provide [secondary storage](/docs/concepts/database#secondary-storage). Verification looks up the credential in the cache and checks that the matching key is still enabled when writing usage to the database. Reads by ID use the database.
 
 ```ts title="auth.ts"
 import { apiKey } from "@better-auth/api-key";
@@ -655,7 +655,7 @@ export const auth = betterAuth({
 });
 ```
 
-Pass a JSON object or array in the `metadata` field. Create and update return HTTP 400 for metadata that cannot be read back. If a stored key has unreadable metadata, listings return that key with `metadata: null`.
+Pass a JSON object or array in the `metadata` field. ISO-formatted strings in stored metadata remain strings in server-side reads. Create and update return HTTP 400 for metadata that cannot be read back. If a stored key has unreadable metadata, listings return that key with `metadata: null`.
 
 ```ts title="create-api-key.ts"
 import { auth } from "@/lib/auth"

@@ -117,10 +117,6 @@ function cacheKeyByHash(key: string) {
 	return `api-key:${key}`;
 }
 
-function cacheKeyById(id: string) {
-	return `api-key:by-id:${id}`;
-}
-
 export function deserializeApiKey(data: unknown): ApiKey | null {
 	if (!data) return null;
 
@@ -141,40 +137,18 @@ export function deserializeApiKey(data: unknown): ApiKey | null {
 	}
 }
 
-export function getApiKey(
+export async function getApiKey(
 	ctx: GenericEndpointContext,
 	hashedKey: string,
 	opts: PredefinedApiKeyOptions,
 ): Promise<ApiKey | null> {
-	return getCachedApiKey(
-		ctx,
-		"key",
-		hashedKey,
-		cacheKeyByHash(hashedKey),
-		opts,
-	);
-}
-
-export function getApiKeyById(
-	ctx: GenericEndpointContext,
-	id: string,
-	opts?: PredefinedApiKeyOptions,
-): Promise<ApiKey | null> {
-	return getCachedApiKey(ctx, "id", id, cacheKeyById(id), opts);
-}
-
-async function getCachedApiKey(
-	ctx: GenericEndpointContext,
-	field: "key" | "id",
-	value: string,
-	cacheKey: string,
-	opts?: PredefinedApiKeyOptions,
-): Promise<ApiKey | null> {
-	const cache = opts && getCache(ctx, opts);
-	if (cache && opts) {
-		const cached = deserializeApiKey(await cache.get(cacheKey));
+	const cache = getCache(ctx, opts);
+	if (cache) {
+		const cached = deserializeApiKey(
+			await cache.get(cacheKeyByHash(hashedKey)),
+		);
 		if (
-			cached?.[field] === value &&
+			cached?.key === hashedKey &&
 			configIdMatches(cached.configId, opts.configId)
 		) {
 			return cached;
@@ -183,10 +157,20 @@ async function getCachedApiKey(
 
 	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
 		model: "apikey",
-		where: [{ field, value }],
+		where: [{ field: "key", value: hashedKey }],
 	});
-	if (apiKey && opts) await setApiKey(ctx, apiKey, opts);
+	if (apiKey) await setApiKey(ctx, apiKey, opts);
 	return apiKey;
+}
+
+export function getApiKeyById(
+	ctx: GenericEndpointContext,
+	id: string,
+): Promise<ApiKey | null> {
+	return ctx.context.adapter.findOne<ApiKey>({
+		model: "apikey",
+		where: [{ field: "id", value: id }],
+	});
 }
 
 export async function setApiKey(
@@ -206,11 +190,11 @@ export async function setApiKey(
 	const ttl = apiKey.expiresAt
 		? Math.floor((apiKey.expiresAt.getTime() - Date.now()) / 1000)
 		: 0;
-	const value = JSON.stringify(apiKey);
-	await Promise.all([
-		cache.set(cacheKeyByHash(apiKey.key), value, ttl > 0 ? ttl : undefined),
-		cache.set(cacheKeyById(apiKey.id), value, ttl > 0 ? ttl : undefined),
-	]);
+	await cache.set(
+		cacheKeyByHash(apiKey.key),
+		JSON.stringify(apiKey),
+		ttl > 0 ? ttl : undefined,
+	);
 }
 
 export async function invalidateApiKeyCache(
@@ -221,10 +205,7 @@ export async function invalidateApiKeyCache(
 	const cache = getCache(ctx, opts);
 	if (!cache) return;
 
-	await Promise.all([
-		cache.delete(cacheKeyByHash(apiKey.key)),
-		cache.delete(cacheKeyById(apiKey.id)),
-	]);
+	await cache.delete(cacheKeyByHash(apiKey.key));
 }
 
 export async function deleteApiKey(

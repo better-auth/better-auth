@@ -720,7 +720,7 @@ A Better Auth 1.8 authorization server accepts only its issuer as the audience b
 
 ## API key storage
 
-Better Auth 1.8 stores and lists API keys in the database. Auth instances that serve the same keys must share that database. With `storage: "secondary-storage"`, verification looks up the credential in secondary storage first and loads it from the database on a cache miss. Reads by ID use the same cache backend.
+Better Auth 1.8 stores and lists API keys in the database. Auth instances that serve the same keys must share that database. With `storage: "secondary-storage"`, verification looks up the credential in secondary storage first and loads it from the database on a cache miss. Reads by ID use the database.
 
 Remove `fallbackToDatabase` from every API key configuration. The option has been removed from the public type and is ignored at runtime. You can keep `storage: "secondary-storage"` if your keys already have database rows. If you enabled `fallbackToDatabase: true` after creating keys in secondary storage, check that those earlier keys have database rows.
 

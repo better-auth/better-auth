@@ -1,5 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { Where } from "@better-auth/core/db/adapter";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { role } from "better-auth/plugins/access";
@@ -9,6 +10,7 @@ import { defaultKeyHasher } from "../";
 import {
 	deleteApiKey,
 	getApiKey,
+	getApiKeyById,
 	migrateDoubleStringifiedMetadata,
 	setApiKey,
 } from "../adapter";
@@ -140,6 +142,29 @@ export async function validateApiKey({
 	return { apiKey: newApiKey, opts };
 }
 
+// A cache entry can outlive invalidation when an in-flight read writes it back.
+function credentialGuard(apiKey: ApiKey): Where[] {
+	return [
+		{ field: "id", value: apiKey.id },
+		{ field: "key", value: apiKey.key },
+		{ field: "enabled", value: apiKey.enabled ?? null },
+	];
+}
+
+async function readCurrentCredential(
+	ctx: GenericEndpointContext,
+	apiKey: ApiKey,
+) {
+	const fresh = await getApiKeyById(ctx, apiKey.id);
+	if (!fresh || fresh.key !== apiKey.key) {
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+	}
+	if (fresh.enabled === false) {
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_DISABLED);
+	}
+	return fresh;
+}
+
 /**
  * Atomically consume quota and a rate-limit slot against the database row, the
  * source of truth in both storage modes. Each guarded `incrementOne` only
@@ -155,26 +180,21 @@ async function claimUsageInDatabase({
 	apiKey: ApiKey;
 	opts: PredefinedApiKeyOptions;
 }): Promise<ApiKey> {
-	let row: ApiKey = apiKey;
-
-	if (apiKey.remaining !== null) {
-		row = await consumeRemaining(ctx, apiKey);
-	}
-
-	row = await consumeRateLimit(ctx, row, opts);
+	const row =
+		apiKey.remaining === null ? apiKey : await consumeRemaining(ctx, apiKey);
+	await consumeRateLimit(ctx, row, opts);
 
 	// A final `updatedAt` stamp returns the fully consolidated row, reflecting
 	// every guarded counter write applied above.
-	const finalRow = await ctx.context.adapter.update<ApiKey>({
+	const finalRow = await ctx.context.adapter.incrementOne<ApiKey>({
 		model: API_KEY_TABLE_NAME,
-		where: [{ field: "id", value: row.id }],
-		update: { updatedAt: new Date() },
+		where: credentialGuard(apiKey),
+		increment: {},
+		set: { updatedAt: new Date() },
 	});
 
-	// A null result means the row was deleted concurrently (for example the key
-	// was revoked). Do not fall back to the in-memory row and re-cache a key
-	// whose authoritative record is gone.
 	if (!finalRow) {
+		await readCurrentCredential(ctx, apiKey);
 		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
 	}
 
@@ -205,7 +225,7 @@ async function consumeRemaining(
 			const refilled = await ctx.context.adapter.incrementOne<ApiKey>({
 				model: API_KEY_TABLE_NAME,
 				where: [
-					{ field: "id", value: apiKey.id },
+					...credentialGuard(apiKey),
 					{ field: "lastRefillAt", value: apiKey.lastRefillAt },
 				],
 				increment: {},
@@ -222,13 +242,14 @@ async function consumeRemaining(
 	const decremented = await ctx.context.adapter.incrementOne<ApiKey>({
 		model: API_KEY_TABLE_NAME,
 		where: [
-			{ field: "id", value: apiKey.id },
+			...credentialGuard(apiKey),
 			{ field: "remaining", operator: "gt", value: 0 },
 		],
 		increment: { remaining: -1 },
 	});
 
 	if (!decremented) {
+		await readCurrentCredential(ctx, apiKey);
 		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
 	}
 
@@ -262,10 +283,11 @@ async function consumeRateLimit(
 		if (decision.lastRequest === null) {
 			return apiKey;
 		}
-		const updated = await ctx.context.adapter.update<ApiKey>({
+		const updated = await ctx.context.adapter.incrementOne<ApiKey>({
 			model: API_KEY_TABLE_NAME,
-			where: [{ field: "id", value: apiKey.id }],
-			update: { lastRequest: decision.lastRequest },
+			where: credentialGuard(apiKey),
+			increment: {},
+			set: { lastRequest: decision.lastRequest },
 		});
 		return updated ?? apiKey;
 	}
@@ -274,7 +296,7 @@ async function consumeRateLimit(
 		const incremented = await ctx.context.adapter.incrementOne<ApiKey>({
 			model: API_KEY_TABLE_NAME,
 			where: [
-				{ field: "id", value: apiKey.id },
+				...credentialGuard(apiKey),
 				{
 					field: "lastRequest",
 					operator: "gt",
@@ -294,13 +316,7 @@ async function consumeRateLimit(
 		}
 		// The window rolled or the max was reached between the read and the
 		// write. Re-evaluate against the freshest row to apply the right guard.
-		const fresh = await ctx.context.adapter.findOne<ApiKey>({
-			model: API_KEY_TABLE_NAME,
-			where: [{ field: "id", value: apiKey.id }],
-		});
-		if (!fresh) {
-			throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
-		}
+		const fresh = await readCurrentCredential(ctx, apiKey);
 		return consumeRateLimit(ctx, fresh, opts);
 	}
 
@@ -317,7 +333,7 @@ async function consumeRateLimit(
 
 	const started = await ctx.context.adapter.incrementOne<ApiKey>({
 		model: API_KEY_TABLE_NAME,
-		where: [{ field: "id", value: apiKey.id }, windowGuard],
+		where: [...credentialGuard(apiKey), windowGuard],
 		increment: {},
 		set: { requestCount: 1, lastRequest: decision.now },
 	});
@@ -326,13 +342,7 @@ async function consumeRateLimit(
 	}
 	// Another verification already opened the window. Re-evaluate so this
 	// request consumes an increment slot instead of resetting the count.
-	const fresh = await ctx.context.adapter.findOne<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: [{ field: "id", value: apiKey.id }],
-	});
-	if (!fresh) {
-		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
-	}
+	const fresh = await readCurrentCredential(ctx, apiKey);
 	return consumeRateLimit(ctx, fresh, opts);
 }
 
