@@ -77,6 +77,47 @@ describe("relations-v2 schema generator", () => {
 		expect(typeErrors(code)).toEqual([]);
 	});
 
+	/**
+	 * Fields that omit `required` are required by Better Auth migrations and
+	 * the CLI Drizzle generator (`required !== false`). relations-v2 must match.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12924
+	 */
+	test("emits .notNull() for fields that omit required", async () => {
+		const { code = "" } = await generate({
+			plugins: [
+				{
+					id: "omit-required-test",
+					schema: {
+						oauthAccessToken: {
+							modelName: "oauth_access_token",
+							fields: {
+								token: { type: "string", unique: true },
+								expiresAt: { type: "date" },
+								createdAt: { type: "date" },
+								optionalNote: { type: "string", required: false },
+							},
+						},
+					},
+				},
+			],
+		});
+
+		expect(code).toMatch(
+			/token:\s*text\(["']token["']\)\.notNull\(\)\.unique\(\)/,
+		);
+		expect(code).toMatch(
+			/expiresAt:\s*timestamp\(["']expires_at["']\)\.notNull\(\)/,
+		);
+		expect(code).toMatch(
+			/createdAt:\s*timestamp\(["']created_at["']\)\.notNull\(\)/,
+		);
+		expect(code).toMatch(
+			/optionalNote:\s*text\(["']optional_note["']\)(?!\.notNull)/,
+		);
+		expect(typeErrors(code)).toEqual([]);
+	});
+
 	test("generates compound indexes with physical field names", async () => {
 		const { code = "" } = await generateFor("mysql", {
 			plugins: [
