@@ -24,7 +24,12 @@ import type {
 	SchemaClient,
 	Scope,
 } from "../types";
-import { challengeHeaders, getAuthEndpointUrl, getClient } from "./index";
+import {
+	BASIC_CHALLENGE,
+	challengeHeaders,
+	getAuthEndpointUrl,
+	getClient,
+} from "./index";
 import {
 	isLocalCapacityRefusal,
 	isTransientAbort,
@@ -655,24 +660,27 @@ async function fetchClientJwks(
 			{ recordsFailures: staleIfErrorMs > 0 },
 		);
 	} catch (error) {
-		if (cached && now - cached.fetchedAt < staleLimitMs) {
-			return cached.jwks;
-		}
+		// A concurrent refresh may have replaced or evicted the set while we waited.
+		const current = readJwksCache(cache, cacheKey);
 		const failedAt = Date.now();
+		if (current && failedAt - current.fetchedAt < staleLimitMs) {
+			return current.jwks;
+		}
+		const failure = cache.failures.get(cacheKey);
 		if (
-			cached &&
-			cache.failures.get(cacheKey)?.transient !== false &&
-			failedAt - cached.fetchedAt <= staleIfErrorMs
+			current &&
+			failure?.transient !== false &&
+			failedAt - current.fetchedAt <= staleIfErrorMs
 		) {
 			if (isTransientJwksFetchFailure(error)) {
-				return serveStaleKeys(cached, error.message);
+				return serveStaleKeys(current, error.message);
 			}
 			if (
 				isLocalCapacityRefusal(error) &&
-				lastFailure?.transient &&
-				failedAt - lastFailure.failedAt <= JWKS_STALE_REFUSAL_WINDOW_MS
+				failure?.transient &&
+				failedAt - failure.failedAt <= JWKS_STALE_REFUSAL_WINDOW_MS
 			) {
-				return serveStaleKeys(cached, lastFailure.reason);
+				return serveStaleKeys(current, failure.reason);
 			}
 		}
 		throw createClientJwksFetchError();
@@ -1012,7 +1020,7 @@ export async function verifyClientAssertion(
 								"client assertion signature verification failed",
 							error: "invalid_client",
 						},
-						challengeHeaders("Basic"),
+						challengeHeaders(BASIC_CHALLENGE),
 					);
 				}
 			} else {
@@ -1022,7 +1030,7 @@ export async function verifyClientAssertion(
 						error_description: "client assertion signature verification failed",
 						error: "invalid_client",
 					},
-					challengeHeaders("Basic"),
+					challengeHeaders(BASIC_CHALLENGE),
 				);
 			}
 		} else {
@@ -1032,7 +1040,7 @@ export async function verifyClientAssertion(
 					error_description: "client assertion signature verification failed",
 					error: "invalid_client",
 				},
-				challengeHeaders("Basic"),
+				challengeHeaders(BASIC_CHALLENGE),
 			);
 		}
 	}
