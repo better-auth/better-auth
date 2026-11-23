@@ -3243,4 +3243,39 @@ describe("checkVerificationOTP without an account", () => {
 			message: "User not found",
 		});
 	});
+
+	it("should reject a valid non-sign-in code when no account exists", async () => {
+		const email = "reset-only@example.com";
+		const otp = "111222";
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP() {},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		await (await auth.$context).internalAdapter.createVerificationValue({
+			value: `${otp}:0`,
+			identifier: `forget-password-otp-${email}`,
+			expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+		});
+
+		const checked = await client.emailOtp.checkVerificationOtp({
+			email,
+			type: "forget-password",
+			otp,
+		});
+		expect(checked.error).toMatchObject({
+			status: 400,
+			code: "USER_NOT_FOUND",
+			message: "User not found",
+		});
+	});
 });
