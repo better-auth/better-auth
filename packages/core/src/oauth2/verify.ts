@@ -52,12 +52,9 @@ interface JwksCacheEntry {
 	jwks?: JSONWebKeySet | undefined;
 	/** Start time of the fetch that produced `jwks`. */
 	fetchedAt: number;
-	/**
-	 * Completion timestamp of the last failed expired-cache refetch attempt, or
-	 * start time of the last refetch for a key missing from `jwks`, whatever
-	 * its outcome.
-	 */
+	/** Start time of the last key-miss refetch, regardless of outcome. */
 	refetchedAt: number;
+	failedRefresh?: { startedAt: number; failedAt: number } | undefined;
 	pending?: { promise: Promise<JSONWebKeySet>; startedAt: number } | undefined;
 }
 
@@ -147,6 +144,7 @@ function isFetching(entry: JwksCacheEntry, now: number): boolean {
 async function loadJwks(
 	entry: JwksCacheEntry,
 	jwksFetch: JwksFetchOptions["jwksFetch"],
+	recordExpiredRefreshFailure = false,
 ): Promise<JSONWebKeySet> {
 	const now = Date.now();
 	if (!entry.pending || !isFetching(entry, now)) {
@@ -157,6 +155,9 @@ async function loadJwks(
 					if (now >= entry.fetchedAt) {
 						entry.jwks = jwks;
 						entry.fetchedAt = now;
+						if (entry.failedRefresh && now >= entry.failedRefresh.startedAt) {
+							entry.failedRefresh = undefined;
+						}
 					}
 					return jwks;
 				})
@@ -178,9 +179,26 @@ async function loadJwks(
 				);
 			}),
 		]);
+	} catch (error) {
+		if (
+			recordExpiredRefreshFailure &&
+			entry.fetchedAt < startedAt &&
+			startedAt >= (entry.failedRefresh?.startedAt ?? 0)
+		) {
+			entry.failedRefresh = { startedAt, failedAt: Date.now() };
+		}
+		throw error;
 	} finally {
 		clearTimeout(timeout);
 	}
+}
+
+function isInJwksRefetchCooldown(entry: JwksCacheEntry, now: number): boolean {
+	const lastRefetch = Math.max(
+		entry.refetchedAt,
+		entry.failedRefresh?.failedAt ?? 0,
+	);
+	return now - lastRefetch < JWKS_REFETCH_COOLDOWN_MS;
 }
 
 /**
@@ -198,7 +216,7 @@ async function refreshJwks(
 	if (entry.jwks !== current) return entry.jwks;
 	const now = Date.now();
 	if (!isFetching(entry, now)) {
-		if (now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) return undefined;
+		if (isInJwksRefetchCooldown(entry, now)) return undefined;
 		entry.refetchedAt = now;
 	}
 	return loadJwks(entry, jwksFetch);
@@ -518,7 +536,7 @@ async function getJwksForVerification(
 	};
 
 	const expired = getStaleJwks(now);
-	if (expired && now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) {
+	if (expired && isInJwksRefetchCooldown(entry, now)) {
 		if (expired.canUse) {
 			return { jwks: expired.stale, kid, refresh: refreshStale };
 		}
@@ -529,10 +547,9 @@ async function getJwksForVerification(
 	}
 
 	try {
-		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
+		return { jwks: await loadJwks(entry, opts.jwksFetch, true), kid };
 	} catch (error) {
 		const failedAt = Date.now();
-		entry.refetchedAt = failedAt;
 		// An earlier fetch that outlived its wait can land while this one fails.
 		// Its set replaces the one read above, which may still hold a key the
 		// issuer has since dropped, so the entry is read again and each set is
