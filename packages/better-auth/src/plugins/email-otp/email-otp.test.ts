@@ -1,8 +1,11 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getCookieCache } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { User } from "../../types";
 import { bearer } from "../bearer";
 import { emailOTP } from ".";
 import { emailOTPClient } from "./client";
@@ -647,6 +650,170 @@ describe("email-otp", async () => {
 	});
 });
 
+/**
+ * Password reset must require the stored address even when the database
+ * compares email addresses without accents.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6532#section-3.1
+ */
+describe("email-otp password reset on an accent-insensitive database", () => {
+	const email = "user@example.com";
+	const lookalikeEmail = "user@exámple.com";
+
+	async function setup() {
+		const fold = (value: string) =>
+			value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+		const db: Record<string, Record<string, unknown>[]> = {
+			user: [],
+			session: [],
+			account: [],
+			verification: [],
+		};
+		const sent: { email: string; otp: string }[] = [];
+
+		const { auth, client } = await getTestInstance(
+			{
+				database: (options) => {
+					const base = memoryAdapter(db)(options);
+					// A miss on an exact `email` match is retried accent- and
+					// case-insensitively, as the database's collation would.
+					const findOne: typeof base.findOne = async <T>(
+						query: Parameters<typeof base.findOne>[0],
+					): Promise<T | null> => {
+						const found = await base.findOne<T>(query);
+						if (found || query.model !== "user") return found;
+						const emailWhere = query.where?.find(
+							(where) =>
+								where.field === "email" && (where.operator ?? "eq") === "eq",
+						);
+						if (typeof emailWhere?.value !== "string") return found;
+						const requested = fold(emailWhere.value);
+						const row = (db.user ?? []).find(
+							(user) =>
+								typeof user.email === "string" &&
+								fold(user.email) === requested,
+						);
+						return (row ?? null) as T | null;
+					};
+					return { ...base, findOne };
+				},
+				emailAndPassword: { enabled: true },
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ email, otp }) {
+							sent.push({ email, otp });
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		const { internalAdapter } = await auth.$context;
+		const registration = await client.signUp.email({
+			email,
+			password: "original-password",
+			name: "User",
+		});
+
+		return {
+			auth,
+			client,
+			internalAdapter,
+			sent,
+			userId: registration.data!.user.id,
+		};
+	}
+
+	it("does not reset another account's password through a look-alike address", async () => {
+		const { auth, client, internalAdapter, sent, userId } = await setup();
+
+		// Confirm that the adapter applies the simulated collation.
+		const collated = await (await auth.$context).adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: lookalikeEmail }],
+		});
+		expect(collated?.id).toBe(userId);
+
+		sent.length = 0;
+		const request = await client.emailOtp.requestPasswordReset({
+			email: lookalikeEmail,
+		});
+		expect(request.data).toBeNull();
+		expect(sent).toEqual([]);
+
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "forget-password",
+		});
+		const otp = sent.at(-1)!.otp;
+		expect(sent.at(-1)!.email).toBe(email);
+		const reset = await client.emailOtp.resetPassword({
+			email: lookalikeEmail,
+			otp,
+			password: "replacement-password",
+		});
+		expect(reset.data).toBeNull();
+
+		const withRejectedPassword = await client.signIn.email({
+			email,
+			password: "replacement-password",
+		});
+		expect(withRejectedPassword.error?.status).toBe(401);
+		const withOwnPassword = await client.signIn.email({
+			email,
+			password: "original-password",
+		});
+		expect(withOwnPassword.data?.user.id).toBe(userId);
+		await expect(
+			internalAdapter.findUserByEmail(lookalikeEmail),
+		).resolves.toBeNull();
+	});
+
+	it("still resets the password for the address itself, regardless of case", async () => {
+		const { client, sent } = await setup();
+		await client.emailOtp.sendVerificationOtp({
+			email: "User@Example.com",
+			type: "forget-password",
+		});
+		expect(sent.at(-1)!.email).toBe(email);
+		const reset = await client.emailOtp.resetPassword({
+			email: "User@Example.com",
+			otp: sent.at(-1)!.otp,
+			password: "rotated-password",
+		});
+		expect(reset.data?.success).toBe(true);
+		const signedIn = await client.signIn.email({
+			email,
+			password: "rotated-password",
+		});
+		expect(signedIn.data?.user.email).toBe(email);
+	});
+
+	it("resolves the stored address written in another normalization form", async () => {
+		const { auth, internalAdapter } = await setup();
+		const stored = "accent@exámple.com".normalize("NFC");
+		const { adapter } = await auth.$context;
+		const user = await adapter.create<User>({
+			model: "user",
+			data: {
+				email: stored,
+				name: "Accent",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		await expect(
+			internalAdapter.findUserByEmail(stored.normalize("NFD")),
+		).resolves.toMatchObject({ user: { id: user.id } });
+	});
+});
+
 describe("change email", async () => {
 	const otpFn = vi.fn();
 	let otp = "";
@@ -1237,6 +1404,167 @@ describe("change email", async () => {
 				expect.any(Object),
 			);
 		});
+	});
+});
+
+describe("change email code binding", () => {
+	// The two (current, new) pairs join to the same string with a "-" separator
+	const first = {
+		email: "a@binding.test",
+		newEmail: "y.org-target@example.com",
+	};
+	const second = {
+		email: "a@binding.test-y.org",
+		newEmail: "target@example.com",
+	};
+	const password = "binding-password-123";
+
+	async function setup() {
+		const otps = new Map<string, string>();
+		const { auth, signInWithUser } = await getTestInstance({
+			plugins: [
+				emailOTP({
+					generateOTP: ({ email }) =>
+						email === first.newEmail ? "123456" : "654321",
+					async sendVerificationOTP({ email, otp }) {
+						otps.set(email, otp);
+					},
+					changeEmail: { enabled: true },
+				}),
+			],
+		});
+		for (const { email } of [first, second]) {
+			await auth.api.signUpEmail({
+				body: {
+					email,
+					password,
+					name: email,
+				},
+			});
+		}
+		const { headers: firstHeaders } = await signInWithUser(
+			first.email,
+			password,
+		);
+		const { headers: secondHeaders } = await signInWithUser(
+			second.email,
+			password,
+		);
+		return { auth, otps, firstHeaders, secondHeaders };
+	}
+
+	it("should not accept a code issued to another account", async () => {
+		const { auth, otps, firstHeaders, secondHeaders } = await setup();
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: firstHeaders,
+			body: {
+				newEmail: first.newEmail,
+			},
+		});
+		const otp = otps.get(first.newEmail);
+		expect.assert.isDefined(otp);
+		const res = auth.api.changeEmailEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+				otp,
+			},
+		});
+
+		await expect(res).rejects.toMatchObject({
+			body: {
+				code: "INVALID_OTP",
+			},
+		});
+		const session = await auth.api.getSession({ headers: secondHeaders });
+		expect(session?.user.email).toBe(second.email);
+	});
+
+	it("should not accept another account's code when both accounts requested one", async () => {
+		const { auth, otps, firstHeaders, secondHeaders } = await setup();
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+			},
+		});
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: firstHeaders,
+			body: {
+				newEmail: first.newEmail,
+			},
+		});
+		const firstOTP = otps.get(first.newEmail);
+		const secondOTP = otps.get(second.newEmail);
+		expect.assert.isDefined(firstOTP);
+		expect.assert.isDefined(secondOTP);
+		expect(firstOTP).not.toBe(secondOTP);
+		const res = auth.api.changeEmailEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+				otp: firstOTP,
+			},
+		});
+
+		await expect(res).rejects.toMatchObject({
+			body: {
+				code: "INVALID_OTP",
+			},
+		});
+		const session = await auth.api.getSession({ headers: secondHeaders });
+		expect(session?.user.email).toBe(second.email);
+	});
+
+	it("should not accept a code for a different new address", async () => {
+		const { auth, otps, firstHeaders } = await setup();
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: firstHeaders,
+			body: {
+				newEmail: "requested@binding.test",
+			},
+		});
+		const otp = otps.get("requested@binding.test");
+		expect.assert.isDefined(otp);
+		const res = auth.api.changeEmailEmailOTP({
+			headers: firstHeaders,
+			body: {
+				newEmail: "other@binding.test",
+				otp,
+			},
+		});
+
+		await expect(res).rejects.toMatchObject({
+			body: {
+				code: "INVALID_OTP",
+			},
+		});
+		const session = await auth.api.getSession({ headers: firstHeaders });
+		expect(session?.user.email).toBe(first.email);
+	});
+
+	it("should change email with a code issued to the same account", async () => {
+		const { auth, otps, secondHeaders } = await setup();
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+			},
+		});
+		const otp = otps.get(second.newEmail);
+		expect.assert.isDefined(otp);
+		const res = await auth.api.changeEmailEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+				otp,
+			},
+		});
+
+		expect(res.success).toBe(true);
+		const session = await auth.api.getSession({ headers: secondHeaders });
+		expect(session?.user.email).toBe(second.newEmail);
+		expect(session?.user.emailVerified).toBe(true);
 	});
 });
 
@@ -2796,4 +3124,423 @@ describe("email-otp send origin/CSRF protection", async () => {
 		expect(response.status).toBe(200);
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
 	});
+});
+
+function uniqueVerificationIdentifier() {
+	return {
+		id: "unique-verification-identifier",
+		schema: {
+			verification: {
+				fields: {
+					identifier: {
+						type: "string",
+						required: true,
+						index: true,
+						unique: true,
+					},
+				},
+			},
+		},
+	} satisfies BetterAuthPlugin;
+}
+
+describe("email-otp verification rows", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10437
+	 */
+	it("keeps one row per identifier when a code is resent after a wrong guess", async () => {
+		const codes = ["111111", "222222"];
+		const { client, auth, testUser } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						generateOTP: () => codes.shift(),
+						storeOTP: "hashed",
+						async sendVerificationOTP() {},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		const email = testUser.email;
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const wrong = await client.signIn.emailOtp({ email, otp: "000000" });
+		expect(wrong.error?.code).toBe("INVALID_OTP");
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+		const rows = await (await auth.$context).adapter.findMany({
+			model: "verification",
+			where: [{ field: "identifier", value: `sign-in-otp-${email}` }],
+		});
+		expect(rows).toHaveLength(1);
+		const superseded = await client.signIn.emailOtp({ email, otp: "111111" });
+		expect(superseded.error?.code).toBe("INVALID_OTP");
+		const latest = await client.signIn.emailOtp({ email, otp: "222222" });
+		expect(latest.data?.token).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10437
+	 */
+	it("accepts the newest code sent while a wrong guess is checked", async () => {
+		const codes = ["111111", "222222"];
+		let holdCheck = false;
+		let releaseCheck: () => void = () => {};
+		const checkReleased = new Promise<void>((resolve) => {
+			releaseCheck = resolve;
+		});
+		let signalCheck: () => void = () => {};
+		const checkStarted = new Promise<void>((resolve) => {
+			signalCheck = resolve;
+		});
+		const { client, testUser } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						generateOTP: () => codes.shift(),
+						async sendVerificationOTP() {},
+						storeOTP: {
+							async hash(otp) {
+								if (holdCheck && otp === "000000") {
+									holdCheck = false;
+									signalCheck();
+									await checkReleased;
+								}
+								return `stored-${otp}`;
+							},
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		const email = testUser.email;
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+		holdCheck = true;
+		vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
+		const guess = client.signIn.emailOtp({ email, otp: "000000" });
+		await checkStarted;
+		vi.setSystemTime(new Date("2026-01-01T00:00:02.000Z"));
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		vi.setSystemTime(new Date("2026-01-01T00:00:03.000Z"));
+		releaseCheck();
+
+		expect((await guess).error?.code).toBe("INVALID_OTP");
+		const latest = await client.signIn.emailOtp({ email, otp: "222222" });
+		expect(latest.data?.token).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
+	it("accepts the newest code when overlapping resends share a millisecond", async () => {
+		let issued = 0;
+		let firstDelivered: () => void = () => {};
+		const firstDelivery = new Promise<void>((resolve) => {
+			firstDelivered = resolve;
+		});
+		let finishFirstDelivery: () => void = () => {};
+		const firstDeliveryPending = new Promise<void>((resolve) => {
+			finishFirstDelivery = resolve;
+		});
+		const delivered: string[] = [];
+		const { auth, testUser } = await getTestInstance({
+			plugins: [
+				emailOTP({
+					generateOTP: () => String(++issued).padStart(6, "0"),
+					async sendVerificationOTP({ otp }) {
+						delivered.push(otp);
+						if (delivered.length === 1) {
+							firstDelivered();
+							await firstDeliveryPending;
+						}
+					},
+				}),
+			],
+		});
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		const body = { email: testUser.email, type: "sign-in" as const };
+
+		const first = auth.api.sendVerificationOTP({ body });
+		await firstDelivery;
+		await auth.api.sendVerificationOTP({ body });
+		finishFirstDelivery();
+		await first;
+
+		expect(delivered).toEqual(["000001", "000002"]);
+		const check = (otp: string) =>
+			auth.api.checkVerificationOTP({
+				body: { ...body, otp },
+				asResponse: true,
+			});
+		expect((await check("000002")).status).toBe(200);
+		expect((await check("000001")).status).toBe(400);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10437
+	 */
+	it("accepts the newest code sent while a checked code is written back", async () => {
+		const codes = ["111111", "222222"];
+		let sendDuringRestore = false;
+		const body = { email: "", type: "sign-in" as const };
+		const { auth, client, testUser } = await getTestInstance(
+			{
+				databaseHooks: {
+					verification: {
+						create: {
+							// Runs after the check found no replacement.
+							async before(verification) {
+								if (
+									!sendDuringRestore ||
+									verification.value !== "stored-111111:0"
+								) {
+									return;
+								}
+								sendDuringRestore = false;
+								vi.setSystemTime(new Date("2026-01-01T00:00:02.000Z"));
+								await auth.api.sendVerificationOTP({ body });
+							},
+						},
+					},
+				},
+				plugins: [
+					emailOTP({
+						generateOTP: () => codes.shift(),
+						async sendVerificationOTP() {},
+						storeOTP: {
+							async hash(otp) {
+								return `stored-${otp}`;
+							},
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		body.email = testUser.email;
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		await auth.api.sendVerificationOTP({ body });
+
+		sendDuringRestore = true;
+		vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
+		const check = await client.emailOtp.checkVerificationOtp({
+			...body,
+			otp: "111111",
+		});
+
+		expect(codes).toHaveLength(0);
+		expect(check.error?.code).toBe("INVALID_OTP");
+		const superseded = await client.signIn.emailOtp({
+			email: body.email,
+			otp: "111111",
+		});
+		expect(superseded.error?.code).toBe("INVALID_OTP");
+		const latest = await client.signIn.emailOtp({
+			email: body.email,
+			otp: "222222",
+		});
+		expect(latest.data?.token).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
+	it("keeps a code sent while an expired code is checked", async () => {
+		const codes = ["111111", "222222"];
+		let sendDuringCheck = false;
+		const body = { email: "", type: "sign-in" as const };
+		const { auth, client, testUser } = await getTestInstance(
+			{
+				databaseHooks: {
+					verification: {
+						delete: {
+							// Runs when the check's lookup drops the expired code.
+							async after() {
+								if (!sendDuringCheck) return;
+								sendDuringCheck = false;
+								await auth.api.sendVerificationOTP({ body });
+							},
+						},
+					},
+				},
+				plugins: [
+					emailOTP({
+						generateOTP: () => codes.shift(),
+						async sendVerificationOTP() {},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		body.email = testUser.email;
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		await auth.api.sendVerificationOTP({ body });
+
+		vi.setSystemTime(new Date("2026-01-01T00:10:00.000Z"));
+		sendDuringCheck = true;
+		const stale = await client.signIn.emailOtp({
+			email: body.email,
+			otp: "111111",
+		});
+
+		expect(codes).toHaveLength(0);
+		expect(stale.error?.code).toBe("OTP_EXPIRED");
+		const latest = await client.signIn.emailOtp({
+			email: body.email,
+			otp: "222222",
+		});
+		expect(latest.data?.token).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11181
+	 */
+	it("leaves one valid code when concurrent hashed sends collide", async () => {
+		let arrivals = 0;
+		let openBarrier: () => void = () => {};
+		const barrier = new Promise<void>((resolve) => {
+			openBarrier = resolve;
+		});
+		const delivered: string[] = [];
+		const { auth, testUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before() {
+							arrivals++;
+							if (arrivals === 2) openBarrier();
+							if (arrivals <= 2) await barrier;
+						},
+					},
+				},
+			},
+			plugins: [
+				emailOTP({
+					storeOTP: "hashed",
+					async sendVerificationOTP({ otp }) {
+						delivered.push(otp);
+					},
+				}),
+			],
+		});
+		const body = { email: testUser.email, type: "sign-in" as const };
+
+		await Promise.all([
+			auth.api.sendVerificationOTP({ body }),
+			auth.api.sendVerificationOTP({ body }),
+		]);
+
+		expect(delivered).toHaveLength(2);
+		const statuses: number[] = [];
+		for (const otp of delivered) {
+			const res = await auth.api.checkVerificationOTP({
+				body: { ...body, otp },
+				asResponse: true,
+			});
+			statuses.push(res.status);
+		}
+		expect(statuses.sort()).toEqual([200, 400]);
+	});
+
+	it("does not read a failed verification create hook as a collision", async () => {
+		let failCreate = true;
+		const delivered: string[] = [];
+		const { auth, testUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async after() {
+							if (!failCreate) return;
+							failCreate = false;
+							throw new Error("create hook failed");
+						},
+					},
+				},
+			},
+			plugins: [
+				emailOTP({
+					storeOTP: "encrypted",
+					async sendVerificationOTP({ otp }) {
+						delivered.push(otp);
+					},
+				}),
+			],
+		});
+
+		await expect(
+			auth.api.sendVerificationOTP({
+				body: { email: testUser.email, type: "sign-in" },
+			}),
+		).rejects.toThrow("create hook failed");
+		expect(delivered).toHaveLength(0);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11181
+	 */
+	it.for(["default", "unique identifier"] as const)(
+		"keeps every delivered code valid when concurrent first sends collide (%s schema)",
+		async (schema) => {
+			let arrivals = 0;
+			let openBarrier: () => void = () => {};
+			const barrier = new Promise<void>((resolve) => {
+				openBarrier = resolve;
+			});
+			const delivered: string[] = [];
+			const { auth, testUser } = await getTestInstance({
+				databaseHooks: {
+					verification: {
+						create: {
+							// Hold the first two inserts until both requests reach them.
+							async before() {
+								arrivals++;
+								if (arrivals === 2) openBarrier();
+								if (arrivals <= 2) await barrier;
+							},
+						},
+					},
+				},
+				plugins: [
+					...(schema === "unique identifier"
+						? [uniqueVerificationIdentifier()]
+						: []),
+					emailOTP({
+						storeOTP: "encrypted",
+						async sendVerificationOTP({ otp }) {
+							delivered.push(otp);
+						},
+					}),
+				],
+			});
+			const body = { email: testUser.email, type: "sign-in" as const };
+
+			await Promise.all([
+				auth.api.sendVerificationOTP({ body }),
+				auth.api.sendVerificationOTP({ body }),
+			]);
+
+			expect(delivered).toHaveLength(2);
+			for (const otp of delivered) {
+				const res = await auth.api.checkVerificationOTP({
+					body: { ...body, otp },
+					asResponse: true,
+				});
+				expect(res.status).toBe(200);
+			}
+		},
+	);
 });

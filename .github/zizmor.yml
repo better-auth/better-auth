@@ -22,6 +22,11 @@ rules:
       # Intentional: runs trusted code from main and validates the triggering
       # branch and commit before creating a token. It never executes that revision.
       - sync-version-docs.yml
+      # Intentional: /changeset and /release-notes gate on author_association
+      # and check out the default branch, reading the PR only as git data or
+      # through the GitHub API. The changeset apply job never checks out code.
+      - auto-changeset.yml
+      - release-notes-command.yml
   use-trusted-publishing:
     ignore:
       # Intentional: pkg.pr.new publishes ephemeral PR preview packages, not npm

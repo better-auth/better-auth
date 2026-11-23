@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { getAuthEndpointUrl } from "./utils";
 
 export function getDpopProofJwt(
 	ctx: Pick<GenericEndpointContext, "headers">,
@@ -17,11 +18,7 @@ export function getEndpointUrl(
 	ctx: Pick<GenericEndpointContext, "context" | "request">,
 	path: string,
 ): string {
-	const { baseURL } = ctx.context;
-	let end = baseURL.length;
-	// A loop, not `/\/+$/`, which backtracks quadratically on runs of slashes.
-	while (end > 0 && baseURL[end - 1] === "/") end--;
-	const base = baseURL.slice(0, end);
+	const base = getAuthEndpointUrl(ctx, "");
 	// `baseURL` stays empty when nothing configures it and no request set it.
 	if (!ctx.request || !base) return `${base}${path}`;
 	const basePath = new URL(base).pathname.replace(/\/$/, "");
@@ -30,4 +27,24 @@ export function getEndpointUrl(
 		? requestPath.slice(basePath.length)
 		: path;
 	return `${base}${endpointPath}`;
+}
+
+/**
+ * Adds `headers` to a comma-separated `Access-Control-Expose-Headers` value,
+ * keeping the names already listed.
+ */
+export function withExposedHeaders(
+	exposed: string | null | undefined,
+	...headers: string[]
+): string {
+	const names = (exposed ?? "")
+		.split(",")
+		.map((name) => name.trim())
+		.filter(Boolean);
+	for (const header of headers) {
+		if (!names.some((name) => name.toLowerCase() === header.toLowerCase())) {
+			names.push(header);
+		}
+	}
+	return names.join(", ");
 }

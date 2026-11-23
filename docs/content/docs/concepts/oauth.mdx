@@ -8,6 +8,10 @@ Better Auth comes with built-in support for OAuth 2.0 and OpenID Connect. This a
 
 If your desired provider isn't directly supported, you can use the [Generic OAuth Plugin](/docs/plugins/generic-oauth) for custom integrations.
 
+<Callout>
+  This page covers signing users in with another provider. To connect each organization to its own OIDC or SAML identity provider, use [SSO](/docs/plugins/sso). To let other apps sign in with your app, use the [OAuth Provider](/docs/plugins/oauth-provider) plugin.
+</Callout>
+
 ## Configuring Social Providers
 
 To enable a social provider, you need to provide `clientId` and `clientSecret` for the provider.
@@ -416,6 +420,7 @@ The table below summarises, for each affected provider, when `email` may be abse
 | Discord            | Phone-only accounts; `email` scope not granted                                                                                                                           | `profile.id` (snowflake)                    | Reliable (dedicated `verified` field)                                                                                                                               |
 | Facebook           | No valid email on file, even with the `email` permission granted                                                                                                         | `profile.id` (app-scoped)                   | Unknown: Graph API exposes no per-email verification flag                                                                                                           |
 | GitHub             | User has set email to private; GitHub App lacks the "Email addresses" permission                                                                                         | `profile.id` (numeric)                      | Reliable                                                                                                                                                            |
+| Kakao              | `account_email` is not requested, not enabled for the app, or not granted by the user                                                                                    | `profile.id` (numeric)                      | Reliable                                                                                                                                                            |
 | LinkedIn           | No confirmed email on the member; `email` scope not granted                                                                                                              | `profile.sub` (pairwise per app)            | Reliable when present                                                                                                                                               |
 | Microsoft Entra ID | Managed users without a `mail` attribute, unless `email` is configured as an [optional claim](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims) | `profile.oid` (stable within `profile.tid`) | **Untrustworthy**: Microsoft [explicitly warns](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference) never to use for authorization |
 | Roblox             | The default Roblox profile flow does not return an email; Better Auth creates a non-routable placeholder from `profile.sub`                                              | `profile.sub` (Roblox user ID)              | Unknown for the default profile flow                                                                                                                                |
@@ -663,6 +668,60 @@ Keep security-sensitive fields such as roles, bans, internal flags, and organiza
 If a provider claim controls who may sign in, enforce the policy before Better Auth completes OAuth sign-in. Do not defer the check until after sign-in, because Better Auth may already have issued a valid session. Prefer a provider-specific option when one exists, such as the Google provider's [`hd` option](/docs/authentication/google#restrict-sign-in-to-google-workspace) for a Google Workspace domain. For flows that invoke [`getUserInfo`](/docs/concepts/oauth#getuserinfo), a custom implementation can verify the provider response and return `null` when the policy fails. Configure equivalent enforcement for separate sign-in paths that do not invoke `getUserInfo`.
 
 If you also need to store the verified claim, keep the field at `input: false` and write it with your application's database layer. Use `defaultValue` only for a static value that applies to every user created through that auth configuration, not for a value derived from a provider profile.
+
+### getAccountFields
+
+Use `getAccountFields` to store your own values on the provider account, such as the email address the provider reports or the tenant a user signed in from. Add a column for each value to `account.additionalFields`, then return the values from the hook. Run `npx auth@latest migrate` after you add a field.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  // Other configurations...
+  account: {
+    additionalFields: {
+      providerEmail: {
+        type: "string",
+        required: false,
+      },
+    },
+  },
+  socialProviders: {
+    google: {
+      clientId: "YOUR_GOOGLE_CLIENT_ID",
+      clientSecret: "YOUR_GOOGLE_CLIENT_SECRET",
+      getAccountFields: async (tokens, userInfo) => {
+        return {
+          providerEmail: userInfo.email,
+        };
+      },
+    },
+  },
+});
+```
+
+The hook receives the provider's tokens and the normalized user info. It runs only when you set it, after Better Auth verifies the provider response, so a provider without `getAccountFields` behaves as before.
+
+Better Auth writes the returned values when it creates the account and when it updates it:
+
+* A new user signs in, or an existing user signs in with a provider for the first time.
+* A signed-in user links the provider.
+* A user who is already linked signs in again or links again. On sign-in, Better Auth updates the values only while [`updateAccountOnSignIn`](/docs/reference/options#updateaccountonsignin) is not `false`.
+
+This covers the redirect flow and ID token sign-in and linking. For an ID token, the `tokens` argument holds only what the client sent: the `idToken`, plus the `accessToken` and `refreshToken` when the client includes them. Sign-in through One Tap and the OAuth Proxy plugin does not call the hook.
+
+Better Auth ignores these returned values:
+
+* Keys that are not declared in `account.additionalFields` or by a plugin.
+* Fields marked `input: false`.
+* Values that are `undefined`. A stored value stays as it is.
+* Better Auth's own account columns: `id`, `userId`, `providerId`, `accountId`, `accessToken`, `refreshToken`, `idToken`, `accessTokenExpiresAt`, `refreshTokenExpiresAt`, `scope`, `password`, `createdAt`, and `updatedAt`. A returned value can never rebind an account or replace its tokens.
+
+Return `null` for the whole result to store nothing. A `null` value for a key is stored as `null` and replaces the stored value.
+
+Values pass through the field's `validator.input` and `transform.input`. A value that fails validation stops the sign-in or link with a validation error, even when `updateAccountOnSignIn` is `false` and the value is not stored. In the redirect flow, the user lands on your error URL with `error=VALIDATION_ERROR`.
+
+Better Auth treats the returned values as provider input, like the values from `mapProfileToUser`. Keep security-sensitive fields, such as roles or internal flags, at `input: false` so that a provider claim cannot set them. Do not copy a provider claim you have not verified into a field your application trusts for authorization. See [server-owned fields and authorization claims](/docs/concepts/oauth#server-owned-fields-and-authorization-claims).
 
 ### refreshAccessToken
 

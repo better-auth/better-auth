@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import type { DatabaseSync } from "node:sqlite";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
-import type { Account, Session } from "../../types";
+import type { Account, BetterAuthOptions, Session } from "../../types";
 
 describe("updateUser", () => {
 	it("should update the user's name", async () => {
@@ -827,9 +828,9 @@ describe("delete user", async () => {
 			},
 		});
 
-		// All sessions should be gone now
+		// Only the revocation cutoff remains after deleting all sessions.
 		expect(store.get(`active-sessions-${userId}`)).toBeUndefined();
-		expect(store.size).toBe(0);
+		expect([...store.keys()]).toEqual([`revoked-sessions-before-${userId}`]);
 	});
 
 	it("should delete with verification flow and password", async () => {
@@ -864,6 +865,48 @@ describe("delete user", async () => {
 			const nullSession = await client.getSession();
 			expect(nullSession.data).toBeNull();
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12132
+	 */
+	it("stops serving the cached session after deleting with a token", async () => {
+		let token = "";
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+			user: {
+				deleteUser: {
+					enabled: true,
+					async sendDeleteAccountVerification(data) {
+						token = data.token;
+					},
+				},
+			},
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		await client.deleteUser({ fetchOptions: { headers } });
+
+		await client.deleteUser({
+			token,
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data).toBeNull();
 	});
 
 	// The delete-account token is single-use: two concurrent callbacks with
@@ -1038,6 +1081,170 @@ describe("delete user", async () => {
 			),
 		);
 		expect(response.status).toBe(404);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11667
+ */
+describe("delete user when a database statement fails", () => {
+	// restoreAllMocks would also undo spies other describes create at collection time.
+	const spies: { mockRestore: () => void }[] = [];
+	afterEach(() => {
+		for (const spy of spies.splice(0)) spy.mockRestore();
+	});
+
+	async function deleteUserWithFailingStatement(failing: string | null) {
+		const { auth, client, db, signInWithTestUser } = await getTestInstance({
+			user: { deleteUser: { enabled: true } },
+		});
+		const { user, headers } = await signInWithTestUser();
+		const sessionsBefore = await db.findMany({
+			model: "session",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(sessionsBefore.length).toBeGreaterThan(0);
+		// Fail at the driver so the fault also reaches transaction statements.
+		const { database } = auth.options as BetterAuthOptions;
+		const sqlite = database as DatabaseSync;
+		const prepare = sqlite.prepare.bind(sqlite);
+		let failed = false;
+		const spy = vi
+			.spyOn(sqlite, "prepare")
+			.mockImplementation((sql: string) => {
+				if (!failed && sql === failing) {
+					failed = true;
+					throw new Error("database statement timed out");
+				}
+				return prepare(sql);
+			});
+		spies.push(spy);
+		const response = await client.deleteUser({ fetchOptions: { headers } });
+		return {
+			failed,
+			response,
+			sessionCount: sessionsBefore.length,
+			user: await db.findOne({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+			}),
+			sessions: await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+			accounts: await db.findMany({
+				model: "account",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		};
+	}
+
+	it("fails and deletes nothing when the user lookup fails", async () => {
+		const result = await deleteUserWithFailingStatement(
+			'select "primary".* from (select * from "user" where "user"."id" = ? limit ?) as "primary"',
+		);
+
+		expect(result.failed).toBe(true);
+		expect(result.response.data).toBeNull();
+		expect(result.response.error?.status).toBe(500);
+		expect(result.user).not.toBeNull();
+		expect(result.sessions).toHaveLength(result.sessionCount);
+		expect(result.accounts).toHaveLength(1);
+	});
+
+	it("fails and deletes nothing when the account lookup fails", async () => {
+		const result = await deleteUserWithFailingStatement(
+			'select "primary".* from (select * from "account" where "account"."userId" = ? limit ?) as "primary"',
+		);
+
+		expect(result.failed).toBe(true);
+		expect(result.response.error?.status).toBe(500);
+		expect(result.user).not.toBeNull();
+		expect(result.sessions).toHaveLength(result.sessionCount);
+		expect(result.accounts).toHaveLength(1);
+	});
+
+	it("keeps the sessions and accounts when the user delete fails", async () => {
+		const result = await deleteUserWithFailingStatement(
+			'delete from "user" where "user"."id" = ?',
+		);
+
+		expect(result.failed).toBe(true);
+		expect(result.response.error?.status).toBe(500);
+		expect(result.user).not.toBeNull();
+		expect(result.sessions).toHaveLength(result.sessionCount);
+		expect(result.accounts).toHaveLength(1);
+	});
+
+	it("deletes the user, sessions and accounts when every statement succeeds", async () => {
+		const result = await deleteUserWithFailingStatement(null);
+
+		expect(result.response.data).toMatchObject({
+			success: true,
+			message: "User deleted",
+		});
+		expect(result.user).toBeNull();
+		expect(result.sessions).toHaveLength(0);
+		expect(result.accounts).toHaveLength(0);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11667
+ */
+describe("delete user when a user delete.before hook vetoes it", () => {
+	it("fails and keeps the user, sessions and accounts", async () => {
+		const afterDelete = vi.fn();
+		const { client, db, signInWithTestUser } = await getTestInstance({
+			user: { deleteUser: { enabled: true, afterDelete } },
+			databaseHooks: { user: { delete: { before: async () => false } } },
+		});
+		const { user, headers } = await signInWithTestUser();
+
+		const response = await client.deleteUser({ fetchOptions: { headers } });
+
+		expect(response.error?.code).toBe("FAILED_TO_DELETE_USER");
+		expect(afterDelete).not.toHaveBeenCalled();
+		const remaining = await db.findOne({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(remaining).not.toBeNull();
+		const accounts = await db.findMany({
+			model: "account",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(accounts).toHaveLength(1);
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user.id).toBe(user.id);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11667
+ */
+describe("delete user when the database skips the user delete", () => {
+	it("fails and keeps the sessions and accounts", async () => {
+		const { auth, client, db, signInWithTestUser } = await getTestInstance({
+			user: { deleteUser: { enabled: true } },
+		});
+		const { user, headers } = await signInWithTestUser();
+		const { database } = auth.options as BetterAuthOptions;
+		const sqlite = database as DatabaseSync;
+		sqlite.exec(
+			'create trigger keep_user before delete on "user" begin select raise(ignore); end',
+		);
+
+		const response = await client.deleteUser({ fetchOptions: { headers } });
+
+		expect(response.error?.code).toBe("FAILED_TO_DELETE_USER");
+		const accounts = await db.findMany({
+			model: "account",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(accounts).toHaveLength(1);
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user.id).toBe(user.id);
 	});
 });
 
@@ -1364,5 +1571,167 @@ describe("password length on verify-only fields", async () => {
 
 		expect(hash).not.toHaveBeenCalled();
 		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+describe("change-email token binding", async () => {
+	const tokensByNewEmail = new Map<string, string>();
+	const { client, auth, sessionSetter } = await getTestInstance({
+		emailVerification: {
+			async sendVerificationEmail({ user, token }) {
+				tokensByNewEmail.set(user.email, token);
+			},
+		},
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
+
+	let counter = 0;
+	async function signUp(email: string) {
+		const headers = new Headers();
+		const res = await client.signUp.email({
+			name: "user",
+			email,
+			password: "password123",
+			fetchOptions: { onSuccess: sessionSetter(headers) },
+		});
+		if (!res.data) throw new Error(`sign up failed for ${email}`);
+		return {
+			headers,
+			userId: res.data.user.id,
+		};
+	}
+
+	async function requestChange(headers: Headers, newEmail: string) {
+		tokensByNewEmail.delete(newEmail);
+		const res = await client.changeEmail({
+			newEmail,
+			fetchOptions: { headers },
+		});
+		expect(res.data?.status).toBe(true);
+		const token = tokensByNewEmail.get(newEmail);
+		if (!token) throw new Error(`no token captured for ${newEmail}`);
+		return token;
+	}
+
+	async function emailOf(userId: string) {
+		const ctx = await auth.$context;
+		const user = await ctx.internalAdapter.findUserById(userId);
+		return user?.email;
+	}
+
+	it("does not let a stale token act on a later owner of the old address", async () => {
+		const suffix = ++counter;
+		const originalEmail = `original-${suffix}@example.com`;
+		const firstNewEmail = `first-new-${suffix}@example.com`;
+		const secondNewEmail = `second-new-${suffix}@example.com`;
+
+		const originalOwner = await signUp(originalEmail);
+		const tokenToFirstAddress = await requestChange(
+			originalOwner.headers,
+			firstNewEmail,
+		);
+		const tokenToSecondAddress = await requestChange(
+			originalOwner.headers,
+			secondNewEmail,
+		);
+
+		const appliedChange = await client.verifyEmail({
+			query: { token: tokenToSecondAddress },
+		});
+		expect(appliedChange.data?.status).toBe(true);
+		expect(await emailOf(originalOwner.userId)).toBe(secondNewEmail);
+
+		const currentOwner = await signUp(originalEmail);
+
+		const responseHeaders = new Headers();
+		const res = await client.verifyEmail({
+			query: { token: tokenToFirstAddress },
+			fetchOptions: { onSuccess: sessionSetter(responseHeaders) },
+		});
+		expect({
+			error: res.error,
+			data: res.data,
+		}).toMatchObject({
+			error: { status: 401 },
+			data: null,
+		});
+		expect(responseHeaders.get("cookie")).toBeFalsy();
+		expect(await emailOf(currentOwner.userId)).toBe(originalEmail);
+		expect(await emailOf(originalOwner.userId)).toBe(secondNewEmail);
+	});
+
+	it("rejects a change-email token once the account's email has changed", async () => {
+		const suffix = ++counter;
+		const start = `start-${suffix}@example.com`;
+		const first = `first-${suffix}@example.com`;
+		const second = `second-${suffix}@example.com`;
+
+		const user = await signUp(start);
+		const tokenToFirst = await requestChange(user.headers, first);
+		const tokenToSecond = await requestChange(user.headers, second);
+
+		const ok = await client.verifyEmail({ query: { token: tokenToSecond } });
+		expect(ok.data?.status).toBe(true);
+		expect(await emailOf(user.userId)).toBe(second);
+
+		const stale = await client.verifyEmail({ query: { token: tokenToFirst } });
+		expect(stale.error?.status).toBe(401);
+		expect(await emailOf(user.userId)).toBe(second);
+	});
+
+	it("rejects a change-email token on second use", async () => {
+		const suffix = ++counter;
+		const user = await signUp(`once-${suffix}@example.com`);
+		const token = await requestChange(
+			user.headers,
+			`once-new-${suffix}@example.com`,
+		);
+
+		const firstUse = await client.verifyEmail({ query: { token } });
+		expect(firstUse.data?.status).toBe(true);
+
+		const secondUse = await client.verifyEmail({ query: { token } });
+		expect(secondUse.error?.status).toBe(401);
+	});
+
+	it("completes a legitimate change without an active session but does not sign in", async () => {
+		const suffix = ++counter;
+		const newEmail = `legit-new-${suffix}@example.com`;
+		const user = await signUp(`legit-${suffix}@example.com`);
+		const token = await requestChange(user.headers, newEmail);
+
+		const fresh = new Headers();
+		const res = await client.verifyEmail({
+			query: { token },
+			fetchOptions: { onSuccess: sessionSetter(fresh) },
+		});
+		expect(res.data?.status).toBe(true);
+		expect(await emailOf(user.userId)).toBe(newEmail);
+
+		const session = await client.getSession({
+			fetchOptions: { headers: fresh },
+		});
+		expect(session.data).toBeNull();
+	});
+
+	it("rejects a change-email token redeemed by a different signed-in user", async () => {
+		const suffix = ++counter;
+		const user = await signUp(`owner-${suffix}@example.com`);
+		const other = await signUp(`other-${suffix}@example.com`);
+		const token = await requestChange(
+			user.headers,
+			`owner-new-${suffix}@example.com`,
+		);
+
+		const res = await client.verifyEmail({
+			query: { token },
+			fetchOptions: { headers: other.headers },
+		});
+		expect(res.error?.status).toBe(401);
+		expect(await emailOf(user.userId)).toBe(`owner-${suffix}@example.com`);
 	});
 });

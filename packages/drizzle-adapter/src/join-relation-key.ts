@@ -54,9 +54,7 @@ export function getOneToOneRelationKey({
 	// Keep this direction check aligned with transformJoinClause and the
 	// forward/reverse naming in both Drizzle schema generators.
 	const joinModelReferencesBase = Object.values(joinModelFields).some(
-		(field) =>
-			field.references &&
-			getDefaultModelName(field.references.model) === defaultBaseModelName,
+		(field) => field.references?.model === defaultBaseModelName,
 	);
 	const generatedRelationKey = joinModelReferencesBase
 		? joinModel

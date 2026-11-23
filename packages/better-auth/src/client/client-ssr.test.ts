@@ -1,6 +1,12 @@
 // @vitest-environment node
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
+import { getTestInstance } from "../test-utils/test-instance";
+import { getGlobalBroadcastChannel } from "./broadcast-channel";
 import { createAuthClient as createVueClient } from "./vue";
+
+afterEach(() => {
+	vi.unstubAllEnvs();
+});
 
 it("should call '/api/auth' for vue client", async () => {
 	const customFetchImpl = vi.fn(async (url: string | Request | URL) => {
@@ -21,6 +27,43 @@ it("should call '/api/auth' for vue client", async () => {
 	});
 	await client.getSession();
 	expect(customFetchImpl).toBeCalled();
+});
+
+it.for([
+	{ name: "VERCEL_URL", value: "my-app.vercel.app" },
+	{ name: "NEXTAUTH_URL", value: "https://example.com" },
+	{ name: "NEXT_PUBLIC_AUTH_URL", value: "https://example.com/api/auth" },
+])(
+	"keeps the vue session fetch relative when $name is set",
+	({ name, value }) => {
+		vi.stubEnv(name, value);
+		const pendingFetch = new Promise<never>(() => undefined);
+		const useFetch = vi.fn(() => pendingFetch);
+		const client = createVueClient();
+
+		void client.useSession(useFetch);
+
+		expect(useFetch).toHaveBeenCalledWith(
+			"/api/auth/get-session",
+			expect.anything(),
+		);
+	},
+);
+
+it.for([
+	{ basePath: "/auth", url: "/auth/get-session" },
+	{ basePath: "/", url: "/get-session" },
+	{ basePath: "auth/", url: "/auth/get-session" },
+])("keeps the vue session fetch on basePath $basePath", ({ basePath, url }) => {
+	const pendingFetch = new Promise<never>(() => undefined);
+	const useFetch = vi.fn(() => pendingFetch);
+	const client = createVueClient({
+		basePath,
+	});
+
+	void client.useSession(useFetch);
+
+	expect(useFetch).toHaveBeenCalledWith(url, expect.anything());
 });
 
 /**
@@ -92,3 +135,32 @@ it.each([
 		);
 	},
 );
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12233
+ */
+it("does not subscribe session refresh listeners on the server", async () => {
+	const { client } = await getTestInstance(undefined, {
+		disableTestUser: true,
+	});
+	const subscribe = vi.spyOn(getGlobalBroadcastChannel(), "subscribe");
+
+	// SSR mounts the session store but never unmounts it.
+	client.useSession.listen(() => {});
+
+	expect(subscribe).not.toHaveBeenCalled();
+});
+
+it("refetches the session on the server when the session signal fires", async () => {
+	const { client } = await getTestInstance(undefined, {
+		disableTestUser: true,
+	});
+	client.useSession.listen(() => {});
+
+	// Electron's main process has no window and relies on this refetch.
+	client.$store.notify("$sessionSignal");
+
+	await vi.waitFor(() => {
+		expect(client.useSession.get().isPending).toBe(false);
+	});
+});

@@ -139,11 +139,14 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		if (state.isInitialized) return;
 		state.isInitialized = true;
 
+		setupSignalSubscription();
+		// SSR never unmounts, so timers and process-wide listeners would pile up per request.
+		if (typeof window === "undefined") return;
+
 		setupPolling();
 		setupBroadcast();
 		setupFocusRefetch();
 		setupOnlineRefetch();
-		setupSignalSubscription();
 
 		state.cleanupBroadcastSetup = getGlobalBroadcastChannel().setup();
 		state.cleanupFocusSetup = getGlobalFocusManager().setup();

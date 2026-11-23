@@ -8,10 +8,14 @@ import {
 } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
-import { mergeScopes } from "@better-auth/core/oauth2";
+import { mergeScopes, parseStringBoolean } from "@better-auth/core/oauth2";
 import { createEmailVerificationToken } from "../api";
+import { isStateful } from "../api/routes/session";
 import { setAccountCookie } from "../cookies/session-store";
+import { symmetricDecrypt } from "../crypto";
+import { derivePurposeKey } from "../crypto/purpose";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
+import type { StateData } from "../state";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { assertValidUserInfo } from "../utils/validate-user-info";
@@ -37,14 +41,17 @@ type LinkedProviderProfile = {
 };
 
 interface LinkOAuthAccountOptions {
-	link: {
-		userId: string;
-		email: string;
-	};
+	link: NonNullable<StateData["link"]>;
 	userInfo: LinkedProviderProfile;
 	account: OAuthAccountData;
 	profile: Record<string, unknown>;
 	scopes?: string[] | undefined;
+	/**
+	 * Values from the provider's `getAccountFields` hook, already limited to
+	 * declared account fields by `resolveOAuthAccountFields`. Better Auth's own
+	 * account columns always take precedence over them.
+	 */
+	accountFields?: Record<string, unknown> | undefined;
 }
 
 interface LinkOAuthAccountFailure {
@@ -64,10 +71,43 @@ function linkOAuthAccountFailure(
 	return { linked: false, error: { code, message } };
 }
 
+/**
+ * Whether the session that started a link is still live when the provider
+ * returns. Links whose state carries no session token (started before the
+ * token was recorded, or built by a direct caller) are not checked.
+ */
+async function isLinkSessionLive(
+	c: GenericEndpointContext,
+	link: LinkOAuthAccountOptions["link"],
+) {
+	if (!link.encryptedSessionToken || !isStateful(c)) return true;
+	const sessionToken = await symmetricDecrypt({
+		key: derivePurposeKey(c.context.secretConfig, "oauth-link-session-token"),
+		data: link.encryptedSessionToken,
+	}).catch(() => null);
+	if (!sessionToken) return false;
+	const source = await c.context.internalAdapter.findSession(sessionToken);
+	if (!source) return false;
+	return (
+		source.session.userId === link.userId &&
+		source.session.expiresAt > new Date()
+	);
+}
+
 export async function linkOAuthAccount(
 	c: GenericEndpointContext,
-	{ link, userInfo, account, profile, scopes }: LinkOAuthAccountOptions,
+	opts: LinkOAuthAccountOptions,
 ): Promise<LinkOAuthAccountResult> {
+	const { link, account, profile, scopes, accountFields } = opts;
+	const userInfo = {
+		...opts.userInfo,
+		emailVerified: parseStringBoolean(opts.userInfo.emailVerified) ?? false,
+	};
+	if (!(await isLinkSessionLive(c, link))) {
+		return linkOAuthAccountFailure(
+			OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+		);
+	}
 	try {
 		await assertValidUserInfo(c, {
 			user: {
@@ -123,6 +163,7 @@ export async function linkOAuthAccount(
 		const mergedScope = mergeScopes(existingAccount.scope, scopes);
 		const updateData = Object.fromEntries(
 			Object.entries({
+				...accountFields,
 				providerId: account.providerId,
 				accessToken: await setTokenUtil(account.accessToken, c.context),
 				refreshToken: await setTokenUtil(account.refreshToken, c.context),
@@ -138,6 +179,7 @@ export async function linkOAuthAccount(
 		);
 	} else {
 		const newAccount = await c.context.internalAdapter.createAccount({
+			...accountFields,
 			userId: link.userId,
 			...account,
 			accessToken: await setTokenUtil(account.accessToken, c.context),
@@ -177,10 +219,25 @@ export async function handleOAuthUserInfo(
 			| undefined;
 		deferNonDatabaseWrites?: boolean | undefined;
 		requireExactAccountBinding?: boolean | undefined;
+		/**
+		 * Values from the provider's `getAccountFields` hook, already limited to
+		 * declared account fields by `resolveOAuthAccountFields`. Better Auth's
+		 * own account columns always take precedence over them.
+		 */
+		accountFields?: Record<string, unknown> | undefined;
 	},
 ) {
-	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
-		opts;
+	const {
+		account,
+		callbackURL,
+		disableSignUp,
+		overrideUserInfo,
+		accountFields,
+	} = opts;
+	const userInfo = {
+		...opts.userInfo,
+		emailVerified: parseStringBoolean(opts.userInfo.emailVerified) ?? false,
+	};
 	const source = opts.source ?? {
 		method: "oauth",
 		oauth: { providerId: account.providerId },
@@ -315,6 +372,7 @@ export async function handleOAuthUserInfo(
 					source: { ...source, action: "link-account" },
 				});
 				const createdAccount = await c.context.internalAdapter.linkAccount({
+					...accountFields,
 					providerId: account.providerId,
 					accountId: account.accountId,
 					userId: dbUser.user.id,
@@ -394,36 +452,37 @@ export async function handleOAuthUserInfo(
 			 *
 			 * @see {@link Account.scope}
 			 */
-			const freshTokens =
-				c.context.options.account?.updateAccountOnSignIn !== false
-					? Object.fromEntries(
-							Object.entries({
-								providerId: account.providerId,
-								idToken: account.idToken,
-								accessToken: await setTokenUtil(account.accessToken, c.context),
-								refreshToken: await setTokenUtil(
-									account.refreshToken,
-									c.context,
-								),
-								accessTokenExpiresAt: account.accessTokenExpiresAt,
-								refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-							}).filter(([_, value]) => value !== undefined),
-						)
-					: {};
+			const updateAccountOnSignIn =
+				c.context.options.account?.updateAccountOnSignIn !== false;
+			const freshTokens = updateAccountOnSignIn
+				? Object.fromEntries(
+						Object.entries({
+							providerId: account.providerId,
+							idToken: account.idToken,
+							accessToken: await setTokenUtil(account.accessToken, c.context),
+							refreshToken: await setTokenUtil(account.refreshToken, c.context),
+							accessTokenExpiresAt: account.accessTokenExpiresAt,
+							refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+						}).filter(([_, value]) => value !== undefined),
+					)
+				: {};
+			const freshAccount = updateAccountOnSignIn
+				? { ...accountFields, ...freshTokens }
+				: freshTokens;
 
 			if (c.context.options.account?.storeAccountCookie) {
 				const accountCookie = {
 					...linkedAccount,
-					...freshTokens,
+					...freshAccount,
 				};
 				if (opts.deferNonDatabaseWrites) pendingAccountCookie = accountCookie;
 				else await setAccountCookie(c, accountCookie);
 			}
 
-			if (Object.keys(freshTokens).length > 0) {
+			if (Object.keys(freshAccount).length > 0) {
 				const updatedAccount = await c.context.internalAdapter.updateAccount(
 					linkedAccount.id,
-					freshTokens,
+					freshAccount,
 				);
 				if (!updatedAccount) {
 					return {
@@ -530,6 +589,7 @@ export async function handleOAuthUserInfo(
 				"create",
 			);
 			const accountData = {
+				...accountFields,
 				accessToken: await setTokenUtil(account.accessToken, c.context),
 				refreshToken: await setTokenUtil(account.refreshToken, c.context),
 				idToken: account.idToken,
@@ -539,26 +599,33 @@ export async function handleOAuthUserInfo(
 				providerId: account.providerId,
 				accountId: account.accountId,
 			};
-			const { createdUser, createdAccount } = await runWithTransaction(
-				c.context.adapter,
-				async () => {
-					const createdUser = await c.context.internalAdapter.createUser(
-						{
-							name,
-							image,
-							...additionalUserFields,
-							email: userInfo.email.toLowerCase(),
-							emailVerified: userInfo.emailVerified,
-						},
-						source,
-					);
-					const createdAccount = await c.context.internalAdapter.createAccount({
-						...accountData,
-						userId: createdUser.id,
-					});
-					return { createdUser, createdAccount };
-				},
-			);
+			const created = await runWithTransaction(c.context.adapter, async () => {
+				const createdUser = await c.context.internalAdapter.createUser(
+					{
+						name,
+						image,
+						...additionalUserFields,
+						email: userInfo.email.toLowerCase(),
+						emailVerified: userInfo.emailVerified,
+					},
+					source,
+				);
+				// A `user.create.before` hook returning false aborts with null.
+				if (!createdUser) return null;
+				const createdAccount = await c.context.internalAdapter.createAccount({
+					...accountData,
+					userId: createdUser.id,
+				});
+				return { createdUser, createdAccount };
+			});
+			if (!created) {
+				return {
+					error: "unable to create user",
+					data: null,
+					isRegister: false,
+				};
+			}
+			const { createdUser, createdAccount } = created;
 			if (
 				requireExactAccountBinding &&
 				(createdAccount.accountId !== account.accountId ||
@@ -682,6 +749,7 @@ async function dispatchVerificationEmail(
 				user.email,
 				undefined,
 				c.context.options.emailVerification?.expiresIn,
+				{ userId: user.id },
 			);
 			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 				callbackURL || "/",

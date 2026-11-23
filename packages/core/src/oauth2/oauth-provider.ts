@@ -218,6 +218,15 @@ export interface OAuthProvider<
 		data: T;
 	} | null>;
 	/**
+	 * Resolve a profile from a client-submitted ID token the route already verified.
+	 *
+	 * @internal
+	 */
+	getUserInfoFromIdToken?: (idToken: string) => Promise<{
+		user: OAuth2UserInfo;
+		data: T;
+	} | null>;
+	/**
 	 * Custom function to refresh a token.
 	 *
 	 * Receives request metadata from the endpoint that triggered the refresh.
@@ -374,6 +383,27 @@ export type ProviderOptions<Profile extends object = object> = {
 	 * user.
 	 */
 	mapProfileToUser?: OAuthProfileMapper<Profile> | undefined;
+	/**
+	 * Return values for columns declared in `account.additionalFields` to store
+	 * on the provider account when it is created or updated.
+	 *
+	 * Called only when set, after the provider tokens and profile are verified.
+	 * Better Auth treats the returned values as provider input, like
+	 * `mapProfileToUser`. It ignores keys that are not declared account fields,
+	 * fields marked `input: false`, values that are `undefined`, and its own
+	 * account columns (`id`, `userId`, `providerId`, `accountId`, token and
+	 * scope columns, `password`, and the timestamps). Return `null` for the whole
+	 * result to store nothing. A `null` value for a key is stored as `null`.
+	 *
+	 * On sign-in the values are written only while `account.updateAccountOnSignIn`
+	 * is not `false`. ID token sign-in passes the tokens the client sent.
+	 */
+	getAccountFields?:
+		| ((
+				tokens: OAuth2Tokens,
+				userInfo: OAuth2UserInfo,
+		  ) => Awaitable<Record<string, unknown> | null | undefined>)
+		| undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.

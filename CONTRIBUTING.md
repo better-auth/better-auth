@@ -207,7 +207,9 @@ Run `pnpm typecheck` and make sure it passes before opening your PR.
   capabilities can land here too as long as they are well-tested, non-breaking,
   and safe to adopt immediately.
 - **`next` is the beta track.** It ships new features, refactors, and breaking
-  changes, after a beta cycle that gives users a window to adapt.
+  changes, after a beta cycle that gives users a window to adapt. Target
+  `next` directly when fixing behavior that exists only on that branch. Such
+  a fix can carry a patch changeset.
 
 Automation moves PRs with `minor` or `major` changesets from `main` to `next`
 for you.
@@ -231,13 +233,15 @@ A good description:
 - Be clear and concise.
 - Explain what changed, not a commit-style prefix (e.g. `fix:`, `feat:`).
 - Describe the symptom users see, not the internal cause.
+- Cover one user-visible change. If your PR fixes several things, add one
+  changeset for each.
 
 If you're not sure whether your change needs one, a maintainer will handle
 it before merge.
 
 ### Submitting a PR
 
-1. Open a pull request against the **`main`** branch.
+1. Open a pull request against the branch selected under [Branch Targeting](#branch-targeting).
 
 2. PR titles must follow the [Conventional Commits](https://www.conventionalcommits.org/)
    format, with an optional scope for the affected package or feature:

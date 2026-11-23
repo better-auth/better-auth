@@ -6,6 +6,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 
 export interface LineIdTokenPayload {
 	iss: string;
@@ -103,16 +104,17 @@ export const line = (options: LineOptions) => {
 				body.set("id_token", token);
 				body.set("client_id", options.clientId);
 				if (nonce) body.set("nonce", nonce);
-				const { data, error } = await betterFetch<LineIdTokenPayload>(
-					verifyIdTokenEndpoint,
-					{
-						method: "POST",
-						headers: {
-							"content-type": "application/x-www-form-urlencoded",
+				const { data, error } =
+					await fetchRefusingRedirects<LineIdTokenPayload>(
+						verifyIdTokenEndpoint,
+						{
+							method: "POST",
+							headers: {
+								"content-type": "application/x-www-form-urlencoded",
+							},
+							body,
 						},
-						body,
-					},
-				);
+					);
 				if (error || !data) {
 					return false;
 				}

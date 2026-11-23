@@ -1,6 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { runSCIMLifecycle } from "@better-auth/test-utils/scim";
+import type { BetterAuthOptions } from "better-auth";
+import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { getHttpTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
@@ -19,13 +21,18 @@ describe("SCIM HTTP end-to-end", () => {
 				},
 			],
 		});
+		const options: BetterAuthOptions = {
+			baseURL: "https://example.com",
+			plugins: [plugin],
+		};
+		const context = await betterAuth(options).$context;
 		const request = new Request("https://example.com/scim/v2/Users/user-1", {
 			method: "DELETE",
 			headers: { authorization: "Bearer streaming-token" },
 			body: new Blob([]),
 		});
 
-		const result = await plugin.onRequest?.(request);
+		const result = await plugin.onRequest?.(request, context);
 		if (!result || !("request" in result) || !result.request) {
 			throw new Error("Expected SCIM DELETE normalization to return a request");
 		}

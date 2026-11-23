@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	isNativePrivateUseRedirectUri,
 	isReverseDomainPrivateUseRedirectUri,
+	RedirectUriSyntaxSchema,
 	SafeUrlSchema,
 } from "./redirect-uri";
 import { appendQueryParams, isSafeUrlScheme, normalizePathname } from "./url";
@@ -172,6 +173,23 @@ describe("SafeUrlSchema", () => {
 		expect(SafeUrlSchema.safeParse("https://example.com/cb").success).toBe(
 			true,
 		);
+	});
+});
+
+describe("RedirectUriSyntaxSchema", () => {
+	it("leaves the https policy to the caller", () => {
+		expect(
+			RedirectUriSyntaxSchema.safeParse("http://192.168.1.50/cb").success,
+		).toBe(true);
+	});
+
+	it("rejects dangerous schemes and fragments", () => {
+		expect(
+			RedirectUriSyntaxSchema.safeParse("javascript:alert(1)").success,
+		).toBe(false);
+		expect(
+			RedirectUriSyntaxSchema.safeParse("http://192.168.1.50/cb#x").success,
+		).toBe(false);
 	});
 });
 

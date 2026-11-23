@@ -1,5 +1,55 @@
 # @better-auth/scim
 
+## 1.7.27
+
+## 1.7.26
+
+### Patch Changes
+
+- [#10793](https://github.com/better-auth/better-auth/pull/10793) [`b835e55`](https://github.com/better-auth/better-auth/commit/b835e5554dab6e059d0680f8522ca4bcb9ba34c7) Thanks [@jonathansamines](https://github.com/jonathansamines)! - Add pagination to `listSCIMManagedConnectionEvents`. The endpoint now accepts optional `limit`, `offset`, and `sortDirection` body fields and returns `total` with the page. Calls that omit those fields still return the latest 100 events in ascending sequence order.
+
+## 1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+- [#12503](https://github.com/better-auth/better-auth/pull/12503) [`87ede79`](https://github.com/better-auth/better-auth/commit/87ede7984d4df152ae3c0f5a58a2d08299b24281) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed errors from hooks and endpoints turning into generic 500 responses or skipping their error handling in the OAuth provider, Client ID Metadata Document, passkey, SSO, SCIM, and Stripe plugins when the app installs more than one copy of `better-call`.
+
+## 1.7.23
+
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+- [#12413](https://github.com/better-auth/better-auth/pull/12413) [`f539be6`](https://github.com/better-auth/better-auth/commit/f539be6c8911643957cb5d9103817515d817ea11) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Apps that enable the SCIM plugin with a database adapter that has no native transactions, such as Cloudflare D1, now start. Before, `betterAuth()` threw at startup, so sign-in, sessions, and every other auth route failed.
+
+  SCIM itself still needs native transactions. On these adapters, Better Auth logs an error at startup and returns 501 Not Implemented for every `/scim/v2` request, over HTTP or through `auth.api`, and for server calls that change a SCIM connection. Server calls that read SCIM connections keep working. To provision users and groups with SCIM, use an adapter with native transactions. Apps whose adapter has native transactions are unaffected.
+
+- [#12070](https://github.com/better-auth/better-auth/pull/12070) [`fcf0db6`](https://github.com/better-auth/better-auth/commit/fcf0db623350bc542457d9234cb2067f2d552e43) Thanks [@mallachari](https://github.com/mallachari)! - SCIM Groups with more than 100 members now sync in full (affected v1.7.0 to v1.7.20). Before, a Group `POST` with more than 100 members returned `400`, and `PUT`, `PATCH` and `DELETE` could leave members or mapped roles behind. Role mapping no longer skips Users who are in several Groups, and the managed connection endpoints return every connection and credential instead of the first 100. No action is needed.
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
+
 ## 1.7.12
 
 ## 1.7.11

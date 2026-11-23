@@ -49,7 +49,7 @@ export type HostKind =
 	| "multicast"
 	/** IPv4 limited broadcast `255.255.255.255`. */
 	| "broadcast"
-	/** Other RFC 6890 special-purpose ranges (0.0.0.0/8, 192.0.0.0/24, 192.88.99.0/24, 240.0.0.0/4, 2001::/32, etc.). */
+	/** Other RFC 6890 special-purpose ranges (0.0.0.0/8, 192.0.0.0/24, 192.88.99.0/24, 240.0.0.0/4, 2001::/32, etc.) and every IPv6 address outside global unicast `2000::/3` that has no more specific kind. */
 	| "reserved"
 	/** Cloud metadata service FQDN (e.g. `metadata.google.internal`). */
 	| "cloudMetadata"
@@ -191,37 +191,53 @@ function classifyIPv4(ip: string): HostKind {
 }
 
 /**
- * Extract an IPv4 address embedded in an expanded IPv6 literal.
- *
- * Used to recurse into tunnel/translation forms (6to4, NAT64, Teredo) so a
- * private destination cannot be smuggled behind a syntactically-public IPv6
- * literal. `startGroup` is the index of the first of two 16-bit groups in the
- * expanded form (`0000:0000:...`). With `xor: true`, the 32-bit value is XORed
- * with `0xffffffff` before decoding (Teredo obfuscates the client IPv4 this
- * way).
+ * Extract the IPv4 address embedded in a 6to4 (`2002::/16`) literal: the two
+ * 16-bit groups after the prefix of the expanded form (`2002:XXXX:YYYY:...`).
  */
-function extractEmbeddedIPv4(
-	expanded: string,
-	startGroup: number,
-	options: { xor?: boolean } = {},
-): string | null {
-	const offset = startGroup * 5;
-	const g1 = Number.parseInt(expanded.slice(offset, offset + 4), 16);
-	const g2 = Number.parseInt(expanded.slice(offset + 5, offset + 9), 16);
+function extractEmbedded6to4IPv4(expanded: string): string | null {
+	const g1 = Number.parseInt(expanded.slice(5, 9), 16);
+	const g2 = Number.parseInt(expanded.slice(10, 14), 16);
 	if (!Number.isFinite(g1) || !Number.isFinite(g2)) return null;
-	let combined = ((g1 << 16) | g2) >>> 0;
-	if (options.xor) combined = (combined ^ 0xffffffff) >>> 0;
+	const combined = ((g1 << 16) | g2) >>> 0;
+	return `${(combined >>> 24) & 0xff}.${(combined >>> 16) & 0xff}.${(combined >>> 8) & 0xff}.${combined & 0xff}`;
+}
+
+/**
+ * Extract the IPv4 address held in the last two 16-bit groups of an expanded
+ * IPv6 address, as in the well-known NAT64 prefix `64:ff9b::/96`.
+ */
+function extractEmbeddedTrailingIPv4(expanded: string): string | null {
+	const g1 = Number.parseInt(expanded.slice(30, 34), 16);
+	const g2 = Number.parseInt(expanded.slice(35, 39), 16);
+	if (!Number.isFinite(g1) || !Number.isFinite(g2)) return null;
+	const combined = ((g1 << 16) | g2) >>> 0;
 	return `${(combined >>> 24) & 0xff}.${(combined >>> 16) & 0xff}.${(combined >>> 8) & 0xff}.${combined & 0xff}`;
 }
 
 /**
  * Classify an expanded, full-form, lowercase IPv6 address (no IPv4-mapped
- * input — those are unmapped to IPv4 before reaching here).
+ * input, those are unmapped to IPv4 before reaching here).
  *
- * 6to4 (`2002::/16`), NAT64 (`64:ff9b::/96`) and Teredo (`2001:0000::/32`)
- * embed an IPv4 that can route to private/loopback space. If the embedded
- * IPv4 classifies as non-`public`, return `reserved` — blocks SSRF without
- * advertising the address as a loopback literal for RFC 8252 §7.3 matching.
+ * An address is `public` only inside global unicast `2000::/3` and outside the
+ * special-purpose blocks listed below. Everything else is `reserved` unless it
+ * has a more specific kind (`::`, `::1`, `fc00::/7`, `fe80::/10`, `ff00::/8`).
+ * The well-known NAT64 prefix `64:ff9b::/96` takes the class of its embedded
+ * IPv4. The rest of `0000::/8` (IPv4-compatible, IPv4-translated, local-use
+ * NAT64, and similar encodings), `0100::/8`, deprecated site-local
+ * `fec0::/10`, and SRv6 SIDs `5f00::/16` are `reserved`.
+ *
+ * @see https://www.iana.org/assignments/ipv6-address-space/ allocates only
+ *   `2000::/3` for global unicast and leaves the rest IETF-reserved, apart from
+ *   unique local, link-local, and multicast.
+ * @see https://www.iana.org/assignments/iana-ipv6-special-registry/ lists the
+ *   special-purpose blocks inside `2000::/3`. Only the blocks named below are
+ *   rejected. The rest of `2001::/23` and the deprecated ORCHID block
+ *   `2001:10::/28` still classify as `public`.
+ *
+ * 6to4 (`2002::/16`) embeds an IPv4 that can route to private or loopback
+ * space. If the embedded IPv4 classifies as non-`public`, return `reserved`,
+ * which blocks SSRF without advertising the address as a loopback literal for
+ * RFC 8252 §7.3 matching.
  */
 function classifyIPv6(expanded: string): HostKind {
 	if (expanded === "0000:0000:0000:0000:0000:0000:0000:0000")
@@ -233,51 +249,38 @@ function classifyIPv6(expanded: string): HostKind {
 
 	if (firstByte === 0xff) return "multicast";
 	if (firstByte === 0xfe && (secondByte & 0xc0) === 0x80) return "linkLocal";
-	// fec0::/10 — deprecated site-local (RFC 3879), not globally reachable.
-	if (firstByte === 0xfe && (secondByte & 0xc0) === 0xc0) return "reserved";
 	if ((firstByte & 0xfe) === 0xfc) return "private";
+
+	// 64:ff9b::/96 (RFC 6052 §2.1). The well-known NAT64 prefix only represents
+	// global IPv4 (RFC 6052 §3.1), and a DNS64 resolver synthesizes it for names
+	// with only an A record, so it is public when the embedded IPv4 is public
+	// and reserved otherwise.
+	if (expanded.startsWith("0064:ff9b:0000:0000:0000:0000:")) {
+		const embedded = extractEmbeddedTrailingIPv4(expanded);
+		return embedded && classifyIPv4(embedded) === "public"
+			? "public"
+			: "reserved";
+	}
+
+	if ((firstByte & 0xe0) !== 0x20) return "reserved";
 
 	if (expanded.startsWith("2001:0db8:")) return "documentation";
 
-	// 2001:2::/48 — Benchmarking (RFC 5180). A specific non-globally-reachable
-	// block inside the otherwise-mixed 2001::/23 protocol-assignments space.
-	if (expanded.startsWith("2001:0002:0000:")) return "benchmarking";
-
-	if (expanded.startsWith("2002:")) {
-		const embedded = extractEmbeddedIPv4(expanded, 1);
-		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
-		return "public";
-	}
-
-	if (expanded.startsWith("0064:ff9b:0000:0000:0000:0000:")) {
-		const embedded = extractEmbeddedIPv4(expanded, 6);
-		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
-		return "reserved";
-	}
-
-	// 64:ff9b:1::/48 — Local-Use IPv4/IPv6 Translation (RFC 8215). Distinct from
-	// the well-known NAT64 /96 prefix above and not globally reachable.
-	if (expanded.startsWith("0064:ff9b:0001:")) return "reserved";
-
-	if (expanded.startsWith("2001:0000:")) {
-		const embedded = extractEmbeddedIPv4(expanded, 6, { xor: true });
-		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
-		return "reserved";
-	}
-
-	if (expanded.startsWith("0100:0000:0000:0000:")) return "reserved";
-
-	// 3fff::/20 — Documentation (RFC 9637). The /20 fixes the first 16 bits to
-	// `3fff` and the next nibble to 0, so only `3fff:0xxx` is in range.
+	// 3fff::/20 (RFC 9637). The /20 fixes the first 16 bits to `3fff` and the
+	// next nibble to 0, so only `3fff:0xxx` is in range.
 	if (expanded.startsWith("3fff:0")) return "documentation";
 
-	// 5f00::/16 — SRv6 SIDs (RFC 9602), not globally reachable.
-	if (expanded.startsWith("5f00:")) return "reserved";
+	// 2001:2::/48 (RFC 5180), a specific non-globally-reachable block inside the
+	// otherwise-mixed 2001::/23 protocol-assignments space.
+	if (expanded.startsWith("2001:0002:0000:")) return "benchmarking";
 
-	// ::/96 — deprecated IPv4-compatible IPv6 (RFC 4291 §2.5.5.1). `::` and
-	// `::1` are matched above; the rest of the block embeds an IPv4 (e.g.
-	// `::127.0.0.1`) and is never a valid public target.
-	if (expanded.startsWith("0000:0000:0000:0000:0000:0000:")) return "reserved";
+	// 2001::/32 Teredo, which embeds an obfuscated client IPv4.
+	if (expanded.startsWith("2001:0000:")) return "reserved";
+
+	if (expanded.startsWith("2002:")) {
+		const embedded = extractEmbedded6to4IPv4(expanded);
+		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
+	}
 
 	return "public";
 }

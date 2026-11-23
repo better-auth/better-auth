@@ -20,7 +20,10 @@ import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { claimsRequestParameterSchema } from "./claims-request";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
-import { validateOAuthProviderExtensions } from "./extensions";
+import {
+	validateAdvertisedAuthMethodsShape,
+	validateOAuthProviderExtensions,
+} from "./extensions";
 import { introspectEndpoint } from "./introspect";
 import type { BackchannelLogoutPlan } from "./logout";
 import {
@@ -52,8 +55,8 @@ import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
 	clientRegistrationRequestSchema,
+	RedirectUriSyntaxSchema,
 	ResourceUriSchema,
-	SafeUrlSchema,
 } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
@@ -84,7 +87,7 @@ export const DEFAULT_OAUTH_SCOPES = [
 const rpInitiatedLogoutRequestSchema = z.object({
 	id_token_hint: z.string().optional(),
 	client_id: z.string().optional(),
-	post_logout_redirect_uri: SafeUrlSchema.optional(),
+	post_logout_redirect_uri: RedirectUriSyntaxSchema.optional(),
 	state: z.string().optional(),
 });
 
@@ -171,6 +174,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			);
 		}
 	}
+	if (options.requireOpenId && !scopes.has("openid")) {
+		throw new BetterAuthError("requireOpenId requires openid in scopes");
+	}
 
 	const configuredResourceIdentifiers = new Set(
 		(options.resources ?? []).map((resource) =>
@@ -232,6 +238,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		clientRegistrationAllowedScopes,
 	};
 	validateOAuthProviderExtensions(opts.extensions);
+
+	validateAdvertisedAuthMethodsShape(
+		opts.advertisedMetadata?.token_endpoint_auth_methods_supported,
+	);
 
 	// Validate pairwiseSecret minimum length
 	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
@@ -661,11 +671,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							postLoginClearedForSession,
 						});
 
-						// On the social sign-in path the authorize query has to survive the
-						// provider redirect to be resumed after login. Carry it in the
-						// server-only OAuth state so a client cannot inject its own `query`
-						// through the request body.
-						if (ctx.path === "/sign-in/social") {
+						// On the social and SSO sign-in paths the authorize query has to
+						// survive the provider redirect to be resumed after login. Carry it
+						// in the server-only OAuth state so a client cannot inject its own
+						// `query` through the request body.
+						if (ctx.path === "/sign-in/social" || ctx.path === "/sign-in/sso") {
 							await addOAuthServerContext({
 								query: queryParams.toString(),
 								...(signedQueryIssuedAt
@@ -929,7 +939,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							client_assertion_type: z.string().optional(),
 							code: z.string().optional(),
 							code_verifier: z.string().optional(),
-							redirect_uri: SafeUrlSchema.optional(),
+							redirect_uri: RedirectUriSyntaxSchema.optional(),
 							refresh_token: z.string().optional(),
 							resource: z
 								.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])

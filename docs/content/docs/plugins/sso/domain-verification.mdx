@@ -1,0 +1,140 @@
+---
+icon: pluginsSSODomainVerification
+sidebarTitle: "Domain verification"
+title: Verify SSO domains
+description: Prove ownership of a provider's email domains with a DNS TXT record before users can sign in.
+---
+
+## Enable domain verification
+
+To require proof of domain ownership, set `domainVerification.enabled`. Without it, a provider can sign users in for any domain its registrant lists, even one the registrant does not own. With it, every new provider starts unverified, and sign-in through it returns `401` with "Provider domain has not been verified" until its domains are verified. A verified domain also lets SSO link existing users whose email matches it, and enables domain-based [organization assignment](/docs/plugins/sso/provisioning#organization-provisioning). Providers configured in `defaultSSO` count as verified.
+
+With domain verification disabled, Better Auth never creates organization memberships from email-domain matches. Providers linked to an organization still provision members, and `signIn.sso` still finds providers by email or domain.
+
+Enable the option on the server and on the client. On the client, it adds the verification endpoints to the types.
+
+<Tabs items={["server", "client"]}>
+  <Tab value="server">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { sso } from "@better-auth/sso";
+
+    export const auth = betterAuth({
+      plugins: [
+        sso({
+          domainVerification: { enabled: true }, // [!code highlight]
+        }),
+      ],
+    });
+    ```
+  </Tab>
+
+  <Tab value="client">
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client";
+    import { ssoClient } from "@better-auth/sso/client";
+
+    export const authClient = createAuthClient({
+      plugins: [
+        ssoClient({
+          domainVerification: { enabled: true }, // [!code highlight]
+        }),
+      ],
+    });
+    ```
+  </Tab>
+</Tabs>
+
+The option adds the `domainVerified` field to the `ssoProvider` table, so migrate the database again.
+
+<Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```package-install
+    npx auth migrate
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```package-install
+    npx auth generate
+    ```
+  </Tab>
+</Tabs>
+
+See the [Schema](/docs/plugins/sso/reference#schema) section to add the fields manually.
+
+<Callout type="warn">
+  Verification resolves DNS through `node:dns/promises`. On runtimes without it, `verify-domain` fails with `DOMAIN_VERIFICATION_FAILED`.
+</Callout>
+
+## Verify your domain
+
+<Steps>
+  <Step>
+    ### Get the verification token
+
+    The registration response includes a `domainVerificationToken`. If you no longer have it, or it expired, call [request-domain-verification](#request-a-verification-token).
+  </Step>
+
+  <Step>
+    ### Publish a TXT record
+
+    Add a `TXT` record at `_{tokenPrefix}-{providerId}.{domain}`. The leading underscore marks the name as an attribute leaf, as described in [RFC 8552](https://datatracker.ietf.org/doc/html/rfc8552). The default `tokenPrefix` is `better-auth-token`. For example, the provider `acme` on `example.com` needs a record at `_better-auth-token-acme.example.com`. Set the record's value to the token, or to `{label}={token}` where `{label}` is `_{tokenPrefix}-{providerId}`.
+
+    If a provider has `domain: "example.com,example.org"`, add the record on both domains. The label must be at most 63 characters, so keep `tokenPrefix` and the provider ID short.
+  </Step>
+
+  <Step>
+    ### Submit verification
+
+    After the record propagates, call `verify-domain`.
+  </Step>
+</Steps>
+
+<APIMethod path="/sso/verify-domain" method="POST" requireSession>
+  ```ts
+  type verifyDomain = {
+    /**
+     * The ID of the provider to verify.
+     */
+    providerId: string = "acme"
+  }
+  ```
+</APIMethod>
+
+The call returns `204` and marks the provider verified only if every listed domain answers with the record. Sign-in through the provider then no longer returns `401` for an unverified domain. You do not need to call `verify-domain` again unless the provider's `domain` changes.
+
+If the provider changes while the check runs, `verify-domain` returns `409` with `SSO_PROVIDER_CHANGED`:
+
+* If its domains changed, reload the provider and retry.
+* If it was deleted, there is nothing left to verify.
+
+## Request a verification token
+
+<APIMethod path="/sso/request-domain-verification" method="POST" requireSession>
+  ```ts
+  type requestDomainVerification = {
+    /**
+     * The ID of the provider to issue a token for.
+     */
+    providerId: string = "acme"
+  }
+  ```
+</APIMethod>
+
+It returns the current `domainVerificationToken` while that token is valid. When no valid token exists, it issues a new one. Update the TXT record with each new token. Tokens last one week.
+
+Changing `domain` through [`update-provider`](/docs/plugins/sso#manage-providers) resets `domainVerified`. Sign-in through the provider then returns `401` until you verify it again.
+
+## Errors
+
+Both endpoints require access to the provider: the signed-in user must own it, or be an owner or admin of its organization. Without that access they return `403`, and `404` when the provider does not exist.
+
+| Code                         | Status | Cause                                                                              | Fix                                                                                                                                                                          |
+| ---------------------------- | ------ | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DOMAIN_VERIFIED`            | 409    | The provider is already verified.                                                  | No action needed.                                                                                                                                                            |
+| `NO_PENDING_VERIFICATION`    | 404    | The provider has no unexpired token.                                               | Request a new token, and update the TXT record with it.                                                                                                                      |
+| `IDENTIFIER_TOO_LONG`        | 400    | `_{tokenPrefix}-{providerId}` is longer than 63 characters.                        | Set a shorter `tokenPrefix`, or register the provider with a shorter ID. Then request a token for the new label, and publish the record under it.                            |
+| `INVALID_DOMAIN`             | 400    | An entry in the provider's `domain` value is not a valid domain.                   | Correct the `domain` value through `update-provider`.                                                                                                                        |
+| `DOMAIN_VERIFICATION_FAILED` | 502    | A domain has no matching TXT record. Returns `500` when `node:dns` is unavailable. | For `502`, check the record's name and value on each domain, wait for DNS to propagate, and retry. For `500`, run the server on a runtime that provides `node:dns/promises`. |
+| `SSO_PROVIDER_CHANGED`       | 409    | The domains changed, or the provider was deleted, during verification.             | Reload the provider, and retry if it still exists.                                                                                                                           |

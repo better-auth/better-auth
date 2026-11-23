@@ -3,9 +3,13 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { generateDrizzleSchema } from "./generate-drizzle-schema";
 
-const TYPE_CHECK_TIMEOUT_MS = 15_000;
+const TYPE_CHECK_TIMEOUT_MS = 60_000;
 
-/** Run compiler-backed tests with their dedicated synchronous-work timeout. */
+/**
+ * Run compiler-backed tests with their dedicated synchronous-work timeout.
+ * Whichever one runs first parses every lib and `drizzle-orm` declaration
+ * file, which can take more than 20 seconds on a loaded CI runner.
+ */
 function test(name: string, callback: () => Promise<void>): void {
 	it(name, callback, TYPE_CHECK_TIMEOUT_MS);
 }
@@ -27,6 +31,18 @@ const generateFor = (
 		adapterConfig: { provider },
 	});
 
+const compilerOptions: ts.CompilerOptions = {
+	noEmit: true,
+	noImplicitAny: false,
+	skipLibCheck: true,
+};
+const compilerHost = ts.createCompilerHost(compilerOptions);
+/**
+ * Parsed and bound lib and `drizzle-orm` declaration files, reused by every
+ * program. Sharing them is safe because all programs use `compilerOptions`.
+ */
+const sharedSourceFiles = new Map<string, ts.SourceFile>();
+
 /**
  * Type-checks the generated schema and returns its diagnostics, ignoring
  * module-resolution errors for `drizzle-orm` (not resolvable in this sandbox).
@@ -37,22 +53,25 @@ const generateFor = (
  */
 function typeErrors(code: string): string[] {
 	const fileName = "schema.ts";
-	const host = ts.createCompilerHost({});
-	const program = ts.createProgram(
-		[fileName],
-		{
-			noEmit: true,
-			noImplicitAny: false,
-			skipLibCheck: true,
+	const program = ts.createProgram([fileName], compilerOptions, {
+		...compilerHost,
+		getSourceFile: (name, languageVersion, onError, shouldCreate) => {
+			if (name === fileName) {
+				return ts.createSourceFile(name, code, ts.ScriptTarget.ESNext);
+			}
+			let sourceFile = sharedSourceFiles.get(name);
+			if (!sourceFile) {
+				sourceFile = compilerHost.getSourceFile(
+					name,
+					languageVersion,
+					onError,
+					shouldCreate,
+				);
+				if (sourceFile) sharedSourceFiles.set(name, sourceFile);
+			}
+			return sourceFile;
 		},
-		{
-			...host,
-			getSourceFile: (name, languageVersion, onError, shouldCreate) =>
-				name === fileName
-					? ts.createSourceFile(name, code, ts.ScriptTarget.ESNext)
-					: host.getSourceFile(name, languageVersion, onError, shouldCreate),
-		},
-	);
+	});
 	return ts
 		.getPreEmitDiagnostics(program)
 		.map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"))

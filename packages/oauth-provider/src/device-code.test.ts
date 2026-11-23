@@ -1,10 +1,13 @@
+import { getAuthTables } from "@better-auth/core/db";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { createAuthClient } from "better-auth/client";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import { openAPI } from "better-auth/plugins";
 import { deviceAuthorization } from "better-auth/plugins/device-authorization";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { decodeJwt } from "jose";
+import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { oauthDeviceAuthorizationClient, oauthProviderClient } from "./client";
 import {
@@ -323,6 +326,74 @@ describe("oauth-provider device-code grant", async () => {
 			headers: FORM_HEADERS,
 		});
 	}
+
+	/** Polls an approved device code with a DPoP proof. */
+	async function createDpopPoller(clientId: string, deviceCode: string) {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const publicJwk = await exportJWK(publicKey);
+		const proofFor = (htu = `${baseURL}/api/auth/oauth2/token`) =>
+			new SignJWT({
+				jti: crypto.randomUUID(),
+				htm: "POST",
+				htu,
+				iat: Math.floor(Date.now() / 1000),
+			})
+				.setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk: publicJwk })
+				.sign(privateKey);
+		const poll = (proof: string) =>
+			client.$fetch<Record<string, unknown>>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: DEVICE_CODE_GRANT_TYPE,
+					device_code: deviceCode,
+					client_id: clientId,
+				}),
+				headers: { ...FORM_HEADERS, dpop: proof },
+			});
+		return { proofFor, poll };
+	}
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-8
+	 */
+	it("keeps an approved device code when the poll's DPoP proof is rejected", async () => {
+		const clientId = await createDeviceClient();
+		const { proofFor, poll } = await createDpopPoller(
+			clientId,
+			await approvedDeviceCode(clientId),
+		);
+
+		const rejected = await poll(
+			await proofFor(`${baseURL}/api/auth/oauth2/introspect`),
+		);
+		expect(rejected.error).toMatchObject({ error: "invalid_dpop_proof" });
+
+		await new Promise((resolve) => setTimeout(resolve, 2_100));
+		const issued = await poll(await proofFor());
+		expect(issued.error).toBeNull();
+		expect(issued.data?.token_type).toBe("DPoP");
+	});
+
+	it("issues once when two polls with one DPoP proof arrive together", async () => {
+		const clientId = await createDeviceClient();
+		const { proofFor, poll } = await createDpopPoller(
+			clientId,
+			await approvedDeviceCode(clientId),
+		);
+		const proof = await proofFor();
+
+		const results = await Promise.all([poll(proof), poll(proof)]);
+		const successes = results.filter((result) => result.error === null);
+		expect(successes).toHaveLength(1);
+		expect(successes[0]?.data?.token_type).toBe("DPoP");
+		// The loser either finds the code claimed or sees the winner's poll time.
+		const loser = results.find((result) => result.error !== null)?.error as
+			| { error?: string }
+			| undefined;
+		expect(["invalid_grant", "slow_down"]).toContain(loser?.error);
+	});
 
 	it("accepts a confidential client authenticated with Basic without body client_id", async () => {
 		const { headers } = await signInWithTestUser();
@@ -997,6 +1068,71 @@ describe("oauth-provider device-code grant", async () => {
 		expect(idToken.aud).toBe(clientId);
 	});
 
+	it("does not redeem a device grant after approval from a revoked cached session", async () => {
+		const {
+			auth: guardedAuth,
+			client: guardedClient,
+			signInWithTestUser: signIn,
+			cookieSetter,
+		} = await getTestInstance(
+			{
+				baseURL,
+				session: { cookieCache: { enabled: true, maxAge: 60 } },
+				plugins: [
+					jwt({ jwt: { issuer: baseURL } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						scopes: ["openid", "profile", "email"],
+					}),
+					oauthDeviceAuthorization(),
+				],
+			},
+			{ clientOptions: { plugins: [oauthProviderClient()] } },
+		);
+		const { headers } = await signIn();
+		const registered = await guardedAuth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid profile email",
+				application_type: "native",
+			},
+		});
+		const current = await guardedClient.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { device_code, user_code } = await guardedAuth.api.deviceCode({
+			body: { client_id: registered!.client_id },
+		});
+		await guardedAuth.api.deviceVerify({ query: { user_code }, headers });
+		const ctx = await guardedAuth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		await expect(
+			guardedAuth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			}),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		const polled = await guardedClient.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: DEVICE_CODE_GRANT_TYPE,
+					device_code,
+					client_id: registered!.client_id,
+				}),
+				headers: FORM_HEADERS,
+			},
+		);
+		expect(polled.data?.access_token).toBeUndefined();
+		expect(polled.error).not.toBeNull();
+	});
+
 	it("returns invalid_request when device-code polling omits client_id", async () => {
 		const clientId = await createDeviceClient();
 		const deviceCode = await approvedDeviceCode(clientId);
@@ -1249,6 +1385,9 @@ describe("oauth-provider device-code grant", async () => {
 		});
 		expect(widened.error?.status).toBe(400);
 		expect((widened.error as TokenErrorBody)?.error).toBe("invalid_target");
+		expect((widened.error as TokenErrorBody)?.error_description).toBe(
+			"Requested resource was not authorized by the user",
+		);
 
 		const stored = await db.findOne<{ deviceCode: string }>({
 			model: "deviceCode",
@@ -1289,6 +1428,39 @@ describe("oauth-provider device-code grant", async () => {
 		expect(decodeJwt(refreshed.data!.access_token as string).aud).toContain(
 			secondResource,
 		);
+	});
+
+	it("keeps a device-grant refresh token usable after narrowing away offline_access", async () => {
+		const scope = "openid offline_access";
+		const clientId = await createDeviceClient(
+			[DEVICE_CODE_GRANT_TYPE, "refresh_token"],
+			scope,
+		);
+		const deviceCode = await approvedDeviceCode(clientId, scope);
+		const issued = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+		});
+		expect(issued.error).toBeNull();
+
+		// The device grant has no session, so dropping offline_access must not
+		// make the refresh token end with one.
+		const narrowed = await pollToken({
+			grant_type: "refresh_token",
+			refresh_token: issued.data!.refresh_token as string,
+			client_id: clientId,
+			scope: "openid",
+		});
+		expect(narrowed.error).toBeNull();
+		const narrowedRefreshToken = narrowed.data!.refresh_token as string;
+
+		const refreshed = await pollToken({
+			grant_type: "refresh_token",
+			refresh_token: narrowedRefreshToken,
+			client_id: clientId,
+		});
+		expect(refreshed.error).toBeNull();
 	});
 
 	it("single-uses the device code (second exchange fails)", async () => {
@@ -1402,6 +1574,9 @@ describe("oauth-provider device-code grant", async () => {
 		});
 		expect(res.error?.status).toBe(400);
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+		expect((res.error as TokenErrorBody)?.error_description).toBe(
+			"Invalid device code",
+		);
 	});
 
 	/**
@@ -1432,6 +1607,9 @@ describe("oauth-provider device-code grant", async () => {
 		});
 		expect(res.error?.status).toBe(400);
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+		expect((res.error as TokenErrorBody)?.error_description).toBe(
+			"Client ID mismatch",
+		);
 	});
 
 	it("returns invalid_grant (not invalid_scope) when a narrower-scoped client replays a code", async () => {
@@ -1463,6 +1641,9 @@ describe("oauth-provider device-code grant", async () => {
 		});
 		expect(res.error?.status).toBe(400);
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+		expect((res.error as TokenErrorBody)?.error_description).toBe(
+			"Client ID mismatch",
+		);
 	});
 
 	it("does not reveal device-code scopes to a confidential client", async () => {
@@ -1499,6 +1680,9 @@ describe("oauth-provider device-code grant", async () => {
 
 		expect(res.error?.status).toBe(400);
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+		expect((res.error as TokenErrorBody)?.error_description).toBe(
+			"Client ID mismatch",
+		);
 	});
 
 	it("blocks redeeming an OAuth-client device code at the first-party /device/token", async () => {
@@ -1585,6 +1769,42 @@ describe("oauth-provider device-code grant", async () => {
 		expect(res.error).toBeNull();
 		expect(res.data?.access_token).toBeDefined();
 		expect(res.data?.token_type).toBe("Bearer");
+	});
+});
+
+describe("oauth-provider device-code grant with requireOpenId", async () => {
+	const baseURL = "http://localhost:3000";
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				requireOpenId: true,
+			}),
+			oauthDeviceAuthorization(),
+		],
+	});
+
+	it("does not apply to the device authorization request", async () => {
+		const { headers } = await signInWithTestUser();
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "profile",
+				application_type: "native",
+			},
+		});
+
+		const res = await auth.api.deviceCode({
+			body: { client_id: created!.client_id, scope: "profile" },
+		});
+
+		expect(res.device_code).toBeTruthy();
+		expect(res.user_code).toBeTruthy();
 	});
 });
 
@@ -1786,5 +2006,140 @@ describe("oauth-provider device-code grant reuse", async () => {
 
 		expect(res.error?.status).toBe(400);
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11933
+ * @see https://www.prisma.io/docs/orm/prisma-schema/data-model/models#type-modifiers
+ */
+describe("oauth-provider device-code grant on scalar list columns", async () => {
+	const baseURL = "http://localhost:3000";
+	const resource = "https://api.example.com";
+	const database: Record<string, Record<string, unknown>[]> = {};
+	const createMemoryAdapter = memoryAdapter(database);
+
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		database: (options) => {
+			const tables = getAuthTables(options);
+			const listFields = (model: string) =>
+				Object.entries(tables[model]?.fields ?? {})
+					.filter(([, field]) => field.type === "string[]")
+					.map(([name]) => name);
+			for (const model of Object.keys(tables)) database[model] ??= [];
+			const adapter = createMemoryAdapter(options);
+			const rejectNullLists = (model: string, data: object) => {
+				for (const field of listFields(model)) {
+					if ((data as Record<string, unknown>)[field] === null) {
+						throw new Error(`Argument \`${field}\` must not be null.`);
+					}
+				}
+			};
+			const readListsAsArrays = <T>(model: string, row: T): T => {
+				if (!row) return row;
+				const copy = { ...row } as Record<string, unknown>;
+				for (const field of listFields(model)) copy[field] ??= [];
+				return copy as T;
+			};
+			return {
+				...adapter,
+				create: (async (args) => {
+					rejectNullLists(args.model, args.data);
+					return adapter.create(args);
+				}) as DBAdapter["create"],
+				update: (async (args) => {
+					rejectNullLists(args.model, args.update);
+					return readListsAsArrays(args.model, await adapter.update(args));
+				}) as DBAdapter["update"],
+				updateMany: (async (args) => {
+					rejectNullLists(args.model, args.update);
+					return adapter.updateMany(args);
+				}) as DBAdapter["updateMany"],
+				findOne: (async (args) =>
+					readListsAsArrays(
+						args.model,
+						await adapter.findOne(args),
+					)) as DBAdapter["findOne"],
+				findMany: (async (args) =>
+					(await adapter.findMany(args)).map((row) =>
+						readListsAsArrays(args.model, row),
+					)) as DBAdapter["findMany"],
+			};
+		},
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [{ identifier: resource, allowedScopes: ["openid"] }],
+			}),
+			oauthDeviceAuthorization(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const { client_id: clientId } = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: "none",
+			grant_types: [DEVICE_CODE_GRANT_TYPE],
+			scope: "openid",
+			application_type: "native",
+		},
+	});
+
+	async function approveWithoutResource() {
+		const codes = await client.$fetch<{
+			device_code: string;
+			user_code: string;
+		}>("/device/code", {
+			method: "POST",
+			body: new URLSearchParams({ client_id: clientId, scope: "openid" }),
+			headers: FORM_HEADERS,
+		});
+		expect(codes.error).toBeNull();
+		const { device_code, user_code } = codes.data!;
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		await auth.api.deviceApprove({ body: { userCode: user_code }, headers });
+		return device_code;
+	}
+
+	function pollToken(body: Record<string, string>) {
+		return client.$fetch<Record<string, unknown>>("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams(body),
+			headers: FORM_HEADERS,
+		});
+	}
+
+	it("issues tokens for a device code requested without a resource", async () => {
+		const deviceCode = await approveWithoutResource();
+
+		const res = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data).toMatchObject({
+			access_token: expect.any(String),
+			token_type: "Bearer",
+			scope: "openid",
+		});
+	});
+
+	it("rejects a resource the user did not approve for a code requested without one", async () => {
+		const deviceCode = await approveWithoutResource();
+
+		const res = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+			resource,
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect((res.error as TokenErrorBody)?.error).toBe("invalid_target");
 	});
 });

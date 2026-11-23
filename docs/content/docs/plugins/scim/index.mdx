@@ -63,7 +63,15 @@ Each SCIM User links to a Better Auth User. Provisioning does not create a sign-
     </Tabs>
 
     <Callout type="warn">
-      Cloudflare D1 does not support the interactive transactions required by the SCIM plugin.
+      Cloudflare D1 does not support interactive transactions. SCIM cannot provision users or groups on D1.
+
+      When the adapter has no native transactions, Better Auth still starts and logs an error. SCIM then refuses every request that needs a transaction:
+
+      * Every `/scim/v2` request returns 501 Not Implemented, reads included. A directory's connection test fails at setup instead of passing and then failing on the first change.
+      * Server calls that create, rotate, revoke, reconcile, or decommission a SCIM connection return 501 with code `SCIM_REQUIRES_NATIVE_TRANSACTIONS`.
+      * Server calls that list or read SCIM connections keep working.
+
+      Do not set `transaction: true` on a D1 database. D1 then rejects the transaction on every SCIM request with a server error.
     </Callout>
   </Step>
 

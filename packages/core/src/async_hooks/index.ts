@@ -1,18 +1,10 @@
 import type { AsyncLocalStorage } from "node:async_hooks";
+import { getBuiltinAsyncLocalStorage } from "./builtin";
 
 export type { AsyncLocalStorage };
 
 let cachedAsyncLocalStorageConstructor: typeof AsyncLocalStorage | undefined;
 let availabilityWarningLogged = false;
-
-function getBuiltinAsyncLocalStorage() {
-	try {
-		return globalThis.process?.getBuiltinModule?.("node:async_hooks")
-			?.AsyncLocalStorage;
-	} catch {
-		return undefined;
-	}
-}
 
 export async function getAsyncLocalStorage(): Promise<
 	typeof AsyncLocalStorage
@@ -55,7 +47,7 @@ export async function getAsyncLocalStorage(): Promise<
 				"[better-auth] Please read more about this warning at https://better-auth.com/docs/installation#mount-handler",
 			);
 			console.warn(
-				"[better-auth] If you are using Cloudflare Workers, please see: https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag",
+				"[better-auth] If you are using Cloudflare Workers, please see: https://better-auth.com/docs/guides/cloudflare#nodejs-compatibility",
 			);
 		}
 		throw err;

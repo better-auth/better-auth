@@ -299,14 +299,17 @@ export type BetterAuthAdvancedOptions = {
 	ipAddress?:
 		| {
 				/**
-				 * List of headers to use for ip address
+				 * Headers to read the client IP address from, in order. Any client can
+				 * send these headers, so list only ones your proxy or server code sets,
+				 * replacing any client value. A header with more than one address is
+				 * skipped unless `trustedProxies` lists the proxies that appended them.
 				 *
 				 * Ip address is used for rate limiting and session tracking
 				 *
-				 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
+				 * @example ["cf-connecting-ip"]
 				 *
-				 * @default
-				 * @link https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/ip.ts
+				 * @default ["x-forwarded-for"]
+				 * @link https://www.better-auth.com/docs/concepts/rate-limit#connecting-ip-address
 				 */
 				ipAddressHeaders?: string[];
 				/**
@@ -473,12 +476,13 @@ export type BetterAuthAdvancedOptions = {
 				 */
 				joins?: boolean;
 				/**
-				 * Validate the schema during initialization and report problems
-				 * through the configured logger. Authentication requests await
-				 * the same check and fail when the schema does not match.
-				 * Kysely introspects the database; Drizzle and Prisma inspect
-				 * local schema metadata without opening a connection.
-				 * Set `false` to disable runtime schema validation.
+				 * Validate the schema when the auth instance is first used.
+				 * Requests and server API calls await the check and fail when the
+				 * schema does not match. Kysely introspects the database; Drizzle
+				 * and Prisma inspect local schema metadata without opening a
+				 * connection. Other adapters are not validated; unless this is
+				 * `false`, they log a skip message instead. Set `false` to disable
+				 * runtime schema validation and its skip message.
 				 *
 				 * @default true
 				 */
@@ -506,7 +510,7 @@ export type BetterAuthAdvancedOptions = {
 	 * or timing-attack mitigation) to run after the response is sent.
 	 *
 	 * Use `waitUntil` from `@vercel/functions` on Vercel,
-	 * or `ctx.waitUntil` on Cloudflare Workers.
+	 * or `waitUntil` from `cloudflare:workers` on Cloudflare Workers.
 	 *
 	 * @example
 	 * // Vercel
@@ -514,12 +518,9 @@ export type BetterAuthAdvancedOptions = {
 	 * advanced: { backgroundTasks: { handler: waitUntil } }
 	 *
 	 * @example
-	 * // Cloudflare Workers (with AsyncLocalStorage)
-	 * advanced: {
-	 *   backgroundTasks: {
-	 *     handler: (p) => execCtxStorage.getStore()?.waitUntil(p)
-	 *   }
-	 * }
+	 * // Cloudflare Workers
+	 * import { waitUntil } from "cloudflare:workers";
+	 * advanced: { backgroundTasks: { handler: waitUntil } }
 	 */
 	backgroundTasks?: {
 		handler: (promise: Promise<unknown>) => void;

@@ -44,4 +44,50 @@ describe("parseJSON", () => {
 	it("preserves non-JSON strings as-is when not strict", () => {
 		expect(parseJSON("not json", { strict: false })).toBe("not json");
 	});
+
+	it("parses a plain constructor key in strict mode", () => {
+		expect(parseJSON('{"constructor":"acme"}')).toEqual({
+			constructor: "acme",
+		});
+		expect(parseJSON('{"meta":{"constructor":["a"]}}')).toEqual({
+			meta: { constructor: ["a"] },
+		});
+	});
+
+	it.each([
+		{ name: "__proto__ key", input: '{"__proto__":{"polluted":true}}' },
+		{
+			name: "escaped __proto__ key",
+			input: '{"\\u005f_proto__":{"polluted":true}}',
+		},
+		{
+			name: "nested __proto__ key",
+			input: '{"a":{"__proto__":{"polluted":true}}}',
+		},
+		{
+			name: "__proto__ key inside an array",
+			input: '[{"__proto__":{"polluted":true}}]',
+		},
+		{
+			name: "constructor.prototype",
+			input: '{"constructor":{"prototype":{"polluted":true}}}',
+		},
+	])("rejects $name in strict mode", ({ input }) => {
+		expect(() => parseJSON(input)).toThrow(
+			"[better-json] Potential prototype pollution attempt detected",
+		);
+	});
+
+	it.each([
+		{ input: '{"__proto__":{"polluted":true},"a":1}', expected: { a: 1 } },
+		{
+			input: '{"constructor":{"prototype":{"polluted":true}},"a":1}',
+			expected: { a: 1 },
+		},
+	])("drops pollution keys when not strict: $input", ({ input, expected }) => {
+		const parsed = parseJSON<Record<string, unknown>>(input, { strict: false });
+		expect(parsed).toEqual(expected);
+		expect(Object.hasOwn(parsed, "__proto__")).toBe(false);
+		expect(Object.getPrototypeOf(parsed)).toBe(Object.prototype);
+	});
 });

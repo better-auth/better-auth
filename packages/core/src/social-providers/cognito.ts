@@ -6,9 +6,11 @@ import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
+	parseStringBoolean,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 
 export interface CognitoProfile {
 	sub: string;
@@ -221,7 +223,9 @@ export const cognito = (options: CognitoOptions) => {
 									"",
 								email: userInfo.email,
 								image: userInfo.picture,
-								emailVerified: userInfo.email_verified,
+								// The user info endpoint returns `email_verified` as a string.
+								emailVerified:
+									parseStringBoolean(userInfo.email_verified) ?? false,
 								...userMap,
 							},
 							data: userInfo,
@@ -247,7 +251,7 @@ export const getCognitoPublicKey = async (
 	const COGNITO_JWKS_URI = `https://cognito-idp.${region}.amazonaws.com/${userPoolId}/.well-known/jwks.json`;
 
 	try {
-		const { data } = await betterFetch<{
+		const { data } = await fetchRefusingRedirects<{
 			keys: Array<{
 				kid: string;
 				alg: string;

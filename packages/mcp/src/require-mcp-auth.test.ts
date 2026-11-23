@@ -27,6 +27,8 @@ const authWith = (baseURL: string, resolvedBaseURL: string) => ({
 	$context: Promise.resolve({
 		baseURL: resolvedBaseURL,
 		internalAdapter: internalAdapterStub,
+		options: {},
+		getPlugin: () => null,
 	}),
 });
 

@@ -12,6 +12,7 @@ import * as z from "zod";
 import {
 	APIError,
 	addOAuthServerContext,
+	formCsrfMiddleware,
 	getOAuthState,
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
@@ -122,6 +123,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 				"/sign-in/anonymous",
 				{
 					method: "POST",
+					use: [formCsrfMiddleware],
 					metadata: {
 						openapi: {
 							description: "Sign in anonymously",
@@ -383,6 +385,13 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						}
 						const newSession = ctx.context.newSession;
 						if (!newSession) {
+							return;
+						}
+						if (
+							await ctx.context
+								.getPlugin("two-factor")
+								?.shouldRequireTwoFactor(ctx)
+						) {
 							return;
 						}
 

@@ -673,6 +673,49 @@ describe("oauth-proxy", async () => {
 			);
 		});
 
+		it("should handle OAuth callback when additionalData has a constructor key", async () => {
+			const { client } = await getTestInstance({
+				database: undefined, // Stateless mode
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const res = await client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+					additionalData: {
+						constructor: "acme",
+					},
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const encryptedState = new URL(res.url!).searchParams.get("state");
+			let location: string | null = null;
+			await client.$fetch(
+				`/callback/google?code=test&state=${encryptedState}`,
+				{
+					onError(context) {
+						location = context.response.headers.get("location");
+					},
+				},
+			);
+			expect(location).toContain("/callback/google/oauth-proxy");
+			expect(location).toContain("profile");
+		});
+
 		it("should decrypt state package correctly", async () => {
 			const { client, auth } = await getTestInstance({
 				database: undefined, // Stateless mode

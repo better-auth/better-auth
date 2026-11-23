@@ -145,7 +145,10 @@ services:
       - mysql-prisma_data:/var/lib/mysql
 
   mssql:
-    image: mcr.microsoft.com/mssql/server:latest
+    # Pin off `:latest` (SQL Server 2025). 2025 images intermittently crash
+    # during startup (Reason 0x00000002) before accepting connections.
+    # @see https://github.com/microsoft/mssql-docker/issues/974
+    image: mcr.microsoft.com/mssql/server:2022-CU28-ubuntu-22.04@sha256:4525e3efac9f3e241cb003bb2ff2a82818b502f37e12049d788b1a9fa7e13b7f
     container_name: mssql
     environment:
       MSSQL_SA_PASSWORD: "Password123!"
@@ -153,7 +156,8 @@ services:
     ports:
       - "1433:1433"
     volumes:
-      - mssql_data:/var/opt/mssql
+      # Separate from mssql_data so leftover SQL Server 2025 files cannot block 2022.
+      - mssql_2022_data:/var/opt/mssql
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'Password123!' -Q 'SELECT 1' -b -o /dev/null"]
       interval: 1s
@@ -168,7 +172,7 @@ volumes:
   postgres-kysely_data:
   postgres-prisma_data:
   mysql_data:
-  mssql_data:
+  mssql_2022_data:
   mysql-kysely_data:
   mysql-prisma_data:
   postgres-kysely2_data:

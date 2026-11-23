@@ -60,10 +60,13 @@ export async function createTelemetry(
 	let anonymousId: string | undefined;
 
 	if (enabled) {
+		// Workers forbid random values outside a request, so `publish` retries.
 		anonymousId = await getProjectId(
 			typeof options.baseURL === "string" ? options.baseURL : undefined,
-		);
+		).catch(() => undefined);
+	}
 
+	if (anonymousId) {
 		const payload = {
 			config: await getTelemetryAuthConfig(options, context),
 			runtime: detectRuntime(),

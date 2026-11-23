@@ -15,6 +15,7 @@ import {
 	uuidTestSuite,
 } from "../adapter-factory";
 import { compoundIndexTestSuite } from "../adapter-factory/compound-index-test-suite";
+import { emailLookupTestSuite } from "../adapter-factory/email-lookup-test-suite";
 
 const mysqlDB = createPool({
 	uri: "mysql://user:password@localhost:3307/better_auth",
@@ -142,6 +143,7 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
+		emailLookupTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),

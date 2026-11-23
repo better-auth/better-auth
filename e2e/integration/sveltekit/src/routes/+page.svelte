@@ -1,8 +1,12 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import type { PageProps } from "./$types";
 
 // biome-ignore lint/correctness/noUnusedVariables: used in the template
 let { data }: PageProps = $props();
+
+// Lets tests wait for hydration before they interact.
+onMount(() => document.body.classList.add("started"));
 </script>
 
 {#if data.userName}

@@ -144,6 +144,10 @@ Since this key is not subject to frequent changes, it can be cached indefinitely
 The key ID (`kid`) that was used to sign a JWT is included in the header of the token.
 In case a JWT with a different `kid` is received, it is recommended to fetch the JWKS again.
 
+When the OAuth provider signs tokens with the JWT plugin, verifiers in the same process as the auth server read the keys directly instead of requesting `/jwks`, unless `jwks.remoteUrl` is set. These include the provider's introspection, revocation, and end-session endpoints, `oauthProviderResourceClient(auth)`, and `requireMcpAuth`. The read skips the router, so hooks and rate limits on `/jwks` do not apply to it. Passing an explicit `jwksUrl` to `oauthProviderResourceClient(auth)` or `requireMcpAuth` fetches the keys over HTTP instead.
+
+Access tokens are JWTs only when the client requests a `resource` and `disableJwtPlugin` is off. Otherwise they are opaque, and have no signing keys to read. Verify opaque tokens by introspection with `remoteVerify` in `oauthProviderResourceClient` or `createMcpProtectedRequestHandler`; `requireMcpAuth` verifies JWT access tokens only.
+
 ```json
   {
     "keys": [
@@ -221,10 +225,13 @@ const payload = await validateToken(token)
 
 ### OAuth Provider Mode
 
-If you are making your system oAuth compliant (such as when utilizing the OIDC or MCP plugins), you **MUST** disable the `/token` endpoint (oAuth equivalent `/oauth2/token`) and disable setting the jwt header (oAuth equivalent `/oauth2/userinfo`).
+When you use the [OAuth Provider](/docs/plugins/oauth-provider) or [MCP](/docs/plugins/mcp) plugin, disable both ways the JWT plugin hands session JWTs to the browser: the `/token` endpoint and the `set-auth-jwt` header. OAuth clients get tokens from `/oauth2/token` and claims from `/oauth2/userinfo`, so they need neither.
+
+Session JWTs are signed with the same keys as OAuth access tokens, and by default they carry the auth server's URL as both `iss` and `aud`. A resource server that checks only signature, issuer, and audience can therefore accept a signed-in user's session JWT as an access token, without any client, consent, or scope. Disabling both paths removes that token from the browser. Resource servers should also reject tokens that are not OAuth access tokens; see [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
 
 betterAuth({
   disabledPaths: [
@@ -235,6 +242,8 @@ betterAuth({
   })]
 })
 ```
+
+In 1.7, the provider's own endpoints recognize a JWT access token by its `azp` claim, not by its `typ` header. Introspection, UserInfo, and `requireMcpAuth` from the [MCP](/docs/plugins/mcp) plugin accept a JWT signed with these keys that carries `azp` and an accepted `aud`; UserInfo also requires the `openid` scope and a `sub` that names an existing user. A JWT that your code signs with `auth.api.signJWT` and that carries `azp` can therefore work as an access token for that client, with the `scope` its payload names. Never sign a payload that carries `azp`, and remove `azp` from any payload built from input you did not write. The gap is closed in 1.8: introspection and UserInfo require `typ: "at+jwt"`, and so does `requireMcpAuth` unless you set `jwksUrl`. With `jwksUrl` set, `requireMcpAuth` still verifies the token locally and requires only `azp`.
 
 ### Remote JWKS Url
 
@@ -316,6 +325,7 @@ Implementers:
 * `remoteUrl` must be defined if using the `sign` function. This shall store all active keys, not just the current one.
 * If using localized approach, ensure server uses the latest private key when rotated. Depending on deployment, the server may need to be restarted.
 * When using remote approach, verify the payload is unchanged after transit. Use integrity validation like CRC32 or SHA256 checks if available.
+* Apply the optional `header` argument to the signed header. The OAuth provider passes `typ: "at+jwt"` for access tokens, and resource servers that check `typ`, as [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) requires, reject an access token without it. In 1.8, the provider's own endpoints reject it too, and so does `requireMcpAuth` unless you set `jwksUrl`.
 
 #### Localized Signing
 
@@ -328,13 +338,14 @@ jwt({
     },
   },
   jwt: {
-    sign: async (jwtPayload: JWTPayload) => {
+    sign: async (jwtPayload: JWTPayload, header) => {
       // this is pseudocode
       return await new SignJWT(jwtPayload)
         .setProtectedHeader({
           alg: "EdDSA",
           kid: process.env.currentKid,
           typ: "JWT",
+          ...header, // carries typ: "at+jwt" for OAuth access tokens
         })
         .sign(process.env.clientPrivateKey);
     },
@@ -355,9 +366,10 @@ jwt({
     },
   },
   jwt: {
-    sign: async (jwtPayload: JWTPayload) => {
+    sign: async (jwtPayload: JWTPayload, header) => {
       // this is pseudocode
-      const headers = JSON.stringify({ kid: '123', alg: 'ES256', typ: 'JWT' })
+      // `header` carries typ: "at+jwt" for OAuth access tokens
+      const headers = JSON.stringify({ kid: '123', alg: 'ES256', typ: 'JWT', ...header })
       const payload = JSON.stringify(jwtPayload)
       const encodedHeaders = Buffer.from(headers).toString('base64url')
       const encodedPayload = Buffer.from(payload).toString('base64url')
@@ -581,3 +593,7 @@ jwt({
   }
 })
 ```
+
+When a verifier in the same process reads the keys, `getJwks` receives the request being verified in `ctx.request` and `ctx.headers`. That applies to introspection, revocation, end-session, and `requireMcpAuth`. `oauthProviderResourceClient(auth)` does not pass its request to `getJwks`, so there `ctx` carries only the auth context in `ctx.context`.
+
+Because `getJwks` can return different keys for each request, such as per tenant, these verifiers do not cache its result. They call it on every verification, so cache inside your store if reads are expensive. Keep any such cache keyed by whatever your store selects keys by.

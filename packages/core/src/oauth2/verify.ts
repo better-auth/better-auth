@@ -13,6 +13,7 @@ import {
 	UnsecuredJWT,
 } from "jose";
 import { logger } from "../env";
+import { isAPIError } from "../utils/is-api-error";
 import type { DpopReplayStore } from "./dpop";
 import {
 	createInMemoryDpopReplayStore,
@@ -33,13 +34,27 @@ function isJoseInfrastructureError(error: joseErrors.JOSEError) {
 	return joseInfrastructureErrorCodes.has(error.code);
 }
 
+/**
+ * A presented access token that failed validation. RFC 6750 §3.1 reserves the
+ * `invalid_token` code for this case, and resource-server challenges read it
+ * to tell a failed token apart from a request that sent none.
+ */
+function invalidTokenError(message: string) {
+	return new APIError("UNAUTHORIZED", {
+		message,
+		error: "invalid_token",
+		error_description: message,
+	});
+}
+
 interface JwksCacheEntry {
 	/** Last fetched key set; absent until a fetch succeeds. */
 	jwks?: JSONWebKeySet | undefined;
 	/** Start time of the fetch that produced `jwks`. */
 	fetchedAt: number;
 	/**
-	 * Start time of the last refetch for a key missing from `jwks`, whatever
+	 * Completion timestamp of the last failed expired-cache refetch attempt, or
+	 * start time of the last refetch for a key missing from `jwks`, whatever
 	 * its outcome.
 	 */
 	refetchedAt: number;
@@ -91,6 +106,14 @@ const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
 // key. Bounds how often tokens naming made-up `kid` values make a source fetch.
 const JWKS_REFETCH_COOLDOWN_MS = 30 * 1000;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
+/**
+ * Maximum age an expired cached JWKS is trusted for verification when a refetch
+ * fails or times out, measured from the fetch that produced it. It is two cache
+ * lifetimes, the bound the client `jwks_uri` fallback in the OAuth provider
+ * uses. The window is a local choice and ignores the key set's `Cache-Control`.
+ * A key the issuer has already rotated out is accepted until the window ends.
+ */
+const JWKS_MAX_STALE_MS = 2 * JWKS_CACHE_TTL_MS;
 
 function getJwksCacheEntry<K>(
 	cache: {
@@ -237,7 +260,8 @@ export interface VerifyAccessTokenRemote {
 	/**
 	 * Forces remote verification of a token.
 	 * This ensures attached session (if applicable)
-	 * is also still active.
+	 * is also still active. The local JWT check is skipped, so
+	 * `verifyOptions.typ` is not enforced.
 	 */
 	force?: boolean;
 	/**
@@ -257,7 +281,10 @@ export interface VerifyAccessTokenRemote {
 }
 
 export interface VerifyAccessTokenOptions {
-	/** Verify options */
+	/**
+	 * Verify options. Introspection results are checked against these too,
+	 * except `typ`, which only the local JWT check can enforce.
+	 */
 	verifyOptions: JWTVerifyOptions &
 		Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
 	/** Scopes the token must satisfy. */
@@ -270,8 +297,21 @@ export interface VerifyAccessTokenOptions {
 		requiredScope: string,
 		grantedScopes: ReadonlySet<string>,
 	) => boolean;
-	/** Required to verify access token locally */
+	/** Verifies the access token locally against this JWKS, unless `jwksFetch` is set */
 	jwksUrl?: string;
+	/**
+	 * In-process key source used instead of `jwksUrl`, for a verifier running
+	 * in the same process as the authorization server.
+	 *
+	 * @internal
+	 */
+	jwksFetch?: () => Promise<JSONWebKeySet | undefined>;
+	/**
+	 * Stable object to cache the `jwksFetch` result under.
+	 *
+	 * @internal
+	 */
+	jwksCacheKey?: object;
 	/** If provided, can verify a token remotely */
 	remoteVerify?: VerifyAccessTokenRemote;
 }
@@ -330,12 +370,21 @@ export async function verifyJwsToken<PayloadType = JWTPayload>(
 	token: string,
 	opts: JwksFetchOptions & {
 		verifyOptions: JWTVerifyOptions;
+		/**
+		 * Verify against an expired cached key set when its refetch fails. Only
+		 * access-token verification sets it.
+		 */
+		allowStaleJwks?: boolean;
 	},
 ) {
 	if (token.split(".").length !== 3) {
 		throw new joseErrors.JWSInvalid("Invalid Compact JWS");
 	}
-	const resolved = await getJwksForVerification(token, opts);
+	const resolved = await getJwksForVerification(
+		token,
+		opts,
+		opts.allowStaleJwks,
+	);
 	let jwks = resolved.jwks;
 	// Retry with a newer cached key set, then await a fetch already in progress.
 	// Allow at most two retries.
@@ -371,7 +420,7 @@ export async function verifyJwsAccessToken(
 	},
 ) {
 	try {
-		const jwt = await verifyJwsToken(token, opts);
+		const jwt = await verifyJwsToken(token, { ...opts, allowStaleJwks: true });
 		// Return the JWT payload in introspection format
 		// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 		if (jwt.payload.azp) {
@@ -391,6 +440,7 @@ export async function getJwks(token: string, opts: JwksFetchOptions) {
 async function getJwksForVerification(
 	token: string,
 	opts: JwksFetchOptions,
+	allowStale = false,
 ): Promise<ResolvedJwks> {
 	// Attempt to decode the token and find a matching kid in jwks
 	let jwtHeaders: ProtectedHeaderParameters | undefined;
@@ -415,19 +465,87 @@ async function getJwksForVerification(
 				? getJwksCacheEntry(functionJwksCache, opts.jwksCacheKey)
 				: { fetchedAt: 0, refetchedAt: 0 };
 
-	const cached =
-		Date.now() - entry.fetchedAt < JWKS_CACHE_TTL_MS ? entry.jwks : undefined;
-	if (!cached) {
-		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
-	}
 	const refresh = (failed: JSONWebKeySet) =>
 		refreshJwks(entry, failed, opts.jwksFetch);
-	// Without `kid`, key selection is deferred to JOSE because RFC 7515 makes
-	// the header parameter optional.
-	if (!kid || cached.keys.some((jwk) => jwk.kid === kid)) {
-		return { jwks: cached, kid, refresh };
+	const resolveCached = async (
+		cached: JSONWebKeySet,
+	): Promise<ResolvedJwks> => {
+		// Without `kid`, key selection is deferred to JOSE because RFC 7515 makes
+		// the header parameter optional.
+		if (!kid || cached.keys.some((jwk) => jwk.kid === kid)) {
+			return { jwks: cached, kid, refresh };
+		}
+		return { jwks: (await refresh(cached)) ?? cached, kid };
+	};
+
+	const now = Date.now();
+	const cached =
+		now - entry.fetchedAt < JWKS_CACHE_TTL_MS ? entry.jwks : undefined;
+	if (cached) return resolveCached(cached);
+	if (!allowStale) {
+		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
 	}
-	return { jwks: (await refresh(cached)) ?? cached, kid };
+
+	// The expired set in the entry while it is within the stale window at `at`,
+	// and whether it can verify this token. A set is cached without validation,
+	// so its entries are checked before `kid` is read from them.
+	const getStaleJwks = (at: number) => {
+		const stale = entry.jwks;
+		if (
+			!stale ||
+			!Array.isArray(stale.keys) ||
+			at - entry.fetchedAt >= JWKS_MAX_STALE_MS
+		) {
+			return undefined;
+		}
+		const canUse =
+			!kid ||
+			stale.keys.some(
+				(jwk) => jwk && typeof jwk === "object" && jwk.kid === kid,
+			);
+		return { stale, canUse };
+	};
+
+	// Only while serving a stale set does a failed refresh leave a token
+	// without `kid` with its own verification error. With a fresh set, the
+	// failure stays an outage error.
+	const refreshStale = async (failed: JSONWebKeySet) => {
+		try {
+			return await refreshJwks(entry, failed, opts.jwksFetch);
+		} catch {
+			return undefined;
+		}
+	};
+
+	const expired = getStaleJwks(now);
+	if (expired && now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) {
+		if (expired.canUse) {
+			return { jwks: expired.stale, kid, refresh: refreshStale };
+		}
+		// The set is not known to lack the key, because the refetch that
+		// could tell failed, so this is an outage rather than an invalid
+		// token. A refetch still in flight settles it, and this joins it.
+		if (!isFetching(entry, now)) throw new Error("JWKS fetch failed");
+	}
+
+	try {
+		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
+	} catch (error) {
+		const failedAt = Date.now();
+		entry.refetchedAt = failedAt;
+		// An earlier fetch that outlived its wait can land while this one fails.
+		// Its set replaces the one read above, which may still hold a key the
+		// issuer has since dropped, so the entry is read again and each set is
+		// judged by the time of its own fetch.
+		if (entry.jwks && failedAt - entry.fetchedAt < JWKS_CACHE_TTL_MS) {
+			return resolveCached(entry.jwks);
+		}
+		const latest = getStaleJwks(failedAt);
+		if (latest?.canUse) {
+			return { jwks: latest.stale, kid, refresh: refreshStale };
+		}
+		throw error;
+	}
 }
 
 async function verifyAccessTokenPayload(
@@ -436,10 +554,12 @@ async function verifyAccessTokenPayload(
 ) {
 	let payload: JWTPayload | undefined;
 	// Locally verify
-	if (opts.jwksUrl && !opts?.remoteVerify?.force) {
+	const jwksFetch = opts.jwksFetch ?? opts.jwksUrl;
+	if (jwksFetch && !opts?.remoteVerify?.force) {
 		try {
 			payload = await verifyJwsAccessToken(token, {
-				jwksFetch: opts.jwksUrl,
+				jwksFetch,
+				jwksCacheKey: opts.jwksCacheKey,
 				verifyOptions: opts.verifyOptions,
 			});
 		} catch (error) {
@@ -447,16 +567,12 @@ async function verifyAccessTokenPayload(
 				if (error.name === "TypeError" || error.name === "JWSInvalid") {
 					// likely an opaque token (continue)
 				} else if (error instanceof joseErrors.JWTExpired) {
-					throw new APIError("UNAUTHORIZED", {
-						message: "token expired",
-					});
+					throw invalidTokenError("token expired");
 				} else if (error instanceof joseErrors.JOSEError) {
 					if (isJoseInfrastructureError(error)) {
 						throw error;
 					}
-					throw new APIError("UNAUTHORIZED", {
-						message: "invalid access token",
-					});
+					throw invalidTokenError("invalid access token");
 				} else {
 					throw error;
 				}
@@ -494,10 +610,7 @@ async function verifyAccessTokenPayload(
 			throw new APIError("INTERNAL_SERVER_ERROR", {
 				message: "introspection failed",
 			});
-		if (!introspect.active)
-			throw new APIError("UNAUTHORIZED", {
-				message: "token inactive",
-			});
+		if (!introspect.active) throw invalidTokenError("token inactive");
 		// Verifies payload using verify options (token valid through introspect).
 		// Audience is enforced by default: when `verifyOptions.audience` is set
 		// but the introspection response omits `aud` (or it mismatches),
@@ -505,26 +618,33 @@ async function verifyAccessTokenPayload(
 		// token issued for a different resource/client on the same issuer would
 		// also pass. Only drop the audience check when the caller has explicitly
 		// opted in via `remoteVerify.allowMissingAudience`.
+		// `typ` checks the JWT header (RFC 9068 §4). An introspection response is
+		// a claim set with no header, so only the local check can enforce it.
 		try {
 			const unsecuredJwt = new UnsecuredJWT(introspect).encode();
-			const { audience: _audience, ...verifyOptionsNoAudience } =
-				opts.verifyOptions;
+			const { typ: _typ, audience, ...claimOptions } = opts.verifyOptions;
 			const skipAudience =
 				!introspect.aud && opts.remoteVerify.allowMissingAudience === true;
 			const verify = UnsecuredJWT.decode(
 				unsecuredJwt,
-				skipAudience ? verifyOptionsNoAudience : opts.verifyOptions,
+				skipAudience ? claimOptions : { ...claimOptions, audience },
 			);
 			payload = verify.payload;
 		} catch (error) {
+			if (error instanceof joseErrors.JWTExpired) {
+				throw invalidTokenError("token expired");
+			}
+			if (
+				error instanceof joseErrors.JOSEError &&
+				!isJoseInfrastructureError(error)
+			) {
+				throw invalidTokenError("invalid access token");
+			}
 			throw new Error(error as unknown as string);
 		}
 	}
 
-	if (!payload)
-		throw new APIError("UNAUTHORIZED", {
-			message: `no token payload`,
-		});
+	if (!payload) throw invalidTokenError("no token payload");
 
 	const grantedScopes = parseGrantedScopes(payload.scope);
 
@@ -591,11 +711,7 @@ function parseGrantedScopes(scope: unknown): ReadonlySet<string> {
 		scope.length === 0 ||
 		scope.split(" ").some((token) => !isOAuthScopeToken(token))
 	) {
-		throw new APIError("UNAUTHORIZED", {
-			message: "access token scope claim is invalid",
-			error: "invalid_token",
-			error_description: "access token scope claim is invalid",
-		});
+		throw invalidTokenError("access token scope claim is invalid");
 	}
 	return new Set(scope.split(" "));
 }
@@ -629,7 +745,7 @@ export function createInsufficientScopeError(
  */
 export function isInsufficientScopeError(error: unknown): error is APIError {
 	if (
-		!(error instanceof APIError) ||
+		!isAPIError(error) ||
 		!insufficientScopeErrors.has(error) ||
 		error.status !== "FORBIDDEN"
 	)

@@ -4,7 +4,7 @@ import { runClient, setup } from "./utils";
 const { ref, start, clean } = setup();
 test.describe("cross domain", () => {
 	test.beforeEach(async () => start());
-	test.afterEach(async () => clean());
+	test.afterEach(async ({}, testInfo) => clean(testInfo));
 
 	test("should work across domains", async () => {
 		const browser = await chromium.launch({

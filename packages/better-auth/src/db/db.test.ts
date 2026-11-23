@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { twoFactor } from "../plugins/two-factor";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
 
@@ -146,6 +147,46 @@ describe("db", async () => {
 			},
 		});
 		expect(session?.user.email).toBe("test@email.com");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12122
+	 */
+	it("should keep plugin schema overrides local to each plugin instance", () => {
+		const member = twoFactor({
+			schema: {
+				twoFactor: {
+					modelName: "memberTwoFactor",
+					fields: {
+						secret: "memberSecret",
+					},
+				},
+			},
+		});
+		twoFactor({
+			schema: {
+				twoFactor: {
+					modelName: "staffTwoFactor",
+					fields: {
+						secret: "staffSecret",
+					},
+				},
+			},
+		});
+		const plain = twoFactor();
+
+		expect(member.schema.twoFactor).toMatchObject({
+			modelName: "memberTwoFactor",
+			fields: {
+				secret: {
+					fieldName: "memberSecret",
+				},
+			},
+		});
+		expect(plain.schema.twoFactor).not.toHaveProperty("modelName");
+		expect(plain.schema.twoFactor.fields.secret).not.toHaveProperty(
+			"fieldName",
+		);
 	});
 
 	it("delete hooks", async () => {

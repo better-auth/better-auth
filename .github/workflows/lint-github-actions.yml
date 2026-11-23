@@ -20,4 +20,4 @@ jobs:
   lint:
     permissions:
       contents: read
-    uses: better-auth/shared-workflows/.github/workflows/lint-github-actions.yml@08e5520e7a829b03bee1152913682b67d2ba44b1
+    uses: better-auth/shared-workflows/.github/workflows/lint-github-actions.yml@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1

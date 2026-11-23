@@ -1,23 +1,23 @@
-import { getEnvVar, isTest } from "@better-auth/core/env";
+import { getEnvVar, getRuntimeName, isTest } from "@better-auth/core/env";
 import { isCI } from "./detect-system-info";
 
 export function detectRuntime() {
-	// @ts-expect-error: TS doesn't know about Deno global
-	if (typeof Deno !== "undefined") {
+	const name = getRuntimeName();
+	if (name === "deno") {
 		// @ts-expect-error: TS doesn't know about Deno global
 		const denoVersion = Deno?.version?.deno ?? null;
-		return { name: "deno", version: denoVersion };
+		return { name, version: denoVersion };
 	}
 
-	if (typeof Bun !== "undefined") {
+	if (name === "bun") {
 		const bunVersion = Bun?.version ?? null;
-		return { name: "bun", version: bunVersion };
+		return { name, version: bunVersion };
 	}
 
-	if (typeof process !== "undefined" && process?.versions?.node) {
-		return { name: "node", version: process.versions.node ?? null };
+	if (name === "node") {
+		return { name, version: process.versions.node ?? null };
 	}
-	return { name: "edge", version: null };
+	return { name: name ?? "edge", version: null };
 }
 
 export function detectEnvironment() {

@@ -61,6 +61,7 @@ export async function sendVerificationEmailFn(
 		user.email,
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
+		{ userId: user.id },
 	);
 	const callbackURL = ctx.body.callbackURL
 		? encodeURIComponent(ctx.body.callbackURL)
@@ -319,17 +320,25 @@ export const verifyEmail = createAuthEndpoint(
 			email: z.email(),
 			updateTo: z.string().optional(),
 			requestType: z.string().optional(),
+			userId: z.string().optional(),
 		});
 		const parsed = schema.parse(jwt.payload);
-		const user = await ctx.context.internalAdapter.findUserByEmail(
-			parsed.email,
-		);
-		if (!user) {
-			return redirectOnError(BASE_ERROR_CODES.USER_NOT_FOUND);
-		}
 		if (parsed.updateTo) {
+			// A released address must not transfer links to its next owner.
+			if (!parsed.userId) {
+				return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
+			}
+			const boundUser = await ctx.context.internalAdapter.findUserById(
+				parsed.userId,
+			);
+			if (!boundUser) {
+				return redirectOnError(BASE_ERROR_CODES.USER_NOT_FOUND);
+			}
+			if (boundUser.email.toLowerCase() !== parsed.email) {
+				return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
+			}
 			const session = await getSessionFromCtx(ctx);
-			if (session && session.user.email !== parsed.email) {
+			if (session && session.user.id !== boundUser.id) {
 				return redirectOnError(BASE_ERROR_CODES.INVALID_USER);
 			}
 			switch (parsed.requestType) {
@@ -342,7 +351,10 @@ export const verifyEmail = createAuthEndpoint(
 						parsed.email,
 						parsed.updateTo,
 						ctx.context.options.emailVerification?.expiresIn,
-						{ requestType: "change-email-verification" },
+						{
+							requestType: "change-email-verification",
+							userId: boundUser.id,
+						},
 					);
 					const updateCallbackURL = ctx.query.callbackURL
 						? encodeURIComponent(ctx.query.callbackURL)
@@ -352,7 +364,10 @@ export const verifyEmail = createAuthEndpoint(
 						await ctx.context.runInBackgroundOrAwait(
 							ctx.context.options.emailVerification.sendVerificationEmail(
 								{
-									user: { ...user.user, email: parsed.updateTo },
+									user: {
+										...boundUser,
+										email: parsed.updateTo,
+									},
 									url,
 									token: newToken,
 								},
@@ -369,41 +384,37 @@ export const verifyEmail = createAuthEndpoint(
 				 * User clicks verification -> updates email
 				 */
 				case "change-email-verification": {
-					let activeSession = session;
-					if (!activeSession) {
-						const newSession = await ctx.context.internalAdapter.createSession(
-							user.user.id,
-						);
-						if (!newSession) {
-							throw APIError.from(
-								"INTERNAL_SERVER_ERROR",
-								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-							);
-						}
-						activeSession = {
-							session: newSession,
-							user: user.user,
-						};
-					}
-					const updatedUser =
-						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
+					// A requester who never proved the current address does not get
+					// a verified address from the change.
+					const emailVerified = boundUser.emailVerified;
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						boundUser.id,
+						{
 							email: parsed.updateTo,
-							emailVerified: true,
-						});
-					if (ctx.context.options.emailVerification?.afterEmailVerification) {
+							emailVerified,
+						},
+					);
+					if (
+						emailVerified &&
+						ctx.context.options.emailVerification?.afterEmailVerification
+					) {
 						await ctx.context.options.emailVerification.afterEmailVerification(
 							updatedUser,
 							ctx.request,
 						);
 					}
-					await setSessionCookie(ctx, {
-						session: activeSession.session,
-						user: {
-							...activeSession.user,
-							email: parsed.updateTo,
-							emailVerified: true,
-						},
-					});
+					// The link proves the new inbox, not the account: only refresh an
+					// existing session, never start one.
+					if (session) {
+						await setSessionCookie(ctx, {
+							session: session.session,
+							user: {
+								...session.user,
+								email: parsed.updateTo,
+								emailVerified,
+							},
+						});
+					}
 					if (ctx.query.callbackURL) {
 						throw ctx.redirect(ctx.query.callbackURL);
 					}
@@ -419,30 +430,19 @@ export const verifyEmail = createAuthEndpoint(
 				 * - updates email immediately
 				 */
 				default: {
-					let activeSession = session;
-					if (!activeSession) {
-						const newSession = await ctx.context.internalAdapter.createSession(
-							user.user.id,
-						);
-						if (!newSession) {
-							throw APIError.from(
-								"INTERNAL_SERVER_ERROR",
-								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-							);
-						}
-						activeSession = {
-							session: newSession,
-							user: user.user,
-						};
-					}
-					const updatedUser =
-						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						boundUser.id,
+						{
 							email: parsed.updateTo,
 							emailVerified: false,
-						});
+						},
+					);
 					const newToken = await createEmailVerificationToken(
 						ctx.context.secret,
 						parsed.updateTo,
+						undefined,
+						undefined,
+						{ userId: boundUser.id },
 					);
 					const updateCallbackURL = ctx.query.callbackURL
 						? encodeURIComponent(ctx.query.callbackURL)
@@ -459,14 +459,16 @@ export const verifyEmail = createAuthEndpoint(
 							),
 						);
 					}
-					await setSessionCookie(ctx, {
-						session: activeSession.session,
-						user: {
-							...activeSession.user,
-							email: parsed.updateTo,
-							emailVerified: false,
-						},
-					});
+					if (session) {
+						await setSessionCookie(ctx, {
+							session: session.session,
+							user: {
+								...session.user,
+								email: parsed.updateTo,
+								emailVerified: false,
+							},
+						});
+					}
 					if (ctx.query.callbackURL) {
 						throw ctx.redirect(ctx.query.callbackURL);
 					}
@@ -476,6 +478,17 @@ export const verifyEmail = createAuthEndpoint(
 					});
 				}
 			}
+		}
+		const user = await ctx.context.internalAdapter.findUserByEmail(
+			parsed.email,
+		);
+		if (!user) {
+			return redirectOnError(BASE_ERROR_CODES.USER_NOT_FOUND);
+		}
+		// A link issued to an earlier owner of this address must not verify the
+		// current one. Links without a user id predate the binding.
+		if (parsed.userId && parsed.userId !== user.user.id) {
+			return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		if (user.user.emailVerified) {
 			if (ctx.query.callbackURL) {

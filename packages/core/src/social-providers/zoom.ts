@@ -222,5 +222,6 @@ export const zoom = (userOptions: ZoomOptions) => {
 				},
 			};
 		},
+		options,
 	} satisfies OAuthProvider<ZoomProfile>;
 };

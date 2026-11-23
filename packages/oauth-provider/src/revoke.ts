@@ -1,14 +1,15 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
+import { isAPIError } from "better-auth/api";
 import {
 	getJwks,
 	stripAccessTokenAuthorizationScheme,
 } from "better-auth/oauth2";
 import { APIError } from "better-call";
-import type { JSONWebKeySet, JWTPayload } from "jose";
+import type { JWTPayload } from "jose";
 import { createLocalJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import { isAudienceClaimAllowed } from "./resources";
-import { decodeRefreshToken, invalidateRefreshFamily } from "./token";
+import { decodeRefreshTokenForLookup, invalidateRefreshFamily } from "./token";
 import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
@@ -16,8 +17,11 @@ import type {
 	Scope,
 } from "./types";
 import {
+	challengeHeaders,
 	destructureCredentials,
 	extractClientCredentials,
+	getAuthEndpointUrl,
+	getJwksSource,
 	getJwtPlugin,
 	getStoredToken,
 	isInvalidJwtError,
@@ -56,8 +60,7 @@ async function revokeJwtAccessToken(
 			error: "invalid_request",
 		});
 	}
-	const jwtPlugin = getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin.options;
+	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 
 	// Verify signature + issuer first, then validate `aud` against the OAuth
 	// resource model. Do not pass jose's `audience` option here: access-token
@@ -65,19 +68,7 @@ async function revokeJwtAccessToken(
 	// audience.
 	let jwtPayload: JWTPayload & { azp?: string };
 	try {
-		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
-			? jwtPluginOptions.jwks.remoteUrl
-			: async (): Promise<JSONWebKeySet | undefined> => {
-					const jwksRes = await jwtPlugin.endpoints.getJwks(ctx);
-					// @ts-expect-error response is a JSONWebKeySet but within the response field
-					return jwksRes?.response as JSONWebKeySet | undefined;
-				};
-		const jwks = await getJwks(token, {
-			jwksFetch,
-			// The plugin instance is stable across requests, so the key set
-			// fetched by the per-request closure above is cached under it.
-			jwksCacheKey: jwtPlugin,
-		});
+		const jwks = await getJwks(token, getJwksSource(ctx));
 		const verified = await jwtVerify<JWTPayload & { azp?: string }>(
 			token,
 			createLocalJWKSet(jwks),
@@ -215,7 +206,11 @@ async function revokeRefreshToken(
 		});
 	}
 	if (refreshToken.revoked) {
-		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+		// Only the owner can replay a token. A token from another client must not
+		// delete the presenting client's own grants.
+		if (refreshToken.clientId === clientId) {
+			await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+		}
 		throw new APIError("BAD_REQUEST", {
 			error_description: "refresh token revoked",
 			error: "invalid_request",
@@ -273,7 +268,7 @@ async function revokeAccessToken(
 	try {
 		return await revokeJwtAccessToken(ctx, opts, token);
 	} catch (err) {
-		if (err instanceof APIError) {
+		if (isAPIError(err)) {
 			// A confirmed JWT access token cannot be revoked: surface that rather
 			// than falling through to the opaque-token lookup.
 			if (err.body?.error === "unsupported_token_type") {
@@ -289,7 +284,7 @@ async function revokeAccessToken(
 	try {
 		return await revokeOpaqueAccessToken(ctx, opts, token, clientId);
 	} catch (err) {
-		if (err instanceof APIError) {
+		if (isAPIError(err)) {
 			// nothing
 		} else if (err instanceof Error) {
 			throw err;
@@ -324,7 +319,7 @@ export async function revokeEndpoint(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/revoke`,
+		getAuthEndpointUrl(ctx, "/oauth2/revoke"),
 	);
 	const {
 		clientId: client_id,
@@ -334,10 +329,14 @@ export async function revokeEndpoint(
 	} = destructureCredentials(credentials);
 
 	if (!client_id) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "missing required credentials",
-			error: "invalid_client",
-		});
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				error_description: "missing required credentials",
+				error: "invalid_client",
+			},
+			challengeHeaders("Basic"),
+		);
 	}
 
 	// Check token
@@ -368,7 +367,7 @@ export async function revokeEndpoint(
 			try {
 				return await revokeAccessToken(ctx, opts, client.clientId, token);
 			} catch (error) {
-				if (error instanceof APIError) {
+				if (isAPIError(error)) {
 					if (
 						token_type_hint === "access_token" ||
 						error.body?.error === "unsupported_token_type"
@@ -385,7 +384,7 @@ export async function revokeEndpoint(
 
 		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
 			try {
-				const refreshToken = await decodeRefreshToken(opts, token);
+				const refreshToken = await decodeRefreshTokenForLookup(opts, token);
 				return await revokeRefreshToken(
 					ctx,
 					opts,
@@ -393,7 +392,7 @@ export async function revokeEndpoint(
 					client.clientId,
 				);
 			} catch (error) {
-				if (error instanceof APIError) {
+				if (isAPIError(error)) {
 					if (token_type_hint === "refresh_token") {
 						throw error;
 					} // else continue
@@ -410,7 +409,7 @@ export async function revokeEndpoint(
 			error: "invalid_request",
 		});
 	} catch (error) {
-		if (error instanceof APIError) {
+		if (isAPIError(error)) {
 			// RFC 7009 §2.2.1: an explicit protocol error (unsupported_token_type)
 			// must surface; an unknown or already-invalid token still succeeds.
 			if (error.body?.error === "unsupported_token_type") {

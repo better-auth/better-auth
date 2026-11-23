@@ -7,6 +7,7 @@ import { kAPIErrorHeaderSymbol } from "better-call";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { init } from "../context/init";
+import { parseSetCookieHeader } from "../cookies";
 import { getTestInstance } from "../test-utils/test-instance";
 import { isAPIError } from "../utils/is-api-error";
 import { toAuthEndpoints } from "./to-auth-endpoints";
@@ -1421,6 +1422,55 @@ describe("before hook response headers", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8789
+ */
+describe("before hook response headers without short-circuit", async () => {
+	const endpoints = {
+		ok: createAuthEndpoint("/ok", { method: "GET" }, async () => ({
+			ok: true,
+		})),
+		overlap: createAuthEndpoint("/overlap", { method: "GET" }, async (c) => {
+			c.setHeader("x-shared", "handler");
+			c.setCookie("shared", "handler");
+			return { ok: true };
+		}),
+	};
+	const authContext = init({
+		hooks: {
+			before: createAuthMiddleware(async (c) => {
+				c.setHeader("x-before", "yes");
+				c.setHeader("x-shared", "before");
+				c.setCookie("from_before", "1");
+				c.setCookie("shared", "before");
+			}),
+		},
+	});
+	const api = toAuthEndpoints(endpoints, authContext);
+
+	it("keeps headers and cookies a before hook set on the response", async () => {
+		const response = await api.ok({ asResponse: true });
+		expect(response.status).toBe(200);
+		expect(response.headers.get("x-before")).toBe("yes");
+		expect(response.headers.get("set-cookie")).toContain("from_before=1");
+	});
+
+	it("keeps headers and cookies a before hook set with returnHeaders", async () => {
+		const { headers } = await api.ok({ returnHeaders: true });
+		expect(headers.get("x-before")).toBe("yes");
+		expect(headers.get("set-cookie")).toContain("from_before=1");
+	});
+
+	it("lets the handler win when it sets the same header or cookie", async () => {
+		const { headers } = await api.overlap({ returnHeaders: true });
+		expect(headers.get("x-before")).toBe("yes");
+		expect(headers.get("x-shared")).toBe("handler");
+		const cookies = parseSetCookieHeader(headers.get("set-cookie") ?? "");
+		expect(cookies.get("from_before")?.value).toBe("1");
+		expect(cookies.get("shared")?.value).toBe("handler");
+	});
+});
+
 describe("after hook error headers", async () => {
 	const endpoints = {
 		ok: createAuthEndpoint("/ok", { method: "GET" }, async () => ({
@@ -1473,5 +1523,61 @@ describe("before hook request headers", async () => {
 		// undefined; the merge must not throw.
 		const res = await api.echoHeaders();
 		expect(res).toMatchObject({ injected: "yes" });
+	});
+});
+
+/**
+ * `Access-Control-Expose-Headers` is a list, so a thrown challenge that
+ * exposes `WWW-Authenticate` must keep the names a hook or the endpoint
+ * already exposed.
+ * @see https://fetch.spec.whatwg.org/#http-access-control-expose-headers
+ */
+describe("Access-Control-Expose-Headers on APIError", async () => {
+	const challenge = {
+		"WWW-Authenticate": "Bearer",
+		"Access-Control-Expose-Headers": "WWW-Authenticate",
+	};
+	const endpoints = {
+		exposeThenThrow: createAuthEndpoint(
+			"/expose-then-throw",
+			{ method: "GET" },
+			async (c) => {
+				c.setHeader("Access-Control-Expose-Headers", "X-Request-Id");
+				throw new APIError("UNAUTHORIZED", { message: "no token" }, challenge);
+			},
+		),
+		throwAfterHook: createAuthEndpoint(
+			"/throw-after-hook",
+			{ method: "GET" },
+			async () => {
+				throw new APIError("UNAUTHORIZED", { message: "no token" }, challenge);
+			},
+		),
+	};
+	const authContext = init({
+		hooks: {
+			before: createAuthMiddleware(async (c) => {
+				if (c.path === "/throw-after-hook") {
+					c.setHeader("Access-Control-Expose-Headers", "X-Request-Id");
+				}
+			}),
+		},
+	});
+	const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+	it("keeps the names the endpoint exposed before it threw", async () => {
+		const response = await authEndpoints.exposeThenThrow({ asResponse: true });
+		expect(response.headers.get("WWW-Authenticate")).toBe("Bearer");
+		expect(response.headers.get("access-control-expose-headers")).toBe(
+			"X-Request-Id, WWW-Authenticate",
+		);
+	});
+
+	it("keeps the names a before hook exposed", async () => {
+		const response = await authEndpoints.throwAfterHook({ asResponse: true });
+		expect(response.headers.get("WWW-Authenticate")).toBe("Bearer");
+		expect(response.headers.get("access-control-expose-headers")).toBe(
+			"X-Request-Id, WWW-Authenticate",
+		);
 	});
 });

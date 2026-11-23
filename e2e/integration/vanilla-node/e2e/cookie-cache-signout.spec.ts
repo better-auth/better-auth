@@ -16,7 +16,7 @@ const { ref, start, clean } = setup({
 
 test.describe("sign-out with cookieCache", () => {
 	test.beforeEach(async () => start());
-	test.afterEach(async () => clean());
+	test.afterEach(async ({}, testInfo) => clean(testInfo));
 
 	test("should clear both session_token and session_data cookies on sign-out", async ({
 		page,

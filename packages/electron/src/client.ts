@@ -1,8 +1,8 @@
 import { Buffer } from "node:buffer";
+import { isDevelopment, isTest } from "@better-auth/core/env";
 import { base64 } from "@better-auth/utils/base64";
 import type { BetterFetch } from "@better-fetch/fetch";
 import type { BetterAuthClientPlugin, ClientStore } from "better-auth";
-import { isDevelopment, isTest } from "better-auth";
 import electron from "electron";
 import type {
 	ElectronAuthenticateOptions,

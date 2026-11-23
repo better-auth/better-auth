@@ -19,17 +19,44 @@ import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
 
 const cleanupSet = new Set<Function>();
 
+// One MongoDB database per test file: Vitest loads this module once per file,
+// so files running in parallel cannot drop each other's data. Instances in one
+// file share it, as they share the file's `afterAll` cleanup.
+const mongodbDatabase = `ba_test_${randomUUID().replaceAll("-", "_")}`;
+
 type CurrentUserContext = {
 	headers: Headers;
 };
 const currentUserContextStorage = new AsyncLocalStorage<CurrentUserContext>();
 
-afterAll(async () => {
+/**
+ * Runs the cleanup of every instance this file created, such as dropping its
+ * database. Each cleanup runs once, even if it throws, since it also closes
+ * the connection a retry would need. A failing cleanup does not stop the
+ * others; afterwards this rethrows its error, or an `AggregateError` when
+ * several fail.
+ *
+ * @internal
+ */
+export async function cleanupTestInstances() {
+	const errors: unknown[] = [];
 	for (const cleanup of cleanupSet) {
-		await cleanup();
 		cleanupSet.delete(cleanup);
+		try {
+			await cleanup();
+		} catch (error) {
+			errors.push(error);
+		}
 	}
-});
+	if (errors.length === 1) {
+		throw errors[0];
+	}
+	if (errors.length > 1) {
+		throw new AggregateError(errors, "Failed to clean up test instances");
+	}
+}
+
+afterAll(cleanupTestInstances);
 
 const TEST_PASSWORD_HASH_PREFIX = "$test$sha256$";
 
@@ -70,6 +97,12 @@ export async function getTestInstance<
 			? `ba_test_${randomUUID().replaceAll("-", "_")}`
 			: undefined;
 
+	const mysqlServerURL = "mysql://root:root_password@127.0.0.1:3306";
+	const mysqlDatabase =
+		testWith === "mysql"
+			? `ba_test_${randomUUID().replaceAll("-", "_")}`
+			: undefined;
+
 	const quotePostgresIdentifier = (identifier: string) =>
 		`"${identifier.replaceAll('"', '""')}"`;
 
@@ -103,30 +136,38 @@ export async function getTestInstance<
 
 	async function getMysql() {
 		const { Kysely, MysqlDialect } = await import("kysely");
-		const { createPool } = await import("mysql2/promise");
+		// Kysely's MysqlDialect drives mysql2's callback API; a mysql2/promise
+		// pool never invokes those callbacks, so every query hangs.
+		const { createConnection, createPool } = await import("mysql2");
+		const admin = createConnection(mysqlServerURL).promise();
+		try {
+			await admin.query(`CREATE DATABASE \`${mysqlDatabase}\``);
+		} finally {
+			await admin.end();
+		}
 		return new Kysely({
 			dialect: new MysqlDialect({
-				pool: createPool("mysql://user:password@localhost:3306/better_auth"),
+				pool: createPool(`${mysqlServerURL}/${mysqlDatabase}`),
 			}),
 		});
 	}
 
-	async function mongodbClient() {
+	async function getMongodb() {
 		const { MongoClient } = await import("mongodb");
-		const dbClient = async (connectionString: string, dbName: string) => {
-			// Fail fast in CI/local when Mongo is unreachable instead of hanging
-			// until Vitest's default 10s testTimeout (driver default is 30s).
-			const client = new MongoClient(connectionString, {
-				serverSelectionTimeoutMS: 2000,
-				connectTimeoutMS: 2000,
-			});
-			await client.connect();
-			const db = client.db(dbName);
-			return db;
-		};
-		const db = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
-		return db;
+		// Fail fast in CI/local when Mongo is unreachable instead of hanging
+		// until Vitest's default 10s testTimeout (driver default is 30s).
+		const client = new MongoClient("mongodb://127.0.0.1:27017", {
+			serverSelectionTimeoutMS: 2000,
+			connectTimeoutMS: 2000,
+		});
+		await client.connect();
+		return { client, db: client.db(mongodbDatabase) };
 	}
+
+	const mongodb = testWith === "mongodb" ? await getMongodb() : undefined;
+	const postgres = testWith === "postgres" ? await getPostgres() : undefined;
+	const mysql = testWith === "mysql" ? await getMysql() : undefined;
+	const sqlite = testWith === "sqlite" ? await getSqlite() : undefined;
 
 	const opts = {
 		socialProviders: {
@@ -140,25 +181,23 @@ export async function getTestInstance<
 			},
 		},
 		secret: "better-auth-secret-that-is-long-enough-for-validation-test",
-		database:
-			testWith === "postgres"
-				? {
-						db: await getPostgres(),
-						type: "postgres",
-						transaction: config?.transaction,
-					}
-				: testWith === "mongodb"
-					? await Promise.all([
-							mongodbClient(),
-							await import("../adapters/mongodb-adapter"),
-						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
-					: testWith === "mysql"
-						? {
-								db: await getMysql(),
-								type: "mysql",
-								transaction: config?.transaction,
-							}
-						: await getSqlite(),
+		database: postgres
+			? {
+					db: postgres,
+					type: "postgres",
+					transaction: config?.transaction,
+				}
+			: mongodb
+				? await import("../adapters/mongodb-adapter").then(
+						({ mongodbAdapter }) => mongodbAdapter(mongodb.db),
+					)
+				: mysql
+					? {
+							db: mysql,
+							type: "mysql",
+							transaction: config?.transaction,
+						}
+					: sqlite,
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -172,6 +211,54 @@ export async function getTestInstance<
 			level: "debug",
 		},
 	} satisfies BetterAuthOptions;
+
+	// Register before migrations and test-user setup so a failed setup still
+	// drops the database it created.
+	const cleanup = async () => {
+		if (mongodb) {
+			try {
+				await mongodb.db.dropDatabase();
+			} finally {
+				await mongodb.client.close();
+			}
+			return;
+		}
+		if (postgres) {
+			try {
+				if (postgresSchema) {
+					await sql
+						.raw(
+							`DROP SCHEMA IF EXISTS ${quotePostgresIdentifier(
+								postgresSchema,
+							)} CASCADE`,
+						)
+						.execute(postgres);
+				} else {
+					await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
+						postgres,
+					);
+				}
+			} finally {
+				await postgres.destroy();
+			}
+			return;
+		}
+
+		if (mysql) {
+			try {
+				await sql
+					.raw(`DROP DATABASE IF EXISTS \`${mysqlDatabase}\``)
+					.execute(mysql);
+			} finally {
+				await mysql.destroy();
+			}
+			return;
+		}
+		if (sqlite) {
+			sqlite.close();
+		}
+	};
+	cleanupSet.add(cleanup);
 
 	const authOptions = {
 		baseURL: "http://localhost:" + (config?.port || 3000),
@@ -229,50 +316,6 @@ export async function getTestInstance<
 	}
 
 	await createTestUser();
-
-	const cleanup = async () => {
-		if (testWith === "mongodb") {
-			const db = await mongodbClient();
-			await db.dropDatabase();
-			return;
-		}
-		if (testWith === "postgres") {
-			const postgres = await getPostgres();
-			if (postgresSchema) {
-				await sql
-					.raw(
-						`DROP SCHEMA IF EXISTS ${quotePostgresIdentifier(
-							postgresSchema,
-						)} CASCADE`,
-					)
-					.execute(postgres);
-			} else {
-				await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
-					postgres,
-				);
-			}
-			await postgres.destroy();
-			return;
-		}
-
-		if (testWith === "mysql") {
-			const mysql = await getMysql();
-			await sql`SET FOREIGN_KEY_CHECKS = 0;`.execute(mysql);
-			const tables = await mysql.introspection.getTables();
-			for (const table of tables) {
-				// @ts-expect-error
-				await mysql.deleteFrom(table.name).execute();
-			}
-			await sql`SET FOREIGN_KEY_CHECKS = 1;`.execute(mysql);
-			return;
-		}
-		if (testWith === "sqlite") {
-			const sqlite = await getSqlite();
-			sqlite.close();
-			return;
-		}
-	};
-	cleanupSet.add(cleanup);
 
 	const customFetchImpl = async (
 		url: string | URL | Request,

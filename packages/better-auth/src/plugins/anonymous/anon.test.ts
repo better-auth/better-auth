@@ -612,6 +612,7 @@ describe("anonymous", async () => {
 					options: {},
 					secret: "secret",
 					setNewSession: vi.fn(),
+					getPlugin: () => null,
 				},
 				headers: new Headers(),
 				query: {},
@@ -728,6 +729,10 @@ describe("anonymous linking through generic oauth (Expo)", async () => {
 
 	beforeAll(async () => {
 		await server.issuer.keys.generate("RS256");
+		// Only the ID token has an audience, so align its subject with UserInfo.
+		server.service.on("beforeTokenSigning", (token) => {
+			if (token.payload.aud) token.payload.sub = "anon-generic-oauth";
+		});
 	});
 
 	server.service.on("beforeUserinfo", (userInfoResponse) => {
@@ -778,5 +783,62 @@ describe("anonymous linking through generic oauth (Expo)", async () => {
 		});
 
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
+	});
+});
+
+describe("anonymous sign-in origin validation", async () => {
+	const { auth } = await getTestInstance(
+		{
+			plugins: [anonymous()],
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+	const signIn = (headers?: Record<string, string>) =>
+		auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/anonymous", {
+				method: "POST",
+				headers,
+			}),
+		);
+
+	it("should reject a request from an untrusted origin", async () => {
+		const response = await signIn({
+			origin: "https://untrusted.example",
+			"Sec-Fetch-Site": "cross-site",
+			"Sec-Fetch-Mode": "no-cors",
+		});
+
+		expect(response.status).toBe(403);
+		expect(response.headers.getSetCookie()).toEqual([]);
+	});
+
+	it("should reject an untrusted origin without Fetch Metadata", async () => {
+		const response = await signIn({
+			origin: "https://untrusted.example",
+		});
+
+		expect(response.status).toBe(403);
+	});
+
+	it("should accept a request from the app's own origin", async () => {
+		const response = await signIn({
+			origin: "http://localhost:3000",
+			"Sec-Fetch-Site": "same-origin",
+			"Sec-Fetch-Mode": "cors",
+		});
+
+		expect(response.status).toBe(200);
+	});
+
+	it("should accept a request without origin headers", async () => {
+		const response = await signIn();
+
+		expect(response.status).toBe(200);
 	});
 });

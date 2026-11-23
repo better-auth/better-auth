@@ -4,6 +4,7 @@ import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { APIError } from "@better-auth/core/error";
 import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
+import { DrizzleQueryError } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as z from "zod";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -11,6 +12,104 @@ import type { DeviceAuthorizationGrant } from ".";
 import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
 import type { DeviceCode } from "./schema";
+
+describe("device approval session authority", () => {
+	it("does not claim a device code for a revoked cached session", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [deviceAuthorization()],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		const stored = await ctx.adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(stored?.userId ?? null).toBeNull();
+	});
+
+	it("does not approve a claimed code after the session is revoked", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [deviceAuthorization()],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		await expect(
+			auth.api.deviceApprove({ body: { userCode: user_code }, headers }),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		const stored = await ctx.adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(stored?.status).toBe("pending");
+	});
+
+	it("does not deny a claimed code after the session is revoked", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [deviceAuthorization()],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		await expect(
+			auth.api.deviceDeny({ body: { userCode: user_code }, headers }),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		const stored = await ctx.adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(stored?.status).toBe("pending");
+	});
+});
 
 describe("device authorization plugin input validation", () => {
 	it("basic validation", async () => {
@@ -188,7 +287,7 @@ describe("client validation", async () => {
 			}),
 		).rejects.toMatchObject({
 			body: {
-				error: "invalid_grant",
+				error: "invalid_client",
 				error_description: "Invalid client ID",
 			},
 		});
@@ -452,6 +551,72 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device verification", () => {
+		it("rejects a lookup whose code is deleted while it claims the code", async () => {
+			const { headers } = await signInWithTestUser();
+			const { user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			const context = await auth.$context;
+			const spy = vi
+				.spyOn(context.adapter, "incrementOne")
+				.mockImplementationOnce(async () => {
+					await context.adapter.deleteMany({
+						model: "deviceCode",
+						where: [{ field: "userCode", value: user_code }],
+					});
+					return null;
+				});
+			try {
+				await expect(
+					auth.api.deviceVerify({ query: { user_code }, headers }),
+				).rejects.toMatchObject({
+					body: { error: "invalid_request" },
+				});
+			} finally {
+				spy.mockRestore();
+			}
+		});
+
+		/**
+		 * React Strict Mode runs an approval page's lookup effect twice, so one
+		 * user can send two lookups for an unclaimed code at once.
+		 */
+		it("returns the request details to both concurrent lookups by the claiming user", async () => {
+			const { headers } = await signInWithTestUser();
+			const { user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client", scope: "read" },
+			});
+			const context = await auth.$context;
+			const incrementOne = context.adapter.incrementOne.bind(context.adapter);
+			const bothReading = Promise.withResolvers<void>();
+			let calls = 0;
+			const spy = vi
+				.spyOn(context.adapter, "incrementOne")
+				.mockImplementation(async (...args) => {
+					// Both lookups read the unclaimed code before either claims it.
+					if (++calls === 2) bothReading.resolve();
+					await bothReading.promise;
+					return incrementOne(...args);
+				});
+			try {
+				const lookups = await Promise.all([
+					auth.api.deviceVerify({ query: { user_code }, headers }),
+					auth.api.deviceVerify({ query: { user_code }, headers }),
+				]);
+
+				expect(calls).toBe(2);
+				for (const lookup of lookups) {
+					expect(lookup).toMatchObject({
+						status: "pending",
+						client_id: "test-client",
+						scope: "read",
+					});
+				}
+			} finally {
+				spy.mockRestore();
+			}
+		});
+
 		it("accepts lowercase user codes for verification, approval, and denial", async () => {
 			const { headers } = await signInWithTestUser();
 			const createLowercaseUserCode = async () => {
@@ -2082,5 +2247,124 @@ describe("verificationUri option", async () => {
 		expect(response.verification_uri_complete).toContain(
 			`user_code=${response.user_code}`,
 		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12314
+ */
+describe("device code collisions reported through a wrapped database error", () => {
+	async function setup(userCodes: string[]) {
+		const generateUserCode = vi.fn(() => userCodes.shift()!);
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization({ generateUserCode })],
+		});
+		const first = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		generateUserCode.mockClear();
+		const adapter = (await auth.$context).adapter;
+		const create = adapter.create.bind(adapter);
+		// Drizzle's shape: the SQL as the message, the driver error as the cause.
+		const wrapLikeDrizzle = () =>
+			vi.spyOn(adapter, "create").mockImplementation((input) =>
+				create(input).catch((cause: unknown) => {
+					throw new DrizzleQueryError(
+						'insert into "device_code" ("id", "device_code", "user_code") values ($1, $2, $3)',
+						[],
+						cause as Error,
+					);
+				}),
+			);
+		return { auth, adapter, first, generateUserCode, wrapLikeDrizzle };
+	}
+
+	it("retries a collision whose unique violation is on the error cause", async () => {
+		const { auth, first, generateUserCode, wrapLikeDrizzle } = await setup([
+			"USERCODE1",
+			"USERCODE1",
+			"USERCODE2",
+		]);
+		wrapLikeDrizzle();
+
+		expect(first.user_code).toBe("USERCODE1");
+		await expect(
+			auth.api.deviceCode({ body: { client_id: "test-client" } }),
+		).resolves.toMatchObject({ user_code: "USERCODE2" });
+		expect(generateUserCode).toHaveBeenCalledTimes(2);
+	});
+
+	it("returns a controlled server error when every wrapped attempt collides", async () => {
+		const { auth, generateUserCode, wrapLikeDrizzle } = await setup([
+			"USERCODE1",
+			"USERCODE1",
+			"USERCODE1",
+			"USERCODE1",
+		]);
+		wrapLikeDrizzle();
+
+		await expect(
+			auth.api.deviceCode({ body: { client_id: "test-client" } }),
+		).rejects.toMatchObject({
+			body: {
+				error: "server_error",
+				error_description: "Failed to generate a unique device code",
+			},
+		});
+		expect(generateUserCode).toHaveBeenCalledTimes(3);
+	});
+
+	it("does not retry a wrapped failure that is not a unique violation", async () => {
+		const { auth, adapter, generateUserCode } = await setup([
+			"USERCODE1",
+			"USERCODE2",
+			"USERCODE3",
+		]);
+		const failure = new DrizzleQueryError(
+			'insert into "device_code" ("id") values ($1)',
+			[],
+			new Error("Connection terminated unexpectedly"),
+		);
+		vi.spyOn(adapter, "create").mockRejectedValue(failure);
+
+		await expect(
+			auth.api.deviceCode({ body: { client_id: "test-client" } }),
+		).rejects.toBe(failure);
+		expect(generateUserCode).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not read collision words in the wrapped query params as a unique violation", async () => {
+		const { auth, adapter, generateUserCode } = await setup([
+			"USERCODE1",
+			"USERCODE2",
+			"USERCODE3",
+		]);
+		const failure = new DrizzleQueryError(
+			'insert into "device_code" ("id", "scope") values ($1, $2)',
+			["device-id", "duplicate key unique key constraint"],
+			new Error("Connection terminated unexpectedly"),
+		);
+		vi.spyOn(adapter, "create").mockRejectedValue(failure);
+
+		await expect(
+			auth.api.deviceCode({ body: { client_id: "test-client" } }),
+		).rejects.toBe(failure);
+		expect(generateUserCode).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not loop on a cause chain that refers back to itself", async () => {
+		const { auth, adapter, generateUserCode } = await setup([
+			"USERCODE1",
+			"USERCODE2",
+			"USERCODE3",
+		]);
+		const failure = new Error("Connection reset");
+		failure.cause = new Error("Socket closed", { cause: failure });
+		vi.spyOn(adapter, "create").mockRejectedValue(failure);
+
+		await expect(
+			auth.api.deviceCode({ body: { client_id: "test-client" } }),
+		).rejects.toBe(failure);
+		expect(generateUserCode).toHaveBeenCalledTimes(1);
 	});
 });

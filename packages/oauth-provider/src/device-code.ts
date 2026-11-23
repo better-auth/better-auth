@@ -15,14 +15,16 @@ import {
 	extractRepeatedResourceFromForm,
 	resolveResourcePolicy,
 } from "./resources";
-import { getOAuthProviderApi } from "./token";
+import { checkDpopProofBeforeConsume, getOAuthProviderApi } from "./token";
 import type {
 	OAuthExtensionGrantHandlerInput,
 	OAuthProviderExtension,
 	OAuthTokenResponse,
 } from "./types";
+import type { Confirmation } from "./types/oauth";
 import { ResourceUriSchema } from "./types/zod";
 import {
+	getAuthEndpointUrl,
 	getClient,
 	getOAuthProviderPlugin,
 	normalizeClientAuthenticationParameters,
@@ -123,14 +125,18 @@ async function exchangeOAuthDeviceCode(
 		requireCredentials: false,
 	});
 	const {
-		authorizationContext: { client, confirmation, scopes },
+		authorizationContext: { client, scopes },
 		claimedDeviceCode,
-		redemptionContext: resources,
+		redemptionContext: { resources, confirmation, recordReplay },
 		user,
 	} = await redeemDeviceCode<
 		OAuthDeviceCodeFields,
 		ClientAuthorization,
-		string[] | undefined
+		{
+			resources?: string[];
+			confirmation?: Confirmation;
+			recordReplay: () => Promise<void>;
+		}
 	>({
 		ctx,
 		deviceCode,
@@ -176,14 +182,31 @@ async function exchangeOAuthDeviceCode(
 			const resources = requestedResources ?? boundResources;
 			// Validate before the atomic claim: an invalid target must not consume a
 			// one-time code that can still be exchanged with its authorized resources.
-			await resolveResourcePolicy(ctx, input.opts, {
+			const policy = await resolveResourcePolicy(ctx, input.opts, {
 				resource: resources,
 				clientId: authorization.client.clientId,
 				requestedScopes: authorization.scopes,
 			});
-			return resources;
+			// A sender constraint the client-authentication strategy proved takes
+			// precedence over a DPoP proof, as in issuance. Otherwise check the
+			// proof here too, so a rejected proof leaves the code for a retry.
+			if (authorization.confirmation) {
+				return {
+					resources,
+					confirmation: authorization.confirmation,
+					recordReplay: async () => {},
+				};
+			}
+			const dpop = await checkDpopProofBeforeConsume(ctx, input.opts, {
+				client: authorization.client,
+				scopes: authorization.scopes,
+				resources,
+				policy,
+			});
+			return { resources, ...dpop };
 		},
 	});
+	await recordReplay();
 
 	return provider.issueTokens({
 		client,
@@ -192,7 +215,6 @@ async function exchangeOAuthDeviceCode(
 		resources,
 		// Seed refresh tokens with every approved resource, not the narrowed poll.
 		originalResources: claimedDeviceCode.resources ?? undefined,
-		// Forward a sender-constraint a confidential client-auth strategy proved.
 		confirmation,
 	});
 }
@@ -253,7 +275,10 @@ function buildOAuthDeviceGrant() {
 			[DEVICE_CODE_GRANT_TYPE]: exchangeOAuthDeviceCode,
 		},
 		metadata: (metadataInput) => ({
-			device_authorization_endpoint: `${metadataInput.ctx.context.baseURL}${DEVICE_AUTHORIZATION_PATH}`,
+			device_authorization_endpoint: getAuthEndpointUrl(
+				metadataInput.ctx,
+				DEVICE_AUTHORIZATION_PATH,
+			),
 		}),
 		authorizeRequest: async ({ ctx, request }) => {
 			const { detected: hasClientAuthentication } =
@@ -314,7 +339,7 @@ function buildOAuthDeviceGrant() {
 				clientId: authenticated.clientId,
 				deviceCodeFields: {
 					oauthClientId: authenticated.clientId,
-					resources: toResourceList(resource) ?? null,
+					resources: toResourceList(resource),
 				},
 			};
 		},

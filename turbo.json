@@ -5,7 +5,8 @@
     "affectedUsingTaskInputs": true
   },
   "global": {
-    "inputs": ["tsconfig.json", "tsconfig.base.json", "pnpm-workspace.yaml"]
+    "inputs": ["tsconfig.json", "tsconfig.base.json", "pnpm-workspace.yaml"],
+    "passThroughEnv": ["PNPM_CONFIG_GLOBAL_SHIMS"]
   },
   "tasks": {
     "dev": {
@@ -81,6 +82,7 @@
         "package.json"
       ],
       "outputs": [".vitest/**", "coverage/**", "test-results/**"],
+      "env": ["NODE_VERSION"],
       "cache": true
     },
     "coverage": {
@@ -95,7 +97,8 @@
         "*.spec.*",
         "package.json"
       ],
-      "outputs": ["coverage/**", "coverage-final.json", ".nyc_output/**"]
+      "outputs": ["coverage/**", "coverage-final.json", ".nyc_output/**"],
+      "env": ["NODE_VERSION"]
     },
     "e2e:smoke": {
       "dependsOn": ["^build"],

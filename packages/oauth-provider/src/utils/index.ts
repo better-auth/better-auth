@@ -1,6 +1,7 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { decodeBasicCredentials } from "@better-auth/core/oauth2";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import {
@@ -10,7 +11,9 @@ import {
 	symmetricEncrypt,
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
+import type { Session } from "better-auth/types";
 import { APIError } from "better-call";
+import type { JSONWebKeySet } from "jose";
 import { errors as joseErrors } from "jose";
 import {
 	getClientDiscoveries,
@@ -18,13 +21,14 @@ import {
 	isExtensionTokenEndpointAuthMethod,
 } from "../extensions";
 import type { oauthProvider } from "../oauth";
-import { canonicalizeOAuthQueryParams } from "../signed-query";
+import { canonicalizeOAuthQueryParams, toBase64Url } from "../signed-query";
 import type {
 	ClientDiscovery,
 	Confirmation,
 	GrantType,
 	OAuthConsent,
 	OAuthOptions,
+	OAuthRefreshToken,
 	Prompt,
 	SchemaClient,
 	Scope,
@@ -100,16 +104,77 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
 	> | null;
 };
 
+const findJwtPlugin = (ctx: AuthContext) =>
+	ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+
 /**
  * Gets the JWT Plugin
  * @internal
  */
 export const getJwtPlugin = (ctx: AuthContext) => {
-	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+	const plugin = findJwtPlugin(ctx);
 	if (!plugin) {
 		throw new BetterAuthError("jwt_config");
 	}
 	return plugin;
+};
+
+type JwksReadContext = Pick<GenericEndpointContext, "context"> &
+	Partial<Pick<GenericEndpointContext, "request" | "headers" | "path">>;
+
+function readJwksInProcess(
+	{ context, request, headers, path }: JwksReadContext,
+	jwtPlugin: ReturnType<typeof jwt>,
+) {
+	const jwksFetch = async (): Promise<JSONWebKeySet | undefined> =>
+		jwtPlugin.endpoints.getJwks({ context, request, headers, path });
+	// A custom `adapter.getJwks` receives this request and may return different
+	// keys for each one, such as per tenant, so its keys are read on every
+	// verification instead of being shared across requests.
+	if (jwtPlugin.options?.adapter?.getJwks) {
+		return { jwksFetch };
+	}
+	return {
+		jwksFetch,
+		// Endpoints receive a per-request copy of the context, and one `jwt()`
+		// object can serve several auth instances. The adapter is the instance's
+		// key store, so the cached keys are scoped to it.
+		jwksCacheKey: context.adapter,
+	};
+}
+
+/**
+ * Source of this server's signing keys, for verifying tokens it issued in an
+ * endpoint. Keys published at `jwks.remoteUrl` are fetched from there;
+ * otherwise they are read in-process with the endpoint's request, so no
+ * request goes to this server's own `/jwks`. That read skips the router, so
+ * hooks and the rate limiter on `/jwks` do not run for it.
+ */
+export const getJwksSource = (ctx: GenericEndpointContext) => {
+	const jwtPlugin = getJwtPlugin(ctx.context);
+	const remoteUrl = jwtPlugin.options?.jwks?.remoteUrl;
+	return remoteUrl
+		? { jwksFetch: remoteUrl }
+		: readJwksInProcess(ctx, jwtPlugin);
+};
+
+/**
+ * In-process source of this server's signing keys for a verifier in the same
+ * process, or `undefined` without a JWT plugin or when the keys are published
+ * at `jwks.remoteUrl`. Pass the request being verified when there is one, so
+ * a custom key store can read it. See {@link getJwksSource}.
+ */
+export const getLocalJwksSource = (
+	context: AuthContext,
+	request?: Request | undefined,
+) => {
+	const jwtPlugin = findJwtPlugin(context);
+	return jwtPlugin && !jwtPlugin.options?.jwks?.remoteUrl
+		? readJwksInProcess(
+				{ context, request, headers: request?.headers },
+				jwtPlugin,
+			)
+		: undefined;
 };
 
 const joseInfrastructureErrorCodes = new Set([
@@ -207,6 +272,70 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 }
 
 /**
+ * The session a refresh token was issued in, while it is still active.
+ * Refresh tokens outlive the session, so the tokens they mint must not name
+ * one that has ended.
+ */
+export async function findActiveSessionId(
+	ctx: GenericEndpointContext,
+	sessionId: string | null | undefined,
+): Promise<string | undefined> {
+	if (!sessionId) return undefined;
+	const session = await ctx.context.adapter.findOne<Session>({
+		model: "session",
+		where: [{ field: "id", value: sessionId }],
+	});
+	return session && session.expiresAt >= new Date() ? sessionId : undefined;
+}
+
+/**
+ * Whether a grant with these scopes, derived from this refresh token, belongs
+ * to the session that issued the token.
+ *
+ * Without `offline_access`, a grant issued in a session ends with it (OIDC
+ * Back-Channel Logout 1.0 §2.7). Authorization codes are redeemed only in a
+ * live session, so a code-issued row with no `sessionId` lost it to the
+ * foreign key when the session row was deleted. Device-code rows never had a
+ * session.
+ */
+export function isSessionBoundRefreshToken(
+	refreshToken: Pick<
+		OAuthRefreshToken<Scope[]>,
+		"sessionId" | "authorizationCodeId"
+	>,
+	scopes: readonly string[] | undefined,
+): boolean {
+	return (
+		!scopes?.includes("offline_access") &&
+		Boolean(refreshToken.sessionId || refreshToken.authorizationCodeId)
+	);
+}
+
+/**
+ * Resolves the session of a refresh token at the moment it is used.
+ *
+ * A session-bound refresh token ends once its session has expired or been
+ * deleted. Checking here, rather than relying only on the cleanup at sign-out,
+ * covers a refresh that races the sign-out. An `offline_access` refresh token
+ * outlives its session and only loses `sid`.
+ */
+export async function resolveRefreshTokenSession(
+	ctx: GenericEndpointContext,
+	refreshToken: Pick<
+		OAuthRefreshToken<Scope[]>,
+		"scopes" | "sessionId" | "authorizationCodeId"
+	>,
+): Promise<{ sessionId: string | undefined; ended: boolean }> {
+	const sessionId = await findActiveSessionId(ctx, refreshToken.sessionId);
+	return {
+		sessionId,
+		ended:
+			!sessionId &&
+			isSessionBoundRefreshToken(refreshToken, refreshToken.scopes),
+	};
+}
+
+/**
  * Normalizes OAuth resource values into a non-empty string array.
  */
 export function toResourceList(
@@ -261,10 +390,16 @@ export async function verifyOAuthQueryParams(
 		canonicalizeOAuthQueryParams(queryParams).toString(),
 		secret,
 	);
+	// A standard base64 `sig` can carry `+`, which reads back as a space once
+	// something in front of the server decodes the query. Restore it, then
+	// compare both sides in base64url so either alphabet matches.
 	return (
 		sigs.length === 1 &&
 		!!sig &&
-		constantTimeEqual(sig, verifySig) &&
+		constantTimeEqual(
+			toBase64Url(sig.replace(/ /g, "+")),
+			toBase64Url(verifySig),
+		) &&
 		new Date(exp * 1000) >= new Date()
 	);
 }
@@ -285,6 +420,9 @@ export function assertNotTrustedClient(
 	}
 }
 
+// RFC 6749 A.1
+const CLIENT_ID = /^[\x20-\x7E]+$/;
+
 /**
  * Get a client by ID, checking trusted clients first, then database
  */
@@ -293,6 +431,7 @@ export async function getClient(
 	options: OAuthOptions<Scope[]>,
 	clientId: string,
 ) {
+	if (!CLIENT_ID.test(clientId)) return null;
 	const trustedClientCache = getTrustedClientCache(options);
 	const trustedClient = trustedClientCache.get(clientId);
 	if (trustedClient && !trustedClient.clientDiscoveryId) {
@@ -402,14 +541,10 @@ async function verifyStoredClientSecret(
 		opts.storeClientSecret ?? (opts.disableJwtPlugin ? "encrypted" : "hashed");
 
 	if (clientSecret && opts.prefix?.clientSecret) {
-		if (clientSecret.startsWith(opts.prefix?.clientSecret)) {
-			clientSecret = clientSecret.replace(opts.prefix.clientSecret, "");
-		} else {
-			throw new APIError("UNAUTHORIZED", {
-				error_description: "invalid client_secret",
-				error: "invalid_client",
-			});
+		if (!clientSecret.startsWith(opts.prefix.clientSecret)) {
+			return false;
 		}
+		clientSecret = clientSecret.replace(opts.prefix.clientSecret, "");
 	}
 
 	if (storageMethod === "hashed") {
@@ -661,6 +796,19 @@ export async function normalizeClientAuthenticationParameters(
 	};
 }
 
+/**
+ * Headers for a response that carries an authentication challenge.
+ * `WWW-Authenticate` is not a CORS-safelisted response header, so browsers
+ * hide it from cross-origin clients, such as a browser MCP client registering
+ * itself, unless the response exposes it.
+ */
+export function challengeHeaders(challenge: string) {
+	return {
+		"WWW-Authenticate": challenge,
+		"Access-Control-Expose-Headers": "WWW-Authenticate",
+	};
+}
+
 function basicToClientCredentials(authorization: string) {
 	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
 		return undefined;
@@ -675,7 +823,7 @@ function basicToClientCredentials(authorization: string) {
 				error_description: "invalid authorization header format",
 				error: "invalid_client",
 			},
-			{ "WWW-Authenticate": "Basic" },
+			challengeHeaders("Basic"),
 		);
 	}
 }
@@ -746,7 +894,7 @@ function throwInvalidClient(
 			error_description: errorDescription,
 			error: "invalid_client",
 		},
-		challengeScheme ? { "WWW-Authenticate": challengeScheme } : undefined,
+		challengeScheme ? challengeHeaders(challengeScheme) : undefined,
 	);
 }
 
@@ -1103,29 +1251,17 @@ export async function findConsent(
 	userId: string,
 	referenceId: string | undefined,
 ): Promise<OAuthConsent<Scope[]> | null> {
-	const where = [
-		{ field: "clientId", value: clientId },
-		{ field: "userId", value: userId },
-	];
-	if (referenceId) {
-		return ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
+	const findByReference = (value: string | null) =>
+		ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
 			model: "oauthConsent",
-			where: [...where, { field: "referenceId", value: referenceId }],
+			where: [
+				{ field: "clientId", value: clientId },
+				{ field: "userId", value: userId },
+				{ field: "referenceId", value },
+			],
 		});
-	}
-	// Matched in code: Prisma on MongoDB leaves an omitted referenceId unset, and `eq null` skips unset fields.
-	const pageSize = 100;
-	for (let offset = 0; ; offset += pageSize) {
-		const consents = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
-			model: "oauthConsent",
-			where,
-			limit: pageSize,
-			offset,
-			sortBy: { field: "id", direction: "asc" },
-		});
-		const consent = consents.find((row) => !row.referenceId);
-		if (consent || consents.length < pageSize) return consent ?? null;
-	}
+	if (referenceId) return findByReference(referenceId);
+	return (await findByReference(null)) ?? findByReference("");
 }
 
 /**
@@ -1225,4 +1361,57 @@ export function isPKCERequired(
 	}
 
 	return false;
+}
+
+/**
+ * Applies the redirect URI HTTPS policy: `http:` is allowed on loopback hosts
+ * for clients that are not `web`, or when `allowInsecureRedirectUri` accepts
+ * the URL. A throwing callback rejects the URI.
+ */
+export function isRedirectUriTransportAllowed(
+	opts: OAuthOptions<Scope[]>,
+	uri: string,
+	isWebClient = false,
+): boolean {
+	let url: URL;
+	try {
+		url = new URL(uri);
+	} catch {
+		return false;
+	}
+	if (url.protocol !== "http:") return true;
+	if (!isWebClient && isLoopbackHost(url.host)) return true;
+	return isInsecureRedirectUriAllowed(opts, url);
+}
+
+/**
+ * Runs `allowInsecureRedirectUri` for an `http:` URL, failing closed. URLs
+ * with credentials are never accepted.
+ */
+export function isInsecureRedirectUriAllowed(
+	opts: OAuthOptions<Scope[]>,
+	url: URL,
+): boolean {
+	if (url.username || url.password) return false;
+	try {
+		return opts.allowInsecureRedirectUri?.(url) === true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The public URL of an endpoint of this server: `baseURL` without trailing
+ * slashes, then `path`. A `baseURL` such as `https://example.com/api/auth/`
+ * would otherwise yield a double slash, which does not route.
+ */
+export function getAuthEndpointUrl(
+	ctx: Pick<GenericEndpointContext, "context">,
+	path: string,
+): string {
+	const { baseURL } = ctx.context;
+	let end = baseURL.length;
+	// A loop, not `/\/+$/`, which backtracks quadratically on runs of slashes.
+	while (end > 0 && baseURL[end - 1] === "/") end--;
+	return `${baseURL.slice(0, end)}${path}`;
 }

@@ -1,5 +1,43 @@
 # @better-auth/memory-adapter
 
+## 1.7.27
+
+## 1.7.26
+
+## 1.7.25
+
+## 1.7.24
+
+## 1.7.23
+
+### Patch Changes
+
+- [#12544](https://github.com/better-auth/better-auth/pull/12544) [`41a2526`](https://github.com/better-auth/better-auth/commit/41a25269dbd0d2942ba95b7c362cb266f977bccb) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - With `generateId: "serial"`, the memory adapter no longer gives a new row the id of a row that is still stored. It used the row count as the next id, which collides after a delete, and two overlapping transactions could pick the same id so that one row overwrote the other.
+
+## 1.7.22
+
+## 1.7.21
+
+## 1.7.20
+
+### Patch Changes
+
+- [#11806](https://github.com/better-auth/better-auth/pull/11806) [`e9b43d7`](https://github.com/better-auth/better-auth/commit/e9b43d7149cec0b52e8194b1341e582d0ea19bba) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `ne null` where clauses no longer match records where the field was never set, matching how `eq null` already treats those records and how the other adapters behave.
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
+
 ## 1.7.12
 
 ## 1.7.11

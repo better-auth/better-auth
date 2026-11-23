@@ -673,3 +673,128 @@ describe("Client ID Metadata Document - integration", async () => {
 		});
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12458
+ * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-4.4
+ */
+describe("CIMD - origin binding of metadata URIs", async () => {
+	const baseURL = "http://localhost:3191";
+	const redirectUri = "http://127.0.0.1:5191/callback";
+	const documents = new Map<string, Record<string, unknown>>();
+	const fetchClientMetadataResource = async (input: RequestInfo | URL) => {
+		const url =
+			typeof input === "string"
+				? input
+				: input instanceof URL
+					? input.href
+					: input.url;
+		const document = documents.get(url);
+		if (!document) throw new Error(`No metadata document for ${url}`);
+		return Response.json(document);
+	};
+
+	function createAuthorizationServer(originBoundFields?: readonly string[]) {
+		return getTestInstance({
+			baseURL,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid"],
+				}),
+				cimd({ fetchClientMetadataResource, originBoundFields }),
+			],
+		});
+	}
+
+	const defaultServer = await createAuthorizationServer();
+	const clientUriBoundServer = await createAuthorizationServer(["client_uri"]);
+
+	function publishDocument(
+		clientId: string,
+		fields: Record<string, unknown>,
+	): void {
+		documents.set(clientId, {
+			client_id: clientId,
+			client_name: "Origin Binding Client",
+			redirect_uris: [redirectUri],
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			...fields,
+		});
+	}
+
+	async function authorize(
+		server: Awaited<ReturnType<typeof createAuthorizationServer>>,
+		clientId: string,
+	) {
+		const { headers } = await server.signInWithTestUser();
+		const response = await server.auth.handler(
+			new Request(
+				`${baseURL}/api/auth/oauth2/authorize` +
+					`?client_id=${encodeURIComponent(clientId)}` +
+					"&response_type=code" +
+					`&redirect_uri=${encodeURIComponent(redirectUri)}` +
+					"&scope=openid" +
+					`&code_challenge=${PKCE_CHALLENGE}` +
+					"&code_challenge_method=S256",
+				{ headers },
+			),
+		);
+		const context = await server.auth.$context;
+		const storedClient = await context.adapter.findOne<{ uri?: string }>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		return { response, storedClient };
+	}
+
+	it("accepts a client_uri on another origin with the default options", async () => {
+		const clientId = "https://app.example.com/client-metadata.json";
+		const clientUri = "https://www.example.org/about";
+		publishDocument(clientId, { client_uri: clientUri });
+
+		const { response, storedClient } = await authorize(defaultServer, clientId);
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toContain("/consent");
+		expect(storedClient).toMatchObject({ uri: clientUri });
+	});
+
+	it("rejects a post_logout_redirect_uris entry on another origin with the default options", async () => {
+		const clientId = "https://logout.example.com/client-metadata.json";
+		publishDocument(clientId, {
+			post_logout_redirect_uris: ["https://www.example.org/logout"],
+		});
+
+		const { response, storedClient } = await authorize(defaultServer, clientId);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: "invalid_client",
+			error_description: expect.stringContaining(
+				"post_logout_redirect_uris value",
+			),
+		});
+		expect(storedClient).toBeNull();
+	});
+
+	it("rejects a client_uri on another origin when originBoundFields lists it", async () => {
+		const clientId = "https://bound.example.com/client-metadata.json";
+		publishDocument(clientId, { client_uri: "https://www.example.org/about" });
+
+		const { response, storedClient } = await authorize(
+			clientUriBoundServer,
+			clientId,
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: "invalid_client",
+			error_description: expect.stringContaining("client_uri value"),
+		});
+		expect(storedClient).toBeNull();
+	});
+});

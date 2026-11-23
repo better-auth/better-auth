@@ -8,6 +8,7 @@ export const ru: TranslationDictionary = {
 	FAILED_TO_CREATE_USER: "Не удалось создать пользователя",
 	FAILED_TO_CREATE_SESSION: "Не удалось создать сессию",
 	FAILED_TO_UPDATE_USER: "Не удалось обновить пользователя",
+	FAILED_TO_DELETE_USER: "Не удалось удалить пользователя",
 	FAILED_TO_GET_SESSION: "Не удалось получить сессию",
 	INVALID_PASSWORD: "Неверный пароль",
 	INVALID_EMAIL: "Недействительный адрес электронной почты",

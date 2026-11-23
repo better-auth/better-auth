@@ -1,4 +1,5 @@
 import { getCurrentAdapter } from "@better-auth/core/context";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { DBAdapter, DBTransactionAdapter } from "better-auth";
 import { APIError, createAuthEndpoint } from "better-auth/api";
@@ -11,7 +12,9 @@ import type {
 } from "./configuration";
 import { decommissionSCIMConnection } from "./connection-decommission";
 import type { SCIMIdentityCoordinator } from "./identity";
+import { SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
+import { assertNativeSCIMTransactions } from "./transaction";
 
 export const SCIM_MANAGED_CONNECTION_ID_PREFIX = "ba_scim_connection_";
 const SCIM_MANAGED_CREDENTIAL_ID_PREFIX = "ba_scim_credential_";
@@ -20,7 +23,8 @@ export const SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT =
 	"SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT";
 
 const SCIM_MANAGED_HASH_VERSION = "v1";
-const SCIM_MANAGED_EVENT_LIMIT = 100;
+const SCIM_MANAGED_DEFAULT_EVENT_LIMIT = 100;
+const SCIM_MANAGED_MAX_EVENT_LIMIT = 100;
 const SCIM_MANAGED_DEFAULT_MAX_ACTIVE_CREDENTIALS = 5;
 const SCIM_MANAGED_DEFAULT_LAST_USED_WRITE_INTERVAL_SECONDS = 300;
 const SCIM_MANAGED_ACTIVE_CREDENTIAL_SCAN_LIMIT = 101;
@@ -62,6 +66,18 @@ const getManagedConnectionBodySchema = z.object({
 	connectionId: connectionIdSchema,
 	provisioningDomainId: provisioningDomainIdSchema,
 });
+const listManagedConnectionEventsBodySchema =
+	getManagedConnectionBodySchema.extend({
+		limit: z
+			.number()
+			.int()
+			.min(1)
+			.max(SCIM_MANAGED_MAX_EVENT_LIMIT)
+			.optional()
+			.default(SCIM_MANAGED_DEFAULT_EVENT_LIMIT),
+		offset: z.number().int().min(0).optional().default(0),
+		sortDirection: z.enum(["asc", "desc"]).optional(),
+	});
 const rotateManagedCredentialBodySchema = z.object({
 	connectionId: connectionIdSchema,
 	provisioningDomainId: provisioningDomainIdSchema,
@@ -369,6 +385,7 @@ async function getManagedConnectionState(
 		model: "scimManagedCredential",
 		where: [{ field: "connectionRecordId", value: connection.id }],
 		sortBy: { field: "createdAt", direction: "desc" },
+		limit: SCIM_UNBOUNDED_ROW_LIMIT,
 	});
 	return {
 		connection: toManagedConnection(connection),
@@ -880,6 +897,7 @@ export function createSCIMManagedConnectionEndpoints(
 				metadata: { noStore: true },
 			},
 			async (ctx) => {
+				assertNativeSCIMTransactions(ctx.context.adapter);
 				const options = requireManagedOptions();
 				assertFutureExpiry(ctx.body.expiresAt);
 				if (new Set(ctx.body.scopes).size !== ctx.body.scopes.length) {
@@ -914,7 +932,7 @@ export function createSCIMManagedConnectionEndpoints(
 						},
 					);
 				} catch (error) {
-					if (error instanceof APIError) throw error;
+					if (isAPIError(error)) throw error;
 					if (joinsAmbientTransaction) throw error;
 					const duplicate = await findManagedConnectionByCreationRequestId(
 						ctx.context.adapter,
@@ -949,6 +967,7 @@ export function createSCIMManagedConnectionEndpoints(
 						},
 					],
 					sortBy: { field: "createdAt", direction: "desc" },
+					limit: SCIM_UNBOUNDED_ROW_LIMIT,
 				});
 				return ctx.json({
 					connections: connections.map((connection) =>
@@ -981,6 +1000,7 @@ export function createSCIMManagedConnectionEndpoints(
 				metadata: { noStore: true },
 			},
 			async (ctx) => {
+				assertNativeSCIMTransactions(ctx.context.adapter);
 				const options = requireManagedOptions();
 				assertFutureExpiry(ctx.body.expiresAt);
 				if (new Set(ctx.body.scopes).size !== ctx.body.scopes.length) {
@@ -1024,6 +1044,7 @@ export function createSCIMManagedConnectionEndpoints(
 				body: revokeManagedCredentialBodySchema,
 			},
 			async (ctx) => {
+				assertNativeSCIMTransactions(ctx.context.adapter);
 				requireManagedOptions();
 				for (let attempt = 0; attempt < 5; attempt++) {
 					const revoked = await runManagedMutationTransaction(
@@ -1046,7 +1067,7 @@ export function createSCIMManagedConnectionEndpoints(
 		listSCIMManagedConnectionEvents: createAuthEndpoint.serverOnly(
 			{
 				method: "POST",
-				body: getManagedConnectionBodySchema,
+				body: listManagedConnectionEventsBodySchema,
 			},
 			async (ctx) => {
 				requireManagedOptions();
@@ -1057,14 +1078,32 @@ export function createSCIMManagedConnectionEndpoints(
 					ctx.body.provisioningDomainId,
 				);
 				if (!connection) throw createManagedNotFoundError();
-				const events = await database.findMany<ManagedConnectionEventRow>({
-					model: "scimManagedConnectionEvent",
-					where: [{ field: "connectionRecordId", value: connection.id }],
-					limit: SCIM_MANAGED_EVENT_LIMIT,
-					sortBy: { field: "sequence", direction: "desc" },
-				});
+				const where = [
+					{ field: "connectionRecordId", value: connection.id },
+				] as const;
+				const limit = ctx.body.limit;
+				const offset = ctx.body.offset;
+				const sortDirection = ctx.body.sortDirection;
+				const [events, total] = await Promise.all([
+					database.findMany<ManagedConnectionEventRow>({
+						model: "scimManagedConnectionEvent",
+						where: [...where],
+						limit,
+						offset,
+						sortBy: {
+							field: "sequence",
+							direction: sortDirection ?? "desc",
+						},
+					}),
+					database.count({
+						model: "scimManagedConnectionEvent",
+						where: [...where],
+					}),
+				]);
+				const orderedEvents =
+					sortDirection == null ? [...events].reverse() : events;
 				return ctx.json({
-					events: events.reverse().map(
+					events: orderedEvents.map(
 						(event): SCIMManagedConnectionEvent => ({
 							sequence: event.sequence,
 							type: event.type,
@@ -1073,6 +1112,9 @@ export function createSCIMManagedConnectionEndpoints(
 							createdAt: event.createdAt,
 						}),
 					),
+					limit,
+					offset,
+					total,
 				});
 			},
 		),
@@ -1082,6 +1124,7 @@ export function createSCIMManagedConnectionEndpoints(
 				body: decommissionManagedConnectionBodySchema,
 			},
 			async (ctx) => {
+				assertNativeSCIMTransactions(ctx.context.adapter);
 				requireManagedOptions();
 				const database = await getCurrentAdapter(ctx.context.adapter);
 				let started: ManagedConnectionRow | undefined;

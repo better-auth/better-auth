@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type {
+	OAuthProvider,
+	ProviderOptions,
+	TokenEndpointAuth,
+} from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 
 export interface VercelProfile {
@@ -14,9 +18,35 @@ export interface VercelProfile {
 
 export interface VercelOptions extends ProviderOptions<VercelProfile> {
 	clientId: string;
+	/**
+	 * Authentication strategy for authorization code exchanges.
+	 * Use a custom strategy for Vercel OIDC tokens or `private_key_jwt` for
+	 * signed client assertions. When omitted, `clientSecret` is sent in the
+	 * request body if configured.
+	 */
+	tokenEndpointAuth?: TokenEndpointAuth | undefined;
 }
 
 export const vercel = (options: VercelOptions) => {
+	const authMethod = options.tokenEndpointAuth?.method;
+	if (
+		options.clientSecret &&
+		(authMethod === "private_key_jwt" || authMethod === "none")
+	) {
+		throw new BetterAuthError(
+			`Vercel ${authMethod} token endpoint authentication cannot be combined with clientSecret`,
+		);
+	}
+	if (
+		!options.clientSecret &&
+		(authMethod === "client_secret_basic" ||
+			authMethod === "client_secret_post")
+	) {
+		throw new BetterAuthError(
+			`Vercel ${authMethod} token endpoint authentication requires clientSecret`,
+		);
+	}
+
 	return {
 		id: "vercel",
 		name: "Vercel",
@@ -57,6 +87,7 @@ export const vercel = (options: VercelOptions) => {
 				redirectURI,
 				options,
 				tokenEndpoint: "https://api.vercel.com/login/oauth/token",
+				tokenEndpointAuth: options.tokenEndpointAuth,
 			});
 		},
 		async getUserInfo(token) {

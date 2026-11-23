@@ -27,27 +27,34 @@ That's it. Once `dash()` is active, audit logs are collected automatically.
 
 <Tabs items={["User", "Session", "Account", "Verification", "Organization", "Security"]}>
   <Tab value="User">
-    | Event                        | Trigger                      |
-    | ---------------------------- | ---------------------------- |
-    | `user_signed_up`             | New user registration        |
-    | `user_profile_updated`       | User updates their profile   |
-    | `user_profile_image_updated` | User changes their avatar    |
-    | `user_email_verified`        | Email verification completed |
-    | `user_banned`                | User is banned               |
-    | `user_unbanned`              | User is unbanned             |
-    | `user_deleted`               | User account deleted         |
+    | Event                      | Trigger                                       |
+    | -------------------------- | --------------------------------------------- |
+    | `user_created`             | New user registration                         |
+    | `profile_updated`          | User updates their profile                    |
+    | `profile_image_updated`    | User changes their avatar                     |
+    | `email_verified`           | Email verification completed                  |
+    | `email_changed`            | User email address changed                    |
+    | `user_banned`              | User is banned                                |
+    | `user_unbanned`            | User is unbanned                              |
+    | `user_role_updated`        | App-level user role changed                   |
+    | `user_deleted`             | User account deleted                          |
+    | `anonymous_user_converted` | Anonymous guest linked to a permanent account |
+    | `two_factor_enabled`       | Two-factor authentication enabled             |
+    | `two_factor_disabled`      | Two-factor authentication disabled            |
+    | `two_factor_verified`      | Two-factor verification succeeded             |
   </Tab>
 
   <Tab value="Session">
-    | Event                        | Trigger                         |
-    | ---------------------------- | ------------------------------- |
-    | `user_signed_in`             | Successful sign-in              |
-    | `user_signed_out`            | User signs out                  |
-    | `session_created`            | New session created             |
-    | `session_revoked`            | Single session revoked          |
-    | `sessions_revoked_all`       | All sessions revoked            |
-    | `user_impersonated`          | Admin starts impersonating user |
-    | `user_impersonation_stopped` | Admin stops impersonating       |
+    | Event                       | Trigger                         |
+    | --------------------------- | ------------------------------- |
+    | `user_signed_in`            | Successful sign-in              |
+    | `user_signed_out`           | User signs out                  |
+    | `user_sign_in_failed`       | Failed sign-in attempt          |
+    | `session_created`           | New session created             |
+    | `session_revoked`           | Single session revoked          |
+    | `all_sessions_revoked`      | All sessions revoked            |
+    | `user_impersonated`         | Admin starts impersonating user |
+    | `user_impersonated_stopped` | Admin stops impersonating       |
   </Tab>
 
   <Tab value="Account">
@@ -69,40 +76,32 @@ That's it. Once `dash()` is active, audit logs are collected automatically.
   <Tab value="Organization">
     Tracked when using the [organization plugin](/docs/plugins/organization).
 
-    | Event                  | Trigger                          |
-    | ---------------------- | -------------------------------- |
-    | `organization_created` | New organization created         |
-    | `organization_updated` | Organization settings changed    |
-    | `member_added`         | Member added to organization     |
-    | `member_removed`       | Member removed from organization |
-    | `member_role_updated`  | Member role changed              |
-    | `member_invited`       | Invitation sent                  |
-    | `invite_accepted`      | Invitation accepted              |
-    | `invite_rejected`      | Invitation rejected              |
-    | `invite_cancelled`     | Invitation cancelled             |
-    | `team_created`         | Team created                     |
-    | `team_updated`         | Team updated                     |
-    | `team_deleted`         | Team deleted                     |
-    | `team_member_added`    | Member added to team             |
-    | `team_member_removed`  | Member removed from team         |
+    | Event                                 | Trigger                          |
+    | ------------------------------------- | -------------------------------- |
+    | `organization_created`                | New organization created         |
+    | `organization_updated`                | Organization settings changed    |
+    | `organization_deleted`                | Organization deleted             |
+    | `organization_member_added`           | Member added to organization     |
+    | `organization_member_removed`         | Member removed from organization |
+    | `organization_member_role_updated`    | Member role changed              |
+    | `organization_member_invited`         | Invitation sent                  |
+    | `organization_member_invite_accepted` | Invitation accepted              |
+    | `organization_member_invite_rejected` | Invitation rejected              |
+    | `organization_member_invite_canceled` | Invitation cancelled             |
+    | `organization_team_created`           | Team created                     |
+    | `organization_team_updated`           | Team updated                     |
+    | `organization_team_deleted`           | Team deleted                     |
+    | `organization_team_member_added`      | Member added to team             |
+    | `organization_team_member_removed`    | Member removed from team         |
   </Tab>
 
   <Tab value="Security">
     Tracked when using the [Sentinel](/docs/infrastructure/plugins/sentinel) plugin.
 
-    | Event                           | Trigger                             |
-    | ------------------------------- | ----------------------------------- |
-    | `security_blocked`              | Request was blocked                 |
-    | `security_allowed`              | Request was allowed after challenge |
-    | `security_credential_stuffing`  | Credential stuffing detected        |
-    | `security_impossible_travel`    | Impossible travel detected          |
-    | `security_geo_blocked`          | Geo-blocking triggered              |
-    | `security_bot_blocked`          | Bot detected and blocked            |
-    | `security_suspicious_ip`        | Suspicious IP detected              |
-    | `security_velocity_exceeded`    | Rate limit exceeded                 |
-    | `security_free_trial_abuse`     | Free trial abuse detected           |
-    | `security_compromised_password` | Compromised password detected       |
-    | `security_stale_account`        | Stale account reactivation          |
+    | Event             | Trigger                                                                                                                                                    |
+    | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | `security_check`  | One event per protected user action. `eventData.outcome` is `passed`, `challenged`, or `blocked`. Includes `evaluatedChecks`, `triggeredBy`, and `reason`. |
+    | `security_signal` | Informational detection detail for the Security dashboard. Does not count toward security usage.                                                           |
   </Tab>
 </Tabs>
 
@@ -292,7 +291,7 @@ Returns all audit events across organizations for the given event type:
 ```ts
 const events = await authClient.dash.getAllAuditLogs({
   session: session.data,
-  eventType: "member_invited",
+  eventType: "organization_member_invited",
 });
 ```
 
@@ -304,7 +303,7 @@ You can combine filters to get more specific results (e.g. all audit events for 
 const orgEvents = await authClient.dash.getAllAuditLogs({
   session: session.data,
   organizationId: "org_123",
-  eventType: "member_invited",
+  eventType: "organization_member_invited",
 });
 ```
 

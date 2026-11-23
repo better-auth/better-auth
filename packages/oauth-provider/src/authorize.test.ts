@@ -30,9 +30,12 @@ describe("validateIssuerUrl (RFC 9207)", () => {
 		);
 	});
 
-	it("should convert HTTP to HTTPS for non-localhost", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11740
+	 */
+	it("should keep a configured HTTP issuer for non-localhost", () => {
 		expect(validateIssuerUrl("http://auth.example.com")).toBe(
-			"https://auth.example.com",
+			"http://auth.example.com",
 		);
 	});
 
@@ -81,7 +84,7 @@ describe("validateIssuerUrl (RFC 9207)", () => {
 	it("should handle complex invalid URL and sanitize", () => {
 		expect(
 			validateIssuerUrl("http://auth.example.com:8080/path?query=1#hash"),
-		).toBe("https://auth.example.com:8080/path");
+		).toBe("http://auth.example.com:8080/path");
 	});
 });
 
@@ -128,6 +131,20 @@ describe("oauth signed query signatures", () => {
 		return params;
 	};
 
+	// RFC 4648 section 5: swap the alphabet and drop the padding.
+	const base64ToBase64Url = (value: string) =>
+		value.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+	const createSignedParamsWithPlusInSig = async (secret: string) => {
+		for (let attempt = 0; attempt < 256; attempt++) {
+			const params = await createSignedParams(secret, (candidate) => {
+				candidate.set("state", `state-${attempt}`);
+			});
+			if (params.get("sig")?.includes("+")) return params;
+		}
+		throw new Error("Expected a signature that contains +");
+	};
+
 	it("should verify signed params when query params are reordered", async () => {
 		const signedParams = await createSignedParams("test-secret");
 		const reordered = new URLSearchParams();
@@ -166,9 +183,80 @@ describe("oauth signed query signatures", () => {
 		).toBe(false);
 	});
 
+	/**
+	 * A `sig` in the base64url alphabet is unchanged by a url decode, so the
+	 * signed query still verifies when something in front of the auth server
+	 * decodes it once.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10427
+	 * @see https://datatracker.ietf.org/doc/html/rfc4648#section-5
+	 */
+	it("should verify a base64url signature after the query is url-decoded once", async () => {
+		const signedParams = await createSignedParams("test-secret");
+		signedParams.set("sig", base64ToBase64Url(signedParams.get("sig") ?? ""));
+		const decodedOnce = decodeURIComponent(signedParams.toString());
+
+		expect(await verifyOAuthQueryParams(decodedOnce, "test-secret")).toBe(true);
+	});
+
+	/**
+	 * The signer issues a standard base64 `sig`, so an unmodified one must keep
+	 * verifying.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10427
+	 */
+	it("should verify signed params carrying a standard base64 signature", async () => {
+		const signedParams = await createSignedParams("test-secret");
+
+		expect(signedParams.get("sig")).toMatch(/=$/);
+		expect(
+			await verifyOAuthQueryParams(signedParams.toString(), "test-secret"),
+		).toBe(true);
+	});
+
+	/**
+	 * A standard base64 `sig` can carry `+`. After something in front of the
+	 * auth server decodes the query, the `+` is a literal character that
+	 * `URLSearchParams` reads back as a space.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10427
+	 * @see https://url.spec.whatwg.org/#urlencoded-parsing
+	 */
+	it("should verify a standard base64 signature with + after the query is url-decoded once", async () => {
+		const signedParams = await createSignedParamsWithPlusInSig("test-secret");
+		const decodedOnce = decodeURIComponent(signedParams.toString());
+
+		expect(new URLSearchParams(decodedOnce).get("sig")).toContain(" ");
+		expect(await verifyOAuthQueryParams(decodedOnce, "test-secret")).toBe(true);
+	});
+
+	it("should reject signed params without a signature", async () => {
+		const signedParams = await createSignedParams("test-secret");
+		signedParams.delete("sig");
+
+		await expect(
+			verifyOAuthQueryParams(signedParams.toString(), "test-secret"),
+		).resolves.toBe(false);
+	});
+
 	it("should reject duplicate signature params", async () => {
 		const signedParams = await createSignedParams("test-secret");
 		signedParams.append("sig", "extra-sig");
+
+		expect(
+			await verifyOAuthQueryParams(signedParams.toString(), "test-secret"),
+		).toBe(false);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10427
+	 */
+	it("should reject duplicate signature params that are both valid", async () => {
+		const signedParams = await createSignedParams("test-secret");
+		signedParams.append(
+			"sig",
+			base64ToBase64Url(signedParams.get("sig") ?? ""),
+		);
 
 		expect(
 			await verifyOAuthQueryParams(signedParams.toString(), "test-secret"),
@@ -1167,6 +1255,46 @@ describe("oauth authorize - authenticated", async () => {
 		);
 		expect(callbackRedirectUrl).not.toContain("/consent");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11481
+	 */
+	it("accepts consent through auth.api with headers only", async () => {
+		if (!oauthClientNeedsConsent?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClientNeedsConsent.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "server-consent");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let consentRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				consentRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const consentUrl = new URL(consentRedirectUrl, authServerBaseUrl);
+		expect(consentUrl.pathname).toBe("/consent");
+
+		await expect(
+			auth.api.oauth2Consent({
+				headers: new Headers(headers),
+				body: {
+					accept: true,
+					oauth_query: consentUrl.searchParams.toString(),
+				},
+			}),
+		).resolves.toMatchObject({
+			redirect: true,
+			url: expect.stringContaining(`${redirectUri}?code=`),
+		});
+	});
 });
 
 describe("oauth authorize - consented resources", async () => {
@@ -2033,5 +2161,441 @@ describe("oauth authorize - custom redirect URI safety", async () => {
 
 		expect(location).toContain(`${authServerBaseUrl}/api/auth/error`);
 		expect(location).toContain("error=invalid_redirect");
+	});
+});
+
+/**
+ * Each check `/oauth2/authorize` makes before sign-in reports its error either
+ * on the provider error page (client and redirect URI checks) or at the
+ * client's redirect URI (request parameter checks). The chain below removes one
+ * defect at a time from a request that has all of them, so it also pins the
+ * order in which the checks run.
+ */
+describe("oauth authorize - error destinations and order", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const errorPage = `${authServerBaseUrl}/api/auth/error`;
+	const redirectUri = "https://rp.example.com/callback";
+	const resource = "https://api.example.com";
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					resources: [resource],
+					enforcePerClientResources: false,
+				}),
+				jwt(),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+	let publicClientId: string;
+	let optionalPkceClientId: string;
+	let disabledClientId: string;
+	let machineClientId: string;
+
+	beforeAll(async () => {
+		const create = (body: Record<string, unknown>) =>
+			auth.api.adminCreateOAuthClient({ headers, body });
+		const [publicClient, optionalPkceClient, disabledClient, machineClient] =
+			await Promise.all([
+				create({
+					redirect_uris: [redirectUri],
+					token_endpoint_auth_method: "none",
+					skip_consent: true,
+				}),
+				create({
+					redirect_uris: [redirectUri],
+					require_pkce: false,
+					skip_consent: true,
+				}),
+				create({ redirect_uris: [redirectUri], skip_consent: true }),
+				create({ grant_types: ["client_credentials"] }),
+			]);
+		publicClientId = publicClient.client_id;
+		optionalPkceClientId = optionalPkceClient.client_id;
+		disabledClientId = disabledClient.client_id;
+		machineClientId = machineClient.client_id;
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: { client_id: disabledClientId, update: { disabled: true } },
+		});
+	});
+
+	async function authorize(params: Record<string, string | undefined>) {
+		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		for (const [key, value] of Object.entries(params)) {
+			if (value !== undefined) url.searchParams.set(key, value);
+		}
+		let location = "";
+		await client.$fetch(url.toString(), {
+			headers,
+			redirect: "manual",
+			onResponse(context) {
+				location = context.response.headers.get("location") || "";
+			},
+		});
+		return new URL(location);
+	}
+
+	function expectError(
+		location: URL,
+		destination: string,
+		error: string,
+		description?: string,
+	) {
+		expect(`${location.origin}${location.pathname}`).toBe(destination);
+		expect(location.searchParams.get("error")).toBe(error);
+		if (description) {
+			expect(location.searchParams.get("error_description")).toBe(description);
+		}
+		if (destination === redirectUri) {
+			expect(location.searchParams.get("state")).toBe("state-1");
+			expect(location.searchParams.get("iss")).toBe(
+				`${authServerBaseUrl}/api/auth`,
+			);
+		}
+	}
+
+	it("reports client errors on the error page before redirect URI errors", async () => {
+		const request = {
+			response_type: "code",
+			redirect_uri: "http://rp.example.com/callback",
+		};
+		expectError(
+			await authorize({ ...request, client_id: "no-such-client" }),
+			errorPage,
+			"invalid_client",
+			"client not found",
+		);
+		expectError(
+			await authorize({ ...request, client_id: disabledClientId }),
+			errorPage,
+			"client_disabled",
+			"client is disabled",
+		);
+		expectError(
+			await authorize({ ...request, client_id: machineClientId }),
+			errorPage,
+			"unauthorized_client",
+			"client is not authorized to use the authorization_code grant",
+		);
+	});
+
+	it("runs each check in order, one defect at a time", async () => {
+		const request: Record<string, string | undefined> = {
+			response_type: "code",
+			client_id: publicClientId,
+			state: "state-1",
+			redirect_uri: "http://rp.example.com/callback",
+			scope: "openid not-a-scope",
+			claims: "{not json",
+			resource: "https://unknown.example.com",
+		};
+		expectError(
+			await authorize(request),
+			errorPage,
+			"invalid_request",
+			"Redirect URI must use HTTPS (HTTP allowed only for loopback hosts)",
+		);
+
+		request.redirect_uri = "https://rp.example.com/other";
+		expectError(
+			await authorize(request),
+			errorPage,
+			"invalid_redirect",
+			"invalid redirect uri",
+		);
+
+		request.redirect_uri = redirectUri;
+		expectError(
+			await authorize(request),
+			redirectUri,
+			"invalid_scope",
+			"The following scopes are invalid: not-a-scope",
+		);
+
+		request.scope = "profile";
+		expectError(
+			await authorize(request),
+			redirectUri,
+			"invalid_request",
+			"openid scope must be requested when using the claims parameter",
+		);
+
+		request.scope = "openid";
+		expectError(
+			await authorize(request),
+			redirectUri,
+			"invalid_request",
+			"claims must be a valid Claims request object",
+		);
+
+		request.claims = JSON.stringify({
+			id_token: { acr: { essential: true, value: "urn:example:mfa" } },
+		});
+		expectError(
+			await authorize(request),
+			redirectUri,
+			"access_denied",
+			"essential acr requirement cannot be met",
+		);
+
+		request.claims = undefined;
+		expectError(await authorize(request), redirectUri, "invalid_target");
+
+		request.resource = resource;
+		expectError(
+			await authorize(request),
+			redirectUri,
+			"invalid_request",
+			"pkce is required for public clients",
+		);
+
+		request.code_challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+		request.code_challenge_method = "S256";
+		const approved = await authorize(request);
+		expect(`${approved.origin}${approved.pathname}`).toBe(redirectUri);
+		expect(approved.searchParams.get("code")).toBeTruthy();
+	});
+
+	it("requires both PKCE parameters when the client does not require PKCE", async () => {
+		expectError(
+			await authorize({
+				response_type: "code",
+				client_id: optionalPkceClientId,
+				state: "state-1",
+				redirect_uri: redirectUri,
+				scope: "openid",
+				code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+			}),
+			redirectUri,
+			"invalid_request",
+			"code_challenge and code_challenge_method must both be provided",
+		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12257
+ */
+describe("oauth authorize - requireOpenId", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const registeredUri = "https://app.example.com/api/auth/callback";
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					requireOpenId: true,
+				}),
+				jwt(),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+	let clientId: string;
+	let consentClientId: string;
+
+	beforeAll(async () => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [registeredUri],
+				skip_consent: true,
+			},
+		});
+		clientId = oauthClient.client_id;
+		const consentClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [registeredUri],
+				skip_consent: false,
+			},
+		});
+		consentClientId = consentClient.client_id;
+	});
+
+	async function authorize(scope?: string) {
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", clientId);
+		authUrl.searchParams.set("redirect_uri", registeredUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("state", "require-openid-test");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+		if (scope !== undefined) {
+			authUrl.searchParams.set("scope", scope);
+		}
+
+		let location = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			redirect: "manual",
+			onResponse(context) {
+				location = context.response.headers.get("location") || "";
+			},
+		});
+		return new URL(location);
+	}
+
+	it.each([
+		{ name: "no scope", scope: undefined },
+		{ name: "an empty scope", scope: "" },
+		{ name: "scopes without openid", scope: "profile email" },
+	])("redirects invalid_scope to the client for $name", async ({ scope }) => {
+		const location = await authorize(scope);
+
+		expect(`${location.origin}${location.pathname}`).toBe(registeredUri);
+		expect(location.searchParams.get("error")).toBe("invalid_scope");
+		expect(location.searchParams.get("state")).toBe("require-openid-test");
+		expect(location.searchParams.get("code")).toBeNull();
+	});
+
+	it("issues a code when the request includes openid", async () => {
+		const location = await authorize("openid profile");
+
+		expect(`${location.origin}${location.pathname}`).toBe(registeredUri);
+		expect(location.searchParams.get("error")).toBeNull();
+		expect(location.searchParams.get("code")).toBeTruthy();
+		expect(location.searchParams.get("state")).toBe("require-openid-test");
+	});
+
+	it("does not leak the error to an unregistered redirect_uri", async () => {
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", clientId);
+		authUrl.searchParams.set("redirect_uri", "https://evil.example.com/cb");
+		authUrl.searchParams.set("response_type", "code");
+
+		let location = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			redirect: "manual",
+			onResponse(context) {
+				location = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(location).toContain(`${authServerBaseUrl}/api/auth/error`);
+		expect(location).toContain("error=invalid_redirect");
+		expect(location).not.toContain("evil.example.com");
+	});
+
+	describe("consent", () => {
+		async function startConsent(scope: string) {
+			const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+			authUrl.searchParams.set("client_id", consentClientId);
+			authUrl.searchParams.set("redirect_uri", registeredUri);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("scope", scope);
+			authUrl.searchParams.set("state", "require-openid-consent");
+			authUrl.searchParams.set("code_challenge", generateRandomString(43));
+			authUrl.searchParams.set("code_challenge_method", "S256");
+
+			let location = "";
+			await client.$fetch(authUrl.toString(), {
+				headers,
+				redirect: "manual",
+				onResponse(context) {
+					location = context.response.headers.get("location") || "";
+				},
+			});
+			const consentUrl = new URL(location, authServerBaseUrl);
+			expect(consentUrl.pathname).toBe("/consent");
+			return consentUrl.searchParams.toString();
+		}
+
+		it("issues a code when the user accepts a scope that includes openid", async () => {
+			const oauthQuery = await startConsent("openid profile email");
+
+			const result = await auth.api.oauth2Consent({
+				headers: new Headers(headers),
+				body: {
+					accept: true,
+					scope: "openid profile",
+					oauth_query: oauthQuery,
+				},
+			});
+
+			expect(result.redirect).toBe(true);
+			expect(new URL(result.url).searchParams.get("code")).toBeTruthy();
+		});
+
+		it("redirects invalid_scope when the user accepts a scope without openid", async () => {
+			const oauthQuery = await startConsent("openid profile email");
+
+			const result = await auth.api.oauth2Consent({
+				headers: new Headers(headers),
+				body: {
+					accept: true,
+					scope: "profile email",
+					oauth_query: oauthQuery,
+				},
+			});
+
+			const location = new URL(result.url);
+			expect(`${location.origin}${location.pathname}`).toBe(registeredUri);
+			expect(location.searchParams.get("error")).toBe("invalid_scope");
+			expect(location.searchParams.get("state")).toBe("require-openid-consent");
+			expect(location.searchParams.get("code")).toBeNull();
+		});
+	});
+});
+
+describe("oauth authorize - without requireOpenId", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const registeredUri = "https://app.example.com/api/auth/callback";
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+				}),
+				jwt(),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+
+	it.each([
+		{ name: "scopes without openid", scope: "profile" },
+		{ name: "no scope", scope: undefined },
+	])("keeps serving requests with $name", async ({ scope }) => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [registeredUri],
+				skip_consent: true,
+			},
+		});
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClient.client_id);
+		authUrl.searchParams.set("redirect_uri", registeredUri);
+		authUrl.searchParams.set("response_type", "code");
+		if (scope !== undefined) {
+			authUrl.searchParams.set("scope", scope);
+		}
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let location = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			redirect: "manual",
+			onResponse(context) {
+				location = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(new URL(location).searchParams.get("code")).toBeTruthy();
 	});
 });

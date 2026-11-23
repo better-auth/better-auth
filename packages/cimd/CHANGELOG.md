@@ -1,5 +1,75 @@
 # @better-auth/cimd
 
+## 1.7.27
+
+### Patch Changes
+
+- [#12819](https://github.com/better-auth/better-auth/pull/12819) [`89e01c8`](https://github.com/better-auth/better-auth/commit/89e01c84249dcb920464b51d4aaff6a8386c8ef1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A Client ID Metadata Document or `jwks_uri` response that is refused before its body is read, such as an error status or a non-JSON content type, now releases its connection right away. Previously the connection stayed open for as long as the server kept sending the body.
+
+- [#12731](https://github.com/better-auth/better-auth/pull/12731) [`9338fe8`](https://github.com/better-auth/better-auth/commit/9338fe8196901a940d6c2622eef6c14b4a3e6149) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A request that joins a Client ID Metadata Document fetch that never settles, as when a runtime ends the request that started it, now stops waiting after 10 seconds and fetches the document itself. Before, it waited forever, and every later request for that client waited with it.
+
+- [#12822](https://github.com/better-auth/better-auth/pull/12822) [`a485725`](https://github.com/better-auth/better-auth/commit/a4857254129340bc26d58d42fb3c3bdf70824535) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Client ID Metadata Documents whose `client_uri` is on a different origin than the `client_id` are now accepted with the default options. `originBoundFields` now defaults to `["post_logout_redirect_uris"]`; add `"client_uri"` to it only if you deliberately want to keep the old restriction.
+
+- [#12823](https://github.com/better-auth/better-auth/pull/12823) [`2a11b26`](https://github.com/better-auth/better-auth/commit/2a11b2687640211b38ba999fdf791e24af5775a0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add the `isCrossOriginJwksUriAllowed` option to `cimd()` so you can accept a Client ID Metadata Document client whose `jwks_uri` is on a different origin than its `client_id`, without adding that origin to `trustedOrigins`. Such a `jwks_uri` is still rejected by default, and the option is consulted only for that case: at registration, when the document is refreshed, when an administrator updates the client, and before each client assertion.
+
+- [#12818](https://github.com/better-auth/better-auth/pull/12818) [`3f95c55`](https://github.com/better-auth/better-auth/commit/3f95c557568f897a292fc764b386f28a2b65ee1b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The Node transport from `@better-auth/cimd/node` now stops waiting for DNS as soon as the request's abort signal fires, so a resolver that never answers no longer holds a client metadata or JWKS fetch past the plugin's five-second timeout. A lookup the resolver has already started keeps running after the abort; at most 16 can be outstanding per process, and while 16 are, fetches to hostnames fail immediately instead of starting more. The plugin answers a metadata fetch refused this way with HTTP 429 `temporarily_unavailable`, as it does for its other fetch limits, and the client's next request fetches again without waiting out the failed-fetch backoff.
+
+- [#12824](https://github.com/better-auth/better-auth/pull/12824) [`32b8b6e`](https://github.com/better-auth/better-auth/commit/32b8b6e7448a5715a3588e23c3c62fc5eadeade1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A new opt-in `metadataStaleIfError` option keeps a known client working while its metadata host is briefly down. When refreshing its document times out after its host name resolved, fails to connect, or gets HTTP 500, 502, 503, or 504, the stored client is served with a warning for up to the configured time (at most 24 hours) since it was last validated, and its cached `jwks_uri` keys keep working the same way. Other failures still reject the request.
+
+- [#12819](https://github.com/better-auth/better-auth/pull/12819) [`89e01c8`](https://github.com/better-auth/better-auth/commit/89e01c84249dcb920464b51d4aaff6a8386c8ef1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `@better-auth/cimd/node` now closes the connection after a response without a body, such as `304 Not Modified` to a metadata revalidation. Previously the connection stayed open for as long as the metadata server kept it open.
+
+- [#12819](https://github.com/better-auth/better-auth/pull/12819) [`89e01c8`](https://github.com/better-auth/better-auth/commit/89e01c84249dcb920464b51d4aaff6a8386c8ef1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Client metadata and JWKS fetches through `@better-auth/cimd/node` now fail when the server answers with `101 Switching Protocols`. Previously the fetch never settled, even after the plugin's five-second timeout, so the OAuth request hung and its fetch slot stayed taken until the process restarted.
+
+- [#12731](https://github.com/better-auth/better-auth/pull/12731) [`9338fe8`](https://github.com/better-auth/better-auth/commit/9338fe8196901a940d6c2622eef6c14b4a3e6149) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Concurrent requests for the same Client ID Metadata Document now each save the client in their own database context. Before, a request that joined an in-flight fetch received the client saved by the first request, so on runtimes that build a context per request it could resolve a client its own database never stored, and one request's database error failed the others. A request that finds the fetched document in the cache before any request has finished saving it now saves it too, so a request that ends mid-save cannot leave the older client in use. A failed save now also drops the fetched document from the cache and paces the next fetch for that client like a failed fetch. Because each request saves, `onClientRefreshed` can run once for each concurrent request that saves a refreshed document.
+
+- [#12731](https://github.com/better-auth/better-auth/pull/12731) [`9338fe8`](https://github.com/better-auth/better-auth/commit/9338fe8196901a940d6c2622eef6c14b4a3e6149) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A Client ID Metadata Document fetch that never settles no longer keeps other clients at the metadata fetch concurrency limit. Once it has run for 10 seconds, the next fetch to start takes back its slot. Before, the slot stayed taken until the server restarted, so stalled fetches could make other clients fail with `temporarily_unavailable`. If such a fetch answers after its slot was taken back and no newer fetch for that client has started, its document is used instead of being fetched again, unless the `maxCacheEntries` bound evicted that client's records first. Otherwise the requests that waited for it resolve the client again, even when it failed.
+
+- [#12817](https://github.com/better-auth/better-auth/pull/12817) [`b89c0d2`](https://github.com/better-auth/better-auth/commit/b89c0d26e777470d0b1f9a0baecbec8cf1842768) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed back-channel logout, `jwks_uri` client authentication, and Client ID Metadata Document fetches failing on Cloudflare Workers, which rejects `redirect: "error"`. Redirects from these endpoints are still refused. With a fetch-based transport, a redirecting metadata URL now reports `Metadata document fetch returned HTTP 30x` instead of `Failed to fetch metadata document (network error or redirect blocked)`; the error code and status are unchanged.
+
+## 1.7.26
+
+### Patch Changes
+
+- [#12730](https://github.com/better-auth/better-auth/pull/12730) [`5bd20bf`](https://github.com/better-auth/better-auth/commit/5bd20bf35fc86479f68f0ec1f911930957660cf0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Node CIMD metadata fetches now succeed when the first DNS answer is unreachable, for example when the host has no outbound IPv6. The transport returns every validated address to Node's address-family fallback instead of only the first, and it still queries DNS once and rejects the request when any answer is not publicly routable.
+
+- [#12694](https://github.com/better-auth/better-auth/pull/12694) [`8b8843f`](https://github.com/better-auth/better-auth/commit/8b8843fbc38dde826bc9ec94bea4b38375c2ec92) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed client ID metadata fetches for a `client_id` URL whose host is a public IPv6 literal, such as `https://[2606:2800:220:1:248:1893:25c8:1946]/client.json`, which always failed with a DNS lookup error. The literal is now classified directly, pinned for the connection, and still rejected when it is not publicly routable.
+
+## 1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+- [#12503](https://github.com/better-auth/better-auth/pull/12503) [`87ede79`](https://github.com/better-auth/better-auth/commit/87ede7984d4df152ae3c0f5a58a2d08299b24281) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed errors from hooks and endpoints turning into generic 500 responses or skipping their error handling in the OAuth provider, Client ID Metadata Document, passkey, SSO, SCIM, and Stripe plugins when the app installs more than one copy of `better-call`.
+
+## 1.7.23
+
+## 1.7.22
+
+## 1.7.21
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+## 1.7.15
+
+### Patch Changes
+
+- [#12103](https://github.com/better-auth/better-auth/pull/12103) [`4592923`](https://github.com/better-auth/better-auth/commit/4592923869aa3714be41fd5d01629f65e80fcdc7) Thanks [@bytaesu](https://github.com/bytaesu)! - The Node metadata transport now rejects responses with an out-of-range status or an invalid reason phrase, so the client is reported as `invalid_client` instead of the error escaping the request and crashing the process.
+
+## 1.7.14
+
+## 1.7.13
+
 ## 1.7.12
 
 ## 1.7.11

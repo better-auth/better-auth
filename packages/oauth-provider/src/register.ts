@@ -3,14 +3,24 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { isLoopbackIP } from "@better-auth/core/utils/host";
-import { isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
-import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
+import { isUniqueViolation } from "@better-auth/core/db/internal";
+import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
+import {
+	INSECURE_REDIRECT_URI_MESSAGE,
+	isNativePrivateUseRedirectUri,
+} from "@better-auth/core/utils/redirect-uri";
+import {
+	APIError,
+	getSessionFromCtx,
+	isAPIError,
+	NO_STORE_HEADERS,
+} from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import { assertValidClientJwks } from "./client-jwks";
 import { stripReservedOAuthClientMetadataExtensions } from "./client-metadata";
 import {
+	getClientDiscoveries,
 	getSupportedAuthMethods,
 	getSupportedGrantTypes,
 	isExtensionTokenEndpointAuthMethod,
@@ -22,6 +32,7 @@ import {
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import { assertResourcePrivileges } from "./oauthResource/privileges";
 import { getResource } from "./resources";
+import { schema as oauthProviderSchema } from "./schema";
 import type {
 	ClientRegistrationRequest,
 	OAuthClientAdministrativeResponse,
@@ -32,8 +43,17 @@ import type {
 	Scope,
 } from "./types";
 import type { GrantType, OAuthClient } from "./types/oauth";
-import { parseClientMetadata, storeClientSecret } from "./utils";
-import { isPrivateHostname } from "./utils/client-assertion";
+import {
+	challengeHeaders,
+	isInsecureRedirectUriAllowed,
+	isRedirectUriTransportAllowed,
+	parseClientMetadata,
+	storeClientSecret,
+} from "./utils";
+import {
+	isCrossOriginJwksUriAllowedByDiscovery,
+	isPrivateHostname,
+} from "./utils/client-assertion";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
 const DEFAULT_REGISTRATION_GRANT_TYPES = [
@@ -119,6 +139,42 @@ function applyOAuthClientRegistrationDefaults(
 		grant_types: grantTypes,
 		response_types: resolveRegistrationResponseTypes(client, grantTypes),
 	};
+}
+
+/**
+ * Client fields that a metadata document sets and a refresh clears when it
+ * omits them. `subjectType` is not listed: changing it changes every user's
+ * `sub` for the client (OIDC Core §8), so an omitted value keeps the stored
+ * one. A document that states another value still changes it.
+ */
+const METADATA_DOCUMENT_CLIENT_FIELDS = [
+	"name",
+	"uri",
+	"icon",
+	"tos",
+	"policy",
+	"contacts",
+	"jwks",
+	"jwksUri",
+	"softwareId",
+	"softwareVersion",
+	"softwareStatement",
+	"postLogoutRedirectUris",
+	"responseTypes",
+	"dpopBoundAccessTokens",
+] as const satisfies readonly (keyof SchemaClient<Scope[]>)[];
+
+/**
+ * The value a refresh stores for a document field the document omits. Some
+ * adapters store a list field in a non-nullable array column, so a list is
+ * cleared to an empty list instead of `null`.
+ */
+function clearedDocumentFieldValue(
+	field: (typeof METADATA_DOCUMENT_CLIENT_FIELDS)[number],
+): [] | null {
+	return oauthProviderSchema.oauthClient.fields[field].type === "string[]"
+		? []
+		: null;
 }
 
 function isCustomSchemeWithHost(redirectUri: string): boolean {
@@ -231,6 +287,7 @@ async function resolveClientRegistrationResources(
 function validateClientRedirectUri(
 	redirectUri: string,
 	applicationType: "web" | "native",
+	opts: OAuthOptions<Scope[]>,
 ) {
 	let url: URL;
 	try {
@@ -259,6 +316,7 @@ function validateClientRedirectUri(
 		isLoopbackIP(url.hostname) || url.hostname === "localhost";
 
 	if (applicationType === "web") {
+		if (isHttp && isInsecureRedirectUriAllowed(opts, url)) return;
 		if (!isHttps || isRedirectLoopback) {
 			invalidRedirectUri(
 				`web clients require https redirect URIs on non-loopback hosts: ${redirectUri}`,
@@ -276,12 +334,14 @@ function validateClientRedirectUri(
 		return;
 	}
 	if (isHttp) {
-		if (!isExactLoopbackHttpRedirectUri(redirectUri)) {
-			invalidRedirectUri(
-				`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
-			);
+		if (isExactLoopbackHttpRedirectUri(redirectUri)) return;
+		// Loopback hosts keep the exact-host rule; the callback covers other hosts.
+		if (!isLoopbackHost(url.host) && isInsecureRedirectUriAllowed(opts, url)) {
+			return;
 		}
-		return;
+		invalidRedirectUri(
+			`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
+		);
 	}
 
 	if (!isNativePrivateUseRedirectUri(url)) {
@@ -334,7 +394,7 @@ export async function registerEndpoint(
 				error_description: "Authentication required for client registration",
 			},
 			{
-				"WWW-Authenticate": "Bearer",
+				...challengeHeaders("Bearer"),
 				...NO_STORE_HEADERS,
 			},
 		);
@@ -400,6 +460,8 @@ export async function checkOAuthClient(
 	opts: OAuthOptions<Scope[]>,
 	settings?: {
 		registrationSource?: "dynamic" | "managed" | "clientMetadataDocument";
+		/** Discovery that owns a `clientMetadataDocument` registration. */
+		clientDiscoveryId?: string;
 		ctx?: GenericEndpointContext;
 	},
 ) {
@@ -471,7 +533,22 @@ export async function checkOAuthClient(
 			uri,
 			(applicationType as "web" | "native" | undefined) ??
 				(isClientMetadataDocument ? "native" : "web"),
+			opts,
 		);
+	}
+	for (const uri of clientWithDefaults.post_logout_redirect_uris ?? []) {
+		let url: URL | undefined;
+		try {
+			url = new URL(uri);
+		} catch {}
+		if (!url || url.username || url.password) {
+			invalidRedirectUri(
+				`post-logout redirect URI must be an absolute URI without credentials: ${uri}`,
+			);
+		}
+		if (!isRedirectUriTransportAllowed(opts, uri)) {
+			invalidRedirectUri(`${INSECURE_REDIRECT_URI_MESSAGE}: ${uri}`);
+		}
 	}
 
 	// Validate correlation between grant_types and response_types
@@ -654,7 +731,21 @@ export async function checkOAuthClient(
 						clientId !== undefined &&
 						URL.canParse(clientId) &&
 						new URL(clientId).origin === uri.origin;
-					if (!isSameOriginClientMetadataDocumentKey) {
+					const isAllowedCrossOriginClientMetadataDocumentKey =
+						!isSameOriginClientMetadataDocumentKey &&
+						isClientMetadataDocument &&
+						clientId !== undefined &&
+						(await isCrossOriginJwksUriAllowedByDiscovery(
+							settings.ctx,
+							getClientDiscoveries(opts).find(
+								(discovery) => discovery.id === settings.clientDiscoveryId,
+							),
+							{ clientId, jwksUri: clientWithDefaults.jwks_uri },
+						));
+					if (
+						!isSameOriginClientMetadataDocumentKey &&
+						!isAllowedCrossOriginClientMetadataDocumentKey
+					) {
 						throw new APIError("BAD_REQUEST", {
 							error: "invalid_client_metadata",
 							error_description:
@@ -663,7 +754,7 @@ export async function checkOAuthClient(
 					}
 				}
 			} catch (e) {
-				if (e instanceof APIError) throw e;
+				if (isAPIError(e)) throw e;
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_client_metadata",
 					error_description: "jwks_uri must be a valid URL",
@@ -864,6 +955,10 @@ async function persistOAuthClientRegistration(
 	// Check if client parameters are valid combination
 	await checkOAuthClient(body, opts, {
 		registrationSource: input.registrationSource,
+		clientDiscoveryId:
+			input.registrationSource === "clientMetadataDocument"
+				? input.clientDiscoveryId
+				: undefined,
 		ctx,
 	});
 
@@ -980,6 +1075,14 @@ async function persistOAuthClientRegistration(
 					enableEndSession: _enableEndSession,
 					...refreshed
 				} = schema;
+				// An update skips undefined values, so a field the document no longer
+				// lists is cleared explicitly.
+				const omittedDocumentFields = Object.fromEntries(
+					METADATA_DOCUMENT_CLIENT_FIELDS.map((field) => [
+						field,
+						refreshed[field] ?? clearedDocumentFieldValue(field),
+					]),
+				);
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
 					model: clientModel,
 					where: [
@@ -991,6 +1094,7 @@ async function persistOAuthClientRegistration(
 					],
 					update: {
 						...refreshed,
+						...omittedDocumentFields,
 						createdAt: existingClient.createdAt,
 						updatedAt: new Date(iat * 1000),
 					},
@@ -1015,7 +1119,7 @@ async function persistOAuthClientRegistration(
 				} catch (error) {
 					if (
 						input.registrationSource === "clientMetadataDocument" &&
-						isUniqueConstraintError(error)
+						isUniqueViolation(error)
 					) {
 						throw {
 							[CLIENT_REGISTRATION_COLLISION]: true,
@@ -1054,7 +1158,7 @@ async function persistOAuthClientRegistration(
 				} catch (error) {
 					if (
 						input.registrationSource === "clientMetadataDocument" &&
-						isUniqueConstraintError(error)
+						isUniqueViolation(error)
 					) {
 						throw {
 							[CLIENT_REGISTRATION_COLLISION]: true,
@@ -1229,36 +1333,6 @@ export async function registerClientMetadataDocument(
 	}
 }
 
-function isUniqueConstraintError(error: unknown): boolean {
-	if (!error || typeof error !== "object") return false;
-	const candidate = error as {
-		code?: unknown;
-		errno?: unknown;
-		name?: unknown;
-		message?: unknown;
-	};
-	const code = String(candidate.code ?? candidate.errno ?? "");
-	if (
-		[
-			"1062",
-			"11000",
-			"23505",
-			"ER_DUP_ENTRY",
-			"P2002",
-			"SQLITE_CONSTRAINT_UNIQUE",
-		].includes(code)
-	) {
-		return true;
-	}
-	if (candidate.name === "MongoServerError" && candidate.code === 11000) {
-		return true;
-	}
-	return (
-		typeof candidate.message === "string" &&
-		/(?:duplicate|unique constraint|unique key)/i.test(candidate.message)
-	);
-}
-
 export function createOAuthClientEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -1401,9 +1475,7 @@ export function oauthToSchema(
 		inputMetadata ?? {},
 	);
 	const metadata =
-		metadataObj && Object.keys(metadataObj).length
-			? JSON.stringify(metadataObj)
-			: undefined;
+		metadataObj && Object.keys(metadataObj).length ? metadataObj : undefined;
 
 	return {
 		// Important Fields

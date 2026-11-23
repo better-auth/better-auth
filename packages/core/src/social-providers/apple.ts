@@ -1,5 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
-
 import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
@@ -7,9 +5,11 @@ import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
+	parseStringBoolean,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
@@ -167,10 +167,7 @@ export const apple = (options: AppleOptions) => {
 				name = profile.name || "";
 			}
 
-			const emailVerified =
-				typeof profile.email_verified === "boolean"
-					? profile.email_verified
-					: profile.email_verified === "true";
+			const emailVerified = parseStringBoolean(profile.email_verified) ?? false;
 			const enrichedProfile = {
 				...profile,
 				name,
@@ -193,7 +190,7 @@ export const apple = (options: AppleOptions) => {
 export const getApplePublicKey = async (kid: string) => {
 	const APPLE_BASE_URL = "https://appleid.apple.com";
 	const JWKS_APPLE_URI = "/auth/keys";
-	const { data } = await betterFetch<{
+	const { data } = await fetchRefusingRedirects<{
 		keys: Array<{
 			kid: string;
 			alg: string;
