@@ -658,7 +658,7 @@ Without an `issuer` option, `requireMcpAuth` now expects the provider's issuer, 
 
 ### The resource client checks tokens against the provider's records
 
-`oauthProviderResourceClient(auth)` now checks each token against the provider's records when `auth` runs the OAuth provider with a static `baseURL` and you set neither `jwksUrl` nor `remoteVerify`. This applies to `verifyAccessTokenRequest` and `verifyBearerToken`. Before, it verified JWT access tokens by signature alone, so these requests change:
+`oauthProviderResourceClient(auth)` now checks each token against the provider's records when `auth` runs the OAuth provider with a static `baseURL`. Setting `jwksUrl`, `jwks.remoteUrl` in the JWT plugin, or `remoteVerify` keeps the corresponding verification mode. This applies to `verifyAccessTokenRequest` and `verifyBearerToken`. Before, it verified JWT access tokens by signature alone, so these requests change:
 
 * A JWT access token now fails with `401 invalid_token` when its associated session ends, its client is disabled, or its resource is deleted. Checking individual JWT access tokens for revocation requires `revocableJwtAccessTokens: true`. Each verification reads your database.
 * An opaque access token from the same provider now verifies without `remoteVerify`.

@@ -78,21 +78,6 @@ export const oauthProviderResourceClient = <
 		return configuredIssuer ? validateIssuerUrl(configuredIssuer) : undefined;
 	};
 	/**
-	 * Whether tokens are checked against the records of the OAuth provider in
-	 * this process: the default with a static base URL, unless the caller chose
-	 * `jwksUrl` or `remoteVerify`.
-	 */
-	const usesLocalRecords = async (
-		opts: { jwksUrl?: string; remoteVerify?: unknown } | undefined,
-	) =>
-		!!auth &&
-		!opts?.jwksUrl &&
-		!opts?.remoteVerify &&
-		// A dynamic `baseURL` resolves only per request, so records checked
-		// without one would carry an empty issuer and UserInfo audience.
-		!!(await getAuthServerBaseUrl()) &&
-		!!(await getOauthProviderPlugin());
-	/**
 	 * Fills a missing nonce secret and lifetime from the auth instance: the
 	 * secret the OAuth provider derives its nonces from and the provider's
 	 * `dpop.nonce.expiresIn`. A resource on the provider's origin then accepts
@@ -161,11 +146,14 @@ export const oauthProviderResourceClient = <
 		const authServerBaseUrl = await getAuthServerBaseUrl();
 		const audience = opts?.verifyOptions?.audience ?? authServerBaseUrl;
 		const configuredIssuer = await getConfiguredIssuer();
-		// The provider in this process checks the token against its records,
-		// which accepts opaque tokens and rejects revoked ones, ended sessions,
-		// and disabled clients, without a request to its own endpoints.
+		// Record checks need the static base URL for the issuer and UserInfo
+		// audience. Explicit verification settings keep their existing path.
 		const introspect =
-			auth && (await usesLocalRecords(opts))
+			auth &&
+			authServerBaseUrl &&
+			!opts?.jwksUrl &&
+			!jwtPluginOptions?.jwks?.remoteUrl &&
+			!opts?.remoteVerify
 				? getLocalIntrospection(
 						(await auth.$context) as Parameters<
 							typeof getLocalIntrospection
@@ -182,9 +170,9 @@ export const oauthProviderResourceClient = <
 						(await auth.$context) as Parameters<typeof getLocalJwksSource>[0],
 					)
 				: undefined;
-		// Records and keys read in-process also accept the issuer as configured. Keys fetched from a URL, which is `opts.jwksUrl` or the JWT
-		// plugin's `jwks.remoteUrl`, are a remote check: RFC 9068 §4 requires an
-		// exact `iss` match, so only the normalized issuer is accepted.
+		// Records and keys read in-process also accept the issuer as configured.
+		// Signature checks with keys fetched from a URL expect the normalized
+		// issuer alone, as RFC 9068 §4 requires an exact `iss` match.
 		const issuer =
 			opts?.verifyOptions?.issuer ??
 			(configuredIssuer
@@ -248,12 +236,10 @@ export const oauthProviderResourceClient = <
 				/**
 				 * Performs verification of an access token for your APIs.
 				 *
-				 * With a static `baseURL`, an auth instance running the provider, and neither
-				 * `jwksUrl` nor `remoteVerify`, the token is checked against the
-				 * provider's records, as `/oauth2/introspect` does, and the result is
-				 * its RFC 7662 introspection response. Otherwise a JWT access token is
-				 * verified by signature against `jwksUrl`, and `remoteVerify`
-				 * introspects over HTTP with a confidential client set up for this API.
+				 * With an in-process provider and a static `baseURL`, the result
+				 * is the token's RFC 7662 introspection response. Setting
+				 * `jwksUrl`, `jwks.remoteUrl` in the JWT plugin, or `remoteVerify`
+				 * selects signature verification or HTTP introspection.
 				 *
 				 * The optional auth parameter can fill known values automatically.
 				 */
@@ -298,14 +284,16 @@ export const oauthProviderResourceClient = <
 				 * scheme, DPoP proof, `ath`, and `cnf.jkt` binding. The proof's `htu`
 				 * is the request URL, or `url` in a {@link ResourceRequestInput}.
 				 *
-				 * With a static `baseURL`, an auth instance running the provider, and neither
-				 * `jwksUrl` nor `remoteVerify`, the token is checked against the
-				 * provider's records. Opaque tokens verify, and revocation of JWT access
-				 * tokens is checked with `revocableJwtAccessTokens` enabled. The result is the token's RFC
-				 * 7662 introspection response, whose `sub` is the subject the access
-				 * token carries. DPoP proofs then use the provider's shared replay
-				 * store, and nonces follow the provider's `dpop.nonce` unless `dpop`
-				 * overrides them. A dynamic `baseURL` keeps signature verification.
+				 * With an in-process provider and a static `baseURL`, the token
+				 * is checked against the provider's records. Setting `jwksUrl`,
+				 * `jwks.remoteUrl` in the JWT plugin, or `remoteVerify` selects
+				 * signature verification or HTTP introspection.
+				 *
+				 * The records check accepts opaque tokens and checks JWT
+				 * revocation with `revocableJwtAccessTokens` enabled. It returns
+				 * the token's RFC 7662 introspection response. DPoP uses the
+				 * provider's shared replay store and `dpop.nonce` settings unless
+				 * the caller overrides them.
 				 */
 				verifyAccessTokenRequest: (async (
 					request: Request | ResourceRequestInput,
