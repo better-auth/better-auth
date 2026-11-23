@@ -825,7 +825,7 @@ export const stripeSubscriptionTableFields = [
 <DatabaseTable name="subscription" fields={stripeSubscriptionTableFields} />
 
 <Callout type="info">
-**Existing Databases**: BetterAuth CLI migration tools (`npx @better-auth/cli migrate`) only create indexes when provisioning new tables or columns. If you are upgrading an existing database where the Stripe tables or columns already exist, create these indexes manually in your database. On production PostgreSQL databases, use `CREATE INDEX CONCURRENTLY` to avoid table locking.
+  **Existing Databases**: BetterAuth CLI migration tools (`npx auth migrate`) only create indexes when provisioning new tables or columns. If you are upgrading an existing database where the Stripe tables or columns already exist, create these indexes manually in your database. On production PostgreSQL databases, use `CREATE INDEX CONCURRENTLY` to avoid table locking.
 </Callout>
 
 ### Customizing the Schema
