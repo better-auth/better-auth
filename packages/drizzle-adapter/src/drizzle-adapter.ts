@@ -28,7 +28,6 @@ import {
 	is,
 	isNotNull,
 	isNull,
-	like,
 	lt,
 	lte,
 	ne,
@@ -43,8 +42,9 @@ import {
 	getOneToOneRelationKey,
 } from "./join-relation-key";
 import {
+	escapedLike,
+	escapeLikePattern,
 	insensitiveEq,
-	insensitiveIlike,
 	insensitiveInArray,
 	insensitiveNe,
 	insensitiveNotInArray,
@@ -415,38 +415,59 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (w.operator === "contains") {
 						if (isInsensitive && typeof w.value === "string") {
 							return [
-								insensitiveIlike(
+								escapedLike(
 									schemaModel[field],
-									`%${w.value}%`,
+									`%${escapeLikePattern(w.value)}%`,
 									config.provider,
+									"insensitive",
 								),
 							];
 						}
-						return [like(schemaModel[field], `%${w.value}%`)];
+						return [
+							escapedLike(
+								schemaModel[field],
+								`%${escapeLikePattern(w.value)}%`,
+								config.provider,
+							),
+						];
 					}
 					if (w.operator === "starts_with") {
 						if (isInsensitive && typeof w.value === "string") {
 							return [
-								insensitiveIlike(
+								escapedLike(
 									schemaModel[field],
-									`${w.value}%`,
+									`${escapeLikePattern(w.value)}%`,
 									config.provider,
+									"insensitive",
 								),
 							];
 						}
-						return [like(schemaModel[field], `${w.value}%`)];
+						return [
+							escapedLike(
+								schemaModel[field],
+								`${escapeLikePattern(w.value)}%`,
+								config.provider,
+							),
+						];
 					}
 					if (w.operator === "ends_with") {
 						if (isInsensitive && typeof w.value === "string") {
 							return [
-								insensitiveIlike(
+								escapedLike(
 									schemaModel[field],
-									`%${w.value}`,
+									`%${escapeLikePattern(w.value)}`,
 									config.provider,
+									"insensitive",
 								),
 							];
 						}
-						return [like(schemaModel[field], `%${w.value}`)];
+						return [
+							escapedLike(
+								schemaModel[field],
+								`%${escapeLikePattern(w.value)}`,
+								config.provider,
+							),
+						];
 					}
 
 					if (w.operator === "lt") {
@@ -530,33 +551,48 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 						if (w.operator === "contains") {
 							if (isInsensitive && typeof w.value === "string") {
-								return insensitiveIlike(
+								return escapedLike(
 									schemaModel[field],
-									`%${w.value}%`,
+									`%${escapeLikePattern(w.value)}%`,
 									config.provider,
+									"insensitive",
 								);
 							}
-							return like(schemaModel[field], `%${w.value}%`);
+							return escapedLike(
+								schemaModel[field],
+								`%${escapeLikePattern(w.value)}%`,
+								config.provider,
+							);
 						}
 						if (w.operator === "starts_with") {
 							if (isInsensitive && typeof w.value === "string") {
-								return insensitiveIlike(
+								return escapedLike(
 									schemaModel[field],
-									`${w.value}%`,
+									`${escapeLikePattern(w.value)}%`,
 									config.provider,
+									"insensitive",
 								);
 							}
-							return like(schemaModel[field], `${w.value}%`);
+							return escapedLike(
+								schemaModel[field],
+								`${escapeLikePattern(w.value)}%`,
+								config.provider,
+							);
 						}
 						if (w.operator === "ends_with") {
 							if (isInsensitive && typeof w.value === "string") {
-								return insensitiveIlike(
+								return escapedLike(
 									schemaModel[field],
-									`%${w.value}`,
+									`%${escapeLikePattern(w.value)}`,
 									config.provider,
+									"insensitive",
 								);
 							}
-							return like(schemaModel[field], `%${w.value}`);
+							return escapedLike(
+								schemaModel[field],
+								`%${escapeLikePattern(w.value)}`,
+								config.provider,
+							);
 						}
 						if (w.operator === "lt") {
 							return lt(schemaModel[field], w.value);
@@ -633,33 +669,48 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 						if (w.operator === "contains") {
 							if (isInsensitive && typeof w.value === "string") {
-								return insensitiveIlike(
+								return escapedLike(
 									schemaModel[field],
-									`%${w.value}%`,
+									`%${escapeLikePattern(w.value)}%`,
 									config.provider,
+									"insensitive",
 								);
 							}
-							return like(schemaModel[field], `%${w.value}%`);
+							return escapedLike(
+								schemaModel[field],
+								`%${escapeLikePattern(w.value)}%`,
+								config.provider,
+							);
 						}
 						if (w.operator === "starts_with") {
 							if (isInsensitive && typeof w.value === "string") {
-								return insensitiveIlike(
+								return escapedLike(
 									schemaModel[field],
-									`${w.value}%`,
+									`${escapeLikePattern(w.value)}%`,
 									config.provider,
+									"insensitive",
 								);
 							}
-							return like(schemaModel[field], `${w.value}%`);
+							return escapedLike(
+								schemaModel[field],
+								`${escapeLikePattern(w.value)}%`,
+								config.provider,
+							);
 						}
 						if (w.operator === "ends_with") {
 							if (isInsensitive && typeof w.value === "string") {
-								return insensitiveIlike(
+								return escapedLike(
 									schemaModel[field],
-									`%${w.value}`,
+									`%${escapeLikePattern(w.value)}`,
 									config.provider,
+									"insensitive",
 								);
 							}
-							return like(schemaModel[field], `%${w.value}`);
+							return escapedLike(
+								schemaModel[field],
+								`%${escapeLikePattern(w.value)}`,
+								config.provider,
+							);
 						}
 						if (w.operator === "lt") {
 							return lt(schemaModel[field], w.value);

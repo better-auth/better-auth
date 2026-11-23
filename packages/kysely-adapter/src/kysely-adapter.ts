@@ -25,8 +25,9 @@ import type {
 } from "kysely";
 import { sql } from "kysely";
 import {
+	escapedLike,
+	escapeLikePattern,
 	insensitiveEq,
-	insensitiveIlike,
 	insensitiveIn,
 	insensitiveNe,
 	insensitiveNotIn,
@@ -384,25 +385,26 @@ export const kyselyAdapter = (
 							return eb(f, "not in", Array.isArray(value) ? value : [value]);
 						}
 
-						if (operator === "contains") {
-							if (isInsensitive && typeof value === "string") {
-								return insensitiveIlike(f, `%${value}%`, config?.type);
-							}
-							return eb(f, "like", `%${value}%`);
-						}
-
-						if (operator === "starts_with") {
-							if (isInsensitive && typeof value === "string") {
-								return insensitiveIlike(f, `${value}%`, config?.type);
-							}
-							return eb(f, "like", `${value}%`);
-						}
-
-						if (operator === "ends_with") {
-							if (isInsensitive && typeof value === "string") {
-								return insensitiveIlike(f, `%${value}`, config?.type);
-							}
-							return eb(f, "like", `%${value}`);
+						if (
+							operator === "contains" ||
+							operator === "starts_with" ||
+							operator === "ends_with"
+						) {
+							const literal = escapeLikePattern(value, config?.type);
+							const pattern =
+								operator === "contains"
+									? `%${literal}%`
+									: operator === "starts_with"
+										? `${literal}%`
+										: `%${literal}`;
+							return escapedLike(
+								f,
+								pattern,
+								config?.type,
+								isInsensitive && typeof value === "string"
+									? "insensitive"
+									: "sensitive",
+							);
 						}
 
 						if (operator === "eq") {

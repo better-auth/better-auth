@@ -297,10 +297,21 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 									w.operator === "ne" ||
 									w.operator === "in" ||
 									w.operator === "not_in")));
+					// Prisma emits LIKE without an ESCAPE clause; PostgreSQL and MySQL
+					// default to `\`, so escaping it matches `%` and `_` literally.
+					const usesLike =
+						(config.provider === "postgresql" || config.provider === "mysql") &&
+						(w.operator === "contains" ||
+							w.operator === "starts_with" ||
+							w.operator === "ends_with");
 					const toPrismaValue = (v: unknown) =>
-						usesRegex && typeof v === "string"
-							? v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-							: v;
+						typeof v !== "string"
+							? v
+							: usesRegex
+								? v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+								: usesLike
+									? v.replace(/[\\%_]/g, "\\$&")
+									: v;
 
 					// Special handling for Prisma null semantics, for non-nullable fields this is a tautology. Skip condition.
 					if (w.operator === "ne" && w.value === null) {

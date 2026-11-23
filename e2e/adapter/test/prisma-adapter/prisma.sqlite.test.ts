@@ -20,6 +20,13 @@ import {
 import { pushPrismaSchema } from "./push-prisma-schema";
 
 const dialect = "sqlite";
+// SQLite LIKE has no default escape character and Prisma cannot add an ESCAPE
+// clause, so `%` and `_` cannot be matched literally.
+const noLiteralLike = {
+	disableTests: {
+		"findMany - contains, starts_with and ends_with should match LIKE wildcards literally": true,
+	},
+};
 const { execute } = await testAdapter({
 	adapter: async () => {
 		const db = await getPrismaClient(dialect);
@@ -37,12 +44,12 @@ const { execute } = await testAdapter({
 		destroyPrismaClient({ migrationCount: migrationCount - 1, dialect });
 	},
 	tests: [
-		normalTestSuite(),
+		normalTestSuite(noLiteralLike),
 		transactionsTestSuite(),
 		authFlowTestSuite(),
-		numberIdTestSuite(),
-		joinsTestSuite(),
-		uuidTestSuite(),
+		numberIdTestSuite(noLiteralLike),
+		joinsTestSuite(noLiteralLike),
+		uuidTestSuite(noLiteralLike),
 		caseInsensitiveTestSuite({
 			disableTests: {
 				"findOne - eq with mode insensitive should match regardless of case": true,
@@ -53,6 +60,7 @@ const { execute } = await testAdapter({
 				"count - with mode insensitive": true,
 				"update - where with mode insensitive": true,
 				"deleteMany - where with mode insensitive": true,
+				"findMany - insensitive contains, starts_with and ends_with should match LIKE wildcards literally": true,
 			},
 		}),
 	],

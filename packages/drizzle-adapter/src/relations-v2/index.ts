@@ -41,6 +41,7 @@ import {
 } from "../join-relation-key";
 import {
 	escapedLike,
+	escapeLikePattern,
 	insensitiveEq,
 	insensitiveInArray,
 	insensitiveNe,
@@ -50,19 +51,6 @@ import { findDrizzleSchemaProblems } from "../schema-check";
 
 export interface DB {
 	[key: string]: any;
-}
-
-function escapeLikePattern(
-	value: string | number | boolean | string[] | number[] | Date | null,
-): string {
-	if (value == null) return "";
-	// Escape the backslash first so the `\` added for `%` and `_` is not
-	// re-escaped, and a literal backslash in the input stays literal under the
-	// `ESCAPE '\'` clause.
-	return String(value)
-		.replace(/\\/g, "\\\\")
-		.replace(/%/g, "\\%")
-		.replace(/_/g, "\\_");
 }
 
 function readDriverRowCount(result: unknown): unknown {
