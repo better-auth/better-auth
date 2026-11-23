@@ -2,6 +2,14 @@ import { isWorkerd } from "@better-auth/core/env";
 
 const asyncLocks = new Map<string, Promise<void>>();
 
+/**
+ * In-process promise-chain mutex for serializing operations per key.
+ *
+ * @note This provides in-process serialization only within a single Node.js/runtime instance.
+ * In distributed or multi-instance deployments where requests are balanced across separate
+ * processes or servers, durable serialization across instances requires database-level transactional
+ * isolation or distributed locking (e.g. Redis / storage locks).
+ */
 export async function withLock<T>(
 	key: string,
 	fn: () => Promise<T>,
