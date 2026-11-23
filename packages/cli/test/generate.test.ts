@@ -262,11 +262,14 @@ model Account {
 		const existing = ({
 			sessionModel = "Session",
 			userRelations,
-			sessionRelations = "user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)",
+			sessionRelations = `userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)`,
+			extraModels = "",
 		}: {
 			sessionModel?: string;
 			userRelations: string;
 			sessionRelations?: string;
+			extraModels?: string;
 		}) => `generator client {
   provider = "prisma-client-js"
 }
@@ -296,7 +299,6 @@ model ${sessionModel} {
   updatedAt DateTime @updatedAt
   ipAddress String?
   userAgent String?
-  userId    String
   ${sessionRelations}
 
   @@index([userId])
@@ -334,23 +336,28 @@ model Verification {
   @@index([identifier])
   @@map("verification")
 }
-`;
+${extraModels}`;
 		const generate = async (
 			schemaPrisma: string,
 			options: Partial<BetterAuthOptions> = {},
+			usePlural = false,
 		) => {
 			const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ba-prisma-"));
 			const file = path.join(tmpDir, "schema.prisma");
 			fs.writeFileSync(file, schemaPrisma);
+			const database = prismaAdapter(
+				{},
+				{
+					provider: "postgresql",
+					usePlural,
+				},
+			);
 			try {
 				return await generatePrismaSchema({
 					file,
-					adapter: prismaAdapter(
-						{},
-						{ provider: "postgresql" },
-					)({} as BetterAuthOptions),
+					adapter: database({} as BetterAuthOptions),
 					options: {
-						database: prismaAdapter({}, { provider: "postgresql" }),
+						database,
 						...options,
 					},
 				});
@@ -360,7 +367,7 @@ model Verification {
 		};
 		const userFieldsOfType = (code: string | undefined, type: string) => {
 			const user = code?.match(/model User \{([\s\S]*?)\n\}/)?.[1] ?? "";
-			return user.match(new RegExp(`^\\s*\\w+\\s+${type}\\[\\]`, "gm")) ?? [];
+			return user.match(new RegExp(`^\\s*\\w+\\s+${type}[[?]`, "gm")) ?? [];
 		};
 
 		it("keeps a camelCase back-relation instead of adding a second one", async () => {
@@ -420,26 +427,103 @@ model Verification {
 				existing({
 					userRelations: `userSessions  Session[] @relation("UserSessions")
   accounts      Account[]`,
-					sessionRelations: `user      User     @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)`,
+					sessionRelations: `userId    String
+  user      User     @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)`,
 				}),
 			);
 
 			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
 		});
 
-		it("adds the back-relation when only a differently named relation exists", async () => {
+		const revokedBy = `revokedById String?
+  revokedBy   User?    @relation("RevokedBy", fields: [revokedById], references: [id])`;
+		const ownedSession = `userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)`;
+
+		it.each([
+			[
+				"after the owning side of the foreign key",
+				`${ownedSession}\n  ${revokedBy}`,
+			],
+			[
+				"before the owning side of the foreign key",
+				`${revokedBy}\n  ${ownedSession}`,
+			],
+			["while the foreign key is still missing", revokedBy],
+		])(
+			"adds the back-relation when another named relation exists %s",
+			async (_, sessionRelations) => {
+				const { code } = await generate(
+					existing({
+						userRelations: `revokedSessions Session[] @relation("RevokedBy")
+  accounts        Account[]`,
+						sessionRelations,
+					}),
+				);
+
+				expect(code).toMatch(/^\s*sessions\s+Session\[\]\s*$/m);
+				expect(userFieldsOfType(code, "Session")).toHaveLength(2);
+			},
+		);
+
+		it("keeps a back-relation paired by relation name when usePlural is enabled", async () => {
+			const { code } = await generate("", {}, true);
+			const named = code!
+				.replace(
+					"sessions      Sessions[]",
+					'userSessions  Sessions[] @relation("UserSessions")',
+				)
+				.replace(
+					"users     Users    @relation(fields: [userId]",
+					'users     Users    @relation("UserSessions", fields: [userId]',
+				);
+			const { code: again } = await generate(named, {}, true);
+
+			expect(named).toContain('@relation("UserSessions", fields: [userId]');
+			expect(again || named).not.toMatch(/^\s*sessions\s+Sessions\[\]/m);
+		});
+
+		it("keeps an optional back-relation to a unique foreign key", async () => {
 			const { code } = await generate(
 				existing({
-					userRelations: `revokedSessions Session[] @relation("RevokedBy")
-  accounts        Account[]`,
-					sessionRelations: `user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  revokedById String?
-  revokedBy   User?    @relation("RevokedBy", fields: [revokedById], references: [id])`,
+					userRelations: `accounts       Account[]
+  sessions       Session[]
+  currentProfile Profile?`,
+					extraModels: `
+model Profile {
+  id     String @id
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profile")
+}
+`,
 				}),
+				{
+					plugins: [
+						{
+							id: "profile",
+							schema: {
+								profile: {
+									fields: {
+										userId: {
+											type: "string",
+											required: true,
+											unique: true,
+											references: {
+												model: "user",
+												field: "id",
+											},
+										},
+									},
+								},
+							},
+						},
+					],
+				},
 			);
 
-			expect(code).toMatch(/^\s*sessions\s+Session\[\]\s*$/m);
-			expect(userFieldsOfType(code, "Session")).toHaveLength(2);
+			expect(userFieldsOfType(code, "Profile")).toHaveLength(1);
 		});
 	});
 

@@ -15,7 +15,7 @@ import {
 } from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
-import type { Field, KeyValue } from "@mrleebo/prisma-ast";
+import type { KeyValue, Model } from "@mrleebo/prisma-ast";
 import {
 	getSchema as parsePrismaSchema,
 	produceSchema,
@@ -31,24 +31,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Reads a field's `@relation` the way Prisma pairs the two sides of a relation:
- * by relation name, unnamed with unnamed. The owning side holds `fields`.
+ * Each field of a Prisma model with its `@relation` name and, on the side that
+ * stores the foreign key, its `fields`. Prisma pairs the two sides by name.
  */
-function readRelation(field: Field) {
-	const values =
-		field.attributes
-			?.find((attribute) => attribute.name === "relation")
-			?.args?.map((arg) => arg.value) ?? [];
-	const keyValues = values.filter(
-		(value): value is KeyValue =>
-			isRecord(value) && !Array.isArray(value) && value.type === "keyValue",
-	);
-	return {
-		name:
-			values.find((value) => typeof value === "string") ??
-			keyValues.find((keyValue) => keyValue.key === "name")?.value,
-		owning: keyValues.some((keyValue) => keyValue.key === "fields"),
-	};
+function readRelations(model: Model | null | undefined) {
+	return (model?.properties ?? []).flatMap((property) => {
+		if (property.type !== "field") return [];
+		const args =
+			property.attributes
+				?.find((attribute) => attribute.name === "relation")
+				?.args?.map((arg) => arg.value) ?? [];
+		const keyed = (key: string) =>
+			args.find((arg): arg is KeyValue => isRecord(arg) && arg.key === key)
+				?.value;
+		const fields = keyed("fields");
+		return {
+			type: property.fieldType,
+			name: args.find((arg) => typeof arg === "string") ?? keyed("name"),
+			fields:
+				typeof fields === "object" && fields !== null && "args" in fields
+					? fields.args
+					: [],
+		};
+	});
 }
 
 function parsePrismaStringLiteral(value: unknown) {
@@ -706,8 +711,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					// Find the FK field on the related model that points to this model
 					const relatedTableName = Object.keys(tables).find(
 						(key) =>
-							capitalizeFirstLetter(tables[key]?.modelName || key) ===
-							relatedModel,
+							capitalizeFirstLetter(
+								getModelName(tables[key]?.modelName || key),
+							) === relatedModel,
 					);
 					const relatedFields = relatedTableName
 						? tables[relatedTableName]?.fields
@@ -718,7 +724,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							getModelName(fieldAttr.references.model) ===
 								getModelName(originalTableName),
 					);
-					const [_fieldKey, fkFieldAttr] = fkField || [];
+					const [fkFieldKey, fkFieldAttr] = fkField || [];
 					const isUnique = fkFieldAttr?.unique === true;
 
 					const fieldName =
@@ -729,29 +735,20 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						name: fieldName,
 						within: prismaModel?.properties,
 					});
-					// Users may name the back-relation field anything, so pair it with
-					// the owning side by relation name instead. A missing owning side is
+					// Users may name the back-relation anything, so pair it by relation
+					// name with the field that stores this foreign key. A missing one is
 					// generated unnamed.
-					const owningSide = builder
-						.findByType("model", { name: relatedModel })
-						?.properties.find(
-							(property): property is Field =>
-								property.type === "field" &&
-								property.fieldType === modelName &&
-								readRelation(property).owning,
-						);
-					const relationName = owningSide && readRelation(owningSide).name;
-					const existingBackRelation = prismaModel?.properties.some(
-						(property) => {
-							if (
-								property.type !== "field" ||
-								property.fieldType !== relatedModel
-							) {
-								return false;
-							}
-							const relation = readRelation(property);
-							return !relation.owning && relation.name === relationName;
-						},
+					const foreignKey = fkFieldAttr?.fieldName || fkFieldKey;
+					const relationName = readRelations(
+						builder.findByType("model", { name: relatedModel }),
+					).find((relation) =>
+						relation.fields.some((field) => field === foreignKey),
+					)?.name;
+					const existingBackRelation = readRelations(prismaModel).some(
+						(relation) =>
+							relation.type === relatedModel &&
+							relation.fields.length === 0 &&
+							relation.name === relationName,
 					);
 					if (!existingField && !existingBackRelation) {
 						builder
