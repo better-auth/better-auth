@@ -7,7 +7,7 @@ import { emailOTP } from "../email-otp";
 import { phoneNumber } from "../phone-number";
 import { username } from "../username";
 import { openAPI } from ".";
-import type { OpenAPISchema, Path } from "./generator";
+import type { OpenAPIModelSchema, OpenAPISchema, Path } from "./generator";
 
 type PostRequestBody = NonNullable<NonNullable<Path["post"]>["requestBody"]>;
 
@@ -465,7 +465,7 @@ describe("open-api", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const schemas = schema.components.schemas as Record<
 			string,
-			Record<string, any>
+			OpenAPIModelSchema
 		>;
 
 		expect(schemas["User"]!.properties.metadata).toEqual({});
