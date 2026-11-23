@@ -29,11 +29,14 @@ afterEach(() => {
 
 describe("getAsyncLocalStorage", () => {
 	it("returns the native constructor through the existing asynchronous API", async () => {
-		const { getAsyncLocalStorage } = await import("./index");
+		const { getAsyncLocalStorage, isNativeAsyncLocalStorage } = await import(
+			"./index"
+		);
 		const result = getAsyncLocalStorage();
 		expectTypeOf(result).toEqualTypeOf<Promise<typeof AsyncLocalStorage>>();
 		expect(result).toBeInstanceOf(Promise);
 		expect(await result).toBe(AsyncLocalStorage);
+		expect(isNativeAsyncLocalStorage(await result)).toBe(true);
 	});
 
 	it.runIf(typeof process.getBuiltinModule === "function")(

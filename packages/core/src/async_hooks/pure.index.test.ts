@@ -49,10 +49,13 @@ describe("pure getAsyncLocalStorage", () => {
 
 	it("provides the polyfill in a browser and restores nested synchronous stores", async () => {
 		vi.stubGlobal("window", {});
-		const { getAsyncLocalStorage } = await import("./pure.index");
+		const { getAsyncLocalStorage, isNativeAsyncLocalStorage } = await import(
+			"./pure.index"
+		);
 		const Storage = await getAsyncLocalStorage();
 		const storage = new Storage<string>();
 		expect(Storage).not.toBe(AsyncLocalStorage);
+		expect(isNativeAsyncLocalStorage(Storage)).toBe(false);
 		expect(storage.getStore()).toBeUndefined();
 		const result = storage.run("outer", () => {
 			expect(storage.getStore()).toBe("outer");
@@ -151,9 +154,12 @@ describe("pure getAsyncLocalStorage", () => {
 			vi.spyOn(process, "getBuiltinModule").mockReturnValue({
 				AsyncLocalStorage,
 			});
-			const { getAsyncLocalStorage } = await import("./pure.index");
+			const { getAsyncLocalStorage, isNativeAsyncLocalStorage } = await import(
+				"./pure.index"
+			);
 			const Storage = await getAsyncLocalStorage();
 			expect(Storage).toBe(AsyncLocalStorage);
+			expect(isNativeAsyncLocalStorage(Storage)).toBe(true);
 			const storage = new Storage<string>();
 			const read = (store: string, delay: number) =>
 				storage.run(store, async () => {

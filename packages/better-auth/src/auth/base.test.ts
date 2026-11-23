@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 
 /**
@@ -224,5 +224,101 @@ describe("handler router reuse", () => {
 		expect((await postFromTenantA("a")).status).toBe(200);
 		expect((await postFromTenantA("b")).status).toBe(403);
 		expect((await postFromTenantA("a")).status).toBe(200);
+	});
+});
+
+describe("handler without a runtime AsyncLocalStorage", () => {
+	beforeEach(() => {
+		vi.resetModules();
+	});
+
+	afterEach(() => {
+		vi.doUnmock("@better-auth/core/async_hooks");
+		vi.restoreAllMocks();
+	});
+
+	it("serves requests when AsyncLocalStorage is unavailable", async () => {
+		vi.doMock("@better-auth/core/async_hooks", async (importOriginal) => ({
+			...(await importOriginal<object>()),
+			getAsyncLocalStorage: () =>
+				Promise.reject(new Error("AsyncLocalStorage is unavailable")),
+		}));
+		const { getTestInstance } = await import("../test-utils/test-instance");
+		const { plugin } = routerProbe();
+		const { auth } = await getTestInstance(
+			{ plugins: [plugin] },
+			{ disableTestUser: true },
+		);
+		for (let i = 0; i < 2; i++) {
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/probe"),
+			);
+			expect(response.status).toBe(200);
+		}
+	});
+
+	it("keeps each overlapping request's trusted origins and origin check on the polyfill", async () => {
+		// An edge or browser build without a runtime AsyncLocalStorage resolves
+		// `@better-auth/core/async_hooks` to this polyfill.
+		const getBuiltinModule = process.getBuiltinModule.bind(process);
+		vi.spyOn(process, "getBuiltinModule").mockImplementation((id) =>
+			id === "node:async_hooks" ? undefined : getBuiltinModule(id),
+		);
+		vi.doMock("@better-auth/core/async_hooks", () =>
+			vi.importActual("../../../core/src/async_hooks/pure.index"),
+		);
+		const { getTestInstance } = await import("../test-utils/test-instance");
+		const { plugin } = routerProbe();
+		let hold = overlap(2);
+		const { auth } = await getTestInstance(
+			{
+				trustedOrigins: (request) => [
+					`https://${tenantOf(request)}.example.com`,
+				],
+				advanced: { disableOriginCheck: false },
+				plugins: [
+					plugin,
+					{
+						id: "hold-until-both-in-flight",
+						async onRequest() {
+							await hold();
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const send = (tenant: string, method: "GET" | "POST") =>
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/probe", {
+					method,
+					headers: {
+						"x-tenant": tenant,
+						origin: "https://a.example.com",
+						cookie: "session=1",
+					},
+				}),
+			);
+		const trustedOriginsOf = async (response: Response) => {
+			expect(response.status).toBe(200);
+			const body = (await response.json()) as ProbeBody;
+			return body.trustedOrigins.filter((origin) =>
+				origin.endsWith("example.com"),
+			);
+		};
+
+		// "b" starts first, so a store shared across requests would hand it
+		// "a"'s context once "a" starts.
+		const [b, a] = await Promise.all([send("b", "GET"), send("a", "GET")]);
+		expect(await trustedOriginsOf(b)).toEqual(["https://b.example.com"]);
+		expect(await trustedOriginsOf(a)).toEqual(["https://a.example.com"]);
+
+		hold = overlap(2);
+		const [fromB, fromA] = await Promise.all([
+			send("b", "POST"),
+			send("a", "POST"),
+		]);
+		expect(fromB.status).toBe(403);
+		expect(await trustedOriginsOf(fromA)).toEqual(["https://a.example.com"]);
 	});
 });
