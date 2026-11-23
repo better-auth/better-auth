@@ -110,6 +110,7 @@ export interface CimdOptions {
 	 * HTTP 500, 502, 503, or 504. If a fetch policy limit or the Node DNS
 	 * lookup limit prevents a retry, the stored client can still be served
 	 * within this age limit for five minutes after its last transient failure.
+	 * Terminal metadata failures still reject the request.
 	 *
 	 * For cached `jwks_uri` keys, this option can extend the ten-minute
 	 * fallback after the last successful key fetch. Shorter values leave
@@ -147,7 +148,7 @@ export interface CimdOptions {
 	 * production).
 	 *
 	 * Only `post_logout_redirect_uris` is origin-bound by default. HTTP(S)
-	 * loopback URLs and authority-free private-use redirects such as
+	 * loopback redirect URLs and authority-free private-use redirects such as
 	 * `com.example.app:/logout` are exempt from this origin check.
 	 * `redirect_uris` is excluded because exact redirect URI matching remains
 	 * mandatory at authorization time. The informative URIs `client_uri`,
