@@ -146,12 +146,12 @@ export const kyselyAdapter = (
 			// filters also pass arrays and must keep their list shape.
 			const encodeJSONArrays = (
 				modelKey: string,
-				values: Record<string, any>,
-			): Record<string, any> => {
+				values: Record<string, unknown>,
+			): Record<string, unknown> => {
 				if (config?.type !== "postgres") return values;
 				const fields = schema[getDefaultModelName(modelKey)]?.fields;
 				if (!fields) return values;
-				let encoded: Record<string, any> | undefined;
+				let encoded: Record<string, unknown> | undefined;
 				for (const [field, attributes] of Object.entries(fields)) {
 					if (attributes.type !== "json") continue;
 					const column = getFieldName({ model: modelKey, field });
@@ -805,7 +805,7 @@ export const kyselyAdapter = (
 
 					let query = db
 						.updateTable(model)
-						.set(encodeJSONArrays(modelKey, values as Record<string, any>));
+						.set(encodeJSONArrays(modelKey, values as Record<string, unknown>));
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
@@ -813,7 +813,7 @@ export const kyselyAdapter = (
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					return await withReturning(
-						values as any,
+						values as Record<string, unknown>,
 						query,
 						model,
 						modelKey,
@@ -824,7 +824,7 @@ export const kyselyAdapter = (
 					const { and, or } = convertWhereClause(model, modelKey, where);
 					let query = db
 						.updateTable(model)
-						.set(encodeJSONArrays(modelKey, values) as any);
+						.set(encodeJSONArrays(modelKey, values));
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
