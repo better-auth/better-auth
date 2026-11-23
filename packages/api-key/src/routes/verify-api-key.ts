@@ -198,7 +198,19 @@ async function claimUsageInDatabase({
 		row = await consumeRemaining(ctx, apiKey);
 	}
 
-	row = await consumeRateLimit(ctx, row, opts);
+	try {
+		row = await consumeRateLimit(ctx, row, opts);
+	} catch (error) {
+		// A rejected request must not spend quota: return the slot claimed above.
+		if (apiKey.remaining !== null) {
+			await ctx.context.adapter.incrementOne<ApiKey>({
+				model: API_KEY_TABLE_NAME,
+				where: [{ field: "id", value: apiKey.id }],
+				increment: { remaining: 1 },
+			});
+		}
+		throw error;
+	}
 
 	// A final `updatedAt` stamp returns the fully consolidated row, reflecting
 	// every guarded counter write applied above.
