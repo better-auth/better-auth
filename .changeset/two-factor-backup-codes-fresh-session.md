@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-`generateBackupCodes` now reads the user from the database instead of the cookie cache, so it no longer fails with `TWO_FACTOR_NOT_ENABLED` when a session cached before two-factor enrollment calls it afterwards, and it rejects a revoked session that is still cached.
+`generateBackupCodes` refreshes store-backed sessions before checking whether two-factor authentication is enabled. A session cached before enrollment can now generate backup codes, and a revoked session is rejected even while its cookie is still cached.
