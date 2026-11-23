@@ -174,9 +174,9 @@ Decommissioning is irreversible. If reconciliation is interrupted, the managed c
 
 | Scope               | Operations                                |
 | ------------------- | ----------------------------------------- |
-| `scim.users.read`   | List or retrieve Users.                   |
+| `scim.users.read`   | List, retrieve, or search Users.          |
 | `scim.users.write`  | Create, replace, patch, or delete Users.  |
-| `scim.groups.read`  | List or retrieve Groups.                  |
+| `scim.groups.read`  | List, retrieve, or search Groups.         |
 | `scim.groups.write` | Create, replace, patch, or delete Groups. |
 
 An authenticated token without the required scope receives `403 Forbidden`. An invalid or expired token receives `401 Unauthorized`.
@@ -187,7 +187,7 @@ The SCIM base path is `/scim/v2` under your Better Auth base URL. User and Group
 
 Requests with a body may use `application/scim+json` or `application/json`. Responses use `application/scim+json`. Authentication, validation, uniqueness, missing-resource, and media-type failures use the SCIM Error schema.
 
-`POST` and `PUT` bodies must contain exactly one matching core schema URN:
+User and Group `POST` and `PUT` bodies must contain exactly one matching core schema URN:
 
 * User: `urn:ietf:params:scim:schemas:core:2.0:User`, optionally followed by `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`
 * Group: `urn:ietf:params:scim:schemas:core:2.0:Group`
@@ -234,6 +234,7 @@ The plugin passes Microsoft's [Entra SCIM Validator](https://learn.microsoft.com
 | -------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST`   | `/scim/v2/Users`         | Creates a SCIM User and creates or explicitly links a Better Auth User, or reprovisions an inactive User with the same `externalId`. Returns `201`. |
 | `GET`    | `/scim/v2/Users`         | Returns the connection's Users in a SCIM `ListResponse`.                                                                                            |
+| `POST`   | `/scim/v2/Users/.search` | Searches the connection's Users with a SCIM `SearchRequest` body and returns a `ListResponse`.                                                      |
 | `GET`    | `/scim/v2/Users/:userId` | Returns one User owned by the connection.                                                                                                           |
 | `PUT`    | `/scim/v2/Users/:userId` | Replaces the writable profile while preserving the resource ID. Returns `200`.                                                                      |
 | `PATCH`  | `/scim/v2/Users/:userId` | Applies ordered, atomic changes. Returns `200` with the updated resource.                                                                           |
@@ -298,6 +299,7 @@ PATCH accepts standard Enterprise paths such as `urn:ietf:params:scim:schemas:ex
 | -------- | -------------------------- | -------------------------------------------------------------------------------------------------- |
 | `POST`   | `/scim/v2/Groups`          | Creates a Group and its direct memberships. Returns `201`.                                         |
 | `GET`    | `/scim/v2/Groups`          | Returns the connection's Groups in a SCIM `ListResponse`.                                          |
+| `POST`   | `/scim/v2/Groups/.search`  | Searches the connection's Groups with a SCIM `SearchRequest` body and returns a `ListResponse`.    |
 | `GET`    | `/scim/v2/Groups/:groupId` | Returns one Group owned by the connection.                                                         |
 | `PUT`    | `/scim/v2/Groups/:groupId` | Replaces the Group attributes and complete membership set. Returns `200`.                          |
 | `PATCH`  | `/scim/v2/Groups/:groupId` | Applies ordered, atomic attribute and membership changes. Returns `200` with the updated resource. |
@@ -338,13 +340,29 @@ GET /api/auth/scim/v2/Users?filter=userName%20eq%20%22ada.login%40example.com%22
 Authorization: Bearer <token>
 ```
 
+The same query can be sent as a JSON [SearchRequest](https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.3) to `POST /scim/v2/Users/.search` or `POST /scim/v2/Groups/.search`. The body `schemas` array must contain only `urn:ietf:params:scim:api:messages:2.0:SearchRequest`. Search is a read of that connection's collection: it requires the same bearer token and `scim.users.read` or `scim.groups.read` scope as GET list. `POST` here is the SCIM search method, not a write; a write-only token receives `403 Forbidden`. Put `filter`, `startIndex`, `count`, `attributes`, and `excludedAttributes` in the body. Query-string collection parameters on the search URL are ignored. `sortBy` and `sortOrder` are ignored, matching GET list, because sorting is advertised as unsupported.
+
+```http
+POST /api/auth/scim/v2/Users/.search
+Authorization: Bearer <token>
+Content-Type: application/scim+json
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:SearchRequest"],
+  "filter": "userName eq \"ada.login@example.com\" or emails.value eq \"ada.alias@example.com\"",
+  "startIndex": 1,
+  "count": 100,
+  "attributes": ["userName", "emails"]
+}
+```
+
 Logical `not`, presence filters, comparison operators, mixed `and`/`or`, and parentheses are not supported. Unsupported syntax returns `invalidFilter`.
 
 Pagination uses a one-based `startIndex` and a nonnegative `count`. Both collections default to `startIndex=1` and `count=100`. The server caps `count` at 100.
 
 ## Response attributes
 
-Use `attributes` or `excludedAttributes` to select response fields. Each parameter accepts a comma-separated list of case-insensitive paths, including `name.givenName`, `emails.value`, and `members.value`. The parameters cannot be combined, and `schemas` and `id` always remain in a projected resource.
+Use `attributes` or `excludedAttributes` to select response fields. On GET, each parameter accepts a comma-separated list of case-insensitive paths, including `name.givenName`, `emails.value`, and `members.value`. On `POST /.search`, the same paths may be a JSON array in the SearchRequest body. The parameters cannot be combined, and `schemas` and `id` always remain in a projected resource.
 
 ```http
 GET /api/auth/scim/v2/Groups?startIndex=1&count=25&excludedAttributes=members
@@ -525,7 +543,7 @@ The plugin does not support the following SCIM features:
 * `User.groups`
 * Passwords, instant messaging addresses, photos, or X.509 certificates
 * Nested Groups or non-User Group members
-* Bulk requests, POST-based search, `/Me`, ETags, cursors, or sorting
+* Bulk requests, `/Me`, ETags, cursors, or sorting
 * Operators other than equality and a uniform logical `and` or `or`
 * A built-in OAuth token endpoint, Basic authentication, or mutual TLS
 * HTTP management endpoints, SCIM request audit records, or webhooks

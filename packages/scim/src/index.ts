@@ -30,6 +30,7 @@ import {
 	listSCIMGroups,
 	patchSCIMGroup,
 	replaceSCIMGroup,
+	searchSCIMGroups,
 } from "./group-provisioning";
 import { normalizeMicrosoftEntraGroupSchema } from "./group-schemas";
 import {
@@ -61,6 +62,7 @@ import {
 	listSCIMUsers,
 	patchSCIMUser,
 	replaceSCIMUser,
+	searchSCIMUsers,
 } from "./user-provisioning";
 import { PACKAGE_VERSION } from "./version";
 
@@ -409,6 +411,7 @@ function createSCIMPlugin(options: SCIMOptions) {
 			deleteSCIMGroup: deleteSCIMGroup(connectionMiddleware, projection),
 			getSCIMGroup: getSCIMGroup(connectionMiddleware),
 			listSCIMGroups: listSCIMGroups(connectionMiddleware),
+			searchSCIMGroups: searchSCIMGroups(connectionMiddleware),
 			patchSCIMGroup: patchSCIMGroup(connectionMiddleware, projection),
 			replaceSCIMGroup: replaceSCIMGroup(connectionMiddleware, projection),
 			createSCIMUser: createSCIMUser(
@@ -423,6 +426,7 @@ function createSCIMPlugin(options: SCIMOptions) {
 			),
 			getSCIMUser: getSCIMUser(connectionMiddleware),
 			listSCIMUsers: listSCIMUsers(connectionMiddleware),
+			searchSCIMUsers: searchSCIMUsers(connectionMiddleware),
 			patchSCIMUser: patchSCIMUser(connectionMiddleware, identity, projection),
 			replaceSCIMUser: replaceSCIMUser(
 				connectionMiddleware,

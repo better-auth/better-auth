@@ -6,6 +6,10 @@ import type {
 import {
 	parseSCIMAttributeProjection,
 	parseSCIMCollectionQuery,
+	parseSCIMSearchCollectionQuery,
+	SCIM_SEARCH_REQUEST_SCHEMA,
+	scimSearchRequestSchema,
+	toSCIMCollectionQueryInput,
 } from "./collection-query";
 
 const SCIM_ENTERPRISE_USER_SCHEMA =
@@ -420,4 +424,78 @@ describe("parseSCIMAttributeProjection", () => {
 			},
 		});
 	});
+});
+
+describe("SCIM SearchRequest", () => {
+	it("maps a SearchRequest body onto the shared collection query input", () => {
+		expect(
+			toSCIMCollectionQueryInput({
+				schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+				filter: 'userName eq "ada@example.com"',
+				startIndex: 1,
+				count: 100,
+				attributes: ["userName", "emails"],
+			}),
+		).toEqual({
+			filter: 'userName eq "ada@example.com"',
+			startIndex: 1,
+			count: 100,
+			attributes: ["userName", "emails"],
+		});
+	});
+
+	it("parses JSON attribute arrays and or filters through the GET grammar", () => {
+		const result = parseSCIMSearchCollectionQuery("User", {
+			schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+			filter:
+				'userName eq "ada@example.com" or emails.value eq "ada.alias@example.com"',
+			attributes: ["userName", "emails"],
+		});
+
+		expect(result).toMatchObject({
+			ok: true,
+			value: {
+				filterCombinator: "or",
+				filters: [
+					{
+						attribute: "userName",
+						operator: "eq",
+						value: "ada@example.com",
+					},
+					{
+						attribute: "emails.value",
+						operator: "eq",
+						value: "ada.alias@example.com",
+					},
+				],
+				projection: {
+					mode: "include",
+					attributes: new Set(["username", "emails"]),
+				},
+			},
+		});
+	});
+
+	it("does not treat omitted SearchRequest fields as a query-string filter", () => {
+		expect(
+			parseSCIMSearchCollectionQuery("User", {
+				schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+			}),
+		).toEqual(parseSCIMCollectionQuery("User", {}));
+	});
+
+	it.each(["sortBy", "sortOrder"] as const)(
+		"ignores %s like unknown GET query parameters",
+		(parameter) => {
+			const parsed = scimSearchRequestSchema.parse({
+				schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+				[parameter]: parameter === "sortBy" ? "userName" : "ascending",
+			});
+
+			expect(parsed).toEqual({ schemas: [SCIM_SEARCH_REQUEST_SCHEMA] });
+			expect(parseSCIMSearchCollectionQuery("User", parsed)).toEqual(
+				parseSCIMCollectionQuery("User", {}),
+			);
+		},
+	);
 });
