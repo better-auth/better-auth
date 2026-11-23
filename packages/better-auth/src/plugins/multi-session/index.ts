@@ -35,6 +35,8 @@ export interface MultiSessionConfig {
 
 import { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
 
+export * from "./error-codes";
+/** @deprecated Use `MULTI_SESSION_ERROR_CODES`. */
 export { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
 
 const setActiveSessionBodySchema = z.object({

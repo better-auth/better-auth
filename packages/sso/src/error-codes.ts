@@ -1,6 +1,6 @@
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
-export const SAML_ERROR_CODES = defineErrorCodes({
+export const SSO_ERROR_CODES = defineErrorCodes({
 	// SLO errors
 	SINGLE_LOGOUT_NOT_ENABLED: "Single Logout is not enabled",
 	INVALID_LOGOUT_RESPONSE: "Invalid LogoutResponse",

@@ -17,7 +17,7 @@ import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
 import { getSchema } from "./schema";
 
-export { USERNAME_ERROR_CODES } from "./error-codes";
+export * from "./error-codes";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

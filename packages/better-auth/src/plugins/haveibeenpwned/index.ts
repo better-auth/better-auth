@@ -1,11 +1,13 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { getCurrentAuthEndpointContext } from "@better-auth/core/context";
-import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "../../api";
 import { isAPIError } from "../../utils/is-api-error";
 import { PACKAGE_VERSION } from "../../version";
+import { HAVE_I_BEEN_PWNED_ERROR_CODES as ERROR_CODES } from "./error-codes";
+
+export * from "./error-codes";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -14,11 +16,6 @@ declare module "@better-auth/core" {
 		};
 	}
 }
-
-const ERROR_CODES = defineErrorCodes({
-	PASSWORD_COMPROMISED:
-		"The password you entered has been compromised. Please choose a different password.",
-});
 
 function getPasswordCompromiseCount(response: string, hashSuffix: string) {
 	const matchingEntryPrefix = `${hashSuffix.toUpperCase()}:`;

@@ -33,7 +33,7 @@ import {
 	TRUST_DEVICE_COOKIE_NAME,
 	TWO_FACTOR_COOKIE_NAME,
 } from "./constant";
-import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+import { TWO_FACTOR_ERROR_CODES } from "./error-codes";
 import { otp2fa } from "./otp";
 import { schema } from "./schema";
 import { totp2fa } from "./totp";
@@ -43,7 +43,7 @@ import type {
 	UserWithTwoFactor,
 } from "./types";
 
-export * from "./error-code";
+export * from "./error-codes";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

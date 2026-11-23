@@ -16,6 +16,7 @@ import {
 	hasBetterAuthCookies,
 	hasSessionCookieChanged,
 } from "./cookies";
+import { ELECTRON_ERROR_CODES } from "./error-codes";
 import type { ExposedBridges } from "./preload";
 import type { ElectronClientOptions, Storage } from "./types/client";
 import {
@@ -24,6 +25,8 @@ import {
 	parseProtocolScheme,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
+
+export * from "./error-codes";
 
 const { app, safeStorage, webContents } = electron;
 
@@ -104,6 +107,7 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 	return {
 		id: "electron",
 		version: PACKAGE_VERSION,
+		$ERROR_CODES: ELECTRON_ERROR_CODES,
 		fetchPlugins: [
 			{
 				id: "electron",
