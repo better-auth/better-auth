@@ -3,11 +3,8 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
-import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
-import {
-	deleteApiKey as deleteApiKeyFromStorage,
-	getApiKeyById,
-} from "../adapter";
+import { API_KEY_ERROR_CODES as ERROR_CODES } from "..";
+import { deleteApiKey as deleteApiKeyRecord, getApiKeyById } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -102,7 +99,7 @@ export function deleteApiKey({
 			);
 			let apiKey: ApiKey | null = null;
 
-			apiKey = await getApiKeyById(ctx, keyId, lookupOpts);
+			apiKey = await getApiKeyById(ctx, keyId);
 
 			if (!apiKey) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
@@ -134,33 +131,10 @@ export function deleteApiKey({
 			}
 
 			try {
-				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-					await deleteApiKeyFromStorage(ctx, apiKey, opts);
-					await ctx.context.adapter.delete<ApiKey>({
-						model: API_KEY_TABLE_NAME,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-						],
-					});
-				} else if (opts.storage === "database") {
-					await ctx.context.adapter.delete<ApiKey>({
-						model: API_KEY_TABLE_NAME,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-						],
-					});
-				} else {
-					await deleteApiKeyFromStorage(ctx, apiKey, opts);
-				}
-			} catch (error: any) {
+				await deleteApiKeyRecord(ctx, apiKey, opts);
+			} catch (error) {
 				throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
-					message: error?.message,
+					message: error instanceof Error ? error.message : undefined,
 				});
 			}
 			deleteAllExpiredApiKeys(ctx.context);

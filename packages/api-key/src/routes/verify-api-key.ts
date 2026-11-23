@@ -1,5 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { Where } from "@better-auth/core/db/adapter";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { role } from "better-auth/plugins/access";
@@ -9,6 +10,7 @@ import { defaultKeyHasher } from "../";
 import {
 	deleteApiKey,
 	getApiKey,
+	getApiKeyById,
 	migrateDoubleStringifiedMetadata,
 	setApiKey,
 } from "../adapter";
@@ -59,8 +61,7 @@ export async function validateApiKey({
 	}
 
 	// Switch from the caller's lookup config to the key's own config for
-	// validation and updates. An unscoped verify cannot find keys that use a
-	// different storage or hashing than the lookup config.
+	// validation and updates. An unscoped verify uses the default hashing mode.
 	const opts = resolveConfiguration(
 		ctx.context,
 		configurations,
@@ -82,22 +83,7 @@ export async function validateApiKey({
 		const now = Date.now();
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
-			const deleteExpiredKey = async () => {
-				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-					await deleteApiKey(ctx, apiKey, opts);
-					await ctx.context.adapter.delete({
-						model: API_KEY_TABLE_NAME,
-						where: [{ field: "id", value: apiKey.id }],
-					});
-				} else if (opts.storage === "secondary-storage") {
-					await deleteApiKey(ctx, apiKey, opts);
-				} else {
-					await ctx.context.adapter.delete({
-						model: API_KEY_TABLE_NAME,
-						where: [{ field: "id", value: apiKey.id }],
-					});
-				}
-			};
+			const deleteExpiredKey = () => deleteApiKey(ctx, apiKey, opts);
 
 			if (opts.deferUpdates) {
 				ctx.context.runInBackground(
@@ -123,7 +109,7 @@ export async function validateApiKey({
 		if (!apiKeyPermissions) {
 			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
 		}
-		const r = role(apiKeyPermissions as any);
+		const r = role(apiKeyPermissions);
 		const result = r.authorize(permissions);
 		if (!result.success) {
 			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
@@ -132,22 +118,7 @@ export async function validateApiKey({
 
 	// A non-refillable key that is already exhausted is removed and rejected.
 	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
-		const deleteExhaustedKey = async () => {
-			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-				await deleteApiKey(ctx, apiKey, opts);
-				await ctx.context.adapter.delete({
-					model: API_KEY_TABLE_NAME,
-					where: [{ field: "id", value: apiKey.id }],
-				});
-			} else if (opts.storage === "secondary-storage") {
-				await deleteApiKey(ctx, apiKey, opts);
-			} else {
-				await ctx.context.adapter.delete({
-					model: API_KEY_TABLE_NAME,
-					where: [{ field: "id", value: apiKey.id }],
-				});
-			}
-		};
+		const deleteExhaustedKey = () => deleteApiKey(ctx, apiKey, opts);
 
 		if (opts.deferUpdates) {
 			ctx.context.runInBackground(
@@ -162,62 +133,72 @@ export async function validateApiKey({
 		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
 	}
 
-	const usesDatabase =
-		opts.storage === "database" ||
-		(opts.storage === "secondary-storage" && opts.fallbackToDatabase);
-
-	const newApiKey = usesDatabase
-		? await claimUsageInDatabase({ ctx, apiKey, opts, hashedKey })
-		: await claimUsageInSecondaryStorage({ ctx, apiKey, opts, hashedKey });
+	const newApiKey = await claimUsageInDatabase({
+		ctx,
+		apiKey,
+		opts,
+	});
 
 	return { apiKey: newApiKey, opts };
 }
 
+// A cache entry can outlive invalidation when an in-flight read writes it back.
+function credentialGuard(apiKey: ApiKey): Where[] {
+	return [
+		{ field: "id", value: apiKey.id },
+		{ field: "key", value: apiKey.key },
+		{ field: "enabled", value: apiKey.enabled ?? null },
+	];
+}
+
+async function readCurrentCredential(
+	ctx: GenericEndpointContext,
+	apiKey: ApiKey,
+) {
+	const fresh = await getApiKeyById(ctx, apiKey.id);
+	if (!fresh || fresh.key !== apiKey.key) {
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+	}
+	if (fresh.enabled === false) {
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_DISABLED);
+	}
+	return fresh;
+}
+
 /**
  * Atomically consume quota and a rate-limit slot against the database row, the
- * source of truth for `database` and `secondary-storage` + `fallbackToDatabase`
- * modes. Each guarded `incrementOne` only mutates the row while the guard still
- * holds, so concurrent verifications cannot drive `remaining` below zero or push
- * `requestCount` past the configured max. The cache (when present) is refreshed
- * from the resulting row.
+ * source of truth in both storage modes. Each guarded `incrementOne` only
+ * mutates the row while the guard still holds, so concurrent verifications
+ * cannot drive `remaining` below zero or push `requestCount` past the maximum.
  */
 async function claimUsageInDatabase({
 	ctx,
 	apiKey,
 	opts,
-	hashedKey,
 }: {
 	ctx: GenericEndpointContext;
 	apiKey: ApiKey;
 	opts: PredefinedApiKeyOptions;
-	hashedKey: string;
 }): Promise<ApiKey> {
-	let row: ApiKey = apiKey;
-
-	if (apiKey.remaining !== null) {
-		row = await consumeRemaining(ctx, apiKey);
-	}
-
-	row = await consumeRateLimit(ctx, row, opts);
+	const row =
+		apiKey.remaining === null ? apiKey : await consumeRemaining(ctx, apiKey);
+	await consumeRateLimit(ctx, row, opts);
 
 	// A final `updatedAt` stamp returns the fully consolidated row, reflecting
 	// every guarded counter write applied above.
-	const finalRow = await ctx.context.adapter.update<ApiKey>({
+	const finalRow = await ctx.context.adapter.incrementOne<ApiKey>({
 		model: API_KEY_TABLE_NAME,
-		where: [{ field: "id", value: row.id }],
-		update: { updatedAt: new Date() },
+		where: credentialGuard(apiKey),
+		increment: {},
+		set: { updatedAt: new Date() },
 	});
 
-	// A null result means the row was deleted concurrently (for example the key
-	// was revoked). Do not fall back to the in-memory row and re-cache a key
-	// whose authoritative record is gone.
 	if (!finalRow) {
+		await readCurrentCredential(ctx, apiKey);
 		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
 	}
 
-	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-		await setApiKey(ctx, finalRow, opts);
-	}
+	await setApiKey(ctx, finalRow, opts);
 
 	return finalRow;
 }
@@ -244,7 +225,7 @@ async function consumeRemaining(
 			const refilled = await ctx.context.adapter.incrementOne<ApiKey>({
 				model: API_KEY_TABLE_NAME,
 				where: [
-					{ field: "id", value: apiKey.id },
+					...credentialGuard(apiKey),
 					{ field: "lastRefillAt", value: apiKey.lastRefillAt },
 				],
 				increment: {},
@@ -261,13 +242,14 @@ async function consumeRemaining(
 	const decremented = await ctx.context.adapter.incrementOne<ApiKey>({
 		model: API_KEY_TABLE_NAME,
 		where: [
-			{ field: "id", value: apiKey.id },
+			...credentialGuard(apiKey),
 			{ field: "remaining", operator: "gt", value: 0 },
 		],
 		increment: { remaining: -1 },
 	});
 
 	if (!decremented) {
+		await readCurrentCredential(ctx, apiKey);
 		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
 	}
 
@@ -301,10 +283,11 @@ async function consumeRateLimit(
 		if (decision.lastRequest === null) {
 			return apiKey;
 		}
-		const updated = await ctx.context.adapter.update<ApiKey>({
+		const updated = await ctx.context.adapter.incrementOne<ApiKey>({
 			model: API_KEY_TABLE_NAME,
-			where: [{ field: "id", value: apiKey.id }],
-			update: { lastRequest: decision.lastRequest },
+			where: credentialGuard(apiKey),
+			increment: {},
+			set: { lastRequest: decision.lastRequest },
 		});
 		return updated ?? apiKey;
 	}
@@ -313,7 +296,7 @@ async function consumeRateLimit(
 		const incremented = await ctx.context.adapter.incrementOne<ApiKey>({
 			model: API_KEY_TABLE_NAME,
 			where: [
-				{ field: "id", value: apiKey.id },
+				...credentialGuard(apiKey),
 				{
 					field: "lastRequest",
 					operator: "gt",
@@ -333,13 +316,7 @@ async function consumeRateLimit(
 		}
 		// The window rolled or the max was reached between the read and the
 		// write. Re-evaluate against the freshest row to apply the right guard.
-		const fresh = await ctx.context.adapter.findOne<ApiKey>({
-			model: API_KEY_TABLE_NAME,
-			where: [{ field: "id", value: apiKey.id }],
-		});
-		if (!fresh) {
-			throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
-		}
+		const fresh = await readCurrentCredential(ctx, apiKey);
 		return consumeRateLimit(ctx, fresh, opts);
 	}
 
@@ -356,7 +333,7 @@ async function consumeRateLimit(
 
 	const started = await ctx.context.adapter.incrementOne<ApiKey>({
 		model: API_KEY_TABLE_NAME,
-		where: [{ field: "id", value: apiKey.id }, windowGuard],
+		where: [...credentialGuard(apiKey), windowGuard],
 		increment: {},
 		set: { requestCount: 1, lastRequest: decision.now },
 	});
@@ -365,119 +342,8 @@ async function consumeRateLimit(
 	}
 	// Another verification already opened the window. Re-evaluate so this
 	// request consumes an increment slot instead of resetting the count.
-	const fresh = await ctx.context.adapter.findOne<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: [{ field: "id", value: apiKey.id }],
-	});
-	if (!fresh) {
-		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
-	}
+	const fresh = await readCurrentCredential(ctx, apiKey);
 	return consumeRateLimit(ctx, fresh, opts);
-}
-
-/**
- * Secondary-storage-only mode has no database row to guard, so quota and
- * rate-limit consumption stays a read-modify-write merge over the serialized
- * key. This is the residual non-atomic path; strict enforcement requires the
- * database (use `fallbackToDatabase`) or an atomic secondary-storage primitive.
- * FIXME(api-key-secondary-atomic): back this with SecondaryStorage.increment on
- * `next` so secondary-storage-only mode enforces quota and rate limits atomically.
- */
-async function claimUsageInSecondaryStorage({
-	ctx,
-	apiKey,
-	opts,
-	hashedKey,
-}: {
-	ctx: GenericEndpointContext;
-	apiKey: ApiKey;
-	opts: PredefinedApiKeyOptions;
-	hashedKey: string;
-}): Promise<ApiKey> {
-	let remaining = apiKey.remaining;
-	let lastRefillAt = apiKey.lastRefillAt;
-
-	if (remaining !== null) {
-		const now = Date.now();
-		const { refillInterval, refillAmount } = apiKey;
-		const lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
-		if (refillInterval && refillAmount && now - lastTime > refillInterval) {
-			remaining = refillAmount;
-			lastRefillAt = new Date();
-		}
-		if (remaining === 0) {
-			throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
-		}
-		remaining--;
-	}
-
-	const rateLimitUpdate = applyRateLimitToSnapshot(apiKey, opts);
-
-	const mutations: Partial<ApiKey> = {
-		...rateLimitUpdate,
-		remaining,
-		lastRefillAt,
-		updatedAt: new Date(),
-	};
-
-	const performUpdate = async (): Promise<ApiKey | null> => {
-		const fresh = await getApiKey(ctx, hashedKey, opts);
-		if (!fresh) {
-			return null;
-		}
-		const merged: ApiKey = { ...fresh, ...mutations };
-		await setApiKey(ctx, merged, opts);
-		return merged;
-	};
-
-	if (opts.deferUpdates) {
-		ctx.context.runInBackground(
-			performUpdate().catch((error) => {
-				ctx.context.logger.error("Failed to update API key:", error);
-			}),
-		);
-		return { ...apiKey, ...mutations };
-	}
-
-	const updated = await performUpdate();
-	if (!updated) {
-		throw APIError.from(
-			"INTERNAL_SERVER_ERROR",
-			ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
-		);
-	}
-	return updated;
-}
-
-/**
- * Translate a rate-limit decision into a counter snapshot for the
- * secondary-storage merge write. Denials throw before any write.
- */
-function applyRateLimitToSnapshot(
-	apiKey: ApiKey,
-	opts: PredefinedApiKeyOptions,
-): Partial<ApiKey> {
-	const decision = evaluateRateLimit(apiKey, opts);
-	switch (decision.type) {
-		case "deny":
-			throw new APIError("TOO_MANY_REQUESTS", {
-				message: decision.message,
-				code: "RATE_LIMITED" as const,
-				details: { tryAgainIn: decision.tryAgainIn },
-			});
-		case "skip":
-			return decision.lastRequest === null
-				? {}
-				: { lastRequest: decision.lastRequest };
-		case "start":
-		case "reset":
-			return { lastRequest: decision.now, requestCount: 1 };
-		case "increment":
-			return {
-				lastRequest: decision.now,
-				requestCount: apiKey.requestCount + 1,
-			};
-	}
 }
 
 const verifyApiKeyBodySchema = z.object({
@@ -600,13 +466,9 @@ export function verifyApiKey({
 			};
 
 			// Migrate legacy double-stringified metadata if needed
-			let migratedMetadata: Record<string, any> | null = null;
+			let migratedMetadata: ApiKey["metadata"] = null;
 			if (apiKey) {
-				migratedMetadata = await migrateDoubleStringifiedMetadata(
-					ctx,
-					apiKey,
-					opts,
-				);
+				migratedMetadata = await migrateDoubleStringifiedMetadata(ctx, apiKey);
 			}
 
 			returningApiKey.permissions = returningApiKey.permissions

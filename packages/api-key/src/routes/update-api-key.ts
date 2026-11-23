@@ -7,9 +7,10 @@ import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
 	getApiKeyById,
+	invalidateApiKeyCache,
 	migrateDoubleStringifiedMetadata,
-	setApiKey,
 } from "../adapter";
+import { normalizeApiKeyMetadata } from "../metadata";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -320,7 +321,7 @@ export function updateApiKey({
 			);
 			let apiKey: ApiKey | null = null;
 
-			apiKey = await getApiKeyById(ctx, keyId, lookupOpts);
+			apiKey = await getApiKeyById(ctx, keyId);
 
 			if (!apiKey) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
@@ -396,8 +397,7 @@ export function updateApiKey({
 				if (typeof metadata !== "object") {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_METADATA_TYPE);
 				}
-				// The adapter will automatically apply the schema transform to stringify
-				newValues.metadata = metadata;
+				newValues.metadata = normalizeApiKeyMetadata(metadata);
 			}
 			if (remaining !== undefined) {
 				newValues.remaining = remaining;
@@ -437,48 +437,23 @@ export function updateApiKey({
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.NO_VALUES_TO_UPDATE);
 			}
 
-			let newApiKey: ApiKey = apiKey;
-			try {
-				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-					const dbUpdated = await ctx.context.adapter.update<ApiKey>({
-						model: API_KEY_TABLE_NAME,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-						],
-						update: newValues,
+			const newApiKey = await ctx.context.adapter
+				.update<ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					where: [{ field: "id", value: apiKey.id }],
+					update: { ...newValues, updatedAt: new Date() },
+				})
+				.then(async (updatedKey) => {
+					if (updatedKey) await invalidateApiKeyCache(ctx, updatedKey, opts);
+					return updatedKey;
+				})
+				.catch((error: unknown) => {
+					throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
+						message: error instanceof Error ? error.message : undefined,
 					});
-					if (dbUpdated) {
-						await setApiKey(ctx, dbUpdated, opts);
-						newApiKey = dbUpdated;
-					}
-				} else if (opts.storage === "database") {
-					const result = await ctx.context.adapter.update<ApiKey>({
-						model: API_KEY_TABLE_NAME,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-						],
-						update: newValues,
-					});
-					if (result) newApiKey = result;
-				} else {
-					const updated: ApiKey = {
-						...apiKey,
-						...newValues,
-						updatedAt: new Date(),
-					};
-					await setApiKey(ctx, updated, opts);
-					newApiKey = updated;
-				}
-			} catch (error: any) {
-				throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
-					message: error?.message,
 				});
+			if (!newApiKey) {
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);
@@ -487,7 +462,6 @@ export function updateApiKey({
 			const migratedMetadata = await migrateDoubleStringifiedMetadata(
 				ctx,
 				newApiKey,
-				opts,
 			);
 
 			const { key: _key, ...returningApiKey } = newApiKey;

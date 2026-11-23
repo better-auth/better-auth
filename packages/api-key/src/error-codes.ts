@@ -2,6 +2,7 @@ import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const API_KEY_ERROR_CODES = defineErrorCodes({
 	INVALID_METADATA_TYPE: "metadata must be an object or undefined",
+	INVALID_METADATA: "Metadata must be an object that can be stored as JSON.",
 	REFILL_AMOUNT_AND_INTERVAL_REQUIRED:
 		"refillAmount is required when refillInterval is provided",
 	REFILL_INTERVAL_AND_AMOUNT_REQUIRED:

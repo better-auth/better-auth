@@ -156,13 +156,13 @@ const secretKey = await auth.api.createApiKey({
 
 <Callout type="warn">
   `get`, `update`, and `delete` must pass the same `configId` the key was created with.
-  `verify` resolves the key's own configuration, so it only needs `configId` when a
-  configuration differs from the default in storage or hashing.
+  Pass `configId` to `verify` when you have no default configuration or when the
+  key's configuration uses different hashing or storage settings from the default.
 </Callout>
 
 ### Using configId for API Key Operations
 
-All API key operations support the `configId` parameter to specify which configuration to use for the lookup. This is important when different configurations have different storage backends (e.g., database vs Redis):
+Use `configId` to select a key's configuration or to filter a listing by configuration.
 
 ```ts title="api-key-operations.ts"
 // Get an API key using a specific config
@@ -427,124 +427,47 @@ console.log(`Key owned by: ${apiKey.referenceId}`);
 
 ## Storage Modes
 
-The API Key plugin supports multiple storage modes for flexible API key management, allowing you to choose the best strategy for your use case.
+The API key plugin stores all keys in the database and uses it for listings and usage counters. Auth instances that serve the same keys must share that database.
 
 ### Storage Mode Options
 
 #### `"database"` (Default)
 
-Store API keys only in the database adapter. This is the default mode and requires no additional configuration.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { apiKey } from "@better-auth/api-key"
-
-export const auth = betterAuth({
-  plugins: [
-    apiKey({
-      storage: "database", // Default, can be omitted
-    }),
-  ],
-});
-```
+Use `apiKey()` with your database adapter. Apply the [API key schema](/docs/plugins/api-key/reference#schema) to your database.
 
 #### `"secondary-storage"`
 
-Store API keys only in secondary storage (e.g., Redis).
-No fallback to database. Best for high-performance scenarios where all keys are migrated to secondary storage.
+Apply the [API key schema](/docs/plugins/api-key/reference#schema), set `storage: "secondary-storage"`, and provide [secondary storage](/docs/concepts/database#secondary-storage). Verification looks up the credential in the cache and checks that the matching key is still enabled when writing usage to the database. Reads by ID use the database.
 
 ```ts title="auth.ts"
-import { createClient } from "redis";
-import { betterAuth } from "better-auth";
 import { apiKey } from "@better-auth/api-key";
-
-const redis = createClient();
-await redis.connect();
+import { betterAuth } from "better-auth";
+import { database, secondaryStorage } from "./storage";
 
 export const auth = betterAuth({
-  secondaryStorage: {
-    get: async (key) => await redis.get(key),
-    set: async (key, value, ttl) => {
-      if (ttl) await redis.set(key, value, { EX: ttl });
-      else await redis.set(key, value);
-    },
-    delete: async (key) => await redis.del(key),
-  },
-  plugins: [
-    apiKey({
-      storage: "secondary-storage",
-    }),
-  ],
+  database,
+  secondaryStorage,
+  plugins: [apiKey({ storage: "secondary-storage" })],
 });
 ```
 
-#### Secondary Storage with Fallback
-
-Check secondary storage first, then fallback to database if not found.
-
-**Read behavior:**
-
-* Checks secondary storage first
-* If not found, queries the database
-* **Automatically populates secondary storage** when falling back to database (cache warming)
-* Ensures frequently accessed keys stay in cache over time
-
-**Write behavior:**
-
-* Writes to **both** database and secondary storage
-* Ensures consistency between both storage layers
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { createClient } from "redis";
-
-const redis = createClient();
-await redis.connect();
-
-export const auth = betterAuth({
-  secondaryStorage: {
-    get: async (key) => await redis.get(key),
-    set: async (key, value, ttl) => {
-      if (ttl) await redis.set(key, value, { EX: ttl });
-      else await redis.set(key, value);
-    },
-    delete: async (key) => await redis.del(key),
-  },
-  plugins: [
-    apiKey({
-      storage: "secondary-storage",
-      fallbackToDatabase: true,
-    }),
-  ],
-});
-```
+If your previous version stored keys only in secondary storage, follow the [1.8 upgrade guide](/docs/guides/1-8-upgrade-guide#api-key-storage) to import them before you deploy.
 
 ### Custom Storage Methods
 
-You can provide custom storage methods specifically for API keys, overriding the global `secondaryStorage` configuration:
+To use a separate cache for API keys, pass a `SecondaryStorage` implementation as `customStorage` in the plugin configuration. It takes precedence over the global `secondaryStorage` option.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { apiKey } from "@better-auth/api-key"
+import { apiKey } from "@better-auth/api-key";
+import { betterAuth } from "better-auth";
+import { apiKeyCache, database } from "./storage";
 
 export const auth = betterAuth({
+  database,
   plugins: [
     apiKey({
       storage: "secondary-storage",
-      customStorage: {
-        get: async (key) => {
-          // Custom get logic for API keys
-          return await customStorage.get(key);
-        },
-        set: async (key, value, ttl) => {
-          // Custom set logic for API keys
-          await customStorage.set(key, value, ttl);
-        },
-        delete: async (key) => {
-          // Custom delete logic for API keys
-          await customStorage.delete(key);
-        },
-      },
+      customStorage: apiKeyCache,
     }),
   ],
 });
@@ -732,7 +655,7 @@ export const auth = betterAuth({
 });
 ```
 
-Then, you can store metadata in the `metadata` field of the API key object.
+Pass a JSON object or array in the `metadata` field. ISO-formatted strings in stored metadata remain strings in server-side reads. Create and update return HTTP 400 for metadata that cannot be read back. If a stored key has unreadable metadata, listings return that key with `metadata: null`.
 
 ```ts title="create-api-key.ts"
 import { auth } from "@/lib/auth"

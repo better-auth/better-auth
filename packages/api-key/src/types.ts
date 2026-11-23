@@ -218,22 +218,14 @@ export interface ApiKeyConfigurationOptions {
 		  }
 		| undefined;
 	/**
-	 * Storage backend for API keys.
+	 * Whether to cache API key verification lookups in secondary storage.
 	 *
 	 * - `"database"`: Store API keys in the database adapter (default)
-	 * - `"secondary-storage"`: Store API keys in the configured secondary storage (e.g., Redis)
+	 * - `"secondary-storage"`: Store API keys in the database and cache credential lookups for verification
 	 *
 	 * @default "database"
 	 */
 	storage?: "database" | "secondary-storage" | undefined;
-	/**
-	 * When `storage` is `"secondary-storage"`, enable fallback to database if key is not found in secondary storage.
-	 *
-	 * Useful for gradual migration from database to secondary storage.
-	 *
-	 * @default false
-	 */
-	fallbackToDatabase?: boolean | undefined;
 	/**
 	 * Custom storage methods for API keys.
 	 *
@@ -245,15 +237,9 @@ export interface ApiKeyConfigurationOptions {
 	 */
 	customStorage?: SecondaryStorage | undefined;
 	/**
-	 * Defer non-critical updates (rate limiting counters, timestamps, remaining count)
-	 * to run after the response is sent using the global `advanced.backgroundTasks` handler.
+	 * Run expired and exhausted key cleanup from verification in the background.
 	 *
 	 * Requires `advanced.backgroundTasks.handler` to be configured in the main auth options.
-	 *
-	 * ⚠️ Warning: Enabling this introduces eventual consistency where the response
-	 * returns optimistic data before the database is updated. If the deferred update
-	 * fails, the database will have stale values. Only enable if your application
-	 * can tolerate this trade-off for improved latency.
 	 *
 	 * @default false
 	 */
