@@ -375,6 +375,23 @@ describe("importDpopKeyPair", () => {
 			importDpopKeyPair({ ...privateJwk, alg: "ES512" }),
 		).rejects.toThrow();
 	});
+
+	it("starts no import when the public key cannot be derived from the JWK", async () => {
+		const { privateJwk } = await storedPrivateJwk({
+			name: "ECDSA",
+			namedCurve: "P-256",
+		} as EcKeyGenParams);
+		const importKey = vi.spyOn(crypto.subtle, "importKey");
+		try {
+			await expect(
+				importDpopKeyPair({ ...privateJwk, x: undefined }),
+			).rejects.toThrow(TypeError);
+			// A started private-key import would reject with nobody awaiting it.
+			expect(importKey).not.toHaveBeenCalled();
+		} finally {
+			importKey.mockRestore();
+		}
+	});
 });
 
 describe("isDpopNonceChallenge", () => {

@@ -192,15 +192,12 @@ export async function importDpopKeyPair(
 		throw new TypeError("DPoP key JWK must be a private key");
 	}
 	const algorithm = resolveDpopJwkImportAlgorithm(privateJwk);
+	// Derived before either import starts, so a malformed JWK cannot leave a
+	// started import rejecting with nobody awaiting it.
+	const publicJwk = toDpopPublicJwk(privateJwk);
 	const [privateKey, publicKey] = await Promise.all([
 		crypto.subtle.importKey("jwk", privateJwk, algorithm, false, ["sign"]),
-		crypto.subtle.importKey(
-			"jwk",
-			toDpopPublicJwk(privateJwk),
-			algorithm,
-			true,
-			["verify"],
-		),
+		crypto.subtle.importKey("jwk", publicJwk, algorithm, true, ["verify"]),
 	]);
 	return { privateKey, publicKey };
 }
