@@ -252,6 +252,97 @@ describe("atomic concurrent enforcement", () => {
 	}
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11660
+ */
+describe.for(["memory", "database"] as const)(
+	"%s rate-limit window",
+	async (storage) => {
+		const { auth } = await getTestInstance(
+			{
+				rateLimit: {
+					enabled: true,
+					storage,
+					customRules: {
+						"/get-session": { window: 10, max: 3 },
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const start = Date.now();
+		const getSessionAt = (offset: number) => {
+			vi.setSystemTime(start + offset);
+			return auth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: { "x-forwarded-for": "203.0.113.115" },
+				}),
+			);
+		};
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it("does not extend the window on allowed requests", async () => {
+			for (const offset of [0, 4_000, 8_000]) {
+				expect((await getSessionAt(offset)).status).toBe(200);
+			}
+
+			const blocked = await getSessionAt(9_000);
+			expect(blocked.status).toBe(429);
+			expect(blocked.headers.get("x-retry-after")).toBe("1");
+
+			expect((await getSessionAt(10_000)).status).toBe(200);
+		});
+	},
+);
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11660
+ */
+describe("database rate-limit sweep frequency", async () => {
+	const { auth } = await getTestInstance(
+		{
+			rateLimit: {
+				enabled: true,
+				storage: "database",
+				customRules: {
+					"/get-session": { window: 10, max: 1 },
+				},
+			},
+		},
+		{ disableTestUser: true },
+	);
+	const ctx = await auth.$context;
+	const start = Date.now();
+	const getSessionAt = (offset: number) => {
+		vi.setSystemTime(start + offset);
+		return auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { "x-forwarded-for": "203.0.113.116" },
+			}),
+		);
+	};
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+	});
+
+	it("sweeps once per longest window while the key keeps resetting", async () => {
+		const deleteMany = vi.spyOn(ctx.adapter, "deleteMany");
+		// The longest configured window is the 60s default rule.
+		for (const offset of [0, 10_000, 20_000, 30_000, 40_000]) {
+			await getSessionAt(offset);
+		}
+		expect(deleteMany).toHaveBeenCalledOnce();
+
+		await getSessionAt(80_000);
+		expect(deleteMany).toHaveBeenCalledTimes(2);
+	});
+});
+
 describe("database rate-limit pruning", async () => {
 	const backgroundTasks: Promise<unknown>[] = [];
 	const { client, db, testUser } = await getTestInstance({

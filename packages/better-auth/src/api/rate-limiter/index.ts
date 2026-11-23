@@ -43,7 +43,7 @@ function pruneMemoryStore() {
 
 /**
  * Decide an atomic rate-limit step against an in-memory `RateLimit` snapshot
- * for the rolling `window` (seconds) and `max`. Shared by the memory backend
+ * for the fixed `window` (seconds) and `max`. Shared by the memory backend
  * (read-decide-write is atomic under single-threaded JS) and as the fallback
  * for storages lacking an atomic primitive.
  */
@@ -66,8 +66,7 @@ function decideConsume(
 			retryAfter: null,
 		};
 	}
-	const timeSinceLastRequest = now - data.lastRequest;
-	if (timeSinceLastRequest >= windowInMs) {
+	if (now - data.lastRequest >= windowInMs) {
 		return {
 			next: { ...data, count: 1, lastRequest: now },
 			update: true,
@@ -84,7 +83,7 @@ function decideConsume(
 		};
 	}
 	return {
-		next: { ...data, count: data.count + 1, lastRequest: now },
+		next: { ...data, count: data.count + 1 },
 		update: true,
 		allowed: true,
 		retryAfter: null,
@@ -112,6 +111,9 @@ function getRetryAfter(lastRequest: number, window: number) {
 	const windowInMs = window * 1000;
 	return Math.ceil((lastRequest + windowInMs - now) / 1000);
 }
+
+// The storage wrapper is rebuilt per request, so the sweep time lives here.
+const lastSweepAt = new WeakMap<object, number>();
 
 function createDatabaseStorageWrapper(
 	ctx: AuthContext,
@@ -166,11 +168,9 @@ function createDatabaseStorageWrapper(
 			}
 		}
 
-		const timeSinceLastRequest = now - data.lastRequest;
-
 		// Window elapsed: reset to a single request, guarded on the window so a
 		// concurrent increment in a new window cannot be clobbered.
-		if (timeSinceLastRequest >= windowInMs) {
+		if (now - data.lastRequest >= windowInMs) {
 			const reset = await db.incrementOne<RateLimit>({
 				model,
 				where: [
@@ -203,7 +203,6 @@ function createDatabaseStorageWrapper(
 				{ field: "count", operator: "lt", value: rule.max },
 			],
 			increment: { count: 1 },
-			set: { lastRequest: now },
 		});
 		if (incremented) {
 			return { allowed: true, retryAfter: null };
@@ -228,7 +227,12 @@ function createDatabaseStorageWrapper(
 	// background handler, the request awaits cleanup so it survives teardown;
 	// failures are logged and do not reject the request.
 	const deleteExpiredRows = async (now: number) => {
-		const cutoff = now - longestObservedWindow * 1000;
+		const longestWindowInMs = longestObservedWindow * 1000;
+		if (now - (lastSweepAt.get(db) ?? 0) < longestWindowInMs) {
+			return;
+		}
+		lastSweepAt.set(db, now);
+		const cutoff = now - longestWindowInMs;
 		await ctx.runInBackgroundOrAwait(
 			db
 				.deleteMany({
@@ -315,7 +319,7 @@ function getRateLimitStorage(
 				if (decision.allowed) {
 					memory.set(key, {
 						data: { ...decision.next, key },
-						expiresAt: now + ttlFor(rule.window) * 1000,
+						expiresAt: decision.next.lastRequest + ttlFor(rule.window) * 1000,
 					});
 				}
 				return {

@@ -190,8 +190,9 @@ export type BaseURLConfig = string | DynamicBaseURLConfig;
 
 export interface BetterAuthRateLimitStorage {
 	/**
-	 * Atomically records one request against `key` within the rolling `window`
-	 * (in seconds) and reports whether it is allowed.
+	 * Atomically records one request against `key` within a fixed `window`
+	 * (in seconds) and reports whether it is allowed. The window starts at the
+	 * request that opens it, and later requests do not extend it.
 	 *
 	 * When `allowed` is true the count was incremented within the active window,
 	 * or the window had elapsed and was reset to start at 1. When `allowed` is
