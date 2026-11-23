@@ -2,6 +2,7 @@
   "name": "@better-auth-test/memory-adapter",
   "private": true,
   "type": "module",
+  "e2eComposeServices": "",
   "scripts": {
     "e2e:integration": "vitest run"
   },

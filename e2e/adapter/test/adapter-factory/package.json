@@ -2,6 +2,7 @@
   "name": "@better-auth-test/adapter-factory",
   "private": true,
   "type": "module",
+  "e2eComposeServices": "",
   "scripts": {
     "e2e:integration": "vitest run"
   },

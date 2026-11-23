@@ -2,6 +2,7 @@
   "name": "@better-auth-test/kysely-prisma-adapter",
   "private": true,
   "type": "module",
+  "e2eComposeServices": "postgres-kysely mysql-kysely postgres-kysely2 mssql",
   "scripts": {
     "e2e:integration": "vitest run"
   },

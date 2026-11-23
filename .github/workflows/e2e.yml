@@ -35,108 +35,82 @@ jobs:
       adapters: ${{ steps.select.outputs.adapters }}
       allow-skips: ${{ steps.select.outputs.allow-skips }}
     steps:
+      - name: Check for a successful merge queue run
+        id: queue
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if verified=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/e2e.yml/runs?head_sha=$GITHUB_SHA&event=merge_group&status=success" --jq '.total_count') \
+            && [[ "$verified" -gt 0 ]]; then
+            echo "verified=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name == 'pull_request'
+        if: steps.queue.outputs.verified != 'true'
         with:
-          fetch-depth: 0
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
           persist-credentials: false
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
+      - name: Check for documentation-only changes
+        id: diff
         if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # Keep the required gate reporting and skip dependency setup for documentation.
+          if git diff --quiet --no-renames "$BASE_SHA"...HEAD -- . \
+            ':(exclude)docs/**' ':(top,glob,exclude).changeset/*.md' ':(top,glob,exclude)*.md' \
+            ':(glob,exclude)**/README.md' ':(glob,exclude)**/CHANGELOG.md'; then
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+          elif [[ "$?" == 1 ]]; then
+            echo "mode=affected" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Could not compare PR files; running every E2E job."
+          fi
+
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
+        id: setup
+        if: steps.diff.outputs.mode == 'affected'
+        continue-on-error: true
 
       - name: Select affected E2E jobs
         id: select
         env:
-          EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GH_TOKEN: ${{ github.event_name == 'push' && github.token || '' }}
-          ADAPTER_MATRIX: |
-            [
-              { "packages": "@better-auth-test/adapter-factory", "compose_services": "" },
-              { "packages": "@better-auth-test/drizzle-adapter", "compose_services": "postgres mysql" },
-              { "packages": "@better-auth-test/drizzle-v2-relations-adapter", "compose_services": "postgres mysql" },
-              { "packages": "@better-auth-test/kysely-prisma-adapter", "compose_services": "postgres-kysely mysql-kysely postgres-kysely2 mssql" },
-              { "packages": "@better-auth-test/memory-adapter", "compose_services": "" },
-              { "packages": "@better-auth-test/mongo-adapter", "compose_services": "mongodb" },
-              { "packages": "@better-auth-test/prisma-adapter", "compose_services": "postgres-prisma mysql-prisma" }
-            ]
+          MODE: ${{ steps.diff.outputs.mode }}
+          QUEUE_VERIFIED: ${{ steps.queue.outputs.verified }}
+          SETUP_OUTCOME: ${{ steps.setup.outcome }}
         run: |
-          all_adapters=$(jq -c . <<< "$ADAPTER_MATRIX")
-
-          run_all() {
-            {
-              echo "smoke=true"
-              echo "integration=true"
-              echo "adapters=$all_adapters"
-              echo "allow-skips=false"
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          }
-
-          if [[ "$EVENT_NAME" == "push" ]]; then
-            # The merge queue pushes the exact commit it tested. Commits merged by bypassing the queue have no such run.
-            if verified=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/e2e.yml/runs?head_sha=$GITHUB_SHA&event=merge_group&status=success" --jq '.total_count') \
-              && [[ "$verified" -gt 0 ]]; then
-              echo "This commit already passed E2E in the merge queue; skipping every E2E job."
-              {
-                echo "smoke=false"
-                echo "integration=false"
-                echo "adapters=[]"
-                echo "allow-skips=true"
-              } >> "$GITHUB_OUTPUT"
-              exit 0
+          tasks=null
+          adapters='[]'
+          if [[ "$MODE" == "skip" || "$QUEUE_VERIFIED" == "true" ]]; then
+            tasks='[]'
+          else
+            adapters=$(jq -ces '
+              map(select(.scripts["e2e:integration"] != null) |
+                {packages: .name, compose_services: .e2eComposeServices})
+              | select(length > 0 and all(.[];
+                  (.packages | test("^@better-auth-test/[a-z0-9][a-z0-9-]*$")) and
+                  (.compose_services | test("^([a-z0-9][a-z0-9_-]*( [a-z0-9][a-z0-9_-]*)*)?$"))))
+            ' e2e/adapter/test/*/package.json)
+            if [[ "$MODE" == "affected" ]]; then
+              if [[ "$SETUP_OUTCOME" != "success" ]] \
+                || ! affected=$(./node_modules/.bin/turbo query affected --tasks e2e:integration e2e:smoke --base "$BASE_SHA" --head HEAD) \
+                || ! tasks=$(jq -ce 'select(.errors == null) | .data.affectedTasks.items | arrays | map(.fullName) | select(all(.[]; type == "string"))' <<< "$affected"); then
+                echo "::warning::Could not compute affected E2E tasks; running every E2E job."
+                tasks=null
+              fi
             fi
           fi
 
-          if [[ "$EVENT_NAME" != "pull_request" ]]; then
-            echo "Running every E2E job for the $EVENT_NAME event."
-            run_all
-          fi
-
-          paths_changed() {
-            local changed
-            # Include the old path when a file moves out of a watched directory.
-            if ! changed=$(git diff --name-only --no-renames "$BASE_SHA"...HEAD -- "$@"); then
-              echo "::warning::Could not compare E2E paths; running every E2E job."
-              run_all
-            fi
-            [[ -n "$changed" ]]
-          }
-
-          # These files shape every E2E job but are not Turbo task inputs.
-          if paths_changed .nvmrc docker-compose.yml .github/workflows/e2e.yml .github/actions/; then
-            echo "E2E setup changed; running every E2E job."
-            run_all
-          fi
-
-          if ! affected=$(./node_modules/.bin/turbo query affected --tasks e2e:integration e2e:smoke --base "$BASE_SHA" --head HEAD) \
-            || ! tasks=$(jq -ce '[.data.affectedTasks.items[].fullName]' <<< "$affected"); then
-            echo "::warning::Could not compute affected E2E tasks; running every E2E job."
-            run_all
-          fi
-
-          echo "Affected E2E tasks: $tasks"
-
-          smoke=$(jq 'any(.[]; endswith("#e2e:smoke"))' <<< "$tasks")
-          integration=$(jq 'index("@better-auth-test/integration#e2e:integration") != null' <<< "$tasks")
-          adapters=$(jq -c --argjson tasks "$tasks" '[.[] | select((.packages + "#e2e:integration") as $task | $tasks | index($task) != null)]' <<< "$all_adapters")
-
-          # Sources the E2E suites load by path, which Turbo's package graph does not see.
-          if paths_changed demo/nextjs/; then
-            echo "Next.js demo changed; the integration job builds and tests it."
-            integration=true
-          fi
-          if paths_changed e2e/adapter/ packages/cli/src/generators/; then
-            echo "Shared adapter suites or schema generators changed; every adapter suite imports them."
-            adapters=$all_adapters
-          fi
-
-          {
-            echo "smoke=$smoke"
-            echo "integration=$integration"
-            echo "adapters=$adapters"
-            echo "allow-skips=true"
-          } >> "$GITHUB_OUTPUT"
+          jq -nr --argjson tasks "$tasks" --argjson adapters "$adapters" '
+            "smoke=\($tasks == null or any($tasks[]?; endswith("#e2e:smoke")))",
+            "integration=\($tasks == null or ($tasks | index("@better-auth-test/integration#e2e:integration") != null))",
+            "adapters=\($adapters | map(select((.packages + "#e2e:integration") as $task
+              | $tasks == null or ($tasks | index($task) != null))) | @json)",
+            "allow-skips=\($tasks != null)"
+          ' >> "$GITHUB_OUTPUT"
 
   smoke:
     name: Smoke test (${{ matrix.node-version }})
@@ -298,7 +272,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The adapter list lives in the changes job's ADAPTER_MATRIX.
         include: ${{ fromJSON(needs.changes.outputs.adapters) }}
     env:
       COMPOSE_SERVICES: ${{ matrix.compose_services }}

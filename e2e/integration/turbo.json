@@ -1,0 +1,15 @@
+{
+  "extends": [
+    "//"
+  ],
+  "tasks": {
+    "e2e:integration": {
+      "inputs": [
+        "$TURBO_EXTENDS$",
+        "!$TURBO_ROOT$/e2e/adapter/**",
+        "$TURBO_ROOT$/e2e/integration/**",
+        "$TURBO_ROOT$/demo/nextjs/**"
+      ]
+    }
+  }
+}

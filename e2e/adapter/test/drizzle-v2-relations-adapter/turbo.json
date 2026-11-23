@@ -1,0 +1,14 @@
+{
+  "extends": [
+    "//"
+  ],
+  "tasks": {
+    "e2e:integration": {
+      "inputs": [
+        "$TURBO_EXTENDS$",
+        "$TURBO_ROOT$/packages/cli/{package.json,src/**}",
+        "$TURBO_ROOT$/e2e/adapter/test/drizzle-adapter/push-drizzle-schema.ts"
+      ]
+    }
+  }
+}
