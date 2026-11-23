@@ -43,8 +43,9 @@ describe("incrementMany helpers", () => {
 		).toThrow(/duplicate ids/);
 	});
 
-	it("sorts numeric ids numerically and string ids lexicographically", () => {
+	it("sorts numeric ids numerically and string ids by code unit", () => {
 		expect(compareAdapterIds(10, 2)).toBeGreaterThan(0);
+		expect(compareAdapterIds("id-2", "id-10")).toBeGreaterThan(0);
 		expect(
 			sortIncrementManyRows(
 				[{ where: [idWhere("c")] }, { where: [idWhere("a")] }],
@@ -102,5 +103,39 @@ describe("incrementMany helpers", () => {
 			assignmentBinds: 1,
 		});
 		expect(chunks.map((chunk) => chunk.length)).toEqual([998, 2]);
+	});
+
+	it("computes bindsPerRow without spreading into Math.max", () => {
+		const rows = Array.from({ length: 200_000 }, (_, index) => ({
+			where: [idWhere(`id-${index}`)],
+		}));
+		const chunks = chunkIncrementManyRows(rows, {
+			maxParameters: 999,
+			assignmentBinds: 1,
+		});
+		expect(chunks[0]).toHaveLength(998);
+		expect(chunks.at(-1)).toHaveLength(200_000 % 998);
+	});
+
+	it("throws when one row cannot fit under maxParameters", () => {
+		expect(() =>
+			chunkIncrementManyRows(
+				[
+					{
+						where: [
+							idWhere("a"),
+							{
+								field: "revision",
+								value: 1,
+								operator: "eq",
+								connector: "AND",
+								mode: "sensitive",
+							},
+						],
+					},
+				],
+				{ maxParameters: 2, assignmentBinds: 2 },
+			),
+		).toThrow(/cannot fit a row under maxParameters=2/);
 	});
 });

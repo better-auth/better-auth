@@ -313,9 +313,13 @@ incrementOne: async ({ model, where, increment, set }) => {
   `incrementOne` is optional. Without it, Better Auth uses conditional updates with bounded retries. If retries are exhausted, the operation throws and the increment is not recorded. Use native increments for heavily contended counters and security controls such as failed-attempt limits.
 </Callout>
 
+Fallbacks reuse your adapter's CRUD methods. They need complete, stable row snapshots with mapped IDs, atomic conditional writes, and exact affected-row counts. Null comparisons must also match absent nullable fields.
+
+Fallback counters must be finite numbers, with null or missing values starting at zero. Use native methods for `bigint` counters, OR predicates on structured values, or trigger-generated return values. Fields not updated by the increment fallback reflect the initial read.
+
 ### `incrementMany` method
 
-The `incrementMany` method atomically applies the same numeric deltas and optional set values to many records, each with its own `where`, then returns the updated rows. It is a batch of `incrementOne`, not a many-row `updateMany`.
+The `incrementMany` method applies the same numeric deltas and optional set values to many records, each with its own `where`, then returns the updated rows. Each matching row is updated the same way as `incrementOne`. It is a batch of `incrementOne`, not a many-row `updateMany`.
 
 parameters:
 
@@ -347,10 +351,6 @@ incrementMany: async ({ model, increment, set, rows }) => {
 <Callout type="warn">
   `incrementMany` is optional. Without it, Better Auth calls `incrementOne` for each row. When the adapter supports transactions, a multi-row fallback runs in one transaction. Without transactions, a multi-row update is not all-or-nothing.
 </Callout>
-
-Fallbacks reuse your adapter's CRUD methods. They need complete, stable row snapshots with mapped IDs, atomic conditional writes, and exact affected-row counts. Null comparisons must also match absent nullable fields.
-
-Fallback counters must be finite numbers, with null or missing values starting at zero. Use native methods for `bigint` counters, OR predicates on structured values, or trigger-generated return values. Fields not updated by the increment fallback reflect the initial read.
 
 ### `findOne` method
 

@@ -324,6 +324,9 @@ describe("kysely incrementMany native", () => {
 		});
 
 		expect(result).toHaveLength(500);
+		expect(result.every((row) => row.remaining === 2 && row.used === 1)).toBe(
+			true,
+		);
 		const updates = executedSql.flatMap((sql, index) =>
 			sql.startsWith("update")
 				? [{ sql, parameters: executedParameters[index] ?? [] }]

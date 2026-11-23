@@ -744,6 +744,12 @@ describe("drizzle-adapter", () => {
 			return { db, calls };
 		}
 
+		function flattenSqlChunks(expr: SQL): unknown[] {
+			return expr.queryChunks.flatMap((chunk) =>
+				is(chunk, SQL) ? [chunk, ...flattenSqlChunks(chunk)] : [chunk],
+			);
+		}
+
 		function createAdapter(db: any) {
 			return adapterFactory(db, { provider: "sqlite" })({
 				secret: defaultSecret,
@@ -785,6 +791,14 @@ describe("drizzle-adapter", () => {
 			expect(db.transaction).toBeUndefined();
 			expect(is(calls.set?.attempts, SQL)).toBe(true);
 			expect(is(calls.whereArgs?.[0], SQL)).toBe(true);
+			const predicate = flattenSqlChunks(calls.whereArgs?.[0] as SQL);
+			expect(
+				predicate.some((chunk) => is(chunk, Param) && chunk.value === "user-a"),
+			).toBe(true);
+			expect(
+				predicate.some((chunk) => is(chunk, Param) && chunk.value === "user-c"),
+			).toBe(true);
+			expect(predicate).toContain(userTable.attempts);
 		});
 
 		it("locks matching postgres rows in id order before the update", async () => {
@@ -858,6 +872,9 @@ describe("drizzle-adapter", () => {
 				"returning",
 			]);
 			expect(is(orderBy.mock.calls[0]?.[0], SQL)).toBe(true);
+			const orderChunks = flattenSqlChunks(orderBy.mock.calls[0]?.[0] as SQL);
+			expect(orderChunks).toContain(userTable.id);
+			expect(orderChunks).toContainEqual({ value: [" asc"] });
 		});
 	});
 });

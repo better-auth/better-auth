@@ -48,7 +48,11 @@ export function compareAdapterIds(
 	if (typeof left === "number" && typeof right === "number") {
 		return left - right;
 	}
-	return String(left).localeCompare(String(right));
+	const leftKey = String(left);
+	const rightKey = String(right);
+	if (leftKey < rightKey) return -1;
+	if (leftKey > rightKey) return 1;
+	return 0;
 }
 
 export function assertUniqueIncrementManyIds(
@@ -134,14 +138,19 @@ export function chunkIncrementManyRows<T extends IncrementManyRow>(
 	const maxParameters = finitePositiveInt(options.maxParameters) ?? 999;
 	const maxRows = finitePositiveInt(options.maxRows);
 	const assignmentBinds = nonNegativeInt(options.assignmentBinds);
-	const bindsPerRow = Math.max(
-		1,
-		...rows.map((row) => whereBindCount(row.where)),
-	);
-	const availableParameters = Math.max(1, maxParameters - assignmentBinds);
-	const parameterChunkSize = Math.max(
-		1,
-		Math.floor(availableParameters / bindsPerRow),
+	let bindsPerRow = 1;
+	for (const row of rows) {
+		const count = whereBindCount(row.where);
+		if (count > bindsPerRow) bindsPerRow = count;
+	}
+	const bindsPerStatement = assignmentBinds + bindsPerRow;
+	if (maxParameters < bindsPerStatement) {
+		throw new BetterAuthError(
+			`incrementMany cannot fit a row under maxParameters=${maxParameters}: each row needs ${bindsPerStatement} binds.`,
+		);
+	}
+	const parameterChunkSize = Math.floor(
+		(maxParameters - assignmentBinds) / bindsPerRow,
 	);
 	const chunkSize = Math.max(
 		1,

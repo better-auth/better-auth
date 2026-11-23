@@ -6,7 +6,10 @@ import type {
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	createAdapterFactory,
+	sortIncrementManyRows,
+} from "@better-auth/core/db/adapter";
 import {
 	checksSchema,
 	createSchemaCheck,
@@ -1248,18 +1251,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							assignments[columnName] = value;
 						}
 					}
-					const sorted = rows.slice().sort((left, right) => {
-						const leftId = left.where.find(
-							(clause) => clause.field === idField,
-						)?.value;
-						const rightId = right.where.find(
-							(clause) => clause.field === idField,
-						)?.value;
-						if (typeof leftId === "number" && typeof rightId === "number") {
-							return leftId - rightId;
-						}
-						return String(leftId ?? "").localeCompare(String(rightId ?? ""));
-					});
+					const sorted = sortIncrementManyRows(rows, idField);
 					if (config.provider === "mysql") {
 						const mutateInTransaction = async (tx: DB) => {
 							const updated: unknown[] = [];

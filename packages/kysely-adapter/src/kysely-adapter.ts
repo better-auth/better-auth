@@ -7,7 +7,10 @@ import type {
 	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	createAdapterFactory,
+	sortIncrementManyRows,
+} from "@better-auth/core/db/adapter";
 import {
 	checksSchema,
 	createSchemaCheck,
@@ -1052,18 +1055,7 @@ export const kyselyAdapter = (
 				async incrementMany({ model, modelKey = model, increment, set, rows }) {
 					if (rows.length === 0) return [];
 					const idField = getFieldName({ model: modelKey, field: "id" });
-					const sorted = rows.slice().sort((left, right) => {
-						const leftId = left.where.find(
-							(clause) => clause.field === idField,
-						)?.value;
-						const rightId = right.where.find(
-							(clause) => clause.field === idField,
-						)?.value;
-						if (typeof leftId === "number" && typeof rightId === "number") {
-							return leftId - rightId;
-						}
-						return String(leftId ?? "").localeCompare(String(rightId ?? ""));
-					});
+					const sorted = sortIncrementManyRows(rows, idField);
 					const assignments: Record<string, any> = {
 						...encodeJSONArrays(modelKey, set ?? {}),
 					};
@@ -1153,7 +1145,7 @@ export const kyselyAdapter = (
 						}
 						return await updateQuery.returningAll().execute();
 					};
-					if (config?.type === "postgres" || config?.type === "mssql") {
+					if (config?.type === "postgres") {
 						const incrementInTransaction = async (trx: typeof db) => {
 							await applyRowsWhere(
 								trx
@@ -1161,6 +1153,23 @@ export const kyselyAdapter = (
 									.select(`${model}.${idField}`)
 									.orderBy(`${model}.${idField}`, "asc")
 									.forUpdate(),
+							).execute();
+							return executeUpdate(trx);
+						};
+						return inTransaction
+							? incrementInTransaction(db)
+							: db.transaction().execute(incrementInTransaction);
+					}
+					if (config?.type === "mssql") {
+						const incrementInTransaction = async (trx: typeof db) => {
+							await applyRowsWhere(
+								trx
+									.selectFrom(
+										// cspell:ignore UPDLOCK
+										sql`${sql.table(model)} WITH (UPDLOCK, ROWLOCK)`.as(model),
+									)
+									.selectAll()
+									.orderBy(sql.ref(`${model}.${idField}`), "asc"),
 							).execute();
 							return executeUpdate(trx);
 						};

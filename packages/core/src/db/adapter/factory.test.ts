@@ -1192,7 +1192,13 @@ describe("createAdapterFactory incrementMany", () => {
 				createCustomAdapter({
 					incrementMany: incrementMany as CustomAdapter["incrementMany"],
 				}),
-		})({});
+		})({
+			user: {
+				additionalFields: {
+					attempts: { type: "number", required: false },
+				},
+			},
+		});
 		const rows = Array.from({ length: 20 }, (_, index) => ({
 			where: [
 				{ field: "id", value: `id-${index}` },
@@ -1201,14 +1207,15 @@ describe("createAdapterFactory incrementMany", () => {
 		}));
 		await adapter.incrementMany({
 			model: "user",
-			increment: {},
+			increment: { attempts: 1 },
 			set: { name: "token" },
 			rows,
 		});
-		// 2 where binds + `name` and `updatedAt` assignment binds: (20 - 2) / 2 = 9.
+		// 2 where binds + `attempts`, `name`, and `updatedAt` assignment binds:
+		// (20 - 3) / 2 = 8.
 		expect(
 			incrementMany.mock.calls.map((call) => call[0]?.rows.length),
-		).toEqual([9, 9, 2]);
+		).toEqual([8, 8, 4]);
 	});
 
 	it("runs native incrementMany chunks inside one transaction", async () => {

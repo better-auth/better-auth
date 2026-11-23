@@ -183,6 +183,60 @@ describe("kysely-adapter", () => {
 		expect(deleteQuery.outputAll).toHaveBeenCalledWith("deleted");
 	});
 
+	// cspell:ignore UPDLOCK
+	it("incrementMany locks mssql rows with UPDLOCK instead of FOR UPDATE", async () => {
+		const selectQuery = {
+			select: vi.fn(() => selectQuery),
+			selectAll: vi.fn(() => selectQuery),
+			where: vi.fn(() => selectQuery),
+			orderBy: vi.fn(() => selectQuery),
+			forUpdate: vi.fn(() => selectQuery),
+			execute: vi.fn().mockResolvedValue([]),
+		};
+		const updateQuery = {
+			set: vi.fn(() => updateQuery),
+			where: vi.fn(() => updateQuery),
+			outputAll: vi.fn(() => updateQuery),
+			execute: vi.fn().mockResolvedValue([{ id: "a", remaining: 2 }]),
+		};
+		const trx = {
+			selectFrom: vi.fn(() => selectQuery),
+			updateTable: vi.fn(() => updateQuery),
+		};
+		const db = {
+			transaction: vi.fn(() => ({
+				execute: (fn: (inner: typeof trx) => unknown) => fn(trx),
+			})),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "mssql" })({
+			plugins: [
+				{
+					id: "counters-test",
+					schema: {
+						counters: {
+							fields: {
+								remaining: { type: "number" },
+							},
+						},
+					},
+				},
+			],
+		});
+
+		const result = await adapter.incrementMany({
+			model: "counters",
+			increment: { remaining: 1 },
+			rows: [{ where: [{ field: "id", value: "a" }] }],
+		});
+
+		expect(result).toEqual([{ id: "a", remaining: 2 }]);
+		expect(db.transaction).toHaveBeenCalledTimes(1);
+		expect(trx.selectFrom).toHaveBeenCalledTimes(1);
+		expect(selectQuery.forUpdate).not.toHaveBeenCalled();
+		expect(selectQuery.orderBy).toHaveBeenCalledTimes(1);
+		expect(updateQuery.outputAll).toHaveBeenCalledWith("inserted");
+	});
+
 	/**
 	 * @see https://node-postgres.com/features/types
 	 */

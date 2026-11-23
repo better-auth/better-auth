@@ -543,7 +543,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	 *
 	 * Every row `where` must include exactly one case-sensitive `id`
 	 * equality. Extra clauses are the rest of the guard. Duplicate ids
-	 * throw. Empty `increment` and empty `set` throw. Empty `rows`
+	 * throw. Throws when `increment` and `set` are both empty. Empty `rows`
 	 * returns `[]`.
 	 *
 	 * Result order is not input order. Callers check `length` and ids;
@@ -699,6 +699,7 @@ export interface CustomAdapter {
 			set?: Record<string, unknown> | undefined;
 		},
 	) => Promise<T | null>;
+	// cspell:ignore UPDLOCK
 	/**
 	 * Optional native batch of `incrementOne`.
 	 *
@@ -707,9 +708,10 @@ export interface CustomAdapter {
 	 * are the rest of the guard. Guard misses omit that row. Result order
 	 * is not input order. Implementations should update in primary-key
 	 * order so concurrent batches deadlock-avoid the same way.
-	 * PostgreSQL and SQL Server should lock matching rows with
-	 * `SELECT ... FOR UPDATE ORDER BY id` (or the dialect equivalent)
-	 * before the guarded `UPDATE`. MySQL should update one locked row
+	 * PostgreSQL should lock matching rows with
+	 * `SELECT ... ORDER BY id FOR UPDATE` before the guarded `UPDATE`.
+	 * SQL Server should lock with `WITH (UPDLOCK, ROWLOCK)` and
+	 * `ORDER BY id`. MySQL should update one locked row
 	 * at a time in id order. SQLite serializes writers, so the guarded
 	 * `UPDATE` is enough.
 	 *
