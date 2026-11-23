@@ -480,6 +480,8 @@ Every API key can have its own rate limit settings. The built-in rate-limiting a
 * When verifying an API key via the `/api-key/verify` endpoint
 * When using API keys for session creation (if `enableSessionForAPIKeys` is enabled), rate limiting applies to all endpoints that use the API key
 
+When a key has a usage quota and a rate limit, verification claims both through one guarded write. Some adapters use additional database reads to apply the write. A rate-limited request leaves the key's remaining quota intact. Secondary storage can serve the credential lookup, and verification waits for the database claim before returning.
+
 For other endpoints/methods that don't use API keys, you should utilize Better Auth's [built-in rate-limiting](/docs/concepts/rate-limit).
 
 <Callout type="warn">

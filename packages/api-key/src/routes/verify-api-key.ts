@@ -165,12 +165,8 @@ async function readCurrentCredential(
 	return fresh;
 }
 
-/**
- * Atomically consume quota and a rate-limit slot against the database row, the
- * source of truth in both storage modes. Each guarded `incrementOne` only
- * mutates the row while the guard still holds, so concurrent verifications
- * cannot drive `remaining` below zero or push `requestCount` past the maximum.
- */
+const MAX_USAGE_CLAIM_ATTEMPTS = 8;
+
 async function claimUsageInDatabase({
 	ctx,
 	apiKey,
@@ -180,170 +176,101 @@ async function claimUsageInDatabase({
 	apiKey: ApiKey;
 	opts: PredefinedApiKeyOptions;
 }): Promise<ApiKey> {
-	const row =
-		apiKey.remaining === null ? apiKey : await consumeRemaining(ctx, apiKey);
-	await consumeRateLimit(ctx, row, opts);
-
-	// A final `updatedAt` stamp returns the fully consolidated row, reflecting
-	// every guarded counter write applied above.
-	const finalRow = await ctx.context.adapter.incrementOne<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: credentialGuard(apiKey),
-		increment: {},
-		set: { updatedAt: new Date() },
-	});
-
-	if (!finalRow) {
-		await readCurrentCredential(ctx, apiKey);
-		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
-	}
-
-	await setApiKey(ctx, finalRow, opts);
-
-	return finalRow;
-}
-
-/**
- * Guarded quota consumption. When a refill is due, exactly one verification wins
- * the refill (compare-and-swap on the observed `lastRefillAt`); any concurrent
- * verification falls through to the plain guarded decrement against the refilled
- * value. The decrement only applies while `remaining > 0`, so it can never go
- * negative. Returns the updated row; throws when the quota is exhausted.
- */
-async function consumeRemaining(
-	ctx: GenericEndpointContext,
-	apiKey: ApiKey,
-): Promise<ApiKey> {
-	const now = new Date();
-	const { refillInterval, refillAmount } = apiKey;
-
-	if (refillInterval && refillAmount) {
-		const lastTime = new Date(
-			apiKey.lastRefillAt ?? apiKey.createdAt,
-		).getTime();
-		if (now.getTime() - lastTime > refillInterval) {
-			const refilled = await ctx.context.adapter.incrementOne<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					...credentialGuard(apiKey),
-					{ field: "lastRefillAt", value: apiKey.lastRefillAt },
-				],
-				increment: {},
-				set: { remaining: refillAmount - 1, lastRefillAt: now },
-			});
-			if (refilled) {
-				return refilled;
-			}
-			// Lost the refill CAS: another verification already refilled. Fall
-			// through and decrement against the refreshed value.
+	for (let attempt = 0; attempt < MAX_USAGE_CLAIM_ATTEMPTS; attempt++) {
+		const claimed = await tryClaimUsage(ctx, apiKey, opts);
+		if (claimed) {
+			await setApiKey(ctx, claimed, opts);
+			return claimed;
 		}
+
+		apiKey = await readCurrentCredential(ctx, apiKey);
 	}
 
-	const decremented = await ctx.context.adapter.incrementOne<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: [
-			...credentialGuard(apiKey),
-			{ field: "remaining", operator: "gt", value: 0 },
-		],
-		increment: { remaining: -1 },
-	});
-
-	if (!decremented) {
-		await readCurrentCredential(ctx, apiKey);
-		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
-	}
-
-	return decremented;
+	throw APIError.from(
+		"SERVICE_UNAVAILABLE",
+		ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
+	);
 }
 
-/**
- * Guarded rate-limit consumption. The common in-window path increments
- * `requestCount` only while it is below the max (compare-and-swap), so a burst
- * of concurrent verifications can never exceed the limit. Window resets and the
- * first request in a window are guarded conditional sets; a request that loses
- * every guard within an active window is rejected. Returns the updated row, or
- * the unchanged row when rate limiting does not apply.
- */
-async function consumeRateLimit(
+function tryClaimUsage(
 	ctx: GenericEndpointContext,
 	apiKey: ApiKey,
 	opts: PredefinedApiKeyOptions,
-): Promise<ApiKey> {
+): Promise<ApiKey | null> {
+	const now = new Date();
+	const where: Where[] = [
+		...credentialGuard(apiKey),
+		{ field: "refillAmount", value: apiKey.refillAmount ?? null },
+		{ field: "refillInterval", value: apiKey.refillInterval ?? null },
+		{ field: "rateLimitEnabled", value: apiKey.rateLimitEnabled ?? null },
+		{ field: "rateLimitMax", value: apiKey.rateLimitMax ?? null },
+		{ field: "rateLimitTimeWindow", value: apiKey.rateLimitTimeWindow ?? null },
+	];
+	const increment: Record<string, number> = {};
+	const set: Record<string, number | Date> = { updatedAt: now };
+
+	const { remaining, refillInterval, refillAmount, lastRefillAt } = apiKey;
+	if (remaining === null) {
+		where.push({ field: "remaining", value: null });
+	} else if (
+		refillInterval &&
+		refillAmount &&
+		now.getTime() - (lastRefillAt ?? apiKey.createdAt).getTime() >
+			refillInterval
+	) {
+		where.push({ field: "lastRefillAt", value: lastRefillAt });
+		where.push({ field: "remaining", value: remaining });
+		set.remaining = refillAmount - 1;
+		set.lastRefillAt = now;
+	} else {
+		if (remaining <= 0) {
+			throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
+		}
+		where.push({ field: "remaining", operator: "gt", value: 0 });
+		increment.remaining = -1;
+	}
+
 	const decision = evaluateRateLimit(apiKey, opts);
-
-	if (decision.type === "deny") {
-		throw new APIError("TOO_MANY_REQUESTS", {
-			message: decision.message,
-			code: "RATE_LIMITED" as const,
-			details: { tryAgainIn: decision.tryAgainIn },
-		});
+	switch (decision.type) {
+		case "deny":
+			throw new APIError("TOO_MANY_REQUESTS", {
+				message: decision.message,
+				code: "RATE_LIMITED" as const,
+				details: { tryAgainIn: decision.tryAgainIn },
+			});
+		case "skip":
+			if (decision.lastRequest !== null) set.lastRequest = decision.lastRequest;
+			break;
+		case "start":
+			where.push({ field: "lastRequest", value: null });
+			set.requestCount = 1;
+			set.lastRequest = decision.now;
+			break;
+		case "reset":
+			where.push({
+				field: "lastRequest",
+				operator: "lte",
+				value: decision.windowStart,
+			});
+			set.requestCount = 1;
+			set.lastRequest = decision.now;
+			break;
+		case "increment":
+			where.push(
+				{ field: "lastRequest", operator: "gt", value: decision.windowStart },
+				{ field: "requestCount", operator: "lt", value: decision.max },
+			);
+			increment.requestCount = 1;
+			set.lastRequest = decision.now;
+			break;
 	}
 
-	if (decision.type === "skip") {
-		if (decision.lastRequest === null) {
-			return apiKey;
-		}
-		const updated = await ctx.context.adapter.incrementOne<ApiKey>({
-			model: API_KEY_TABLE_NAME,
-			where: credentialGuard(apiKey),
-			increment: {},
-			set: { lastRequest: decision.lastRequest },
-		});
-		return updated ?? apiKey;
-	}
-
-	if (decision.type === "increment") {
-		const incremented = await ctx.context.adapter.incrementOne<ApiKey>({
-			model: API_KEY_TABLE_NAME,
-			where: [
-				...credentialGuard(apiKey),
-				{
-					field: "lastRequest",
-					operator: "gt",
-					value: decision.windowStart,
-				},
-				{
-					field: "requestCount",
-					operator: "lt",
-					value: decision.max,
-				},
-			],
-			increment: { requestCount: 1 },
-			set: { lastRequest: decision.now },
-		});
-		if (incremented) {
-			return incremented;
-		}
-		// The window rolled or the max was reached between the read and the
-		// write. Re-evaluate against the freshest row to apply the right guard.
-		const fresh = await readCurrentCredential(ctx, apiKey);
-		return consumeRateLimit(ctx, fresh, opts);
-	}
-
-	// "start" and "reset": set the count to 1 for a fresh window, guarded so a
-	// concurrent increment in the same window cannot be silently overwritten.
-	const windowGuard =
-		decision.type === "reset"
-			? {
-					field: "lastRequest",
-					operator: "lte" as const,
-					value: decision.windowStart,
-				}
-			: { field: "lastRequest", operator: "eq" as const, value: null };
-
-	const started = await ctx.context.adapter.incrementOne<ApiKey>({
+	return ctx.context.adapter.incrementOne<ApiKey>({
 		model: API_KEY_TABLE_NAME,
-		where: [...credentialGuard(apiKey), windowGuard],
-		increment: {},
-		set: { requestCount: 1, lastRequest: decision.now },
+		where,
+		increment,
+		set,
 	});
-	if (started) {
-		return started;
-	}
-	// Another verification already opened the window. Re-evaluate so this
-	// request consumes an increment slot instead of resetting the count.
-	const fresh = await readCurrentCredential(ctx, apiKey);
-	return consumeRateLimit(ctx, fresh, opts);
 }
 
 const verifyApiKeyBodySchema = z.object({

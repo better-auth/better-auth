@@ -752,6 +752,12 @@ If any keys still exist only in secondary storage, import them before serving tr
 
 After import, verification applies quota and rate-limit updates to the database row before returning. The imported counters are the starting values. With `deferUpdates: true`, verification can schedule expired and exhausted key cleanup in the background. Verification waits for counter updates.
 
+### Atomic API key usage claims
+
+Verification now claims quota and rate limits together. A request denied by the rate limiter no longer uses up a quota slot. You can keep your existing configuration.
+
+For a successful verification without contention, the default database mode goes from one API key read and two writes to one read and one write. In secondary-storage mode, a cache hit needs zero database lookups and goes from two writes to one. A cache miss adds one lookup. The previous path used two writes with default settings, which enable rate limiting and leave quota disabled. It also used two writes when both limits were explicitly disabled because verification still updated timestamps. With quota and rate limiting both enabled, it used three writes. Some adapters use extra reads to implement a guarded write. Concurrent updates can require a fresh read before retrying.
+
 ***
 
 ## Other plugins and adapters
