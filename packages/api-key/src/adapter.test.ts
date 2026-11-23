@@ -175,4 +175,68 @@ describe("withRefListLock", () => {
 
 		expect(result).toBe("C");
 	});
+
+	it("lets existing and new waiters pass a stalled Workers writer after five seconds", async () => {
+		vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+		vi.useFakeTimers();
+
+		const refKey = "key-burst-then-stall";
+		const healthy = Array.from({ length: 20 }, (_, index) =>
+			withRefListLock(refKey, async () => index),
+		);
+		let stalledAt: number | undefined;
+		void withRefListLock(refKey, () => {
+			stalledAt = Date.now();
+			return new Promise<never>(() => {});
+		});
+
+		const started: string[] = [];
+		const queued = withRefListLock(refKey, async () => {
+			started.push("queued");
+		});
+		expect(await Promise.all(healthy)).toHaveLength(20);
+		await vi.advanceTimersByTimeAsync(2_000);
+		expect(stalledAt).toBe(Date.now() - 2_000);
+		const late = withRefListLock(refKey, async () => {
+			started.push("late");
+		});
+
+		await vi.advanceTimersByTimeAsync(2_999);
+		expect(started).toEqual([]);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(started).toEqual(["queued", "late"]);
+		await Promise.all([queued, late]);
+	});
+
+	it("keeps the Workers lock budget independent of a healthy writer's queue position", async () => {
+		vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+		vi.useFakeTimers();
+		const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+
+		try {
+			const started: number[] = [];
+			const finished: number[] = [];
+			const writes = Array.from({ length: 20 }, (_, index) =>
+				withRefListLock("key-healthy-burst", async () => {
+					started.push(index);
+					await new Promise<void>((resolve) => setTimeout(resolve, 4_999));
+					finished.push(index);
+				}),
+			);
+
+			await vi.advanceTimersByTimeAsync(0);
+			for (let index = 0; index < writes.length; index++) {
+				expect(started).toHaveLength(index + 1);
+				expect(finished).toHaveLength(index);
+				await vi.advanceTimersByTimeAsync(4_999);
+			}
+			await Promise.all(writes);
+			expect(finished).toEqual(writes.map((_, index) => index));
+			expect(
+				Math.max(...setTimeoutSpy.mock.calls.map(([, delay]) => delay ?? 0)),
+			).toBe(5_000);
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+	});
 });

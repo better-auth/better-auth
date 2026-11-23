@@ -239,10 +239,9 @@ async function getApiKeyByIdFromStorage(
 
 /**
  * Serializes reference-list mutations per `refKey` within a single process.
- * Each new mutation chains onto the previous one for the same key, so the
- * read/modify/write below never interleaves with another mutation of the same
- * list. This closes the lost-update race in secondary-storage-only mode, where
- * the serialized list is the source of truth for listing.
+ * Healthy mutations of the same key run in arrival order. This closes the
+ * lost-update race in secondary-storage-only mode, where the serialized list
+ * is the source of truth for listing.
  *
  * Limitation: the lock is in-process only. Across multiple server instances
  * sharing one secondary storage, concurrent writers can still lose updates.
@@ -260,63 +259,88 @@ async function getApiKeyByIdFromStorage(
  *
  * @see https://github.com/better-auth/better-auth/issues/12397
  */
-const refListLocks = new Map<string, RefListLock>();
+const refListLocks = new Map<string, RefListLockQueue>();
 
 const REF_LIST_LOCK_HOLD_MS = 5_000;
 
 type RefListLock = {
-	promise: Promise<unknown>;
-	/**
-	 * When a waiter stops presuming this writer is alive. A writer can start no
-	 * later than its predecessor's deadline, so each deadline derives from the
-	 * stored one and never from the writer's own request, which may have ended.
-	 */
+	wake?: () => void;
+};
+
+type RefListLockQueue = {
+	writers: Set<RefListLock>;
 	holdUntil: number;
 };
 
 /**
- * Waits for `previous` to settle. On workerd the wait also ends at its
- * `holdUntil`, on a timer owned by the caller: a timer started by the prior
- * request is canceled when that request ends.
+ * On Workers each waiter owns its timer and can advance the queue if the
+ * current writer stalls. A queued request can end before it even starts,
+ * so it gets a deadline as soon as it reaches the front.
  */
-function waitForRefListLock(previous: RefListLock | undefined) {
-	if (!previous) return Promise.resolve();
-	const settled = previous.promise.then(
-		() => {},
-		() => {},
-	);
-	if (!isWorkerd()) return settled;
-	return new Promise<void>((resolve) => {
-		const timeout = setTimeout(
-			resolve,
-			Math.max(0, previous.holdUntil - Date.now()),
-		);
-		void settled.then(() => {
-			clearTimeout(timeout);
-			resolve();
+async function waitForRefListLock(
+	queue: RefListLockQueue,
+	writer: RefListLock,
+) {
+	const bounded = isWorkerd();
+	for (;;) {
+		const holder = queue.writers.values().next().value;
+		if (holder === writer) return true;
+		if (!holder || !queue.writers.has(writer)) return false;
+
+		const remaining = queue.holdUntil - Date.now();
+		if (bounded && remaining <= 0) {
+			queue.writers.delete(holder);
+			queue.holdUntil = Date.now() + REF_LIST_LOCK_HOLD_MS;
+			continue;
+		}
+
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		await new Promise<void>((resolve) => {
+			writer.wake = resolve;
+			if (bounded) {
+				timer = setTimeout(resolve, remaining);
+			}
 		});
-	});
+		clearTimeout(timer);
+		writer.wake = undefined;
+	}
 }
 
 /** @internal Exported for unit tests. */
-export function withRefListLock<T>(
+export async function withRefListLock<T>(
 	refKey: string,
 	task: () => Promise<T>,
 ): Promise<T> {
-	const previous = refListLocks.get(refKey);
-	const holdUntil =
-		Math.max(Date.now(), previous?.holdUntil ?? 0) + REF_LIST_LOCK_HOLD_MS;
-	const run = waitForRefListLock(previous).then(task);
-	// The map holds the `.finally()` chain, so the cleanup must compare against
-	// that same promise (not `run`) or the entry is never removed and the map
-	// grows without bound.
-	const promise = run.finally(() => {
-		if (refListLocks.get(refKey)?.promise === promise) {
-			refListLocks.delete(refKey);
+	let queue = refListLocks.get(refKey);
+	if (!queue) {
+		queue = {
+			writers: new Set(),
+			holdUntil: Date.now() + REF_LIST_LOCK_HOLD_MS,
+		};
+		refListLocks.set(refKey, queue);
+	}
+
+	const writer: RefListLock = {};
+	queue.writers.add(writer);
+	if (!(await waitForRefListLock(queue, writer))) {
+		// A request that resumes after losing its turn must queue again.
+		return withRefListLock(refKey, task);
+	}
+
+	queue.holdUntil = Date.now() + REF_LIST_LOCK_HOLD_MS;
+	try {
+		return await task();
+	} finally {
+		if (queue.writers.delete(writer)) {
+			const next = queue.writers.values().next().value;
+			if (next) {
+				queue.holdUntil = Date.now() + REF_LIST_LOCK_HOLD_MS;
+				next.wake?.();
+			} else {
+				refListLocks.delete(refKey);
+			}
 		}
-	});
-	refListLocks.set(refKey, { promise, holdUntil });
-	return promise;
+	}
 }
 
 /**
