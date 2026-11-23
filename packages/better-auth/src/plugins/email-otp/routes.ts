@@ -386,7 +386,7 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			const identifier = toOTPIdentifier(ctx.body.type, email);
 			await atomicVerifyOTP(ctx, opts, identifier, ctx.body.otp, "restore");
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
-			if (!user) {
+			if (!user && (opts.disableSignUp || ctx.body.type !== "sign-in")) {
 				/**
 				 * safe to leak the existence of a user, given the user has already the OTP from the
 				 * email
