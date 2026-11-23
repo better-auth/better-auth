@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { SecondaryStorage } from "@better-auth/core/db";
+import type { Where } from "@better-auth/core/db/adapter";
 import { isWorkerd } from "@better-auth/core/env";
 import { mapConcurrent } from "@better-auth/core/utils/async";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -636,11 +637,79 @@ export interface ListApiKeysOptions {
 	offset?: number;
 	sortBy?: string;
 	sortDirection?: "asc" | "desc";
+	/**
+	 * When set, restrict results to this configuration.
+	 * `"default"` (and empty values) also match keys with a null configId.
+	 */
+	configId?: string;
 }
 
 export interface ListApiKeysResult {
 	apiKeys: ApiKey[];
 	total: number;
+}
+
+function isDefaultConfigId(configId: string): boolean {
+	return !configId || configId === "default";
+}
+
+function buildApiKeyListWhere(referenceId: string, configId?: string): Where[] {
+	const where: Where[] = [
+		{
+			field: "referenceId",
+			value: referenceId,
+		},
+	];
+	if (configId === undefined) {
+		return where;
+	}
+	if (isDefaultConfigId(configId)) {
+		// `(referenceId = ?) AND (configId = 'default' OR configId IS NULL)`
+		where.push(
+			{
+				field: "configId",
+				value: "default",
+				connector: "OR",
+			},
+			{
+				field: "configId",
+				value: null,
+				connector: "OR",
+			},
+		);
+		return where;
+	}
+	where.push({
+		field: "configId",
+		value: configId,
+	});
+	return where;
+}
+
+async function listApiKeysFromDatabase(
+	ctx: GenericEndpointContext,
+	referenceId: string,
+	paginationOpts?: ListApiKeysOptions,
+): Promise<ListApiKeysResult> {
+	const { limit, offset, sortBy, sortDirection, configId } =
+		paginationOpts || {};
+	const where = buildApiKeyListWhere(referenceId, configId);
+	const [apiKeys, total] = await Promise.all([
+		ctx.context.adapter.findMany<ApiKey>({
+			model: "apikey",
+			where,
+			limit,
+			offset,
+			sortBy: sortBy
+				? { field: sortBy, direction: sortDirection || "asc" }
+				: undefined,
+		}),
+		ctx.context.adapter.count({
+			model: "apikey",
+			where,
+		}),
+	]);
+	return { apiKeys, total };
 }
 
 /**
@@ -700,32 +769,7 @@ export async function listApiKeys(
 
 	// Database mode only
 	if (opts.storage === "database") {
-		const [apiKeys, total] = await Promise.all([
-			ctx.context.adapter.findMany<ApiKey>({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-				limit,
-				offset,
-				sortBy: sortBy
-					? { field: sortBy, direction: sortDirection || "asc" }
-					: undefined,
-			}),
-			ctx.context.adapter.count({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-			}),
-		]);
-		return { apiKeys, total };
+		return await listApiKeysFromDatabase(ctx, referenceId, paginationOpts);
 	}
 
 	// Secondary storage mode with fallback
@@ -767,31 +811,11 @@ export async function listApiKeys(
 			}
 		}
 		// Fallback to database
-		const [dbKeys, total] = await Promise.all([
-			ctx.context.adapter.findMany<ApiKey>({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-				limit,
-				offset,
-				sortBy: sortBy
-					? { field: sortBy, direction: sortDirection || "asc" }
-					: undefined,
-			}),
-			ctx.context.adapter.count({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-			}),
-		]);
+		const { apiKeys: dbKeys, total } = await listApiKeysFromDatabase(
+			ctx,
+			referenceId,
+			paginationOpts,
+		);
 
 		// Rebuild from DB truth:
 		// per-key entries fan out,
@@ -853,30 +877,5 @@ export async function listApiKeys(
 	}
 
 	// Default fallback
-	const [apiKeys, total] = await Promise.all([
-		ctx.context.adapter.findMany<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "referenceId",
-					value: referenceId,
-				},
-			],
-			limit,
-			offset,
-			sortBy: sortBy
-				? { field: sortBy, direction: sortDirection || "asc" }
-				: undefined,
-		}),
-		ctx.context.adapter.count({
-			model: "apikey",
-			where: [
-				{
-					field: "referenceId",
-					value: referenceId,
-				},
-			],
-		}),
-	]);
-	return { apiKeys, total };
+	return await listApiKeysFromDatabase(ctx, referenceId, paginationOpts);
 }
