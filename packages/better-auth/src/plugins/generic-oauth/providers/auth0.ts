@@ -55,6 +55,7 @@ export function auth0(options: Auth0Options): GenericOAuthConfig<"auth0"> {
 		pkce: options.pkce,
 		disableImplicitSignUp: options.disableImplicitSignUp,
 		disableSignUp: options.disableSignUp,
+		disableIdTokenSignIn: options.disableIdTokenSignIn,
 		overrideUserInfo: options.overrideUserInfo,
 	};
 }
