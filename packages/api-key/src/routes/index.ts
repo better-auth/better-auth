@@ -29,7 +29,6 @@ export type PredefinedApiKeyOptions = ApiKeyConfigurationOptions &
 			| "enableSessionForAPIKeys"
 			| "startingCharactersConfig"
 			| "storage"
-			| "fallbackToDatabase"
 			| "deferUpdates"
 		>
 	> & {

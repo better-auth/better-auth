@@ -228,11 +228,7 @@ export function getApiKey({
 			deleteAllExpiredApiKeys(ctx.context);
 
 			// Migrate legacy double-stringified metadata if needed
-			const metadata = await migrateDoubleStringifiedMetadata(
-				ctx,
-				apiKey,
-				opts,
-			);
+			const metadata = await migrateDoubleStringifiedMetadata(ctx, apiKey);
 
 			const { key: _key, ...returningApiKey } = apiKey;
 

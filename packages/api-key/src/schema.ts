@@ -1,5 +1,5 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { parseJSON } from "better-auth/client";
+import { readApiKeyMetadata } from "./metadata";
 
 export const apiKeySchema = ({
 	defaultRateLimitMax,
@@ -193,10 +193,7 @@ export const apiKeySchema = ({
 						input(value) {
 							return JSON.stringify(value);
 						},
-						output(value) {
-							if (!value) return null;
-							return parseJSON<any>(value as string);
-						},
+						output: readApiKeyMetadata,
 					},
 				},
 			},

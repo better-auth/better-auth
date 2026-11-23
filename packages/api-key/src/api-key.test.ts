@@ -2,7 +2,11 @@ import type { SecondaryStorage } from "@better-auth/core/db";
 import type { APIError } from "@better-auth/core/error";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
+import {
+	apiKey,
+	defaultKeyHasher,
+	API_KEY_ERROR_CODES as ERROR_CODES,
+} from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
 import { isAPIError } from "./utils";
@@ -2640,8 +2644,11 @@ describe("api-key", async () => {
 			// Check that API key is stored in secondary storage by ID
 			expect(store.has(`api-key:by-id:${apiKey?.id}`)).toBe(true);
 
-			// Check that user's API key list is updated
-			expect(store.has(`api-key:by-ref:${user.id}`)).toBe(true);
+			const dbKey = await (await auth.$context).adapter.findOne<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: apiKey!.id }],
+			});
+			expect(dbKey?.referenceId).toBe(user.id);
 
 			// Verify the stored data can be retrieved
 			const storedData = store.get(`api-key:by-id:${apiKey?.id}`);
@@ -2670,7 +2677,7 @@ describe("api-key", async () => {
 			expect(retrievedKey?.referenceId).toBe(user.id);
 		});
 
-		it("should list API keys from secondary storage", async () => {
+		it("lists keys after the per-key cache is cleared", async () => {
 			const { headers } = await signInWithTestUser();
 
 			// Create multiple API keys
@@ -2683,6 +2690,8 @@ describe("api-key", async () => {
 				{ headers: headers },
 			);
 
+			store.delete(`api-key:by-id:${key1?.id}`);
+			store.delete(`api-key:by-id:${key2?.id}`);
 			const { data: keys } = await client.apiKey.list({
 				fetchOptions: { headers: headers },
 			});
@@ -2691,36 +2700,13 @@ describe("api-key", async () => {
 			expect(keys?.apiKeys?.length).toBeGreaterThanOrEqual(2);
 			expect(keys?.apiKeys?.some((k) => k.id === key1?.id)).toBe(true);
 			expect(keys?.apiKeys?.some((k) => k.id === key2?.id)).toBe(true);
-		});
-
-		it("should fetch keys from secondary storage in parallel, not sequentially", async () => {
-			const { headers } = await signInWithTestUser();
-
-			const keyCount = 5;
-			for (let i = 0; i < keyCount; i++) {
-				await client.apiKey.create({}, { headers });
-			}
-
-			let concurrentGets = 0;
-			let maxConcurrentGets = 0;
-			const originalGet = secondaryStorage.get;
-			vi.spyOn(secondaryStorage, "get").mockImplementation(async (key) => {
-				if (!key.startsWith("api-key:by-id:")) return originalGet(key);
-				concurrentGets++;
-				maxConcurrentGets = Math.max(maxConcurrentGets, concurrentGets);
-				await new Promise((r) => setTimeout(r, 20));
-				const result = await originalGet(key);
-				concurrentGets--;
-				return result;
+			expect(store.has(`api-key:by-id:${key1?.id}`)).toBe(false);
+			const retrievedKey = await auth.api.getApiKey({
+				headers,
+				query: { id: key1!.id },
 			});
-
-			const { data: keys } = await client.apiKey.list({
-				fetchOptions: { headers },
-			});
-
-			expect(keys).not.toBeNull();
-			expect(keys!.apiKeys!.length).toBe(keyCount);
-			expect(maxConcurrentGets).toBe(keyCount);
+			expect(retrievedKey.id).toBe(key1!.id);
+			expect(store.has(`api-key:by-id:${key1?.id}`)).toBe(true);
 		});
 
 		it("should update API key in secondary storage", async () => {
@@ -2746,7 +2732,7 @@ describe("api-key", async () => {
 		});
 
 		it("should delete API key from secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },
@@ -2764,15 +2750,58 @@ describe("api-key", async () => {
 			// Verify it's deleted from secondary storage
 			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(false);
 
-			// Verify it's removed from user's list
-			const userListData = store.get(`api-key:by-ref:${user.id}`);
-			if (userListData) {
-				const userIds = JSON.parse(userListData);
-				expect(userIds.includes(createdKey!.id)).toBe(false);
-			}
+			const dbKey = await (await auth.$context).adapter.findOne<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey!.id }],
+			});
+			expect(dbKey).toBeNull();
 		});
 
-		it("should verify API key from secondary storage", async () => {
+		it("invalidates both caches when disabling or deleting a key", async () => {
+			const { headers } = await signInWithTestUser();
+			const { id, key } = await auth.api.createApiKey({ headers, body: {} });
+			const hash = await defaultKeyHasher(key);
+			const hashCacheKey = `api-key:${hash}`;
+			const idCacheKey = `api-key:by-id:${id}`;
+			expect(store.has(hashCacheKey)).toBe(true);
+			expect(store.has(idCacheKey)).toBe(true);
+
+			await auth.api.updateApiKey({
+				headers,
+				body: { keyId: id, enabled: false },
+			});
+			expect(store.has(hashCacheKey)).toBe(false);
+			expect(store.has(idCacheKey)).toBe(false);
+			expect(await auth.api.verifyApiKey({ body: { key } })).toMatchObject({
+				valid: false,
+				error: { code: "KEY_DISABLED" },
+			});
+			expect(
+				await auth.api.getApiKey({ headers, query: { id } }),
+			).toMatchObject({
+				id,
+				enabled: false,
+			});
+			expect(store.has(hashCacheKey)).toBe(true);
+			expect(store.has(idCacheKey)).toBe(true);
+
+			expect(
+				await auth.api.deleteApiKey({ headers, body: { keyId: id } }),
+			).toEqual({ success: true });
+			expect(store.has(hashCacheKey)).toBe(false);
+			expect(store.has(idCacheKey)).toBe(false);
+			expect(await auth.api.verifyApiKey({ body: { key } })).toMatchObject({
+				valid: false,
+				error: { code: "INVALID_API_KEY" },
+			});
+			await expect(
+				auth.api.getApiKey({ headers, query: { id } }),
+			).rejects.toMatchObject({
+				body: { code: "KEY_NOT_FOUND" },
+			});
+		});
+
+		it("verifies a key with an empty cache", async () => {
 			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
@@ -2781,6 +2810,11 @@ describe("api-key", async () => {
 
 			expect(createdKey).not.toBeNull();
 
+			store.clear();
+
+			const { adapter } = await auth.$context;
+			const findOne = vi.spyOn(adapter, "findOne");
+			const hash = await defaultKeyHasher(createdKey!.key);
 			const result = await auth.api.verifyApiKey({
 				body: {
 					key: createdKey!.key,
@@ -2790,9 +2824,22 @@ describe("api-key", async () => {
 			expect(result.valid).toBe(true);
 			expect(result.key).not.toBeNull();
 			expect(result.key?.id).toBe(createdKey?.id);
+			const lookup = {
+				model: "apikey",
+				where: [{ field: "key", value: hash }],
+			};
+			expect(findOne).toHaveBeenCalledWith(lookup);
+			expect(store.has(`api-key:${hash}`)).toBe(true);
+			findOne.mockClear();
+
+			expect(
+				await auth.api.verifyApiKey({ body: { key: createdKey!.key } }),
+			).toMatchObject({ valid: true, key: { id: createdKey!.id } });
+			expect(findOne).not.toHaveBeenCalledWith(lookup);
+			findOne.mockRestore();
 		});
 
-		it("should set TTL when API key has expiration", async () => {
+		it("caps the cache lifetime at the key expiration", async () => {
 			const { headers } = await signInWithTestUser();
 			const expiresIn = 60 * 60 * 24; // 1 day in seconds
 
@@ -2809,8 +2856,8 @@ describe("api-key", async () => {
 			const ttl = expirationMap.get(storedKey);
 			expect(ttl).toBeDefined();
 			expect(ttl).toBeGreaterThan(0);
-			// TTL should be approximately expiresIn seconds (within 5 seconds tolerance)
-			expect(Math.abs(ttl! - expiresIn)).toBeLessThan(5);
+			expect(ttl).toBeGreaterThanOrEqual(expiresIn - 1);
+			expect(ttl).toBeLessThanOrEqual(expiresIn);
 		});
 
 		it("should handle metadata in secondary storage", async () => {
@@ -2931,126 +2978,8 @@ describe("api-key", async () => {
 			vi.useRealTimers();
 		});
 
-		it("should maintain user's API key list in secondary storage", async () => {
-			const { headers } = await signInWithTestUser();
-
-			// Create multiple API keys for the same user
-			const { data: key1 } = await client.apiKey.create(
-				{},
-				{ headers: headers },
-			);
-			const { data: key2 } = await client.apiKey.create(
-				{},
-				{ headers: headers },
-			);
-			const { data: key3 } = await client.apiKey.create(
-				{},
-				{ headers: headers },
-			);
-
-			// List should return all keys
-			const { data: keys } = await client.apiKey.list({
-				fetchOptions: { headers: headers },
-			});
-
-			expect(keys?.apiKeys?.length).toBeGreaterThanOrEqual(3);
-			expect(keys?.apiKeys?.some((k) => k.id === key1?.id)).toBe(true);
-			expect(keys?.apiKeys?.some((k) => k.id === key2?.id)).toBe(true);
-			expect(keys?.apiKeys?.some((k) => k.id === key3?.id)).toBe(true);
-
-			// Delete one key
-			await client.apiKey.delete({ keyId: key2!.id }, { headers: headers });
-
-			// List should now have one less key
-			const { data: keysAfterDelete } = await client.apiKey.list({
-				fetchOptions: { headers: headers },
-			});
-
-			expect(keysAfterDelete?.apiKeys?.length).toBe(keys!.apiKeys!.length - 1);
-			expect(keysAfterDelete?.apiKeys?.some((k) => k.id === key2?.id)).toBe(
-				false,
-			);
-		});
-	});
-
-	describe("secondary-storage-with-fallback", async () => {
-		const store = new Map<string, string>();
-		const expirationMap = new Map<string, number>();
-
-		const fallbackStorage: SecondaryStorage = {
-			set(key, value, ttl) {
-				store.set(key, value as string);
-				if (ttl) expirationMap.set(key, ttl);
-			},
-			get(key) {
-				return store.get(key) || null;
-			},
-			getAndDelete(key) {
-				const value = store.get(key) || null;
-				store.delete(key);
-				expirationMap.delete(key);
-				return value;
-			},
-			increment(key, ttl) {
-				const count = Number(store.get(key) ?? 0) + 1;
-				store.set(key, String(count));
-				if (ttl !== undefined) expirationMap.set(key, ttl);
-				return count;
-			},
-			delete(key) {
-				store.delete(key);
-				expirationMap.delete(key);
-			},
-		};
-
-		const { client, auth, signInWithTestUser } = await getTestInstance(
-			{
-				secondaryStorage: fallbackStorage,
-				plugins: [
-					apiKey({
-						storage: "secondary-storage",
-						fallbackToDatabase: true,
-						enableMetadata: true,
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [apiKeyClient()],
-				},
-			},
-		);
-
-		beforeEach(() => {
-			store.clear();
-			expirationMap.clear();
-		});
-
-		afterEach(() => {
-			vi.restoreAllMocks();
-		});
-
-		it("should read from secondary storage first", async () => {
-			const { headers } = await signInWithTestUser();
-			const { data: createdKey } = await client.apiKey.create(
-				{},
-				{ headers: headers },
-			);
-
-			expect(createdKey).not.toBeNull();
-			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(true);
-
-			const { data: retrievedKey } = await client.apiKey.get(
-				{ query: { id: createdKey!.id } },
-				{ headers: headers },
-			);
-
-			expect(retrievedKey).not.toBeNull();
-			expect(retrievedKey?.id).toBe(createdKey?.id);
-		});
-
-		it("verifyApiKey should persist quota updates to the database when fallbackToDatabase is true", async () => {
-			const { headers, user } = await signInWithTestUser();
+		it("persists quota updates to the database in secondary-storage mode", async () => {
+			const { user } = await signInWithTestUser();
 
 			const createdKey = await auth.api.createApiKey({
 				body: {
@@ -3069,11 +2998,11 @@ describe("api-key", async () => {
 			expect(first.key?.remaining).toBe(0);
 
 			// Ensure the canonical DB row was updated (not just the cache).
-			const dbAfterFirst = await auth.api.getApiKey({
-				query: { id: createdKey.id },
-				headers,
+			const dbAfterFirst = await (await auth.$context).adapter.findOne<ApiKey>({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
 			});
-			expect(dbAfterFirst.remaining).toBe(0);
+			expect(dbAfterFirst?.remaining).toBe(0);
 
 			// Simulate cache eviction/deletion and ensure we don't repopulate stale allowances.
 			store.clear();
@@ -3086,419 +3015,6 @@ describe("api-key", async () => {
 
 			expect(second.valid).toBe(false);
 			expect(second.error?.code).toBe("USAGE_EXCEEDED");
-		});
-
-		it("should fallback to database when not found in storage and auto-populate storage", async () => {
-			const { headers, user } = await signInWithTestUser();
-
-			// Create key directly in database adapter (bypassing storage)
-			const context = await auth.$context;
-			const hashedKey = "test_hashed_key_123";
-			const dbKey = await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
-				model: "apikey",
-				data: {
-					configId: "default",
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					name: "Test Key",
-					prefix: "test",
-					start: "test_",
-					key: hashedKey,
-					enabled: true,
-					expiresAt: null,
-					referenceId: user.id,
-					lastRefillAt: null,
-					lastRequest: null,
-					metadata: null,
-					rateLimitMax: null,
-					rateLimitTimeWindow: null,
-					remaining: null,
-					refillAmount: null,
-					refillInterval: null,
-					rateLimitEnabled: false,
-					requestCount: 0,
-					permissions: null,
-				},
-			});
-
-			expect(dbKey).not.toBeNull();
-
-			// Ensure key is NOT in storage initially
-			expect(store.has(`api-key:by-id:${dbKey!.id}`)).toBe(false);
-			expect(store.has(`api-key:${hashedKey}`)).toBe(false);
-
-			// Retrieve it via API (should fallback to DB and auto-populate storage)
-			const { data: retrievedKey } = await client.apiKey.get(
-				{ query: { id: dbKey!.id } },
-				{ headers: headers },
-			);
-
-			expect(retrievedKey).not.toBeNull();
-			expect(retrievedKey?.id).toBe(dbKey?.id);
-
-			// Verify it's now in storage (auto-populated)
-			expect(store.has(`api-key:by-id:${dbKey!.id}`)).toBe(true);
-			expect(store.has(`api-key:${hashedKey}`)).toBe(true);
-		});
-
-		it("should populate storage when listing keys falls back to database", async () => {
-			const { headers, user } = await signInWithTestUser();
-
-			// Create keys directly in database adapter (bypassing storage)
-			const context = await auth.$context;
-			const hashedKey1 = "test_hashed_key_1";
-			const hashedKey2 = "test_hashed_key_2";
-
-			const dbKey1 = await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
-				model: "apikey",
-				data: {
-					configId: "default",
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					name: "Test Key 1",
-					prefix: "test",
-					start: "test_",
-					key: hashedKey1,
-					enabled: true,
-					expiresAt: null,
-					referenceId: user.id,
-					lastRefillAt: null,
-					lastRequest: null,
-					metadata: null,
-					rateLimitMax: null,
-					rateLimitTimeWindow: null,
-					remaining: null,
-					refillAmount: null,
-					refillInterval: null,
-					rateLimitEnabled: false,
-					requestCount: 0,
-					permissions: null,
-				},
-			});
-
-			const dbKey2 = await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
-				model: "apikey",
-				data: {
-					configId: "default",
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					name: "Test Key 2",
-					prefix: "test",
-					start: "test_",
-					key: hashedKey2,
-					enabled: true,
-					expiresAt: null,
-					referenceId: user.id,
-					lastRefillAt: null,
-					lastRequest: null,
-					metadata: null,
-					rateLimitMax: null,
-					rateLimitTimeWindow: null,
-					remaining: null,
-					refillAmount: null,
-					refillInterval: null,
-					rateLimitEnabled: false,
-					requestCount: 0,
-					permissions: null,
-				},
-			});
-
-			expect(dbKey1).not.toBeNull();
-			expect(dbKey2).not.toBeNull();
-
-			// Ensure keys are NOT in storage initially
-			expect(store.has(`api-key:by-id:${dbKey1!.id}`)).toBe(false);
-			expect(store.has(`api-key:by-id:${dbKey2!.id}`)).toBe(false);
-			expect(store.has(`api-key:by-ref:${user.id}`)).toBe(false);
-
-			// List keys via API (should fallback to DB and auto-populate storage)
-			const { data: keys } = await client.apiKey.list({}, { headers: headers });
-
-			expect(keys).not.toBeNull();
-			expect(keys?.apiKeys?.length).toBeGreaterThanOrEqual(2);
-			expect(keys?.apiKeys?.some((k) => k.id === dbKey1!.id)).toBe(true);
-			expect(keys?.apiKeys?.some((k) => k.id === dbKey2!.id)).toBe(true);
-
-			// Verify keys are now in storage (auto-populated)
-			expect(store.has(`api-key:by-id:${dbKey1!.id}`)).toBe(true);
-			expect(store.has(`api-key:by-id:${dbKey2!.id}`)).toBe(true);
-			expect(store.has(`api-key:${hashedKey1}`)).toBe(true);
-			expect(store.has(`api-key:${hashedKey2}`)).toBe(true);
-			// Verify user's key list is populated
-			expect(store.has(`api-key:by-ref:${user.id}`)).toBe(true);
-		});
-
-		it("should populate storage in parallel when listing falls back to database", async () => {
-			const { headers, user } = await signInWithTestUser();
-
-			const context = await auth.$context;
-			const keyCount = 5;
-			for (let i = 0; i < keyCount; i++) {
-				await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
-					model: "apikey",
-					data: {
-						configId: "default",
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						name: `Parallel Key ${i}`,
-						prefix: "test",
-						start: "test_",
-						key: `hashed_parallel_${i}`,
-						enabled: true,
-						expiresAt: null,
-						referenceId: user.id,
-						lastRefillAt: null,
-						lastRequest: null,
-						metadata: null,
-						rateLimitMax: null,
-						rateLimitTimeWindow: null,
-						remaining: null,
-						refillAmount: null,
-						refillInterval: null,
-						rateLimitEnabled: false,
-						requestCount: 0,
-						permissions: null,
-					},
-				});
-			}
-
-			let concurrentSets = 0;
-			let maxConcurrentSets = 0;
-			const originalSet = fallbackStorage.set;
-			vi.spyOn(fallbackStorage, "set").mockImplementation(
-				async (key, value) => {
-					if (!key.startsWith("api-key:by-id:")) return originalSet(key, value);
-					concurrentSets++;
-					maxConcurrentSets = Math.max(maxConcurrentSets, concurrentSets);
-					await new Promise((r) => setTimeout(r, 20));
-					await originalSet(key, value);
-					concurrentSets--;
-				},
-			);
-
-			const { data: keys } = await client.apiKey.list({}, { headers });
-
-			expect(keys).not.toBeNull();
-			expect(keys!.apiKeys!.length).toBeGreaterThanOrEqual(keyCount);
-			expect(maxConcurrentSets).toBeGreaterThanOrEqual(keyCount);
-		});
-
-		it("should not touch the ref list per key while populating", async () => {
-			const { headers, user } = await signInWithTestUser();
-
-			const context = await auth.$context;
-			const keyCount = 5;
-			for (let i = 0; i < keyCount; i++) {
-				await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
-					model: "apikey",
-					data: {
-						configId: "default",
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						name: `Ref List Key ${i}`,
-						prefix: "test",
-						start: "test_",
-						key: `hashed_ref_list_${i}`,
-						enabled: true,
-						expiresAt: null,
-						referenceId: user.id,
-						lastRefillAt: null,
-						lastRequest: null,
-						metadata: null,
-						rateLimitMax: null,
-						rateLimitTimeWindow: null,
-						remaining: null,
-						refillAmount: null,
-						refillInterval: null,
-						rateLimitEnabled: false,
-						requestCount: 0,
-						permissions: null,
-					},
-				});
-			}
-
-			const refKey = `api-key:by-ref:${user.id}`;
-			const getSpy = vi.spyOn(fallbackStorage, "get");
-			const setSpy = vi.spyOn(fallbackStorage, "set");
-
-			const { data: keys } = await client.apiKey.list({}, { headers });
-
-			expect(keys).not.toBeNull();
-			expect(keys!.apiKeys!.length).toBeGreaterThanOrEqual(keyCount);
-			expect(
-				getSpy.mock.calls.filter(([k]) => k === refKey).length,
-			).toBeLessThanOrEqual(1);
-			expect(setSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(1);
-		});
-
-		it("should invalidate (not mutate) the ref list on create", async () => {
-			const { headers, user } = await signInWithTestUser();
-			const refKey = `api-key:by-ref:${user.id}`;
-			await client.apiKey.list({}, { headers });
-
-			const getSpy = vi.spyOn(fallbackStorage, "get");
-			const setSpy = vi.spyOn(fallbackStorage, "set");
-			const deleteSpy = vi.spyOn(fallbackStorage, "delete");
-
-			await client.apiKey.create({}, { headers });
-
-			expect(getSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(0);
-			expect(setSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(0);
-			expect(deleteSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(1);
-		});
-
-		it("should invalidate (not mutate) the ref list on delete", async () => {
-			const { headers, user } = await signInWithTestUser();
-			const { data: created } = await client.apiKey.create({}, { headers });
-			await client.apiKey.list({}, { headers });
-
-			const refKey = `api-key:by-ref:${user.id}`;
-			const getSpy = vi.spyOn(fallbackStorage, "get");
-			const setSpy = vi.spyOn(fallbackStorage, "set");
-			const deleteSpy = vi.spyOn(fallbackStorage, "delete");
-
-			await client.apiKey.delete({ keyId: created!.id }, { headers });
-
-			expect(getSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(0);
-			expect(setSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(0);
-			expect(deleteSpy.mock.calls.filter(([k]) => k === refKey).length).toBe(1);
-		});
-
-		it("should not lose ids when two creates race on the ref list", async () => {
-			const { headers } = await signInWithTestUser();
-
-			// Widen the RMW window so both writers would observe the same
-			// empty ref list before either wrote back. The fix avoids get entirely.
-			const originalGet = fallbackStorage.get.bind(fallbackStorage);
-			vi.spyOn(fallbackStorage, "get").mockImplementation(
-				async (key: string) => {
-					const value = await originalGet(key);
-					if (key.startsWith("api-key:by-ref:")) {
-						await new Promise((r) => setTimeout(r, 30));
-					}
-					return value;
-				},
-			);
-
-			const [a, b] = await Promise.all([
-				client.apiKey.create({ name: "race-a" }, { headers }),
-				client.apiKey.create({ name: "race-b" }, { headers }),
-			]);
-
-			const { data: keys } = await client.apiKey.list({}, { headers });
-			const ids = keys!.apiKeys!.map((k) => k.id);
-			expect(ids).toContain(a.data!.id);
-			expect(ids).toContain(b.data!.id);
-		});
-
-		it("should write to secondary storage only", async () => {
-			const { headers } = await signInWithTestUser();
-			const { data: createdKey } = await client.apiKey.create(
-				{ name: "Test Key" },
-				{ headers: headers },
-			);
-
-			expect(createdKey).not.toBeNull();
-			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(true);
-		});
-
-		it("should create in both database and secondary storage when fallbackToDatabase is true", async () => {
-			const { headers } = await signInWithTestUser();
-			const { data: createdKey } = await client.apiKey.create(
-				{ name: "Fallback Test Key" },
-				{ headers: headers },
-			);
-
-			expect(createdKey).not.toBeNull();
-
-			// Should be in secondary storage
-			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(true);
-
-			// Should also be in database (verify by direct DB query)
-			const dbKey = await auth.api.getApiKey({
-				query: { id: createdKey!.id },
-				headers,
-			});
-			expect(dbKey).not.toBeNull();
-			expect(dbKey?.id).toBe(createdKey?.id);
-			expect(dbKey?.name).toBe("Fallback Test Key");
-		});
-
-		it("should update both database and secondary storage when fallbackToDatabase is true", async () => {
-			const { headers } = await signInWithTestUser();
-			const { data: createdKey } = await client.apiKey.create(
-				{ name: "Original Name" },
-				{ headers: headers },
-			);
-
-			expect(createdKey).not.toBeNull();
-
-			// Update the key
-			const { data: updatedKey } = await client.apiKey.update(
-				{
-					keyId: createdKey!.id,
-					name: "Updated Name",
-				},
-				{ headers: headers },
-			);
-
-			expect(updatedKey).not.toBeNull();
-			expect(updatedKey?.name).toBe("Updated Name");
-
-			// Verify secondary storage is updated
-			const cachedData = store.get(`api-key:by-id:${createdKey!.id}`);
-			expect(cachedData).toBeDefined();
-			const parsed = JSON.parse(cachedData!);
-			expect(parsed.name).toBe("Updated Name");
-
-			// Verify database is updated
-			const dbKey = await auth.api.getApiKey({
-				query: { id: createdKey!.id },
-				headers,
-			});
-			expect(dbKey?.name).toBe("Updated Name");
-		});
-
-		it("should delete from both database and secondary storage when fallbackToDatabase is true", async () => {
-			const { headers } = await signInWithTestUser();
-			const { data: createdKey } = await client.apiKey.create(
-				{},
-				{ headers: headers },
-			);
-
-			expect(createdKey).not.toBeNull();
-			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(true);
-
-			// Verify it exists in DB
-			const dbKeyBefore = await auth.api.getApiKey({
-				query: { id: createdKey!.id },
-				headers,
-			});
-			expect(dbKeyBefore).not.toBeNull();
-
-			// Delete the key
-			const { data: deleteResult } = await client.apiKey.delete(
-				{ keyId: createdKey!.id },
-				{ headers: headers },
-			);
-
-			expect(deleteResult?.success).toBe(true);
-
-			// Should be deleted from secondary storage
-			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(false);
-
-			// Should be deleted from database
-			let error: any = null;
-			try {
-				await auth.api.getApiKey({
-					query: { id: createdKey!.id },
-					headers,
-				});
-			} catch (e) {
-				error = e;
-			}
-			expect(error).not.toBeNull();
-			expect(error.status).toBe("NOT_FOUND");
 		});
 	});
 
@@ -5229,83 +4745,6 @@ describe("concurrent verification enforces atomic counters", async () => {
 			expect(stored.requestCount).toBe(2);
 		});
 	});
-
-	describe("secondary storage reference list", async () => {
-		const store = new Map<string, string>();
-		// A read of the gated key yields for a tick before returning. Two
-		// concurrent writers without a lock therefore both read the same pre-write
-		// reference list and the lost update is exercised deterministically; a
-		// correctly serialized writer reads the gated key one at a time and keeps
-		// both entries.
-		let gatedKey: string | null = null;
-
-		const secondaryStorage: SecondaryStorage = {
-			set(key, value) {
-				store.set(key, value as string);
-			},
-			async get(key) {
-				if (key === gatedKey) {
-					await new Promise((resolve) => setTimeout(resolve, 5));
-				}
-				return store.get(key) || null;
-			},
-			getAndDelete(key) {
-				const value = store.get(key) || null;
-				store.delete(key);
-				return value;
-			},
-			increment(key) {
-				const count = Number(store.get(key) ?? 0) + 1;
-				store.set(key, String(count));
-				return count;
-			},
-			delete(key) {
-				store.delete(key);
-			},
-		};
-
-		const { auth, signInWithTestUser } = await getTestInstance(
-			{
-				secondaryStorage,
-				plugins: [apiKey({ storage: "secondary-storage" })],
-			},
-			{
-				clientOptions: {
-					plugins: [apiKeyClient()],
-				},
-			},
-		);
-
-		beforeEach(() => {
-			store.clear();
-			gatedKey = null;
-		});
-
-		it("does not hide an active key when two creates run concurrently", async () => {
-			const { headers, user } = await signInWithTestUser();
-
-			gatedKey = `api-key:by-ref:${user.id}`;
-
-			const [keyA, keyB] = await Promise.all([
-				auth.api.createApiKey({ body: {}, headers }),
-				auth.api.createApiKey({ body: {}, headers }),
-			]);
-
-			gatedKey = null;
-
-			const listed = await auth.api.listApiKeys({ headers });
-			const listedIds = listed.apiKeys.map((k) => k.id);
-			expect(listedIds).toContain(keyA.id);
-			expect(listedIds).toContain(keyB.id);
-
-			for (const created of [keyA, keyB]) {
-				const verified = await auth.api.verifyApiKey({
-					body: { key: created.key },
-				});
-				expect(verified.valid).toBe(true);
-			}
-		});
-	});
 });
 
 describe.each(["string", "parsed"] as const)(
@@ -5385,12 +4824,12 @@ describe.each(["string", "parsed"] as const)(
 			expect(listed.apiKeys.map((k) => k.id)).toContain(created!.id);
 		});
 
-		it("keeps date-like strings in name and metadata as stored", async () => {
+		it("keeps date-like strings in name and cached metadata", async () => {
 			const { headers } = await signInWithTestUser();
 			const created = await auth.api.createApiKey({
 				body: {
 					name: "2024-01-01T00:00:00Z",
-					metadata: { since: "2025-06-01T00:00:00Z" },
+					metadata: { since: "2025-06-01T00:00:00.000Z" },
 				},
 				headers,
 			});
@@ -5400,7 +4839,7 @@ describe.each(["string", "parsed"] as const)(
 				headers,
 			});
 			expect(got.name).toBe("2024-01-01T00:00:00Z");
-			expect(got.metadata).toEqual({ since: "2025-06-01T00:00:00Z" });
+			expect(got.metadata).toEqual({ since: "2025-06-01T00:00:00.000Z" });
 		});
 
 		it("reads keys whose metadata has a constructor field", async () => {

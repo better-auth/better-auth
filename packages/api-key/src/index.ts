@@ -35,6 +35,7 @@ export const defaultKeyHasher = async (key: string) => {
 };
 
 export { API_KEY_ERROR_CODES } from "./error-codes";
+export { migrateSecondaryStorageApiKeys } from "./migrate";
 
 export const API_KEY_TABLE_NAME = "apikey";
 
@@ -102,7 +103,6 @@ export function apiKey(
 					config?.startingCharactersConfig?.charactersLength ?? 6,
 			},
 			enableSessionForAPIKeys: config?.enableSessionForAPIKeys ?? false,
-			fallbackToDatabase: config?.fallbackToDatabase ?? false,
 			customStorage: config?.customStorage,
 			deferUpdates: config?.deferUpdates ?? false,
 		})),

@@ -1,13 +1,13 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { setApiKey } from "../adapter";
+import { normalizeApiKeyMetadata } from "../metadata";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -370,8 +370,7 @@ export function createApiKey({
 				}
 			}
 
-			// if metadata is defined, than check that it's an object.
-			if (metadata) {
+			if (metadata != null) {
 				if (opts.enableMetadata === false) {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.METADATA_DISABLED);
 				}
@@ -475,7 +474,7 @@ export function createApiKey({
 				referenceId: referenceId,
 				lastRefillAt: null,
 				lastRequest: null,
-				metadata: null,
+				metadata: metadata == null ? null : normalizeApiKeyMetadata(metadata),
 				rateLimitMax: rateLimitMax ?? opts.rateLimit.maxRequests ?? null,
 				rateLimitTimeWindow:
 					rateLimitTimeWindow ?? opts.rateLimit.timeWindow ?? null,
@@ -492,35 +491,14 @@ export function createApiKey({
 				permissions: permissionsToApply,
 			};
 
-			if (metadata) {
-				// The adapter will automatically apply the schema transform to stringify
-				data.metadata = metadata;
-			}
-
-			let apiKey: ApiKey;
-
-			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
-					model: API_KEY_TABLE_NAME,
-					data: data,
-				});
-				await setApiKey(ctx, apiKey, opts);
-			} else if (opts.storage === "secondary-storage") {
-				const generatedId = ctx.context.generateId({
-					model: API_KEY_TABLE_NAME,
-				});
-				const id = generatedId || generateId();
-				apiKey = {
-					...data,
-					id,
-				} as ApiKey;
-				await setApiKey(ctx, apiKey, opts);
-			} else {
-				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
-					model: API_KEY_TABLE_NAME,
-					data: data,
-				});
-			}
+			const apiKey = await ctx.context.adapter.create<
+				Omit<ApiKey, "id">,
+				ApiKey
+			>({
+				model: API_KEY_TABLE_NAME,
+				data,
+			});
+			await setApiKey(ctx, apiKey, opts);
 
 			return ctx.json({
 				...(apiKey as ApiKey),

@@ -1,34 +1,18 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { Where } from "@better-auth/core/db/adapter";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
 import {
 	batchMigrateLegacyMetadata,
-	listApiKeys as listApiKeysFromStorage,
+	listApiKeys as listApiKeysFromDatabase,
 	parseDoubleStringifiedMetadata,
 } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { configIdMatches, isDefaultConfigId, resolveConfiguration } from ".";
-
-/**
- * Generate a unique identifier for a configuration's storage backend.
- * Used to group configurations that share the same storage and avoid duplicate queries.
- */
-function getStorageIdentifier(config: PredefinedApiKeyOptions): string {
-	if (config.storage === "database") {
-		return "database";
-	}
-	if (config.customStorage) {
-		return `custom:${config.configId ?? "default"}`;
-	}
-	return config.fallbackToDatabase
-		? "secondary-storage-with-fallback"
-		: "secondary-storage";
-}
 
 const listApiKeysQuerySchema = z
 	.object({
@@ -276,99 +260,50 @@ export function listApiKeys({
 			}
 
 			const referenceId = organizationId ?? session.user.id;
-			const expectedReferencesType = organizationId ? "organization" : "user";
-
-			let allApiKeys: ApiKey[] = [];
-
 			if (configId) {
-				const resolvedConfig = resolveConfiguration(
-					ctx.context,
-					configurations,
-					configId,
-				);
+				resolveConfiguration(ctx.context, configurations, configId);
+			}
 
-				const { apiKeys } = await listApiKeysFromStorage(
+			const filters = keyConfigurationFilter(
+				configurations,
+				Boolean(organizationId),
+				configId,
+			);
+			if (!filters) {
+				return ctx.json({ apiKeys: [], total: 0, limit, offset });
+			}
+
+			const { apiKeys: paginatedApiKeys, total } =
+				await listApiKeysFromDatabase(
 					ctx,
-					referenceId,
-					resolvedConfig,
+					[...filters, { field: "referenceId", value: referenceId }],
 					{
-						limit: undefined,
-						offset: undefined,
-						sortBy: ctx.query?.sortBy,
-						sortDirection: ctx.query?.sortDirection,
+						limit,
+						offset,
+						sortBy: ctx.query?.sortBy
+							? {
+									field: ctx.query.sortBy,
+									direction: ctx.query.sortDirection ?? "asc",
+								}
+							: undefined,
 					},
 				);
-				allApiKeys = apiKeys;
-			} else {
-				// When no configId specified, query each unique storage backend
-				// Group configurations by their effective storage to avoid duplicate queries
-				const storageGroups = new Map<string, PredefinedApiKeyOptions>();
-				for (const config of configurations) {
-					const storageKey = getStorageIdentifier(config);
-					if (!storageGroups.has(storageKey)) {
-						storageGroups.set(storageKey, config);
-					}
-				}
-
-				// Query each unique storage backend in parallel and merge results
-				const groupResults = await Promise.all(
-					[...storageGroups.values()].map((opts) =>
-						listApiKeysFromStorage(ctx, referenceId, opts, {
-							limit: undefined,
-							offset: undefined,
-							sortBy: ctx.query?.sortBy,
-							sortDirection: ctx.query?.sortDirection,
-						}),
-					),
-				);
-				const seenIds = new Set<string>();
-				for (const { apiKeys } of groupResults) {
-					for (const key of apiKeys) {
-						if (!seenIds.has(key.id)) {
-							seenIds.add(key.id);
-							allApiKeys.push(key);
-						}
-					}
-				}
-			}
-
-			// Filter by ownership type (user or organization) based on config's references setting
-			let filteredApiKeys = allApiKeys.filter((key) => {
-				const keyConfig = configurations.find((c) => {
-					// Keys with configId null, undefined, or "default" all match the default config
-					if (isDefaultConfigId(key.configId)) {
-						return isDefaultConfigId(c.configId);
-					}
-					return c.configId === key.configId;
-				});
-				const referencesType = keyConfig?.references ?? "user";
-				return (
-					referencesType === expectedReferencesType &&
-					key.referenceId === referenceId
-				);
-			});
-
-			if (configId) {
-				filteredApiKeys = filteredApiKeys.filter((key) =>
-					configIdMatches(key.configId, configId),
-				);
-			}
-
-			const total = filteredApiKeys.length;
-
-			// Apply pagination after filtering
-			let paginatedApiKeys = filteredApiKeys;
-			if (offset !== undefined) {
-				paginatedApiKeys = paginatedApiKeys.slice(offset);
-			}
-			if (limit !== undefined) {
-				paginatedApiKeys = paginatedApiKeys.slice(0, limit);
-			}
 
 			deleteAllExpiredApiKeys(ctx.context);
 
 			// Build response with parsed metadata (synchronous, no DB calls)
-			const returningApiKeys = paginatedApiKeys.map((apiKey) => {
+			const matchingApiKeys = paginatedApiKeys.filter((apiKey) => {
+				const configuration = configurations.find((config) =>
+					configIdMatches(config.configId, apiKey.configId),
+				);
+				return (
+					apiKey.referenceId === referenceId &&
+					(configuration?.references === "organization") ===
+						Boolean(organizationId) &&
+					(!configId || configIdMatches(apiKey.configId, configId))
+				);
+			});
+			const returningApiKeys = matchingApiKeys.map((apiKey) => {
 				const { key: _key, ...rest } = apiKey;
 				return {
 					...rest,
@@ -381,15 +316,9 @@ export function listApiKeys({
 				};
 			});
 
-			// Batch migrate legacy metadata - use first config with database storage
-			const dbConfig = configurations.find(
-				(c) => c.storage === "database" || c.fallbackToDatabase,
+			await ctx.context.runInBackgroundOrAwait(
+				batchMigrateLegacyMetadata(ctx, matchingApiKeys),
 			);
-			if (dbConfig) {
-				await ctx.context.runInBackgroundOrAwait(
-					batchMigrateLegacyMetadata(ctx, paginatedApiKeys, dbConfig),
-				);
-			}
 
 			return ctx.json({
 				apiKeys: returningApiKeys,
@@ -399,4 +328,58 @@ export function listApiKeys({
 			});
 		},
 	);
+}
+
+function keyConfigurationFilter(
+	configurations: PredefinedApiKeyOptions[],
+	organization: boolean,
+	configId?: string,
+): Where[] | null {
+	const belongsToOrganization = (id: string) =>
+		configurations.find((config) => configIdMatches(config.configId, id))
+			?.references === "organization";
+
+	const legacyDefault: Where = {
+		field: "configId",
+		value: null,
+		connector: "OR",
+	};
+
+	if (configId) {
+		if (belongsToOrganization(configId) !== organization) return null;
+		return isDefaultConfigId(configId)
+			? [
+					{
+						field: "configId",
+						operator: "in",
+						value: ["default", ""],
+						connector: "OR",
+					},
+					legacyDefault,
+				]
+			: [{ field: "configId", value: configId }];
+	}
+
+	const organizationConfigs = new Set(
+		configurations
+			.map((config) => config.configId || "default")
+			.filter(belongsToOrganization),
+	);
+	if (organizationConfigs.size === 0) return organization ? null : [];
+	const includesDefault = organizationConfigs.has("default");
+	if (includesDefault) organizationConfigs.add("");
+
+	const named: Where = {
+		field: "configId",
+		operator: organization ? "in" : "not_in",
+		value: [...organizationConfigs],
+	};
+
+	if (organization === includesDefault) {
+		return [{ ...named, connector: "OR" }, legacyDefault];
+	}
+	if (!organization) {
+		return [named, { field: "configId", operator: "ne", value: null }];
+	}
+	return [named];
 }

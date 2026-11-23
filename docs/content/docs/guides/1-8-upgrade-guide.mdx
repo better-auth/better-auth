@@ -2,7 +2,7 @@
 icon: guidesV18UpgradeGuide
 sidebarTitle: "1.8 Upgrade Guide"
 title: Upgrading to Better Auth 1.8
-description: Upgrade Better Auth from 1.7 to 1.8, including schema changes and breaking changes in sign-up, phone numbers, One Tap, social provider profiles, the OAuth provider, resource servers, device authorization, and SAML.
+description: Upgrade Better Auth from 1.7 to 1.8, including schema changes and breaking changes in sign-up, phone numbers, One Tap, social provider profiles, the OAuth provider, resource servers, device authorization, API keys, and SAML.
 ---
 
 Most projects upgrade to Better Auth 1.8 with one command:
@@ -23,12 +23,13 @@ Some areas change behavior or types. Use this table to choose the sections that 
 | Runs its own OAuth or OpenID provider        | [Schema changes](#schema-changes) and [As an identity provider](#as-an-identity-provider) |
 | Verifies access tokens as a resource server  | [Resource servers](#resource-servers)                                                     |
 | Uses the device authorization plugin         | [Device authorization](#device-authorization)                                             |
+| Uses the API key plugin                      | [API key storage](#api-key-storage)                                                       |
 | Uses SAML SSO                                | [Enterprise SSO](#enterprise-sso)                                                         |
 | Uses passkeys, Electron, or Drizzle          | [Other plugins and adapters](#other-plugins-and-adapters)                                 |
 
 ## Schema changes
 
-Only the OAuth provider plugins add columns in 1.8. Every `oauthProvider()` setup needs them, even when the feature that uses a column is off. Every new column is optional, so no data step is needed. Other projects can skip this section.
+Only the OAuth provider plugins add columns in 1.8. Every `oauthProvider()` setup needs them, even when the feature that uses a column is off. Every new column is optional, so no data step is needed. If you stored API keys only in secondary storage, also see [API key storage](#api-key-storage).
 
 * `oauthProvider()` adds:
   * `acr`, `amr`, and `grantId` on `oauthRefreshToken`
@@ -714,6 +715,42 @@ Before, a SAML user without a `displayName`, `givenName`, or `surname` attribute
 This applies if an OIDC SSO provider uses `tokenEndpointAuthentication: "private_key_jwt"` and signs in to a Better Auth 1.8 authorization server. By default, its client assertions are still signed for the provider's token endpoint URL, as in 1.7. They carry the JOSE header `typ: "client-authentication+jwt"` only if that URL is also the provider's registered `issuer`, and `typ: "JWT"` otherwise.
 
 A Better Auth 1.8 authorization server accepts only its issuer as the audience by default. To sign in to one, set `clientAssertionAudience: "issuer"` in the provider's `oidcConfig`, through `registerSSOProvider` or `updateSSOProvider`. The assertions are then signed for the provider's registered `issuer`, as [RFC 10070 §4](https://www.rfc-editor.org/rfc/rfc10070#section-4) asks, and carry `typ: "client-authentication+jwt"`.
+
+***
+
+## API key storage
+
+Better Auth 1.8 stores and lists API keys in the database. Auth instances that serve the same keys must share that database. With `storage: "secondary-storage"`, verification looks up the credential in secondary storage first and loads it from the database on a cache miss. Reads by ID use the same cache backend.
+
+Remove `fallbackToDatabase` from every API key configuration. The option has been removed from the public type and is ignored at runtime. If you used `fallbackToDatabase: true`, your keys already have database rows and you can continue using `storage: "secondary-storage"`.
+
+If you used `storage: "secondary-storage"` with `fallbackToDatabase` off or omitted, import your keys before serving traffic with 1.8:
+
+1. Apply the [API key schema](/docs/plugins/api-key/reference#schema) if your database is missing the `apikey` table or its custom equivalent. Use the schema commands in [Schema changes](#schema-changes).
+
+2. Pause legacy API key traffic, including verification, so usage counters and key state stop changing during the import. Back up the old storage. Use each configured backend's key enumeration or export to read the original key names and values under `api-key:`. For an eventually consistent backend, export after the last writes and deletes are visible. Your export may contain usable credentials if you disabled key hashing. Keep the export private.
+
+3. Run the import from a trusted maintenance process using your 1.8 auth configuration. Pass the export as an iterable or async iterable of `[storageKey, storedValue]` pairs. Include configurations that kept keys exclusively in the exported storage. The importer uses the individual credential records, including records missing from old reference lists. It skips expired records and preserves rows already imported.
+
+   ```ts
+   import { migrateSecondaryStorageApiKeys } from "@better-auth/api-key";
+   import { auth } from "./auth";
+   import { legacyApiKeyEntries } from "./legacy-api-key-export";
+
+   await migrateSecondaryStorageApiKeys({
+     auth,
+     entries: legacyApiKeyEntries,
+     configIds: ["default"],
+   });
+   ```
+
+   Use `"default"` for your default configuration. For named configurations, supply their IDs and repeat the import for each backend holding legacy records. The importer preserves credential values and key IDs. If your database uses `generateId: "serial"` or `generateId: false`, it assigns new key IDs. Match the old and new rows by their stored key values to update any application data that references those IDs.
+
+   If the same stored key value belongs to a different record in the database, the importer stops. Replace the conflicting legacy credential before retrying the import.
+
+4. While traffic is paused, clear the old per-key entries from secondary storage for the configurations you imported. Keep the backup. Remove the entries by stored credential and by ID so the plugin fills the cache from the database, including any IDs assigned during import. Then confirm that imported keys appear in listings and verify with their original credentials before switching traffic to 1.8.
+
+After import, verification applies quota and rate-limit updates to the database row before returning. The imported counters are the starting values. With `deferUpdates: true`, verification can schedule expired and exhausted key cleanup in the background. Verification waits for counter updates.
 
 ***
 

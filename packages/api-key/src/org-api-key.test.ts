@@ -1,3 +1,5 @@
+import type { DatabaseSync } from "node:sqlite";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { createAccessControl } from "better-auth/plugins/access";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -336,6 +338,7 @@ describe("organization API keys", async () => {
 								configId: "org-keys",
 								defaultPrefix: "org_",
 								references: "organization",
+								enableMetadata: true,
 							},
 						]),
 					],
@@ -380,6 +383,101 @@ describe("organization API keys", async () => {
 
 			return headers;
 		}
+
+		it("lists and deletes a key with metadata that cannot be read back", async () => {
+			const { headers: ownerHeaders } = await signInWithTestUser();
+			const org = await auth.api.createOrganization({
+				body: { name: "Metadata Org", slug: "metadata-org" },
+				headers: ownerHeaders,
+			});
+			const adminHeaders = await createUserAndInvite(
+				ownerHeaders,
+				org.id,
+				"admin",
+			);
+			const scope = { configId: "org-keys", organizationId: org.id };
+			const legacyKey = await auth.api.createApiKey({
+				headers: adminHeaders,
+				body: scope,
+			});
+			const otherKey = await auth.api.createApiKey({
+				headers: ownerHeaders,
+				body: { ...scope, metadata: { label: "keep" } },
+			});
+			const database = (auth.options as BetterAuthOptions)
+				.database as DatabaseSync;
+			database
+				.prepare("UPDATE apikey SET metadata = ? WHERE id = ?")
+				.run("{", legacyKey.id);
+
+			const listed = await client.apiKey.list(
+				{ query: scope },
+				{ headers: ownerHeaders },
+			);
+			expect.soft(listed.data?.total).toBe(2);
+			expect.soft(listed.data?.apiKeys).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ id: legacyKey.id, metadata: null }),
+					expect.objectContaining({
+						id: otherKey.id,
+						metadata: { label: "keep" },
+					}),
+				]),
+			);
+
+			const deleted = await client.apiKey.delete(
+				{ configId: scope.configId, keyId: legacyKey.id },
+				{ headers: ownerHeaders },
+			);
+			expect(deleted.data?.success).toBe(true);
+			const after = await auth.api.listApiKeys({
+				headers: ownerHeaders,
+				query: scope,
+			});
+			expect(after.apiKeys.map(({ id }) => id)).toEqual([otherKey.id]);
+		});
+
+		it("rejects metadata that cannot be read back before saving", async () => {
+			const { headers: ownerHeaders } = await signInWithTestUser();
+			const org = await auth.api.createOrganization({
+				body: { name: "Invalid Metadata Org", slug: "invalid-metadata-org" },
+				headers: ownerHeaders,
+			});
+			const headers = await createUserAndInvite(ownerHeaders, org.id, "admin");
+			const scope = { configId: "org-keys", organizationId: org.id };
+			const key = await auth.api.createApiKey({
+				headers,
+				body: { ...scope, metadata: { label: "keep" } },
+			});
+			const metadata: Record<string, unknown> = {};
+			metadata.self = metadata;
+
+			await expect(
+				auth.api.createApiKey({ headers, body: { ...scope, metadata } }),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: { code: ERROR_CODES.INVALID_METADATA.code },
+			});
+			await expect(
+				auth.api.updateApiKey({
+					headers,
+					body: { configId: scope.configId, keyId: key.id, metadata },
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: { code: ERROR_CODES.INVALID_METADATA.code },
+			});
+
+			const listed = await auth.api.listApiKeys({
+				headers: ownerHeaders,
+				query: scope,
+			});
+			expect(listed.total).toBe(1);
+			expect(listed.apiKeys[0]).toMatchObject({
+				id: key.id,
+				metadata: { label: "keep" },
+			});
+		});
 
 		it("admin role should have full apiKey CRUD permissions", async () => {
 			const { headers: ownerHeaders } = await signInWithTestUser();

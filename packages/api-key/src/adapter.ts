@@ -1,21 +1,17 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type { SecondaryStorage } from "@better-auth/core/db";
-import { mapConcurrent } from "@better-auth/core/utils/async";
-import { safeJSONParse } from "@better-auth/core/utils/json";
+import type { Where } from "@better-auth/core/db/adapter";
+import { readApiKeyMetadata } from "./metadata";
 import type { PredefinedApiKeyOptions } from "./routes";
 import type { ApiKey } from "./types";
 
-const STORAGE_CONCURRENCY = 10;
-
 /**
  * Parses double-stringified metadata synchronously without updating the database.
- * Use this for reading metadata, then call migrateLegacyMetadataInBackground for DB updates.
  *
  * @returns The properly parsed metadata object, or the original if already an object
  */
 export function parseDoubleStringifiedMetadata(
 	metadata: ApiKey["metadata"],
-): Record<string, any> | null {
+): ApiKey["metadata"] {
 	// If metadata is null/undefined, return null
 	if (metadata == null) {
 		return null;
@@ -28,7 +24,8 @@ export function parseDoubleStringifiedMetadata(
 
 	// Metadata is a string - this is legacy double-stringified data
 	// Parse it to get the actual object
-	return safeJSONParse<Record<string, any>>(metadata);
+	const parsed = readApiKeyMetadata(metadata);
+	return typeof parsed === "object" ? parsed : null;
 }
 
 /**
@@ -45,13 +42,7 @@ function needsMetadataMigration(metadata: ApiKey["metadata"]): boolean {
 export async function batchMigrateLegacyMetadata(
 	ctx: GenericEndpointContext,
 	apiKeys: ApiKey[],
-	opts: PredefinedApiKeyOptions,
 ): Promise<void> {
-	// Only migrate for database storage
-	if (opts.storage !== "database" && !opts.fallbackToDatabase) {
-		return;
-	}
-
 	// Filter keys that need migration
 	const keysToMigrate = apiKeys.filter((key) =>
 		needsMetadataMigration(key.metadata),
@@ -93,15 +84,10 @@ export async function batchMigrateLegacyMetadata(
 export async function migrateDoubleStringifiedMetadata(
 	ctx: GenericEndpointContext,
 	apiKey: ApiKey,
-	opts: PredefinedApiKeyOptions,
-): Promise<Record<string, any> | null> {
+): Promise<ApiKey["metadata"]> {
 	const parsed = parseDoubleStringifiedMetadata(apiKey.metadata);
 
-	// Update the database to fix the legacy data (only for database storage)
-	if (
-		needsMetadataMigration(apiKey.metadata) &&
-		(opts.storage === "database" || opts.fallbackToDatabase)
-	) {
+	if (needsMetadataMigration(apiKey.metadata)) {
 		try {
 			await ctx.context.adapter.update({
 				model: "apikey",
@@ -120,48 +106,22 @@ export async function migrateDoubleStringifiedMetadata(
 	return parsed;
 }
 
-/**
- * Generate storage key for API key by hashed key
- */
-function getStorageKeyByHashedKey(hashedKey: string): string {
-	return `api-key:${hashedKey}`;
+function getCache(ctx: GenericEndpointContext, opts: PredefinedApiKeyOptions) {
+	return opts.storage === "secondary-storage"
+		? (opts.customStorage ?? ctx.context.secondaryStorage)
+		: undefined;
 }
 
-/**
- * Generate storage key for API key by ID
- */
-function getStorageKeyById(id: string): string {
+function cacheKeyByHash(key: string) {
+	return `api-key:${key}`;
+}
+
+function cacheKeyById(id: string) {
 	return `api-key:by-id:${id}`;
 }
 
-/**
- * Generate storage key for reference's API key list (user or org)
- */
-function getStorageKeyByReferenceId(referenceId: string): string {
-	return `api-key:by-ref:${referenceId}`;
-}
-
-/**
- * Serialize API key for storage
- */
-function serializeApiKey(apiKey: ApiKey): string {
-	return JSON.stringify({
-		...apiKey,
-		createdAt: apiKey.createdAt.toISOString(),
-		updatedAt: apiKey.updatedAt.toISOString(),
-		expiresAt: apiKey.expiresAt?.toISOString() ?? null,
-		lastRefillAt: apiKey.lastRefillAt?.toISOString() ?? null,
-		lastRequest: apiKey.lastRequest?.toISOString() ?? null,
-	});
-}
-
-/**
- * Deserialize API key from storage
- */
-function deserializeApiKey(data: unknown): ApiKey | null {
-	if (!data) {
-		return null;
-	}
+export function deserializeApiKey(data: unknown): ApiKey | null {
+	if (!data) return null;
 
 	try {
 		const parsed = (
@@ -180,631 +140,122 @@ function deserializeApiKey(data: unknown): ApiKey | null {
 	}
 }
 
-/**
- * Get the storage instance to use (custom methods take precedence)
- */
-function getStorageInstance(
-	ctx: GenericEndpointContext,
-	opts: PredefinedApiKeyOptions,
-): SecondaryStorage | null {
-	if (opts.customStorage) {
-		return opts.customStorage as SecondaryStorage;
-	}
-	return ctx.context.secondaryStorage || null;
-}
-
-/**
- * Calculate TTL in seconds for an API key
- */
-function calculateTTL(apiKey: ApiKey): number | undefined {
-	if (apiKey.expiresAt) {
-		const now = Date.now();
-		const expiresAt = new Date(apiKey.expiresAt).getTime();
-		const ttlSeconds = Math.floor((expiresAt - now) / 1000);
-		// Only set TTL if expiration is in the future
-		if (ttlSeconds > 0) {
-			return ttlSeconds;
-		}
-	}
-
-	return undefined;
-}
-
-/**
- * Get API key from secondary storage by hashed key
- */
-async function getApiKeyFromStorage(
+export function getApiKey(
 	ctx: GenericEndpointContext,
 	hashedKey: string,
-	storage: SecondaryStorage,
-): Promise<ApiKey | null> {
-	const key = getStorageKeyByHashedKey(hashedKey);
-	const data = await storage.get(key);
-	return deserializeApiKey(data);
-}
-
-/**
- * Get API key from secondary storage by ID
- */
-async function getApiKeyByIdFromStorage(
-	ctx: GenericEndpointContext,
-	id: string,
-	storage: SecondaryStorage,
-): Promise<ApiKey | null> {
-	const key = getStorageKeyById(id);
-	const data = await storage.get(key);
-	return deserializeApiKey(data);
-}
-
-/**
- * Serializes reference-list mutations per `refKey` within a single process.
- * Each new mutation chains onto the previous one for the same key, so the
- * read/modify/write below never interleaves with another mutation of the same
- * list. This closes the lost-update race in secondary-storage-only mode, where
- * the serialized list is the source of truth for listing.
- *
- * Limitation: the lock is in-process only. Across multiple server instances
- * sharing one secondary storage, concurrent writers can still lose updates.
- * Secondary storage with `fallbackToDatabase` avoids this by treating the list
- * as an invalidate-only cache with the database as the source of truth.
- * FIXME(api-key-reflist-durable): on `next`, drop the source-of-truth reference
- * list entirely and make the database authoritative for listing, removing this
- * in-process lock.
- */
-const refListLocks = new Map<string, Promise<unknown>>();
-
-function withRefListLock<T>(
-	refKey: string,
-	task: () => Promise<T>,
-): Promise<T> {
-	const previous = refListLocks.get(refKey) ?? Promise.resolve();
-	const run = previous.then(task, task);
-	// The map holds the `.finally()` chain, so the cleanup must compare against
-	// that same promise (not `run`) or the entry is never removed and the map
-	// grows without bound.
-	const tracked = run.finally(() => {
-		if (refListLocks.get(refKey) === tracked) {
-			refListLocks.delete(refKey);
-		}
-	});
-	refListLocks.set(refKey, tracked);
-	return tracked;
-}
-
-/**
- * Read-modify-write the ref list:
- * used only when the list is the source of truth.
- */
-async function modifyRefList(
-	storage: SecondaryStorage,
-	refKey: string,
-	modify: (ids: string[]) => string[],
-): Promise<void> {
-	await withRefListLock(refKey, async () => {
-		const refListData = await storage.get(refKey);
-		let keyIds: string[] = [];
-		if (refListData && typeof refListData === "string") {
-			try {
-				keyIds = JSON.parse(refListData);
-			} catch {
-				keyIds = [];
-			}
-		} else if (Array.isArray(refListData)) {
-			keyIds = refListData;
-		}
-		const next = modify(keyIds);
-		if (next.length === 0) {
-			await storage.delete(refKey);
-		} else {
-			await storage.set(refKey, JSON.stringify(next));
-		}
-	});
-}
-
-async function setApiKeyInStorage(
-	_ctx: GenericEndpointContext,
-	apiKey: ApiKey,
-	storage: SecondaryStorage,
-	ttl: number | undefined,
 	opts: PredefinedApiKeyOptions,
-): Promise<void> {
-	const serialized = serializeApiKey(apiKey);
-	const refKey = getStorageKeyByReferenceId(apiKey.referenceId);
-
-	// Fallback mode:
-	// the ref list is a cache,
-	// so invalidate instead of RMW to avoid concurrent-writer races.
-	if (opts.fallbackToDatabase) {
-		await Promise.all([
-			storage.set(getStorageKeyByHashedKey(apiKey.key), serialized, ttl),
-			storage.set(getStorageKeyById(apiKey.id), serialized, ttl),
-			storage.delete(refKey),
-		]);
-		return;
-	}
-
-	await Promise.all([
-		storage.set(getStorageKeyByHashedKey(apiKey.key), serialized, ttl),
-		storage.set(getStorageKeyById(apiKey.id), serialized, ttl),
-	]);
-
-	await modifyRefList(storage, refKey, (ids) =>
-		ids.includes(apiKey.id) ? ids : [...ids, apiKey.id],
+): Promise<ApiKey | null> {
+	return getCachedApiKey(
+		ctx,
+		"key",
+		hashedKey,
+		cacheKeyByHash(hashedKey),
+		opts,
 	);
 }
 
-/**
- * Delete API key from secondary storage
- */
-async function deleteApiKeyFromStorage(
-	ctx: GenericEndpointContext,
-	apiKey: ApiKey,
-	storage: SecondaryStorage,
-	opts: PredefinedApiKeyOptions,
-): Promise<void> {
-	const refKey = getStorageKeyByReferenceId(apiKey.referenceId);
-
-	// Mirror setApiKeyInStorage:
-	// invalidate in fallback mode, RMW otherwise.
-	if (opts.fallbackToDatabase) {
-		await Promise.all([
-			storage.delete(getStorageKeyByHashedKey(apiKey.key)),
-			storage.delete(getStorageKeyById(apiKey.id)),
-			storage.delete(refKey),
-		]);
-		return;
-	}
-
-	await Promise.all([
-		storage.delete(getStorageKeyByHashedKey(apiKey.key)),
-		storage.delete(getStorageKeyById(apiKey.id)),
-		modifyRefList(storage, refKey, (ids) =>
-			ids.filter((keyId) => keyId !== apiKey.id),
-		),
-	]);
-}
-
-/**
- * Unified getter for API keys with support for all storage modes
- */
-export async function getApiKey(
-	ctx: GenericEndpointContext,
-	hashedKey: string,
-	opts: PredefinedApiKeyOptions,
-): Promise<ApiKey | null> {
-	const storage = getStorageInstance(ctx, opts);
-
-	// Database mode only
-	if (opts.storage === "database") {
-		return await ctx.context.adapter.findOne<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "key",
-					value: hashedKey,
-				},
-			],
-		});
-	}
-
-	// Secondary storage mode with fallback
-	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-		if (storage) {
-			const cached = await getApiKeyFromStorage(ctx, hashedKey, storage);
-			if (cached) {
-				return cached;
-			}
-		}
-		const dbKey = await ctx.context.adapter.findOne<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "key",
-					value: hashedKey,
-				},
-			],
-		});
-
-		if (dbKey && storage) {
-			// Populate secondary storage for future reads
-			const ttl = calculateTTL(dbKey);
-			await setApiKeyInStorage(ctx, dbKey, storage, ttl, opts);
-		}
-
-		return dbKey;
-	}
-
-	// Secondary storage mode only
-	if (opts.storage === "secondary-storage") {
-		if (!storage) {
-			return null;
-		}
-		return await getApiKeyFromStorage(ctx, hashedKey, storage);
-	}
-
-	// Default fallback
-	return await ctx.context.adapter.findOne<ApiKey>({
-		model: "apikey",
-		where: [
-			{
-				field: "key",
-				value: hashedKey,
-			},
-		],
-	});
-}
-
-/**
- * Unified getter for API keys by ID
- */
-export async function getApiKeyById(
+export function getApiKeyById(
 	ctx: GenericEndpointContext,
 	id: string,
-	opts: PredefinedApiKeyOptions,
+	opts?: PredefinedApiKeyOptions,
 ): Promise<ApiKey | null> {
-	const storage = getStorageInstance(ctx, opts);
-
-	// Database mode only
-	if (opts.storage === "database") {
-		return await ctx.context.adapter.findOne<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "id",
-					value: id,
-				},
-			],
-		});
-	}
-
-	// Secondary storage mode with fallback
-	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-		if (storage) {
-			const cached = await getApiKeyByIdFromStorage(ctx, id, storage);
-			if (cached) {
-				return cached;
-			}
-		}
-		const dbKey = await ctx.context.adapter.findOne<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "id",
-					value: id,
-				},
-			],
-		});
-
-		if (dbKey && storage) {
-			// Populate secondary storage for future reads
-			const ttl = calculateTTL(dbKey);
-			await setApiKeyInStorage(ctx, dbKey, storage, ttl, opts);
-		}
-
-		return dbKey;
-	}
-
-	// Secondary storage mode only
-	if (opts.storage === "secondary-storage") {
-		if (!storage) {
-			return null;
-		}
-		return await getApiKeyByIdFromStorage(ctx, id, storage);
-	}
-
-	// Default fallback
-	return await ctx.context.adapter.findOne<ApiKey>({
-		model: "apikey",
-		where: [
-			{
-				field: "id",
-				value: id,
-			},
-		],
-	});
+	return getCachedApiKey(ctx, "id", id, cacheKeyById(id), opts);
 }
 
-/**
- * Unified setter for API keys with support for all storage modes
- */
+async function getCachedApiKey(
+	ctx: GenericEndpointContext,
+	field: "key" | "id",
+	value: string,
+	cacheKey: string,
+	opts?: PredefinedApiKeyOptions,
+): Promise<ApiKey | null> {
+	const cache = opts && getCache(ctx, opts);
+	if (cache) {
+		const cached = deserializeApiKey(await cache.get(cacheKey));
+		if (cached?.[field] === value) return cached;
+	}
+
+	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
+		model: "apikey",
+		where: [{ field, value }],
+	});
+	if (apiKey && opts) await setApiKey(ctx, apiKey, opts);
+	return apiKey;
+}
+
 export async function setApiKey(
 	ctx: GenericEndpointContext,
 	apiKey: ApiKey,
 	opts: PredefinedApiKeyOptions,
 ): Promise<void> {
-	const storage = getStorageInstance(ctx, opts);
-	const ttl = calculateTTL(apiKey);
+	const cache = getCache(ctx, opts);
+	if (!cache || needsMetadataMigration(apiKey.metadata)) return;
 
-	// Database mode only - handled by adapter in route handlers
-	if (opts.storage === "database") {
-		return;
-	}
-
-	// Secondary storage mode (with or without fallback)
-	if (opts.storage === "secondary-storage") {
-		if (!storage) {
-			throw new Error(
-				"Secondary storage is required when storage mode is 'secondary-storage'",
-			);
-		}
-		await setApiKeyInStorage(ctx, apiKey, storage, ttl, opts);
-		return;
-	}
+	const ttl = apiKey.expiresAt
+		? Math.floor((apiKey.expiresAt.getTime() - Date.now()) / 1000)
+		: 0;
+	const value = JSON.stringify(apiKey);
+	await Promise.all([
+		cache.set(cacheKeyByHash(apiKey.key), value, ttl > 0 ? ttl : undefined),
+		cache.set(cacheKeyById(apiKey.id), value, ttl > 0 ? ttl : undefined),
+	]);
 }
 
-/**
- * Unified deleter for API keys with support for all storage modes
- */
+export async function invalidateApiKeyCache(
+	ctx: GenericEndpointContext,
+	apiKey: ApiKey,
+	opts: PredefinedApiKeyOptions,
+): Promise<void> {
+	const cache = getCache(ctx, opts);
+	if (!cache) return;
+
+	await Promise.all([
+		cache.delete(cacheKeyByHash(apiKey.key)),
+		cache.delete(cacheKeyById(apiKey.id)),
+	]);
+}
+
 export async function deleteApiKey(
 	ctx: GenericEndpointContext,
 	apiKey: ApiKey,
 	opts: PredefinedApiKeyOptions,
 ): Promise<void> {
-	const storage = getStorageInstance(ctx, opts);
-
-	// Database mode only - handled by adapter in route handlers
-	if (opts.storage === "database") {
-		return;
-	}
-
-	// Secondary storage mode (with or without fallback)
-	if (opts.storage === "secondary-storage") {
-		if (!storage) {
-			throw new Error(
-				"Secondary storage is required when storage mode is 'secondary-storage'",
-			);
-		}
-		await deleteApiKeyFromStorage(ctx, apiKey, storage, opts);
-		return;
-	}
+	await invalidateApiKeyCache(ctx, apiKey, opts);
+	await ctx.context.adapter.delete({
+		model: "apikey",
+		where: [{ field: "id", value: apiKey.id }],
+	});
 }
 
-export interface ListApiKeysOptions {
-	limit?: number;
-	offset?: number;
-	sortBy?: string;
-	sortDirection?: "asc" | "desc";
-}
-
-export interface ListApiKeysResult {
-	apiKeys: ApiKey[];
-	total: number;
-}
-
-/**
- * Apply sorting and pagination to an array of API keys in memory
- * Used for secondary storage mode where we can't rely on database operations
- */
-function applySortingAndPagination(
-	apiKeys: ApiKey[],
-	sortBy?: string,
-	sortDirection?: "asc" | "desc",
-	limit?: number,
-	offset?: number,
-): ApiKey[] {
-	let result = [...apiKeys];
-
-	// Apply sorting if sortBy is specified
-	if (sortBy) {
-		const direction = sortDirection || "asc";
-		result.sort((a, b) => {
-			const aValue = a[sortBy as keyof ApiKey];
-			const bValue = b[sortBy as keyof ApiKey];
-
-			// Handle null/undefined values
-			if (aValue == null && bValue == null) return 0;
-			if (aValue == null) return direction === "asc" ? -1 : 1;
-			if (bValue == null) return direction === "asc" ? 1 : -1;
-
-			// Compare values
-			if (aValue < bValue) return direction === "asc" ? -1 : 1;
-			if (aValue > bValue) return direction === "asc" ? 1 : -1;
-			return 0;
-		});
-	}
-
-	// Apply pagination
-	if (offset !== undefined) {
-		result = result.slice(offset);
-	}
-	if (limit !== undefined) {
-		result = result.slice(0, limit);
-	}
-
-	return result;
-}
-
-/**
- * List API keys for a reference (user or org) with support for all storage modes
- */
 export async function listApiKeys(
 	ctx: GenericEndpointContext,
-	referenceId: string,
-	opts: PredefinedApiKeyOptions,
-	paginationOpts?: ListApiKeysOptions,
-): Promise<ListApiKeysResult> {
-	const storage = getStorageInstance(ctx, opts);
-	const { limit, offset, sortBy, sortDirection } = paginationOpts || {};
+	where: Where[],
+	page: {
+		limit?: number | undefined;
+		offset?: number | undefined;
+		sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
+	},
+): Promise<{ apiKeys: ApiKey[]; total: number }> {
+	const adapter = ctx.context.adapter;
+	const total = await adapter.count({ model: "apikey", where });
+	if (page.limit === 0) return { apiKeys: [], total };
 
-	// Database mode only
-	if (opts.storage === "database") {
-		const [apiKeys, total] = await Promise.all([
-			ctx.context.adapter.findMany<ApiKey>({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-				limit,
-				offset,
-				sortBy: sortBy
-					? { field: sortBy, direction: sortDirection || "asc" }
-					: undefined,
-			}),
-			ctx.context.adapter.count({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-			}),
-		]);
-		return { apiKeys, total };
-	}
-
-	// Secondary storage mode with fallback
-	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-		const refKey = getStorageKeyByReferenceId(referenceId);
-
-		if (storage) {
-			const refListData = await storage.get(refKey);
-			let keyIds: string[] = [];
-
-			if (refListData && typeof refListData === "string") {
-				try {
-					keyIds = JSON.parse(refListData);
-				} catch {
-					keyIds = [];
-				}
-			} else if (Array.isArray(refListData)) {
-				keyIds = refListData;
-			}
-
-			if (keyIds.length > 0) {
-				const results = await mapConcurrent(
-					keyIds,
-					(id) => getApiKeyByIdFromStorage(ctx, id, storage),
-					{ concurrency: STORAGE_CONCURRENCY },
-				);
-				const apiKeys = results.filter(
-					(key): key is ApiKey => key !== null && key !== undefined,
-				);
-				// Apply sorting and pagination in memory for secondary storage
-				const sortedKeys = applySortingAndPagination(
-					apiKeys,
-					sortBy,
-					sortDirection,
-					limit,
-					offset,
-				);
-				return { apiKeys: sortedKeys, total: apiKeys.length };
-			}
-		}
-		// Fallback to database
-		const [dbKeys, total] = await Promise.all([
-			ctx.context.adapter.findMany<ApiKey>({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-				limit,
-				offset,
-				sortBy: sortBy
-					? { field: sortBy, direction: sortDirection || "asc" }
-					: undefined,
-			}),
-			ctx.context.adapter.count({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-			}),
-		]);
-
-		// Rebuild from DB truth:
-		// per-key entries fan out,
-		// ref list is written last with the full id set.
-		if (storage && dbKeys.length > 0) {
-			await mapConcurrent(
-				dbKeys,
-				(apiKey) =>
-					setApiKeyInStorage(ctx, apiKey, storage, calculateTTL(apiKey), opts),
-				{ concurrency: STORAGE_CONCURRENCY },
-			);
-			const keyIds = dbKeys.map((apiKey) => apiKey.id);
-			await storage.set(refKey, JSON.stringify(keyIds));
-		}
-
-		return { apiKeys: dbKeys, total };
-	}
-
-	// Secondary storage mode only
-	if (opts.storage === "secondary-storage") {
-		if (!storage) {
-			return { apiKeys: [], total: 0 };
-		}
-
-		const refKey = getStorageKeyByReferenceId(referenceId);
-		const refListData = await storage.get(refKey);
-		let keyIds: string[] = [];
-
-		if (refListData && typeof refListData === "string") {
-			try {
-				keyIds = JSON.parse(refListData);
-			} catch {
-				return { apiKeys: [], total: 0 };
-			}
-		} else if (Array.isArray(refListData)) {
-			keyIds = refListData;
-		} else {
-			return { apiKeys: [], total: 0 };
-		}
-
-		const results = await mapConcurrent(
-			keyIds,
-			(id) => getApiKeyByIdFromStorage(ctx, id, storage),
-			{ concurrency: STORAGE_CONCURRENCY },
-		);
-		const apiKeys = results.filter(
-			(key): key is ApiKey => key !== null && key !== undefined,
-		);
-
-		// Apply sorting and pagination in memory for secondary storage
-		const sortedKeys = applySortingAndPagination(
-			apiKeys,
-			sortBy,
-			sortDirection,
-			limit,
-			offset,
-		);
-		return { apiKeys: sortedKeys, total: apiKeys.length };
-	}
-
-	// Default fallback
-	const [apiKeys, total] = await Promise.all([
-		ctx.context.adapter.findMany<ApiKey>({
+	let limit = page.limit ?? total + 1;
+	for (;;) {
+		const apiKeys = await adapter.findMany<ApiKey>({
 			model: "apikey",
-			where: [
-				{
-					field: "referenceId",
-					value: referenceId,
-				},
-			],
+			where,
+			...page,
 			limit,
-			offset,
-			sortBy: sortBy
-				? { field: sortBy, direction: sortDirection || "asc" }
-				: undefined,
-		}),
-		ctx.context.adapter.count({
-			model: "apikey",
-			where: [
-				{
-					field: "referenceId",
-					value: referenceId,
-				},
-			],
-		}),
-	]);
-	return { apiKeys, total };
+		});
+		if (page.limit !== undefined || apiKeys.length < limit) {
+			return {
+				apiKeys,
+				total:
+					page.limit === undefined && !page.offset ? apiKeys.length : total,
+			};
+		}
+		// A concurrent insert can make the count too small for an unbounded read.
+		limit *= 2;
+	}
 }
