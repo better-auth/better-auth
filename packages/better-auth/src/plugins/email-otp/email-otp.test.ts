@@ -3162,3 +3162,85 @@ describe("email-otp send origin/CSRF protection", async () => {
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11439
+ */
+describe("checkVerificationOTP without an account", () => {
+	it("should accept a valid sign-in code when sign-up is enabled and no account exists", async () => {
+		let otp = "";
+		const email = "new-person@example.com";
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp: code }) {
+							otp = code;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		const sent = await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "sign-in",
+		});
+		expect(sent.error).toBeFalsy();
+		expect(otp).not.toBe("");
+
+		const checked = await client.emailOtp.checkVerificationOtp({
+			email,
+			type: "sign-in",
+			otp,
+		});
+		expect(checked.error).toBeFalsy();
+		expect(checked.data?.success).toBe(true);
+
+		const user = await (await auth.$context).internalAdapter.findUserByEmail(
+			email,
+		);
+		expect(user).toBeNull();
+	});
+
+	it("should reject a valid code when sign-up is disabled and no account exists", async () => {
+		const email = "blocked-person@example.com";
+		const otp = "654321";
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP() {},
+						disableSignUp: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+		await (await auth.$context).internalAdapter.createVerificationValue({
+			value: `${otp}:0`,
+			identifier: `sign-in-otp-${email}`,
+			expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+		});
+
+		const checked = await client.emailOtp.checkVerificationOtp({
+			email,
+			type: "sign-in",
+			otp,
+		});
+		expect(checked.error).toMatchObject({
+			status: 400,
+			code: "USER_NOT_FOUND",
+			message: "User not found",
+		});
+	});
+});
