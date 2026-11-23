@@ -3240,8 +3240,9 @@ export interface OAuthResource {
 	/**
 	 * Requested scopes must intersect the allowlist or issuance fails with
 	 * `invalid_scope`. Admin responses return `null` for unrestricted resources
-	 * and `[]` for a legacy empty allowlist. In storage, an empty list at
-	 * policy version 2 represents an unrestricted resource.
+	 * and `[]` for a legacy empty allowlist. In storage, `null` or `undefined` is
+	 * unrestricted, an empty list at policy version 1 denies every scope, and an
+	 * empty list at policy version 2 is unrestricted.
 	 */
 	allowedScopes?: string[] | null;
 	/**

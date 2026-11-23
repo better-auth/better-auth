@@ -257,6 +257,37 @@ describe("seedResources (integration via plugin init)", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11725
 	 */
+	it("merge mode replaces an existing allowlist with the unrestricted policy when re-seeded with allowedScopes: null", async () => {
+		const identifier = "https://api.example.com/merge-null-scopes";
+
+		const first = await bootWithResourcesOption({
+			resources: [
+				{
+					identifier,
+					name: "Original",
+					allowedScopes: ["read"],
+				},
+			],
+		});
+		const firstCtx = await first.auth.$context;
+
+		await seedResources(
+			firstCtx as unknown as AuthContext,
+			{
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [{ identifier, allowedScopes: null }],
+				resourceSeedMode: "merge",
+			} as OAuthOptions<Scope[]>,
+		);
+
+		const row = await readResource(first.auth, identifier);
+		expect(row).toMatchObject({ allowedScopes: [], policyVersion: 2 });
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
 	it.each([
 		{ mode: "insertOnly", allowedScopes: null, policyVersion: 1 },
 		{ mode: "merge", allowedScopes: undefined, policyVersion: 1 },

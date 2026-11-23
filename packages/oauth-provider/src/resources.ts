@@ -322,8 +322,9 @@ export async function isAudienceClaimAllowed(
  *    confirm the client is linked to every requested resource via
  *    `oauthClientResource`. Unlinked → `invalid_target`.
  * 4. Intersect `requestedScopes` with each resource's `allowedScopes`.
- *    Empty intersection → `invalid_scope`. Resources with a null, undefined,
- *    or empty allowlist contribute no narrowing.
+ *    Empty intersection → `invalid_scope`. Resources with a null or undefined
+ *    allowlist, or an empty one at policy version 2, contribute no narrowing.
+ *    An empty allowlist at policy version 1 denies every scope.
  * 5. Pick the minimum `accessTokenTtl` across requested resources.
  * 6. Pick signing config — only honored for single-resource requests
  *    (a JWT can only have one signature).
