@@ -716,15 +716,20 @@ function toOpenApiSchema(zodType: z.ZodType<unknown>): OpenAPISchema {
 	if (zodType instanceof z.ZodUndefined) {
 		return withDescription({}, zodType);
 	}
+	if (zodType instanceof z.ZodDate) {
+		return withDescription({ type: "string", format: "date-time" }, zodType);
+	}
 	if (zodType instanceof z.ZodVoid) {
 		return withDescription({}, zodType);
 	}
 
+	const format = (zodType as z.ZodType<unknown> & { format?: string }).format;
 	const baseSchema = {
 		type: getOpenApiTypeFromZodType(zodType),
 		...(zodType instanceof z.ZodString
 			? getZodStringSchemaConstraints(zodType)
 			: {}),
+		...(format === "datetime" ? { format: "date-time" } : {}),
 	};
 
 	return withDescription(baseSchema, zodType);
