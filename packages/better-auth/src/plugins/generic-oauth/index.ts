@@ -154,6 +154,22 @@ function discoveryCacheKey(url: string, headers?: Record<string, string>) {
 	return `${url}\n${JSON.stringify(sortedHeaders)}`;
 }
 
+/**
+ * Drop a document a provider rejected, so a later instance can retry instead
+ * of waiting out the cache TTL. A newer fetch may already have replaced it.
+ */
+function invalidateDiscovery(
+	url: string,
+	headers: Record<string, string> | undefined,
+	document: DiscoveryDocument,
+) {
+	const key = discoveryCacheKey(url, headers);
+	const entry = discoveryCache.get(key);
+	if (entry?.document === document) {
+		discoveryCache.delete(key);
+	}
+}
+
 function getRemoteJwks(url: URL) {
 	const key = url.href;
 	const cached = remoteJwksCache.get(key);
@@ -204,6 +220,21 @@ async function requestDiscovery(
 	return result.data;
 }
 
+/**
+ * Apply a caller's deadline to a shared fetch without cancelling it for the
+ * other callers waiting on the same request.
+ */
+function withDiscoveryDeadline(
+	promise: Promise<DiscoveryDocument | null>,
+	timeout: number,
+): Promise<DiscoveryDocument | null> {
+	let timer: ReturnType<typeof setTimeout>;
+	const deadline = new Promise<null>((resolve) => {
+		timer = setTimeout(() => resolve(null), timeout);
+	});
+	return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
 async function fetchDiscovery(
 	url: string,
 	headers?: Record<string, string>,
@@ -217,13 +248,16 @@ async function fetchDiscovery(
 		return cached.document;
 	}
 
-	// A fetch can outlive the request that started it (runtimes cancel I/O when
-	// the request ends), so only join one that is still within its own bound.
+	// Join only a fetch whose bound is at least this caller's, so a longer
+	// caller does not inherit a shorter one's abort. Each caller is also bounded
+	// independently: a short caller must not wait for a longer fetch, and its
+	// timeout must not cancel the fetch for other callers.
 	if (
 		cached?.pending &&
+		cached.pending.timeout >= timeout &&
 		now - cached.pending.startedAt <= cached.pending.timeout
 	) {
-		return cached.pending.promise;
+		return withDiscoveryDeadline(cached.pending.promise, timeout);
 	}
 
 	const entry: DiscoveryCacheEntry = cached ?? { fetchedAt: 0 };
@@ -354,9 +388,10 @@ export const genericOAuth = <const ID extends string>(
 			let issuer: string | undefined;
 			let isOidc = false;
 			let idTokenConfig: OAuthIdTokenConfig | undefined;
+			let discovered: DiscoveryDocument | null = null;
 
 			if (c.discoveryUrl) {
-				const discovered = await fetchDiscovery(
+				discovered = await fetchDiscovery(
 					c.discoveryUrl,
 					c.discoveryHeaders,
 					c.discoveryTimeout,
@@ -382,6 +417,11 @@ export const genericOAuth = <const ID extends string>(
 							ctx.logger.error(
 								`Provider "${c.providerId}": invalid jwks_uri "${discovered.jwks_uri}" in discovery document. Provider skipped.`,
 							);
+							invalidateDiscovery(
+								c.discoveryUrl,
+								c.discoveryHeaders,
+								discovered,
+							);
 							continue;
 						}
 						idTokenConfig = {
@@ -396,6 +436,9 @@ export const genericOAuth = <const ID extends string>(
 					ctx.logger.error(
 						`Provider "${c.providerId}": discovery left no usable authorization endpoint or token exchange. Provider skipped.`,
 					);
+					if (discovered) {
+						invalidateDiscovery(c.discoveryUrl, c.discoveryHeaders, discovered);
+					}
 					continue;
 				}
 			}
@@ -404,6 +447,9 @@ export const genericOAuth = <const ID extends string>(
 					ctx.logger.error(
 						`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri. Provider skipped.`,
 					);
+					if (discovered) {
+						invalidateDiscovery(c.discoveryUrl, c.discoveryHeaders, discovered);
+					}
 					continue;
 				}
 				throw new Error(

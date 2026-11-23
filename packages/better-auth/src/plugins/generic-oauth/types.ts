@@ -53,16 +53,16 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
 	 *
 	 * Successful discovery documents are cached in memory and reused across auth
-	 * instances, so runtimes that construct an auth instance per request do not
-	 * fetch the document on every request.
+	 * instances using the same URL and headers, so runtimes that construct an
+	 * auth instance per request do not fetch the document on every request.
 	 */
 	discoveryUrl?: string | undefined;
 	/**
 	 * Upper bound, in milliseconds, for the discovery request.
 	 *
-	 * A discovery endpoint that stops responding is aborted after this long, and
-	 * the provider is skipped until a later attempt succeeds. Applies to retries
-	 * as well.
+	 * A discovery endpoint that stops responding is aborted after this long.
+	 * Without explicit endpoints or `getToken` as a fallback, the provider is
+	 * skipped until a later attempt succeeds. Applies to retries as well.
 	 *
 	 * @default 10000
 	 */

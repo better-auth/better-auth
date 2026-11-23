@@ -5711,32 +5711,55 @@ describe("discovery caching and timeouts", () => {
 	});
 
 	async function startDiscoveryServer(
-		options: { delayMs?: number; hang?: boolean; jwks?: boolean } = {},
+		options: {
+			delayMs?: number;
+			hang?: boolean;
+			jwks?: boolean;
+			hold?: boolean;
+			invalidJwks?: boolean;
+		} = {},
 	) {
 		const state = { fetches: 0, aborted: 0 };
+		let release: (() => void) | undefined;
+		const held = options.hold
+			? new Promise<void>((resolve) => {
+					release = resolve;
+				})
+			: undefined;
 		const server = createServer((req, res) => {
 			state.fetches++;
 			req.on("aborted", () => {
 				state.aborted++;
 			});
 			if (options.hang) return;
-			setTimeout(() => {
-				const origin = `http://localhost:${(server.address() as AddressInfo).port}`;
-				res.setHeader("content-type", "application/json");
-				res.end(
-					JSON.stringify({
-						issuer: origin,
-						authorization_endpoint: `${origin}/authorize`,
-						token_endpoint: `${origin}/token`,
-						...(options.jwks
-							? {
-									jwks_uri: `${origin}/keys`,
-									id_token_signing_alg_values_supported: ["RS256"],
-								}
-							: {}),
-					}),
-				);
-			}, options.delayMs ?? 0);
+			const respond = () => {
+				setTimeout(() => {
+					const address = server.address() as AddressInfo | null;
+					if (!address) return;
+					const origin = `http://localhost:${address.port}`;
+					res.setHeader("content-type", "application/json");
+					res.end(
+						JSON.stringify({
+							issuer: origin,
+							authorization_endpoint: `${origin}/authorize`,
+							token_endpoint: `${origin}/token`,
+							...(options.jwks || options.invalidJwks
+								? {
+										jwks_uri: options.invalidJwks
+											? "http://["
+											: `${origin}/keys`,
+										id_token_signing_alg_values_supported: ["RS256"],
+									}
+								: {}),
+						}),
+					);
+				}, options.delayMs ?? 0);
+			};
+			if (options.hold) {
+				void held?.then(respond);
+			} else {
+				respond();
+			}
 		});
 		servers.push(server);
 		await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -5744,6 +5767,7 @@ describe("discovery caching and timeouts", () => {
 		return {
 			state,
 			discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+			release: () => release?.(),
 		};
 	}
 
@@ -5857,10 +5881,97 @@ describe("discovery caching and timeouts", () => {
 		expect(state.fetches).toBe(2);
 	});
 
+	it("respects each caller's timeout when sharing an in-flight fetch", async () => {
+		const { state, discoveryUrl, release } = await startDiscoveryServer({
+			hold: true,
+		});
+		try {
+			const long = await createAuth(discoveryUrl);
+			await vi.waitFor(() => expect(state.fetches).toBe(1));
+			const short = await createAuth(discoveryUrl, { discoveryTimeout: 100 });
+			const shortContext = short.auth.$context;
+
+			const finishedWithinDeadline = await Promise.race([
+				shortContext.then(() => true),
+				new Promise<boolean>((resolve) =>
+					setTimeout(() => resolve(false), 1000),
+				),
+			]);
+			expect(finishedWithinDeadline).toBe(true);
+			expect(
+				(await shortContext).socialProviders.map((provider) => provider.id),
+			).not.toContain("cached-idp");
+
+			release();
+			expect(
+				(await long.auth.$context).socialProviders.map(
+					(provider) => provider.id,
+				),
+			).toContain("cached-idp");
+		} finally {
+			release();
+		}
+	});
+
+	it("keeps discovery alive for a longer caller after a shorter one times out", async () => {
+		const { state, discoveryUrl, release } = await startDiscoveryServer({
+			hold: true,
+		});
+		try {
+			const short = await createAuth(discoveryUrl, { discoveryTimeout: 300 });
+			await vi.waitFor(() => expect(state.fetches).toBe(1));
+			const long = await createAuth(discoveryUrl);
+			await vi.waitFor(() => expect(state.aborted).toBe(1));
+			expect(
+				(await short.auth.$context).socialProviders.map(
+					(provider) => provider.id,
+				),
+			).not.toContain("cached-idp");
+
+			let longSettled = false;
+			void long.auth.$context.then(() => {
+				longSettled = true;
+			});
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			expect(longSettled).toBe(false);
+
+			release();
+			expect(
+				(await long.auth.$context).socialProviders.map(
+					(provider) => provider.id,
+				),
+			).toContain("cached-idp");
+		} finally {
+			release();
+		}
+	});
+
+	it("refetches a discovery document that was rejected", async () => {
+		const options = { invalidJwks: true };
+		const { state, discoveryUrl } = await startDiscoveryServer(options);
+		expect(
+			(
+				await (
+					await createAuth(discoveryUrl)
+				).auth.$context
+			).socialProviders.map((provider) => provider.id),
+		).not.toContain("cached-idp");
+
+		options.invalidJwks = false;
+		expect(
+			(
+				await (
+					await createAuth(discoveryUrl)
+				).auth.$context
+			).socialProviders.map((provider) => provider.id),
+		).toContain("cached-idp");
+		expect(state.fetches).toBe(2);
+	});
+
 	it("aborts discovery that exceeds discoveryTimeout", async () => {
 		const { state, discoveryUrl } = await startDiscoveryServer({ hang: true });
-		const startedAt = Date.now();
 		const { auth } = await createAuth(discoveryUrl, { discoveryTimeout: 100 });
+		const startedAt = Date.now();
 		const context = await auth.$context;
 
 		expect(Date.now() - startedAt).toBeLessThan(2000);
