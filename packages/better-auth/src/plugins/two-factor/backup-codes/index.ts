@@ -2,7 +2,11 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
-import { sessionMiddleware } from "../../../api";
+import {
+	getAuthoritativeSessionFromCtx,
+	sessionMiddleware,
+} from "../../../api";
+import { isSessionOutsideStore } from "../../../api/state/session-source";
 import type { SecretConfig } from "../../../crypto";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { generateRandomString } from "../../../crypto/random";
@@ -472,7 +476,20 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					},
 				},
 				async (ctx) => {
-					const user = ctx.context.session.user as UserWithTwoFactor;
+					// A cached session can predate enrollment, so read the user from the
+					// store. Sessions built outside the store have no row to re-read.
+					const session = (await isSessionOutsideStore(
+						ctx.context.session.session.token,
+					))
+						? ctx.context.session
+						: await getAuthoritativeSessionFromCtx(ctx);
+					if (!session) {
+						throw APIError.from("UNAUTHORIZED", {
+							message: "Unauthorized",
+							code: "UNAUTHORIZED",
+						});
+					}
+					const user = session.user as UserWithTwoFactor;
 					if (!user.twoFactorEnabled) {
 						throw APIError.from(
 							"BAD_REQUEST",
