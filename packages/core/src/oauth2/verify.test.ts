@@ -1622,6 +1622,51 @@ describe("verifyBearerToken", () => {
 				});
 			});
 
+			/**
+			 * @see https://github.com/better-auth/better-auth/issues/12847
+			 */
+			it("allows a key-miss refresh after a newer fetch succeeds during the failure cooldown", async () => {
+				const { verify, token, options, fetchedAt, currentKey } =
+					await seedKeySet();
+				const currentToken = await createSignedToken(
+					currentKey.privateKey,
+					currentKey.kid,
+				);
+				const rotatedKey = await createTestJWKS();
+				const rotatedToken = await createSignedToken(
+					rotatedKey.privateKey,
+					rotatedKey.kid,
+				);
+				const expiredAt = fetchedAt + 5 * 60 * 1000 + 1_000;
+				vi.useFakeTimers({ now: expiredAt });
+				mockedFetch.mockReturnValueOnce(new Promise(() => {}));
+				const oldVerification = verify(token, options);
+				await vi.advanceTimersByTimeAsync(1);
+
+				// A replacement can start once the first fetch's lease has expired,
+				// before the first wait's timeout callback runs.
+				vi.setSystemTime(expiredAt + 5_000);
+				const newerFetch = Promise.withResolvers<Response>();
+				mockedFetch.mockReturnValueOnce(newerFetch.promise);
+				const currentVerification = verify(currentToken, options);
+				await vi.advanceTimersByTimeAsync(4_999);
+				await expect(oldVerification).resolves.toMatchObject({
+					sub: "user-123",
+				});
+				expect(mockedFetch).toHaveBeenCalledTimes(3);
+
+				newerFetch.resolve(jwksResponse(currentKey.publicJWK));
+				await expect(currentVerification).resolves.toMatchObject({
+					sub: "user-123",
+				});
+
+				mockJWKSResponse(currentKey.publicJWK, rotatedKey.publicJWK);
+				await expect(verify(rotatedToken, options)).resolves.toMatchObject({
+					sub: "user-123",
+				});
+				expect(mockedFetch).toHaveBeenCalledTimes(4);
+			});
+
 			it("should reject a key the landed set dropped as an invalid token while that set is fresh", async () => {
 				const { verify, token, options, fetchedAt, currentKey } =
 					await seedKeySet();
