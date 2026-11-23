@@ -150,6 +150,48 @@ it.each(["database", "secondary-storage"] as const)(
 );
 
 /** @see https://github.com/better-auth/better-auth/issues/12874 */
+it("paginates default keys with adapters that reject null configuration filters", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		advanced: { database: { defaultFindManyLimit: 1 } },
+		plugins: [apiKey([{ configId: "default" }, { configId: "other" }])],
+	});
+	const { headers } = await signInWithTestUser();
+	await auth.api.createApiKey({ headers, body: { name: "A" } });
+	await auth.api.createApiKey({
+		headers,
+		body: { name: "B", configId: "other" },
+	});
+	const c = await auth.api.createApiKey({ headers, body: { name: "C" } });
+
+	const { adapter } = await auth.$context;
+	const originalAdapterId = adapter.id;
+	adapter.id = "prisma";
+	const count = adapter.count.bind(adapter);
+	const countSpy = vi.spyOn(adapter, "count").mockImplementation((options) => {
+		if (
+			options.where?.some(
+				({ field, value }) => field === "configId" && value === null,
+			)
+		) {
+			throw new Error("configId is required");
+		}
+		return count(options);
+	});
+	try {
+		const result = await auth.api.listApiKeys({
+			headers,
+			query: { configId: "default", sortBy: "name", offset: 1, limit: 1 },
+		});
+
+		expect(result.total).toBe(2);
+		expect(result.apiKeys.map(({ id }) => id)).toEqual([c.id]);
+	} finally {
+		countSpy.mockRestore();
+		adapter.id = originalAdapterId;
+	}
+});
+
+/** @see https://github.com/better-auth/better-auth/issues/12874 */
 it("includes the full result when a key is created between counting and reading", async () => {
 	const { first, second, headers } = await createWriters();
 	const old = await first.api.createApiKey({

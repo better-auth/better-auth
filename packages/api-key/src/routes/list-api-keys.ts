@@ -273,26 +273,28 @@ export function listApiKeys({
 				return ctx.json({ apiKeys: [], total: 0, limit, offset });
 			}
 
-			const { apiKeys: paginatedApiKeys, total } =
-				await listApiKeysFromDatabase(
-					ctx,
-					[...filters, { field: "referenceId", value: referenceId }],
-					{
-						limit,
-						offset,
-						sortBy: ctx.query?.sortBy
-							? {
-									field: ctx.query.sortBy,
-									direction: ctx.query.sortDirection ?? "asc",
-								}
-							: undefined,
-					},
-				);
+			// Prisma rejects null filters on the required configId field.
+			const filterBeforePagination =
+				ctx.context.adapter.id === "prisma" &&
+				filters.some(({ value }) => value === null);
+			const where: Where[] = [
+				...(filterBeforePagination ? [] : filters),
+				{ field: "referenceId", value: referenceId },
+			];
+			const result = await listApiKeysFromDatabase(ctx, where, {
+				limit: filterBeforePagination ? undefined : limit,
+				offset: filterBeforePagination ? undefined : offset,
+				sortBy: ctx.query?.sortBy
+					? {
+							field: ctx.query.sortBy,
+							direction: ctx.query.sortDirection ?? "asc",
+						}
+					: undefined,
+			});
 
 			deleteAllExpiredApiKeys(ctx.context);
 
-			// Build response with parsed metadata (synchronous, no DB calls)
-			const matchingApiKeys = paginatedApiKeys.filter((apiKey) => {
+			const matchingApiKeys = result.apiKeys.filter((apiKey) => {
 				const configuration = configurations.find((config) =>
 					configIdMatches(config.configId, apiKey.configId),
 				);
@@ -303,7 +305,14 @@ export function listApiKeys({
 					(!configId || configIdMatches(apiKey.configId, configId))
 				);
 			});
-			const returningApiKeys = matchingApiKeys.map((apiKey) => {
+			const start = offset ?? 0;
+			const page = filterBeforePagination
+				? matchingApiKeys.slice(
+						start,
+						limit === undefined ? undefined : start + limit,
+					)
+				: matchingApiKeys;
+			const returningApiKeys = page.map((apiKey) => {
 				const { key: _key, ...rest } = apiKey;
 				return {
 					...rest,
@@ -317,12 +326,12 @@ export function listApiKeys({
 			});
 
 			await ctx.context.runInBackgroundOrAwait(
-				batchMigrateLegacyMetadata(ctx, matchingApiKeys),
+				batchMigrateLegacyMetadata(ctx, page),
 			);
 
 			return ctx.json({
 				apiKeys: returningApiKeys,
-				total,
+				total: filterBeforePagination ? matchingApiKeys.length : result.total,
 				limit,
 				offset,
 			});
