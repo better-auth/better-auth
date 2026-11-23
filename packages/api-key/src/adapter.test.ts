@@ -151,4 +151,28 @@ describe("withRefListLock", () => {
 		expect(rC).toBe("C");
 		expect(order).toEqual(["B-start", "B-end", "C"]);
 	});
+
+	it("keeps later writers moving when a queued request ends on Workers", async () => {
+		vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+		vi.useFakeTimers();
+
+		void withRefListLock("key-queued-ends", () => new Promise<never>(() => {}));
+
+		// Request B queues behind the stalled holder and ends before its own
+		// timer fires, so the timer it owns never fires.
+		const setTimeoutSpy = vi
+			.spyOn(globalThis, "setTimeout")
+			.mockImplementation(() => 0 as unknown as ReturnType<typeof setTimeout>);
+		void withRefListLock("key-queued-ends", async () => "B");
+		await vi.advanceTimersByTimeAsync(0);
+		setTimeoutSpy.mockRestore();
+
+		let result: string | undefined;
+		void withRefListLock("key-queued-ends", async () => "C").then((value) => {
+			result = value;
+		});
+		await vi.advanceTimersByTimeAsync(10_000);
+
+		expect(result).toBe("C");
+	});
 });

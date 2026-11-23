@@ -251,8 +251,8 @@ async function getApiKeyByIdFromStorage(
  *
  * On Cloudflare Workers, I/O from a request that has ended never settles, so an
  * unbounded wait on a prior holder would hang later writers for the same key.
- * Callers bound that wait (5s); after the bound they proceed, accepting the
- * same lost-update risk as multi-instance writers.
+ * There, a waiter proceeds once the holder's `holdUntil` deadline passes,
+ * accepting the same lost-update risk as multi-instance writers.
  *
  * FIXME(api-key-reflist-durable): on `next`, drop the source-of-truth reference
  * list entirely and make the database authoritative for listing, removing this
@@ -260,52 +260,41 @@ async function getApiKeyByIdFromStorage(
  *
  * @see https://github.com/better-auth/better-auth/issues/12397
  */
-const REF_LIST_LOCK_WAIT_MS = 5_000;
+const refListLocks = new Map<string, RefListLock>();
+
+const REF_LIST_LOCK_HOLD_MS = 5_000;
 
 type RefListLock = {
 	promise: Promise<unknown>;
-	/** Settles when this writer begins executing `task` (lock acquired). */
-	acquired: Promise<void>;
-	acquiredAt?: number;
+	/**
+	 * When a waiter stops presuming this writer is alive. A writer can start no
+	 * later than its predecessor's deadline, so each deadline derives from the
+	 * stored one and never from the writer's own request, which may have ended.
+	 */
+	holdUntil: number;
 };
 
-const refListLocks = new Map<string, RefListLock>();
-
 /**
- * Wait for `previous` to settle, or until its hold exceeds the workerd bound.
- * The 5s clock starts when the previous writer acquires the lock — not when it
- * joins the queue — so healthy writers queued behind a stalled holder stay
- * ordered with each other. The caller's own timer must bound the wait: a timer
- * from the prior request is canceled when that request ends.
+ * Waits for `previous` to settle. On workerd the wait also ends at its
+ * `holdUntil`, on a timer owned by the caller: a timer started by the prior
+ * request is canceled when that request ends.
  */
-function waitForRefListLock(previous: RefListLock | undefined): Promise<void> {
+function waitForRefListLock(previous: RefListLock | undefined) {
 	if (!previous) return Promise.resolve();
-	if (!isWorkerd()) {
-		return previous.promise.then(
-			() => {},
-			() => {},
-		);
-	}
+	const settled = previous.promise.then(
+		() => {},
+		() => {},
+	);
+	if (!isWorkerd()) return settled;
 	return new Promise<void>((resolve) => {
-		let settled = false;
-		let timeout: ReturnType<typeof setTimeout> | undefined;
-		const done = () => {
-			if (settled) return;
-			settled = true;
-			if (timeout !== undefined) clearTimeout(timeout);
+		const timeout = setTimeout(
+			resolve,
+			Math.max(0, previous.holdUntil - Date.now()),
+		);
+		void settled.then(() => {
+			clearTimeout(timeout);
 			resolve();
-		};
-		previous.promise.then(done, done);
-		previous.acquired.then(() => {
-			if (settled) return;
-			const start = previous.acquiredAt ?? Date.now();
-			const remaining = start + REF_LIST_LOCK_WAIT_MS - Date.now();
-			if (remaining <= 0) {
-				done();
-				return;
-			}
-			timeout = setTimeout(done, remaining);
-		}, done);
+		});
 	});
 }
 
@@ -315,29 +304,19 @@ export function withRefListLock<T>(
 	task: () => Promise<T>,
 ): Promise<T> {
 	const previous = refListLocks.get(refKey);
-	let markAcquired!: () => void;
-	const acquired = new Promise<void>((resolve) => {
-		markAcquired = resolve;
-	});
-	const tracked: RefListLock = {
-		acquired,
-		promise: null as unknown as Promise<unknown>,
-	};
-	const run = waitForRefListLock(previous).then(() => {
-		tracked.acquiredAt = Date.now();
-		markAcquired();
-		return task();
-	});
+	const holdUntil =
+		Math.max(Date.now(), previous?.holdUntil ?? 0) + REF_LIST_LOCK_HOLD_MS;
+	const run = waitForRefListLock(previous).then(task);
 	// The map holds the `.finally()` chain, so the cleanup must compare against
 	// that same promise (not `run`) or the entry is never removed and the map
 	// grows without bound.
-	tracked.promise = run.finally(() => {
-		if (refListLocks.get(refKey) === tracked) {
+	const promise = run.finally(() => {
+		if (refListLocks.get(refKey)?.promise === promise) {
 			refListLocks.delete(refKey);
 		}
 	});
-	refListLocks.set(refKey, tracked);
-	return tracked.promise as Promise<T>;
+	refListLocks.set(refKey, { promise, holdUntil });
+	return promise;
 }
 
 /**
