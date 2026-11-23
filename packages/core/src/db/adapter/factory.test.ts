@@ -1123,6 +1123,39 @@ describe("createAdapterFactory incrementMany", () => {
 		).rejects.toThrow(/case-sensitive `id`/);
 	});
 
+	it("does not apply native bind limits to sequential incrementOne fallback", async () => {
+		const seen: string[] = [];
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				incrementManyMaxParameters: 2,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					incrementOne: async <T>({ where }: { where: Required<Where>[] }) => {
+						const id = where.find((clause) => clause.field === "id")?.value;
+						if (typeof id === "string") seen.push(id);
+						return { id } as T;
+					},
+				}),
+		})({
+			user: {
+				additionalFields: {
+					attempts: { type: "number", required: false },
+				},
+			},
+		});
+		await expect(
+			adapter.incrementMany({
+				model: "user",
+				increment: { attempts: 1 },
+				set: { name: "token" },
+				rows: [{ where: [{ field: "id", value: "a" }] }],
+			}),
+		).resolves.toEqual([{ id: "a" }]);
+		expect(seen).toEqual(["a"]);
+	});
+
 	it("falls back to sequential incrementOne in id order and omits misses", async () => {
 		const seen: string[] = [];
 		const adapter = createTestAdapter({

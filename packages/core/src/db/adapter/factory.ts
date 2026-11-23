@@ -1632,11 +1632,13 @@ export const createAdapterFactory =
 						"incrementMany resolved to an empty update: every increment/set field was unknown to the schema or transformed away.",
 					);
 				}
-				const chunks = chunkIncrementManyRows(sorted, {
-					maxParameters: config.incrementManyMaxParameters,
-					maxRows: config.incrementManyMaxRows,
-					assignmentBinds: incrementManyAssignmentBinds(increment, set),
-				});
+				const chunks = adapterInstance.incrementMany
+					? chunkIncrementManyRows(sorted, {
+							maxParameters: config.incrementManyMaxParameters,
+							maxRows: config.incrementManyMaxRows,
+							assignmentBinds: incrementManyAssignmentBinds(increment, set),
+						})
+					: [sorted];
 				const wrapInTransaction =
 					typeof config.transaction === "function" &&
 					(chunks.length > 1 ||
