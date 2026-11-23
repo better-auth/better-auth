@@ -1,5 +1,12 @@
 # @better-auth/mcp
 
+## 1.7.27
+
+### Patch Changes
+
+- Updated dependencies [[`89e01c8`](https://github.com/better-auth/better-auth/commit/89e01c84249dcb920464b51d4aaff6a8386c8ef1), [`2a11b26`](https://github.com/better-auth/better-auth/commit/2a11b2687640211b38ba999fdf791e24af5775a0), [`0706b66`](https://github.com/better-auth/better-auth/commit/0706b6660308e2313d1b6dd37acdaa75ad5b5ef0), [`9f4dece`](https://github.com/better-auth/better-auth/commit/9f4dece3684f4a4a16cdd7720f705ab5cae2e15c), [`260b869`](https://github.com/better-auth/better-auth/commit/260b86979594b89a983c24daf90e9ff4efb290b6), [`ca5f6b4`](https://github.com/better-auth/better-auth/commit/ca5f6b4376c08272206f64e3cb8c380cfa749964), [`ca5f6b4`](https://github.com/better-auth/better-auth/commit/ca5f6b4376c08272206f64e3cb8c380cfa749964), [`b89c0d2`](https://github.com/better-auth/better-auth/commit/b89c0d26e777470d0b1f9a0baecbec8cf1842768), [`0c6305e`](https://github.com/better-auth/better-auth/commit/0c6305e21225d58e7e42c71469a6c366fa02e69f), [`7db8d0b`](https://github.com/better-auth/better-auth/commit/7db8d0b563f09b0742d26f9b5aa7cb12d4152708), [`7db8d0b`](https://github.com/better-auth/better-auth/commit/7db8d0b563f09b0742d26f9b5aa7cb12d4152708), [`32b8b6e`](https://github.com/better-auth/better-auth/commit/32b8b6e7448a5715a3588e23c3c62fc5eadeade1), [`3a7e13c`](https://github.com/better-auth/better-auth/commit/3a7e13c5ed47e224d29ce2b64495f95e4b1212c9), [`70a7143`](https://github.com/better-auth/better-auth/commit/70a7143729b3852b656fa1c36c9e2c8cb91797da), [`929e29f`](https://github.com/better-auth/better-auth/commit/929e29f8987cd37287136201e8ad4d2a7b4ca174), [`2a11b26`](https://github.com/better-auth/better-auth/commit/2a11b2687640211b38ba999fdf791e24af5775a0), [`dd04a88`](https://github.com/better-auth/better-auth/commit/dd04a88384d8ac8f935c47872318a3dac000f43b), [`297ef88`](https://github.com/better-auth/better-auth/commit/297ef887c91c3d19876019db7e63f51bb81b2a78), [`297ef88`](https://github.com/better-auth/better-auth/commit/297ef887c91c3d19876019db7e63f51bb81b2a78), [`50f7240`](https://github.com/better-auth/better-auth/commit/50f72404050f327715b0089491118d2c62875b7e)]:
+  - @better-auth/oauth-provider@1.7.27
+
 ## 1.7.26
 
 ### Patch Changes

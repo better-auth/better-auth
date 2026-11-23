@@ -19,6 +19,7 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	FAILED_TO_CREATE_USER: "Failed to create user",
 	FAILED_TO_CREATE_SESSION: "Failed to create session",
 	FAILED_TO_UPDATE_USER: "Failed to update user",
+	FAILED_TO_DELETE_USER: "Failed to delete user",
 	FAILED_TO_GET_SESSION: "Failed to get session",
 	INVALID_PASSWORD: "Invalid password",
 	INVALID_EMAIL: "Invalid email",
