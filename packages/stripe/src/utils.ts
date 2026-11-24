@@ -1,5 +1,78 @@
+import type { GenericEndpointContext } from "better-auth";
 import type Stripe from "stripe";
-import type { StripeOptions, StripePlan, Subscription } from "./types";
+import type {
+	BillingPortalSessionParamsData,
+	BillingPortalSessionParamsResult,
+	StripeOptions,
+	StripePlan,
+	Subscription,
+	SubscriptionOptions,
+} from "./types";
+
+/**
+ * Resolves Billing Portal session params from the current plan's
+ * `billingPortalConfiguration` and `getBillingPortalSessionParams`, dropping
+ * fields the plugin manages so callers cannot redirect the session to another
+ * customer or bypass the validated return URL.
+ *
+ * `getData` is only called when a plan sets `billingPortalConfiguration` or
+ * `getBillingPortalSessionParams` is configured, so callers can defer lookups
+ * the default flow does not need. Request options are returned as a tuple to
+ * spread into `create()`, so the call is unchanged when none are provided.
+ * Pass `resolvedPlans` when the caller already resolved plans for the request.
+ */
+export async function resolveBillingPortalSessionParams(
+	options: StripeOptions,
+	getData: (
+		plans: StripePlan[],
+	) => BillingPortalSessionParamsData | Promise<BillingPortalSessionParamsData>,
+	ctx: GenericEndpointContext,
+	resolvedPlans?: StripePlan[],
+): Promise<{
+	params: Stripe.BillingPortal.SessionCreateParams;
+	requestOptions: [] | [Stripe.RequestOptions];
+}> {
+	const subscriptionOptions = options.subscription as SubscriptionOptions;
+	const getParams = subscriptionOptions.getBillingPortalSessionParams;
+	// Plans are only needed for optional portal settings, so a failing plan
+	// provider must not block access to the billing portal or cancellation.
+	const plans =
+		resolvedPlans ??
+		(await getPlans(options.subscription).catch((error) => {
+			ctx.context.logger.error(
+				"Failed to resolve plans for Billing Portal session; plan `billingPortalConfiguration` will not be applied",
+				error,
+			);
+			return [];
+		}));
+	if (!getParams && !plans.some((plan) => plan.billingPortalConfiguration)) {
+		return { params: {}, requestOptions: [] };
+	}
+	const data = await getData(plans);
+	const currentPlan = data.subscription
+		? findPlanByName(plans, data.subscription.plan)
+		: undefined;
+	const result: BillingPortalSessionParamsResult | undefined = getParams
+		? await getParams(data, ctx)
+		: undefined;
+	const {
+		customer: _customer,
+		customer_account: _customerAccount,
+		return_url: _returnUrl,
+		flow_data: _flowData,
+		...params
+	} = result?.params ?? {};
+	const configuration =
+		params.configuration ?? currentPlan?.billingPortalConfiguration;
+	return {
+		params: configuration ? { ...params, configuration } : params,
+		requestOptions: result?.options ? [result.options] : [],
+	};
+}
+
+export function findPlanByName(plans: StripePlan[], name: string) {
+	return plans.find((plan) => plan.name.toLowerCase() === name.toLowerCase());
+}
 
 export async function getPlans(
 	subscriptionOptions: StripeOptions["subscription"],
@@ -14,7 +87,7 @@ export async function getPlans(
 
 export async function getPlanByName(options: StripeOptions, name: string) {
 	return await getPlans(options.subscription).then((res) =>
-		res?.find((plan) => plan.name.toLowerCase() === name.toLowerCase()),
+		findPlanByName(res, name),
 	);
 }
 
@@ -74,16 +147,18 @@ export function resolveQuantity(
  *
  * - Iterates items to find one whose price matches a configured plan.
  * - For single-item subscriptions, returns the item even without a plan match.
+ * - Pass `resolvedPlans` to reuse plans already resolved for the request.
  */
 export async function resolvePlanItem(
 	options: StripeOptions,
 	items: Stripe.SubscriptionItem[],
+	resolvedPlans?: StripePlan[],
 ): Promise<
 	{ item: Stripe.SubscriptionItem; plan: StripePlan | undefined } | undefined
 > {
 	const first = items[0];
 	if (!first) return undefined;
-	const plans = await getPlans(options.subscription);
+	const plans = resolvedPlans ?? (await getPlans(options.subscription));
 	for (const item of items) {
 		const plan = plans?.find(
 			(p) =>
