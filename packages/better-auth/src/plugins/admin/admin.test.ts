@@ -592,6 +592,102 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user?.banExpires).toBeDefined();
 	});
 
+	it("should allow to ban user with an absolute banExpires date", async () => {
+		const created = await client.admin.createUser(
+			{
+				name: "Absolute Ban User",
+				email: "absolute-ban@email.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const userId = created.data?.user.id || "";
+		const futureDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+		const res = await client.admin.banUser(
+			{
+				userId,
+				banReason: "Absolute expiry reason",
+				banExpires: futureDate,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.user?.banned).toBe(true);
+		expect(res.data?.user?.banReason).toBe("Absolute expiry reason");
+		expect(new Date(res.data?.user?.banExpires!).getTime()).toBe(
+			futureDate.getTime(),
+		);
+
+		const signIn = await client.signIn.email({
+			email: "absolute-ban@email.com",
+			password: "test",
+		});
+		expect(signIn.error?.code).toBe("BANNED_USER");
+		expect(signIn.error?.status).toBe(403);
+	});
+
+	it("should allow banning user via auth.api.banUser with banExpires", async () => {
+		const created = await client.admin.createUser(
+			{
+				name: "Server Ban User",
+				email: "server-ban@email.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const userId = created.data?.user.id || "";
+		const futureDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
+		const res = await auth.api.banUser({
+			headers: adminHeaders,
+			body: {
+				userId,
+				banExpires: futureDate,
+			},
+		});
+		expect(res.user.banned).toBe(true);
+		expect(new Date(res.user.banExpires!).getTime()).toBe(futureDate.getTime());
+	});
+
+	it("should reject banUser when both banExpires and banExpiresIn are provided", async () => {
+		const res = await client.admin.banUser(
+			{
+				userId: newUser?.id || "",
+				banExpiresIn: 60 * 60,
+				banExpires: new Date(Date.now() + 1000 * 60 * 60),
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			ADMIN_ERROR_CODES.CANNOT_PROVIDE_BOTH_BAN_EXPIRES_AND_BAN_EXPIRES_IN.code,
+		);
+	});
+
+	it("should reject banUser when banExpires is in the past", async () => {
+		const res = await client.admin.banUser(
+			{
+				userId: newUser?.id || "",
+				banExpires: new Date(Date.now() - 1000 * 60 * 60),
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			ADMIN_ERROR_CODES.BAN_EXPIRES_CANNOT_BE_IN_THE_PAST.code,
+		);
+	});
+
 	it("should not allow banned user to sign in", async () => {
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
