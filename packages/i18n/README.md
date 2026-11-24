@@ -10,7 +10,7 @@ npm install @better-auth/i18n
 
 ## Built-in translations
 
-The package ships with ready-to-use translations for 22 languages, covering the error codes of core and every plugin. Messages not translated yet contain the English text and are marked `TODO: translate`:
+The package ships with ready-to-use translations for 22 languages, covering the error codes of core and every plugin. Messages not translated yet contain the English text, and the locale source files mark them with a `TODO: translate` comment:
 
 | Code | Language  |
 |------|-----------|
@@ -106,7 +106,7 @@ import { i18n } from "@better-auth/i18n";
 import * as locales from "@better-auth/i18n/locales";
 import type { TranslationDictionary } from "@better-auth/i18n";
 
-const myLocale: Partial<TranslationDictionary> = {
+const myLocale: TranslationDictionary = {
   USER_NOT_FOUND: "...",
   INVALID_EMAIL_OR_PASSWORD: "...",
   // ... other error codes

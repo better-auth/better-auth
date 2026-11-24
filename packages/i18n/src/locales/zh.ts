@@ -17,7 +17,10 @@ import type { ORGANIZATION_ERROR_CODES } from "better-auth/plugins/organization"
 import type { PHONE_NUMBER_ERROR_CODES } from "better-auth/plugins/phone-number";
 import type { TWO_FACTOR_ERROR_CODES } from "better-auth/plugins/two-factor";
 import type { USERNAME_ERROR_CODES } from "better-auth/plugins/username";
-import type { LocalizedTranslations, TranslationDictionary } from "../types";
+import type {
+	CompleteTranslationDictionary,
+	LocalizedTranslations,
+} from "../types";
 
 const zhCore: LocalizedTranslations<typeof BASE_ERROR_CODES> = {
 	USER_NOT_FOUND: "用户未找到",
@@ -173,7 +176,7 @@ const zhApiKey: LocalizedTranslations<typeof API_KEY_ERROR_CODES> = {
 const zhCaptcha: LocalizedTranslations<typeof CAPTCHA_ERROR_CODES> = {
 	VERIFICATION_FAILED: "Captcha verification failed", // TODO: translate
 	MISSING_RESPONSE: "Missing CAPTCHA response", // TODO: translate
-	UNKNOWN_ERROR: "Something went wrong", // TODO: translate
+	UNKNOWN_ERROR: "Unknown error", // TODO: translate
 };
 
 const zhDeviceAuthorization: LocalizedTranslations<
@@ -450,7 +453,7 @@ const zhUsername: LocalizedTranslations<typeof USERNAME_ERROR_CODES> = {
 /**
  * Simplified Chinese translations
  */
-export const zh: TranslationDictionary = {
+export const zh: CompleteTranslationDictionary = {
 	...zhCore,
 	...zhAdmin,
 	...zhAnonymous,

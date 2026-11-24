@@ -53,15 +53,24 @@ type ALL_PLUGIN_ERROR_CODE_KEYS = keyof UnionToIntersection<
 	}[Exclude<BetterAuthPluginRegistryIdentifier, "i18n">]
 >;
 
-type InternalTranslationDictionary = {
+type InternalTranslationDictionary = Partial<{
 	[Key in ALL_PLUGIN_ERROR_CODE_KEYS]: string;
-};
+}>;
 
 /**
  * Translation dictionary mapping error codes to translated messages
  */
 export type TranslationDictionary = InternalTranslationDictionary &
 	Record<string, string>;
+
+/**
+ * Translation dictionary that has a message for every error code of every
+ * built-in plugin. The built-in locales use this type so that a new error code
+ * fails the build until it is added to every locale.
+ */
+export type CompleteTranslationDictionary = {
+	[Key in ALL_PLUGIN_ERROR_CODE_KEYS]: string;
+} & Record<string, string>;
 
 /**
  * Locale detection strategy
@@ -85,7 +94,7 @@ export interface I18nOptions<Locales extends string[]> {
 	 * }
 	 */
 	translations: {
-		[Locale in Locales[number]]: Partial<TranslationDictionary>;
+		[Locale in Locales[number]]: TranslationDictionary;
 	};
 
 	/**

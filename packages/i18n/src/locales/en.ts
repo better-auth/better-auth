@@ -17,7 +17,10 @@ import type { ORGANIZATION_ERROR_CODES } from "better-auth/plugins/organization"
 import type { PHONE_NUMBER_ERROR_CODES } from "better-auth/plugins/phone-number";
 import type { TWO_FACTOR_ERROR_CODES } from "better-auth/plugins/two-factor";
 import type { USERNAME_ERROR_CODES } from "better-auth/plugins/username";
-import type { LocalizedTranslations, TranslationDictionary } from "../types";
+import type {
+	CompleteTranslationDictionary,
+	LocalizedTranslations,
+} from "../types";
 
 const enCore: LocalizedTranslations<typeof BASE_ERROR_CODES> = {
 	USER_NOT_FOUND: "User not found",
@@ -176,7 +179,7 @@ const enApiKey: LocalizedTranslations<typeof API_KEY_ERROR_CODES> = {
 const enCaptcha: LocalizedTranslations<typeof CAPTCHA_ERROR_CODES> = {
 	VERIFICATION_FAILED: "Captcha verification failed",
 	MISSING_RESPONSE: "Missing CAPTCHA response",
-	UNKNOWN_ERROR: "Something went wrong",
+	UNKNOWN_ERROR: "Unknown error",
 };
 
 const enDeviceAuthorization: LocalizedTranslations<
@@ -453,7 +456,7 @@ const enUsername: LocalizedTranslations<typeof USERNAME_ERROR_CODES> = {
 /**
  * English translations (default)
  */
-export const en: TranslationDictionary = {
+export const en: CompleteTranslationDictionary = {
 	...enCore,
 	...enAdmin,
 	...enAnonymous,

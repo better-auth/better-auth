@@ -17,7 +17,10 @@ import type { ORGANIZATION_ERROR_CODES } from "better-auth/plugins/organization"
 import type { PHONE_NUMBER_ERROR_CODES } from "better-auth/plugins/phone-number";
 import type { TWO_FACTOR_ERROR_CODES } from "better-auth/plugins/two-factor";
 import type { USERNAME_ERROR_CODES } from "better-auth/plugins/username";
-import type { LocalizedTranslations, TranslationDictionary } from "../types";
+import type {
+	CompleteTranslationDictionary,
+	LocalizedTranslations,
+} from "../types";
 
 const plCore: LocalizedTranslations<typeof BASE_ERROR_CODES> = {
 	USER_NOT_FOUND: "Użytkownik nie znaleziony",
@@ -178,7 +181,7 @@ const plApiKey: LocalizedTranslations<typeof API_KEY_ERROR_CODES> = {
 const plCaptcha: LocalizedTranslations<typeof CAPTCHA_ERROR_CODES> = {
 	VERIFICATION_FAILED: "Captcha verification failed", // TODO: translate
 	MISSING_RESPONSE: "Missing CAPTCHA response", // TODO: translate
-	UNKNOWN_ERROR: "Something went wrong", // TODO: translate
+	UNKNOWN_ERROR: "Unknown error", // TODO: translate
 };
 
 const plDeviceAuthorization: LocalizedTranslations<
@@ -455,7 +458,7 @@ const plUsername: LocalizedTranslations<typeof USERNAME_ERROR_CODES> = {
 /**
  * Polish translations
  */
-export const pl: TranslationDictionary = {
+export const pl: CompleteTranslationDictionary = {
 	...plCore,
 	...plAdmin,
 	...plAnonymous,
