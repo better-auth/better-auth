@@ -277,8 +277,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			continue;
 		}
 		const fields = tables[table]?.fields;
-		for (const field in fields) {
-			const attr = fields[field]!;
+		for (const attr of Object.values(fields ?? {})) {
 			if (attr.references) {
 				const referencedOriginalModel = attr.references.model;
 				if (isMigrationDisabled(referencedOriginalModel)) {
@@ -313,8 +312,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		const modelName = capitalizeFirstLetter(getModelName(customModelName));
 		indexedFields.set(modelName, []);
 
-		for (const field in fields) {
-			const attr = fields[field]!;
+		for (const [field, attr] of Object.entries(fields ?? {})) {
 			if (attr.index && !attr.unique) {
 				const fieldName = attr.fieldName || field;
 				indexedFields.get(modelName)!.push(fieldName);
@@ -428,8 +426,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 			}
 
-			for (const field in fields) {
-				const attr = fields[field]!;
+			for (const [field, attr] of Object.entries(fields ?? {})) {
 				const fieldName = attr.fieldName || field;
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				const useNumberId = options.advanced?.database?.generateId === "serial";
