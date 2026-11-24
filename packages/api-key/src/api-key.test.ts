@@ -1,6 +1,7 @@
 import type { SecondaryStorage } from "@better-auth/core/db";
 import type { APIError } from "@better-auth/core/error";
-import { getTestInstance } from "better-auth/test";
+import { twoFactor } from "better-auth/plugins/two-factor";
+import { convertSetCookieToCookie, getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
@@ -2014,6 +2015,48 @@ describe("api-key", async () => {
 			await auth.api.getSession({ headers });
 
 			expect(validator).toHaveBeenCalledTimes(1);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/12202
+		 */
+		it("should refuse an API key session when generating backup codes", async () => {
+			const { auth, signInWithTestUser, testUser } = await getTestInstance({
+				plugins: [
+					apiKey({ enableSessionForAPIKeys: true }),
+					twoFactor({ skipVerificationOnEnable: true }),
+				],
+			});
+
+			const { user, headers: signInHeaders } = await signInWithTestUser();
+			// Enabling without verification replaces the session.
+			const enabled = await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers: signInHeaders,
+				returnHeaders: true,
+			});
+			const cookieHeaders = convertSetCookieToCookie(enabled.headers);
+			const { key } = await auth.api.createApiKey({
+				body: { userId: user.id },
+			});
+			const apiKeyHeaders = new Headers({ "x-api-key": key });
+
+			const apiKeySession = await auth.api.getSession({
+				headers: apiKeyHeaders,
+			});
+			expect(apiKeySession?.user.id).toBe(user.id);
+			await expect(
+				auth.api.generateBackupCodes({
+					body: { password: testUser.password },
+					headers: apiKeyHeaders,
+				}),
+			).rejects.toMatchObject({ statusCode: 401 });
+
+			const fromCookie = await auth.api.generateBackupCodes({
+				body: { password: testUser.password },
+				headers: cookieHeaders,
+			});
+			expect(fromCookie.backupCodes.length).toBeGreaterThan(0);
 		});
 
 		it("should not grant a session for a key from a different config", async () => {
