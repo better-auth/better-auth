@@ -11,6 +11,7 @@ import type { TsConfigResult } from "get-tsconfig";
 import { createPathsMatcher, getTsconfig, parseTsconfig } from "get-tsconfig";
 import type { JitiOptions } from "jiti";
 import { addCloudflareVirtualModules } from "./cloudflare-virtual-modules";
+import { addServerOnlyModule } from "./server-only-module";
 import { addSvelteKitVirtualModules } from "./sveltekit-virtual-modules";
 import { getViteAssetStub } from "./vite-virtual-modules";
 
@@ -258,6 +259,7 @@ function getVirtualModuleAliases(): Record<string, string> {
 	const result: Record<string, string> = {};
 	addSvelteKitVirtualModules(result);
 	addCloudflareVirtualModules(result);
+	addServerOnlyModule(result);
 	return result;
 }
 /**
