@@ -304,13 +304,13 @@ export function listApiKeys({
 				(config) => (config.references ?? "user") === expectedReferencesType,
 			);
 			// Page in the database only when in-memory filters cannot drop rows:
-			// one database backend, every listed config matches this ownership
-			// type, and configId is omitted or an exact non-default match.
+			// one database backend and every listed config matches this ownership
+			// type. `configId` is an exact column match (`"default"` means
+			// `"default"`, not null).
 			const canPageInDatabase =
 				databaseConfig?.storage === "database" &&
 				ownershipMatchesListing &&
-				(resolvedConfig != null || storageGroupConfigs.length === 1) &&
-				(!configId || !isDefaultConfigId(configId));
+				(resolvedConfig != null || storageGroupConfigs.length === 1);
 
 			let paginatedApiKeys: ApiKey[];
 			let total: number;
@@ -325,7 +325,11 @@ export function listApiKeys({
 						offset,
 						sortBy,
 						sortDirection,
-						...(configId ? { configId } : {}),
+						...(configId
+							? {
+									configId: isDefaultConfigId(configId) ? "default" : configId,
+								}
+							: {}),
 					},
 				);
 				paginatedApiKeys = result.apiKeys;
