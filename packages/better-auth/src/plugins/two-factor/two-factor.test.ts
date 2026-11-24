@@ -2686,6 +2686,44 @@ describe("two-factor session rotation", () => {
 			code: "SESSION_NOT_FRESH",
 		});
 	});
+
+	it("gives the replacement session fresh default field values", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				secret: DEFAULT_SECRET,
+				session: {
+					additionalFields: {
+						deviceKey: {
+							type: "string",
+							unique: true,
+							defaultValue: () => crypto.randomUUID(),
+						},
+					},
+				},
+				plugins: [anonymous(), twoFactor({ allowPasswordless: true })],
+			},
+			{ disableTestUser: true },
+		);
+		const headers = new Headers();
+		await client.$fetch("/sign-in/anonymous", {
+			method: "POST",
+			onSuccess: cookieSetter(headers),
+		});
+		const source = await auth.api.getSession({ headers });
+
+		const res = await client.$fetch("/two-factor/disable", {
+			method: "POST",
+			body: {},
+			headers,
+			onSuccess: cookieSetter(headers),
+		});
+		expect(res.error).toBeNull();
+
+		const rotated = await auth.api.getSession({ headers });
+		expect(rotated?.session.token).not.toBe(source!.session.token);
+		expect(rotated?.session.deviceKey).toEqual(expect.any(String));
+		expect(rotated?.session.deviceKey).not.toBe(source!.session.deviceKey);
+	});
 });
 
 /**

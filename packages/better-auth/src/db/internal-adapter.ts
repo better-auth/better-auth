@@ -639,6 +639,8 @@ export const createInternalAdapter = (
 				...(sessionId ? { id: sessionId } : {}),
 				ipAddress: headers ? getIP(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
+				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+				createdAt: new Date(),
 				...rest,
 				/**
 				 * If the user doesn't want to be remembered
@@ -650,8 +652,6 @@ export const createInternalAdapter = (
 					: getDate(sessionExpiration, "sec"),
 				userId,
 				token: generateId(32),
-				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-				createdAt: new Date(),
 				updatedAt: new Date(),
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
