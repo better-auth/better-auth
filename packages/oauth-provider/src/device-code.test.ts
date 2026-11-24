@@ -2937,6 +2937,13 @@ describe("oauth-provider device-code grant on scalar list columns", async () => 
 					rejectNullLists(args.model, args.update);
 					return adapter.updateMany(args);
 				}) as DBAdapter["updateMany"],
+				incrementOne: (async (args) => {
+					rejectNullLists(args.model, args.set ?? {});
+					return readListsAsArrays(
+						args.model,
+						await adapter.incrementOne(args),
+					);
+				}) as DBAdapter["incrementOne"],
 				findOne: (async (args) =>
 					readListsAsArrays(
 						args.model,

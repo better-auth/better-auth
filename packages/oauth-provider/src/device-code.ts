@@ -306,7 +306,7 @@ function deviceApprovalRequest(
 							referenceId: approval.referenceId ?? null,
 							authTime: new Date(approval.authTime),
 							acr: approval.acr ?? null,
-							amr: approval.amr ?? null,
+							amr: approval.amr,
 						},
 					});
 					return completionURL(ctx, deviceCode.userCode, "approved");
