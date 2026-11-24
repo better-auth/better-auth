@@ -509,7 +509,7 @@ Whether the database supports arrays. Defaults to `false`, in which case array f
 
 Whether `findMany` can run without a row cap. Defaults to `false`.
 
-Callers pass `limit: null` on `findMany` to load every matching row. You do not need this flag for that to work: the factory counts matching rows and calls your `findMany` with that total as `limit` (two database calls).
+Callers pass `limit: null` on `findMany` to load every matching row. You do not need this flag for that to work: the factory counts matching rows and calls your `findMany` with that total as `limit` (up to two database calls).
 
 Set this to `true` only if omitted `limit` means no cap in your `findMany` implementation. The factory then skips the count and omits `limit`. If your database requires `LIMIT` whenever `OFFSET` is set, apply that dialect's unbounded form when `limit` is omitted and `offset` is present.
 

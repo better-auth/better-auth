@@ -127,7 +127,7 @@ export interface DBAdapterFactoryConfig<
 	 *
 	 * When `false` (default), public `findMany({ limit: null })` still returns
 	 * every matching row: the factory counts, then calls `findMany` with that
-	 * total as `limit` (two database calls).
+	 * total as `limit` (up to two database calls).
 	 *
 	 * @default false
 	 */
