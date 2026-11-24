@@ -6,6 +6,7 @@ import {
 } from "@better-auth/core/db/internal";
 import { toSnakeCase } from "@better-auth/core/utils/string";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
+import type { DrizzleAdapterConfig } from "better-auth/adapters/drizzle";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
 import type { BetterAuthOptions } from "better-auth/types";
@@ -106,6 +107,52 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			})),
 	);
 
+	const enumColumns = new Map<string, string>();
+	const mappings: DrizzleAdapterConfig["enumFields"] =
+		adapter.options?.enumFields;
+	if (mappings) {
+		if (databaseType !== "pg") {
+			throw new Error(
+				`enumFields requires the "pg" provider. Received "${databaseType}".`,
+			);
+		}
+		const modules = new Map<string, string>();
+		const usedNames = new Set(Object.keys(tables).map(getModelName));
+		for (const [key, mapping] of Object.entries(mappings)) {
+			const [model, field, extra] = key.split(".");
+			if (
+				!model ||
+				!field ||
+				extra !== undefined ||
+				!Array.isArray(tables[model]?.fields?.[field]?.type)
+			) {
+				throw new Error(
+					`Expected an enum field for enumFields mapping "${key}".`,
+				);
+			}
+			if (isMigrationDisabled(model)) continue;
+			if (!mapping?.from || !mapping.name) {
+				throw new Error(
+					`Missing module or export name for enumFields mapping "${key}".`,
+				);
+			}
+			const { from, name } = mapping;
+			let alias = modules.get(from);
+			if (!alias) {
+				let suffix = modules.size + 1;
+				alias = suffix === 1 ? "pgEnums" : `pgEnums${suffix}`;
+				while (usedNames.has(alias)) alias = `pgEnums${++suffix}`;
+				usedNames.add(alias);
+				modules.set(from, alias);
+				code += `import * as ${alias} from ${JSON.stringify(from)};\n`;
+			}
+			const member = /^[A-Za-z_$][\w$]*$/.test(name)
+				? `.${name}`
+				: `[${JSON.stringify(name)}]`;
+			enumColumns.set(key, alias + member);
+		}
+	}
+
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
 		if (isMigrationDisabled(tableKey)) {
@@ -116,7 +163,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		const resolvedTableIndexes = resolvedIndexesByTable.get(modelName) ?? [];
 
 		function getType(
-			name: string,
+			fieldKey: string,
 			field: DBFieldAttribute,
 			tableIndexStringLength?: number | undefined,
 		) {
@@ -126,7 +173,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					`Database provider type is undefined during Drizzle schema generation. Please define a \`provider\` in the Drizzle adapter config. Read more at https://better-auth.com/docs/adapters/drizzle`,
 				);
 			}
-			name = convertToSnakeCase(name, adapter.options?.camelCase);
+			const name = convertToSnakeCase(
+				field.fieldName || fieldKey,
+				adapter.options?.camelCase,
+			);
+			const enumColumn = enumColumns.get(`${tableKey}.${fieldKey}`);
+			if (enumColumn) return `${enumColumn}(${JSON.stringify(name)})`;
 			if (field.references?.field === "id") {
 				const useNumberId = options.advanced?.database?.generateId === "serial";
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
@@ -304,7 +356,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							const attr = fields[field]!;
 							const fieldName = attr.fieldName || field;
 							let type = getType(
-								fieldName,
+								field,
 								attr,
 								databaseType === "mysql"
 									? getDatabaseIndexStringLength({
