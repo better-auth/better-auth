@@ -527,22 +527,46 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 						// Update local DB with Stripe customer ID. Going through the
 						// internal adapter runs user update database hooks, as on sign-up.
-						await ctx.context.internalAdapter.updateUser(user.id, {
-							stripeCustomerId: stripeCustomer.id,
-						});
+						const linkedUser = await ctx.context.internalAdapter.updateUser(
+							user.id,
+							{
+								stripeCustomerId: stripeCustomer.id,
+							},
+						);
 
-						// Call onCustomerCreate callback only for newly created customers
-						if (createdCustomer) {
-							await options.onCustomerCreate?.(
-								{
-									stripeCustomer,
-									user: {
-										...user,
-										stripeCustomerId: stripeCustomer.id,
-									},
-								},
-								ctx,
+						// A user.update.before hook can veto the write, in which case
+						// updateUser returns null. Stop before the callback and checkout
+						// rather than continue with a customer that isn't linked to the
+						// user: a later upgrade can't reuse it by email for an unverified
+						// user and would create a duplicate customer and subscription.
+						if (!linkedUser) {
+							throw new Error(
+								"Stripe customer was created but could not be saved to the user",
 							);
+						}
+
+						// Call onCustomerCreate callback only for newly created
+						// customers. The customer is already created and linked here, so
+						// a throwing callback is logged rather than failing the upgrade:
+						// a retry would reuse this customer and never re-run the callback.
+						if (createdCustomer) {
+							try {
+								await options.onCustomerCreate?.(
+									{
+										stripeCustomer,
+										user: {
+											...user,
+											stripeCustomerId: stripeCustomer.id,
+										},
+									},
+									ctx,
+								);
+							} catch (error) {
+								ctx.context.logger.error(
+									"Stripe onCustomerCreate callback failed",
+									error,
+								);
+							}
 						}
 
 						customerId = stripeCustomer.id;

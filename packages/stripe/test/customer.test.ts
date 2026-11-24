@@ -1267,5 +1267,57 @@ describe("stripe customer", () => {
 			>({ model: "user", where: [{ field: "id", value: user.id }] });
 			expect(stored?.stripeCustomerId).toBe("cus_upgrade_hooks");
 		});
+
+		test("aborts before checkout when a user.update hook vetoes saving the customer id", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			stripeMock.customers.create.mockResolvedValueOnce({
+				id: "cus_upgrade_vetoed",
+			});
+			stripeMock.subscriptions.list.mockResolvedValue({ data: [] });
+
+			const { client, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [
+						stripe({ ...stripeOptions, createCustomerOnSignUp: false }),
+					],
+					databaseHooks: {
+						user: {
+							// Veto every user update: updateUser returns null, so the
+							// customer id is never saved to the user.
+							update: { before: async () => false },
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+					clientOptions: { plugins: [stripeClient({ subscription: true })] },
+				},
+			);
+			await client.signUp.email(
+				{ email, password: "password", name: "Veto User" },
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email, password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			// The upgrade must fail rather than proceed to checkout with a customer
+			// that was created on Stripe but never linked to the user — which would
+			// let a retry create a duplicate customer and subscription.
+			const res = await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			// Aborted before checkout: the upgrade returns an error instead of a URL.
+			expect(res.error).toBeTruthy();
+			expect(res.data).toBeNull();
+		});
 	});
 });
