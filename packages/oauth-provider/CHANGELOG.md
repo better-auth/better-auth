@@ -1,5 +1,21 @@
 # @better-auth/oauth-provider
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12789](https://github.com/better-auth/better-auth/pull/12789) [`f62411e`](https://github.com/better-auth/better-auth/commit/f62411e874cd4ec88ece36b1612381bd696e3e56) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `WWW-Authenticate: Basic` challenge on a failed client authentication now includes the `realm` parameter that [RFC 7617 §2](https://www.rfc-editor.org/rfc/rfc7617#section-2) requires. Paths that sent a bare `Basic` now send `Basic realm="oauth"`. Challenges for other schemes are unchanged.
+
+- [#12853](https://github.com/better-auth/better-auth/pull/12853) [`2ba7622`](https://github.com/better-auth/better-auth/commit/2ba762276c39db0ed5e5de3e8180fd3f85039921) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix Client ID Metadata Document registration treating a failed insert as a registration race when the query parameters in the wrapped error message contain words such as "duplicate". The original database error is now returned.
+
+- [#12850](https://github.com/better-auth/better-auth/pull/12850) [`ddec4d7`](https://github.com/better-auth/better-auth/commit/ddec4d7c4630681eb18fec2284fd80ea02f50291) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Client assertion verification now uses the most recently cached key set when overlapping JWKS refreshes finish out of order.
+
+- [#12863](https://github.com/better-auth/better-auth/pull/12863) [`dd557b6`](https://github.com/better-auth/better-auth/commit/dd557b6a5739181980aa33a0b2858efb258544ac) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `oauthProviderClient` requests without a body failing with a 415 error on pages with a signed OAuth query. The `oauth_query` body it adds is now sent as `application/json`.
+
+- [#12854](https://github.com/better-auth/better-auth/pull/12854) [`c870302`](https://github.com/better-auth/better-auth/commit/c87030213b959e86c416896f6c7beeeae080e490) Thanks [@bytaesu](https://github.com/bytaesu)! - A client ID with characters outside the range RFC 6749 allows, such as NUL, now gets the same `invalid_client` response as any unknown client, instead of a 500 on PostgreSQL.
+
+- [#12854](https://github.com/better-auth/better-auth/pull/12854) [`c870302`](https://github.com/better-auth/better-auth/commit/c87030213b959e86c416896f6c7beeeae080e490) Thanks [@bytaesu](https://github.com/bytaesu)! - Requesting an OAuth device code without a `resource` no longer fails with a 500 on Prisma with PostgreSQL, CockroachDB or MongoDB, which cannot store `null` in a list column.
+
 ## 1.7.27
 
 ### Patch Changes

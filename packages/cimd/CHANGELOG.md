@@ -1,5 +1,11 @@
 # @better-auth/cimd
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12850](https://github.com/better-auth/better-auth/pull/12850) [`ddec4d7`](https://github.com/better-auth/better-auth/commit/ddec4d7c4630681eb18fec2284fd80ea02f50291) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - With `metadataStaleIfError` enabled, a known client regains stored-registration fallback when a request on the same resolver saves the result of the same metadata fetch through the same adapter after a rejected save. Fetch-policy and local-capacity refusals allow fallback only within five minutes of a transient failure and within the configured age limit. A later invalid document or terminal HTTP response still stops fallback.
+
 ## 1.7.27
 
 ### Patch Changes
