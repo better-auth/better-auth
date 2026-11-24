@@ -784,6 +784,198 @@ describe("SSO provider read endpoints", () => {
 			// This tests that org admin check takes precedence when org plugin is enabled
 			expect(nonAdminResponse.providers).toHaveLength(0);
 		});
+
+		it("should return caller's provider when ssoProvider table has more than 100 rows", async () => {
+			const {
+				auth,
+				getAuthHeaders,
+				createOrganization,
+				registerSAMLProvider,
+				data,
+			} = createTestAuth(true);
+
+			// Seed 100 ssoProvider rows directly with other organizationIds
+			for (let i = 1; i <= 100; i++) {
+				data.ssoProvider.push({
+					id: `aaa-unrelated-provider-${i}`,
+					providerId: `aaa-unrelated-provider-${i}`,
+					issuer: `https://unrelated-${i}.com`,
+					domain: `unrelated-${i}.com`,
+					userId: `other-user-${i}`,
+					organizationId: `other-org-${i}`,
+					samlConfig: JSON.stringify({
+						entryPoint: `https://unrelated-${i}.com/sso`,
+						cert: TEST_CERT,
+						audience: `audience-${i}`,
+						wantAssertionsSigned: true,
+						spMetadata: {},
+					}),
+				});
+			}
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const org = await createOrganization("test-org", ownerHeaders);
+			await registerSAMLProvider(ownerHeaders, "my-org-saml-provider", org!.id);
+
+			expect(data.ssoProvider).toHaveLength(101);
+
+			const response = await auth.api.listSSOProviders({
+				headers: ownerHeaders,
+			});
+
+			expect(response.providers).toHaveLength(1);
+			expect(response.providers[0]!.providerId).toBe("my-org-saml-provider");
+		});
+
+		it("should return all providers when caller has admin access to more than 100 organizations", async () => {
+			const { auth, getAuthHeaders, data } = createTestAuth(true);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "superowner@example.com",
+				password: "password123",
+				name: "Super Owner",
+			});
+
+			const ownerUser = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "superowner@example.com",
+			);
+
+			// Seed 101 organizations, memberships, and providers
+			for (let i = 1; i <= 101; i++) {
+				const orgId = `org-${i}`;
+				data.organization.push({
+					id: orgId,
+					name: `Organization ${i}`,
+					slug: `org-${i}`,
+					createdAt: new Date(),
+				});
+				data.member.push({
+					id: `member-${i}`,
+					userId: ownerUser!.id,
+					organizationId: orgId,
+					role: "owner",
+					createdAt: new Date(),
+				});
+				data.ssoProvider.push({
+					id: `provider-${i}`,
+					providerId: `provider-${i}`,
+					issuer: `https://idp-${i}.com`,
+					domain: `idp-${i}.com`,
+					userId: ownerUser!.id,
+					organizationId: orgId,
+					samlConfig: JSON.stringify({
+						entryPoint: `https://idp-${i}.com/sso`,
+						cert: TEST_CERT,
+						audience: `audience-${i}`,
+						wantAssertionsSigned: true,
+						spMetadata: {},
+					}),
+				});
+			}
+
+			expect(data.ssoProvider).toHaveLength(101);
+
+			const response = await auth.api.listSSOProviders({
+				headers: ownerHeaders,
+			});
+
+			expect(response.providers).toHaveLength(101);
+		});
+
+		it("should return providers even when candidate organizations have duplicate memberships", async () => {
+			const { auth, getAuthHeaders, data } = createTestAuth(true);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "dupowner@example.com",
+				password: "password123",
+				name: "Dup Owner",
+			});
+
+			const ownerUser = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "dupowner@example.com",
+			);
+
+			// Org 1 has duplicate membership rows for the user
+			data.organization.push({
+				id: "org-1",
+				name: "Organization 1",
+				slug: "org-1",
+				createdAt: new Date(),
+			});
+			data.member.push({
+				id: "member-1a",
+				userId: ownerUser!.id,
+				organizationId: "org-1",
+				role: "owner",
+				createdAt: new Date(),
+			});
+			data.member.push({
+				id: "member-1b",
+				userId: ownerUser!.id,
+				organizationId: "org-1",
+				role: "owner",
+				createdAt: new Date(),
+			});
+			data.ssoProvider.push({
+				id: "provider-1",
+				providerId: "provider-1",
+				issuer: "https://idp-1.com",
+				domain: "idp-1.com",
+				userId: ownerUser!.id,
+				organizationId: "org-1",
+				samlConfig: JSON.stringify({
+					entryPoint: "https://idp-1.com/sso",
+					cert: TEST_CERT,
+					audience: "audience-1",
+					wantAssertionsSigned: true,
+					spMetadata: {},
+				}),
+			});
+
+			// Org 2 has normal membership
+			data.organization.push({
+				id: "org-2",
+				name: "Organization 2",
+				slug: "org-2",
+				createdAt: new Date(),
+			});
+			data.member.push({
+				id: "member-2",
+				userId: ownerUser!.id,
+				organizationId: "org-2",
+				role: "owner",
+				createdAt: new Date(),
+			});
+			data.ssoProvider.push({
+				id: "provider-2",
+				providerId: "provider-2",
+				issuer: "https://idp-2.com",
+				domain: "idp-2.com",
+				userId: ownerUser!.id,
+				organizationId: "org-2",
+				samlConfig: JSON.stringify({
+					entryPoint: "https://idp-2.com/sso",
+					cert: TEST_CERT,
+					audience: "audience-2",
+					wantAssertionsSigned: true,
+					spMetadata: {},
+				}),
+			});
+
+			const response = await auth.api.listSSOProviders({
+				headers: ownerHeaders,
+			});
+
+			expect(response.providers).toHaveLength(2);
+			const returnedIds = response.providers.map((p) => p.providerId);
+			expect(returnedIds).toContain("provider-1");
+			expect(returnedIds).toContain("provider-2");
+		});
 	});
 
 	describe("GET /sso/get-provider", () => {
