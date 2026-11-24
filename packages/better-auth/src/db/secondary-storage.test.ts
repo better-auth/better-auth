@@ -627,6 +627,67 @@ describe("secondary storage - deleteUser", () => {
 			}),
 		).toHaveLength(0);
 	});
+
+	it("revokes cached sessions once when it deletes the session rows", async () => {
+		const store = new Map<string, string>();
+		const storage = createStringSecondaryStorage(store);
+		const { auth } = await getTestInstance({
+			secondaryStorage: storage,
+			session: { storeSessionInDatabase: true },
+			rateLimit: { enabled: false },
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser(
+			{
+				name: "Single Revocation User",
+				email: "single-revocation-user@test.com",
+			},
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+		const revokedBeforeKey = `revoked-sessions-before-${user.id}`;
+		const setSpy = vi.spyOn(storage, "set");
+
+		await internalAdapter.deleteUser(user.id);
+
+		expect(
+			setSpy.mock.calls.filter(([key]) => key === revokedBeforeKey),
+		).toHaveLength(1);
+		expect(store.has(session.token)).toBe(false);
+		expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+	});
+
+	it("revokes cached sessions when a hook vetoes the session row delete", async () => {
+		const store = new Map<string, string>();
+		const { auth } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: { storeSessionInDatabase: true },
+			databaseHooks: {
+				session: {
+					delete: {
+						before: async () => false,
+					},
+				},
+			},
+			rateLimit: { enabled: false },
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser(
+			{
+				name: "Vetoed Session User",
+				email: "vetoed-session-user@test.com",
+			},
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+
+		await internalAdapter.deleteUser(user.id);
+
+		expect(await internalAdapter.findUserById(user.id)).toBeNull();
+		expect(store.has(session.token)).toBe(false);
+		expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+		expect(store.has(`revoked-sessions-before-${user.id}`)).toBe(true);
+	});
 });
 
 /**

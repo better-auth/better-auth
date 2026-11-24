@@ -561,8 +561,11 @@ export const createInternalAdapter = (
 		},
 		deleteUser: async (userId: string) => {
 			const sessionReferences = await getActiveSessionReferences(userId);
-			const revokeCachedSessions = () =>
-				revokeCachedUserSessions(userId, sessionReferences);
+			let cachedSessionsRevoked = false;
+			const revokeCachedSessions = async () => {
+				await revokeCachedUserSessions(userId, sessionReferences);
+				cachedSessionsRevoked = true;
+			};
 			// One transaction, so a failed delete keeps the sessions and accounts.
 			await runWithTransaction(adapter, async () => {
 				// Revoke before the delete.after hooks, which can throw.
@@ -593,7 +596,11 @@ export const createInternalAdapter = (
 								BASE_ERROR_CODES.FAILED_TO_DELETE_USER,
 							);
 						}
-						await revokeCachedSessions();
+						// Not yet revoked when sessions live only in secondary storage
+						// or a session delete.before hook vetoed the row delete.
+						if (!cachedSessionsRevoked) {
+							await revokeCachedSessions();
+						}
 					},
 					executeMainFn: false,
 				});
