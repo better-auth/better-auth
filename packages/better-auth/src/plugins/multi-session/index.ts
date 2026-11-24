@@ -56,10 +56,33 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 	};
 
 	const isMultiSessionCookie = (key: string) => key.includes("_multi-");
-	// Another auth instance on the same host may use a different cookie prefix.
-	// Only cookies named for this instance may be counted or expired here.
-	const isOwnedMultiSessionCookie = (key: string, sessionCookieName: string) =>
-		key.startsWith(`${sessionCookieName}_multi-`);
+	/**
+	 * Device cookies belong to this instance only when their name is the exact
+	 * one this instance generates: `<session cookie name>_multi-<token>`, where
+	 * session tokens are 32 alphanumeric characters lowercased in the name.
+	 * A hostname can hold both the secure and plain variant of the same cookie
+	 * (e.g. `protocol: "auto"`), so both are considered. Checking the full name
+	 * keeps cookies of another instance whose configured name merely shares a
+	 * prefix (such as `foo_multi-`) from being counted or expired here.
+	 */
+	const isOwnedMultiSessionCookie = (
+		key: string,
+		sessionCookieName: string,
+	) => {
+		const names = [
+			sessionCookieName,
+			sessionCookieName.startsWith(SECURE_COOKIE_PREFIX)
+				? sessionCookieName.slice(SECURE_COOKIE_PREFIX.length)
+				: `${SECURE_COOKIE_PREFIX}${sessionCookieName}`,
+		];
+		return names.some((name) => {
+			const prefix = `${name}_multi-`;
+			return (
+				key.startsWith(prefix) &&
+				/^[a-z0-9]{32}$/.test(key.slice(prefix.length))
+			);
+		});
+	};
 
 	return {
 		id: "multi-session",
