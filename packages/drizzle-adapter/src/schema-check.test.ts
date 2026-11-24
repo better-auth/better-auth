@@ -135,6 +135,36 @@ describe("drizzleAdapter", () => {
 		);
 	});
 
+	it("reads Relations v2 tables from fullSchema", async () => {
+		const adapter = relationsV2Adapter(
+			{ _: { fullSchema: tablesFor({}) } },
+			{ provider: "pg" },
+		)({ secret });
+		await expect(schemaCheckFor(adapter)?.()).resolves.toBeUndefined();
+	});
+
+	it("prefers relation tables over fullSchema for renamed models", async () => {
+		const options = { account: { modelName: "identities" } };
+		const fullSchema = tablesFor(options);
+		const identities = pgTable("identities", {
+			...columnsFor(getExpectedSchema(options).identities!.fields),
+			issuer: text("issuer").notNull(),
+		});
+		const adapter = relationsV2Adapter(
+			{ _: { fullSchema, relations: { identities: { table: identities } } } },
+			{ provider: "pg" },
+		)({ ...options, secret });
+		await expect(schemaCheckFor(adapter)?.()).rejects.toMatchObject({
+			findings: [
+				{
+					kind: "unexpected-required-column",
+					table: "identities",
+					column: "issuer",
+				},
+			],
+		});
+	});
+
 	it("keeps explicit validation for Relations v2 when runtime checks are disabled", async () => {
 		const adapter = relationsV2Adapter(
 			{ _: { fullSchema: {} } },
