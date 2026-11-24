@@ -703,7 +703,7 @@ export const auth = betterAuth({
 Set custom strategies for ID generation, findMany queries, and database joins.
 
 * `generateId`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: [random base62 string](https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/id.ts)). See the [Database documentation](/docs/concepts/database#id-generation) for more info.
-* `defaultFindManyLimit`: The default maximum number of records returned by the `findMany` adapter method. (default: `100`)
+* `defaultFindManyLimit`: Maximum rows returned by adapter `findMany` when `limit` is omitted. (default: `100`). Pass `limit: null` to return every matching row. Use `limit: null` only from server code you control; it can return a large result set.
 * `joins`: Enable database joins for adapters that support them. When disabled (default), related data is fetched via separate queries. See the [Database documentation](/docs/concepts/database#joins) for more info. (default: `false`)
 * `validateSchema`: Compare the schema with the tables Better Auth writes before the first request and report every difference with its fix. See the [Database documentation](/docs/concepts/database#schema-validation) for more info. (default: `true` outside production)
 

@@ -72,6 +72,7 @@ export const createAdapterFactory =
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 			supportsUUIDs: cfg.supportsUUIDs ?? false,
 			supportsArrays: cfg.supportsArrays ?? false,
+			supportsUnboundedFindMany: cfg.supportsUnboundedFindMany ?? false,
 			transaction: cfg.transaction ?? false,
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
@@ -1205,7 +1206,7 @@ export const createAdapterFactory =
 			}: {
 				model: string;
 				where?: Where[] | undefined;
-				limit?: number | undefined;
+				limit?: number | null | undefined;
 				select?: string[] | undefined;
 				sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
 				offset?: number | undefined;
@@ -1213,10 +1214,6 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
-				const limit =
-					unsafeLimit ??
-					options.advanced?.database?.defaultFindManyLimit ??
-					100;
 				const modelKey = getDefaultModelName(inputModel);
 				const model = getModelName(modelKey);
 				const where = transformWhereClause({
@@ -1244,6 +1241,46 @@ export const createAdapterFactory =
 					// assume it's already transformed if transformation is disabled
 					join = unsafeJoin as never as JoinConfig;
 				}
+				let limit: number | undefined;
+				if (unsafeLimit === null) {
+					if (config.supportsUnboundedFindMany) {
+						limit = undefined;
+					} else {
+						const countWhere = transformWhereClause({
+							model: modelKey,
+							where: unsafeWhere,
+							action: "count",
+						});
+						const total = await withSpan(
+							`db count ${model}`,
+							{
+								[ATTR_DB_OPERATION_NAME]: "count",
+								[ATTR_DB_COLLECTION_NAME]: model,
+							},
+							() =>
+								adapterInstance.count({
+									model,
+									modelKey,
+									where: countWhere,
+								}),
+						);
+						if (total === 0) {
+							debugLog(
+								{ method: "findMany" },
+								`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+								`${formatMethod("findMany")}:`,
+								{ model, where, limit: 0, sortBy, offset, join },
+							);
+							return [];
+						}
+						limit = total;
+					}
+				} else {
+					limit =
+						unsafeLimit ??
+						options.advanced?.database?.defaultFindManyLimit ??
+						100;
+				}
 				debugLog(
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
@@ -1261,7 +1298,7 @@ export const createAdapterFactory =
 							model,
 							modelKey,
 							where,
-							limit: limit,
+							...(typeof limit === "number" ? { limit } : {}),
 							select,
 							sortBy,
 							offset,

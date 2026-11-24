@@ -9,6 +9,11 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import type { DB } from "./drizzle-adapter";
 import { drizzleAdapter } from "./drizzle-adapter";
+import {
+	findManyPaging,
+	MYSQL_UNBOUNDED_LIMIT,
+	SQLITE_UNBOUNDED_LIMIT,
+} from "./find-many-paging";
 import { drizzleAdapter as drizzleRelationsV2Adapter } from "./relations-v2";
 
 describe("drizzle-adapter", () => {
@@ -704,6 +709,110 @@ describe("drizzle-adapter", () => {
 			});
 
 			expect(result).toBeNull();
+		});
+	});
+
+	describe("findManyPaging", () => {
+		it("omits limit and offset when both are absent", () => {
+			expect(findManyPaging("sqlite", undefined, undefined)).toEqual({});
+			expect(findManyPaging("mysql", undefined, undefined)).toEqual({});
+			expect(findManyPaging("pg", undefined, undefined)).toEqual({});
+		});
+
+		it("uses LIMIT -1 for unbounded sqlite offset", () => {
+			expect(findManyPaging("sqlite", undefined, 2)).toEqual({
+				limit: SQLITE_UNBOUNDED_LIMIT,
+				offset: 2,
+			});
+			expect(findManyPaging("sqlite", undefined, 0)).toEqual({
+				limit: SQLITE_UNBOUNDED_LIMIT,
+				offset: 0,
+			});
+		});
+
+		it("uses a large LIMIT for unbounded mysql offset", () => {
+			expect(findManyPaging("mysql", undefined, 2)).toEqual({
+				limit: MYSQL_UNBOUNDED_LIMIT,
+				offset: 2,
+			});
+		});
+
+		it("omits LIMIT for unbounded postgres offset", () => {
+			expect(findManyPaging("pg", undefined, 2)).toEqual({ offset: 2 });
+		});
+	});
+
+	describe.each([
+		{ relations: "Relations v1", adapterFactory: drizzleAdapter },
+		{ relations: "Relations v2", adapterFactory: drizzleRelationsV2Adapter },
+	])("findMany paging ($relations)", ({ adapterFactory }) => {
+		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+		const userTable = pgTable("user", {
+			id: text("id"),
+			name: text("name"),
+			email: text("email"),
+			emailVerified: boolean("emailVerified"),
+			image: text("image"),
+			createdAt: timestamp("createdAt"),
+			updatedAt: timestamp("updatedAt"),
+		});
+
+		function createFindManyDb() {
+			const calls: { limit?: number; offset?: number } = {};
+			const builder: {
+				limit: ReturnType<typeof vi.fn>;
+				offset: ReturnType<typeof vi.fn>;
+				orderBy: ReturnType<typeof vi.fn>;
+				where: ReturnType<typeof vi.fn>;
+			} = {
+				limit: vi.fn((value: number) => {
+					calls.limit = value;
+					return builder;
+				}),
+				offset: vi.fn((value: number) => {
+					calls.offset = value;
+					return builder;
+				}),
+				orderBy: vi.fn(() => builder),
+				where: vi.fn().mockResolvedValue([]),
+			};
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				select: vi.fn().mockReturnValue({
+					from: vi.fn().mockReturnValue(builder),
+				}),
+			} as any;
+			return { db, calls, builder };
+		}
+
+		it("returns no rows for limit 0 without querying", async () => {
+			const { db, builder } = createFindManyDb();
+			const adapter = adapterFactory(db, { provider: "sqlite" })({
+				secret: defaultSecret,
+			});
+			await expect(
+				adapter.findMany({ model: "user", limit: 0, offset: 1 }),
+			).resolves.toEqual([]);
+			expect(db.select).not.toHaveBeenCalled();
+			expect(builder.limit).not.toHaveBeenCalled();
+		});
+
+		it("does not invent offset 0 on unbounded queries", async () => {
+			const { db, calls } = createFindManyDb();
+			const adapter = adapterFactory(db, { provider: "mysql" })({
+				secret: defaultSecret,
+			});
+			await adapter.findMany({ model: "user", limit: null });
+			expect(calls).toEqual({});
+		});
+
+		it("adds LIMIT -1 for unbounded sqlite offset", async () => {
+			const { db, calls } = createFindManyDb();
+			const adapter = adapterFactory(db, { provider: "sqlite" })({
+				secret: defaultSecret,
+			});
+			await adapter.findMany({ model: "user", limit: null, offset: 2 });
+			expect(calls).toEqual({ limit: SQLITE_UNBOUNDED_LIMIT, offset: 2 });
 		});
 	});
 });

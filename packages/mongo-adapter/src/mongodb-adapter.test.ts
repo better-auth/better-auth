@@ -20,6 +20,44 @@ describe("mongodb-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	it("returns no rows for limit 0 without sending $limit: 0", async () => {
+		const aggregate = vi.fn();
+		const db = {
+			collection: vi.fn(() => ({
+				aggregate: (...args: unknown[]) => {
+					aggregate(...args);
+					return { toArray: async () => [{ id: "should-not-run" }] };
+				},
+			})),
+		} as any;
+		const adapter = mongodbAdapter(db)({});
+		await expect(
+			adapter.findMany({ model: "user", limit: 0 }),
+		).resolves.toEqual([]);
+		await expect(
+			adapter.findMany({ model: "user", limit: 0, offset: 2 }),
+		).resolves.toEqual([]);
+		expect(aggregate).not.toHaveBeenCalled();
+	});
+
+	it("omits $limit when unbounded and still applies $skip", async () => {
+		const pipelines: Record<string, unknown>[][] = [];
+		const db = {
+			collection: vi.fn(() => ({
+				aggregate: (pipeline: Record<string, unknown>[]) => {
+					pipelines.push(pipeline);
+					return { toArray: async () => [] };
+				},
+			})),
+		} as any;
+		const adapter = mongodbAdapter(db)({});
+		await adapter.findMany({ model: "user", limit: null, offset: 2 });
+		expect(pipelines[0]).toEqual(expect.arrayContaining([{ $skip: 2 }]));
+		expect(pipelines[0]?.some((stage) => Object.hasOwn(stage, "$limit"))).toBe(
+			false,
+		);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10925
 	 */

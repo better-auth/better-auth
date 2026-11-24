@@ -123,6 +123,16 @@ export interface DBAdapterFactoryConfig<
 	 */
 	supportsArrays?: boolean | undefined;
 	/**
+	 * Set to `true` if `findMany` treats an omitted `limit` as no cap.
+	 *
+	 * When `false` (default), public `findMany({ limit: null })` still returns
+	 * every matching row: the factory counts, then calls `findMany` with that
+	 * total as `limit`.
+	 *
+	 * @default false
+	 */
+	supportsUnboundedFindMany?: boolean | undefined;
+	/**
 	 * Execute multiple operations in a transaction.
 	 *
 	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
@@ -422,7 +432,14 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	findMany: <T>(data: {
 		model: string;
 		where?: Where[] | undefined;
-		limit?: number | undefined;
+		/**
+		 * Maximum rows to return.
+		 *
+		 * - Omitted (`undefined`): apply `advanced.database.defaultFindManyLimit` (default `100`)
+		 * - A number: that cap (`0` returns no rows)
+		 * - `null`: every matching row
+		 */
+		limit?: number | null | undefined;
 		select?: string[] | undefined;
 		sortBy?:
 			| {
@@ -586,7 +603,17 @@ export interface CustomAdapter {
 		join,
 	}: ModelTarget & {
 		where?: CleanedWhere[] | undefined;
-		limit: number;
+		/**
+		 * Maximum rows to return.
+		 *
+		 * Maximum rows to return.
+		 *
+		 * The factory always passes a number unless this adapter set
+		 * `supportsUnboundedFindMany` and the public caller passed `limit: null`.
+		 * Omitted then means unbounded. A number, including `0`, is a hard cap
+		 * (`0` returns no rows).
+		 */
+		limit?: number | undefined;
 		select?: string[] | undefined;
 		sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
 		offset?: number | undefined;

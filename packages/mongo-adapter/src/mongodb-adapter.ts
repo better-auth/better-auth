@@ -810,6 +810,9 @@ export const mongodbAdapter = (
 					join,
 				}) {
 					retryFieldIndexSetup();
+					if (limit === 0) {
+						return [];
+					}
 					const matchStage = where
 						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
@@ -926,7 +929,7 @@ export const mongodbAdapter = (
 						pipeline.push({ $skip: offset });
 					}
 
-					if (limit) {
+					if (typeof limit === "number" && limit > 0) {
 						pipeline.push({ $limit: limit });
 					}
 
@@ -1056,6 +1059,7 @@ export const mongodbAdapter = (
 			},
 			supportsArrays: true,
 			supportsNumericIds: false,
+			supportsUnboundedFindMany: true,
 			transaction:
 				config?.client && (config?.transaction ?? true)
 					? async (cb) => {

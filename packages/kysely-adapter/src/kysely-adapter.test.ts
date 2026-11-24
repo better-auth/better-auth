@@ -2,10 +2,19 @@ import { DatabaseSync } from "node:sqlite";
 import {
 	DummyDriver,
 	Kysely,
+	MssqlAdapter,
+	MssqlIntrospector,
+	MssqlQueryCompiler,
+	MysqlAdapter,
+	MysqlIntrospector,
+	MysqlQueryCompiler,
 	PostgresAdapter,
 	PostgresIntrospector,
 	PostgresQueryCompiler,
+	SqliteAdapter,
 	SqliteDialect,
+	SqliteIntrospector,
+	SqliteQueryCompiler,
 } from "kysely";
 import { describe, expect, it, vi } from "vitest";
 import { kyselyAdapter } from "./kysely-adapter";
@@ -236,6 +245,156 @@ describe("kysely-adapter", () => {
 				update: { json: { done: true } },
 			});
 			expect(parameters).toEqual([[{ done: true }, 1, 2, 3, 4]]);
+		});
+	});
+
+	describe("findMany limit and offset", () => {
+		function compiledAdapter(type: "sqlite" | "mysql" | "postgres" | "mssql") {
+			const queries: { sql: string; parameters: readonly unknown[] }[] = [];
+			const dialects = {
+				sqlite: {
+					createAdapter: () => new SqliteAdapter(),
+					createDriver: () => new DummyDriver(),
+					createIntrospector: (db: Kysely<unknown>) =>
+						new SqliteIntrospector(db),
+					createQueryCompiler: () => new SqliteQueryCompiler(),
+				},
+				mysql: {
+					createAdapter: () => new MysqlAdapter(),
+					createDriver: () => new DummyDriver(),
+					createIntrospector: (db: Kysely<unknown>) =>
+						new MysqlIntrospector(db),
+					createQueryCompiler: () => new MysqlQueryCompiler(),
+				},
+				postgres: {
+					createAdapter: () => new PostgresAdapter(),
+					createDriver: () => new DummyDriver(),
+					createIntrospector: (db: Kysely<unknown>) =>
+						new PostgresIntrospector(db),
+					createQueryCompiler: () => new PostgresQueryCompiler(),
+				},
+				mssql: {
+					createAdapter: () => new MssqlAdapter(),
+					createDriver: () => new DummyDriver(),
+					createIntrospector: (db: Kysely<unknown>) =>
+						new MssqlIntrospector(db),
+					createQueryCompiler: () => new MssqlQueryCompiler(),
+				},
+			} as const;
+			const db = new Kysely<unknown>({
+				dialect: dialects[type],
+				log: (event) => {
+					if (event.level === "query") {
+						queries.push({
+							sql: event.query.sql,
+							parameters: event.query.parameters,
+						});
+					}
+				},
+			});
+			return {
+				adapter: kyselyAdapter(db, { type })({}),
+				queries,
+			};
+		}
+
+		it("returns no rows for limit 0 without compiling a query", async () => {
+			const { adapter, queries } = compiledAdapter("mssql");
+			await expect(
+				adapter.findMany({ model: "user", limit: 0, offset: 2 }),
+			).resolves.toEqual([]);
+			expect(queries).toEqual([]);
+		});
+
+		it("uses LIMIT -1 for unbounded sqlite offset", async () => {
+			const { adapter, queries } = compiledAdapter("sqlite");
+			await adapter.findMany({ model: "user", limit: null, offset: 2 });
+			expect(queries[0]?.sql.toLowerCase()).toContain("limit");
+			expect(queries[0]?.sql.toLowerCase()).toContain("offset");
+			expect(queries[0]?.parameters).toEqual(expect.arrayContaining([-1, 2]));
+		});
+
+		it("uses a large LIMIT for unbounded mysql offset", async () => {
+			const { adapter, queries } = compiledAdapter("mysql");
+			await adapter.findMany({ model: "user", limit: null, offset: 2 });
+			expect(queries[0]?.sql.toLowerCase()).toContain("limit");
+			expect(queries[0]?.sql.toLowerCase()).toContain("offset");
+			expect(queries[0]?.parameters).toEqual(
+				expect.arrayContaining([Number.MAX_SAFE_INTEGER, 2]),
+			);
+		});
+
+		it("omits LIMIT for unbounded postgres offset", async () => {
+			const { adapter, queries } = compiledAdapter("postgres");
+			await adapter.findMany({ model: "user", limit: null, offset: 2 });
+			expect(queries[0]?.sql.toLowerCase()).not.toContain("limit");
+			expect(queries[0]?.sql.toLowerCase()).toContain("offset");
+			expect(queries[0]?.parameters).toEqual(expect.arrayContaining([2]));
+		});
+
+		it("uses OFFSET without FETCH for unbounded mssql", async () => {
+			const { adapter, queries } = compiledAdapter("mssql");
+			await adapter.findMany({ model: "user", limit: null, offset: 2 });
+			const sql = queries[0]?.sql.toLowerCase() ?? "";
+			expect(sql).toContain("offset");
+			expect(sql).not.toContain("fetch");
+			expect(queries[0]?.parameters).toEqual(expect.arrayContaining([2]));
+		});
+
+		it("uses FETCH only when mssql has a positive limit and offset", async () => {
+			const { adapter, queries } = compiledAdapter("mssql");
+			await adapter.findMany({ model: "user", limit: 5, offset: 2 });
+			const sql = queries[0]?.sql.toLowerCase() ?? "";
+			expect(sql).toContain("offset");
+			expect(sql).toContain("fetch");
+			expect(queries[0]?.parameters).toEqual(expect.arrayContaining([2, 5]));
+		});
+
+		it("skips remaining sqlite rows when unbounded with offset", async ({
+			onTestFinished,
+		}) => {
+			const sqlite = new DatabaseSync(":memory:");
+			sqlite.exec(`
+				CREATE TABLE user (
+					id TEXT PRIMARY KEY,
+					name TEXT NOT NULL,
+					email TEXT NOT NULL,
+					emailVerified INTEGER NOT NULL,
+					image TEXT,
+					createdAt TEXT NOT NULL,
+					updatedAt TEXT NOT NULL
+				);
+			`);
+			const db = new Kysely<unknown>({
+				dialect: new NodeSqliteDialect({ database: sqlite }),
+			});
+			onTestFinished(() => db.destroy());
+			const adapter = kyselyAdapter(db, { type: "sqlite" })({});
+			const now = new Date();
+			for (const id of ["a", "b", "c"]) {
+				await adapter.create({
+					model: "user",
+					data: {
+						id,
+						name: id,
+						email: `${id}@example.com`,
+						emailVerified: false,
+						createdAt: now,
+						updatedAt: now,
+					},
+					forceAllowId: true,
+				});
+			}
+			await expect(
+				adapter.findMany({ model: "user", limit: 0, offset: 1 }),
+			).resolves.toEqual([]);
+			const remaining = await adapter.findMany<{ id: string }>({
+				model: "user",
+				limit: null,
+				offset: 1,
+				sortBy: { field: "id", direction: "asc" },
+			});
+			expect(remaining.map((row) => row.id)).toEqual(["b", "c"]);
 		});
 	});
 });

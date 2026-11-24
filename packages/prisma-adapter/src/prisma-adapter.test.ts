@@ -430,6 +430,33 @@ describe("prisma-adapter", () => {
 		);
 	});
 
+	it("defaults omitted findMany limit to take 100 and omits take when unbounded", async () => {
+		const findMany = vi.fn().mockResolvedValue([]);
+		const adapter = createTestAdapter({
+			$transaction: vi.fn(),
+			user: { findMany },
+		});
+
+		await adapter.findMany({ model: "user" });
+		expect(findMany.mock.calls[0]![0]).toEqual(
+			expect.objectContaining({ take: 100 }),
+		);
+
+		await adapter.findMany({ model: "user", limit: 0 });
+		expect(findMany.mock.calls[1]![0]).toEqual(
+			expect.objectContaining({ take: 0 }),
+		);
+
+		await adapter.findMany({ model: "user", limit: null });
+		expect(findMany.mock.calls[2]![0]).not.toHaveProperty("take");
+
+		await adapter.findMany({ model: "user", limit: null, offset: 2 });
+		expect(findMany.mock.calls[3]![0]).not.toHaveProperty("take");
+		expect(findMany.mock.calls[3]![0]).toEqual(
+			expect.objectContaining({ skip: 2 }),
+		);
+	});
+
 	/**
 	 * A unique field compared with `null` can match many rows, so it does not
 	 * select a single row for Prisma's `update`.

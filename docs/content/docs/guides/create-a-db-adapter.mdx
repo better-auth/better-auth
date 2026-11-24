@@ -345,7 +345,7 @@ parameters:
 
 * `model`: The model/table name that the records will be found in.
 * `where`: The `where` clause to find the records by.
-* `limit`: The limit of records to return.
+* `limit`: Maximum number of records to return. `0` returns no rows. Unless you set `supportsUnboundedFindMany`, this is always a number.
 * `select`: The `select` clause to return.
 * `sortBy`: The `sortBy` clause to sort the records by.
 * `offset`: The offset of records to return.
@@ -504,6 +504,14 @@ Whether the database supports booleans. If the database doesn't support booleans
 ### `supportsArrays`
 
 Whether the database supports arrays. Defaults to `false`, in which case array fields (`string[]`, `number[]`) are stored as a serialized `string` and safely parsed back when retrieved. Set this to `true` if your database supports array columns natively.
+
+### `supportsUnboundedFindMany`
+
+Whether `findMany` can run without a row cap. Defaults to `false`.
+
+Callers pass `limit: null` on `findMany` to load every matching row. You do not need this flag for that to work: the factory counts matching rows and calls your `findMany` with that total as `limit`.
+
+Set this to `true` only if omitted `limit` means no cap in your `findMany` implementation. The factory then skips the count and omits `limit`. If your database requires `LIMIT` whenever `OFFSET` is set, apply that dialect's unbounded form when `limit` is omitted and `offset` is present.
 
 ### `usePlural`
 
