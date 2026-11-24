@@ -148,8 +148,10 @@ export interface CimdOptions {
 	 * production).
 	 *
 	 * Only `post_logout_redirect_uris` is origin-bound by default. HTTP(S)
-	 * loopback redirect URLs and authority-free private-use redirects such as
-	 * `com.example.app:/logout` are exempt from this origin check.
+	 * loopback redirect URLs are exempt from this origin check. In
+	 * `redirect_uris`, any private-use redirect is exempt. In
+	 * `post_logout_redirect_uris`, only the authority-free form, such as
+	 * `com.example.app:/logout`, is exempt.
 	 * `redirect_uris` is excluded because exact redirect URI matching remains
 	 * mandatory at authorization time. The informative URIs `client_uri`,
 	 * `logo_uri`, `tos_uri`, and `policy_uri` are never origin-bound by
