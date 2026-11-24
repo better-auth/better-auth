@@ -51,8 +51,7 @@ async function deriveVerificationId(
 	const digest = await createHash("SHA-256").digest(
 		new TextEncoder().encode(`verification:${storedIdentifier}`),
 	);
-	// 24 bytes encode to 32 characters, within the `varchar(36)` id column.
-	return encodeDeterministicId(new Uint8Array(digest).slice(0, 24), options, {
+	return encodeDeterministicId(new Uint8Array(digest), options, {
 		adapter: ctx.context.adapter,
 		model: "verification",
 	});

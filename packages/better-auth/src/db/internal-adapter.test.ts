@@ -2620,6 +2620,24 @@ describe("internal adapter test", async () => {
 			expect(second).toBe(false);
 		});
 
+		it("treats a marker stored under another id as reserved", async () => {
+			const adapter = await makeAdapter();
+			const expiresAt = new Date(Date.now() + 60_000);
+			await adapter.createVerificationValue({
+				identifier: "reserve:other-id",
+				value: "used",
+				expiresAt,
+			});
+
+			const reserved = await adapter.reserveVerificationValue({
+				identifier: "reserve:other-id",
+				value: "replayed",
+				expiresAt,
+			});
+
+			expect(reserved).toBe(false);
+		});
+
 		it("yields exactly one winner under concurrent reserve", async () => {
 			const adapter = await makeAdapter();
 
