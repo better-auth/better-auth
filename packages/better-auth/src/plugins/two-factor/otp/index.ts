@@ -10,6 +10,7 @@ import {
 	symmetricEncrypt,
 } from "../../../crypto";
 import { parseUserOutput } from "../../../db/schema";
+import { restoreVerification } from "../../../db/verification";
 import { PACKAGE_VERSION } from "../../../version";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
@@ -405,13 +406,16 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				return valid(ctx);
 			}
 			// Wrong code within budget: re-arm the row with the incremented counter
-			// and the original expiry. The recreated counter is the durable record
-			// of the attempt, so the next submission either keeps guessing or hits
-			// the lock-out guard above. The original expiry caps the whole burst.
-			await ctx.context.internalAdapter.createVerificationValue({
+			// and the original expiry and creation time. The recreated counter is
+			// the durable record of the attempt, so the next submission either keeps
+			// guessing or hits the lock-out guard above. The original expiry caps
+			// the whole burst. A code sent while this one was being checked
+			// replaces it, so the re-arm yields to it.
+			await restoreVerification(ctx, {
 				value: `${otp}:${attempts + 1}`,
 				identifier: `2fa-otp-${key}`,
 				expiresAt: consumed.expiresAt,
+				createdAt: consumed.createdAt,
 			});
 			if (twoFactor) {
 				await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);

@@ -57,3 +57,26 @@ async function deriveVerificationId(
 		model: "verification",
 	});
 }
+
+/**
+ * Writes a consumed verification value back, such as a code with one more
+ * failed attempt, unless a value issued after the consume already holds the
+ * identifier. Returns the stored value, which is the newer one when this
+ * write yields, or `null` when a `verification.create.before` hook vetoes it.
+ *
+ * In the database, the derived id of `createOrFindVerification` also makes the
+ * write yield. Secondary storage has no conditional write, so a value issued
+ * between this read and the write can still be replaced.
+ */
+export async function restoreVerification(
+	ctx: GenericEndpointContext,
+	data: Parameters<InternalAdapter["createVerificationValue"]>[0] & {
+		createdAt: Date;
+	},
+) {
+	const issued = await ctx.context.internalAdapter.findVerificationValue(
+		data.identifier,
+	);
+	if (issued) return issued;
+	return createOrFindVerification(ctx, data);
+}

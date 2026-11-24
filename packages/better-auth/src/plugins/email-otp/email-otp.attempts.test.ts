@@ -1,6 +1,6 @@
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { getTestInstance } from "better-auth/test";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { emailOTP } from ".";
 import { emailOTPClient } from "./client";
 import { splitAtLastColon, toOTPIdentifier } from "./utils";
@@ -29,6 +29,10 @@ function createSecondaryStorage(): SecondaryStorage {
 }
 
 describe("email OTP preflight attempt accounting", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it.for(["database", "secondary", "mirrored"] as const)(
 		"only compares one guess while a %s check holds the OTP",
 		async (storage) => {
@@ -358,4 +362,90 @@ describe("email OTP preflight attempt accounting", () => {
 			).data?.token,
 		).toBeDefined();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 * @see https://github.com/better-auth/better-auth/pull/12893
+	 */
+	it.for(["database", "secondary", "mirrored"] as const)(
+		"keeps a code resent while a wrong guess is checked in %s storage",
+		async (storage) => {
+			const codes = ["111111", "222222"];
+			let releaseCheck: () => void = () => {};
+			const checkReleased = new Promise<void>((resolve) => {
+				releaseCheck = resolve;
+			});
+			let signalCheck: () => void = () => {};
+			const checkStarted = new Promise<void>((resolve) => {
+				signalCheck = resolve;
+			});
+			const { client, auth, testUser } = await getTestInstance(
+				{
+					...(storage === "database"
+						? {}
+						: {
+								secondaryStorage: createSecondaryStorage(),
+								...(storage === "mirrored"
+									? { verification: { storeInDatabase: true } }
+									: {}),
+							}),
+					plugins: [
+						emailOTP({
+							generateOTP: () => codes.shift(),
+							async sendVerificationOTP() {},
+							storeOTP: {
+								async hash(otp) {
+									// The wrong guess is compared after it consumed the code.
+									if (otp === "000000") {
+										signalCheck();
+										await checkReleased;
+									}
+									return `stored-${otp}`;
+								},
+							},
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [emailOTPClient()] } },
+			);
+			const email = testUser.email;
+			vi.useFakeTimers({ toFake: ["Date"] });
+			vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+			await client.emailOtp.sendVerificationOtp({
+				email,
+				type: "sign-in",
+			});
+
+			vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
+			const guess = client.emailOtp.checkVerificationOtp({
+				email,
+				type: "sign-in",
+				otp: "000000",
+			});
+			await checkStarted;
+			vi.setSystemTime(new Date("2026-01-01T00:00:02.000Z"));
+			await client.emailOtp.sendVerificationOtp({
+				email,
+				type: "sign-in",
+			});
+			vi.setSystemTime(new Date("2026-01-01T00:00:03.000Z"));
+			releaseCheck();
+
+			expect((await guess).error?.code).toBe("INVALID_OTP");
+			const stored = await (
+				await auth.$context
+			).internalAdapter.findVerificationValue(
+				toOTPIdentifier("sign-in", email),
+			);
+			expect(stored?.value).toBe("stored-222222:0");
+			expect(
+				(
+					await client.signIn.emailOtp({
+						email,
+						otp: "222222",
+					})
+				).data?.token,
+			).toBeDefined();
+		},
+	);
 });

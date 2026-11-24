@@ -1,8 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import type { SecondaryStorage } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthMiddleware } from "../../api";
 import { createAuthClient } from "../../client";
 import { applySetCookies, parseSetCookieHeader } from "../../cookies";
@@ -1936,6 +1937,122 @@ describe("OTP storage modes", async () => {
 			expect(verifyRes.status).toBe(200);
 		});
 	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11105
+ * @see https://github.com/better-auth/better-auth/pull/12893
+ */
+describe("OTP resent while a wrong guess is checked", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	function createSecondaryStorage(): SecondaryStorage {
+		const values = new Map<string, string>();
+		return {
+			get: (key) => values.get(key) ?? null,
+			getAndDelete: (key) => {
+				const value = values.get(key) ?? null;
+				values.delete(key);
+				return value;
+			},
+			increment: (key) => {
+				const value = Number(values.get(key) ?? 0) + 1;
+				values.set(key, String(value));
+				return value;
+			},
+			set: (key, value) => {
+				values.set(key, value);
+			},
+			delete: (key) => {
+				values.delete(key);
+			},
+		};
+	}
+
+	it.for(["database", "secondary", "mirrored"] as const)(
+		"accepts the resent code in %s storage",
+		async (storage) => {
+			const codes: string[] = [];
+			let heldGuess: string | undefined;
+			let releaseCheck: () => void = () => {};
+			const checkReleased = new Promise<void>((resolve) => {
+				releaseCheck = resolve;
+			});
+			let signalCheck: () => void = () => {};
+			const checkStarted = new Promise<void>((resolve) => {
+				signalCheck = resolve;
+			});
+			const { auth, signInWithTestUser, testUser } = await getTestInstance({
+				secret: DEFAULT_SECRET,
+				...(storage === "database"
+					? {}
+					: {
+							secondaryStorage: createSecondaryStorage(),
+							...(storage === "mirrored"
+								? { verification: { storeInDatabase: true } }
+								: {}),
+						}),
+				plugins: [
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp }) {
+								codes.push(otp);
+							},
+							storeOTP: {
+								async hash(token) {
+									// The wrong guess is compared after it consumed the code.
+									if (token === heldGuess) {
+										heldGuess = undefined;
+										signalCheck();
+										await checkReleased;
+									}
+									return `custom_${token}`;
+								},
+							},
+						},
+					}),
+				],
+			});
+			const { headers: sessionHeaders } = await signInWithTestUser();
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password, method: "otp" },
+				headers: sessionHeaders,
+			});
+			const signInRes = await auth.api.signInEmail({
+				body: { email: testUser.email, password: testUser.password },
+				asResponse: true,
+			});
+			const headers = convertSetCookieToCookie(signInRes.headers);
+			vi.useFakeTimers({ toFake: ["Date"] });
+			vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+			await auth.api.sendTwoFactorOTP({ headers, body: {} });
+
+			const wrong = codes[0] === "000000" ? "111111" : "000000";
+			heldGuess = wrong;
+			vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
+			const guess = auth.api.verifyTwoFactorOTP({
+				headers,
+				body: { code: wrong },
+				asResponse: true,
+			});
+			await checkStarted;
+			vi.setSystemTime(new Date("2026-01-01T00:00:02.000Z"));
+			await auth.api.sendTwoFactorOTP({ headers, body: {} });
+			vi.setSystemTime(new Date("2026-01-01T00:00:03.000Z"));
+			releaseCheck();
+
+			expect((await guess).status).toBe(401);
+			expect(codes).toHaveLength(2);
+			const latest = await auth.api.verifyTwoFactorOTP({
+				headers,
+				body: { code: codes[1]! },
+				asResponse: true,
+			});
+			expect(latest.status).toBe(200);
+		},
+	);
 });
 
 describe("pre-migration twoFactor rows (verified absent)", async () => {

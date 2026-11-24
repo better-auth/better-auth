@@ -13,7 +13,7 @@ import { setCookieCache, setSessionCookie } from "../../cookies";
 import { symmetricDecrypt } from "../../crypto";
 import { revokeUnprovenAccountAccess } from "../../db/revoke-unproven-account-access";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
-import { createOrFindVerification } from "../../db/verification";
+import { restoreVerification } from "../../db/verification";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
@@ -1284,8 +1284,10 @@ async function atomicVerifyOTP(
 	}
 
 	const verified = await verifyStoredOTP(ctx, opts, otpValue, providedOTP);
+	// A code issued while this one was being checked replaces it, so the
+	// write-back yields to it instead of reviving the old code.
 	const writeBack = (value: string) =>
-		createOrFindVerification(ctx, {
+		restoreVerification(ctx, {
 			value,
 			identifier,
 			expiresAt: consumed.expiresAt,
@@ -1299,13 +1301,6 @@ async function atomicVerifyOTP(
 
 	if (successDisposition === "consume") return;
 
-	// A code issued while this one was being checked replaces it, so writing
-	// the old code back would revive it over the new one.
-	const replacement =
-		await ctx.context.internalAdapter.findVerificationValue(identifier);
-	if (replacement) {
-		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
-	}
 	const restored = await writeBack(consumed.value);
 	// A verification.create.before hook can veto the restore by returning false.
 	if (!restored) {
