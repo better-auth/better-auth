@@ -72,6 +72,7 @@ describe("listMembers", async () => {
 		});
 		expect(members.data?.members.length).toBe(11);
 		expect(members.data?.total).toBe(11);
+		expect(membersHaveUserFields(members.data?.members)).toBe(true);
 	});
 
 	it("should return all members by organization slug", async () => {
@@ -98,6 +99,7 @@ describe("listMembers", async () => {
 		});
 		expect(members.data?.members.length).toBe(5);
 		expect(members.data?.total).toBe(11);
+		expect(membersHaveUserFields(members.data?.members)).toBe(true);
 	});
 
 	it("should offset the members", async () => {
@@ -262,6 +264,33 @@ describe("listMembers", async () => {
 		expect(members.data?.total).toBe(1);
 	});
 
+	it("should not query users with a second findMany", async () => {
+		const originalFindMany = ctx.adapter.findMany.bind(ctx.adapter);
+		const models: string[] = [];
+		ctx.adapter.findMany = async (data) => {
+			models.push(data.model);
+			return originalFindMany(data);
+		};
+		try {
+			const members = await client.organization.listMembers({
+				fetchOptions: {
+					headers,
+				},
+				query: {
+					organizationId: org.data?.id as string,
+					limit: 5,
+				},
+			});
+			expect(members.error).toBeNull();
+			expect(members.data?.members.length).toBe(5);
+			expect(membersHaveUserFields(members.data?.members)).toBe(true);
+			expect(models).toContain("member");
+			expect(models).not.toContain("user");
+		} finally {
+			ctx.adapter.findMany = originalFindMany;
+		}
+	});
+
 	it("should not list members if not a member", async () => {
 		const newHeaders = new Headers();
 		await client.signUp.email({
@@ -398,13 +427,83 @@ describe("listMembers with >100 members", async () => {
 		expect(members.error).toBeNull();
 		expect(members.data?.members.length).toBe(111);
 		expect(members.data?.total).toBe(111);
-		expect(
-			members.data?.members.every(
-				(member) =>
-					typeof member.user?.id === "string" &&
-					typeof member.user?.email === "string",
-			),
-		).toBe(true);
+		expect(membersHaveUserFields(members.data?.members)).toBe(true);
+	});
+});
+
+describe("listMembers with joins enabled", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [organization()],
+		advanced: {
+			database: {
+				joins: true,
+			},
+		},
+	});
+	const ctx = await auth.$context;
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const org = await client.organization.create({
+		name: "join-org",
+		slug: "join-org",
+		fetchOptions: {
+			headers,
+		},
+	});
+
+	for (let i = 0; i < 8; i++) {
+		const user = await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: `join-org-${i}@test.com`,
+				name: `join-org-${i}`,
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: user.id,
+				role: "member",
+			},
+		});
+	}
+
+	it("should include user fields on a page of members without a second user findMany", async () => {
+		const originalFindMany = ctx.adapter.findMany.bind(ctx.adapter);
+		const models: string[] = [];
+		ctx.adapter.findMany = async (data) => {
+			models.push(data.model);
+			return originalFindMany(data);
+		};
+		try {
+			const members = await client.organization.listMembers({
+				fetchOptions: {
+					headers,
+				},
+				query: {
+					organizationId: org.data?.id as string,
+					limit: 5,
+					offset: 2,
+				},
+			});
+			expect(members.error).toBeNull();
+			expect(members.data?.members.length).toBe(5);
+			expect(members.data?.total).toBe(9);
+			expect(membersHaveUserFields(members.data?.members)).toBe(true);
+			expect(models).toContain("member");
+			expect(models).not.toContain("user");
+		} finally {
+			ctx.adapter.findMany = originalFindMany;
+		}
 	});
 });
 
@@ -830,6 +929,28 @@ describe("activeMemberRole", async () => {
 		}
 	});
 });
+
+function membersHaveUserFields(
+	members:
+		| {
+				user?: {
+					id?: string | undefined;
+					email?: string | undefined;
+					name?: string | undefined;
+				};
+		  }[]
+		| undefined,
+) {
+	return (
+		!!members?.length &&
+		members.every(
+			(member) =>
+				typeof member.user?.id === "string" &&
+				typeof member.user?.email === "string" &&
+				typeof member.user?.name === "string",
+		)
+	);
+}
 
 type AuthQueryValue<Result> = ReturnType<AuthQueryAtom<Result>["get"]>;
 
