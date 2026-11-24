@@ -158,7 +158,7 @@ export function parseInputData<T extends Record<string, any>>(
 			if (fields[key]!.input === false) {
 				if (fields[key]!.defaultValue !== undefined) {
 					if (action !== "update") {
-						parsedData[key] = fields[key]!.defaultValue;
+						parsedData[key] = resolveDefaultValue(fields[key]!);
 						continue;
 					}
 				}

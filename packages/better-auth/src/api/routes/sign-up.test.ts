@@ -201,6 +201,110 @@ describe("sign-up with custom fields", async () => {
 	});
 });
 
+describe("sign-up input: false field with a function defaultValue", () => {
+	const approved = {
+		type: "boolean",
+		required: false,
+		input: false,
+		defaultValue: () => false,
+	} as const;
+
+	it("should store the resolved default when the client sends the key", async () => {
+		const seen: unknown[] = [];
+		const { auth, db } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						approved,
+					},
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								seen.push(user.approved);
+							},
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "function-default@test.com",
+					password: "password",
+					name: "Function Default",
+					//@ts-expect-error
+					approved: true,
+				},
+			}),
+		).resolves.toMatchObject({
+			user: {
+				approved: false,
+			},
+		});
+
+		expect(seen).toEqual([false]);
+		const stored = await db.findOne<{ approved: boolean }>({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					value: "function-default@test.com",
+				},
+			],
+		});
+		expect(stored?.approved).toBe(false);
+	});
+
+	it("should answer an existing email normally when the client sends the key", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				user: {
+					additionalFields: {
+						approved,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const body = {
+			email: "function-default-existing@test.com",
+			password: "password",
+			name: "Function Default",
+		};
+		const first = await auth.api.signUpEmail({
+			body,
+		});
+
+		const second = auth.api.signUpEmail({
+			body: {
+				...body,
+				//@ts-expect-error
+				approved: true,
+			},
+		});
+		await expect(second).resolves.toMatchObject({
+			user: {
+				approved: false,
+			},
+		});
+		const { user } = await second;
+		expect(user.id).not.toBe(first.user.id);
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/11642
  */
