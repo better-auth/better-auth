@@ -659,6 +659,31 @@ describe("multi-session stale device cookies", async () => {
 			).toBe(0);
 		}
 	});
+
+	it("clears a tampered device cookie named for this instance", async () => {
+		const signedHeaders = new Headers();
+		const signed = await client.signUp.email(
+			{ email: "signed@test.com", password: "password", name: "Signed" },
+			{ onSuccess: cookieSetter(signedHeaders) },
+		);
+		expect(signed.error).toBeNull();
+		const tamperedName = `better-auth.session_token_multi-${signed.data!.token!.toLowerCase()}`;
+
+		let setCookie = "";
+		const second = await client.signUp.email(
+			{ email: "tampered@test.com", password: "password", name: "Tampered" },
+			{
+				headers: new Headers({ cookie: `${tamperedName}=tampered` }),
+				onResponse(context) {
+					setCookie = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+		expect(second.error).toBeNull();
+		expect(parseSetCookieHeader(setCookie).get(tamperedName)?.["max-age"]).toBe(
+			0,
+		);
+	});
 });
 
 /**
@@ -805,6 +830,31 @@ describe("multi-session cookie secure variants", async () => {
 		expect(setCookie).not.toContain(
 			`better-auth.session_token_multi-${second.data!.token!.toLowerCase()}=`,
 		);
+	});
+
+	it("keeps the configured cookie when the alternate name is sent first", async () => {
+		const { plainName, secureName, signedValue } = await secureVariantHeaders();
+
+		let setCookie = "";
+		const second = await client.signUp.email(
+			{
+				email: "variant-order@test.com",
+				password: "password",
+				name: "Variant Order",
+			},
+			{
+				headers: new Headers({
+					cookie: `${secureName}=${signedValue}; ${plainName}=${signedValue}`,
+				}),
+				onResponse(context) {
+					setCookie = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+		expect(second.error).toBeNull();
+		const cookies = parseSetCookieHeader(setCookie);
+		expect(cookies.get(secureName)?.["max-age"]).toBe(0);
+		expect(cookies.get(plainName)?.["max-age"]).toBeUndefined();
 	});
 
 	it("expires a revoked secure-variant cookie with the Secure attribute", async () => {
