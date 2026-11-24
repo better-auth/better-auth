@@ -293,75 +293,86 @@ describe("email OTP preflight attempt accounting", () => {
 		).toBe("INVALID_OTP");
 	});
 
-	it("does not revive a code that was replaced while it was being checked", async () => {
-		const codes = ["111111", "222222"];
-		let holdCheck = false;
-		let releaseCheck: () => void = () => {};
-		const checkReleased = new Promise<void>((resolve) => {
-			releaseCheck = resolve;
-		});
-		let signalCheck: () => void = () => {};
-		const checkStarted = new Promise<void>((resolve) => {
-			signalCheck = resolve;
-		});
-		const { client, testUser } = await getTestInstance(
-			{
-				plugins: [
-					emailOTP({
-						generateOTP: () => codes.shift(),
-						async sendVerificationOTP() {},
-						storeOTP: {
-							async hash(otp) {
-								if (holdCheck && otp === "111111") {
-									holdCheck = false;
-									signalCheck();
-									await checkReleased;
-								}
-								return `stored-${otp}`;
+	it.for(["database", "secondary", "mirrored"] as const)(
+		"does not revive a code that was replaced while it was being checked in %s storage",
+		async (storage) => {
+			const codes = ["111111", "222222"];
+			let holdCheck = false;
+			let releaseCheck: () => void = () => {};
+			const checkReleased = new Promise<void>((resolve) => {
+				releaseCheck = resolve;
+			});
+			let signalCheck: () => void = () => {};
+			const checkStarted = new Promise<void>((resolve) => {
+				signalCheck = resolve;
+			});
+			const { client, testUser } = await getTestInstance(
+				{
+					...(storage === "database"
+						? {}
+						: {
+								secondaryStorage: createSecondaryStorage(),
+								...(storage === "mirrored"
+									? { verification: { storeInDatabase: true } }
+									: {}),
+							}),
+					plugins: [
+						emailOTP({
+							generateOTP: () => codes.shift(),
+							async sendVerificationOTP() {},
+							storeOTP: {
+								async hash(otp) {
+									if (holdCheck && otp === "111111") {
+										holdCheck = false;
+										signalCheck();
+										await checkReleased;
+									}
+									return `stored-${otp}`;
+								},
 							},
-						},
-					}),
-				],
-			},
-			{ clientOptions: { plugins: [emailOTPClient()] } },
-		);
-		const email = testUser.email;
-		await client.emailOtp.sendVerificationOtp({
-			email,
-			type: "sign-in",
-		});
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [emailOTPClient()] } },
+			);
+			const email = testUser.email;
+			await client.emailOtp.sendVerificationOtp({
+				email,
+				type: "sign-in",
+			});
 
-		holdCheck = true;
-		const check = client.emailOtp.checkVerificationOtp({
-			email,
-			type: "sign-in",
-			otp: "111111",
-		});
-		await checkStarted;
-		await client.emailOtp.sendVerificationOtp({
-			email,
-			type: "sign-in",
-		});
-		releaseCheck();
+			holdCheck = true;
+			const check = client.emailOtp.checkVerificationOtp({
+				email,
+				type: "sign-in",
+				otp: "111111",
+			});
+			await checkStarted;
+			await client.emailOtp.sendVerificationOtp({
+				email,
+				type: "sign-in",
+			});
+			releaseCheck();
 
-		expect((await check).error?.code).toBe("INVALID_OTP");
-		expect(
-			(
-				await client.signIn.emailOtp({
-					email,
-					otp: "111111",
-				})
-			).error?.code,
-		).toBe("INVALID_OTP");
-		expect(
-			(
-				await client.signIn.emailOtp({
-					email,
-					otp: "222222",
-				})
-			).data?.token,
-		).toBeDefined();
-	});
+			expect((await check).error?.code).toBe("INVALID_OTP");
+			expect(
+				(
+					await client.signIn.emailOtp({
+						email,
+						otp: "111111",
+					})
+				).error?.code,
+			).toBe("INVALID_OTP");
+			expect(
+				(
+					await client.signIn.emailOtp({
+						email,
+						otp: "222222",
+					})
+				).data?.token,
+			).toBeDefined();
+		},
+	);
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11105
@@ -438,6 +449,67 @@ describe("email OTP preflight attempt accounting", () => {
 				toOTPIdentifier("sign-in", email),
 			);
 			expect(stored?.value).toBe("stored-222222:0");
+			expect(
+				(
+					await client.signIn.emailOtp({
+						email,
+						otp: "222222",
+					})
+				).data?.token,
+			).toBeDefined();
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/12893
+	 */
+	it.for(["database", "mirrored"] as const)(
+		"keeps the code after a wrong guess when an older plain-identifier row remains in %s storage",
+		async (storage) => {
+			const { client, db, testUser } = await getTestInstance(
+				{
+					...(storage === "mirrored"
+						? { secondaryStorage: createSecondaryStorage() }
+						: {}),
+					verification: {
+						storeIdentifier: "hashed",
+						...(storage === "mirrored" ? { storeInDatabase: true } : {}),
+					},
+					plugins: [
+						emailOTP({
+							generateOTP: () => "222222",
+							async sendVerificationOTP() {},
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [emailOTPClient()] } },
+			);
+			const email = testUser.email;
+			// Stored before identifiers were hashed.
+			await db.create({
+				model: "verification",
+				data: {
+					identifier: toOTPIdentifier("sign-in", email),
+					value: "111111:0",
+					expiresAt: new Date(Date.now() + 60_000),
+					createdAt: new Date(Date.now() - 60_000),
+					updatedAt: new Date(Date.now() - 60_000),
+				},
+			});
+			await client.emailOtp.sendVerificationOtp({
+				email,
+				type: "sign-in",
+			});
+
+			expect(
+				(
+					await client.emailOtp.checkVerificationOtp({
+						email,
+						type: "sign-in",
+						otp: "000000",
+					})
+				).error?.code,
+			).toBe("INVALID_OTP");
 			expect(
 				(
 					await client.signIn.emailOtp({
