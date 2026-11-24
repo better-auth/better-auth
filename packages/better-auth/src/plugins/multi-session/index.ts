@@ -104,7 +104,11 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						{ onlyActiveSessions: true },
 					);
 					const validSessions = sessions.filter(
-						(session) => session && session.session.expiresAt > new Date(),
+						(session) =>
+							session &&
+							!(session.session as { impersonatedBy?: string })
+								.impersonatedBy &&
+							session.session.expiresAt > new Date(),
 					);
 					const uniqueUserSessions = validSessions.reduce(
 						(acc, session) => {
@@ -328,6 +332,11 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						if (!cookieString) return;
 						const newSession = ctx.context.newSession;
 						if (!newSession) return;
+						// An impersonation session is temporary: the admin plugin deletes it
+						// when impersonation stops. Treating it as a new device session would
+						// replace the target user's real session and leave a cookie pointing
+						// at a session that no longer exists.
+						if (newSession.session.impersonatedBy) return;
 
 						const sessionCookieConfig = ctx.context.authCookies.sessionToken;
 						const sessionToken = newSession.session.token;
@@ -342,12 +351,31 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						).filter(isMultiSessionCookie);
 
 						const tokensToDelete: string[] = [];
+						const staleCookieKeys: string[] = [];
 						for (const key of multiSessionKeys) {
 							const token = await ctx.getSignedCookie(key, ctx.context.secret);
-							if (!token) continue;
+							if (!token) {
+								// An unsigned or tampered cookie can never be used again.
+								staleCookieKeys.push(key);
+								ctx.setCookie(key, "", {
+									...sessionCookieConfig.attributes,
+									maxAge: 0,
+								});
+								continue;
+							}
 							const session =
 								await ctx.context.internalAdapter.findSession(token);
-							if (session?.user.id === newSession.user.id) {
+							if (!session || session.session.expiresAt < new Date()) {
+								// A device cookie whose session was deleted or expired must not
+								// keep a slot reserved and block the next sign-in.
+								staleCookieKeys.push(key);
+								ctx.setCookie(key, "", {
+									...sessionCookieConfig.attributes,
+									maxAge: 0,
+								});
+								continue;
+							}
+							if (session.user.id === newSession.user.id) {
 								tokensToDelete.push(token);
 								ctx.setCookie(key, "", {
 									...sessionCookieConfig.attributes,
@@ -361,7 +389,8 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 
 						const currentCount =
 							multiSessionKeys.length -
-							tokensToDelete.length +
+							tokensToDelete.length -
+							staleCookieKeys.length +
 							(cookieString.includes(sessionCookieConfig.name) ? 1 : 0);
 
 						if (currentCount > opts.maximumSessions) return;

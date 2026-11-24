@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { admin } from "../admin/admin";
+import { adminClient } from "../admin/client";
 import { multiSession } from ".";
 import { multiSessionClient } from "./client";
 
@@ -485,5 +487,174 @@ describe("multi-session", async () => {
 			fetchOptions: { headers: otherHeaders },
 		});
 		expect(otherAfter.data?.session.token).toBe(otherToken);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12904
+ */
+describe("multi-session with admin impersonation", async () => {
+	const { auth, client, testUser, cookieSetter } = await getTestInstance(
+		{
+			plugins: [admin(), multiSession({ maximumSessions: 5 })],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: {
+								...user,
+								role: user.name === "Admin" ? "admin" : user.role,
+							},
+						}),
+					},
+				},
+			},
+		},
+		{
+			clientOptions: { plugins: [adminClient(), multiSessionClient()] },
+			testUser: { name: "Admin" },
+		},
+	);
+
+	it("keeps the target's real session and device listing through impersonation", async () => {
+		const deviceHeaders = new Headers();
+		const target = {
+			email: "impersonation-target@test.com",
+			password: "password",
+			name: "Target",
+		};
+		const targetSession = await client.signUp.email(target, {
+			onSuccess: cookieSetter(deviceHeaders),
+		});
+		expect(targetSession.error).toBeNull();
+		const adminSession = await client.signIn.email(testUser, {
+			headers: deviceHeaders,
+			onSuccess: cookieSetter(deviceHeaders),
+		});
+		expect(adminSession.error).toBeNull();
+		const adminHeaders = new Headers(deviceHeaders);
+		const adminToken = adminSession.data!.token!;
+		const targetToken = targetSession.data!.token!;
+
+		const before = await client.multiSession.listDeviceSessions({
+			fetchOptions: { headers: adminHeaders },
+		});
+		expect(before.data?.map((s) => s.session.token).sort()).toEqual(
+			[adminToken, targetToken].sort(),
+		);
+
+		const impersonationHeaders = new Headers(deviceHeaders);
+		let impersonationToken = "";
+		let impersonationSetCookie = "";
+		const impersonated = await client.admin.impersonateUser(
+			{ userId: targetSession.data!.user.id },
+			{
+				headers: deviceHeaders,
+				onSuccess: cookieSetter(impersonationHeaders),
+				onResponse(context) {
+					impersonationSetCookie =
+						context.response.headers.get("set-cookie") || "";
+					impersonationToken =
+						parseSetCookieHeader(impersonationSetCookie)
+							.get("better-auth.session_token")
+							?.value.split(".")[0] || "";
+				},
+			},
+		);
+		expect(impersonated.error).toBeNull();
+		expect(impersonationToken).not.toBe("");
+		expect(impersonationToken).not.toBe(targetToken);
+
+		const { internalAdapter } = await auth.$context;
+		expect(await internalAdapter.findSession(targetToken)).not.toBeNull();
+		expect(impersonationSetCookie).not.toContain(
+			`better-auth.session_token_multi-${impersonationToken.toLowerCase()}`,
+		);
+
+		const during = await client.multiSession.listDeviceSessions({
+			fetchOptions: { headers: adminHeaders },
+		});
+		expect(during.data?.map((s) => s.user.email).sort()).toEqual(
+			[testUser.email, target.email].sort(),
+		);
+
+		let stopImpersonatingSetCookie = "";
+		const stopped = await client.admin.stopImpersonating(
+			{},
+			{
+				headers: impersonationHeaders,
+				onResponse(context) {
+					stopImpersonatingSetCookie =
+						context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+		expect(stopped.error).toBeNull();
+		expect(
+			parseSetCookieHeader(stopImpersonatingSetCookie).get(
+				"better-auth.dont_remember",
+			)?.["max-age"],
+		).toBe(0);
+		expect(await internalAdapter.findSession(targetToken)).not.toBeNull();
+		const after = await client.multiSession.listDeviceSessions({
+			fetchOptions: { headers: adminHeaders },
+		});
+		expect(after.data?.map((s) => s.user.email).sort()).toEqual(
+			[testUser.email, target.email].sort(),
+		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12904
+ */
+describe("multi-session stale device cookies", async () => {
+	const { auth, client, cookieSetter } = await getTestInstance(
+		{ plugins: [multiSession({ maximumSessions: 2 })] },
+		{ clientOptions: { plugins: [multiSessionClient()] } },
+	);
+
+	it("expires deleted device sessions instead of counting them toward the limit", async () => {
+		const headers = new Headers();
+		const first = await client.signUp.email(
+			{ email: "stale-one@test.com", password: "password", name: "One" },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const second = await client.signUp.email(
+			{ email: "stale-two@test.com", password: "password", name: "Two" },
+			{ headers, onSuccess: cookieSetter(headers) },
+		);
+		expect(first.error).toBeNull();
+		expect(second.error).toBeNull();
+
+		const { internalAdapter } = await auth.$context;
+		await internalAdapter.deleteSession(first.data!.token!);
+		await internalAdapter.deleteSession(second.data!.token!);
+
+		let setCookie = "";
+		const fresh = await client.signUp.email(
+			{ email: "fresh@test.com", password: "password", name: "Fresh" },
+			{
+				headers,
+				onSuccess: cookieSetter(headers),
+				onResponse(context) {
+					setCookie = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+		expect(fresh.error).toBeNull();
+		const cookies = parseSetCookieHeader(setCookie);
+		expect(
+			cookies.get(
+				`better-auth.session_token_multi-${fresh.data!.token!.toLowerCase()}`,
+			)?.value,
+		).toBeTruthy();
+		for (const token of [first.data!.token!, second.data!.token!]) {
+			expect(
+				cookies.get(`better-auth.session_token_multi-${token.toLowerCase()}`)?.[
+					"max-age"
+				],
+			).toBe(0);
+		}
 	});
 });
