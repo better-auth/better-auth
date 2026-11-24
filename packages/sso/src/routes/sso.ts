@@ -416,12 +416,12 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
-			const providers = await ctx.context.adapter.findMany({
+			const providerCount = await ctx.context.adapter.count({
 				model: "ssoProvider",
 				where: [{ field: "userId", value: user.id }],
 			});
 
-			if (providers.length >= limit) {
+			if (providerCount >= limit) {
 				throw new APIError("FORBIDDEN", {
 					message: "You have reached the maximum number of SSO providers",
 				});
