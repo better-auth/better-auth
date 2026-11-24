@@ -107,8 +107,14 @@ export interface CimdOptions {
 	 * validated (its `updatedAt`) when refreshing its metadata document fails
 	 * transiently: the fetch times out after its host name resolved, the
 	 * connection fails with a known error code, or the server answers with
-	 * HTTP 500, 502, 503, or 504. Other failures still reject the request.
-	 * Cached `jwks_uri` keys follow the same rules.
+	 * HTTP 500, 502, 503, or 504. If a fetch policy limit or the Node DNS
+	 * lookup limit prevents a retry, the stored client can still be served
+	 * within this age limit for five minutes after its last transient failure.
+	 * Terminal metadata failures still reject the request.
+	 *
+	 * For cached `jwks_uri` keys, this option can extend the ten-minute
+	 * fallback after the last successful key fetch. Shorter values leave
+	 * that fallback in place.
 	 *
 	 * Accepts a number of seconds or a duration string (e.g. `"6h"`), at most
 	 * 24 hours.
@@ -141,7 +147,9 @@ export interface CimdOptions {
 	 * Pass an empty array to disable origin binding (not recommended for
 	 * production).
 	 *
-	 * Only `post_logout_redirect_uris` is origin-bound by default.
+	 * Only `post_logout_redirect_uris` is origin-bound by default. HTTP(S)
+	 * loopback redirect URLs and authority-free private-use redirects such as
+	 * `com.example.app:/logout` are exempt from this origin check.
 	 * `redirect_uris` is excluded because exact redirect URI matching remains
 	 * mandatory at authorization time. The informative URIs `client_uri`,
 	 * `logo_uri`, `tos_uri`, and `policy_uri` are never origin-bound by

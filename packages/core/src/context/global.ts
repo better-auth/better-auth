@@ -15,6 +15,20 @@ interface BetterAuthGlobal {
 	 * Stores the AsyncLocalStorage instances for each context.
 	 */
 	context: Record<string, AsyncLocalStorage<unknown>>;
+	/**
+	 * Schema checks keyed by adapter and schema revisions keyed by database,
+	 * shared across copies of `@better-auth/core`. Absent when an older copy
+	 * created this object.
+	 */
+	schemaRegistry?: SchemaRegistry;
+}
+
+/**
+ * @internal
+ */
+export interface SchemaRegistry {
+	checks: WeakMap<object, unknown>;
+	revisions: WeakMap<object, { value: number }>;
 }
 
 const symbol = Symbol.for("better-auth:global");
