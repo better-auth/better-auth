@@ -2475,6 +2475,219 @@ describe("two factor password still required for credential accounts", async () 
 	});
 });
 
+describe("two-factor session rotation", () => {
+	it.for([
+		{
+			name: "enabling OTP",
+			path: "/two-factor/enable",
+			body: { method: "otp" },
+		},
+		{
+			name: "enabling TOTP with verification skipped",
+			path: "/two-factor/enable",
+			body: {},
+		},
+		{
+			name: "disabling",
+			path: "/two-factor/disable",
+			body: {},
+		},
+	])(
+		"$name keeps the session creation time for an account without a password",
+		async ({ path, body }) => {
+			const { auth, client, db, cookieSetter } = await getTestInstance(
+				{
+					secret: DEFAULT_SECRET,
+					plugins: [
+						anonymous(),
+						twoFactor({
+							allowPasswordless: true,
+							skipVerificationOnEnable: true,
+							otpOptions: {
+								async sendOTP() {},
+							},
+						}),
+					],
+				},
+				{ disableTestUser: true },
+			);
+			const headers = new Headers();
+			await client.$fetch("/sign-in/anonymous", {
+				method: "POST",
+				onSuccess: cookieSetter(headers),
+			});
+			const source = await auth.api.getSession({ headers });
+			const createdAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+			await db.update({
+				model: "session",
+				where: [{ field: "id", value: source!.session.id }],
+				update: { createdAt },
+			});
+
+			const res = await client.$fetch(path, {
+				method: "POST",
+				body,
+				headers,
+				onSuccess: cookieSetter(headers),
+			});
+			expect(res.error).toBeNull();
+
+			const rotated = await auth.api.getSession({ headers });
+			expect(rotated?.session.token).not.toBe(source!.session.token);
+			expect(rotated?.session.createdAt).toEqual(createdAt);
+			const listed = await client.listSessions({ fetchOptions: { headers } });
+			expect(listed.error).toMatchObject({
+				status: 403,
+				code: "SESSION_NOT_FRESH",
+			});
+		},
+	);
+
+	it("keeps the session creation time when TOTP enrollment completes", async () => {
+		const { auth, client, db, cookieSetter } = await getTestInstance(
+			{
+				secret: DEFAULT_SECRET,
+				plugins: [anonymous(), twoFactor({ allowPasswordless: true })],
+			},
+			{ disableTestUser: true },
+		);
+		const headers = new Headers();
+		await client.$fetch("/sign-in/anonymous", {
+			method: "POST",
+			onSuccess: cookieSetter(headers),
+		});
+		const source = await auth.api.getSession({ headers });
+		const enrollment = await client.$fetch("/two-factor/enable", {
+			method: "POST",
+			body: {},
+			headers,
+		});
+		expect(enrollment.error).toBeNull();
+		const twoFactorRecord = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: source!.user.id }],
+		});
+		const secret = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactorRecord!.secret,
+		});
+		const code = await createOTP(secret).totp();
+		const createdAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+		await db.update({
+			model: "session",
+			where: [{ field: "id", value: source!.session.id }],
+			update: { createdAt },
+		});
+
+		const res = await client.$fetch("/two-factor/verify-totp", {
+			method: "POST",
+			body: { code },
+			headers,
+			onSuccess: cookieSetter(headers),
+		});
+		expect(res.error).toBeNull();
+
+		const rotated = await auth.api.getSession({ headers });
+		expect(rotated?.user.twoFactorEnabled).toBe(true);
+		expect(rotated?.session.token).not.toBe(source!.session.token);
+		expect(rotated?.session.createdAt).toEqual(createdAt);
+		const listed = await client.listSessions({ fetchOptions: { headers } });
+		expect(listed.error).toMatchObject({
+			status: 403,
+			code: "SESSION_NOT_FRESH",
+		});
+	});
+
+	it("keeps the session creation time when OTP enrollment completes", async () => {
+		const sent: string[] = [];
+		const { auth, client, db, cookieSetter } = await getTestInstance(
+			{
+				secret: DEFAULT_SECRET,
+				plugins: [
+					anonymous(),
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp }) {
+								sent.push(otp);
+							},
+						},
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const headers = new Headers();
+		await client.$fetch("/sign-in/anonymous", {
+			method: "POST",
+			onSuccess: cookieSetter(headers),
+		});
+		const source = await auth.api.getSession({ headers });
+		const createdAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+		await db.update({
+			model: "session",
+			where: [{ field: "id", value: source!.session.id }],
+			update: { createdAt },
+		});
+		const sendRes = await client.$fetch("/two-factor/send-otp", {
+			method: "POST",
+			body: {},
+			headers,
+		});
+		expect(sendRes.error).toBeNull();
+
+		const res = await client.$fetch("/two-factor/verify-otp", {
+			method: "POST",
+			body: { code: sent[0] },
+			headers,
+			onSuccess: cookieSetter(headers),
+		});
+		expect(res.error).toBeNull();
+
+		const rotated = await auth.api.getSession({ headers });
+		expect(rotated?.user.twoFactorEnabled).toBe(true);
+		expect(rotated?.session.token).not.toBe(source!.session.token);
+		expect(rotated?.session.createdAt).toEqual(createdAt);
+		const listed = await client.listSessions({ fetchOptions: { headers } });
+		expect(listed.error).toMatchObject({
+			status: 403,
+			code: "SESSION_NOT_FRESH",
+		});
+	});
+
+	it("keeps the session creation time when disabling with the password", async () => {
+		const { auth, client, db, cookieSetter, testUser, signInWithTestUser } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [twoFactor({ allowPasswordless: true })],
+			});
+		const { headers } = await signInWithTestUser();
+		const source = await auth.api.getSession({ headers });
+		const createdAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+		await db.update({
+			model: "session",
+			where: [{ field: "id", value: source!.session.id }],
+			update: { createdAt },
+		});
+
+		const res = await client.$fetch("/two-factor/disable", {
+			method: "POST",
+			body: { password: testUser.password },
+			headers,
+			onSuccess: cookieSetter(headers),
+		});
+		expect(res.error).toBeNull();
+
+		const rotated = await auth.api.getSession({ headers });
+		expect(rotated?.session.token).not.toBe(source!.session.token);
+		expect(rotated?.session.createdAt).toEqual(createdAt);
+		const listed = await client.listSessions({ fetchOptions: { headers } });
+		expect(listed.error).toMatchObject({
+			status: 403,
+			code: "SESSION_NOT_FRESH",
+		});
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/8900
  */
