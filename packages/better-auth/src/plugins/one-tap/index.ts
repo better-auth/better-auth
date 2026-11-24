@@ -31,6 +31,14 @@ export interface OneTapOptions {
 	 *
 	 * @default false
 	 */
+	disableSignUp?: boolean | undefined;
+	/**
+	 * Disable the signup flow
+	 *
+	 * @deprecated Use `disableSignUp` instead.
+	 *
+	 * @default false
+	 */
 	disableSignup?: boolean | undefined;
 	/**
 	 * Google Client ID
@@ -210,7 +218,9 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							scope: "openid,profile,email",
 						},
 						disableSignUp:
-							options?.disableSignup || googleProvider?.disableSignUp,
+							options?.disableSignUp ||
+							options?.disableSignup ||
+							googleProvider?.disableSignUp,
 						overrideUserInfo: googleProvider?.overrideUserInfoOnSignIn,
 						source: {
 							method: "oauth",

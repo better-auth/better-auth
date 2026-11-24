@@ -819,31 +819,110 @@ describe("one-tap disableSignUp", () => {
 		expect(users).toHaveLength(0);
 	});
 
-	it("keeps provider sign-up disabled when One Tap enables it", async () => {
-		verifiedPayload.email = "one-tap-signup-override@example.com";
-		verifiedPayload.sub = "one-tap-signup-override-sub";
+	it.for([{ disableSignUp: false }, { disableSignup: false }])(
+		"keeps provider sign-up disabled when One Tap enables it with %o",
+		async (options) => {
+			verifiedPayload.email = "one-tap-signup-override@example.com";
+			verifiedPayload.sub = "one-tap-signup-override-sub";
+
+			const { auth } = await getTestInstance({
+				socialProviders: {
+					google: {
+						clientId: "test-client",
+						clientSecret: "test-secret",
+						enabled: true,
+						disableSignUp: true,
+					},
+				},
+				plugins: [oneTap(options)],
+			});
+
+			await expect(
+				auth.api.oneTapCallback({
+					body: { idToken: "stub-id-token" },
+				}),
+			).rejects.toMatchObject({
+				statusCode: 401,
+				status: "UNAUTHORIZED",
+				body: { message: "signup disabled" },
+			});
+		},
+	);
+
+	it.for([{ disableSignUp: true }, { disableSignup: true }])(
+		"rejects sign-up disabled on the plugin with %o",
+		async (options) => {
+			verifiedPayload.email = "one-tap-plugin-disable-signup@example.com";
+			verifiedPayload.sub = "one-tap-plugin-disable-signup-sub";
+
+			const { auth } = await getTestInstance({
+				plugins: [
+					oneTap({
+						clientId: "test-client",
+						...options,
+					}),
+				],
+			});
+
+			await expect(
+				auth.api.oneTapCallback({
+					body: { idToken: "stub-id-token" },
+				}),
+			).rejects.toMatchObject({
+				statusCode: 401,
+				status: "UNAUTHORIZED",
+				body: { message: "signup disabled" },
+			});
+
+			const ctx = await auth.$context;
+			const users = await ctx.adapter.findMany<{ email: string }>({
+				model: "user",
+				where: [
+					{
+						field: "email",
+						value: verifiedPayload.email,
+					},
+				],
+			});
+			expect(users).toHaveLength(0);
+		},
+	);
+
+	it("signs in an existing user when the plugin disables sign-up", async () => {
+		verifiedPayload.email =
+			"one-tap-plugin-disable-signup-existing@example.com";
+		verifiedPayload.sub = "one-tap-plugin-disable-signup-existing-sub";
 
 		const { auth } = await getTestInstance({
-			socialProviders: {
-				google: {
+			plugins: [
+				oneTap({
 					clientId: "test-client",
-					clientSecret: "test-secret",
-					enabled: true,
 					disableSignUp: true,
-				},
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const user = await ctx.internalAdapter.createUser(
+			{
+				name: "Existing One Tap User",
+				email: verifiedPayload.email,
 			},
-			plugins: [oneTap({ disableSignup: false })],
+			{
+				method: "test",
+			},
+		);
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: verifiedPayload.sub,
 		});
 
-		await expect(
-			auth.api.oneTapCallback({
-				body: { idToken: "stub-id-token" },
-			}),
-		).rejects.toMatchObject({
-			statusCode: 401,
-			status: "UNAUTHORIZED",
-			body: { message: "signup disabled" },
+		const res = await auth.api.oneTapCallback({
+			body: { idToken: "stub-id-token" },
 		});
+
+		expect(res.token).toBeTruthy();
+		expect(res.user.id).toBe(user.id);
 	});
 });
 
