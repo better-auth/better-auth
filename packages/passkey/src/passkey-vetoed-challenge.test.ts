@@ -36,6 +36,9 @@ describe("passkey challenges vetoed by a verification hook", () => {
 
 		expect(res.status).toBe(500);
 		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(res.headers.get("set-cookie") ?? "").not.toContain(
+			"better-auth-passkey=",
+		);
 	});
 
 	it("does not return authentication options whose challenge was not stored", async () => {
@@ -48,5 +51,8 @@ describe("passkey challenges vetoed by a verification hook", () => {
 
 		expect(res.status).toBe(500);
 		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(res.headers.get("set-cookie") ?? "").not.toContain(
+			"better-auth-passkey=",
+		);
 	});
 });

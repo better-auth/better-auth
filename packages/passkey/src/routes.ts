@@ -382,15 +382,6 @@ export const generatePasskeyRegistrationOptions = (
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				opts.advanced.webAuthnChallengeCookie,
 			);
-			await ctx.setSignedCookie(
-				webAuthnCookie.name,
-				verificationToken,
-				ctx.context.secret,
-				{
-					...webAuthnCookie.attributes,
-					maxAge: maxAgeInSeconds,
-				},
-			);
 			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
 			const verification =
 				await ctx.context.internalAdapter.createVerificationValue({
@@ -417,6 +408,15 @@ export const generatePasskeyRegistrationOptions = (
 					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
 				);
 			}
+			await ctx.setSignedCookie(
+				webAuthnCookie.name,
+				verificationToken,
+				ctx.context.secret,
+				{
+					...webAuthnCookie.attributes,
+					maxAge: maxAgeInSeconds,
+				},
+			);
 			return ctx.json(options, {
 				status: 200,
 			});
@@ -573,15 +573,6 @@ export const generatePasskeyAuthenticationOptions = (
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				opts.advanced.webAuthnChallengeCookie,
 			);
-			await ctx.setSignedCookie(
-				webAuthnCookie.name,
-				verificationToken,
-				ctx.context.secret,
-				{
-					...webAuthnCookie.attributes,
-					maxAge: maxAgeInSeconds,
-				},
-			);
 			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
 			const verification =
 				await ctx.context.internalAdapter.createVerificationValue({
@@ -595,6 +586,15 @@ export const generatePasskeyAuthenticationOptions = (
 					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
 				);
 			}
+			await ctx.setSignedCookie(
+				webAuthnCookie.name,
+				verificationToken,
+				ctx.context.secret,
+				{
+					...webAuthnCookie.attributes,
+					maxAge: maxAgeInSeconds,
+				},
+			);
 			return ctx.json(options, {
 				status: 200,
 			});

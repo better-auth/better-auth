@@ -54,7 +54,7 @@ describe("verification records vetoed by a database hook", () => {
 		expect(sendMagicLink).not.toHaveBeenCalled();
 	});
 
-	it("does not send a password reset link that was not stored", async () => {
+	it("does not send a password reset link that was not stored, and does not reveal the account", async () => {
 		const { veto, databaseHooks } = vetoingHooks();
 		const sendResetPassword = vi.fn();
 		const { auth, testUser } = await getTestInstance({
@@ -62,13 +62,14 @@ describe("verification records vetoed by a database hook", () => {
 			emailAndPassword: { enabled: true, sendResetPassword },
 		});
 		veto.active = true;
+		const request = (email: string) =>
+			auth.api.requestPasswordReset({ body: { email }, asResponse: true });
 
-		await expectVerificationFailure(
-			await auth.api.requestPasswordReset({
-				body: { email: testUser.email },
-				asResponse: true,
-			}),
-		);
+		const known = await request(testUser.email);
+		const unknown = await request("missing@test.com");
+
+		expect(known.status).toBe(200);
+		expect(await known.json()).toEqual(await unknown.json());
 		expect(sendResetPassword).not.toHaveBeenCalled();
 	});
 

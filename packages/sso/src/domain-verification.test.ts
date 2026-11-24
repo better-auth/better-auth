@@ -1070,7 +1070,7 @@ describe("domain verification tokens vetoed by a verification hook", () => {
 		return { auth, headers, veto, register };
 	}
 
-	it("does not return a registration token that was not stored", async () => {
+	it("does not register a provider whose token was not stored", async () => {
 		const { veto, register } = await setup();
 		veto.active = true;
 
@@ -1078,6 +1078,12 @@ describe("domain verification tokens vetoed by a verification hook", () => {
 
 		expect(res.status).toBe(500);
 		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		veto.active = false;
+		const retry = await register();
+		expect(retry.status).toBe(200);
+		expect((await retry.json()).domainVerificationToken).toEqual(
+			expect.any(String),
+		);
 	});
 
 	it("does not return a requested token that was not stored", async () => {

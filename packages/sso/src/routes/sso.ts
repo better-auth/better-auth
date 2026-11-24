@@ -733,7 +733,12 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						value: domainVerificationToken as string,
 						expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
 					});
+				// Remove the provider so a retry can register it again.
 				if (!verification) {
+					await ctx.context.adapter.delete({
+						model: "ssoProvider",
+						where: [{ field: "providerId", value: provider.providerId }],
+					});
 					throw APIError.from(
 						"INTERNAL_SERVER_ERROR",
 						BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
