@@ -435,6 +435,101 @@ ${extraModels}`;
 			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/12896
+		 */
+		it("adds a missing back-relation under the relation name of the owning side", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: "accounts      Account[]",
+					sessionRelations: `userId    String
+  user      User     @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)`,
+				}),
+			);
+
+			expect(code).toMatch(
+				/^\s*sessions\s+Session\[\]\s+@relation\("UserSessions"\)\s*$/m,
+			);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/12896
+		 */
+		it("adds a missing optional back-relation under the relation name of a unique foreign key", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `accounts      Account[]
+  sessions      Session[]`,
+					extraModels: `
+model Profile {
+  id     String @id
+  userId String @unique
+  user   User   @relation("User \\"Profile\\"", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profile")
+}
+`,
+				}),
+				{
+					plugins: [
+						{
+							id: "profile",
+							schema: {
+								profile: {
+									fields: {
+										userId: {
+											type: "string",
+											required: true,
+											unique: true,
+											references: {
+												model: "user",
+												field: "id",
+											},
+										},
+									},
+								},
+							},
+						},
+					],
+				},
+			);
+
+			expect(code).toMatch(
+				/^\s*profile\s+Profile\?\s+@relation\("User \\"Profile\\""\)\s*$/m,
+			);
+			expect(userFieldsOfType(code, "Profile")).toHaveLength(1);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/12896
+		 */
+		it("takes the relation name from the relation to this model when a composite key shares the foreign key", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: "accounts      Account[]",
+					sessionRelations: `tenantId     String?
+  tenantMember TenantMember? @relation("SessionTenantMember", fields: [tenantId, userId], references: [tenantId, userId])
+  userId       String
+  user         User          @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)`,
+					extraModels: `
+model TenantMember {
+  tenantId String
+  userId   String
+  sessions Session[] @relation("SessionTenantMember")
+
+  @@id([tenantId, userId])
+}
+`,
+				}),
+			);
+
+			expect(code).toMatch(
+				/^\s*sessions\s+Session\[\]\s+@relation\("UserSessions"\)\s*$/m,
+			);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
 		const revokedBy = `revokedById String?
   revokedBy   User?    @relation("RevokedBy", fields: [revokedById], references: [id])`;
 		const ownedSession = `userId    String

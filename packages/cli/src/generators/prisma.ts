@@ -736,13 +736,16 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						within: prismaModel?.properties,
 					});
 					// Users may name the back-relation anything, so pair it by relation
-					// name with the field that stores this foreign key. A missing one is
-					// generated unnamed.
+					// name with the field that stores this foreign key. A missing one
+					// takes that relation name, or Prisma cannot pair the two sides.
 					const foreignKey = fkFieldAttr?.fieldName || fkFieldKey;
 					const relationName = readRelations(
 						builder.findByType("model", { name: relatedModel }),
-					).find((relation) =>
-						relation.fields.some((field) => field === foreignKey),
+					).find(
+						(relation) =>
+							relation.type === modelName &&
+							relation.fields.length === 1 &&
+							relation.fields[0] === foreignKey,
 					)?.name;
 					const existingBackRelation = readRelations(prismaModel).some(
 						(relation) =>
@@ -751,9 +754,13 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							relation.name === relationName,
 					);
 					if (!existingField && !existingBackRelation) {
-						builder
+						const backRelation = builder
 							.model(modelName)
 							.field(fieldName, `${relatedModel}${isUnique ? "?" : "[]"}`);
+						if (relationName !== undefined) {
+							// The parsed name is the quoted literal from the schema.
+							backRelation.attribute(`relation(${relationName})`);
+						}
 					}
 				}
 			}
