@@ -571,25 +571,26 @@ export type ModelTarget = {
  * Default adapters always receive a number. Adapters that set
  * `supportsUnboundedFindMany: true` may omit `limit`, which means unbounded.
  */
-export type CustomAdapterFindManyLimit<Unbounded extends boolean = false> =
-	Unbounded extends true
-		? {
-				/**
-				 * Maximum rows to return.
-				 *
-				 * Omitted means unbounded. A number, including `0`, is a hard cap
-				 * (`0` returns no rows).
-				 */
-				limit?: number | undefined;
-			}
-		: {
-				/**
-				 * Maximum rows to return.
-				 *
-				 * The factory always passes a number. `0` returns no rows.
-				 */
-				limit: number;
-			};
+export type CustomAdapterFindManyLimit<Unbounded extends boolean = false> = [
+	Unbounded,
+] extends [true]
+	? {
+			/**
+			 * Maximum rows to return.
+			 *
+			 * Omitted means unbounded. A number, including `0`, is a hard cap
+			 * (`0` returns no rows).
+			 */
+			limit?: number | undefined;
+		}
+	: {
+			/**
+			 * Maximum rows to return.
+			 *
+			 * The factory always passes a number. `0` returns no rows.
+			 */
+			limit: number;
+		};
 
 export interface CustomAdapter<Unbounded extends boolean = false> {
 	create: <T extends Record<string, any>>({

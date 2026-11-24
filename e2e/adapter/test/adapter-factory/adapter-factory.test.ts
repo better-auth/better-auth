@@ -110,8 +110,11 @@ async function createTestAdapter<Options extends BetterAuthOptions>(
 				async incrementOne(data) {
 					return x.incrementOne?.(data) ?? null;
 				},
-				async findMany(data) {
-					return x.findMany?.(data) ?? [];
+				async findMany<T>(
+					data: Parameters<CustomAdapter["findMany"]>[0],
+				): Promise<T[]> {
+					const rows = await x.findMany?.(data);
+					return (rows ?? []) as T[];
 				},
 				async findOne(data) {
 					return x.findOne?.(data) ?? null;

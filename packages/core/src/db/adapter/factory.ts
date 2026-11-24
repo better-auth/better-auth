@@ -71,7 +71,7 @@ export const createAdapterFactory = (<Options extends BetterAuthOptions>({
 	config: cfg,
 }: {
 	config: AdapterFactoryConfig;
-	adapter: AdapterFactoryCustomizeAdapterCreator<boolean>;
+	adapter: AdapterFactoryCustomizeAdapterCreator<true>;
 }): AdapterFactory<Options> =>
 	(options: Options): DBAdapter<Options> => {
 		const withSpan = createWithSpan(options);
