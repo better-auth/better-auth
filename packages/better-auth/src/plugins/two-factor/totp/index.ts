@@ -4,7 +4,6 @@ import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
-import { setSessionCookie } from "../../../cookies";
 import type { SymmetricDecryptOptions } from "../../../crypto";
 import { symmetricDecrypt } from "../../../crypto";
 import { shouldRequirePassword } from "../../../utils/password";
@@ -12,6 +11,7 @@ import { PACKAGE_VERSION } from "../../../version";
 import type { BackupCodeOptions } from "../backup-codes";
 import { DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS } from "../constant";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { replaceSession } from "../session";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
@@ -353,17 +353,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 							twoFactorEnabled: true,
 						},
 					);
-					const newSession = await ctx.context.internalAdapter.createSession(
-						user.id,
-						false,
-						activeSession,
-					);
-
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
-					await ctx.context.internalAdapter.deleteSession(activeSession.token);
+					await replaceSession(ctx, activeSession, updatedUser);
 				}
 				// Mark verified only after all session operations succeed.
 				// This keeps the gate on twoFactorEnabled (retry-safe) and ensures

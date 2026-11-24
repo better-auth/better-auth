@@ -16,11 +16,7 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import { isSessionOutsideStore } from "../../api/state/session-source";
-import {
-	deleteSessionCookie,
-	expireCookie,
-	setSessionCookie,
-} from "../../cookies";
+import { deleteSessionCookie, expireCookie } from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
@@ -36,6 +32,7 @@ import {
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
 import { schema } from "./schema";
+import { replaceSession } from "./session";
 import { totp2fa } from "./totp";
 import type {
 	TwoFactorOptions,
@@ -324,18 +321,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								twoFactorEnabled: true,
 							},
 						);
-						const newSession = await ctx.context.internalAdapter.createSession(
-							updatedUser.id,
-							false,
-							ctx.context.session.session,
-						);
-						await setSessionCookie(ctx, {
-							session: newSession,
-							user: updatedUser,
-						});
-						await ctx.context.internalAdapter.deleteSession(
-							ctx.context.session.session.token,
-						);
+						await replaceSession(ctx, ctx.context.session.session, updatedUser);
 						return ctx.json({ method: "otp" as const });
 					}
 
@@ -366,18 +352,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								twoFactorEnabled: true,
 							},
 						);
-						const newSession = await ctx.context.internalAdapter.createSession(
-							updatedUser.id,
-							false,
-							ctx.context.session.session,
-						);
-						await setSessionCookie(ctx, {
-							session: newSession,
-							user: updatedUser,
-						});
-						await ctx.context.internalAdapter.deleteSession(
-							ctx.context.session.session.token,
-						);
+						await replaceSession(ctx, ctx.context.session.session, updatedUser);
 					}
 					const totpData = {
 						secret: encryptedSecret,
@@ -498,22 +473,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							},
 						],
 					});
-					const newSession = await ctx.context.internalAdapter.createSession(
-						updatedUser.id,
-						false,
-						ctx.context.session.session,
-					);
-					/**
-					 * Update the session cookie with the new user data
-					 */
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
-					//remove current session
-					await ctx.context.internalAdapter.deleteSession(
-						ctx.context.session.session.token,
-					);
+					await replaceSession(ctx, ctx.context.session.session, updatedUser);
 					const disableTrustCookie = ctx.context.createAuthCookie(
 						TRUST_DEVICE_COOKIE_NAME,
 						{
