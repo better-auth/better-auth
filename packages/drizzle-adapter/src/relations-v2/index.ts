@@ -281,7 +281,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	const getRelationKeysByModel = () =>
 		(relationKeysByModel ??= buildRelationKeysByModel(db._?.relations));
 	const createCustomAdapter =
-		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
+		(
+			db: DB,
+			inTransaction = false,
+		): AdapterFactoryCustomizeAdapterCreator<true> =>
 		({ getFieldName, getDefaultModelName, options, schema: baSchema }) => {
 			if (
 				config.provider === "mysql" &&
@@ -1160,7 +1163,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				options: config,
 			};
 		};
-	let adapterOptions: AdapterFactoryOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions<true> | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "drizzle",

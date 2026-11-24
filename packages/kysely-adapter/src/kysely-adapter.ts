@@ -83,7 +83,7 @@ export const kyselyAdapter = (
 	const createCustomAdapter = (
 		db: Kysely<any>,
 		inTransaction = false,
-	): AdapterFactoryCustomizeAdapterCreator => {
+	): AdapterFactoryCustomizeAdapterCreator<true> => {
 		return ({
 			getFieldName,
 			schema,
@@ -1074,7 +1074,7 @@ export const kyselyAdapter = (
 			};
 		};
 	};
-	let adapterOptions: AdapterFactoryOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions<true> | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "kysely",

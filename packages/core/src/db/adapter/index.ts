@@ -127,7 +127,10 @@ export interface DBAdapterFactoryConfig<
 	 *
 	 * When `false` (default), public `findMany({ limit: null })` still returns
 	 * every matching row: the factory counts, then calls `findMany` with that
-	 * total as `limit` (up to two database calls).
+	 * total as `limit` (up to two database calls). `CustomAdapter.findMany`
+	 * still receives a required `number`.
+	 *
+	 * When `true`, `CustomAdapter.findMany` types `limit` as optional.
 	 *
 	 * @default false
 	 */
@@ -562,7 +565,33 @@ export type ModelTarget = {
 	modelKey?: string | undefined;
 };
 
-export interface CustomAdapter {
+/**
+ * `findMany` limit on the inner adapter.
+ *
+ * Default adapters always receive a number. Adapters that set
+ * `supportsUnboundedFindMany: true` may omit `limit`, which means unbounded.
+ */
+export type CustomAdapterFindManyLimit<Unbounded extends boolean = false> =
+	Unbounded extends true
+		? {
+				/**
+				 * Maximum rows to return.
+				 *
+				 * Omitted means unbounded. A number, including `0`, is a hard cap
+				 * (`0` returns no rows).
+				 */
+				limit?: number | undefined;
+			}
+		: {
+				/**
+				 * Maximum rows to return.
+				 *
+				 * The factory always passes a number. `0` returns no rows.
+				 */
+				limit: number;
+			};
+
+export interface CustomAdapter<Unbounded extends boolean = false> {
 	create: <T extends Record<string, any>>({
 		data,
 		model,
@@ -603,20 +632,11 @@ export interface CustomAdapter {
 		join,
 	}: ModelTarget & {
 		where?: CleanedWhere[] | undefined;
-		/**
-		 * Maximum rows to return.
-		 *
-		 * The factory always passes a number unless this adapter set
-		 * `supportsUnboundedFindMany` and the public caller passed `limit: null`.
-		 * Omitted then means unbounded. A number, including `0`, is a hard cap
-		 * (`0` returns no rows).
-		 */
-		limit?: number | undefined;
 		select?: string[] | undefined;
 		sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
 		offset?: number | undefined;
 		join?: JoinConfig | undefined;
-	}) => Promise<T[]>;
+	} & CustomAdapterFindManyLimit<Unbounded>) => Promise<T[]>;
 	delete: ({
 		model,
 		where,

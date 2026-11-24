@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
 import type { CleanedWhere, CustomAdapter, Where } from "./index";
@@ -536,7 +536,7 @@ describe("createAdapterFactory findMany limit", () => {
 	});
 
 	it("omits CustomAdapter limit when public limit is null and the adapter is unbounded", async () => {
-		let seen: Parameters<CustomAdapter["findMany"]>[0] | undefined;
+		let seen: Parameters<CustomAdapter<true>["findMany"]>[0] | undefined;
 		let countCalls = 0;
 		const adapter = createLimitAdapter({
 			onFindMany: (params) => {
@@ -553,6 +553,36 @@ describe("createAdapterFactory findMany limit", () => {
 		expect(seen && "limit" in seen).toBe(false);
 		expect(seen?.limit).toBeUndefined();
 		expect(seen?.offset).toBe(2);
+	});
+
+	it("types findMany limit as required unless the adapter is unbounded", () => {
+		createAdapterFactory({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+			},
+			adapter: () => ({
+				...createCustomAdapter(),
+				findMany: async ({ limit }) => {
+					expectTypeOf(limit).toEqualTypeOf<number>();
+					return [];
+				},
+			}),
+		});
+		createAdapterFactory({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				supportsUnboundedFindMany: true,
+			},
+			adapter: () => ({
+				...createCustomAdapter(),
+				findMany: async ({ limit }) => {
+					expectTypeOf(limit).toEqualTypeOf<number | undefined>();
+					return [];
+				},
+			}),
+		});
 	});
 });
 

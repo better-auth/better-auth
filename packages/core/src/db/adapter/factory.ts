@@ -25,6 +25,7 @@ import type {
 } from "./index";
 import type {
 	AdapterFactoryConfig,
+	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 } from "./types";
@@ -52,11 +53,26 @@ export type AdapterFactory<Options extends BetterAuthOptions> = (
 	options: Options,
 ) => DBAdapter<Options>;
 
-export const createAdapterFactory =
-	<Options extends BetterAuthOptions>({
-		adapter: customAdapter,
-		config: cfg,
-	}: AdapterFactoryOptions): AdapterFactory<Options> =>
+type CreateAdapterFactoryFn = {
+	<Options extends BetterAuthOptions>(
+		options: AdapterFactoryOptions<true>,
+	): AdapterFactory<Options>;
+	<Options extends BetterAuthOptions>(
+		options: AdapterFactoryOptions<false>,
+	): AdapterFactory<Options>;
+	<Options extends BetterAuthOptions>(options: {
+		config: AdapterFactoryConfig;
+		adapter: AdapterFactoryCustomizeAdapterCreator<boolean>;
+	}): AdapterFactory<Options>;
+};
+
+export const createAdapterFactory = (<Options extends BetterAuthOptions>({
+	adapter: customAdapter,
+	config: cfg,
+}: {
+	config: AdapterFactoryConfig;
+	adapter: AdapterFactoryCustomizeAdapterCreator<boolean>;
+}): AdapterFactory<Options> =>
 	(options: Options): DBAdapter<Options> => {
 		const withSpan = createWithSpan(options);
 		const uniqueAdapterFactoryInstanceId = Math.random()
@@ -1691,7 +1707,7 @@ export const createAdapterFactory =
 				: {}),
 		};
 		return adapter;
-	};
+	}) as CreateAdapterFactoryFn;
 
 function formatTransactionId(transactionId: number) {
 	if (getColorDepth() < 8) {

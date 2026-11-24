@@ -91,7 +91,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		(
 			prisma: PrismaClient,
 			inTransaction = false,
-		): AdapterFactoryCustomizeAdapterCreator =>
+		): AdapterFactoryCustomizeAdapterCreator<true> =>
 		({
 			getFieldName,
 			getModelName,
@@ -881,7 +881,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			};
 		};
 
-	let adapterOptions: AdapterFactoryOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions<true> | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "prisma",

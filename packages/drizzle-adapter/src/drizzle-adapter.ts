@@ -191,7 +191,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	const getRelationKeysByModel = () =>
 		(relationKeysByModel ??= buildRelationKeysByModel(db._?.schema));
 	const createCustomAdapter =
-		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
+		(
+			db: DB,
+			inTransaction = false,
+		): AdapterFactoryCustomizeAdapterCreator<true> =>
 		({
 			getFieldName,
 			getDefaultFieldName,
@@ -1224,7 +1227,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				options: config,
 			};
 		};
-	let adapterOptions: AdapterFactoryOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions<true> | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "drizzle",

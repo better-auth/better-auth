@@ -179,7 +179,7 @@ export const mongodbAdapter = (
 		(
 			db: Db,
 			session?: ClientSession | undefined,
-		): AdapterFactoryCustomizeAdapterCreator =>
+		): AdapterFactoryCustomizeAdapterCreator<true> =>
 		({ getFieldAttributes, getFieldName, getModelName, schema, options }) => {
 			const customIdGen = getCustomIdGenerator(options);
 			const useUUIDs = options.advanced?.database?.generateId === "uuid";
@@ -1044,7 +1044,7 @@ export const mongodbAdapter = (
 	let lazyAdapter:
 		| ((options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>)
 		| null = null;
-	let adapterOptions: AdapterFactoryOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions<true> | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "mongodb-adapter",
