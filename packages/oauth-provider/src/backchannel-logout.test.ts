@@ -612,6 +612,14 @@ describe("oauth back-channel logout", async () => {
 		);
 		expect(narrowedRow).toBeDefined();
 
+		const liveOfflineIds = (rows: RefreshRow[]) =>
+			rows
+				.filter((row) => row.scopes.includes("offline_access") && !row.revoked)
+				.map((row) => row.id)
+				.sort();
+		const offlineBefore = liveOfflineIds(refreshBefore);
+		expect(offlineBefore.length).toBeGreaterThan(0);
+
 		await client.signOut({ fetchOptions: { headers } });
 		await waitForDispatches();
 
@@ -627,11 +635,7 @@ describe("oauth back-channel logout", async () => {
 		expect(
 			refreshAfter.find((t) => t.id === narrowedRow!.id)?.revoked,
 		).toBeInstanceOf(Date);
-		// Offline access refresh tokens must survive (spec §2.7)
-		const offlineAfter = refreshAfter.filter(
-			(t) => t.scopes.includes("offline_access") && !t.revoked,
-		);
-		expect(offlineAfter.length).toBeGreaterThan(0);
+		expect(liveOfflineIds(refreshAfter)).toEqual(offlineBefore);
 	});
 
 	it("revokes access tokens on session end even when no refresh token was issued", async () => {

@@ -2836,3 +2836,261 @@ describe("updateUser with a request that has no body", async () => {
 		},
 	);
 });
+
+describe("phone-number verification rows", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10449
+	 */
+	it.for([
+		["send-otp", "phone-number-otp-"],
+		["request-password-reset", "phone-number-reset-"],
+		["sign-in", "phone-number-otp-"],
+	] as const)(
+		"keeps one row per identifier when %s is requested again",
+		async ([route, prefix]) => {
+			const { client, db } = await getTestInstance(
+				{
+					plugins: [
+						phoneNumber({
+							async sendOTP() {},
+							async sendPasswordResetOTP() {},
+							requireVerification: route === "sign-in",
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [phoneNumberClient()] } },
+			);
+			const number = "+15550000001";
+			const password = "password123";
+			const signUp = await client.signUp.email({
+				email: "rows@example.com",
+				password,
+				name: "rows",
+			});
+			await db.update({
+				model: "user",
+				where: [{ field: "id", value: signUp.data!.user.id }],
+				update: { phoneNumber: number },
+			});
+			const request = () => {
+				if (route === "send-otp") {
+					return client.phoneNumber.sendOtp({ phoneNumber: number });
+				}
+				if (route === "request-password-reset") {
+					return client.phoneNumber.requestPasswordReset({
+						phoneNumber: number,
+					});
+				}
+				return client.signIn.phoneNumber({ phoneNumber: number, password });
+			};
+			await request();
+			await request();
+
+			const rows = await db.findMany({
+				model: "verification",
+				where: [{ field: "identifier", value: `${prefix}${number}` }],
+			});
+			expect(rows).toHaveLength(1);
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10449
+	 */
+	it("reports an unregistered number when sign-up on verification is off", async () => {
+		let code = "";
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code: sent }) {
+							code = sent;
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [phoneNumberClient()] } },
+		);
+		const number = "+15550000002";
+		await client.phoneNumber.sendOtp({ phoneNumber: number });
+
+		const res = await client.phoneNumber.verify({ phoneNumber: number, code });
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PHONE_NUMBER_NOT_EXIST");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
+	it("accepts the newest code sent while a wrong guess is checked", async () => {
+		const number = "+15550000003";
+		const codes: string[] = [];
+		let sendDuringCheck = false;
+		const { client, auth } = await getTestInstance(
+			{
+				databaseHooks: {
+					verification: {
+						delete: {
+							// Runs once the wrong guess has consumed the stored code.
+							async after() {
+								if (!sendDuringCheck) return;
+								sendDuringCheck = false;
+								vi.setSystemTime(new Date("2026-01-01T00:00:02.000Z"));
+								await auth.api.sendPhoneNumberOTP({
+									body: { phoneNumber: number },
+								});
+								vi.setSystemTime(new Date("2026-01-01T00:00:03.000Z"));
+							},
+						},
+					},
+				},
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							codes.push(code);
+						},
+						signUpOnVerification: {
+							getTempEmail: (phoneNumber) => `${phoneNumber}@example.com`,
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [phoneNumberClient()] } },
+		);
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
+
+		sendDuringCheck = true;
+		vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
+		const guess = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[0] === "000000" ? "111111" : "000000",
+		});
+
+		expect(codes).toHaveLength(2);
+		expect(guess.error?.code).toBe("INVALID_OTP");
+		const latest = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[1]!,
+		});
+		expect(latest.data?.status).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
+	it("keeps a code sent while an exhausted code is checked", async () => {
+		const number = "+15550000004";
+		const codes: string[] = [];
+		let sendDuringCheck = false;
+		const { client, auth } = await getTestInstance(
+			{
+				databaseHooks: {
+					verification: {
+						delete: {
+							async before() {
+								if (!sendDuringCheck) return;
+								sendDuringCheck = false;
+								await auth.api.sendPhoneNumberOTP({
+									body: { phoneNumber: number },
+								});
+							},
+						},
+					},
+				},
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							codes.push(code);
+						},
+						signUpOnVerification: {
+							getTempEmail: (phoneNumber) => `${phoneNumber}@example.com`,
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [phoneNumberClient()] } },
+		);
+		await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
+		const wrong = codes[0] === "000000" ? "111111" : "000000";
+		for (let i = 0; i < 3; i++) {
+			const res = await client.phoneNumber.verify({
+				phoneNumber: number,
+				code: wrong,
+			});
+			expect(res.error?.code).toBe("INVALID_OTP");
+		}
+
+		sendDuringCheck = true;
+		const exhausted = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: wrong,
+		});
+
+		expect(codes).toHaveLength(2);
+		expect(exhausted.error?.code).toBe("INVALID_OTP");
+		const latest = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[1]!,
+		});
+		expect(latest.data?.status).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
+	it("keeps every delivered code valid when concurrent sends collide", async () => {
+		const number = "+15550000005";
+		let arrivals = 0;
+		let openBarrier: () => void = () => {};
+		const barrier = new Promise<void>((resolve) => {
+			openBarrier = resolve;
+		});
+		const codes: string[] = [];
+		const { client, auth } = await getTestInstance(
+			{
+				databaseHooks: {
+					verification: {
+						create: {
+							// Hold the first two inserts until both requests reach them.
+							async before() {
+								arrivals++;
+								if (arrivals === 2) openBarrier();
+								if (arrivals <= 2) await barrier;
+							},
+						},
+					},
+				},
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							codes.push(code);
+						},
+						signUpOnVerification: {
+							getTempEmail: (phoneNumber) => `${phoneNumber}@example.com`,
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [phoneNumberClient()] } },
+		);
+
+		await Promise.all([
+			auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } }),
+			auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } }),
+		]);
+
+		expect(codes).toHaveLength(2);
+		expect(codes[1]).toBe(codes[0]);
+		const res = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[0]!,
+		});
+		expect(res.data?.status).toBe(true);
+	});
+});

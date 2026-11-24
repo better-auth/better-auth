@@ -88,7 +88,10 @@ async function createVerifier(
 			updatedAt: new Date(),
 		},
 	});
-	const verify = async (kid: string | null = "stale-key") =>
+	const verify = async (
+		kid: string | null = "stale-key",
+		signingKey = privateKey,
+	) =>
 		verifyClientAssertion(
 			{ context } as unknown as GenericEndpointContext,
 			opts,
@@ -100,7 +103,7 @@ async function createVerifier(
 				.setIssuedAt()
 				.setExpirationTime("2m")
 				.setJti(crypto.randomUUID())
-				.sign(privateKey),
+				.sign(signingKey),
 			CLIENT_ASSERTION_TYPE,
 			clientId,
 			audience,
@@ -504,6 +507,40 @@ describe("jwksStaleIfError on a client discovery", () => {
 			});
 		},
 	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/12824
+	 */
+	it("uses keys refreshed by another request while its own fetch was pending", async () => {
+		const verifier = await createVerifier({ jwksStaleIfError: 3_600 });
+		const rotated = await generateKeyPair("RS256", { extractable: true });
+		const jwk = await exportJWK(rotated.publicKey);
+		vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
+		await verifier.verify();
+
+		vi.setSystemTime(START_MS + 61 * MINUTE_MS);
+		const pending = Promise.withResolvers<Response>();
+		const started = Promise.withResolvers<void>();
+		verifier.transport.mockImplementationOnce(() => {
+			started.resolve();
+			return pending.promise;
+		});
+		const first = verifier.verify("rotated-key", rotated.privateKey);
+		try {
+			await started.promise;
+			vi.setSystemTime(Date.now() + 5_000);
+			verifier.transport.mockResolvedValueOnce(
+				Response.json({ keys: [{ ...jwk, kid: "rotated-key", alg: "RS256" }] }),
+			);
+			await expect(
+				verifier.verify("rotated-key", rotated.privateKey),
+			).resolves.toMatchObject({ clientId: verifier.clientId });
+		} finally {
+			pending.resolve(new Response(null, { status: 503 }));
+		}
+		await expect(first).resolves.toMatchObject({ clientId: verifier.clientId });
+		expect(verifier.transport).toHaveBeenCalledTimes(3);
+	});
 
 	it("keeps a terminal failure when an older fetch of the keys succeeds after it", async () => {
 		const verifier = await createVerifier({ jwksStaleIfError: 3_600 });

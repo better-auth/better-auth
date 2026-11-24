@@ -8,6 +8,7 @@ export const pt: TranslationDictionary = {
 	FAILED_TO_CREATE_USER: "Falha ao criar usuário",
 	FAILED_TO_CREATE_SESSION: "Falha ao criar sessão",
 	FAILED_TO_UPDATE_USER: "Falha ao atualizar usuário",
+	FAILED_TO_DELETE_USER: "Falha ao excluir usuário",
 	FAILED_TO_GET_SESSION: "Falha ao obter sessão",
 	INVALID_PASSWORD: "Senha inválida",
 	INVALID_EMAIL: "E-mail inválido",

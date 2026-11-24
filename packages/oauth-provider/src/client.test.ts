@@ -4,7 +4,7 @@ import { oauthProviderClient } from "./client";
 import { setSignedOAuthQueryParameterNames } from "./signed-query";
 
 describe("oauthProviderClient", async () => {
-	const { client } = await getTestInstance(
+	const { auth, client } = await getTestInstance(
 		{},
 		{
 			clientOptions: {
@@ -119,6 +119,21 @@ describe("oauthProviderClient", async () => {
 
 			expect(Object.keys(sent)).toEqual(["oauth_query"]);
 			expectSignedQuery(sent.oauth_query);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12072
+		 */
+		it("sends a request without a body as JSON the server accepts", async () => {
+			stubSignedPage();
+
+			const { error } = await client.$fetch("/sign-out", {
+				method: "POST",
+				customFetchImpl: (input, init) =>
+					auth.handler(new Request(input, init)),
+			});
+
+			expect(error).toBeNull();
 		});
 
 		/**

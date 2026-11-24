@@ -383,6 +383,10 @@ async function deleteCurrentUser(ctx: GenericEndpointContext, user: User) {
 	}
 	// Also deletes the user's accounts and stored sessions.
 	await ctx.context.internalAdapter.deleteUser(user.id);
+	const remaining = await ctx.context.internalAdapter.findUserById(user.id);
+	if (remaining) {
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.FAILED_TO_DELETE_USER);
+	}
 	await ctx.context.internalAdapter.deleteUserSessions(user.id);
 	deleteSessionCookie(ctx);
 	const afterDelete = ctx.context.options.user?.deleteUser?.afterDelete;

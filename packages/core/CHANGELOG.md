@@ -158,6 +158,20 @@
 
 ## 1.8.0-beta.0
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12806](https://github.com/better-auth/better-auth/pull/12806) [`47a77c0`](https://github.com/better-auth/better-auth/commit/47a77c0fd36b89db20019ecb60223471e6b6f794) Thanks [@bytaesu](https://github.com/bytaesu)! - After-commit hooks queued with `onError` now still run when an earlier queued hook throws.
+
+- [#12858](https://github.com/better-auth/better-auth/pull/12858) [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7) Thanks [@bytaesu](https://github.com/bytaesu)! - Deleting a user no longer reports success when a database read fails, a `user.delete.before` hook vetoes the delete, or the database skips it without an error. A failed read now surfaces as an error. A veto or a skipped delete answers `FAILED_TO_DELETE_USER` and keeps the user's sessions and accounts, on databases with transactions for a skipped delete. `user.delete.before` now runs before the session and account deletes.
+
+- [#12850](https://github.com/better-auth/better-auth/pull/12850) [`ddec4d7`](https://github.com/better-auth/better-auth/commit/ddec4d7c4630681eb18fec2284fd80ea02f50291) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A timed-out JWKS refresh no longer blocks a refresh against a newer cached key set.
+
+- [#12858](https://github.com/better-auth/better-auth/pull/12858) [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7) Thanks [@bytaesu](https://github.com/bytaesu)! - Revoking all of a user's sessions now fails when `secondaryStorage` cannot clean up the cached sessions, after the remaining delete hooks have run. Previously the call reported success, and the cached sessions could keep working until they expired.
+
+- [#12905](https://github.com/better-auth/better-auth/pull/12905) [`a879d3d`](https://github.com/better-auth/better-auth/commit/a879d3daa2e778d8ce4b13f4028c4519d017fa1b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed the Drizzle schema check being dropped when a project resolves two copies of `@better-auth/core`, for example one per `better-call` peer version. Schema checks registered by an adapter are now visible to every copy that includes this fix.
+
 ## 1.7.27
 
 ### Patch Changes

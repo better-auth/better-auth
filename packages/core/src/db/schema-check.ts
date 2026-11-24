@@ -5,6 +5,7 @@
  * adapter authors once the registration and lifecycle contracts are stabilized.
  */
 
+import { __getBetterAuthGlobal } from "../context/global";
 import { isWorkerd } from "../env";
 import type { Awaitable, BetterAuthOptions } from "../types";
 import type { SchemaFinding, SchemaSource } from "./schema-diff";
@@ -26,11 +27,27 @@ export type SchemaCheck = (() => Promise<void> | undefined) & {
 	source?: SchemaSource;
 };
 
-const schemaChecks = new WeakMap<
-	object,
-	{ check: SchemaCheck; runtimeEnabled: boolean }
->();
-const schemaRevisions = new WeakMap<object, { value: number }>();
+type SchemaCheckRegistration = { check: SchemaCheck; runtimeEnabled: boolean };
+
+/**
+ * Package managers can resolve several copies of `@better-auth/core`, such as
+ * one per `better-call` peer. The adapter registers in one copy and the
+ * runtime reads another, so the registry lives on the shared global.
+ */
+function schemaRegistry() {
+	const shared = __getBetterAuthGlobal();
+	shared.schemaRegistry ??= {
+		checks: new WeakMap(),
+		revisions: new WeakMap(),
+	};
+	return {
+		checks: shared.schemaRegistry.checks as WeakMap<
+			object,
+			SchemaCheckRegistration
+		>,
+		revisions: shared.schemaRegistry.revisions,
+	};
+}
 
 type SchemaCheckRegistrationOptions = {
 	runtimeEnabled?: boolean;
@@ -38,7 +55,7 @@ type SchemaCheckRegistrationOptions = {
 
 /** Invalidates cached checks after Better Auth changes this database's schema. */
 export function invalidateSchemaChecks(database: object): void {
-	const revision = schemaRevisions.get(database);
+	const revision = schemaRegistry().revisions.get(database);
 	if (revision) revision.value++;
 }
 
@@ -52,14 +69,14 @@ export function registerSchemaCheck(
 	options: SchemaCheckRegistrationOptions = {},
 ): void {
 	const runtimeEnabled = options.runtimeEnabled ?? true;
-	schemaChecks.set(adapter, { check, runtimeEnabled });
+	schemaRegistry().checks.set(adapter, { check, runtimeEnabled });
 }
 
 /**
  * The registered check, regardless of whether runtime validation is enabled.
  */
 export function schemaCheckFor(adapter: object): SchemaCheck | undefined {
-	return schemaChecks.get(adapter)?.check;
+	return schemaRegistry().checks.get(adapter)?.check;
 }
 
 /**
@@ -68,7 +85,7 @@ export function schemaCheckFor(adapter: object): SchemaCheck | undefined {
 export function runtimeSchemaCheckFor(
 	adapter: object,
 ): SchemaCheck | undefined {
-	const registration = schemaChecks.get(adapter);
+	const registration = schemaRegistry().checks.get(adapter);
 	return registration?.runtimeEnabled ? registration.check : undefined;
 }
 
@@ -100,10 +117,11 @@ export function createSchemaCheck(
 	source: SchemaSource,
 	database?: object,
 ): SchemaCheck {
+	const revisions = schemaRegistry().revisions;
 	const revision = database
-		? (schemaRevisions.get(database) ?? { value: 0 })
+		? (revisions.get(database) ?? { value: 0 })
 		: undefined;
-	if (database && revision) schemaRevisions.set(database, revision);
+	if (database && revision) revisions.set(database, revision);
 
 	// Workers tie I/O to the request that started it, so a lookup begun by
 	// another request may never settle there.

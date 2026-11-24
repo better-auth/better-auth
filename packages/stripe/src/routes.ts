@@ -24,9 +24,12 @@ import type {
 	WithStripeCustomerId,
 } from "./types";
 import {
+	activeOrTrialingStatusWhere,
 	escapeStripeSearchValue,
+	findActiveOrTrialingSubscription,
 	getPlanByName,
 	getPlans,
+	hasReferenceEverTrialed,
 	isActiveOrTrialing,
 	isPendingCancel,
 	resolvePlanItem,
@@ -535,21 +538,36 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				}
 			}
 
-			const subscriptions = subscriptionToUpdate
-				? [subscriptionToUpdate]
-				: await ctx.context.adapter.findMany<Subscription>({
-						model: "subscription",
-						where: [
-							{
-								field: "referenceId",
-								value: referenceId,
-							},
-						],
-					});
-
-			const activeOrTrialingSubscription = subscriptions.find((sub) =>
-				isActiveOrTrialing(sub),
-			);
+			let activeOrTrialingSubscription: Subscription | null | undefined;
+			let incompleteSubscription: Subscription | null | undefined;
+			if (subscriptionToUpdate) {
+				if (isActiveOrTrialing(subscriptionToUpdate)) {
+					activeOrTrialingSubscription = subscriptionToUpdate;
+				} else if (subscriptionToUpdate.status === "incomplete") {
+					incompleteSubscription = subscriptionToUpdate;
+				}
+			} else {
+				activeOrTrialingSubscription = await findActiveOrTrialingSubscription(
+					ctx.context.adapter,
+					referenceId,
+				);
+				if (!activeOrTrialingSubscription) {
+					incompleteSubscription =
+						await ctx.context.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "referenceId",
+									value: referenceId,
+								},
+								{
+									field: "status",
+									value: "incomplete",
+								},
+							],
+						});
+				}
+			}
 
 			const activeSubscriptions = await client.subscriptions
 				.list({
@@ -581,11 +599,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				: undefined;
 			const planItem = resolvedPlan?.item;
 			const stripeSubscriptionPriceId = planItem?.price.id;
-
-			// Also find any incomplete subscription that we can reuse
-			const incompleteSubscription = subscriptions.find(
-				(sub) => sub.status === "incomplete",
-			);
 
 			const priceId = ctx.body.annual
 				? plan.annualDiscountPriceId
@@ -1007,7 +1020,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			}
 
 			let subscription: Subscription | undefined =
-				activeOrTrialingSubscription || incompleteSubscription;
+				activeOrTrialingSubscription || incompleteSubscription || undefined;
 
 			if (incompleteSubscription && !activeOrTrialingSubscription) {
 				const updated = await ctx.context.adapter.update<Subscription>({
@@ -1059,19 +1072,12 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				ctx,
 			);
 
-			const allSubscriptions = await ctx.context.adapter.findMany<Subscription>(
-				{
-					model: "subscription",
-					where: [{ field: "referenceId", value: referenceId }],
-				},
+			// Check if user has ever had a trial for any plan (not just the same plan)
+			// This prevents users from getting multiple trials by switching plans
+			const hasEverTrialed = await hasReferenceEverTrialed(
+				ctx.context.adapter,
+				referenceId,
 			);
-			const hasEverTrialed = allSubscriptions.some((s) => {
-				// Check if user has ever had a trial for any plan (not just the same plan)
-				// This prevents users from getting multiple trials by switching plans
-				const hadTrial =
-					!!(s.trialStart || s.trialEnd) || s.status === "trialing";
-				return hadTrial;
-			});
 
 			const freeTrial =
 				!hasEverTrialed && plan.freeTrial
@@ -1277,18 +1283,16 @@ export const cancelSubscription = (options: StripeOptions) => {
 							},
 						],
 					})
-				: await ctx.context.adapter
-						.findMany<Subscription>({
-							model: "subscription",
-							where: [{ field: "referenceId", value: referenceId }],
-						})
-						.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
+				: await findActiveOrTrialingSubscription(
+						ctx.context.adapter,
+						referenceId,
+					);
 			if (
 				ctx.body.subscriptionId &&
 				subscription &&
 				subscription.referenceId !== referenceId
 			) {
-				subscription = undefined;
+				subscription = null;
 			}
 
 			if (!subscription || !subscription.stripeCustomerId) {
@@ -1436,23 +1440,16 @@ export const restoreSubscription = (options: StripeOptions) => {
 							},
 						],
 					})
-				: await ctx.context.adapter
-						.findMany<Subscription>({
-							model: "subscription",
-							where: [
-								{
-									field: "referenceId",
-									value: referenceId,
-								},
-							],
-						})
-						.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
+				: await findActiveOrTrialingSubscription(
+						ctx.context.adapter,
+						referenceId,
+					);
 			if (
 				ctx.body.subscriptionId &&
 				subscription &&
 				subscription.referenceId !== referenceId
 			) {
-				subscription = undefined;
+				subscription = null;
 			}
 			if (!subscription || !subscription.stripeCustomerId) {
 				throw APIError.from(
@@ -1645,6 +1642,7 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 						field: "referenceId",
 						value: referenceId,
 					},
+					activeOrTrialingStatusWhere,
 				],
 			});
 			if (!subscriptions.length) {
@@ -1654,22 +1652,20 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 			if (!plans) {
 				return [];
 			}
-			const subs = subscriptions
-				.map((sub) => {
-					const plan = plans.find(
-						(p) => p.name.toLowerCase() === sub.plan.toLowerCase(),
-					);
-					const priceId =
-						sub.billingInterval === "year"
-							? (plan?.annualDiscountPriceId ?? plan?.priceId)
-							: plan?.priceId;
-					return {
-						...sub,
-						limits: plan?.limits,
-						priceId,
-					};
-				})
-				.filter((sub) => isActiveOrTrialing(sub));
+			const subs = subscriptions.map((sub) => {
+				const plan = plans.find(
+					(p) => p.name.toLowerCase() === sub.plan.toLowerCase(),
+				);
+				const priceId =
+					sub.billingInterval === "year"
+						? (plan?.annualDiscountPriceId ?? plan?.priceId)
+						: plan?.priceId;
+				return {
+					...sub,
+					limits: plan?.limits,
+					priceId,
+				};
+			});
 			return ctx.json(subs);
 		},
 	);
@@ -1949,29 +1945,20 @@ export const createBillingPortal = (options: StripeOptions) => {
 
 				if (!customerId) {
 					// Fallback to subscription's stripeCustomerId
-					const subscription = await ctx.context.adapter
-						.findMany<Subscription>({
-							model: "subscription",
-							where: [{ field: "referenceId", value: referenceId }],
-						})
-						.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
+					const subscription = await findActiveOrTrialingSubscription(
+						ctx.context.adapter,
+						referenceId,
+					);
 					customerId = subscription?.stripeCustomerId;
 				}
 			} else {
 				// User billing portal
 				customerId = user.stripeCustomerId;
 				if (!customerId) {
-					const subscription = await ctx.context.adapter
-						.findMany<Subscription>({
-							model: "subscription",
-							where: [
-								{
-									field: "referenceId",
-									value: referenceId,
-								},
-							],
-						})
-						.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
+					const subscription = await findActiveOrTrialingSubscription(
+						ctx.context.adapter,
+						referenceId,
+					);
 
 					customerId = subscription?.stripeCustomerId;
 				}

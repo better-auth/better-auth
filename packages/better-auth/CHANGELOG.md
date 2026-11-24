@@ -263,6 +263,43 @@
   - @better-auth/prisma-adapter@1.8.0-beta.0
   - @better-auth/telemetry@1.8.0-beta.0
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12806](https://github.com/better-auth/better-auth/pull/12806) [`47a77c0`](https://github.com/better-auth/better-auth/commit/47a77c0fd36b89db20019ecb60223471e6b6f794) Thanks [@bytaesu](https://github.com/bytaesu)! - Revoked sessions are now removed from secondary storage even when a database `after` hook throws during password reset or user deletion. Before, they could stay valid until they expired.
+
+- [#12858](https://github.com/better-auth/better-auth/pull/12858) [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7) Thanks [@bytaesu](https://github.com/bytaesu)! - Deleting a user no longer reports success when a database read fails, a `user.delete.before` hook vetoes the delete, or the database skips it without an error. A failed read now surfaces as an error. A veto or a skipped delete answers `FAILED_TO_DELETE_USER` and keeps the user's sessions and accounts, on databases with transactions for a skipped delete. `user.delete.before` now runs before the session and account deletes.
+
+- [#12853](https://github.com/better-auth/better-auth/pull/12853) [`2ba7622`](https://github.com/better-auth/better-auth/commit/2ba762276c39db0ed5e5de3e8180fd3f85039921) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `/device/code` returning a 500 on a user or device code collision with the Drizzle adapter. The collision is now retried with a new code, as with the other adapters.
+
+- [#12893](https://github.com/better-auth/better-auth/pull/12893) [`a3a9d2d`](https://github.com/better-auth/better-auth/commit/a3a9d2d53af69725a61c441a4b660520e1a3aa44) Thanks [@bytaesu](https://github.com/bytaesu)! - When two email OTP requests for the same address collide on a database with a unique `verification.identifier`, both emails now carry the same code when it can be read back. Before, the code in one of the emails was rejected as invalid.
+
+- [#12893](https://github.com/better-auth/better-auth/pull/12893) [`a3a9d2d`](https://github.com/better-auth/better-auth/commit/a3a9d2d53af69725a61c441a4b660520e1a3aa44) Thanks [@bytaesu](https://github.com/bytaesu)! - Sending a new email OTP now replaces the earlier code for that address instead of keeping it. Before, a code resent after a wrong guess, or in the same millisecond as another send, could be refused while the earlier code still worked.
+
+- [#12893](https://github.com/better-auth/better-auth/pull/12893) [`a3a9d2d`](https://github.com/better-auth/better-auth/commit/a3a9d2d53af69725a61c441a4b660520e1a3aa44) Thanks [@bytaesu](https://github.com/bytaesu)! - Sending a new phone number OTP now replaces the earlier code for that number instead of keeping it, so a code sent while another one is being checked stays valid.
+
+- [#12893](https://github.com/better-auth/better-auth/pull/12893) [`a3a9d2d`](https://github.com/better-auth/better-auth/commit/a3a9d2d53af69725a61c441a4b660520e1a3aa44) Thanks [@bytaesu](https://github.com/bytaesu)! - Verifying a phone number that no user has, without `signUpOnVerification`, now returns a 400 `PHONE_NUMBER_NOT_EXIST` error instead of a 500.
+
+- [#12858](https://github.com/better-auth/better-auth/pull/12858) [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7) Thanks [@bytaesu](https://github.com/bytaesu)! - `/revoke-session` and `/admin/revoke-user-session` no longer report success when the session survives, such as when a `session.delete.before` hook vetoes the delete or the database read before the delete fails.
+
+- [#12858](https://github.com/better-auth/better-auth/pull/12858) [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7) Thanks [@bytaesu](https://github.com/bytaesu)! - Revoking all of a user's sessions now fails when `secondaryStorage` cannot clean up the cached sessions, after the remaining delete hooks have run. Previously the call reported success, and the cached sessions could keep working until they expired.
+
+- [#12858](https://github.com/better-auth/better-auth/pull/12858) [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7) Thanks [@bytaesu](https://github.com/bytaesu)! - A session cached in `secondaryStorage` without its user no longer breaks `getSession`. The user is now read from the database, where `getSession` previously failed for every request until the cached session expired.
+
+- [#12907](https://github.com/better-auth/better-auth/pull/12907) [`d079059`](https://github.com/better-auth/better-auth/commit/d079059d51db859d53b6606bbf4cf4ae9cec57dc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `generateBackupCodes` refreshes store-backed sessions before checking whether two-factor authentication is enabled. A session cached before enrollment can now generate backup codes, and a revoked session is rejected even while its cookie is still cached.
+
+- [#12860](https://github.com/better-auth/better-auth/pull/12860) [`3011e5c`](https://github.com/better-auth/better-auth/commit/3011e5ccb6cf3d27f37f8b5bf6bf5b9891a2367a) Thanks [@bytaesu](https://github.com/bytaesu)! - The `username` plugin now checks usernames on `/update-user` against the session the endpoint resolved, so re-sending your own username with a bearer token no longer fails as already taken. Signed-out `/update-user` calls with a taken username now return 401 like other signed-out calls.
+
+- Updated dependencies [[`47a77c0`](https://github.com/better-auth/better-auth/commit/47a77c0fd36b89db20019ecb60223471e6b6f794), [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7), [`35df753`](https://github.com/better-auth/better-auth/commit/35df7535de4064fa7b5a116eacd08aa97a41fb28), [`ddec4d7`](https://github.com/better-auth/better-auth/commit/ddec4d7c4630681eb18fec2284fd80ea02f50291), [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7), [`a879d3d`](https://github.com/better-auth/better-auth/commit/a879d3daa2e778d8ce4b13f4028c4519d017fa1b)]:
+  - @better-auth/core@1.7.28
+  - @better-auth/drizzle-adapter@1.7.28
+  - @better-auth/kysely-adapter@1.7.28
+  - @better-auth/memory-adapter@1.7.28
+  - @better-auth/mongo-adapter@1.7.28
+  - @better-auth/prisma-adapter@1.7.28
+  - @better-auth/telemetry@1.7.28
+
 ## 1.7.27
 
 ### Patch Changes

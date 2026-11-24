@@ -29,6 +29,7 @@ import type { Confirmation } from "./types/oauth";
 import { ResourceUriSchema } from "./types/zod";
 import {
 	assertConsentStillCovers,
+	BASIC_CHALLENGE,
 	getAuthEndpointUrl,
 	getClient,
 	getOAuthProviderPlugin,
@@ -336,7 +337,7 @@ function buildOAuthDeviceGrant(verificationUri: string | undefined) {
 				headers: {
 					"WWW-Authenticate": {
 						description: "Basic client authentication challenge",
-						schema: { type: "string", example: "Basic" },
+						schema: { type: "string", example: BASIC_CHALLENGE },
 					},
 				},
 				content: {
@@ -464,7 +465,7 @@ function buildOAuthDeviceGrant(verificationUri: string | undefined) {
 				clientId: authenticated.clientId,
 				deviceCodeFields: {
 					oauthClientId: authenticated.clientId,
-					resources: toResourceList(resource) ?? null,
+					resources: toResourceList(resource),
 				},
 			};
 		},

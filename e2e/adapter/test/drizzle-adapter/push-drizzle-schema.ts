@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
@@ -16,13 +17,16 @@ const drizzleKitCliPaths = new Map<string, string>();
  * This cannot use `require.resolve("drizzle-kit/package.json")`. The `exports`
  * map of drizzle-kit does not include it, so a deep specifier gives the error
  * ERR_PACKAGE_PATH_NOT_EXPORTED. This function resolves the main entry and
- * uses the `bin` file beside it.
+ * reads the `bin` declared by the `package.json` beside it, because the CLI
+ * file name differs across drizzle-kit versions.
  */
 function resolveDrizzleKitCli(cwd: string) {
 	let cli = drizzleKitCliPaths.get(cwd);
 	if (!cli) {
 		const require = createRequire(join(cwd, "noop.js"));
-		cli = join(dirname(require.resolve("drizzle-kit")), "bin.cjs");
+		const root = dirname(require.resolve("drizzle-kit"));
+		const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+		cli = join(root, pkg.bin["drizzle-kit"]);
 		drizzleKitCliPaths.set(cwd, cli);
 	}
 	return cli;

@@ -532,6 +532,18 @@ describe("internal adapter test", async () => {
 		deleteSpy.mockRestore();
 	});
 
+	it("should delete a missing user without failing when adapter.delete throws for missing rows", async () => {
+		const deleteSpy = vi
+			.spyOn(authContext.adapter, "delete")
+			.mockRejectedValue(new Error("record not found"));
+
+		await expect(
+			internalAdapter.deleteUser("missing-user-id"),
+		).resolves.toBeUndefined();
+
+		deleteSpy.mockRestore();
+	});
+
 	describe("verification token storage", () => {
 		it("should hash identifier when storeIdentifier is 'hashed'", async () => {
 			const hashedOpts = {

@@ -30,6 +30,12 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12909](https://github.com/better-auth/better-auth/pull/12909) [`6aebc1d`](https://github.com/better-auth/better-auth/commit/6aebc1d672ab1b3599c61126debf3a97753b2271) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - On Cloudflare Workers, a write to an API key reference list in secondary storage no longer hangs when an earlier request for the same reference ID ended without releasing its lock. A writer now stops waiting five seconds after it reaches the front of the queue and proceeds. If the earlier writer was only slow, the two writes can overlap and one update to the list can be lost.
+
 ## 1.7.27
 
 ## 1.7.26

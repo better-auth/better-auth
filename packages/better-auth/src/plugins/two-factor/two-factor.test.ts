@@ -207,6 +207,117 @@ describe("two-factor enrollment session authority", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9132
+ */
+describe("backup codes with a stale cookie-cached session", async () => {
+	/**
+	 * Signs in twice, enrolls TOTP from the first session, and returns the
+	 * headers of the second session, whose cached user predates enrollment.
+	 */
+	async function enrollFromAnotherSession() {
+		const instance = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [twoFactor()],
+		});
+		const { auth, client, testUser, cookieSetter } = instance;
+		const staleHeaders = new Headers();
+		const enrollingHeaders = new Headers();
+		for (const headers of [staleHeaders, enrollingHeaders]) {
+			await client.signIn.email(
+				{ email: testUser.email, password: testUser.password },
+				{ onSuccess: cookieSetter(headers) },
+			);
+		}
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers: enrollingHeaders,
+		});
+		const ctx = await auth.$context;
+		const user = (await auth.api.getSession({ headers: enrollingHeaders }))!
+			.user;
+		const record = await ctx.adapter.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: user.id }],
+		});
+		const secret = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: record!.secret,
+		});
+		const verified = await auth.api.verifyTOTP({
+			body: { code: await createOTP(secret).totp() },
+			headers: enrollingHeaders,
+			asResponse: true,
+		});
+		expect(verified.status).toBe(200);
+		const stored = await ctx.internalAdapter.findUserById(user.id);
+		expect((stored as UserWithTwoFactor).twoFactorEnabled).toBe(true);
+		const cached = await client.getSession({
+			fetchOptions: { headers: staleHeaders },
+		});
+		expect(
+			(cached.data?.user as UserWithTwoFactor).twoFactorEnabled,
+		).toBeFalsy();
+		return { ...instance, staleHeaders, user };
+	}
+
+	it("generates backup codes after two factor was enabled from another session", async () => {
+		const { auth, testUser, staleHeaders, user } =
+			await enrollFromAnotherSession();
+		const ctx = await auth.$context;
+		const before = await ctx.adapter.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: user.id }],
+		});
+
+		const result = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers: staleHeaders,
+		});
+
+		expect(result.status).toBe(true);
+		expect(result.backupCodes.length).toBeGreaterThan(0);
+		const after = await ctx.adapter.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(after?.backupCodes).not.toBe(before?.backupCodes);
+	});
+
+	it("still rejects backup code generation when two factor is not enabled", async () => {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [twoFactor()],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await expect(
+			auth.api.generateBackupCodes({
+				body: { password: testUser.password },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: { code: "TWO_FACTOR_NOT_ENABLED" },
+		});
+	});
+
+	it("rejects backup code generation once the cached session is revoked", async () => {
+		const { auth, testUser, staleHeaders } = await enrollFromAnotherSession();
+		const ctx = await auth.$context;
+		const session = await auth.api.getSession({ headers: staleHeaders });
+		await ctx.internalAdapter.deleteSession(session!.session.token);
+
+		await expect(
+			auth.api.generateBackupCodes({
+				body: { password: testUser.password },
+				headers: staleHeaders,
+			}),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+	});
+});
+
 describe("two factor", async () => {
 	let OTP = "";
 	const { testUser, customFetchImpl, sessionSetter, db, auth } =

@@ -27,6 +27,7 @@ export {
 export { resolveResourcePolicy } from "./resources";
 export {
 	assertConsentStillCovers,
+	BASIC_CHALLENGE,
 	getAuthEndpointUrl,
 	getLocalJwksSource,
 	parseClientMetadata,

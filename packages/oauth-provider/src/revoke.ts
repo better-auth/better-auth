@@ -23,7 +23,12 @@ import {
 	notifyTokenRevoked,
 } from "./token-lookup";
 import type { OAuthOptions, OAuthRefreshToken, Scope } from "./types";
-import { challengeHeaders, getAuthEndpointUrl, isPublicClient } from "./utils";
+import {
+	BASIC_CHALLENGE,
+	challengeHeaders,
+	getAuthEndpointUrl,
+	isPublicClient,
+} from "./utils";
 
 /**
  * Revocation follows RFC 7009
@@ -229,7 +234,7 @@ export async function revokeEndpoint(
 				error_description: "missing required credentials",
 				error: "invalid_client",
 			},
-			challengeHeaders("Basic"),
+			challengeHeaders(BASIC_CHALLENGE),
 		);
 	}
 
