@@ -2,13 +2,13 @@
  * SQLite treats a negative LIMIT as unbounded, which is required when OFFSET
  * is used without a cap.
  */
-export const SQLITE_UNBOUNDED_LIMIT = -1;
+const SQLITE_UNBOUNDED_LIMIT = -1;
 
 /**
  * MySQL rejects OFFSET without LIMIT. `Number.MAX_SAFE_INTEGER` is a valid
  * integer cap that is practically unbounded.
  */
-export const MYSQL_UNBOUNDED_LIMIT = Number.MAX_SAFE_INTEGER;
+const MYSQL_UNBOUNDED_LIMIT = Number.MAX_SAFE_INTEGER;
 
 /**
  * Limit/offset for a `findMany` call, including dialect workarounds so

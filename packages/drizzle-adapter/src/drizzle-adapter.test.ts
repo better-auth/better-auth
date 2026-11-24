@@ -9,11 +9,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import type { DB } from "./drizzle-adapter";
 import { drizzleAdapter } from "./drizzle-adapter";
-import {
-	findManyPaging,
-	MYSQL_UNBOUNDED_LIMIT,
-	SQLITE_UNBOUNDED_LIMIT,
-} from "./find-many-paging";
+import { findManyPaging } from "./find-many-paging";
 import { drizzleAdapter as drizzleRelationsV2Adapter } from "./relations-v2";
 
 describe("drizzle-adapter", () => {
@@ -721,18 +717,18 @@ describe("drizzle-adapter", () => {
 
 		it("uses LIMIT -1 for unbounded sqlite offset", () => {
 			expect(findManyPaging("sqlite", undefined, 2)).toEqual({
-				limit: SQLITE_UNBOUNDED_LIMIT,
+				limit: -1,
 				offset: 2,
 			});
 			expect(findManyPaging("sqlite", undefined, 0)).toEqual({
-				limit: SQLITE_UNBOUNDED_LIMIT,
+				limit: -1,
 				offset: 0,
 			});
 		});
 
 		it("uses a large LIMIT for unbounded mysql offset", () => {
 			expect(findManyPaging("mysql", undefined, 2)).toEqual({
-				limit: MYSQL_UNBOUNDED_LIMIT,
+				limit: Number.MAX_SAFE_INTEGER,
 				offset: 2,
 			});
 		});
@@ -812,7 +808,7 @@ describe("drizzle-adapter", () => {
 				secret: defaultSecret,
 			});
 			await adapter.findMany({ model: "user", limit: null, offset: 2 });
-			expect(calls).toEqual({ limit: SQLITE_UNBOUNDED_LIMIT, offset: 2 });
+			expect(calls).toEqual({ limit: -1, offset: 2 });
 		});
 	});
 });
