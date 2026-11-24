@@ -35,8 +35,8 @@ const getAdditionalFields = <
 	const additionalFields =
 		options?.schema?.organizationRole?.additionalFields || {};
 	if (shouldBePartial) {
-		for (const key in additionalFields) {
-			additionalFields[key]!.required = false;
+		for (const field of Object.values(additionalFields)) {
+			field.required = false;
 		}
 	}
 	const additionalFieldsSchema = toZodSchema({

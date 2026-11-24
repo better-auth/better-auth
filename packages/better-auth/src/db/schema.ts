@@ -91,9 +91,9 @@ export function buildSyntheticUserOutput(
 	const result: Record<string, unknown> = {};
 
 	for (const key in schema) {
-		const fieldAttr = schema[key]!;
+		const fieldAttr = schema[key];
 
-		if (fieldAttr.returned === false) {
+		if (!fieldAttr || fieldAttr.returned === false) {
 			continue;
 		}
 
@@ -154,11 +154,15 @@ export function parseInputData<T extends Record<string, any>>(
 	const fields = schema.fields;
 	const parsedData = Object.create(null);
 	for (const key in fields) {
+		const field = fields[key];
+		if (!field) {
+			continue;
+		}
 		if (key in data) {
-			if (fields[key]!.input === false) {
-				if (fields[key]!.defaultValue !== undefined) {
+			if (field.input === false) {
+				if (field.defaultValue !== undefined) {
 					if (action !== "update") {
-						parsedData[key] = resolveDefaultValue(fields[key]!);
+						parsedData[key] = resolveDefaultValue(field);
 						continue;
 					}
 				}
@@ -170,10 +174,8 @@ export function parseInputData<T extends Record<string, any>>(
 				}
 				continue;
 			}
-			if (fields[key]!.validator?.input && data[key] !== undefined) {
-				const result = fields[key]!.validator.input["~standard"].validate(
-					data[key],
-				);
+			if (field.validator?.input && data[key] !== undefined) {
+				const result = field.validator.input["~standard"].validate(data[key]);
 				if (result instanceof Promise) {
 					throw APIError.from(
 						"INTERNAL_SERVER_ERROR",
@@ -189,20 +191,20 @@ export function parseInputData<T extends Record<string, any>>(
 				parsedData[key] = result.value;
 				continue;
 			}
-			if (fields[key]!.transform?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key]!.transform?.input(data[key]);
+			if (field.transform?.input && data[key] !== undefined) {
+				parsedData[key] = field.transform?.input(data[key]);
 				continue;
 			}
 			parsedData[key] = data[key];
 			continue;
 		}
 
-		if (fields[key]!.defaultValue !== undefined && action === "create") {
-			parsedData[key] = resolveDefaultValue(fields[key]!);
+		if (field.defaultValue !== undefined && action === "create") {
+			parsedData[key] = resolveDefaultValue(field);
 			continue;
 		}
 
-		if (fields[key]!.required && action === "create") {
+		if (field.required && action === "create") {
 			throw APIError.from("BAD_REQUEST", {
 				...BASE_ERROR_CODES.MISSING_FIELD,
 				message: `${key} is required`,
@@ -266,8 +268,9 @@ export function getSessionDefaultFields(options: BetterAuthOptions) {
 	const fields = getFields(options, "session", "input");
 	const defaults: Record<string, any> = {};
 	for (const key in fields) {
-		if (fields[key]!.defaultValue !== undefined) {
-			defaults[key] = resolveDefaultValue(fields[key]!);
+		const field = fields[key];
+		if (field?.defaultValue !== undefined) {
+			defaults[key] = resolveDefaultValue(field);
 		}
 	}
 	return defaults;

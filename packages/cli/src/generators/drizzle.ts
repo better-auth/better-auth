@@ -97,17 +97,16 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			);
 		});
 	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
-		Object.keys(tables)
-			.filter((tableKey) => !isMigrationDisabled(tableKey))
-			.map((tableKey) => ({
-				fields: tables[tableKey]!.fields,
-				indexes: tables[tableKey]!.indexes,
+		Object.entries(tables)
+			.filter(([tableKey]) => !isMigrationDisabled(tableKey))
+			.map(([tableKey, table]) => ({
+				fields: table.fields,
+				indexes: table.indexes,
 				tableName: getModelName(tableKey),
 			})),
 	);
 
-	for (const tableKey in tables) {
-		const table = tables[tableKey]!;
+	for (const [tableKey, table] of Object.entries(tables)) {
 		if (isMigrationDisabled(tableKey)) {
 			continue;
 		}
@@ -392,8 +391,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	}
 
 	let relationsString: string = "";
-	for (const tableKey in tables) {
-		const table = tables[tableKey]!;
+	for (const [tableKey, table] of Object.entries(tables)) {
 		if (isMigrationDisabled(tableKey)) {
 			continue;
 		}
