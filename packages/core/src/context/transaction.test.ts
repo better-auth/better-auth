@@ -374,6 +374,70 @@ describe("runWithTransaction", () => {
 		);
 	});
 
+	it("logs later after-commit failures before rethrowing the first", async () => {
+		const { adapter } = createTransactionHarness();
+		const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+		onTestFinished(() => error.mockRestore());
+		const first = new Error("session hook failed");
+		const second = new Error("cache eviction failed");
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await queueAfterTransactionHook(async () => {
+					throw first;
+				});
+				await queueAfterTransactionHook(
+					async () => {
+						throw second;
+					},
+					{
+						onError(hookError) {
+							throw hookError;
+						},
+					},
+				);
+			}),
+		).rejects.toBe(first);
+		expect(error).toHaveBeenCalledOnce();
+		expect(error).toHaveBeenCalledWith(
+			"Failed to run an after-commit hook",
+			second,
+		);
+	});
+
+	it("keeps the first after-commit failure when logging a later one throws", async () => {
+		const { adapter } = createTransactionHarness();
+		const error = vi.spyOn(logger, "error").mockImplementation(() => {
+			throw new Error("logger failed");
+		});
+		onTestFinished(() => error.mockRestore());
+		const first = new Error("session hook failed");
+		const rethrow = {
+			onError(hookError: unknown) {
+				throw hookError;
+			},
+		};
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await queueAfterTransactionHook(async () => {
+					throw first;
+				});
+				await queueAfterTransactionHook(async () => {
+					throw new Error("second hook failed");
+				}, rethrow);
+				await queueAfterTransactionHook(async () => {
+					throw new Error("third hook failed");
+				}, rethrow);
+			}),
+		).rejects.toBe(first);
+		expect(error).toHaveBeenCalledTimes(2);
+		expect(error).toHaveBeenLastCalledWith(
+			"Failed to run an after-commit hook",
+			expect.objectContaining({ message: "third hook failed" }),
+		);
+	});
+
 	/**
 	 * Copies of `@better-auth/core` share one adapter store, so a hook queued
 	 * by one copy may run in a transaction started by another.

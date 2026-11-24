@@ -127,8 +127,8 @@ export const runWithAdapter = async <
  * path goes to `onAfterCommitHookError`, or is logged when none is given.
  *
  * Otherwise, without `onAfterCommitHookError`, the first hook failure is
- * rethrown once the queue ends. A failed hook without `onError` skips the later
- * hooks that have none.
+ * rethrown once the queue ends and later failures are logged. A failed hook
+ * without `onError` skips the later hooks that have none.
  */
 export const runWithTransaction = async <
 	R,
@@ -206,7 +206,15 @@ export const runWithTransaction = async <
 						}
 					}
 				}
-				if (failures.length) throw failures[0];
+				if (!failures.length) return;
+				for (const failure of failures.slice(1)) {
+					try {
+						logger.error("Failed to run an after-commit hook", failure);
+					} catch {
+						// A failing logger must not replace the first hook failure.
+					}
+				}
+				throw failures[0];
 			};
 			if (hasError) {
 				// Without a real transaction (`transaction: false`), each write was
