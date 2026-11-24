@@ -1,14 +1,12 @@
 /**
- * SQLite treats a negative LIMIT as unbounded, which is required when OFFSET
- * is used without a cap.
+ * Companion LIMIT when OFFSET is present and the query is unbounded.
+ *
+ * MySQL rejects OFFSET without LIMIT. Drizzle's SQLite dialect omits
+ * negative LIMIT values (`limit >= 0`), so `LIMIT -1` never reaches
+ * SQLite and the query becomes OFFSET without LIMIT. A large positive
+ * integer is valid on both and is practically unbounded.
  */
-const SQLITE_UNBOUNDED_LIMIT = -1;
-
-/**
- * MySQL rejects OFFSET without LIMIT. `Number.MAX_SAFE_INTEGER` is a valid
- * integer cap that is practically unbounded.
- */
-const MYSQL_UNBOUNDED_LIMIT = Number.MAX_SAFE_INTEGER;
+const UNBOUNDED_OFFSET_LIMIT = Number.MAX_SAFE_INTEGER;
 
 /**
  * Limit/offset for a `findMany` call, including dialect workarounds so
@@ -28,8 +26,7 @@ export function findManyPaging(
 		offset !== undefined &&
 		(provider === "sqlite" || provider === "mysql")
 	) {
-		paging.limit =
-			provider === "sqlite" ? SQLITE_UNBOUNDED_LIMIT : MYSQL_UNBOUNDED_LIMIT;
+		paging.limit = UNBOUNDED_OFFSET_LIMIT;
 	}
 	if (offset !== undefined) {
 		paging.offset = offset;

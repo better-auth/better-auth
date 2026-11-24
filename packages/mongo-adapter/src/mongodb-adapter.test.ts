@@ -40,6 +40,21 @@ describe("mongodb-adapter", () => {
 		expect(aggregate).not.toHaveBeenCalled();
 	});
 
+	it("still sends $limit for a negative numeric cap", async () => {
+		const pipelines: Record<string, unknown>[][] = [];
+		const db = {
+			collection: vi.fn(() => ({
+				aggregate: (pipeline: Record<string, unknown>[]) => {
+					pipelines.push(pipeline);
+					return { toArray: async () => [] };
+				},
+			})),
+		} as any;
+		const adapter = mongodbAdapter(db)({});
+		await adapter.findMany({ model: "user", limit: -1 });
+		expect(pipelines[0]).toEqual(expect.arrayContaining([{ $limit: -1 }]));
+	});
+
 	it("omits $limit when unbounded and still applies $skip", async () => {
 		const pipelines: Record<string, unknown>[][] = [];
 		const db = {

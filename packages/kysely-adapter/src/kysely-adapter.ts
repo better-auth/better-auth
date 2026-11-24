@@ -721,6 +721,10 @@ export const kyselyAdapter = (
 									}
 								} else if (typeof limit === "number") {
 									b = b.top(limit);
+								} else if (sortBy?.field) {
+									// ORDER BY in a derived table is invalid on SQL Server
+									// unless TOP, OFFSET, or FOR XML is also specified.
+									b = b.offset(0);
 								}
 							} else {
 								if (typeof limit === "number") {

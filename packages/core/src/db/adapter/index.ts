@@ -127,7 +127,7 @@ export interface DBAdapterFactoryConfig<
 	 *
 	 * When `false` (default), public `findMany({ limit: null })` still returns
 	 * every matching row: the factory counts, then calls `findMany` with that
-	 * total as `limit`.
+	 * total as `limit` (two database calls).
 	 *
 	 * @default false
 	 */
@@ -604,8 +604,6 @@ export interface CustomAdapter {
 	}: ModelTarget & {
 		where?: CleanedWhere[] | undefined;
 		/**
-		 * Maximum rows to return.
-		 *
 		 * Maximum rows to return.
 		 *
 		 * The factory always passes a number unless this adapter set

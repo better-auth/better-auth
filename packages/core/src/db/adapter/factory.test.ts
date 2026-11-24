@@ -509,8 +509,14 @@ describe("createAdapterFactory findMany limit", () => {
 				return 101;
 			},
 		});
-		await adapter.findMany({ model: "user", limit: null, offset: 2 });
+		await adapter.findMany({
+			model: "user",
+			where: [{ field: "email", value: "a@b.com" }],
+			limit: null,
+			offset: 2,
+		});
 		expect(counted).toMatchObject({ model: "user" });
+		expect(counted?.where).toBe(seen?.where);
 		expect(seen).toMatchObject({ limit: 101, offset: 2 });
 		expect(seen && "limit" in seen).toBe(true);
 	});

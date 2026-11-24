@@ -929,7 +929,7 @@ export const mongodbAdapter = (
 						pipeline.push({ $skip: offset });
 					}
 
-					if (typeof limit === "number" && limit > 0) {
+					if (typeof limit === "number") {
 						pipeline.push({ $limit: limit });
 					}
 

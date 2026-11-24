@@ -341,6 +341,20 @@ describe("kysely-adapter", () => {
 			expect(queries[0]?.parameters).toEqual(expect.arrayContaining([2]));
 		});
 
+		it("uses OFFSET 0 for unbounded mssql sortBy without offset", async () => {
+			const { adapter, queries } = compiledAdapter("mssql");
+			await adapter.findMany({
+				model: "user",
+				limit: null,
+				sortBy: { field: "id", direction: "asc" },
+			});
+			const sql = queries[0]?.sql.toLowerCase() ?? "";
+			expect(sql).toContain("order by");
+			expect(sql).toContain("offset");
+			expect(sql).not.toContain("fetch");
+			expect(queries[0]?.parameters).toEqual(expect.arrayContaining([0]));
+		});
+
 		it("uses FETCH only when mssql has a positive limit and offset", async () => {
 			const { adapter, queries } = compiledAdapter("mssql");
 			await adapter.findMany({ model: "user", limit: 5, offset: 2 });

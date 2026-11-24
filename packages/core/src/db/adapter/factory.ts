@@ -1246,11 +1246,6 @@ export const createAdapterFactory =
 					if (config.supportsUnboundedFindMany) {
 						limit = undefined;
 					} else {
-						const countWhere = transformWhereClause({
-							model: modelKey,
-							where: unsafeWhere,
-							action: "count",
-						});
 						const total = await withSpan(
 							`db count ${model}`,
 							{
@@ -1261,7 +1256,7 @@ export const createAdapterFactory =
 								adapterInstance.count({
 									model,
 									modelKey,
-									where: countWhere,
+									where,
 								}),
 						);
 						if (total === 0) {

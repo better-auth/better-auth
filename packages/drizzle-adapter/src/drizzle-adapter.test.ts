@@ -715,13 +715,13 @@ describe("drizzle-adapter", () => {
 			expect(findManyPaging("pg", undefined, undefined)).toEqual({});
 		});
 
-		it("uses LIMIT -1 for unbounded sqlite offset", () => {
+		it("uses a large LIMIT for unbounded sqlite offset", () => {
 			expect(findManyPaging("sqlite", undefined, 2)).toEqual({
-				limit: -1,
+				limit: Number.MAX_SAFE_INTEGER,
 				offset: 2,
 			});
 			expect(findManyPaging("sqlite", undefined, 0)).toEqual({
-				limit: -1,
+				limit: Number.MAX_SAFE_INTEGER,
 				offset: 0,
 			});
 		});
@@ -735,6 +735,21 @@ describe("drizzle-adapter", () => {
 
 		it("omits LIMIT for unbounded postgres offset", () => {
 			expect(findManyPaging("pg", undefined, 2)).toEqual({ offset: 2 });
+		});
+
+		it("passes a numeric limit and offset through", () => {
+			expect(findManyPaging("sqlite", 5, 2)).toEqual({
+				limit: 5,
+				offset: 2,
+			});
+			expect(findManyPaging("mysql", 5, 2)).toEqual({
+				limit: 5,
+				offset: 2,
+			});
+			expect(findManyPaging("pg", 5, 2)).toEqual({
+				limit: 5,
+				offset: 2,
+			});
 		});
 	});
 
@@ -802,13 +817,25 @@ describe("drizzle-adapter", () => {
 			expect(calls).toEqual({});
 		});
 
-		it("adds LIMIT -1 for unbounded sqlite offset", async () => {
+		it("adds a large LIMIT for unbounded sqlite offset", async () => {
 			const { db, calls } = createFindManyDb();
 			const adapter = adapterFactory(db, { provider: "sqlite" })({
 				secret: defaultSecret,
 			});
 			await adapter.findMany({ model: "user", limit: null, offset: 2 });
-			expect(calls).toEqual({ limit: -1, offset: 2 });
+			expect(calls).toEqual({
+				limit: Number.MAX_SAFE_INTEGER,
+				offset: 2,
+			});
+		});
+
+		it("passes a numeric limit and offset through", async () => {
+			const { db, calls } = createFindManyDb();
+			const adapter = adapterFactory(db, { provider: "pg" })({
+				secret: defaultSecret,
+			});
+			await adapter.findMany({ model: "user", limit: 5, offset: 2 });
+			expect(calls).toEqual({ limit: 5, offset: 2 });
 		});
 	});
 });
