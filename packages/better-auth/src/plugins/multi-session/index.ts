@@ -56,6 +56,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 	};
 
 	const isMultiSessionCookie = (key: string) => key.includes("_multi-");
+	// Another auth instance on the same host may use a different cookie prefix.
+	// Only cookies named for this instance may be counted or expired here.
+	const isOwnedMultiSessionCookie = (key: string, sessionCookieName: string) =>
+		key.startsWith(`${sessionCookieName}_multi-`);
 
 	return {
 		id: "multi-session",
@@ -348,7 +352,9 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 
 						const multiSessionKeys = Object.keys(
 							Object.fromEntries(cookies),
-						).filter(isMultiSessionCookie);
+						).filter((key) =>
+							isOwnedMultiSessionCookie(key, sessionCookieConfig.name),
+						);
 
 						const tokensToDelete: string[] = [];
 						const staleCookieKeys: string[] = [];
@@ -365,9 +371,16 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							}
 							const session =
 								await ctx.context.internalAdapter.findSession(token);
-							if (!session || session.session.expiresAt < new Date()) {
-								// A device cookie whose session was deleted or expired must not
-								// keep a slot reserved and block the next sign-in.
+							if (
+								!session ||
+								(session.session as { impersonatedBy?: string })
+									.impersonatedBy ||
+								session.session.expiresAt < new Date()
+							) {
+								// A device cookie whose session was deleted, expired, or was
+								// left behind by impersonation before this fix must not keep a
+								// slot reserved and block the next sign-in. The session itself
+								// is left alone; only the cookie is cleared.
 								staleCookieKeys.push(key);
 								ctx.setCookie(key, "", {
 									...sessionCookieConfig.attributes,
