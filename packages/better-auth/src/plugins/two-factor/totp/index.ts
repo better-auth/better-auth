@@ -5,7 +5,7 @@ import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
-import type { SymmetricDecryptOptions } from "../../../crypto";
+import type { SecretConfig, SymmetricDecryptOptions } from "../../../crypto";
 import { symmetricDecrypt } from "../../../crypto";
 import { shouldRequirePassword } from "../../../utils/password";
 import { PACKAGE_VERSION } from "../../../version";
@@ -69,6 +69,23 @@ async function decryptTOTPSecret(options: SymmetricDecryptOptions) {
 		return secret;
 	}
 	return base32.decode(secret.slice(BASE32_PREFIX.length).toUpperCase());
+}
+
+/**
+ * Check a TOTP code against a stored two-factor row. It does not touch the
+ * lockout counters; callers apply them.
+ */
+export async function verifyTOTPCode(
+	key: SecretConfig | string,
+	twoFactor: TwoFactorTable,
+	code: string,
+	options?: TOTPOptions | undefined,
+): Promise<boolean> {
+	const secret = await decryptTOTPSecret({ key, data: twoFactor.secret });
+	return createOTP(secret, {
+		period: options?.period || 30,
+		digits: options?.digits || 6,
+	}).verify(code);
 }
 
 const generateTOTPBodySchema = z.object({
@@ -314,14 +331,12 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				: null;
 			let status: boolean;
 			try {
-				const decrypted = await decryptTOTPSecret({
-					key: ctx.context.secretConfig,
-					data: twoFactor.secret,
-				});
-				status = await createOTP(decrypted, {
-					period: opts.period,
-					digits: opts.digits,
-				}).verify(ctx.body.code);
+				status = await verifyTOTPCode(
+					ctx.context.secretConfig,
+					twoFactor,
+					ctx.body.code,
+					opts,
+				);
 			} catch (error) {
 				// A server error before the code is checked must not spend the slot.
 				await attempt?.restore();
