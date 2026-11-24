@@ -891,6 +891,105 @@ describe("oauth-proxy", async () => {
 		});
 
 		/**
+		 * mapProfileToUser fields must survive the production → preview relay.
+		 * @see https://github.com/better-auth/better-auth/issues/12429
+		 */
+		it("relays mapProfileToUser fields through the passthrough payload", async () => {
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					user: {
+						additionalFields: {
+							department: { type: "string", required: false },
+						},
+					},
+					plugins: [oAuthProxy()],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+							mapProfileToUser: () => ({ department: "test" }),
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					user: {
+						additionalFields: {
+							department: { type: "string", required: false },
+						},
+					},
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+							mapProfileToUser: () => ({ department: "test" }),
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			const { secret } = await production.auth.$context;
+			const res = await preview.client.signIn.social(
+				{ provider: "google", callbackURL: "/dashboard" },
+				{ throw: true },
+			);
+			const state = new URL(res.url!).searchParams.get("state");
+
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location?.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+
+			expect(encryptedProfile).toBeTruthy();
+			const decrypted = await symmetricDecrypt({
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
+				data: encryptedProfile!,
+			});
+			const payload = parseJSON<{
+				userInfo: { email: string; department?: string };
+			}>(decrypted);
+			expect(payload.userInfo.department).toBe("test");
+
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						expect(context.response.headers.get("location")).toContain(
+							"/dashboard",
+						);
+					},
+				},
+			);
+
+			const previewCtx = await preview.auth.$context;
+			const users = await previewCtx.internalAdapter.listUsers();
+			expect(users).toHaveLength(1);
+			expect((users[0] as { department?: string }).department).toBe("test");
+		});
+
+		/**
 		 * Cookie strategy with a dedicated proxy `secret` that differs from
 		 * `BETTER_AUTH_SECRET`. The `oauth_state` cookie is encrypted with the
 		 * environment secret, so the proxy must re-encrypt it with the proxy key
