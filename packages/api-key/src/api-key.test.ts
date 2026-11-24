@@ -1991,9 +1991,9 @@ describe("api-key", async () => {
 			expect(page2.apiKeys.length).toBe(1);
 			expect(page1.total).toBe(3);
 			expect(page2.total).toBe(3);
-			expect(page1.apiKeys.map((key) => key.id)).not.toEqual(
-				page2.apiKeys.map((key) => key.id),
-			);
+			const page1Ids = page1.apiKeys.map((key) => key.id);
+			const page2Ids = page2.apiKeys.map((key) => key.id);
+			expect(page1Ids.filter((id) => page2Ids.includes(id))).toEqual([]);
 		});
 
 		it("should return total from the database count when more than 100 keys exist", async () => {

@@ -639,7 +639,7 @@ export interface ListApiKeysOptions {
 	sortDirection?: "asc" | "desc";
 	/**
 	 * When set, restrict results to this configuration.
-	 * `"default"` (and empty values) also match keys with a null configId.
+	 * `"default"` (and empty values) match `configId = "default"`.
 	 */
 	configId?: string;
 }
@@ -663,25 +663,11 @@ function buildApiKeyListWhere(referenceId: string, configId?: string): Where[] {
 	if (configId === undefined) {
 		return where;
 	}
-	if (isDefaultConfigId(configId)) {
-		// `(referenceId = ?) AND (configId = 'default' OR configId IS NULL)`
-		where.push(
-			{
-				field: "configId",
-				value: "default",
-				connector: "OR",
-			},
-			{
-				field: "configId",
-				value: null,
-				connector: "OR",
-			},
-		);
-		return where;
-	}
+	// Keep this an AND equality. Mixed AND/OR (default OR null) is evaluated
+	// left-associatively by the memory adapter and would drop `referenceId`.
 	where.push({
 		field: "configId",
-		value: configId,
+		value: isDefaultConfigId(configId) ? "default" : configId,
 	});
 	return where;
 }

@@ -41,13 +41,6 @@ function getStorageGroups(configurations: PredefinedApiKeyOptions[]) {
 	return storageGroups;
 }
 
-/**
- * Prisma and Drizzle cap omitted `findMany` limits at 100. Across storage
- * backends we still merge in memory, so database pages cannot use the
- * request's limit/offset. Pass this bound instead of `undefined`.
- */
-const DATABASE_MERGE_FETCH_LIMIT = 100;
-
 const listApiKeysQuerySchema = z
 	.object({
 		configId: z
@@ -306,8 +299,13 @@ export function listApiKeys({
 				? resolveConfiguration(ctx.context, configurations, configId)
 				: undefined;
 			const databaseConfig = resolvedConfig ?? singleStorage;
+			const listingConfigs = resolvedConfig ? [resolvedConfig] : configurations;
+			const ownershipMatchesListing = listingConfigs.every(
+				(config) => (config.references ?? "user") === expectedReferencesType,
+			);
 			const canPageInDatabase =
 				databaseConfig?.storage === "database" &&
+				ownershipMatchesListing &&
 				(resolvedConfig != null || storageGroupConfigs.length === 1);
 
 			let paginatedApiKeys: ApiKey[];
@@ -323,7 +321,7 @@ export function listApiKeys({
 						offset,
 						sortBy,
 						sortDirection,
-						...(configId !== undefined ? { configId } : {}),
+						...(configId ? { configId } : {}),
 					},
 				);
 				paginatedApiKeys = result.apiKeys;
@@ -343,16 +341,12 @@ export function listApiKeys({
 					);
 					allApiKeys = apiKeys;
 				} else {
-					// When no configId specified, query each unique storage backend.
-					// Database pages cannot be merged across stores, so fetch each
-					// database backend with an explicit bound instead of `undefined`.
+					// Across storage backends we still merge in memory, so request
+					// limit/offset cannot be pushed into each store. Omitted
+					// `findMany` limits stay adapter-defined (100 on Prisma/Drizzle).
 					const groupResults = await Promise.all(
 						storageGroupConfigs.map((opts) =>
 							listApiKeysFromStorage(ctx, referenceId, opts, {
-								limit:
-									opts.storage === "database"
-										? DATABASE_MERGE_FETCH_LIMIT
-										: undefined,
 								sortBy,
 								sortDirection,
 							}),
