@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -756,40 +757,45 @@ describe("multi-session cookie ownership", async () => {
 describe("multi-session cookie secure variants", async () => {
 	const { client, cookieSetter } = await getTestInstance(
 		{
-			advanced: { useSecureCookies: true },
+			advanced: { useSecureCookies: false },
 			plugins: [multiSession({ maximumSessions: 1 })],
 		},
 		{ clientOptions: { plugins: [multiSessionClient()] } },
 	);
 
-	it("counts a plain-variant device cookie when secure cookies are in use", async () => {
+	async function secureVariantHeaders() {
 		const headers = new Headers();
-		const first = await client.signUp.email(
+		const session = await client.signUp.email(
 			{
-				email: "secure-first@test.com",
+				email: `variant-${randomUUID()}@test.com`,
 				password: "password",
-				name: "Secure First",
+				name: "Variant",
 			},
 			{ onSuccess: cookieSetter(headers) },
 		);
-		expect(first.error).toBeNull();
-		const token = first.data!.token!.toLowerCase();
-		const secureName = `__Secure-better-auth.session_token_multi-${token}`;
+		expect(session.error).toBeNull();
+		const token = session.data!.token!.toLowerCase();
 		const plainName = `better-auth.session_token_multi-${token}`;
+		const secureName = `__Secure-${plainName}`;
 		const signedValue = parseCookies(headers.get("cookie") || "").get(
-			secureName,
+			plainName,
 		);
 		expect(signedValue).toBeTruthy();
+		return { token, plainName, secureName, signedValue };
+	}
+
+	it("counts the alternate variant when the instance can serve both protocols", async () => {
+		const { secureName, signedValue } = await secureVariantHeaders();
 
 		let setCookie = "";
 		const second = await client.signUp.email(
 			{
-				email: "secure-second@test.com",
+				email: "variant-second@test.com",
 				password: "password",
-				name: "Secure Second",
+				name: "Variant Second",
 			},
 			{
-				headers: new Headers({ cookie: `${plainName}=${signedValue}` }),
+				headers: new Headers({ cookie: `${secureName}=${signedValue}` }),
 				onResponse(context) {
 					setCookie = context.response.headers.get("set-cookie") || "";
 				},
@@ -797,7 +803,204 @@ describe("multi-session cookie secure variants", async () => {
 		);
 		expect(second.error).toBeNull();
 		expect(setCookie).not.toContain(
-			`__Secure-better-auth.session_token_multi-${second.data!.token!.toLowerCase()}=`,
+			`better-auth.session_token_multi-${second.data!.token!.toLowerCase()}=`,
+		);
+	});
+
+	it("expires a revoked secure-variant cookie with the Secure attribute", async () => {
+		const headers = new Headers();
+		const first = await client.signUp.email(
+			{
+				email: "revoked-variant@test.com",
+				password: "password",
+				name: "Revoked Variant",
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		expect(first.error).toBeNull();
+		const token = first.data!.token!.toLowerCase();
+		const plainName = `better-auth.session_token_multi-${token}`;
+		const secureName = `__Secure-${plainName}`;
+		const signedValue = parseCookies(headers.get("cookie") || "").get(
+			plainName,
+		);
+		expect(signedValue).toBeTruthy();
+
+		// Revoke the session without applying the response cookies, so the
+		// browser-side jar still holds a now-dead device cookie.
+		const revoked = await client.multiSession.revoke(
+			{ sessionToken: token },
+			{
+				headers,
+			},
+		);
+		expect(revoked.error).toBeNull();
+
+		let setCookie = "";
+		const second = await client.signUp.email(
+			{
+				email: "stale-secure-variant@test.com",
+				password: "password",
+				name: "Stale Secure Variant",
+			},
+			{
+				headers: new Headers({ cookie: `${secureName}=${signedValue}` }),
+				onResponse(context) {
+					setCookie = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+		expect(second.error).toBeNull();
+		const cookies = parseSetCookieHeader(setCookie);
+		expect(cookies.get(secureName)?.["max-age"]).toBe(0);
+		expect(cookies.get(secureName)?.secure).toBe(true);
+		expect(
+			cookies.get(
+				`better-auth.session_token_multi-${second.data!.token!.toLowerCase()}`,
+			)?.value,
+		).toBeTruthy();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12904
+ */
+describe("multi-session fixed cookie configuration", async () => {
+	const plain = await getTestInstance(
+		{
+			secret: "plain-app-secret-that-is-long-enough-for-tests",
+			advanced: { useSecureCookies: false },
+			plugins: [multiSession({ maximumSessions: 5 })],
+		},
+		{ clientOptions: { plugins: [multiSessionClient()] } },
+	);
+	const secure = await getTestInstance(
+		{
+			secret: "secure-app-secret-that-is-long-enough-for-tests",
+			advanced: { useSecureCookies: true },
+			plugins: [multiSession({ maximumSessions: 5 })],
+		},
+		{ clientOptions: { plugins: [multiSessionClient()] } },
+	);
+
+	it("leaves another app's cookies alone when their secrets differ", async () => {
+		const headers = new Headers();
+		const session = await plain.client.signUp.email(
+			{ email: "plain-app@test.com", password: "password", name: "Plain" },
+			{ onSuccess: plain.cookieSetter(headers) },
+		);
+		expect(session.error).toBeNull();
+		const plainName = `better-auth.session_token_multi-${session.data!.token!.toLowerCase()}`;
+		const plainValue = parseCookies(headers.get("cookie") || "").get(plainName);
+		expect(plainValue).toBeTruthy();
+
+		let setCookie = "";
+		const other = await secure.client.signUp.email(
+			{ email: "secure-app@test.com", password: "password", name: "Secure" },
+			{
+				headers: new Headers({ cookie: `${plainName}=${plainValue}` }),
+				onResponse(context) {
+					setCookie = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+		expect(other.error).toBeNull();
+		expect(setCookie).not.toContain(`${plainName}=;`);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12904
+ */
+describe("multi-session custom session tokens", async () => {
+	const { client, cookieSetter } = await getTestInstance(
+		{
+			plugins: [multiSession({ maximumSessions: 1 })],
+			databaseHooks: {
+				session: {
+					create: {
+						before: async (session) => ({
+							data: { ...session, token: randomUUID() },
+						}),
+					},
+				},
+			},
+		},
+		{ clientOptions: { plugins: [multiSessionClient()] } },
+	);
+
+	it("counts a device cookie with a custom token format", async () => {
+		const headers = new Headers();
+		const first = await client.signUp.email(
+			{ email: "custom-token@test.com", password: "password", name: "Custom" },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		expect(first.error).toBeNull();
+		const customName = `better-auth.session_token_multi-${first.data!.token!.toLowerCase()}`;
+		const customValue = parseCookies(headers.get("cookie") || "").get(
+			customName,
+		);
+		expect(customValue).toBeTruthy();
+
+		let setCookie = "";
+		const second = await client.signUp.email(
+			{ email: "custom-token-two@test.com", password: "password", name: "Two" },
+			{
+				headers: new Headers({ cookie: `${customName}=${customValue}` }),
+				onResponse(context) {
+					setCookie = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+		expect(second.error).toBeNull();
+		expect(setCookie).not.toContain(
+			`better-auth.session_token_multi-${second.data!.token!.toLowerCase()}=`,
+		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12904
+ */
+describe("multi-session duplicate cookie variants", async () => {
+	const { client, cookieSetter } = await getTestInstance(
+		{
+			advanced: { useSecureCookies: false },
+			plugins: [multiSession({ maximumSessions: 2 })],
+		},
+		{ clientOptions: { plugins: [multiSessionClient()] } },
+	);
+
+	it("counts both variants of one session only once", async () => {
+		const headers = new Headers();
+		const first = await client.signUp.email(
+			{ email: "duplicate@test.com", password: "password", name: "Duplicate" },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		expect(first.error).toBeNull();
+		const token = first.data!.token!.toLowerCase();
+		const plainName = `better-auth.session_token_multi-${token}`;
+		const secureName = `__Secure-${plainName}`;
+		const signedValue = parseCookies(headers.get("cookie") || "").get(
+			plainName,
+		);
+		expect(signedValue).toBeTruthy();
+
+		let setCookie = "";
+		const second = await client.signUp.email(
+			{ email: "duplicate-two@test.com", password: "password", name: "Two" },
+			{
+				headers: new Headers({
+					cookie: `${plainName}=${signedValue}; ${secureName}=${signedValue}`,
+				}),
+				onResponse(context) {
+					setCookie = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+		expect(second.error).toBeNull();
+		expect(setCookie).toContain(
+			`better-auth.session_token_multi-${second.data!.token!.toLowerCase()}=`,
 		);
 	});
 });

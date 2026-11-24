@@ -56,33 +56,6 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 	};
 
 	const isMultiSessionCookie = (key: string) => key.includes("_multi-");
-	/**
-	 * Device cookies belong to this instance only when their name is the exact
-	 * one this instance generates: `<session cookie name>_multi-<token>`, where
-	 * session tokens are 32 alphanumeric characters lowercased in the name.
-	 * A hostname can hold both the secure and plain variant of the same cookie
-	 * (e.g. `protocol: "auto"`), so both are considered. Checking the full name
-	 * keeps cookies of another instance whose configured name merely shares a
-	 * prefix (such as `foo_multi-`) from being counted or expired here.
-	 */
-	const isOwnedMultiSessionCookie = (
-		key: string,
-		sessionCookieName: string,
-	) => {
-		const names = [
-			sessionCookieName,
-			sessionCookieName.startsWith(SECURE_COOKIE_PREFIX)
-				? sessionCookieName.slice(SECURE_COOKIE_PREFIX.length)
-				: `${SECURE_COOKIE_PREFIX}${sessionCookieName}`,
-		];
-		return names.some((name) => {
-			const prefix = `${name}_multi-`;
-			return (
-				key.startsWith(prefix) &&
-				/^[a-z0-9]{32}$/.test(key.slice(prefix.length))
-			);
-		});
-	};
 
 	return {
 		id: "multi-session",
@@ -375,23 +348,54 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 
 						const multiSessionKeys = Object.keys(
 							Object.fromEntries(cookies),
-						).filter((key) =>
-							isOwnedMultiSessionCookie(key, sessionCookieConfig.name),
-						);
+						).filter(isMultiSessionCookie);
+
+						// The same deployment can be served over HTTP and HTTPS, so a
+						// browser may hold either variant of this instance's cookie name.
+						// Ownership is still verified below by the signature and by
+						// matching the full name against the signed token, so another
+						// app's cookies are never counted or cleared.
+						const ownedNames = [
+							sessionCookieConfig.name,
+							sessionCookieConfig.name.startsWith(SECURE_COOKIE_PREFIX)
+								? sessionCookieConfig.name.slice(SECURE_COOKIE_PREFIX.length)
+								: `${SECURE_COOKIE_PREFIX}${sessionCookieConfig.name}`,
+						];
+						const expireDeviceCookie = (name: string) =>
+							ctx.setCookie(name, "", {
+								...sessionCookieConfig.attributes,
+								// Browsers ignore the deletion of a `__Secure-` cookie unless
+								// the Secure attribute is set on the expiring entry too.
+								secure: name.startsWith(SECURE_COOKIE_PREFIX),
+								maxAge: 0,
+							});
 
 						const tokensToDelete: string[] = [];
 						const staleCookieKeys: string[] = [];
+						const seenTokens = new Set<string>();
+						let ownedCount = 0;
 						for (const key of multiSessionKeys) {
+							const name = ownedNames.find((ownedName) =>
+								key.startsWith(`${ownedName}_multi-`),
+							);
+							if (!name) continue;
 							const token = await ctx.getSignedCookie(key, ctx.context.secret);
-							if (!token) {
-								// An unsigned or tampered cookie can never be used again.
-								staleCookieKeys.push(key);
-								ctx.setCookie(key, "", {
-									...sessionCookieConfig.attributes,
-									maxAge: 0,
-								});
+							// The signed token must be exactly the one in the cookie name.
+							// This works for custom token formats and ignores cookies
+							// another app signed or named differently.
+							if (!token || key !== `${name}_multi-${token.toLowerCase()}`) {
 								continue;
 							}
+							const dedupeKey = token.toLowerCase();
+							if (seenTokens.has(dedupeKey)) {
+								// Both cookie variants can hold the same session: count it
+								// once and clear the duplicate.
+								staleCookieKeys.push(key);
+								expireDeviceCookie(key);
+								continue;
+							}
+							seenTokens.add(dedupeKey);
+							ownedCount++;
 							const session =
 								await ctx.context.internalAdapter.findSession(token);
 							if (
@@ -405,18 +409,12 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 								// slot reserved and block the next sign-in. The session itself
 								// is left alone; only the cookie is cleared.
 								staleCookieKeys.push(key);
-								ctx.setCookie(key, "", {
-									...sessionCookieConfig.attributes,
-									maxAge: 0,
-								});
+								expireDeviceCookie(key);
 								continue;
 							}
 							if (session.user.id === newSession.user.id) {
 								tokensToDelete.push(token);
-								ctx.setCookie(key, "", {
-									...sessionCookieConfig.attributes,
-									maxAge: 0,
-								});
+								expireDeviceCookie(key);
 							}
 						}
 						if (tokensToDelete.length > 0) {
@@ -424,7 +422,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						}
 
 						const currentCount =
-							multiSessionKeys.length -
+							ownedCount -
 							tokensToDelete.length -
 							staleCookieKeys.length +
 							(cookieString.includes(sessionCookieConfig.name) ? 1 : 0);
