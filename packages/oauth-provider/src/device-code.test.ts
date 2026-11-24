@@ -3014,6 +3014,7 @@ describe("oauth-provider device-code grant on scalar list columns", async () => 
 			token_type: "Bearer",
 			scope: "openid",
 		});
+		expect(decodeJwt(res.data!.id_token as string)).not.toHaveProperty("amr");
 	});
 
 	it("rejects a resource the user did not approve for a code requested without one", async () => {
