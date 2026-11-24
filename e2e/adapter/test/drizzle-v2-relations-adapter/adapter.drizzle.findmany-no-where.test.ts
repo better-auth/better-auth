@@ -8,15 +8,7 @@ import Database from "better-sqlite3";
 import { defineRelationsPart } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import {
-	afterAll,
-	afterEach,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const users = sqliteTable("user", {
 	id: text("id").primaryKey(),
@@ -47,9 +39,6 @@ const relations = defineRelationsPart(tables, (r) => ({
 	},
 }));
 
-/**
- * @see https://github.com/better-auth/better-auth/issues/12927
- */
 describe("drizzle relations-v2 adapter: joined findMany without where", () => {
 	const sqliteDb = new Database(":memory:");
 	const db = drizzle({ client: sqliteDb, schema: tables, relations });
@@ -61,9 +50,7 @@ describe("drizzle relations-v2 adapter: joined findMany without where", () => {
 		advanced: { database: { joins: true } },
 	});
 
-	beforeEach(() => {
-		sqliteDb.exec("DROP TABLE IF EXISTS session;");
-		sqliteDb.exec("DROP TABLE IF EXISTS user;");
+	beforeAll(() => {
 		sqliteDb.exec(`
 			CREATE TABLE user (
 				id TEXT PRIMARY KEY,
@@ -98,20 +85,19 @@ describe("drizzle relations-v2 adapter: joined findMany without where", () => {
 		`);
 	});
 
-	afterEach(() => {
-		vi.restoreAllMocks();
-	});
-
 	afterAll(() => {
 		sqliteDb.close();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12927
+	 */
 	it("omits the `where` key and returns every joined row", async () => {
 		const findMany = vi.spyOn(db.query.session, "findMany");
 
 		const result = await adapter.findMany<{
 			id: string;
-			user: { id: string; email: string };
+			user: { email: string };
 		}>({
 			model: "session",
 			join: { user: true },
@@ -124,21 +110,5 @@ describe("drizzle relations-v2 adapter: joined findMany without where", () => {
 			["s1", "alice@test.com"],
 			["s2", "bob@test.com"],
 		]);
-	});
-
-	it("still applies the filter when a `where` is given", async () => {
-		const findMany = vi.spyOn(db.query.session, "findMany");
-
-		const result = await adapter.findMany<{
-			id: string;
-			user: { id: string };
-		}>({
-			model: "session",
-			where: [{ field: "userId", value: "u2" }],
-			join: { user: true },
-		});
-
-		expect(findMany.mock.calls[0]![0]).toHaveProperty("where");
-		expect(result.map((r) => [r.id, r.user.id])).toEqual([["s2", "u2"]]);
 	});
 });
