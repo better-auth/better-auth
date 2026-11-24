@@ -9,7 +9,7 @@ import {
 	CAPTCHA_INTERNAL_ERROR_CODES,
 } from "./error-codes";
 
-export * from "./error-codes";
+export { CAPTCHA_ERROR_CODES } from "./error-codes";
 
 import type { CaptchaOptions } from "./types";
 
