@@ -879,11 +879,70 @@ model Directory_user {
 			const updatedSchema =
 				updated.code || fs.readFileSync(schemaPath, "utf-8");
 			expect(updatedSchema).toMatch(
-				/id\s+String\s+@id\s+@default\(dbgenerated\("pg_catalog\.gen_random_uuid\(\)"\)\)\s+@db\.Uuid/,
+				/id\s+String\s+@id\s+@default\(dbgenerated\("gen_random_uuid\(\)"\)\)\s+@db\.Uuid/,
 			);
 			expect(updatedSchema).toMatch(/userId\s+String\s+@db\.Uuid/);
 			expect(updatedSchema).not.toMatch(/id\s+Int\s+@id.*@db\.Uuid/);
 			expect(updatedSchema).not.toMatch(/userId\s+Int\s+@db\.Uuid/);
+		} finally {
+			fs.rmSync(tmpDir, { recursive: true });
+		}
+	});
+
+	it("should rewrite the qualified uuid default in an existing prisma schema", async () => {
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-uuid-default-"),
+		);
+		const schemaPath = path.join(tmpDir, "schema.prisma");
+		const relativePath = path.relative(process.cwd(), schemaPath);
+		try {
+			const generate = () =>
+				generatePrismaSchema({
+					file: relativePath,
+					adapter: prismaAdapter(
+						{},
+						{
+							provider: "postgresql",
+						},
+					)({} as BetterAuthOptions),
+					options: {
+						database: prismaAdapter(
+							{},
+							{
+								provider: "postgresql",
+							},
+						),
+						advanced: {
+							database: {
+								generateId: "uuid",
+							},
+						},
+					},
+				});
+
+			const first = await generate();
+			expect(first.code).toBeDefined();
+			// What earlier CLI versions wrote, plus a model Better Auth doesn't own.
+			fs.writeFileSync(
+				schemaPath,
+				`${first.code!.replaceAll(
+					'dbgenerated("gen_random_uuid()")',
+					'dbgenerated("pg_catalog.gen_random_uuid()")',
+				)}
+model Post {
+  id String @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
+}
+`,
+			);
+
+			const updated = await generate();
+			expect(updated.overwrite).toBe(true);
+			const [authModels, postModel] = updated.code!.split("model Post");
+			expect(authModels).toContain('dbgenerated("gen_random_uuid()")');
+			expect(authModels).not.toContain("pg_catalog");
+			expect(postModel).toContain(
+				'dbgenerated("pg_catalog.gen_random_uuid()")',
+			);
 		} finally {
 			fs.rmSync(tmpDir, { recursive: true });
 		}

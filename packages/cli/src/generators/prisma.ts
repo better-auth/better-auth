@@ -138,6 +138,14 @@ function prismaIndexMatches(
 }
 
 /**
+ * Unqualified on purpose: Postgres reports the column default as
+ * `gen_random_uuid()`, and Prisma Migrate compares `dbgenerated` with that
+ * text, so the `pg_catalog.` form causes drift on every `migrate dev`.
+ */
+const UUID_DEFAULT = '"gen_random_uuid()"';
+const LEGACY_UUID_DEFAULT = '"pg_catalog.gen_random_uuid()"';
+
+/**
  * The models an existing schema declares, read the way the comparison wants
  * them: each model by name, each scalar or enum field by name. A relation
  * field is not a column and is skipped.
@@ -420,10 +428,34 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							.model(modelName)
 							.field("id", "String")
 							.attribute("id")
-							.attribute('default(dbgenerated("pg_catalog.gen_random_uuid()"))')
+							.attribute(`default(dbgenerated(${UUID_DEFAULT}))`)
 							.attribute("db.Uuid");
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
+					}
+				}
+			} else if (provider === "postgresql") {
+				// Schemas written by earlier CLI versions carry the qualified
+				// default, so they keep drifting until it is rewritten too.
+				const idField = builder.findByType("field", {
+					name: "id",
+					within: prismaModel.properties,
+				});
+				for (const attribute of idField?.attributes ?? []) {
+					if (attribute.name !== "default") continue;
+					for (const arg of attribute.args ?? []) {
+						const value = arg.value;
+						if (
+							typeof value === "object" &&
+							value !== null &&
+							"type" in value &&
+							value.type === "function" &&
+							value.name === "dbgenerated" &&
+							value.params?.length === 1 &&
+							value.params[0] === LEGACY_UUID_DEFAULT
+						) {
+							value.params[0] = UUID_DEFAULT;
+						}
 					}
 				}
 			}
