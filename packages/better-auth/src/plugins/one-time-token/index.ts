@@ -6,6 +6,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -107,11 +108,18 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 			: generateRandomString(32);
 		const expiresAt = new Date(Date.now() + (opts?.expiresIn ?? 3) * 60 * 1000);
 		const storedToken = await storeToken(c, token);
-		await c.context.internalAdapter.createVerificationValue({
-			value: session.session.token,
-			identifier: `one-time-token:${storedToken}`,
-			expiresAt,
-		});
+		const verification =
+			await c.context.internalAdapter.createVerificationValue({
+				value: session.session.token,
+				identifier: `one-time-token:${storedToken}`,
+				expiresAt,
+			});
+		if (!verification) {
+			throw APIError.from(
+				"INTERNAL_SERVER_ERROR",
+				BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+			);
+		}
 		return token;
 	}
 

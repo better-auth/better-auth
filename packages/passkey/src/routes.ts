@@ -4,7 +4,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -392,24 +392,31 @@ export const generatePasskeyRegistrationOptions = (
 				},
 			);
 			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
-			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: verificationToken,
-				value: JSON.stringify({
-					type: "registration",
-					registrationSource: await registrationSourceFor(
-						!requireSession && isStateful(ctx),
-						sessionToken,
-					),
-					expectedChallenge: options.challenge,
-					userData: {
-						id: user.id,
-						name: user.name,
-						displayName: user.displayName,
-					},
-					context: ctx.query?.context ?? null,
-				} satisfies StoredChallengeValue),
-				expiresAt: expirationTime,
-			});
+			const verification =
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: verificationToken,
+					value: JSON.stringify({
+						type: "registration",
+						registrationSource: await registrationSourceFor(
+							!requireSession && isStateful(ctx),
+							sessionToken,
+						),
+						expectedChallenge: options.challenge,
+						userData: {
+							id: user.id,
+							name: user.name,
+							displayName: user.displayName,
+						},
+						context: ctx.query?.context ?? null,
+					} satisfies StoredChallengeValue),
+					expiresAt: expirationTime,
+				});
+			if (!verification) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 			return ctx.json(options, {
 				status: 200,
 			});
@@ -576,11 +583,18 @@ export const generatePasskeyAuthenticationOptions = (
 				},
 			);
 			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
-			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: verificationToken,
-				value: JSON.stringify(data),
-				expiresAt: expirationTime,
-			});
+			const verification =
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: verificationToken,
+					value: JSON.stringify(data),
+					expiresAt: expirationTime,
+				});
+			if (!verification) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 			return ctx.json(options, {
 				status: 200,
 			});

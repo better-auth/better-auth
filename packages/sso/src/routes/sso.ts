@@ -3,6 +3,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
@@ -726,11 +727,18 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				domainVerified = false;
 				domainVerificationToken = generateRandomString(24);
 
-				await ctx.context.internalAdapter.createVerificationValue({
-					identifier: getVerificationIdentifier(options, provider.providerId),
-					value: domainVerificationToken as string,
-					expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
-				});
+				const verification =
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: getVerificationIdentifier(options, provider.providerId),
+						value: domainVerificationToken as string,
+						expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
+					});
+				if (!verification) {
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+					);
+				}
 			}
 
 			type SSOProviderResponse = {
@@ -1233,11 +1241,18 @@ export const signInSSO = (options?: SSOOptions) => {
 						createdAt: Date.now(),
 						expiresAt: Date.now() + ttl,
 					};
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: `${constants.AUTHN_REQUEST_KEY_PREFIX}${record.id}`,
-						value: JSON.stringify(record),
-						expiresAt: new Date(record.expiresAt),
-					});
+					const verification =
+						await ctx.context.internalAdapter.createVerificationValue({
+							identifier: `${constants.AUTHN_REQUEST_KEY_PREFIX}${record.id}`,
+							value: JSON.stringify(record),
+							expiresAt: new Date(record.expiresAt),
+						});
+					if (!verification) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+						);
+					}
 				}
 
 				return ctx.json({

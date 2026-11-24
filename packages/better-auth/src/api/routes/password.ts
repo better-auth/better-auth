@@ -129,11 +129,18 @@ export const requestPasswordReset = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: user.user.id,
-			identifier: `reset-password:${verificationToken}`,
-			expiresAt,
-		});
+		const verification =
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: user.user.id,
+				identifier: `reset-password:${verificationToken}`,
+				expiresAt,
+			});
+		if (!verification) {
+			throw APIError.from(
+				"INTERNAL_SERVER_ERROR",
+				BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+			);
+		}
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.runInBackgroundOrAwait(

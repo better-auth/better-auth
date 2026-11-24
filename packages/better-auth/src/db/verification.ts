@@ -2,6 +2,7 @@ import type {
 	GenericEndpointContext,
 	InternalAdapter,
 } from "@better-auth/core";
+import type { Verification } from "@better-auth/core/db";
 import {
 	encodeDeterministicId,
 	isUniqueViolation,
@@ -16,12 +17,13 @@ import {
  * Creates a verification value, or returns the one a concurrent request stored
  * first. With the default or `"uuid"` id strategy, the id is derived from the
  * stored `identifier`, so the primary key keeps one row per identifier even
- * though the schema does not make `identifier` unique.
+ * though the schema does not make `identifier` unique. Resolves to `null` when
+ * a `verification.create.before` hook vetoes the create.
  */
 export async function createOrFindVerification(
 	ctx: GenericEndpointContext,
 	data: Parameters<InternalAdapter["createVerificationValue"]>[0],
-) {
+): Promise<Verification | null> {
 	const { internalAdapter } = ctx.context;
 	const id = await deriveVerificationId(ctx, data.identifier);
 	return internalAdapter

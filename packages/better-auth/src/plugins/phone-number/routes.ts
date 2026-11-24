@@ -991,7 +991,14 @@ async function issuePhoneNumberOTP(
 	};
 	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
 	const stored = await createOrFindVerification(ctx, verification);
-	if (!stored || stored.value === verification.value) return code;
+	// A verification.create.before hook can veto the create by returning false.
+	if (!stored) {
+		throw APIError.from(
+			"INTERNAL_SERVER_ERROR",
+			BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+		);
+	}
+	if (stored.value === verification.value) return code;
 
 	const [storedCode, attempts] = stored.value.split(":");
 	const reusable =

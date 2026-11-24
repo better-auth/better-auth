@@ -570,11 +570,17 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								ctx.context.secret,
 								`${data.user.id}!${newTrustIdentifier}`,
 							);
-							await ctx.context.internalAdapter.createVerificationValue({
-								value: data.user.id,
-								identifier: newTrustIdentifier,
-								expiresAt: new Date(Date.now() + trustDeviceMaxAge * 1000),
-							});
+							const trustRecord =
+								await ctx.context.internalAdapter.createVerificationValue({
+									value: data.user.id,
+									identifier: newTrustIdentifier,
+									expiresAt: new Date(Date.now() + trustDeviceMaxAge * 1000),
+								});
+							// A vetoed record leaves the device untrusted from now on.
+							if (!trustRecord) {
+								expireCookie(ctx, trustDeviceCookieAttrs);
+								return;
+							}
 							const newTrustDeviceCookie = ctx.context.createAuthCookie(
 								TRUST_DEVICE_COOKIE_NAME,
 								{
@@ -616,19 +622,33 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						);
 						const identifier = `2fa-${generateRandomString(20)}`;
 						const expiresAt = new Date(Date.now() + maxAge * 1000);
-						await ctx.context.internalAdapter.createVerificationValue({
-							value: data.user.id,
-							identifier,
-							expiresAt,
-						});
+						const challenge =
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: data.user.id,
+								identifier,
+								expiresAt,
+							});
+						if (!challenge) {
+							throw APIError.from(
+								"INTERNAL_SERVER_ERROR",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+							);
+						}
 						// Per-challenge attempt counter, consumed atomically by
 						// verify-totp and verify-backup-code as the race gate so a
 						// concurrent burst cannot exceed the budget.
-						await ctx.context.internalAdapter.createVerificationValue({
-							value: "0",
-							identifier: `2fa-attempts-${identifier}`,
-							expiresAt,
-						});
+						const attemptCounter =
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: "0",
+								identifier: `2fa-attempts-${identifier}`,
+								expiresAt,
+							});
+						if (!attemptCounter) {
+							throw APIError.from(
+								"INTERNAL_SERVER_ERROR",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+							);
+						}
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
 							identifier,

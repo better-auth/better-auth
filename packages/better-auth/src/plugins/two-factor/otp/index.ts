@@ -217,11 +217,18 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			const { session, key } = await verifyTwoFactor(ctx);
 			const code = generateRandomString(opts.digits, "0-9");
 			const hashedCode = await storeOTP(ctx, code);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${hashedCode}:0`,
-				identifier: `2fa-otp-${key}`,
-				expiresAt: new Date(Date.now() + opts.period),
-			});
+			const verification =
+				await ctx.context.internalAdapter.createVerificationValue({
+					value: `${hashedCode}:0`,
+					identifier: `2fa-otp-${key}`,
+					expiresAt: new Date(Date.now() + opts.period),
+				});
+			if (!verification) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 			const sendOTPResult = options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
 				ctx,

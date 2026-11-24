@@ -4,6 +4,7 @@ import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import type { SecondaryStorage } from "better-auth/db";
 import { bearer, organization } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
@@ -1028,5 +1029,73 @@ describe("Domain verification", async () => {
 
 			expect(verifyResponse.status).toBe(204);
 		});
+	});
+});
+
+/**
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("domain verification tokens vetoed by a verification hook", () => {
+	async function setup() {
+		const veto = { active: false };
+		const { auth, signInWithTestUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before() {
+							return veto.active ? false : undefined;
+						},
+					},
+				},
+			},
+			plugins: [sso({ domainVerification: { enabled: true } })],
+		});
+		const { headers } = await signInWithTestUser();
+		const register = () =>
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "vetoed-domain-provider",
+					issuer: "https://idp.vetoed-domain.com",
+					domain: "vetoed-domain.com",
+					samlConfig: {
+						entryPoint: "https://idp.vetoed-domain.com/sso",
+						cert: "the-cert",
+						idpMetadata: { entityID: "https://idp.vetoed-domain.com" },
+						spMetadata: {},
+					},
+				},
+				headers,
+				asResponse: true,
+			});
+		return { auth, headers, veto, register };
+	}
+
+	it("does not return a registration token that was not stored", async () => {
+		const { veto, register } = await setup();
+		veto.active = true;
+
+		const res = await register();
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+	});
+
+	it("does not return a requested token that was not stored", async () => {
+		const { auth, headers, veto, register } = await setup();
+		expect((await register()).status).toBe(200);
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteVerificationByIdentifier(
+			"_better-auth-token-vetoed-domain-provider",
+		);
+		veto.active = true;
+
+		const res = await auth.api.requestDomainVerification({
+			body: { providerId: "vetoed-domain-provider" },
+			headers,
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
 	});
 });

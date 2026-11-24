@@ -500,7 +500,7 @@ describe("internal adapter test", async () => {
 		});
 
 		await internalAdapter.deleteVerificationByIdentifier(
-			verification.identifier,
+			verification!.identifier,
 		);
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
@@ -516,7 +516,7 @@ describe("internal adapter test", async () => {
 		// Remove the DB record so the entity no longer exists
 		await authContext.adapter.deleteMany({
 			model: "verification",
-			where: [{ field: "identifier", value: verification.identifier }],
+			where: [{ field: "identifier", value: verification!.identifier }],
 		});
 
 		const deleteSpy = vi.spyOn(authContext.adapter, "delete");
@@ -564,7 +564,7 @@ describe("internal adapter test", async () => {
 			});
 
 			// Stored identifier should be hashed (not equal to original)
-			expect(verification.identifier).not.toBe("reset-password:my-token-123");
+			expect(verification!.identifier).not.toBe("reset-password:my-token-123");
 
 			// Should be able to find by original identifier
 			const found = await hashedAdapter.findVerificationValue(
@@ -606,7 +606,7 @@ describe("internal adapter test", async () => {
 				value: "user-1",
 				expiresAt: new Date(Date.now() + 60000),
 			});
-			expect(hashedVerification.identifier).not.toBe(
+			expect(hashedVerification!.identifier).not.toBe(
 				"reset-password:token-abc",
 			);
 
@@ -616,7 +616,7 @@ describe("internal adapter test", async () => {
 				value: "user-2",
 				expiresAt: new Date(Date.now() + 60000),
 			});
-			expect(plainVerification.identifier).toBe("magic-link:token-xyz");
+			expect(plainVerification!.identifier).toBe("magic-link:token-xyz");
 		});
 
 		it("should fallback to plain lookup for old tokens", async () => {
@@ -1860,8 +1860,10 @@ describe("internal adapter test", async () => {
 				expiresAt: new Date(Date.now() + 60000),
 			});
 
-			expect(dataMap.has(`verification:${verification.identifier}`)).toBe(true);
-			expect(ttlMap.has(`verification:${verification.identifier}`)).toBe(true);
+			expect(dataMap.has(`verification:${verification!.identifier}`)).toBe(
+				true,
+			);
+			expect(ttlMap.has(`verification:${verification!.identifier}`)).toBe(true);
 		});
 
 		it("should find verification from secondary storage", async () => {

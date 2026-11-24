@@ -3544,3 +3544,36 @@ describe("email-otp verification rows", () => {
 		},
 	);
 });
+
+/**
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("email OTP issuance vetoed by a verification hook", () => {
+	it.for(["sign-in", "email-verification", "forget-password"] as const)(
+		"refuses to send a %s code that was not stored",
+		async (type) => {
+			const sendVerificationOTP = vi.fn();
+			const { auth, testUser } = await getTestInstance({
+				databaseHooks: {
+					verification: {
+						create: {
+							async before() {
+								return false;
+							},
+						},
+					},
+				},
+				plugins: [emailOTP({ sendVerificationOTP })],
+			});
+
+			const res = await auth.api.sendVerificationOTP({
+				body: { email: testUser.email, type },
+				asResponse: true,
+			});
+
+			expect(res.status).toBe(500);
+			expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+			expect(sendVerificationOTP).not.toHaveBeenCalled();
+		},
+	);
+});
