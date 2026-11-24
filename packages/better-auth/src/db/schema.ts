@@ -65,6 +65,12 @@ export function parseUserOutput<T extends User>(
 	return filterOutputFields(user, schema);
 }
 
+function resolveDefaultValue(field: DBFieldAttribute) {
+	return typeof field.defaultValue === "function"
+		? field.defaultValue()
+		: field.defaultValue;
+}
+
 /**
  * Builds a synthetic user object that matches the shape of a real user
  * returned from the database. This ensures enumeration protection works
@@ -94,10 +100,7 @@ export function buildSyntheticUserOutput(
 		if (key in data && data[key] !== undefined) {
 			result[key] = data[key];
 		} else if (fieldAttr.defaultValue !== undefined) {
-			result[key] =
-				typeof fieldAttr.defaultValue === "function"
-					? fieldAttr.defaultValue()
-					: fieldAttr.defaultValue;
+			result[key] = resolveDefaultValue(fieldAttr);
 		} else if (!fieldAttr.required) {
 			result[key] = null;
 		}
@@ -155,7 +158,7 @@ export function parseInputData<T extends Record<string, any>>(
 			if (fields[key]!.input === false) {
 				if (fields[key]!.defaultValue !== undefined) {
 					if (action !== "update") {
-						parsedData[key] = fields[key]!.defaultValue;
+						parsedData[key] = resolveDefaultValue(fields[key]!);
 						continue;
 					}
 				}
@@ -195,11 +198,7 @@ export function parseInputData<T extends Record<string, any>>(
 		}
 
 		if (fields[key]!.defaultValue !== undefined && action === "create") {
-			if (typeof fields[key]!.defaultValue === "function") {
-				parsedData[key] = fields[key]!.defaultValue();
-				continue;
-			}
-			parsedData[key] = fields[key]!.defaultValue;
+			parsedData[key] = resolveDefaultValue(fields[key]!);
 			continue;
 		}
 
@@ -268,10 +267,7 @@ export function getSessionDefaultFields(options: BetterAuthOptions) {
 	const defaults: Record<string, any> = {};
 	for (const key in fields) {
 		if (fields[key]!.defaultValue !== undefined) {
-			defaults[key] =
-				typeof fields[key]!.defaultValue === "function"
-					? fields[key]!.defaultValue()
-					: fields[key]!.defaultValue;
+			defaults[key] = resolveDefaultValue(fields[key]!);
 		}
 	}
 	return defaults;
