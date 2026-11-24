@@ -282,6 +282,54 @@ consumeOne: async ({ model, where }) => {
   `consumeOne` is optional. Without it, Better Auth uses a conditional delete and returns the record only when exactly one row was deleted.
 </Callout>
 
+### `consumeLatest` method
+
+The `consumeLatest` method picks the ordered row among every record with `field = value`, deletes the picked row and every matching row that does not sort after it, and returns the picked row. Two concurrent requests cannot both receive a row. It powers identifier-keyed single-use values such as email OTP, magic links, and password-reset tokens, where more than one row may exist for the same identifier.
+
+parameters:
+
+* `model`: The model/table name to consume records from.
+* `field`: The field to match, for example `identifier`.
+* `value`: The field value to consume. An empty string returns `null` without querying.
+* `orderBy`: The field and direction used to pick the returned row, typically `{ field: "createdAt", direction: "desc" }`.
+
+**Returns** `Promise<T | null>`: the picked record, or `null` if no row matched (including when another request consumed it first). A later insert that sorts after the pick is not deleted.
+
+```ts title="Example"
+consumeLatest: async ({ model, field, value, orderBy }) => {
+  if (value === "") return null;
+  const latest = await db
+    .selectFrom(model)
+    .where(field, "=", value)
+    .orderBy(orderBy.field, orderBy.direction)
+    .limit(1)
+    .executeTakeFirst();
+  if (!latest) return null;
+  const bound = latest[orderBy.field];
+  // Delete the picked row first. That id delete is the exclusive claim;
+  // a range delete alone can succeed after another caller already took it.
+  const claimed = await db
+    .deleteFrom(model)
+    .where("id", "=", latest.id)
+    .executeTakeFirst();
+  if (Number(claimed.numDeletedRows) === 0) return null;
+  await db
+    .deleteFrom(model)
+    .where(field, "=", value)
+    .where(
+      orderBy.field,
+      orderBy.direction === "desc" ? "<=" : ">=",
+      bound,
+    )
+    .execute();
+  return latest;
+};
+```
+
+<Callout type="warn">
+  `consumeLatest` is optional. Without it, Better Auth consumes the picked row with `consumeOne`, then deletes matching rows that do not sort after it. Wrap the steps in a transaction when the database supports one. Prisma has no portable row lock for this path, matching `consumeOne`.
+</Callout>
+
 ### `incrementOne` method
 
 The `incrementOne` method atomically updates one matching record by applying numeric deltas and optional set values, then returns the updated row. It powers guarded counters such as rate limits, quotas, and one-winner state transitions.
@@ -531,7 +579,7 @@ With `false`, a write is kept even when a later step in the same request fails, 
 
 ### `debugLogs`
 
-Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `consumeOne`, `incrementOne`, `count`.
+Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `consumeOne`, `consumeLatest`, `incrementOne`, `count`.
 If any of the keys are `true`, the debug logs will be enabled for that method.
 
 ```ts title="Example"
