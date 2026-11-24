@@ -3416,6 +3416,7 @@ describe("email-otp verification rows", () => {
 			openBarrier = resolve;
 		});
 		const delivered: string[] = [];
+		const codes = ["111111", "222222"];
 		const { auth, testUser } = await getTestInstance({
 			databaseHooks: {
 				verification: {
@@ -3431,6 +3432,7 @@ describe("email-otp verification rows", () => {
 			plugins: [
 				emailOTP({
 					storeOTP: "hashed",
+					generateOTP: () => codes.shift(),
 					async sendVerificationOTP({ otp }) {
 						delivered.push(otp);
 					},
