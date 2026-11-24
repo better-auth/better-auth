@@ -24,6 +24,7 @@ import type {
 import type { Confirmation } from "./types/oauth";
 import { ResourceUriSchema } from "./types/zod";
 import {
+	BASIC_CHALLENGE,
 	getAuthEndpointUrl,
 	getClient,
 	getOAuthProviderPlugin,
@@ -229,7 +230,7 @@ function buildOAuthDeviceGrant() {
 				headers: {
 					"WWW-Authenticate": {
 						description: "Basic client authentication challenge",
-						schema: { type: "string", example: "Basic" },
+						schema: { type: "string", example: BASIC_CHALLENGE },
 					},
 				},
 				content: {

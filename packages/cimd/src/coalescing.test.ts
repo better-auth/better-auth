@@ -3,6 +3,7 @@ import type { SchemaClient, Scope } from "@better-auth/oauth-provider";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import { APIError } from "better-call";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCimdClientDiscovery } from "./index";
 import type { CimdOptions } from "./types";
@@ -174,6 +175,131 @@ describe("CIMD in-flight coalescing", () => {
 		expect(await first.findClient(clientId)).toBeNull();
 		expect(await second.findClient(clientId)).toMatchObject({ clientId });
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11875
+	 */
+	it.each([
+		{
+			scenario: "the same cacheable document",
+			cacheControl: "no-cache",
+			recovers: true,
+		},
+		{
+			scenario: "the same no-store document",
+			cacheControl: "no-store",
+			recovers: true,
+		},
+		{ scenario: "a later HTTP 404", cacheControl: "no-store", recovers: false },
+		{
+			scenario: "an intervening HTTP 503",
+			cacheControl: "no-store",
+			recovers: true,
+		},
+		{ scenario: "another database", cacheControl: "no-store", recovers: false },
+		{
+			scenario: "a later rejected no-store document",
+			cacheControl: "no-cache",
+			recovers: false,
+		},
+	])(
+		"checks stale serving after overlapping metadata saves ($scenario)",
+		async ({ scenario, cacheControl, recovers }) => {
+			const clientId = "https://save-recovery.example/client.json";
+			const releaseSave = deferred<void>();
+			let holdSave = false;
+			const { discovery, fetchClientMetadataResource } = createDiscovery({
+				metadataStaleIfError: "1h",
+				onClientRefreshed: async () => {
+					if (holdSave) await releaseSave.promise;
+				},
+			});
+			const first = await createRequestContext();
+			const second =
+				scenario === "another database" ? await createRequestContext() : first;
+			const ok = async () =>
+				metadataResponse(clientId, { "cache-control": "no-store" });
+			fetchClientMetadataResource.mockImplementation(ok);
+			const firstRow = await discovery.resolve(first.ctx, clientId, null);
+			const secondRow =
+				first === second
+					? firstRow
+					: await discovery.resolve(second.ctx, clientId, null);
+			const refused = new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "provider rejected metadata",
+			});
+			const shared = deferred<Response>();
+			fetchClientMetadataResource.mockImplementationOnce(() => shared.promise);
+			const save = vi
+				.spyOn(first.context.adapter, "transaction")
+				.mockRejectedValueOnce(refused);
+			holdSave = true;
+			const attempts = [
+				discovery.resolve(first.ctx, clientId, firstRow),
+				discovery.resolve(second.ctx, clientId, secondRow),
+			];
+			const finished = Promise.allSettled(attempts);
+			shared.resolve(
+				metadataResponse(clientId, { "cache-control": cacheControl }),
+			);
+			try {
+				await expect(Promise.race(attempts)).rejects.toBe(refused);
+				if (
+					scenario === "a later HTTP 404" ||
+					scenario === "an intervening HTTP 503"
+				) {
+					const status = scenario === "a later HTTP 404" ? 404 : 503;
+					fetchClientMetadataResource.mockResolvedValueOnce(
+						new Response(null, { status }),
+					);
+					await expect(
+						discovery.resolve(first.ctx, clientId, firstRow),
+					).rejects.toMatchObject({
+						body: {
+							error_description: `Metadata document fetch returned HTTP ${status}`,
+						},
+					});
+				}
+				if (scenario === "a later rejected no-store document") {
+					fetchClientMetadataResource.mockResolvedValueOnce(
+						metadataResponse(
+							clientId,
+							{ "cache-control": "no-store" },
+							"Replacement",
+						),
+					);
+					save.mockRejectedValueOnce(refused);
+					await expect(
+						discovery.resolve(first.ctx, clientId, firstRow),
+					).rejects.toBe(refused);
+				}
+			} finally {
+				releaseSave.resolve();
+			}
+			expect((await finished).map(({ status }) => status).sort()).toEqual([
+				"fulfilled",
+				"rejected",
+			]);
+			fetchClientMetadataResource.mockResolvedValueOnce(
+				new Response(null, { status: 503 }),
+			);
+			const next = discovery.resolve(
+				first.ctx,
+				clientId,
+				await first.findClient(clientId),
+			);
+			if (recovers) {
+				await expect(next).resolves.toMatchObject({ clientId });
+			} else {
+				await expect(next).rejects.toMatchObject({
+					body: {
+						error_description: "Metadata document fetch returned HTTP 503",
+					},
+				});
+			}
+		},
+	);
 
 	it("drops a fetched document and paces the next fetch when persistence fails", async () => {
 		let now = 1_800_000_000_000;

@@ -115,6 +115,34 @@ describe("API-key sessions on session routes", () => {
 		});
 	});
 
+	it("generates backup codes once TOTP enrollment is finished", async () => {
+		const { auth, testUser, apiKeyHeaders } = await setup();
+		const enrollment = await auth.api.enableTwoFactor({
+			body: {
+				password: testUser.password,
+			},
+			headers: apiKeyHeaders,
+		});
+		assert(enrollment.method === "totp");
+		const secret = new URL(enrollment.totpURI).searchParams.get("secret")!;
+		await auth.api.verifyTOTP({
+			body: {
+				code: await createOTP(base32.decode(secret)).totp(),
+			},
+			headers: apiKeyHeaders,
+		});
+
+		const result = await auth.api.generateBackupCodes({
+			body: {
+				password: testUser.password,
+			},
+			headers: apiKeyHeaders,
+		});
+
+		expect(result.status).toBe(true);
+		expect(result.backupCodes.length).toBeGreaterThan(0);
+	});
+
 	it("replaces the phone number", async () => {
 		const { auth, user, apiKeyHeaders, readOTP } = await setup();
 		const number = "+15555550123";

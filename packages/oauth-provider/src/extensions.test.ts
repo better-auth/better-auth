@@ -473,7 +473,9 @@ describe("oauth-provider extensions", async () => {
 		expect((response.error as { error?: string } | undefined)?.error).toBe(
 			"invalid_client",
 		);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("authorizes against the resolved record, not the strategy", async () => {
