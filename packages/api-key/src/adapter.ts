@@ -638,8 +638,7 @@ export interface ListApiKeysOptions {
 	sortBy?: string;
 	sortDirection?: "asc" | "desc";
 	/**
-	 * When set, restrict results to this configuration.
-	 * `"default"` (and empty values) also match keys with a null configId.
+	 * When set, restrict results to this configuration with an exact match.
 	 */
 	configId?: string;
 }
@@ -649,43 +648,20 @@ export interface ListApiKeysResult {
 	total: number;
 }
 
-function isDefaultConfigId(configId: string): boolean {
-	return !configId || configId === "default";
-}
-
 function buildApiKeyListWhere(referenceId: string, configId?: string): Where[] {
-	const referenceWhere: Where = {
-		field: "referenceId",
-		value: referenceId,
-	};
-	if (configId === undefined) {
-		return [referenceWhere];
-	}
-	if (!isDefaultConfigId(configId)) {
-		return [
-			referenceWhere,
-			{
-				field: "configId",
-				value: configId,
-			},
-		];
-	}
-	// `(configId = 'default' OR configId IS NULL) AND referenceId = ?`
-	// OR clauses come first so the memory adapter's left-associative
-	// evaluation cannot drop the referenceId constraint.
-	return [
+	const where: Where[] = [
 		{
-			field: "configId",
-			value: "default",
-			connector: "OR",
+			field: "referenceId",
+			value: referenceId,
 		},
-		{
-			field: "configId",
-			value: null,
-			connector: "OR",
-		},
-		referenceWhere,
 	];
+	if (configId !== undefined) {
+		where.push({
+			field: "configId",
+			value: configId,
+		});
+	}
+	return where;
 }
 
 async function listApiKeysFromDatabase(

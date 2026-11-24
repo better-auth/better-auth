@@ -303,10 +303,14 @@ export function listApiKeys({
 			const ownershipMatchesListing = listingConfigs.every(
 				(config) => (config.references ?? "user") === expectedReferencesType,
 			);
+			// Page in the database only when in-memory filters cannot drop rows:
+			// one database backend, every listed config matches this ownership
+			// type, and configId is omitted or an exact non-default match.
 			const canPageInDatabase =
 				databaseConfig?.storage === "database" &&
 				ownershipMatchesListing &&
-				(resolvedConfig != null || storageGroupConfigs.length === 1);
+				(resolvedConfig != null || storageGroupConfigs.length === 1) &&
+				(!configId || !isDefaultConfigId(configId));
 
 			let paginatedApiKeys: ApiKey[];
 			let total: number;
