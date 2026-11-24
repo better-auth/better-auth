@@ -896,7 +896,7 @@ model Directory_user {
 		const schemaPath = path.join(tmpDir, "schema.prisma");
 		const relativePath = path.relative(process.cwd(), schemaPath);
 		try {
-			const generate = () =>
+			const generate = (generateId: "uuid" | false = "uuid") =>
 				generatePrismaSchema({
 					file: relativePath,
 					adapter: prismaAdapter(
@@ -914,7 +914,7 @@ model Directory_user {
 						),
 						advanced: {
 							database: {
-								generateId: "uuid",
+								generateId,
 							},
 						},
 					},
@@ -934,6 +934,12 @@ model Post {
 }
 `,
 			);
+
+			// Without uuid ids the default is the project's own, so it stays.
+			const untouched = await generate(false);
+			expect(
+				untouched.code || fs.readFileSync(schemaPath, "utf-8"),
+			).not.toContain('dbgenerated("gen_random_uuid()")');
 
 			const updated = await generate();
 			expect(updated.overwrite).toBe(true);

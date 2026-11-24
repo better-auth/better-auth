@@ -434,14 +434,26 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						builder.model(modelName).field("id", "String").attribute("id");
 					}
 				}
-			} else if (provider === "postgresql") {
+			} else if (
+				provider === "postgresql" &&
+				options.advanced?.database?.generateId === "uuid"
+			) {
 				// Schemas written by earlier CLI versions carry the qualified
-				// default, so they keep drifting until it is rewritten too.
+				// default, so they keep drifting until it is rewritten too. Only
+				// the `String @id @db.Uuid` field those versions wrote is touched.
 				const idField = builder.findByType("field", {
 					name: "id",
 					within: prismaModel.properties,
 				});
-				for (const attribute of idField?.attributes ?? []) {
+				const attributes = idField?.attributes ?? [];
+				const isGeneratedUuidId =
+					idField?.fieldType === "String" &&
+					attributes.some((attribute) => attribute.name === "id") &&
+					attributes.some(
+						(attribute) =>
+							attribute.group === "db" && attribute.name === "Uuid",
+					);
+				for (const attribute of isGeneratedUuidId ? attributes : []) {
 					if (attribute.name !== "default") continue;
 					for (const arg of attribute.args ?? []) {
 						const value = arg.value;
