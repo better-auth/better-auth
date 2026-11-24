@@ -11,7 +11,7 @@ import { shouldRequirePassword } from "../../../utils/password";
 import { PACKAGE_VERSION } from "../../../version";
 import type { BackupCodeOptions } from "../backup-codes";
 import { DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS } from "../constant";
-import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { TWO_FACTOR_ERROR_CODES } from "../error-codes";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,

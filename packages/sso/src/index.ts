@@ -30,6 +30,7 @@ export {
 	DEFAULT_MAX_SAML_METADATA_SIZE,
 	DEFAULT_MAX_SAML_RESPONSE_SIZE,
 } from "./constants";
+export * from "./error-codes";
 export {
 	deriveSAMLIdentityProviderEntityID,
 	deriveSAMLServiceProviderPolicy,
@@ -49,6 +50,7 @@ export {
 	validateSAMLTimestamp,
 } from "./saml/timestamp";
 
+import { SSO_ERROR_CODES } from "./error-codes";
 import type {
 	InferSSOProvider,
 	OIDCConfig,
@@ -159,6 +161,7 @@ export type SSOPlugin<O extends SSOOptions> = {
 		SSOProvider: InferSSOProvider<O>;
 	};
 	options: NoInfer<O>;
+	$ERROR_CODES: typeof SSO_ERROR_CODES;
 };
 
 /**
@@ -546,5 +549,6 @@ export function sso<O extends SSOOptions>(
 			SSOProvider: {} as InferSSOProvider<O>,
 		},
 		options: options as NoInfer<O>,
+		$ERROR_CODES: SSO_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 }

@@ -214,4 +214,5 @@ export const electron = (options?: ElectronOptions | undefined) => {
 	} satisfies BetterAuthPlugin;
 };
 
+export * from "./error-codes";
 export type * from "./types";

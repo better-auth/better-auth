@@ -16,6 +16,7 @@ import {
 import { schema } from "./schema";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
+export * from "./error-codes";
 export type { PhoneNumberOptions, UserWithPhoneNumber };
 
 declare module "@better-auth/core" {

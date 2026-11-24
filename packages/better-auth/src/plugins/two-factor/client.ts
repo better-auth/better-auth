@@ -2,9 +2,9 @@ import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { isSafeUrlScheme } from "@better-auth/core/utils/url";
 import { PACKAGE_VERSION } from "../../version";
 import type { twoFactor as twoFa } from ".";
-import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+import { TWO_FACTOR_ERROR_CODES } from "./error-codes";
 
-export * from "./error-code";
+export * from "./error-codes";
 
 export const twoFactorClient = (
 	options?:

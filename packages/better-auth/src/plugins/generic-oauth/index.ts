@@ -26,6 +26,7 @@ import type {
 	GenericOAuthUserInfo,
 } from "./types";
 
+export * from "./error-codes";
 export * from "./providers";
 export type {
 	GenericOAuthConfig,

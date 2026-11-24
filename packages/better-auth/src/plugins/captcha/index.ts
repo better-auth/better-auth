@@ -4,7 +4,13 @@ import { middlewareResponse } from "../../utils/middleware-response";
 import { wildcardMatch } from "../../utils/wildcard";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
-import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
+import {
+	CAPTCHA_ERROR_CODES,
+	CAPTCHA_INTERNAL_ERROR_CODES,
+} from "./error-codes";
+
+export { CAPTCHA_ERROR_CODES } from "./error-codes";
+
 import type { CaptchaOptions } from "./types";
 
 declare module "@better-auth/core" {
@@ -37,7 +43,7 @@ export const captcha = (options: CaptchaOptions) =>
 	({
 		id: "captcha",
 		version: PACKAGE_VERSION,
-		$ERROR_CODES: EXTERNAL_ERROR_CODES,
+		$ERROR_CODES: CAPTCHA_ERROR_CODES,
 		onRequest: async (request, ctx) => {
 			try {
 				const endpoints = options.endpoints?.length
@@ -67,7 +73,9 @@ export const captcha = (options: CaptchaOptions) =>
 				}
 
 				if (!options.secretKey) {
-					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message);
+					throw new Error(
+						CAPTCHA_INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message,
+					);
 				}
 
 				const captchaResponse = request.headers.get("x-captcha-response");
@@ -75,8 +83,8 @@ export const captcha = (options: CaptchaOptions) =>
 
 				if (!captchaResponse) {
 					return middlewareResponse({
-						message: EXTERNAL_ERROR_CODES.MISSING_RESPONSE.message,
-						code: EXTERNAL_ERROR_CODES.MISSING_RESPONSE.code,
+						message: CAPTCHA_ERROR_CODES.MISSING_RESPONSE.message,
+						code: CAPTCHA_ERROR_CODES.MISSING_RESPONSE.code,
 						status: 400,
 					});
 				}
@@ -132,8 +140,8 @@ export const captcha = (options: CaptchaOptions) =>
 				});
 
 				return middlewareResponse({
-					message: EXTERNAL_ERROR_CODES.UNKNOWN_ERROR.message,
-					code: EXTERNAL_ERROR_CODES.UNKNOWN_ERROR.code,
+					message: CAPTCHA_ERROR_CODES.UNKNOWN_ERROR.message,
+					code: CAPTCHA_ERROR_CODES.UNKNOWN_ERROR.code,
 					status: 500,
 				});
 			}

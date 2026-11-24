@@ -34,7 +34,7 @@ export const defaultKeyHasher = async (key: string) => {
 	return hashed;
 };
 
-export { API_KEY_ERROR_CODES } from "./error-codes";
+export * from "./error-codes";
 
 export const API_KEY_TABLE_NAME = "apikey";
 

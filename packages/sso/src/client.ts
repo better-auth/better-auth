@@ -1,7 +1,10 @@
 import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { DBFieldAttribute } from "better-auth/db";
+import { SSO_ERROR_CODES } from "./error-codes";
 import type { SSOPlugin } from "./index";
 import { PACKAGE_VERSION } from "./version";
+
+export * from "./error-codes";
 
 interface SSOClientOptions {
 	domainVerification?:
@@ -26,6 +29,7 @@ export const ssoClient = <CO extends SSOClientOptions>(
 	return {
 		id: "sso-client",
 		version: PACKAGE_VERSION,
+		$ERROR_CODES: SSO_ERROR_CODES,
 		$InferServerPlugin: {} as SSOPlugin<{
 			domainVerification: {
 				enabled: CO["domainVerification"] extends { enabled: true }

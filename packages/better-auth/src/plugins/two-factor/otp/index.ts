@@ -11,7 +11,7 @@ import {
 } from "../../../crypto";
 import { parseUserOutput } from "../../../db/schema";
 import { PACKAGE_VERSION } from "../../../version";
-import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { TWO_FACTOR_ERROR_CODES } from "../error-codes";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,

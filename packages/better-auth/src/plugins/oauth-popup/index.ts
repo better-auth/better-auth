@@ -371,5 +371,5 @@ export {
 	OAUTH_POPUP_MESSAGE_TYPE,
 	POPUP_MARKER_COOKIE,
 } from "./constants";
-export { OAUTH_POPUP_ERROR_CODES } from "./error-codes";
+export * from "./error-codes";
 export type { OAuthPopupData, OAuthPopupMessage } from "./types";

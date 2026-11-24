@@ -5,8 +5,8 @@
  * "exactly one cert source" contract.
  */
 import { APIError } from "better-auth/api";
+import { SSO_ERROR_CODES } from "../error-codes";
 import type { SAMLConfig } from "../types";
-import { SAML_ERROR_CODES } from "./error-codes";
 
 /**
  * Returns the IdP signing certificates Better Auth trusts for this provider
@@ -36,6 +36,6 @@ export function validateCertSources(
 		config.idpMetadata?.cert !== undefined || config.cert !== undefined;
 
 	if (!hasMetadataXml && !hasExplicitCert) {
-		throw APIError.from("BAD_REQUEST", SAML_ERROR_CODES.CERT_SOURCE_MISSING);
+		throw APIError.from("BAD_REQUEST", SSO_ERROR_CODES.CERT_SOURCE_MISSING);
 	}
 }

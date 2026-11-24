@@ -13,7 +13,7 @@ import {
 	TRUST_DEVICE_COOKIE_NAME,
 	TWO_FACTOR_COOKIE_NAME,
 } from "./constant";
-import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+import { TWO_FACTOR_ERROR_CODES } from "./error-codes";
 import type {
 	TwoFactorOptions,
 	TwoFactorTable,

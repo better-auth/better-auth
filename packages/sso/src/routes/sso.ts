@@ -40,6 +40,7 @@ import type { BindingContext } from "samlify/types/src/entity";
 import type { RequestInfo } from "samlify/types/src/types";
 import * as z from "zod";
 import * as constants from "../constants";
+import { SSO_ERROR_CODES } from "../error-codes";
 import { assignOrganizationFromProvider } from "../linking";
 import type { HydratedOIDCConfig } from "../oidc";
 import {
@@ -59,7 +60,6 @@ import {
 	SSO_PROVIDER_STATE_KEY,
 } from "../provider-reference";
 import { validateCertSources, validateConfigAlgorithms } from "../saml";
-import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
 import type {
 	AuthnRequestRecord,
@@ -2199,7 +2199,7 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			if (!options?.saml?.enableSingleLogout) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					SAML_ERROR_CODES.SINGLE_LOGOUT_NOT_ENABLED,
+					SSO_ERROR_CODES.SINGLE_LOGOUT_NOT_ENABLED,
 				);
 			}
 
@@ -2234,7 +2234,7 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			if (!provider?.samlConfig) {
 				throw APIError.from(
 					"NOT_FOUND",
-					SAML_ERROR_CODES.SAML_PROVIDER_NOT_FOUND,
+					SSO_ERROR_CODES.SAML_PROVIDER_NOT_FOUND,
 				);
 			}
 
@@ -2274,10 +2274,7 @@ async function handleLogoutResponse(
 		});
 	} catch (error) {
 		ctx.context.logger.error("LogoutResponse validation failed", { error });
-		throw APIError.from(
-			"BAD_REQUEST",
-			SAML_ERROR_CODES.INVALID_LOGOUT_RESPONSE,
-		);
+		throw APIError.from("BAD_REQUEST", SSO_ERROR_CODES.INVALID_LOGOUT_RESPONSE);
 	}
 
 	const extract = parsed?.extract as {
@@ -2292,7 +2289,7 @@ async function handleLogoutResponse(
 		(parsed as any)?.samlContent?.status?.statusCode;
 	if (statusCode && statusCode !== constants.SAML_STATUS_SUCCESS) {
 		ctx.context.logger.warn("LogoutResponse indicates failure", { statusCode });
-		throw APIError.from("BAD_REQUEST", SAML_ERROR_CODES.LOGOUT_FAILED_AT_IDP);
+		throw APIError.from("BAD_REQUEST", SSO_ERROR_CODES.LOGOUT_FAILED_AT_IDP);
 	}
 
 	const inResponseTo = extract?.response?.inResponseTo;
@@ -2348,10 +2345,10 @@ async function handleLogoutRequest(
 		});
 	} catch (error) {
 		ctx.context.logger.error("LogoutRequest validation failed", { error });
-		throw APIError.from("BAD_REQUEST", SAML_ERROR_CODES.INVALID_LOGOUT_REQUEST);
+		throw APIError.from("BAD_REQUEST", SSO_ERROR_CODES.INVALID_LOGOUT_REQUEST);
 	}
 	if (!parsed?.extract) {
-		throw APIError.from("BAD_REQUEST", SAML_ERROR_CODES.INVALID_LOGOUT_REQUEST);
+		throw APIError.from("BAD_REQUEST", SSO_ERROR_CODES.INVALID_LOGOUT_REQUEST);
 	}
 
 	const { nameID } = parsed.extract;
@@ -2455,7 +2452,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 			if (!options?.saml?.enableSingleLogout) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					SAML_ERROR_CODES.SINGLE_LOGOUT_NOT_ENABLED,
+					SSO_ERROR_CODES.SINGLE_LOGOUT_NOT_ENABLED,
 				);
 			}
 
@@ -2470,7 +2467,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 			if (!provider?.samlConfig) {
 				throw APIError.from(
 					"NOT_FOUND",
-					SAML_ERROR_CODES.SAML_PROVIDER_NOT_FOUND,
+					SSO_ERROR_CODES.SAML_PROVIDER_NOT_FOUND,
 				);
 			}
 
@@ -2483,7 +2480,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 			if (!idpHasSLO) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					SAML_ERROR_CODES.IDP_SLO_NOT_SUPPORTED,
+					SSO_ERROR_CODES.IDP_SLO_NOT_SUPPORTED,
 				);
 			}
 

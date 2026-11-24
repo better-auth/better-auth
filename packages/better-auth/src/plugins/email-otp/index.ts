@@ -28,6 +28,7 @@ declare module "@better-auth/core" {
 	}
 }
 
+export * from "./error-codes";
 export type { EmailOTPOptions } from "./types";
 
 export const emailOTP = (options: EmailOTPOptions) => {

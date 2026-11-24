@@ -27,7 +27,7 @@ export {
 	commonAuthenticatorNames,
 	getAuthenticatorName,
 } from "./authenticator-metadata";
-export { PASSKEY_ERROR_CODES } from "./error-codes";
+export * from "./error-codes";
 
 const MAX_AGE_IN_SECONDS = 60 * 5; // 5 minutes
 

@@ -5,6 +5,35 @@ import type {
 	UnionToIntersection,
 } from "@better-auth/core";
 
+export const SUPPORTED_LOCALES = [
+	"en",
+	"fr",
+	"ar",
+	"de",
+	"es",
+	"zh",
+	"ja",
+	"ko",
+	"pt",
+	"it",
+	"ru",
+	"tr",
+	"nl",
+	"pl",
+	"sv",
+	"vi",
+	"hi",
+	"id",
+	"uk",
+	"bn",
+	"th",
+	"fa",
+] as const;
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
+
+export type LocalizedTranslations<ErrorCodes extends Record<string, any>> =
+	Record<keyof ErrorCodes, string>;
+
 type ALL_PLUGIN_ERROR_CODE_KEYS = keyof UnionToIntersection<
 	{
 		[Key in Exclude<
@@ -33,6 +62,15 @@ type InternalTranslationDictionary = Partial<{
  */
 export type TranslationDictionary = InternalTranslationDictionary &
 	Record<string, string>;
+
+/**
+ * Translation dictionary that has a message for every error code of every
+ * built-in plugin. The built-in locales use this type so that a new error code
+ * fails the build until it is added to every locale.
+ */
+export type CompleteTranslationDictionary = {
+	[Key in ALL_PLUGIN_ERROR_CODE_KEYS]: string;
+} & Record<string, string>;
 
 /**
  * Locale detection strategy

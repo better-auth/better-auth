@@ -25,6 +25,8 @@ import {
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
+export * from "./error-codes";
+
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		stripe: {

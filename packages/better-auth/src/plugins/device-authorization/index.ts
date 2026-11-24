@@ -286,6 +286,7 @@ export const deviceAuthorization = <
 };
 
 export type * from "../../utils/time";
+export * from "./error-codes";
 export {
 	type DeviceCodeRedemptionAuthorization,
 	type DeviceCodeRedemptionResult,

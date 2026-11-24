@@ -4,6 +4,9 @@
   "references": [
     {
       "path": "../core/tsconfig.json"
+    },
+    {
+      "path": "../better-auth/tsconfig.json"
     }
   ]
 }

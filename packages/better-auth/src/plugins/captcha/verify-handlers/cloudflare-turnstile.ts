@@ -2,7 +2,10 @@ import type { InternalLogger } from "@better-auth/core/env";
 import { betterFetch } from "@better-fetch/fetch";
 import { middlewareResponse } from "../../../utils/middleware-response";
 import { CAPTCHA_VERIFY_TIMEOUT_MS } from "../constants";
-import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "../error-codes";
+import {
+	CAPTCHA_ERROR_CODES,
+	CAPTCHA_INTERNAL_ERROR_CODES,
+} from "../error-codes";
 
 type Params = {
 	siteVerifyURL: string;
@@ -50,7 +53,7 @@ export const cloudflareTurnstile = async ({
 	});
 
 	if (!response.data || response.error) {
-		throw new Error(INTERNAL_ERROR_CODES.SERVICE_UNAVAILABLE.message);
+		throw new Error(CAPTCHA_INTERNAL_ERROR_CODES.SERVICE_UNAVAILABLE.message);
 	}
 
 	const verificationFailed = (details: Record<string, unknown>) => {
@@ -60,8 +63,8 @@ export const cloudflareTurnstile = async ({
 		});
 
 		return middlewareResponse({
-			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.message,
-			code: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.code,
+			message: CAPTCHA_ERROR_CODES.VERIFICATION_FAILED.message,
+			code: CAPTCHA_ERROR_CODES.VERIFICATION_FAILED.code,
 			status: 403,
 		});
 	};
