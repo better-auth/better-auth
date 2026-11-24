@@ -141,6 +141,11 @@ export const createAdapterFactory =
 						) {
 							return;
 						} else if (
+							method === "consumeLatest" &&
+							!config.debugLogs.consumeLatest
+						) {
+							return;
+						} else if (
 							method === "incrementOne" &&
 							!config.debugLogs.incrementOne
 						) {
@@ -499,6 +504,7 @@ export const createAdapterFactory =
 				| "delete"
 				| "deleteMany"
 				| "consumeOne"
+				| "consumeLatest"
 				| "incrementOne"
 				| "count";
 		}): W extends undefined ? undefined : CleanedWhere[] => {
@@ -1440,6 +1446,98 @@ export const createAdapterFactory =
 					{ model, data: transformed },
 				);
 				return transformed as T | null;
+			},
+			consumeLatest: async <T>({
+				model: inputModel,
+				field: unsafeField,
+				value: unsafeValue,
+				orderBy: unsafeOrderBy,
+			}: {
+				model: string;
+				field: string;
+				value: string;
+				orderBy: { field: string; direction: "asc" | "desc" };
+			}): Promise<T | null> => {
+				if (unsafeValue === "") return null;
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const modelKey = getDefaultModelName(inputModel);
+				const model = getModelName(modelKey);
+				const [match] = transformWhereClause({
+					model: modelKey,
+					where: [{ field: unsafeField, value: unsafeValue }],
+					action: "consumeLatest",
+				});
+				const matchValue = match?.value;
+				if (!match || typeof matchValue !== "string") return null;
+				const mappedKeys = config.mapKeysTransformInput ?? {};
+				const orderBy = {
+					field:
+						mappedKeys[
+							getDefaultFieldName({
+								field: unsafeOrderBy.field,
+								model: modelKey,
+							})
+						] ||
+						getFieldName({
+							model: modelKey,
+							field: unsafeOrderBy.field,
+						}),
+					direction: unsafeOrderBy.direction,
+				};
+				debugLog(
+					{ method: "consumeLatest" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("consumeLatest")} ${formatAction("ConsumeLatest")}:`,
+					{ model, field: match.field, value: matchValue, orderBy },
+				);
+
+				const res = await withSpan(
+					`db consumeLatest ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "consumeLatest",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() =>
+						adapterInstance.consumeLatest
+							? adapterInstance.consumeLatest<T>({
+									model,
+									modelKey,
+									field: match.field,
+									value: matchValue,
+									orderBy,
+								})
+							: atomicFallbacks.consumeLatest({
+									model,
+									modelKey,
+									field: match.field,
+									value: matchValue,
+									orderBy,
+								}),
+				);
+
+				debugLog(
+					{ method: "consumeLatest" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("consumeLatest")} ${formatAction("DB Result")}:`,
+					{ model, data: res },
+				);
+				let transformed: T | null = res as T | null;
+				if (!config.disableTransformOutput && res) {
+					transformed = (await transformOutput(
+						res as Record<string, unknown>,
+						modelKey,
+						undefined,
+						undefined,
+					)) as T;
+				}
+				debugLog(
+					{ method: "consumeLatest" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("consumeLatest")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed;
 			},
 			incrementOne: async <T>({
 				model: inputModel,

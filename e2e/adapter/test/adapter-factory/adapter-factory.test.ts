@@ -107,6 +107,9 @@ async function createTestAdapter<Options extends BetterAuthOptions>(
 				async consumeOne(data) {
 					return x.consumeOne?.(data) ?? null;
 				},
+				async consumeLatest(data) {
+					return x.consumeLatest?.(data) ?? null;
+				},
 				async incrementOne(data) {
 					return x.incrementOne?.(data) ?? null;
 				},

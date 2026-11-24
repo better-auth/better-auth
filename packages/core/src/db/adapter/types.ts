@@ -123,6 +123,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 			| "delete"
 			| "deleteMany"
 			| "consumeOne"
+			| "consumeLatest"
 			| "incrementOne"
 			| "count";
 	}) => W extends undefined ? undefined : CleanedWhere[];

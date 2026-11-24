@@ -2238,6 +2238,103 @@ export const getNormalTestSuiteTests = (
 			});
 			expect(result).toBeNull();
 		},
+		/**
+		 * @see packages/better-auth/src/db/internal-adapter.ts consumeVerificationValue
+		 */
+		"consumeLatest - returns the latest row and deletes every matching row":
+			async () => {
+				const older = await generate("verification");
+				const newer = await generate("verification");
+				const identifier = older.identifier;
+				await adapter.create<Verification>({
+					model: "verification",
+					data: {
+						...older,
+						identifier,
+						value: "older",
+						createdAt: new Date(Date.now() - 5_000),
+					},
+					forceAllowId: true,
+				});
+				await adapter.create<Verification>({
+					model: "verification",
+					data: {
+						...newer,
+						identifier,
+						value: "newer",
+						createdAt: new Date(),
+					},
+					forceAllowId: true,
+				});
+
+				const consumed = await adapter.consumeLatest<Verification>({
+					model: "verification",
+					field: "identifier",
+					value: identifier,
+					orderBy: { field: "createdAt", direction: "desc" },
+				});
+				expect(consumed?.value).toBe("newer");
+
+				const leftover = await adapter.findMany<Verification>({
+					model: "verification",
+					where: [{ field: "identifier", value: identifier }],
+				});
+				expect(leftover).toEqual([]);
+
+				const second = await adapter.consumeLatest<Verification>({
+					model: "verification",
+					field: "identifier",
+					value: identifier,
+					orderBy: { field: "createdAt", direction: "desc" },
+				});
+				expect(second).toBeNull();
+			},
+		"consumeLatest - returns null for an empty value": async () => {
+			const result = await adapter.consumeLatest<Verification>({
+				model: "verification",
+				field: "identifier",
+				value: "",
+				orderBy: { field: "createdAt", direction: "desc" },
+			});
+			expect(result).toBeNull();
+		},
+		"consumeLatest - does not delete rows for a different field value":
+			async () => {
+				const older = await generate("verification");
+				const other = await generate("verification");
+				await adapter.create<Verification>({
+					model: "verification",
+					data: {
+						...older,
+						value: "consumed",
+						createdAt: new Date(),
+					},
+					forceAllowId: true,
+				});
+				await adapter.create<Verification>({
+					model: "verification",
+					data: {
+						...other,
+						value: "other",
+						createdAt: new Date(),
+					},
+					forceAllowId: true,
+				});
+
+				const consumed = await adapter.consumeLatest<Verification>({
+					model: "verification",
+					field: "identifier",
+					value: older.identifier,
+					orderBy: { field: "createdAt", direction: "desc" },
+				});
+				expect(consumed?.value).toBe("consumed");
+
+				const leftover = await adapter.findOne<Verification>({
+					model: "verification",
+					where: [{ field: "identifier", value: other.identifier }],
+				});
+				expect(leftover?.value).toBe("other");
+			},
 		"deleteMany - should delete many models": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			await adapter.deleteMany({

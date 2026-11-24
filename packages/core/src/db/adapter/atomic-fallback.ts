@@ -39,7 +39,7 @@ type FallbackContext = {
 	transformWhereClause: (input: {
 		model: string;
 		where: Where[];
-		action: "consumeOne" | "incrementOne";
+		action: "consumeOne" | "consumeLatest" | "incrementOne";
 	}) => CleanedWhere[];
 };
 
@@ -60,7 +60,7 @@ export function createAtomicFallbacks(context: FallbackContext) {
 	async function idWhere(
 		row: StoredRow,
 		model: string,
-		action: "consumeOne" | "incrementOne",
+		action: "consumeOne" | "consumeLatest" | "incrementOne",
 	): Promise<CleanedWhere> {
 		const mappedId =
 			context.mapKeysTransformInput?.id ||
@@ -117,7 +117,7 @@ export function createAtomicFallbacks(context: FallbackContext) {
 		row: StoredRow,
 		fields: readonly string[],
 		request: FallbackRequest,
-		action: "consumeOne" | "incrementOne",
+		action: "consumeOne" | "consumeLatest" | "incrementOne",
 	): Promise<CleanedWhere[]> {
 		const id = await idWhere(row, request.modelKey, action);
 		const hasOr = request.where.some((clause) => clause.connector === "OR");
@@ -152,6 +152,58 @@ export function createAtomicFallbacks(context: FallbackContext) {
 			);
 		}
 		return count === 1;
+	}
+
+	async function consumeLatest(request: {
+		model: string;
+		modelKey: string;
+		field: string;
+		value: CleanedWhere["value"];
+		orderBy: { field: string; direction: "asc" | "desc" };
+	}): Promise<StoredRow | null> {
+		if (request.value === "") return null;
+		const match: CleanedWhere = {
+			field: request.field,
+			value: request.value,
+			operator: "eq",
+			connector: "AND",
+			mode: "sensitive",
+		};
+		const rows = await adapter.findMany<StoredRow>({
+			model: request.model,
+			modelKey: request.modelKey,
+			where: [match],
+			limit: 1,
+			sortBy: request.orderBy,
+		});
+		const latest = rows[0];
+		if (!latest) return null;
+		const id = await idWhere(latest, request.modelKey, "consumeLatest");
+		const orderValue = scalar.safeParse(latest[request.orderBy.field] ?? null);
+		if (!orderValue.success || orderValue.data === null) {
+			return null;
+		}
+		const consumed = await consumeOne({
+			model: request.model,
+			modelKey: request.modelKey,
+			where: [id],
+		});
+		if (!consumed) return null;
+		await adapter.deleteMany({
+			model: request.model,
+			modelKey: request.modelKey,
+			where: [
+				match,
+				{
+					field: request.orderBy.field,
+					value: orderValue.data,
+					operator: request.orderBy.direction === "desc" ? "lte" : "gte",
+					connector: "AND",
+					mode: "sensitive",
+				},
+			],
+		});
+		return consumed;
 	}
 
 	async function consumeOne(
@@ -243,5 +295,5 @@ export function createAtomicFallbacks(context: FallbackContext) {
 		);
 	}
 
-	return { consumeOne, incrementOne };
+	return { consumeOne, consumeLatest, incrementOne };
 }

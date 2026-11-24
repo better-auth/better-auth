@@ -16,6 +16,7 @@ export type DBAdapterDebugLogOption =
 			delete?: boolean | undefined;
 			deleteMany?: boolean | undefined;
 			consumeOne?: boolean | undefined;
+			consumeLatest?: boolean | undefined;
 			incrementOne?: boolean | undefined;
 			count?: boolean | undefined;
 	  }
@@ -214,6 +215,7 @@ export interface DBAdapterFactoryConfig<
 					| "delete"
 					| "deleteMany"
 					| "consumeOne"
+					| "consumeLatest"
 					| "incrementOne"
 					| "count";
 				/**
@@ -476,6 +478,28 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	 */
 	consumeOne: <T>(data: { model: string; where: Where[] }) => Promise<T | null>;
 	/**
+	 * Among rows where `field = value`, pick one row by `orderBy`, delete every
+	 * matching row that does not sort after that pick, and return the picked
+	 * row.
+	 *
+	 * A later insert that sorts after the pick is not deleted. Under concurrent
+	 * callers, exactly one receives the row; the rest receive `null`. Empty
+	 * `value` or no matching row returns `null`.
+	 *
+	 * This is the race-safe primitive for consuming every current row of a
+	 * non-unique identifier (verification tokens keyed by email, OTP, OAuth
+	 * state) while returning the latest one.
+	 *
+	 * Always defined on the factory-wrapped adapter. Without a native method,
+	 * the factory uses `findMany` + `deleteMany` + `consumeOne`.
+	 */
+	consumeLatest: <T>(data: {
+		model: string;
+		field: string;
+		value: string;
+		orderBy: { field: string; direction: "asc" | "desc" };
+	}) => Promise<T | null>;
+	/**
 	 * Atomically apply signed numeric deltas to a single row matching the where
 	 * clause. For each entry in `increment`, the operation applies
 	 * `field = field + delta` in one atomic step; a negative delta decrements.
@@ -615,6 +639,21 @@ export interface CustomAdapter {
 	consumeOne?: <T>(
 		data: ModelTarget & {
 			where: CleanedWhere[];
+		},
+	) => Promise<T | null>;
+	/**
+	 * Optional native consume of the ordered row for a field value.
+	 *
+	 * Among rows where `field = value`, pick one by `orderBy`, delete every
+	 * matching row that does not sort after that pick, and return the picked
+	 * row. Implementations must give the row to exactly one concurrent caller.
+	 * Empty `value` or no matching row returns `null`.
+	 */
+	consumeLatest?: <T>(
+		data: ModelTarget & {
+			field: string;
+			value: string;
+			orderBy: { field: string; direction: "asc" | "desc" };
 		},
 	) => Promise<T | null>;
 	/**

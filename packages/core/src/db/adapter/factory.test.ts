@@ -183,6 +183,73 @@ describe("createAdapterFactory atomic primitives", () => {
 		});
 	});
 
+	it("delegates consumeLatest to the native adapter with transformed field and output", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				consumeLatest: async <T>({
+					model,
+					field,
+					value,
+					orderBy,
+				}: {
+					model: string;
+					field: string;
+					value: string;
+					orderBy: { field: string; direction: "asc" | "desc" };
+				}) => {
+					expect(model).toBe("verificationRecords");
+					expect(field).toBe("identifier_text");
+					expect(value).toBe("token:consumeLatest");
+					expect(orderBy).toEqual({
+						field: "createdAt",
+						direction: "desc",
+					});
+					return {
+						id: "verification-id",
+						identifier_text: "stored-token",
+					} as T;
+				},
+			}),
+		});
+
+		const result = await adapter.consumeLatest<{
+			id: string;
+			identifier: string;
+		}>({
+			model: "verification",
+			field: "identifier",
+			value: "token",
+			orderBy: { field: "createdAt", direction: "desc" },
+		});
+
+		expect(result).toEqual({
+			id: "verification-id",
+			identifier: "stored-token:output",
+		});
+	});
+
+	it("returns null from consumeLatest for an empty value without querying", async () => {
+		let queried = false;
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				consumeLatest: async <T>(): Promise<T | null> => {
+					queried = true;
+					return null;
+				},
+			}),
+		});
+
+		await expect(
+			adapter.consumeLatest({
+				model: "verification",
+				field: "identifier",
+				value: "",
+				orderBy: { field: "createdAt", direction: "desc" },
+			}),
+		).resolves.toBeNull();
+		expect(queried).toBe(false);
+	});
+
 	it("delegates incrementOne to the native adapter with mapped increment fields", async () => {
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({
@@ -537,6 +604,300 @@ describe("legacy adapter atomic fallbacks", () => {
 		expect(
 			db.prepare("SELECT count(*) AS count FROM verification").get(),
 		).toMatchObject({ count: 0 });
+	});
+	it("fallback consumeLatest returns the latest row and deletes matching rows", async ({
+		onTestFinished,
+	}) => {
+		const db = new DatabaseSync(":memory:");
+		onTestFinished(() => db.close());
+		db.exec(
+			"CREATE TABLE verification (_id TEXT PRIMARY KEY, identifier TEXT, value TEXT, createdAt TEXT)",
+		);
+		db.exec(
+			"INSERT INTO verification VALUES ('old', 'token', 'older', '2020-01-01T00:00:00.000Z')",
+		);
+		db.exec(
+			"INSERT INTO verification VALUES ('new', 'token', 'newer', '2020-01-02T00:00:00.000Z')",
+		);
+		const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
+		function sqlOperator(operator: CleanedWhere["operator"]) {
+			if (operator === "eq") return "=";
+			if (operator === "ne") return "<>";
+			if (operator === "lte") return "<=";
+			if (operator === "gte") return ">=";
+			throw new Error("Unsupported test predicate");
+		}
+		function condition(where: CleanedWhere[]) {
+			return where
+				.map(
+					({ field, operator, connector }, index) =>
+						`${index ? connector + " " : ""}${quote(field)} ${sqlOperator(operator)} ?`,
+				)
+				.join(" ");
+		}
+		function values(where: CleanedWhere[]) {
+			return where.map(({ value }) => {
+				if (value instanceof Date) return value.toISOString();
+				if (typeof value !== "string" && typeof value !== "number") {
+					throw new Error("Unsupported test value");
+				}
+				return value;
+			});
+		}
+		const adapter = createAdapterFactory({
+			config: {
+				adapterId: "legacy",
+				mapKeysTransformInput: { id: "_id" },
+				mapKeysTransformOutput: { _id: "id" },
+			},
+			adapter: () => ({
+				...createCustomAdapter(),
+				consumeOne: undefined,
+				consumeLatest: undefined,
+				findOne: async <T>({ where }: { where: CleanedWhere[] }) =>
+					(db
+						.prepare(
+							`SELECT * FROM verification WHERE ${condition(where)} LIMIT 1`,
+						)
+						.get(...values(where)) ?? null) as T | null,
+				findMany: async <T>({
+					where,
+					limit,
+					sortBy,
+				}: {
+					where?: CleanedWhere[];
+					limit: number;
+					sortBy?: { field: string; direction: "asc" | "desc" };
+				}) => {
+					const order = sortBy
+						? ` ORDER BY ${quote(sortBy.field)} ${sortBy.direction.toUpperCase()}`
+						: "";
+					return db
+						.prepare(
+							`SELECT * FROM verification WHERE ${condition(where ?? [])}${order} LIMIT ?`,
+						)
+						.all(...values(where ?? []), limit) as T[];
+				},
+				deleteMany: async ({ where }: { where: CleanedWhere[] }) =>
+					Number(
+						db
+							.prepare(`DELETE FROM verification WHERE ${condition(where)}`)
+							.run(...values(where)).changes,
+					),
+			}),
+		})({});
+
+		const consumed = await adapter.consumeLatest<{
+			id: string;
+			value: string;
+		}>({
+			model: "verification",
+			field: "identifier",
+			value: "token",
+			orderBy: { field: "createdAt", direction: "desc" },
+		});
+		expect(consumed).toMatchObject({ id: "new", value: "newer" });
+		expect(
+			db.prepare("SELECT count(*) AS count FROM verification").get(),
+		).toMatchObject({ count: 0 });
+		await expect(
+			adapter.consumeLatest({
+				model: "verification",
+				field: "identifier",
+				value: "token",
+				orderBy: { field: "createdAt", direction: "desc" },
+			}),
+		).resolves.toBeNull();
+	});
+	it("fallback consumeLatest returns null when the order-by value is missing", async ({
+		onTestFinished,
+	}) => {
+		const db = new DatabaseSync(":memory:");
+		onTestFinished(() => db.close());
+		db.exec(
+			"CREATE TABLE verification (_id TEXT PRIMARY KEY, identifier TEXT, value TEXT, createdAt TEXT)",
+		);
+		db.exec("INSERT INTO verification VALUES ('row', 'token', 'secret', NULL)");
+		const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
+		function sqlOperator(operator: CleanedWhere["operator"]) {
+			if (operator === "eq") return "=";
+			if (operator === "ne") return "<>";
+			if (operator === "lte") return "<=";
+			if (operator === "gte") return ">=";
+			throw new Error("Unsupported test predicate");
+		}
+		function condition(where: CleanedWhere[]) {
+			return where
+				.map(
+					({ field, operator, connector }, index) =>
+						`${index ? connector + " " : ""}${quote(field)} ${sqlOperator(operator)} ?`,
+				)
+				.join(" ");
+		}
+		function values(where: CleanedWhere[]) {
+			return where.map(({ value }) => {
+				if (value instanceof Date) return value.toISOString();
+				if (typeof value !== "string" && typeof value !== "number") {
+					throw new Error("Unsupported test value");
+				}
+				return value;
+			});
+		}
+		const adapter = createAdapterFactory({
+			config: {
+				adapterId: "legacy",
+				mapKeysTransformInput: { id: "_id" },
+				mapKeysTransformOutput: { _id: "id" },
+			},
+			adapter: () => ({
+				...createCustomAdapter(),
+				consumeOne: undefined,
+				consumeLatest: undefined,
+				findOne: async <T>({ where }: { where: CleanedWhere[] }) =>
+					(db
+						.prepare(
+							`SELECT * FROM verification WHERE ${condition(where)} LIMIT 1`,
+						)
+						.get(...values(where)) ?? null) as T | null,
+				findMany: async <T>({
+					where,
+					limit,
+					sortBy,
+				}: {
+					where?: CleanedWhere[];
+					limit: number;
+					sortBy?: { field: string; direction: "asc" | "desc" };
+				}) => {
+					const order = sortBy
+						? ` ORDER BY ${quote(sortBy.field)} ${sortBy.direction.toUpperCase()}`
+						: "";
+					return db
+						.prepare(
+							`SELECT * FROM verification WHERE ${condition(where ?? [])}${order} LIMIT ?`,
+						)
+						.all(...values(where ?? []), limit) as T[];
+				},
+				deleteMany: async ({ where }: { where: CleanedWhere[] }) =>
+					Number(
+						db
+							.prepare(`DELETE FROM verification WHERE ${condition(where)}`)
+							.run(...values(where)).changes,
+					),
+			}),
+		})({});
+
+		await expect(
+			adapter.consumeLatest({
+				model: "verification",
+				field: "identifier",
+				value: "token",
+				orderBy: { field: "createdAt", direction: "desc" },
+			}),
+		).resolves.toBeNull();
+		expect(
+			db.prepare("SELECT count(*) AS count FROM verification").get(),
+		).toMatchObject({ count: 1 });
+	});
+	it("fallback consumeLatest keeps a later insert that sorts after the pick", async ({
+		onTestFinished,
+	}) => {
+		const db = new DatabaseSync(":memory:");
+		onTestFinished(() => db.close());
+		db.exec(
+			"CREATE TABLE verification (_id TEXT PRIMARY KEY, identifier TEXT, value TEXT, createdAt TEXT)",
+		);
+		db.exec(
+			"INSERT INTO verification VALUES ('first', 'token', 'first', '2020-01-01T00:00:00.000Z')",
+		);
+		const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
+		function sqlOperator(operator: CleanedWhere["operator"]) {
+			if (operator === "eq") return "=";
+			if (operator === "ne") return "<>";
+			if (operator === "lte") return "<=";
+			if (operator === "gte") return ">=";
+			throw new Error("Unsupported test predicate");
+		}
+		function condition(where: CleanedWhere[]) {
+			return where
+				.map(
+					({ field, operator, connector }, index) =>
+						`${index ? connector + " " : ""}${quote(field)} ${sqlOperator(operator)} ?`,
+				)
+				.join(" ");
+		}
+		function values(where: CleanedWhere[]) {
+			return where.map(({ value }) => {
+				if (value instanceof Date) return value.toISOString();
+				if (typeof value !== "string" && typeof value !== "number") {
+					throw new Error("Unsupported test value");
+				}
+				return value;
+			});
+		}
+		let insertedLater = false;
+		const adapter = createAdapterFactory({
+			config: {
+				adapterId: "legacy",
+				mapKeysTransformInput: { id: "_id" },
+				mapKeysTransformOutput: { _id: "id" },
+			},
+			adapter: () => ({
+				...createCustomAdapter(),
+				consumeOne: undefined,
+				consumeLatest: undefined,
+				findOne: async <T>({ where }: { where: CleanedWhere[] }) =>
+					(db
+						.prepare(
+							`SELECT * FROM verification WHERE ${condition(where)} LIMIT 1`,
+						)
+						.get(...values(where)) ?? null) as T | null,
+				findMany: async <T>({
+					where,
+					limit,
+					sortBy,
+				}: {
+					where?: CleanedWhere[];
+					limit: number;
+					sortBy?: { field: string; direction: "asc" | "desc" };
+				}) => {
+					const order = sortBy
+						? ` ORDER BY ${quote(sortBy.field)} ${sortBy.direction.toUpperCase()}`
+						: "";
+					return db
+						.prepare(
+							`SELECT * FROM verification WHERE ${condition(where ?? [])}${order} LIMIT ?`,
+						)
+						.all(...values(where ?? []), limit) as T[];
+				},
+				deleteMany: async ({ where }: { where: CleanedWhere[] }) => {
+					if (!insertedLater) {
+						insertedLater = true;
+						db.exec(
+							"INSERT INTO verification VALUES ('second', 'token', 'second', '2020-01-02T00:00:00.000Z')",
+						);
+					}
+					return Number(
+						db
+							.prepare(`DELETE FROM verification WHERE ${condition(where)}`)
+							.run(...values(where)).changes,
+					);
+				},
+			}),
+		})({});
+
+		const consumed = await adapter.consumeLatest<{
+			id: string;
+			value: string;
+		}>({
+			model: "verification",
+			field: "identifier",
+			value: "token",
+			orderBy: { field: "createdAt", direction: "desc" },
+		});
+		expect(consumed).toMatchObject({ id: "first", value: "first" });
+		expect(db.prepare("SELECT value FROM verification").get()).toMatchObject({
+			value: "second",
+		});
 	});
 	it("does not lose concurrent increments starting from null", async ({
 		onTestFinished,

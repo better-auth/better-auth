@@ -340,6 +340,14 @@ export const createTestSuite = <
 									adapter = await helpers.adapter();
 									return adapter.consumeOne<T>(args);
 								},
+								consumeLatest: async <T>(
+									args: Parameters<
+										DBAdapter<BetterAuthOptions>["consumeLatest"]
+									>[0],
+								) => {
+									adapter = await helpers.adapter();
+									return adapter.consumeLatest<T>(args);
+								},
 								incrementOne: async <T>(
 									args: Parameters<
 										DBAdapter<BetterAuthOptions>["incrementOne"]
