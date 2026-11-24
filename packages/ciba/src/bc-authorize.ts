@@ -302,9 +302,9 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 					userId: user.id,
 					scope: scopes.join(" "),
 					bindingMessage,
-					acrValues: acrValues ?? null,
+					...(acrValues ? { acrValues } : {}),
 					authorizationDetails: storeAuthorizationDetails(authorizationDetails),
-					resources: resources ?? null,
+					...(resources ? { resources } : {}),
 					actor: actor ?? null,
 					status: "pending",
 					...(ping
