@@ -29,7 +29,7 @@ export function escapedLike(
  */
 export function escapeLikePattern(value: unknown, dbType?: KyselyDatabaseType) {
 	// Backslash first so the escapes added below are not escaped again.
-	const escaped = String(value ?? "")
+	const escaped = String(value)
 		.replace(/\\/g, "\\\\")
 		.replace(/%/g, "\\%")
 		.replace(/_/g, "\\_");

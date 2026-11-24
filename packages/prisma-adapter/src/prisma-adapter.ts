@@ -297,10 +297,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 									w.operator === "ne" ||
 									w.operator === "in" ||
 									w.operator === "not_in")));
-					// Prisma emits LIKE without an ESCAPE clause; PostgreSQL and MySQL
+					// Prisma emits LIKE without an ESCAPE clause; PostgreSQL, CockroachDB and MySQL
 					// default to `\`, so escaping it matches `%` and `_` literally.
 					const usesLike =
-						(config.provider === "postgresql" || config.provider === "mysql") &&
+						(config.provider === "postgresql" ||
+							config.provider === "cockroachdb" ||
+							config.provider === "mysql") &&
 						(w.operator === "contains" ||
 							w.operator === "starts_with" ||
 							w.operator === "ends_with");

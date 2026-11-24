@@ -12,7 +12,6 @@ type DrizzleProvider = "pg" | "mysql" | "sqlite";
 export function escapeLikePattern(
 	value: string | number | boolean | string[] | number[] | Date | null,
 ): string {
-	if (value == null) return "";
 	// Escape the backslash first so the `\` added for `%` and `_` is not
 	// re-escaped, and a literal backslash in the input stays literal under the
 	// `ESCAPE '\'` clause.
