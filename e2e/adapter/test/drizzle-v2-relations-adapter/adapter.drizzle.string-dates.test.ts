@@ -37,10 +37,10 @@ describe("drizzle relations-v2 adapter: SQLite text() date columns", () => {
 	sqliteDb.exec(
 		"CREATE TABLE user (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, emailVerified INTEGER NOT NULL, image TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL)",
 	);
-	const adapter = drizzleAdapter(
-		drizzle({ client: sqliteDb, schema: { users } }),
-		{ schema: { user: users }, provider: "sqlite" },
-	)({});
+	const adapter = drizzleAdapter(drizzle({ client: sqliteDb }), {
+		schema: { user: users },
+		provider: "sqlite",
+	})({});
 	const createdAt = new Date("2026-01-16T16:50:54.888Z");
 
 	it("writes, filters on, and reads back a Date", async () => {

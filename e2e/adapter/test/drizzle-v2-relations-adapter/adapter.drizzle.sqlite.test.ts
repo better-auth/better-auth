@@ -27,14 +27,11 @@ const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(sqliteDB, options, "sqlite");
 		const { authRelations: relations, ...schemas } = schema;
-		return drizzleAdapter(
-			drizzle({ client: sqliteDB, schema: schemas, relations }),
-			{
-				debugLogs: { isRunningAdapterTests: true },
-				schema: { ...schemas, relations },
-				provider: "sqlite",
-			},
-		);
+		return drizzleAdapter(drizzle({ client: sqliteDB, relations }), {
+			debugLogs: { isRunningAdapterTests: true },
+			schema: { ...schemas, relations },
+			provider: "sqlite",
+		});
 	},
 	async runMigrations(betterAuthOptions) {
 		sqliteDB.close();

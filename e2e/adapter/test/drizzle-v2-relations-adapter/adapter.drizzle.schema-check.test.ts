@@ -92,13 +92,17 @@ describe("relations-v2 schema validation", () => {
 					account: tableFor("account"),
 					verification: tableFor("verification"),
 				};
-				const db =
+				const adapter =
 					source === "relations"
-						? drizzle({ client, relations: defineRelations(schema) })
-						: drizzle({ client, schema });
-				const check = schemaCheckFor(
-					drizzleAdapter(db, { provider: "sqlite" })({}),
-				);
+						? drizzleAdapter(
+								drizzle({ client, relations: defineRelations(schema) }),
+								{ provider: "sqlite" },
+							)
+						: drizzleAdapter(drizzle({ client }), {
+								provider: "sqlite",
+								schema,
+							});
+				const check = schemaCheckFor(adapter({}));
 				expect(check).toBeTypeOf("function");
 				await expect(check!()).resolves.toBeUndefined();
 			} finally {
@@ -107,7 +111,7 @@ describe("relations-v2 schema validation", () => {
 		},
 	);
 
-	it("uses relation tables before fullSchema and preserves renamed model keys", async ({
+	it("uses relation tables and preserves renamed model keys", async ({
 		onTestFinished,
 	}) => {
 		const client = new Database(":memory:");
@@ -116,9 +120,6 @@ describe("relations-v2 schema validation", () => {
 		});
 		const db = drizzle({
 			client,
-			schema: {
-				identities: sqliteTable("old_account", { id: text("id").primaryKey() }),
-			},
 			relations: defineRelations({ identities: account }),
 		});
 		const options: BetterAuthOptions = { account: { modelName: "identities" } };

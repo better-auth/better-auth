@@ -44,7 +44,7 @@ const relations = defineRelationsPart(dbSchema, (r) => ({
 
 describe("drizzle relations-v2 adapter: plural db.query keys", () => {
 	const sqliteDb = new Database(":memory:");
-	const db = drizzle({ client: sqliteDb, schema: dbSchema, relations });
+	const db = drizzle({ client: sqliteDb, relations });
 
 	const adapter = drizzleAdapter(db, {
 		schema: { user: users, session: sessions, relations },
@@ -122,7 +122,7 @@ describe("drizzle relations-v2 adapter: plural db.query keys", () => {
 
 describe("drizzle relations-v2 adapter: missing relational query namespace", () => {
 	const sqliteDb = new Database(":memory:");
-	const db = drizzle({ client: sqliteDb, schema: dbSchema, relations });
+	const db = drizzle({ client: sqliteDb, relations });
 	// Simulate a db built without the relational-query namespace. The adapter
 	// must fall back to the SQL path rather than dereference `undefined`.
 	(db as { query?: unknown }).query = undefined;
@@ -170,10 +170,9 @@ describe("drizzle relations-v2 adapter: missing relational query namespace", () 
 
 describe("drizzle relations-v2 adapter: query key via relations internal", () => {
 	const sqliteDb = new Database(":memory:");
-	const db = drizzle({ client: sqliteDb, schema: dbSchema, relations });
+	const db = drizzle({ client: sqliteDb, relations });
 	// Drizzle 1.0 drops the v1 `db._.fullSchema` internal, so the key lookup must
-	// also work off `db._.relations`. Remove fullSchema to force that path.
-	(db._ as { fullSchema?: unknown }).fullSchema = undefined;
+	// also work off `db._.relations`.
 
 	const adapter = drizzleAdapter(db, {
 		schema: { user: users, session: sessions, relations },
@@ -261,7 +260,7 @@ describe("drizzle relations-v2 adapter: model identity", () => {
 			createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
 			updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
 		});
-		const db = drizzle({ client: sqliteDb, schema: { account } });
+		const db = drizzle({ client: sqliteDb });
 		const adapter = drizzleAdapter(db, {
 			provider: "sqlite",
 			schema: { account },
