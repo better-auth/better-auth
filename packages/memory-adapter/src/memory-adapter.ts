@@ -578,6 +578,62 @@ export const memoryAdapter = (
 						activeDb[model] = table.filter((record) => record !== target);
 						return target as any;
 					},
+					consumeLatest: async ({
+						model,
+						modelKey = model,
+						field,
+						value,
+						orderBy,
+					}) => {
+						if (value === "") return null;
+						const table = activeDb[model]!;
+						const matches = convertWhereClause(
+							[
+								{
+									field,
+									value,
+									operator: "eq",
+									connector: "AND",
+									mode: "sensitive",
+								},
+							],
+							model,
+							modelKey,
+						);
+						if (matches.length === 0) return null;
+						const sorted = applySortToRecords([...matches], orderBy, modelKey);
+						const latest = sorted[0];
+						if (!latest) return null;
+						const orderField = getFieldName({
+							model: modelKey,
+							field: orderBy.field,
+						});
+						const bound = latest[orderField];
+						if (bound === undefined || bound === null) return null;
+						if (!table.includes(latest)) return null;
+						activeDb[model] = table.filter((record) => {
+							if (record === latest) return false;
+							if (!matches.includes(record)) return true;
+							const current = record[orderField];
+							if (current == null) return true;
+							const comparison = (() => {
+								if (current instanceof Date && bound instanceof Date) {
+									return current.getTime() - bound.getTime();
+								}
+								if (typeof current === "number" && typeof bound === "number") {
+									return current - bound;
+								}
+								if (typeof current === "string" && typeof bound === "string") {
+									return current.localeCompare(bound);
+								}
+								return String(current).localeCompare(String(bound));
+							})();
+							return orderBy.direction === "desc"
+								? comparison > 0
+								: comparison < 0;
+						});
+						return latest as any;
+					},
 					incrementOne: async ({
 						model,
 						modelKey = model,

@@ -525,6 +525,105 @@ describe("drizzle-adapter", () => {
 		});
 	});
 
+	describe.each([
+		{ relations: "Relations v1", adapterFactory: drizzleAdapter },
+		{ relations: "Relations v2", adapterFactory: drizzleRelationsV2Adapter },
+	])("consumeLatest ($relations)", ({ adapterFactory }) => {
+		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+		const verificationTable = pgTable("verification", {
+			id: text("id"),
+			identifier: text("identifier"),
+			value: text("value"),
+			expiresAt: timestamp("expiresAt"),
+			createdAt: timestamp("createdAt"),
+			updatedAt: timestamp("updatedAt"),
+		});
+		const verificationRow = {
+			id: "verification-2",
+			identifier: "reset-password:token",
+			value: "user-1",
+			expiresAt: new Date(Date.now() + 60_000),
+			createdAt: new Date("2020-01-02"),
+			updatedAt: new Date(),
+		};
+
+		it("does not open a transaction when the adapter has none", async () => {
+			const limit = vi.fn().mockResolvedValue([verificationRow]);
+			const orderBy = vi.fn().mockReturnValue({ limit });
+			const selectWhere = vi.fn().mockReturnValue({ orderBy });
+			const selectFrom = vi.fn().mockReturnValue({ where: selectWhere });
+			const returning = vi.fn().mockResolvedValue([verificationRow]);
+			const deleteWhere = vi
+				.fn()
+				.mockReturnValueOnce({ returning })
+				.mockReturnValueOnce(Promise.resolve());
+			const db = {
+				_: { fullSchema: { verification: verificationTable } },
+				select: vi.fn().mockReturnValue({ from: selectFrom }),
+				delete: vi.fn().mockReturnValue({ where: deleteWhere }),
+				transaction: vi.fn(),
+			} as Parameters<typeof adapterFactory>[0];
+			const adapter = adapterFactory(db, { provider: "pg" })({
+				secret: defaultSecret,
+			});
+
+			const result = await adapter.consumeLatest({
+				model: "verification",
+				field: "identifier",
+				value: verificationRow.identifier,
+				orderBy: { field: "createdAt", direction: "desc" },
+			});
+
+			expect(result).toEqual(verificationRow);
+			expect(db.transaction).not.toHaveBeenCalled();
+			expect(limit).toHaveBeenCalledWith(1);
+			expect(db.delete).toHaveBeenCalledTimes(2);
+			expect(returning).toHaveBeenCalledTimes(1);
+		});
+
+		it("uses a transaction and FOR UPDATE on mysql", async () => {
+			const limit = vi.fn().mockResolvedValue([verificationRow]);
+			const selectFor = vi.fn().mockReturnValue({
+				orderBy: vi.fn().mockReturnValue({ limit }),
+			});
+			const selectWhere = vi.fn().mockReturnValue({ for: selectFor });
+			const selectFrom = vi.fn().mockReturnValue({ where: selectWhere });
+			const execute = vi.fn().mockResolvedValue([{ affectedRows: 1 }]);
+			const deleteWhere = vi
+				.fn()
+				.mockReturnValueOnce({ execute })
+				.mockReturnValueOnce(Promise.resolve());
+			const tx = {
+				select: vi.fn().mockReturnValue({ from: selectFrom }),
+				delete: vi.fn().mockReturnValue({ where: deleteWhere }),
+			};
+			const db = {
+				_: { fullSchema: { verification: verificationTable } },
+				transaction: vi
+					.fn()
+					.mockImplementation((fn: (transaction: typeof tx) => unknown) =>
+						fn(tx),
+					),
+			} as Parameters<typeof adapterFactory>[0];
+			const adapter = adapterFactory(db, { provider: "mysql" })({
+				secret: defaultSecret,
+			});
+
+			const result = await adapter.consumeLatest({
+				model: "verification",
+				field: "identifier",
+				value: verificationRow.identifier,
+				orderBy: { field: "createdAt", direction: "desc" },
+			});
+
+			expect(result).toEqual(verificationRow);
+			expect(db.transaction).toHaveBeenCalledOnce();
+			expect(selectFor).toHaveBeenCalledWith("update");
+			expect(limit).toHaveBeenCalledWith(1);
+			expect(tx.delete).toHaveBeenCalledTimes(2);
+		});
+	});
+
 	// Both entry points carry their own copy of incrementOne, so every case
 	// below runs against each; a fix landing in one copy but not the other is
 	// caught here, without a database.

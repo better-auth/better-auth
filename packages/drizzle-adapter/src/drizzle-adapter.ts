@@ -69,7 +69,7 @@ export interface DB {
  */
 function getAffectedRowCount(
 	result: unknown,
-	operation: "updateMany" | "deleteMany" | "consumeOne",
+	operation: "updateMany" | "deleteMany" | "consumeOne" | "consumeLatest",
 	context: { model: string; where: Where[] },
 ): number {
 	let count: unknown = 0;
@@ -1126,6 +1126,86 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.where(inArray(idColumn, targetIds))
 						.returning();
 					return (deleted[0] as any) ?? null;
+				},
+				async consumeLatest({
+					model,
+					modelKey = model,
+					field,
+					value,
+					orderBy,
+				}) {
+					if (value === "") return null;
+					const table = getSchema(model);
+					const matchWhere = [
+						{
+							field,
+							value,
+							operator: "eq" as const,
+							connector: "AND" as const,
+							mode: "sensitive" as const,
+						},
+					];
+					const clause = convertWhereClause(matchWhere, model, modelKey);
+					const orderField = getFieldName({
+						model: modelKey,
+						field: orderBy.field,
+					});
+					const orderColumn = table[orderField];
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const idColumn = table[idField];
+					if (!orderColumn || !idColumn) return null;
+					const sortFn = orderBy.direction === "desc" ? desc : asc;
+					const boundOp = orderBy.direction === "desc" ? lte : gte;
+					const claimFromConnection = async (tx: DB) => {
+						let selectQuery = tx
+							.select()
+							.from(table)
+							.where(...clause);
+						if (config.provider === "mysql") {
+							selectQuery = selectQuery.for("update");
+						}
+						const rows = await selectQuery
+							.orderBy(sortFn(orderColumn))
+							.limit(1);
+						const latest = rows[0];
+						if (!latest) return null;
+						const targetId = latest[idField] ?? (latest as { id?: unknown }).id;
+						if (targetId === undefined || targetId === null) return null;
+						const bound = latest[orderField];
+						if (bound === undefined || bound === null) return null;
+
+						// The id delete is the exclusive claim. A range delete can
+						// succeed after another caller already took the picked row.
+						if (config.provider === "mysql") {
+							const delRes = await tx
+								.delete(table)
+								.where(eq(idColumn, targetId))
+								.execute();
+							const count = getAffectedRowCount(delRes, "consumeLatest", {
+								model,
+								where: matchWhere,
+							});
+							if (count === 0) return null;
+						} else {
+							const deleted = await tx
+								.delete(table)
+								.where(eq(idColumn, targetId))
+								.returning();
+							if (deleted.length === 0) return null;
+						}
+
+						await tx
+							.delete(table)
+							.where(and(...clause, boundOp(orderColumn, bound)));
+						return latest;
+					};
+					if (inTransaction) {
+						return claimFromConnection(db);
+					}
+					if (config.provider === "mysql" || config.transaction) {
+						return db.transaction(claimFromConnection);
+					}
+					return claimFromConnection(db);
 				},
 				async incrementOne({ model, modelKey = model, where, increment, set }) {
 					const table = getSchema(model);

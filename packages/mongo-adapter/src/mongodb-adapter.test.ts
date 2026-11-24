@@ -479,6 +479,48 @@ describe("mongodb-adapter", () => {
 		);
 	});
 
+	it("consumeLatest claims the picked document by _id before deleting remaining rows", async () => {
+		const latest = {
+			_id: "verification-new",
+			identifier: "magic-link-token",
+			createdAt: new Date("2020-01-02"),
+		};
+		const findOne = vi.fn(async () => latest);
+		const deleteOne = vi.fn(async () => ({ deletedCount: 1 }));
+		const deleteMany = vi.fn(async () => ({ deletedCount: 1 }));
+		const db = {
+			collection: vi.fn(() => ({
+				findOne,
+				deleteOne,
+				deleteMany,
+			})),
+		} as any;
+		const adapter = mongodbAdapter(db, { transaction: false })({});
+
+		const result = await adapter.consumeLatest({
+			model: "verification",
+			field: "identifier",
+			value: "magic-link-token",
+			orderBy: { field: "createdAt", direction: "desc" },
+		});
+
+		expect(result).toMatchObject({
+			id: "verification-new",
+			identifier: "magic-link-token",
+		});
+		expect(deleteOne).toHaveBeenCalledWith(
+			{ _id: "verification-new" },
+			expect.objectContaining({ session: undefined }),
+		);
+		expect(deleteMany).toHaveBeenCalledWith(
+			{
+				identifier: "magic-link-token",
+				createdAt: { $lte: latest.createdAt },
+			},
+			expect.objectContaining({ session: undefined }),
+		);
+	});
+
 	const rateLimitOptions = { rateLimit: { storage: "database" } } as any;
 
 	it("incrementOne applies $inc and $set atomically against the guard filter", async () => {

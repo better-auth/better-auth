@@ -964,6 +964,119 @@ export const kyselyAdapter = (
 					);
 					return deleteWithReturning(query);
 				},
+				async consumeLatest({
+					model,
+					modelKey = model,
+					field,
+					value,
+					orderBy,
+				}) {
+					if (value === "") return null;
+					const matchWhere = [
+						{
+							field,
+							value,
+							operator: "eq" as const,
+							connector: "AND" as const,
+							mode: "sensitive" as const,
+						},
+					];
+					const { and, or } = convertWhereClause(model, modelKey, matchWhere);
+					const applyWhere = (query: any) => {
+						if (and) {
+							query = query.where((eb: any) =>
+								eb.and(and.map((expr) => expr(eb))),
+							);
+						}
+						if (or) {
+							query = query.where((eb: any) =>
+								eb.or(or.map((expr) => expr(eb))),
+							);
+						}
+						return query;
+					};
+					const orderField = getFieldName({
+						model: modelKey,
+						field: orderBy.field,
+					});
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const boundOperator = orderBy.direction === "desc" ? "lte" : "gte";
+					const claimFromConnection = async (trx: any) => {
+						let selectQuery = applyWhere(trx.selectFrom(model).selectAll());
+						if (config?.type === "mysql") {
+							selectQuery = selectQuery.forUpdate();
+						}
+						selectQuery = selectQuery.orderBy(
+							`${model}.${orderField}`,
+							orderBy.direction,
+						);
+						const latest =
+							config?.type === "mssql"
+								? await selectQuery.top(1).executeTakeFirst()
+								: await selectQuery.limit(1).executeTakeFirst();
+						if (!latest) return null;
+						const targetId = latest[idField] ?? latest.id;
+						if (targetId === undefined || targetId === null) return null;
+						const bound = latest[orderField];
+						if (bound === undefined || bound === null) return null;
+
+						// The id delete is the exclusive claim. A range delete can
+						// succeed after another caller already took the picked row.
+						const claimQuery: any = trx
+							.deleteFrom(model)
+							.where(`${model}.${idField}`, "=", targetId);
+						if (config?.type === "mysql") {
+							const result = await claimQuery.executeTakeFirst();
+							if (Number(result.numDeletedRows) === 0) return null;
+						} else if (config?.type === "mssql") {
+							const claimed = await claimQuery
+								.outputAll("deleted")
+								.executeTakeFirst();
+							if (!claimed) return null;
+						} else {
+							const claimed = await claimQuery
+								.returningAll()
+								.executeTakeFirst();
+							if (!claimed) return null;
+						}
+
+						const remainingClause = convertWhereClause(model, modelKey, [
+							...matchWhere,
+							{
+								field: orderBy.field,
+								value: bound,
+								operator: boundOperator,
+								connector: "AND",
+								mode: "sensitive",
+							},
+						]);
+						let remainingQuery = trx.deleteFrom(model);
+						const remainingAnd = remainingClause.and;
+						const remainingOr = remainingClause.or;
+						if (remainingAnd) {
+							remainingQuery = remainingQuery.where((eb: any) =>
+								eb.and(remainingAnd.map((expr: any) => expr(eb))),
+							);
+						}
+						if (remainingOr) {
+							remainingQuery = remainingQuery.where((eb: any) =>
+								eb.or(remainingOr.map((expr: any) => expr(eb))),
+							);
+						}
+						await remainingQuery.execute();
+						return latest;
+					};
+					if (inTransaction) {
+						return claimFromConnection(db);
+					}
+					// MySQL needs a transaction for SELECT ... FOR UPDATE.
+					// Stores without interactive transactions (Cloudflare D1)
+					// throw on db.transaction(); the id delete is still the claim.
+					if (config?.type === "mysql" || config?.transaction) {
+						return db.transaction().execute(claimFromConnection);
+					}
+					return claimFromConnection(db);
+				},
 				async incrementOne({ model, modelKey = model, where, increment, set }) {
 					const { and, or } = convertWhereClause(model, modelKey, where);
 					const applyWhere = (query: any) => {

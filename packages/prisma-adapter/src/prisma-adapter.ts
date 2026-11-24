@@ -785,6 +785,94 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						? claimFromTransaction(db)
 						: db.$transaction(claimFromTransaction);
 				},
+				async consumeLatest({
+					model,
+					modelKey = model,
+					field,
+					value,
+					orderBy,
+				}) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+					if (value === "") return null;
+
+					// FIXME(consume-one-prisma-locking): Prisma has no portable
+					// row-locking API for findFirst. consumeLatest has the
+					// same limitation.
+					const orderField = getFieldName({
+						model: modelKey,
+						field: orderBy.field,
+					});
+					const matchWhere = [
+						{
+							field,
+							value,
+							operator: "eq" as const,
+							connector: "AND" as const,
+							mode: "sensitive" as const,
+						},
+					];
+					const findWhere = convertWhereClause({
+						model: modelKey,
+						where: matchWhere,
+						action: "findMany",
+					});
+					const claimFromTransaction = async (tx: PrismaClient) => {
+						const target = await (tx as any)[model].findFirst({
+							where: findWhere,
+							orderBy: {
+								[orderField]: orderBy.direction === "asc" ? "asc" : "desc",
+							},
+						});
+						if (!target) return null;
+						const bound = (target as any)[orderField];
+						if (bound === undefined || bound === null) return null;
+						try {
+							const claimed = await (tx as any)[model].deleteMany({
+								where: convertWhereClause({
+									model: modelKey,
+									where: [
+										{
+											field: "id",
+											value: (target as any).id,
+											operator: "eq",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+									action: "deleteMany",
+								}),
+							});
+							if (!(claimed?.count > 0)) return null;
+							await (tx as any)[model].deleteMany({
+								where: convertWhereClause({
+									model: modelKey,
+									where: [
+										...matchWhere,
+										{
+											field: orderBy.field,
+											value: bound,
+											operator: orderBy.direction === "desc" ? "lte" : "gte",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+									action: "deleteMany",
+								}),
+							});
+							return target as any;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
+					};
+					return inTransaction || typeof db.$transaction !== "function"
+						? claimFromTransaction(db)
+						: db.$transaction(claimFromTransaction);
+				},
 				async incrementOne({ model, modelKey = model, where, increment, set }) {
 					if (!db[model]) {
 						throw new BetterAuthError(

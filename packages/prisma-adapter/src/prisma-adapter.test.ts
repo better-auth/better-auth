@@ -639,6 +639,51 @@ describe("prisma-adapter", () => {
 		});
 	});
 
+	it("consumeLatest claims the picked row by id before deleting remaining rows", async () => {
+		const target = {
+			id: "verification-new",
+			identifier: "magic-link-token",
+			createdAt: new Date("2020-01-02"),
+		};
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue(target),
+				deleteMany: vi
+					.fn()
+					.mockResolvedValueOnce({ count: 1 })
+					.mockResolvedValueOnce({ count: 1 }),
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createTestAdapter({
+			$transaction: transaction,
+			verification: {
+				delete: vi.fn(),
+			},
+		});
+
+		const result = await adapter.consumeLatest({
+			model: "verification",
+			field: "identifier",
+			value: "magic-link-token",
+			orderBy: { field: "createdAt", direction: "desc" },
+		});
+
+		expect(result).toEqual(target);
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(txClient.verification.deleteMany).toHaveBeenNthCalledWith(1, {
+			where: { id: { equals: "verification-new" } },
+		});
+		expect(txClient.verification.deleteMany).toHaveBeenNthCalledWith(2, {
+			where: {
+				AND: [
+					{ identifier: { equals: "magic-link-token" } },
+					{ createdAt: { lte: target.createdAt } },
+				],
+			},
+		});
+	});
+
 	// A delete that fails for any reason other than the record not existing
 	// (constraint violation, connection loss, permission denial) must surface
 	// the error. Reporting success would hide real data-integrity failures.

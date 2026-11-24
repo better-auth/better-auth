@@ -1006,6 +1006,56 @@ export const mongodbAdapter = (
 					});
 					return ((doc as any)?.value as any) ?? null;
 				},
+				async consumeLatest({
+					model,
+					modelKey = model,
+					field,
+					value,
+					orderBy,
+				}) {
+					retryFieldIndexSetup();
+					if (value === "") return null;
+					const clause = convertWhereClause({
+						where: [
+							{
+								field,
+								value,
+								operator: "eq",
+								connector: "AND",
+								mode: "sensitive",
+							},
+						],
+						modelKey,
+					});
+					const sortField =
+						orderBy.field === "id" || orderBy.field === "_id"
+							? "_id"
+							: orderBy.field;
+					const latest = await db.collection(model).findOne(clause, {
+						session,
+						sort: {
+							[sortField]: orderBy.direction === "desc" ? -1 : 1,
+						},
+					});
+					if (!latest) return null;
+					const bound = (latest as Record<string, unknown>)[sortField];
+					if (bound === undefined || bound === null) return null;
+					const claimed = await db
+						.collection(model)
+						.deleteOne({ _id: (latest as { _id: any })._id }, { session });
+					if (claimed.deletedCount === 0) return null;
+					await db.collection(model).deleteMany(
+						{
+							...clause,
+							[sortField]:
+								orderBy.direction === "desc"
+									? { $lte: bound }
+									: { $gte: bound },
+						},
+						{ session },
+					);
+					return latest as any;
+				},
 				async incrementOne({ model, modelKey = model, where, increment, set }) {
 					retryFieldIndexSetup();
 					await ensureModelIndexes(model, modelKey);

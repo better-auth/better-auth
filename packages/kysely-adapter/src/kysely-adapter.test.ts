@@ -183,6 +183,152 @@ describe("kysely-adapter", () => {
 		expect(deleteQuery.outputAll).toHaveBeenCalledWith("deleted");
 	});
 
+	it("consumeLatest does not open a transaction when the adapter has none", async () => {
+		const latest = {
+			id: "verification-2",
+			identifier: "same-identifier",
+			createdAt: new Date("2020-01-02"),
+		};
+		const selectQuery = {
+			selectAll: vi.fn(() => selectQuery),
+			where: vi.fn(() => selectQuery),
+			orderBy: vi.fn(() => selectQuery),
+			limit: vi.fn(() => selectQuery),
+			top: vi.fn(() => selectQuery),
+			forUpdate: vi.fn(() => selectQuery),
+			executeTakeFirst: vi.fn().mockResolvedValue(latest),
+		};
+		const deleteQuery = {
+			where: vi.fn(() => deleteQuery),
+			returningAll: vi.fn(() => deleteQuery),
+			outputAll: vi.fn(() => deleteQuery),
+			executeTakeFirst: vi.fn().mockResolvedValue(latest),
+			execute: vi.fn().mockResolvedValue({ numDeletedRows: 1n }),
+		};
+		const db = {
+			selectFrom: vi.fn(() => selectQuery),
+			deleteFrom: vi.fn(() => deleteQuery),
+			transaction: vi.fn(),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "sqlite", transaction: false })(
+			{},
+		);
+
+		const result = await adapter.consumeLatest({
+			model: "verification",
+			field: "identifier",
+			value: "same-identifier",
+			orderBy: { field: "createdAt", direction: "desc" },
+		});
+
+		expect(result).toEqual(latest);
+		expect(db.transaction).not.toHaveBeenCalled();
+		expect(selectQuery.limit).toHaveBeenCalledWith(1);
+		expect(selectQuery.forUpdate).not.toHaveBeenCalled();
+		expect(db.deleteFrom).toHaveBeenCalledTimes(2);
+		expect(deleteQuery.where).toHaveBeenCalledWith(
+			"verification.id",
+			"=",
+			"verification-2",
+		);
+	});
+
+	it("consumeLatest uses a transaction and FOR UPDATE on mysql", async () => {
+		const latest = {
+			id: "verification-2",
+			identifier: "same-identifier",
+			createdAt: new Date("2020-01-02"),
+		};
+		const selectQuery = {
+			selectAll: vi.fn(() => selectQuery),
+			where: vi.fn(() => selectQuery),
+			orderBy: vi.fn(() => selectQuery),
+			limit: vi.fn(() => selectQuery),
+			forUpdate: vi.fn(() => selectQuery),
+			executeTakeFirst: vi.fn().mockResolvedValue(latest),
+		};
+		const deleteQuery = {
+			where: vi.fn(() => deleteQuery),
+			executeTakeFirst: vi.fn().mockResolvedValue({ numDeletedRows: 1 }),
+			execute: vi.fn().mockResolvedValue({ numDeletedRows: 1 }),
+		};
+		const trx = {
+			selectFrom: vi.fn(() => selectQuery),
+			deleteFrom: vi.fn(() => deleteQuery),
+		};
+		const db = {
+			transaction: vi.fn(() => ({
+				execute: (fn: (transaction: typeof trx) => unknown) => fn(trx),
+			})),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "mysql" })({});
+
+		const result = await adapter.consumeLatest({
+			model: "verification",
+			field: "identifier",
+			value: "same-identifier",
+			orderBy: { field: "createdAt", direction: "desc" },
+		});
+
+		expect(result).toEqual(latest);
+		expect(db.transaction).toHaveBeenCalledTimes(1);
+		expect(selectQuery.forUpdate).toHaveBeenCalledTimes(1);
+		expect(selectQuery.limit).toHaveBeenCalledWith(1);
+		expect(deleteQuery.where).toHaveBeenCalledWith(
+			"verification.id",
+			"=",
+			"verification-2",
+		);
+	});
+
+	it("consumeLatest uses a top(1) select and OUTPUT on mssql", async () => {
+		const latest = {
+			id: "verification-2",
+			identifier: "same-identifier",
+			createdAt: new Date("2020-01-02"),
+		};
+		const selectQuery = {
+			selectAll: vi.fn(() => selectQuery),
+			where: vi.fn(() => selectQuery),
+			orderBy: vi.fn(() => selectQuery),
+			limit: vi.fn(() => selectQuery),
+			top: vi.fn(() => selectQuery),
+			executeTakeFirst: vi.fn().mockResolvedValue(latest),
+		};
+		const deleteQuery = {
+			where: vi.fn(() => deleteQuery),
+			outputAll: vi.fn(() => deleteQuery),
+			executeTakeFirst: vi.fn().mockResolvedValue(latest),
+			execute: vi.fn().mockResolvedValue([]),
+		};
+		const db = {
+			selectFrom: vi.fn(() => selectQuery),
+			deleteFrom: vi.fn(() => deleteQuery),
+			transaction: vi.fn(),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "mssql", transaction: false })(
+			{},
+		);
+
+		const result = await adapter.consumeLatest({
+			model: "verification",
+			field: "identifier",
+			value: "same-identifier",
+			orderBy: { field: "createdAt", direction: "desc" },
+		});
+
+		expect(result).toEqual(latest);
+		expect(db.transaction).not.toHaveBeenCalled();
+		expect(selectQuery.top).toHaveBeenCalledWith(1);
+		expect(selectQuery.limit).not.toHaveBeenCalled();
+		expect(deleteQuery.outputAll).toHaveBeenCalledWith("deleted");
+		expect(deleteQuery.where).toHaveBeenCalledWith(
+			"verification.id",
+			"=",
+			"verification-2",
+		);
+	});
+
 	/**
 	 * @see https://node-postgres.com/features/types
 	 */
