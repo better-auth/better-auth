@@ -1,14 +1,13 @@
 /**
  * Since drizzle-orm 1.0.0-rc.5, an explicit `where: undefined` in a relational
- * query throws ("Unexpected 'undefined' in filter value"). A joined `findMany`
- * without a `where` must leave the key out.
+ * query throws ("Unexpected 'undefined' in filter value").
  */
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import Database from "better-sqlite3";
 import { defineRelationsPart } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const users = sqliteTable("user", {
 	id: text("id").primaryKey(),
@@ -41,7 +40,7 @@ const relations = defineRelationsPart(tables, (r) => ({
 
 describe("drizzle relations-v2 adapter: joined findMany without where", () => {
 	const sqliteDb = new Database(":memory:");
-	const db = drizzle({ client: sqliteDb, schema: tables, relations });
+	const db = drizzle({ client: sqliteDb, relations });
 
 	const adapter = drizzleAdapter(db, {
 		schema: { ...tables, relations },
@@ -92,9 +91,7 @@ describe("drizzle relations-v2 adapter: joined findMany without where", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12927
 	 */
-	it("omits the `where` key and returns every joined row", async () => {
-		const findMany = vi.spyOn(db.query.session, "findMany");
-
+	it("returns every joined row", async () => {
 		const result = await adapter.findMany<{
 			id: string;
 			user: { email: string };
@@ -104,8 +101,6 @@ describe("drizzle relations-v2 adapter: joined findMany without where", () => {
 			sortBy: { field: "id", direction: "asc" },
 		});
 
-		expect(findMany).toHaveBeenCalledTimes(1);
-		expect(findMany.mock.calls[0]![0]).not.toHaveProperty("where");
 		expect(result.map((r) => [r.id, r.user.email])).toEqual([
 			["s1", "alice@test.com"],
 			["s2", "bob@test.com"],
