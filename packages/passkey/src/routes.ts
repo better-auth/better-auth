@@ -11,7 +11,6 @@ import { createHash } from "@better-auth/utils/hash";
 import type {
 	AuthenticationExtensionsClientInputs,
 	AuthenticationResponseJSON,
-	AuthenticatorTransportFuture,
 } from "@simplewebauthn/server";
 import {
 	generateAuthenticationOptions,
@@ -365,9 +364,7 @@ export const generatePasskeyRegistrationOptions = (
 				attestationType: "none",
 				excludeCredentials: userPasskeys.map((passkey) => ({
 					id: passkey.credentialID,
-					transports: passkey.transports?.split(
-						",",
-					) as AuthenticatorTransportFuture[],
+					transports: passkey.transports?.split(","),
 				})),
 				authenticatorSelection: {
 					residentKey: "preferred",
@@ -555,9 +552,7 @@ export const generatePasskeyAuthenticationOptions = (
 					? {
 							allowCredentials: userPasskeys.map((passkey) => ({
 								id: passkey.credentialID,
-								transports: passkey.transports?.split(
-									",",
-								) as AuthenticatorTransportFuture[],
+								transports: passkey.transports?.split(","),
 							})),
 						}
 					: {}),
@@ -1010,9 +1005,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 						id: passkey.credentialID,
 						publicKey: base64.decode(passkey.publicKey),
 						counter: passkey.counter,
-						transports: passkey.transports?.split(
-							",",
-						) as AuthenticatorTransportFuture[],
+						transports: passkey.transports?.split(","),
 					},
 					requireUserVerification:
 						options.authenticatorSelection?.userVerification === "required",

@@ -725,6 +725,17 @@ The passkey plugin now applies `authenticatorSelection.userVerification` to auth
 
 **What to do:** if you set `userVerification: "required"`, make sure your users' authenticators support user verification, such as a PIN or biometric. Otherwise set it to `"preferred"`.
 
+### Passkeys use SimpleWebAuthn 14
+
+The passkey plugin now depends on SimpleWebAuthn 14, which requires Node.js 22 or newer, or Deno 2.4 or newer. On runtimes that support ML-DSA, registration options list ML-DSA-44 as the preferred algorithm, ahead of the algorithms offered before. Registration verification accepts the same algorithms that registration offers, so it no longer accepts algorithms the plugin never offered. Passkeys that users already registered keep working.
+
+The SimpleWebAuthn types that `@better-auth/passkey/client` re-exports now come from version 14. `AuthenticatorTransportFuture` no longer exists, and credential `transports` fields are typed as `string[]`.
+
+**What to do:**
+
+- Run the passkey plugin on Node.js 22 or newer, or Deno 2.4 or newer.
+- Replace imports of `AuthenticatorTransportFuture` with `AuthenticatorTransport`, or type transport lists as `string[]`.
+
 ### Electron sign-in waits for two-factor verification
 
 Electron desktop sign-in now completes only after required two-factor verification and the other sign-in after-hooks, whatever the plugin order. Authorization codes require the issuing browser session to stay valid until the code is exchanged.
