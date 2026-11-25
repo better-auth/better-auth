@@ -1,6 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { PACKAGE_VERSION } from "../../version";
 import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
@@ -107,11 +106,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 									type: "email-verification",
 								},
 							);
-							if (!otp) {
-								throw APIError.from(
-									"INTERNAL_SERVER_ERROR",
-									BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+							// Like a failed verification email in core sign-up, a vetoed code
+							// is logged and sign-up still succeeds, so the user can request
+							// a new code.
+							if (otp === null) {
+								ctx.context.logger.error(
+									"Email OTP: a verification hook vetoed the sign-up verification code",
 								);
+								return;
 							}
 							await ctx.context.runInBackgroundOrAwait(
 								options.sendVerificationOTP(

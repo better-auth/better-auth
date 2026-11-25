@@ -72,6 +72,7 @@ describe("verification records vetoed by a database hook", () => {
 		const unknown = await request("missing@test.com");
 
 		expect(known.status).toBe(200);
+		expect(unknown.status).toBe(200);
 		expect(await known.json()).toEqual(await unknown.json());
 		expect(sendResetPassword).not.toHaveBeenCalled();
 	});
@@ -104,6 +105,21 @@ describe("verification records vetoed by a database hook", () => {
 		await expectVerificationFailure(
 			await auth.api.generateOneTimeToken({ headers, asResponse: true }),
 		);
+	});
+
+	it("returns an empty custom one-time token, which is not a veto", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [oneTimeToken({ generateToken: async () => "" })],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const res = await auth.api.generateOneTimeToken({
+			headers,
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ token: "" });
 	});
 
 	it("completes sign-in without the set-ott header when the token is not stored", async () => {
@@ -200,10 +216,14 @@ describe("verification records vetoed by a database hook", () => {
 			expect(await sessionIds()).toEqual(before);
 		});
 
-		it("removes the stored challenge when its attempt counter is not stored", async () => {
-			const { ctx, veto, signIn } = await setup((identifier) =>
+		it("removes the stored challenge when a TOTP user's attempt counter is not stored", async () => {
+			const { ctx, veto, userId, signIn } = await setup((identifier) =>
 				identifier.startsWith("2fa-attempts-"),
 			);
+			await ctx.adapter.create({
+				model: "twoFactor",
+				data: { userId, secret: "secret", backupCodes: "[]", verified: true },
+			});
 			veto.active = true;
 
 			await expectVerificationFailure(await signIn());
@@ -214,6 +234,29 @@ describe("verification records vetoed by a database hook", () => {
 			expect(rows.filter((row) => row.identifier.startsWith("2fa-"))).toEqual(
 				[],
 			);
+		});
+
+		it("issues an OTP-only challenge without the unused attempt counter", async () => {
+			const { auth, veto, sentCodes, signIn } = await setup((identifier) =>
+				identifier.startsWith("2fa-attempts-"),
+			);
+			veto.active = true;
+
+			const res = await signIn();
+
+			expect(res.status).toBe(200);
+			expect(await res.json()).toMatchObject({
+				twoFactorRedirect: true,
+				twoFactorMethods: ["otp"],
+			});
+			const challenge = convertSetCookieToCookie(res.headers);
+			await auth.api.sendTwoFactorOTP({ headers: challenge, body: {} });
+			const verified = await auth.api.verifyTwoFactorOTP({
+				headers: challenge,
+				body: { code: sentCodes[0]! },
+				asResponse: true,
+			});
+			expect(verified.status).toBe(200);
 		});
 
 		it("does not send a two-factor OTP that was not stored", async () => {

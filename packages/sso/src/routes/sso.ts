@@ -653,13 +653,16 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			let domainVerificationToken: string | undefined;
 			let domainVerified: boolean | undefined;
 
-			// A vetoed domain token rolls back the provider so registration can be retried.
+			// A vetoed domain token must not leave the provider behind, or a retry
+			// fails as a duplicate. Adapters without transactions do not roll back,
+			// so the row this request inserted is removed by its id.
+			let createdId: string | undefined;
 			const provider = await runWithTransaction(
 				ctx.context.adapter,
 				async () => {
 					const created = await (
 						await getCurrentAdapter(ctx.context.adapter)
-					).create<Record<string, any>, SSOProvider<O>>({
+					).create<Record<string, any>, SSOProvider<O> & { id: string }>({
 						model: "ssoProvider",
 						data: {
 							issuer: body.issuer,
@@ -725,6 +728,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							providerId: body.providerId,
 						},
 					});
+					createdId = created.id;
 
 					if (options?.domainVerification?.enabled) {
 						domainVerified = false;
@@ -748,7 +752,15 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					}
 					return created;
 				},
-			);
+			).catch(async (error: unknown) => {
+				if (createdId) {
+					await ctx.context.adapter.deleteMany({
+						model: "ssoProvider",
+						where: [{ field: "id", value: createdId }],
+					});
+				}
+				throw error;
+			});
 
 			type SSOProviderResponse = {
 				redirectURI: string;

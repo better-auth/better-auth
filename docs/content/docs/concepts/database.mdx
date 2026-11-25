@@ -869,7 +869,7 @@ This configuration allows you to:
 
 ### Database Hooks
 
-Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in Better Auth. You can create hooks for the following models: **user**, **session**, and **account**.
+Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in Better Auth. You can create hooks for the following models: **user**, **session**, **account**, and **verification**.
 
 <Callout type="warn">
   Additional fields are supported, however full type inference for these fields isn't yet supported.
@@ -880,7 +880,7 @@ There are two types of hooks you can define:
 
 #### 1. Before Hook
 
-* **Purpose**: This hook is called before the respective entity (user, session, or account) is created, updated, or deleted.
+* **Purpose**: This hook is called before the respective entity (user, session, account, or verification) is created, updated, or deleted.
 * **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload. On MongoDB with transactions, a before hook can run more than once for one operation: when MongoDB aborts the transaction because of a concurrent write, the adapter runs it again. Send emails and call other services from an after hook instead. When a `verification` create is aborted, endpoints that would hand out the code, link, or token it backs fail with `FAILED_TO_CREATE_VERIFICATION` instead. A few endpoints handle it differently:
   * Endpoints whose reply hides whether an account exists, such as password reset and the email OTP and phone number reset requests, send nothing and return their usual reply.
   * The OAuth authorization endpoint redirects to the client with `error=server_error`.

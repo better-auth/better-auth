@@ -3598,6 +3598,7 @@ describe("email OTP issuance vetoed by a verification hook", () => {
 			const unknown = await send("missing@test.com");
 
 			expect(known.status).toBe(200);
+			expect(unknown.status).toBe(200);
 			expect(await known.json()).toEqual(await unknown.json());
 			expect(sendVerificationOTP).not.toHaveBeenCalled();
 		},
@@ -3615,10 +3616,41 @@ describe("email OTP issuance vetoed by a verification hook", () => {
 			const unknown = await request("missing@test.com");
 
 			expect(known.status).toBe(200);
+			expect(unknown.status).toBe(200);
 			expect(await known.json()).toEqual(await unknown.json());
 			expect(sendVerificationOTP).not.toHaveBeenCalled();
 		},
 	);
+
+	it("completes sign-up without sending a sign-up code that was not stored", async () => {
+		const veto = { active: false };
+		const sendVerificationOTP = vi.fn();
+		const { auth } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before() {
+							return veto.active ? false : undefined;
+						},
+					},
+				},
+			},
+			plugins: [
+				emailOTP({ sendVerificationOTP, sendVerificationOnSignUp: true }),
+			],
+		});
+		sendVerificationOTP.mockClear();
+		veto.active = true;
+
+		const res = await auth.api.signUpEmail({
+			body: { email: "new@test.com", password: "password123", name: "new" },
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(200);
+		expect((await res.json()).user.email).toBe("new@test.com");
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+	});
 
 	it("does not send a change-email code that was not stored, and does not reveal the address", async () => {
 		const { auth, signInWithTestUser, veto, sendVerificationOTP } =
@@ -3639,6 +3671,7 @@ describe("email OTP issuance vetoed by a verification hook", () => {
 		const taken = await request("taken@test.com");
 
 		expect(free.status).toBe(200);
+		expect(taken.status).toBe(200);
 		expect(await free.json()).toEqual(await taken.json());
 		expect(sendVerificationOTP).not.toHaveBeenCalled();
 	});

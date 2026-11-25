@@ -1,3 +1,4 @@
+import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
@@ -1035,10 +1036,29 @@ describe("Domain verification", async () => {
 /**
  * @see https://better-auth.com/docs/concepts/database#database-hooks
  */
+/**
+ * A memory adapter whose transactions run without rollback, like an adapter
+ * configured with `transaction: false`.
+ */
+function memoryWithoutTransactions(): BetterAuthOptions["database"] {
+	const adapter = memoryAdapter({
+		user: [],
+		session: [],
+		account: [],
+		verification: [],
+		ssoProvider: [],
+	});
+	return (options) => {
+		const db = adapter(options);
+		return { ...db, transaction: (run) => run(db) };
+	};
+}
+
 describe("domain verification tokens vetoed by a verification hook", () => {
-	async function setup() {
+	async function setup(database?: BetterAuthOptions["database"]) {
 		const veto = { active: false };
 		const { auth, signInWithTestUser } = await getTestInstance({
+			...(database ? { database } : {}),
 			databaseHooks: {
 				verification: {
 					create: {
@@ -1070,21 +1090,29 @@ describe("domain verification tokens vetoed by a verification hook", () => {
 		return { auth, headers, veto, register };
 	}
 
-	it("does not register a provider whose token was not stored", async () => {
-		const { veto, register } = await setup();
-		veto.active = true;
+	it.for([
+		["with transactions", undefined],
+		["without transactions", memoryWithoutTransactions],
+	] as const)(
+		"does not register a provider whose token was not stored %s",
+		async ([, database]) => {
+			const { auth, veto, register } = await setup(database?.());
+			veto.active = true;
 
-		const res = await register();
+			const res = await register();
 
-		expect(res.status).toBe(500);
-		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
-		veto.active = false;
-		const retry = await register();
-		expect(retry.status).toBe(200);
-		expect((await retry.json()).domainVerificationToken).toEqual(
-			expect.any(String),
-		);
-	});
+			expect(res.status).toBe(500);
+			expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+			const ctx = await auth.$context;
+			expect(await ctx.adapter.findMany({ model: "ssoProvider" })).toEqual([]);
+			veto.active = false;
+			const retry = await register();
+			expect(retry.status).toBe(200);
+			expect((await retry.json()).domainVerificationToken).toEqual(
+				expect.any(String),
+			);
+		},
+	);
 
 	it("does not return a requested token that was not stored", async () => {
 		const { auth, headers, veto, register } = await setup();

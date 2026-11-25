@@ -2592,6 +2592,7 @@ describe("phone number OTP issuance vetoed by a verification hook", () => {
 		const unknown = await request("+251900000000");
 
 		expect(known.status).toBe(200);
+		expect(unknown.status).toBe(200);
 		expect(await known.json()).toEqual(await unknown.json());
 		expect(sendPasswordResetOTP).not.toHaveBeenCalled();
 	});

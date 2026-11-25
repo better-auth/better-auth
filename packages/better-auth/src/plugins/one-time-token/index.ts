@@ -152,7 +152,7 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 					}
 					const session = c.context.session;
 					const token = await generateToken(c, session);
-					if (!token) {
+					if (token === null) {
 						throw APIError.from(
 							"INTERNAL_SERVER_ERROR",
 							BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
@@ -240,7 +240,7 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 							);
 							const token = await generateToken(ctx, ctx.context.newSession);
 							// Sign-in stands without the optional header when the token is vetoed.
-							if (!token) {
+							if (token === null) {
 								return;
 							}
 							headersSet.add("set-ott");

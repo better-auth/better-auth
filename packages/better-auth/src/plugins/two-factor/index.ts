@@ -634,6 +634,16 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
 							);
 						}
+						const userTwoFactor =
+							await ctx.context.adapter.findOne<TwoFactorTable>({
+								model: opts.twoFactorTable,
+								where: [
+									{
+										field: "userId",
+										value: data.user.id,
+									},
+								],
+							});
 						// Per-challenge attempt counter, consumed atomically by
 						// verify-totp and verify-backup-code as the race gate so a
 						// concurrent burst cannot exceed the budget.
@@ -643,7 +653,9 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								identifier: `2fa-attempts-${identifier}`,
 								expiresAt,
 							});
-						if (!attemptCounter) {
+						// Only TOTP and backup codes, which need a twoFactor row, use the
+						// counter. OTP tracks attempts in its own record.
+						if (!attemptCounter && userTwoFactor) {
 							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 								identifier,
 							);
@@ -664,20 +676,12 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						 * totp requires per-user setup, so we check
 						 * that the user actually has a secret stored.
 						 */
-						if (!options?.totpOptions?.disable) {
-							const userTotpSecret =
-								await ctx.context.adapter.findOne<TwoFactorTable>({
-									model: opts.twoFactorTable,
-									where: [
-										{
-											field: "userId",
-											value: data.user.id,
-										},
-									],
-								});
-							if (userTotpSecret && userTotpSecret.verified !== false) {
-								twoFactorMethods.push("totp");
-							}
+						if (
+							!options?.totpOptions?.disable &&
+							userTwoFactor &&
+							userTwoFactor.verified !== false
+						) {
+							twoFactorMethods.push("totp");
 						}
 
 						/**
