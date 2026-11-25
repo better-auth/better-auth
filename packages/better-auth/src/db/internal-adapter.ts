@@ -9,6 +9,7 @@ import type {
 import {
 	getCurrentAdapter,
 	getCurrentAuthEndpointContext,
+	getCurrentDBAdapterAsyncLocalStorage,
 	queueAfterTransactionHook,
 	runWithTransaction,
 	tryGetCurrentAuthEndpointContext,
@@ -320,6 +321,13 @@ export const createInternalAdapter = (
 		// by that request would never be released. Callers race at the database
 		// instead, so a `delete.before` hook can run for one that loses.
 		if (isWorkerd()) return fn();
+		// Waiting here while holding a transaction's connection can deadlock.
+		const store = await getCurrentDBAdapterAsyncLocalStorage()
+			.then((als) => als.getStore())
+			.catch(() => undefined);
+		const nativeTransaction =
+			typeof adapter.options?.adapterConfig.transaction === "function";
+		if (store?.isTransactionActive && nativeTransaction) return fn();
 		const previous = verificationConsumeLocks.get(key) ?? Promise.resolve();
 		let release!: () => void;
 		const current = new Promise<void>((resolve) => {

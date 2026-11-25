@@ -2377,6 +2377,112 @@ describe("internal adapter test", async () => {
 			expect(remaining?.value).toBe("second");
 		});
 
+		it("does not wait on the consume lock inside a transaction", async () => {
+			const database = new DatabaseSync(":memory:");
+			const migrations = await getMigrations({ database });
+			await migrations.runMigrations();
+			const db = new Kysely<Record<string, never>>({
+				dialect: new NodeSqliteDialect({ database }),
+			});
+			let transactions = 0;
+			const ctx = await init({
+				database: (options) => {
+					const base = kyselyAdapter(db, {
+						type: "sqlite",
+						transaction: true,
+					})(options);
+					return {
+						...base,
+						transaction: (callback) => {
+							transactions++;
+							return base.transaction(callback);
+						},
+					};
+				},
+			});
+			const adapter = ctx.internalAdapter;
+			await adapter.createVerificationValue({
+				identifier: "consume:in-transaction",
+				value: "user-held",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			let open = () => {};
+			const gate = new Promise<void>((resolve) => {
+				open = resolve;
+			});
+
+			// The transaction holds the only SQLite connection until `open`.
+			const inTransaction = runWithTransaction(ctx.adapter, async () => {
+				await gate;
+				return adapter.consumeVerificationValue("consume:in-transaction");
+			});
+			await vi.waitFor(() => expect(transactions).toBe(1));
+			// This consume takes the lock, then queues for the connection.
+			const outside = adapter.consumeVerificationValue(
+				"consume:in-transaction",
+			);
+			await vi.waitFor(() => expect(transactions).toBe(2));
+			open();
+
+			const stillWaiting = new Promise((resolve) =>
+				setTimeout(resolve, 1_000, "still waiting"),
+			);
+			const settled = await Promise.race([inTransaction, stillWaiting]);
+			expect(settled).toMatchObject({ value: "user-held" });
+			expect(await outside).toBeNull();
+		});
+
+		it.for([
+			{ adapterShape: "factory", wrap: false },
+			{ adapterShape: "spread wrapper", wrap: true },
+		])(
+			"still orders consumes inside a transaction on a $adapterShape adapter without transactions",
+			async ({ wrap }) => {
+				const database = new DatabaseSync(":memory:");
+				const migrations = await getMigrations({ database });
+				await migrations.runMigrations();
+				const db = new Kysely<Record<string, never>>({
+					dialect: new NodeSqliteDialect({ database }),
+				});
+				let release = () => {};
+				const held = new Promise<boolean>((resolve) => {
+					release = () => resolve(true);
+				});
+				const before = vi.fn().mockReturnValueOnce(held).mockReturnValue(true);
+				const withoutTransaction = kyselyAdapter(db, {
+					type: "sqlite",
+					transaction: false,
+				});
+				const ctx = await init({
+					database: wrap
+						? (options) => ({ ...withoutTransaction(options) })
+						: withoutTransaction,
+					databaseHooks: { verification: { delete: { before } } },
+				});
+				const adapter = ctx.internalAdapter;
+				await adapter.createVerificationValue({
+					identifier: "consume:no-transaction",
+					value: "user-ordered",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+				const consume = () =>
+					runWithTransaction(ctx.adapter, () =>
+						adapter.consumeVerificationValue("consume:no-transaction"),
+					);
+
+				const first = consume();
+				await vi.waitFor(() => expect(before).toHaveBeenCalledOnce());
+				const second = consume();
+				// Give an unordered second consume time to reach its hook.
+				await new Promise((resolve) => setTimeout(resolve, 50));
+				release();
+
+				const values = [(await first)?.value, (await second)?.value];
+				expect(values.filter(Boolean)).toEqual(["user-ordered"]);
+				expect(before).toHaveBeenCalledOnce();
+			},
+		);
+
 		it("returns null for an unknown identifier", async () => {
 			const adapter = await makeAdapter();
 			const result = await adapter.consumeVerificationValue("consume:missing");
