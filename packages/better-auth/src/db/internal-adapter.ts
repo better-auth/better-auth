@@ -37,6 +37,7 @@ import {
 	parseSessionOutput,
 	parseUserOutput,
 } from "./schema";
+import { verifyVerificationAttempt } from "./verification-attempt";
 import {
 	getStorageOption,
 	processIdentifier,
@@ -85,6 +86,7 @@ export const createInternalAdapter = (
 		deleteWithHooks,
 		deleteManyWithHooks,
 		consumeOneWithHooks,
+		incrementOneWithHooks,
 	} = getWithHooks(adapter, ctx);
 
 	/**
@@ -1662,6 +1664,28 @@ export const createInternalAdapter = (
 			// invalid, so callers can rely on a non-null return meaning "valid".
 			if (!consumed || consumed.expiresAt < new Date()) return null;
 			return consumed;
+		},
+		verifyVerificationValue: async (identifier, verifyOptions) => {
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
+			);
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+			return verifyVerificationAttempt(
+				{
+					adapter,
+					hooks: { consumeOneWithHooks, incrementOneWithHooks },
+					secondaryStorage,
+					storeInDatabase: options.verification?.storeInDatabase,
+				},
+				storageOption && storageOption !== "plain"
+					? [storedIdentifier, identifier]
+					: [storedIdentifier],
+				verifyOptions,
+			);
 		},
 		/**
 		 * First-writer-wins create keyed by a deterministic primary key derived

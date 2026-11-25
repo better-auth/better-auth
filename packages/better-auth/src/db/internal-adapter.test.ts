@@ -2912,6 +2912,122 @@ describe("internal adapter test", async () => {
 		});
 	});
 
+	/**
+	 * @see https://better-auth.com/docs/concepts/database#database-hooks
+	 */
+	describe("verifyVerificationValue", () => {
+		async function makeAdapter(overrides?: Partial<BetterAuthOptions>) {
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				...overrides,
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			return ctx.internalAdapter;
+		}
+
+		it("runs the update hooks to count an attempt and the delete hooks to consume", async () => {
+			const events: string[] = [];
+			const adapter = await makeAdapter({
+				databaseHooks: {
+					verification: {
+						update: {
+							async before(data) {
+								events.push(`update.before ${String(data.value)}`);
+							},
+							async after(verification) {
+								events.push(`update.after ${verification.value}`);
+							},
+						},
+						delete: {
+							async before(verification) {
+								events.push(`delete.before ${verification.value}`);
+							},
+							async after(verification) {
+								events.push(`delete.after ${verification.value}`);
+							},
+						},
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "attempt:hooks",
+				value: "123456:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const verify = (guess: string) =>
+				adapter.verifyVerificationValue("attempt:hooks", {
+					allowedAttempts: 3,
+					matches: (code) => code === guess,
+				});
+
+			expect((await verify("000000")).status).toBe("invalid");
+			const verified = await verify("123456");
+
+			expect(verified.status).toBe("verified");
+			expect(events).toEqual([
+				"update.before 123456:1",
+				"update.after 123456:1",
+				"update.before 123456:2",
+				"update.after 123456:2",
+				"delete.before 123456:2",
+				"delete.after 123456:2",
+			]);
+			expect(await adapter.findVerificationValue("attempt:hooks")).toBeNull();
+		});
+
+		it("does not compare a guess when an update hook vetoes counting it", async () => {
+			const adapter = await makeAdapter({
+				databaseHooks: {
+					verification: {
+						update: {
+							async before() {
+								return false;
+							},
+						},
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "attempt:veto",
+				value: "123456:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const matches = vi.fn(() => true);
+
+			const result = await adapter.verifyVerificationValue("attempt:veto", {
+				allowedAttempts: 3,
+				matches,
+			});
+
+			expect(result.status).toBe("vetoed");
+			expect(matches).not.toHaveBeenCalled();
+			expect((await adapter.findVerificationValue("attempt:veto"))?.value).toBe(
+				"123456:0",
+			);
+		});
+
+		it("returns the attempt of a matching guess it keeps", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "attempt:keep",
+				value: "123456:1",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const result = await adapter.verifyVerificationValue("attempt:keep", {
+				allowedAttempts: 3,
+				matches: (code) => code === "123456",
+				keep: true,
+			});
+
+			expect(result.status).toBe("verified");
+			expect((await adapter.findVerificationValue("attempt:keep"))?.value).toBe(
+				"123456:1",
+			);
+		});
+	});
+
 	describe("reserveVerificationValue", () => {
 		async function makeAdapter(overrides?: Partial<BetterAuthOptions>) {
 			const opts = {

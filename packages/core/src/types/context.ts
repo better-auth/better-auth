@@ -109,6 +109,31 @@ export type CookieCacheSigner = {
 	} | null>;
 };
 
+/**
+ * The outcome of `InternalAdapter.verifyVerificationValue`.
+ *
+ * - `"verified"`: the guess matched.
+ * - `"invalid"`: the guess was compared and did not match.
+ * - `"missing"`: no code is stored.
+ * - `"expired"`: the stored code expired.
+ * - `"exhausted"`: every allowed attempt was used, so the code was removed.
+ * - `"superseded"`: another request consumed or replaced the code during
+ *   this attempt.
+ * - `"vetoed"`: a `verification.update.before` database hook blocked
+ *   counting the attempt or returning it.
+ */
+export type VerificationAttemptResult =
+	| { status: "verified"; verification: Verification }
+	| {
+			status:
+				| "invalid"
+				| "missing"
+				| "expired"
+				| "exhausted"
+				| "superseded"
+				| "vetoed";
+	  };
+
 export interface InternalAdapter<
 	_Options extends BetterAuthOptions = BetterAuthOptions,
 > {
@@ -287,6 +312,40 @@ export interface InternalAdapter<
 	 * pair at single-use credential consumption sites.
 	 */
 	consumeVerificationValue(identifier: string): Promise<Verification | null>;
+
+	/**
+	 * Check a guess against the single-use code stored under `identifier`,
+	 * such as a one-time password, counting the attempt before the guess is
+	 * compared.
+	 *
+	 * The stored value is the code followed by `:<attempts>`. A guess is
+	 * compared only once it has claimed one of `allowedAttempts`, so
+	 * concurrent guesses can never compare more often than that. A wrong guess
+	 * leaves the code stored with the attempt counted, and a matching one
+	 * consumes it, so exactly one concurrent caller receives `"verified"`.
+	 * With `keep`, a matching guess leaves the code stored and returns its
+	 * attempt, so a follow-up call can use the code.
+	 *
+	 * With secondary storage only, attempts are counted beside the stored
+	 * value rather than in it.
+	 */
+	verifyVerificationValue(
+		identifier: string,
+		options: {
+			allowedAttempts: number;
+			/**
+			 * Compare the guess with the stored code, which excludes the attempt
+			 * count.
+			 */
+			matches: (storedCode: string) => Awaitable<boolean>;
+			/**
+			 * Leave a matching code stored for a follow-up call.
+			 *
+			 * @default false
+			 */
+			keep?: boolean | undefined;
+		},
+	): Promise<VerificationAttemptResult>;
 
 	/**
 	 * First-writer-wins create keyed by a deterministic primary key derived from

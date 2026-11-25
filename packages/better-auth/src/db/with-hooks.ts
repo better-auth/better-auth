@@ -508,6 +508,65 @@ export function getWithHooks(
 		return consumed;
 	}
 
+	/**
+	 * Runs the `update` hooks around a guarded single-row update such as
+	 * `adapter.incrementOne`. `update.before` hooks receive `data` and may change
+	 * it; `incrementFn` receives the result. Resolves to `false` when a hook
+	 * vetoes the update, and to `null` when the guard matched no row, in which
+	 * case `update.after` hooks do not run.
+	 */
+	async function incrementOneWithHooks<T extends Record<string, any>>(
+		model: BaseModelNames,
+		data: Record<string, unknown>,
+		incrementFn: (data: Record<string, unknown>) => Promise<T | null>,
+	): Promise<T | null | false> {
+		const context = tryGetCurrentAuthEndpointContext();
+		let actualData = data;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.update?.before;
+			if (toRun) {
+				const result = await withSpan(
+					`db update.before ${model}`,
+					{
+						[ATTR_HOOK_TYPE]: "update.before",
+						[ATTR_DB_COLLECTION_NAME]: model,
+						[ATTR_CONTEXT]: source,
+					},
+					() =>
+						// @ts-expect-error context type mismatch
+						toRun(actualData as any, context),
+				);
+				if (result === false) return false;
+				if (typeof result === "object" && "data" in result) {
+					actualData = { ...actualData, ...result.data };
+				}
+			}
+		}
+
+		const updated = await incrementFn(actualData);
+		if (!updated) return null;
+
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.update?.after;
+			if (toRun) {
+				await queueAfterTransactionHook(async () => {
+					await withSpan(
+						`db update.after ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "update.after",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(updated as any, context),
+					);
+				});
+			}
+		}
+		return updated;
+	}
+
 	return {
 		createWithHooks,
 		updateWithHooks,
@@ -515,5 +574,6 @@ export function getWithHooks(
 		deleteWithHooks,
 		deleteManyWithHooks,
 		consumeOneWithHooks,
+		incrementOneWithHooks,
 	};
 }

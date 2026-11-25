@@ -13,7 +13,6 @@ import { setCookieCache, setSessionCookie } from "../../cookies";
 import { symmetricDecrypt } from "../../crypto";
 import { revokeUnprovenAccountAccess } from "../../db/revoke-unproven-account-access";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
-import { restoreVerification } from "../../db/verification";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
@@ -1274,16 +1273,13 @@ export const changeEmailEmailOTP = (opts: RequiredEmailOTPOptions) =>
 	);
 
 /**
- * Verifies an OTP with race-condition protection.
+ * Verifies an OTP, counting the attempt before the guess is compared.
  *
- * The atomic consume is the single gate: only the first concurrent caller
- * receives the record, every later racer receives `null` and is rejected, so
- * only one caller at a time can compare a guess. Credential routes leave a
- * successful OTP consumed. The optional preflight restores it unchanged so
- * the documented follow-up call can use it. A wrong guess restores it with
- * one additional attempt. Both restores keep the original expiry and creation
- * time, so a code issued meanwhile stays the latest. An exhausted record stays
- * consumed, locking the identifier out.
+ * Credential routes consume a matching OTP, so only one concurrent caller
+ * succeeds. The optional preflight leaves it stored with its attempt returned,
+ * so the documented follow-up call can use it. A wrong guess leaves the OTP
+ * stored with the attempt counted. Once every attempt is used, the OTP is
+ * removed.
  */
 async function atomicVerifyOTP(
 	ctx: GenericEndpointContext,
@@ -1292,62 +1288,27 @@ async function atomicVerifyOTP(
 	providedOTP: string,
 	successDisposition: "consume" | "restore" = "consume",
 ): Promise<void> {
-	// Surface the OTP_EXPIRED error shape before consuming. The consume itself
-	// drops expired rows and returns null, which would otherwise be
-	// indistinguishable from a missing record; this read only reports expiry
-	// and never decides the success path, so it does not weaken the race gate.
-	// It must not delete either: a code issued after this read would go with it.
-	const existing =
-		await ctx.context.internalAdapter.findVerificationValue(identifier);
-	if (existing && existing.expiresAt < new Date()) {
-		throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
-	}
-
-	const consumed =
-		await ctx.context.internalAdapter.consumeVerificationValue(identifier);
-
-	// A null result means the record was missing, already consumed by a racing
-	// request, or expired: there is nothing valid left to verify against.
-	if (!consumed) {
-		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
-	}
-
-	const [otpValue, attempts] = splitAtLastColon(consumed.value);
-	const allowedAttempts = opts?.allowedAttempts || 3;
-	const usedAttempts = parseInt(attempts || "0");
-
-	// Budget exhausted: the record stays consumed, so no further attempt can
-	// replay it.
-	if (usedAttempts >= allowedAttempts) {
-		throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
-	}
-
-	const verified = await verifyStoredOTP(ctx, opts, otpValue, providedOTP);
-	// A code issued while this one was being checked replaces it, so the
-	// write-back yields to it instead of reviving the old code.
-	const writeBack = (value: string) =>
-		restoreVerification(ctx, {
-			value,
-			identifier,
-			expiresAt: consumed.expiresAt,
-			createdAt: consumed.createdAt,
-		});
-
-	if (!verified) {
-		await writeBack(`${otpValue}:${usedAttempts + 1}`);
-		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
-	}
-
-	if (successDisposition === "consume") return;
-
-	const restored = await writeBack(consumed.value);
-	// A verification.create.before hook can veto the restore by returning false.
-	if (!restored) {
-		throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
-			message: "Unable to complete OTP verification",
-		});
-	}
-	if (restored.value !== consumed.value) {
-		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+	const result = await ctx.context.internalAdapter.verifyVerificationValue(
+		identifier,
+		{
+			allowedAttempts: opts?.allowedAttempts || 3,
+			matches: (storedOTP) =>
+				verifyStoredOTP(ctx, opts, storedOTP, providedOTP),
+			keep: successDisposition === "restore",
+		},
+	);
+	switch (result.status) {
+		case "verified":
+			return;
+		case "expired":
+			throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
+		case "exhausted":
+			throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
+		case "vetoed":
+			throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
+				message: "Unable to complete OTP verification",
+			});
+		default:
+			throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 	}
 }

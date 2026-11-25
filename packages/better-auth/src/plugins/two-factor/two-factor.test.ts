@@ -2064,6 +2064,305 @@ describe("OTP resent while a wrong guess is checked", () => {
 	);
 });
 
+/**
+ * A code sent and used while a wrong code is compared against an older one
+ * must stay the only valid one.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11105
+ */
+describe("OTP guessed while a newer code was used", () => {
+	function createSecondaryStorage(): SecondaryStorage {
+		const values = new Map<string, string>();
+		return {
+			get: (key) => values.get(key) ?? null,
+			getAndDelete: (key) => {
+				const value = values.get(key) ?? null;
+				values.delete(key);
+				return value;
+			},
+			increment: (key) => {
+				const value = Number(values.get(key) ?? 0) + 1;
+				values.set(key, String(value));
+				return value;
+			},
+			set: (key, value) => {
+				values.set(key, value);
+			},
+			delete: (key) => {
+				values.delete(key);
+			},
+		};
+	}
+
+	it.for([
+		"database",
+		"database with custom ids",
+		"database with hashed identifiers",
+		"secondary",
+		"secondary with hashed identifiers",
+		"mirrored",
+	] as const)(
+		"does not revive the older code in %s storage",
+		async (storage) => {
+			const codes: string[] = [];
+			let heldGuess: string | undefined;
+			let releaseCheck: () => void = () => {};
+			const checkReleased = new Promise<void>((resolve) => {
+				releaseCheck = resolve;
+			});
+			let signalCheck: () => void = () => {};
+			const checkStarted = new Promise<void>((resolve) => {
+				signalCheck = resolve;
+			});
+			const { auth, signInWithTestUser, testUser } = await getTestInstance({
+				secret: DEFAULT_SECRET,
+				...(storage === "database with custom ids"
+					? {
+							advanced: {
+								database: { generateId: () => crypto.randomUUID() },
+							},
+						}
+					: {}),
+				...(storage.startsWith("secondary") || storage === "mirrored"
+					? { secondaryStorage: createSecondaryStorage() }
+					: {}),
+				verification: {
+					...(storage.endsWith("hashed identifiers")
+						? { storeIdentifier: "hashed" as const }
+						: {}),
+					...(storage === "mirrored" ? { storeInDatabase: true } : {}),
+				},
+				plugins: [
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp }) {
+								codes.push(otp);
+							},
+							storeOTP: {
+								async hash(token) {
+									// Hold the wrong guess while it is compared.
+									if (token === heldGuess) {
+										heldGuess = undefined;
+										signalCheck();
+										await checkReleased;
+									}
+									return `custom_${token}`;
+								},
+							},
+						},
+					}),
+				],
+			});
+			const { headers: signInHeaders } = await signInWithTestUser();
+			const enabled = await auth.api.enableTwoFactor({
+				body: { password: testUser.password, method: "otp" },
+				headers: signInHeaders,
+				asResponse: true,
+			});
+			const headers = convertSetCookieToCookie(enabled.headers);
+			const current = await auth.api.getSession({ headers });
+			const identifier = `2fa-otp-${current!.user.id}!${current!.session.id}`;
+			await auth.api.sendTwoFactorOTP({ headers, body: {} });
+
+			const wrong = codes[0] === "000000" ? "111111" : "000000";
+			heldGuess = wrong;
+			const guess = auth.api.verifyTwoFactorOTP({
+				headers,
+				body: { code: wrong },
+				asResponse: true,
+			});
+			await checkStarted;
+			await auth.api.sendTwoFactorOTP({ headers, body: {} });
+			const newer = await auth.api.verifyTwoFactorOTP({
+				headers,
+				body: { code: codes[1]! },
+				asResponse: true,
+			});
+			releaseCheck();
+
+			expect(newer.status).toBe(200);
+			expect((await guess).status).toBe(401);
+			const { internalAdapter } = await auth.$context;
+			expect(
+				await internalAdapter.findVerificationValue(identifier),
+			).toBeNull();
+			const stale = await auth.api.verifyTwoFactorOTP({
+				headers,
+				body: { code: codes[0]! },
+				asResponse: true,
+			});
+			expect(stale.status).toBe(400);
+		},
+	);
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11105
+ */
+describe("OTP attempts counted in place", () => {
+	const storages = [
+		"database",
+		"database with custom ids",
+		"database with hashed identifiers",
+		"secondary",
+		"secondary with hashed identifiers",
+		"mirrored",
+	] as const;
+
+	async function setup(storage: (typeof storages)[number]) {
+		const values = new Map<string, string>();
+		const secondaryStorage: SecondaryStorage = {
+			get: (key) => values.get(key) ?? null,
+			getAndDelete: (key) => {
+				const value = values.get(key) ?? null;
+				values.delete(key);
+				return value;
+			},
+			increment: (key) => {
+				const value = Number(values.get(key) ?? 0) + 1;
+				values.set(key, String(value));
+				return value;
+			},
+			set: (key, value) => {
+				values.set(key, value);
+			},
+			delete: (key) => {
+				values.delete(key);
+			},
+		};
+		const codes: string[] = [];
+		let compared = 0;
+		let hold: Promise<void> | undefined;
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			...(storage === "database with custom ids"
+				? {
+						advanced: {
+							database: { generateId: () => crypto.randomUUID() },
+						},
+					}
+				: {}),
+			...(storage.startsWith("secondary") || storage === "mirrored"
+				? { secondaryStorage }
+				: {}),
+			verification: {
+				...(storage.endsWith("hashed identifiers")
+					? { storeIdentifier: "hashed" as const }
+					: {}),
+				...(storage === "mirrored" ? { storeInDatabase: true } : {}),
+			},
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						allowedAttempts: 3,
+						sendOTP({ otp }) {
+							codes.push(otp);
+						},
+					},
+				}),
+			],
+		});
+		const { headers: signInHeaders } = await signInWithTestUser();
+		const enabled = await auth.api.enableTwoFactor({
+			body: { password: testUser.password, method: "otp" },
+			headers: signInHeaders,
+			asResponse: true,
+		});
+		const headers = convertSetCookieToCookie(enabled.headers);
+		const { internalAdapter } = await auth.$context;
+		const verifyValue = internalAdapter.verifyVerificationValue;
+		// Slow every comparison so concurrent requests overlap.
+		vi.spyOn(internalAdapter, "verifyVerificationValue").mockImplementation(
+			(id, options) =>
+				verifyValue(id, {
+					...options,
+					async matches(storedCode) {
+						compared++;
+						await (hold ?? new Promise((resolve) => setTimeout(resolve, 5)));
+						return options.matches(storedCode);
+					},
+				}),
+		);
+		const verify = (code: string) =>
+			auth.api.verifyTwoFactorOTP({
+				headers,
+				body: { code },
+				asResponse: true,
+			});
+		return {
+			auth,
+			headers,
+			codes,
+			verify,
+			compared: () => compared,
+			holdComparisons(gate: Promise<void>) {
+				hold = gate;
+			},
+		};
+	}
+
+	it.for(storages)(
+		"accepts the same code once when it is submitted twice at once in %s storage",
+		async (storage) => {
+			const { auth, headers, codes, verify } = await setup(storage);
+			await auth.api.sendTwoFactorOTP({ headers, body: {} });
+
+			const results = await Promise.all([verify(codes[0]!), verify(codes[0]!)]);
+
+			expect(results.map((res) => res.status).sort()).toEqual([200, 400]);
+		},
+	);
+
+	it.for(storages)(
+		"compares no more than the allowed attempts of a burst of codes in %s storage",
+		async (storage) => {
+			const { auth, headers, codes, verify, compared } = await setup(storage);
+			await auth.api.sendTwoFactorOTP({ headers, body: {} });
+			const wrong = (index: number) =>
+				String((Number(codes[0]) + index + 1) % 1_000_000).padStart(6, "0");
+
+			const results = await Promise.all(
+				Array.from({ length: 10 }, (_, index) => verify(wrong(index))),
+			);
+
+			expect(compared()).toBe(3);
+			for (const res of results) {
+				expect([400, 401]).toContain(res.status);
+			}
+			expect((await verify(codes[0]!)).status).toBe(400);
+		},
+	);
+
+	it("keeps the code sent while a wrong guess waits to be compared", async () => {
+		const { auth, headers, codes, verify, compared, holdComparisons } =
+			await setup("database");
+		await auth.api.sendTwoFactorOTP({ headers, body: {} });
+		let release: () => void = () => {};
+		holdComparisons(
+			new Promise<void>((resolve) => {
+				release = resolve;
+			}),
+		);
+		const wrong = codes[0] === "000000" ? "111111" : "000000";
+		const guess = verify(wrong);
+		await vi.waitFor(() => expect(compared()).toBe(1));
+
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date(Date.now() + 1_000));
+		await auth.api.sendTwoFactorOTP({ headers, body: {} });
+		vi.setSystemTime(new Date(Date.now() + 1_000));
+		await auth.api.sendTwoFactorOTP({ headers, body: {} });
+		vi.useRealTimers();
+		holdComparisons(Promise.resolve());
+		release();
+
+		expect((await guess).status).toBe(401);
+		// Only the newest code is accepted.
+		expect((await verify(codes[1]!)).status).toBe(401);
+		expect((await verify(codes[2]!)).status).toBe(200);
+	});
+});
+
 describe("pre-migration twoFactor rows (verified absent)", async () => {
 	it("should complete enrollment when verified is null", async () => {
 		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({

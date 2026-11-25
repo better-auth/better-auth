@@ -9,7 +9,6 @@ import {
 	symmetricEncrypt,
 } from "../../../crypto";
 import { parseUserOutput } from "../../../db/schema";
-import { restoreVerification } from "../../../db/verification";
 import { PACKAGE_VERSION } from "../../../version";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { replaceSession } from "../session";
@@ -340,41 +339,44 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					await assertTwoFactorNotLocked(ctx, twoFactorTable, twoFactor);
 				}
 			}
-			// Consume the OTP row atomically as the race gate. The first concurrent
-			// submission wins the row; every other racer receives null and is
-			// rejected, so a burst of guesses cannot all read the same attempt
-			// counter before any write lands. Expiry is gated inside the consume,
-			// so a stale row returns null without minting a session.
-			const consumed =
-				await ctx.context.internalAdapter.consumeVerificationValue(
-					`2fa-otp-${key}`,
-				);
-			if (!consumed) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
-				);
-			}
-			const [otp, counter] = consumed.value?.split(":") ?? [];
-			const allowedAttempts = options?.allowedAttempts || 5;
-			const attempts = parseInt(counter!, 10) || 0;
-			if (attempts >= allowedAttempts) {
-				// The budget is spent. The row stays consumed, so the next
-				// submission is rejected as expired/already-consumed.
+			// The attempt is counted before the code is compared, so a burst of
+			// guesses compares no more often than allowed. A matching code is
+			// consumed, so only one concurrent submission mints a session.
+			const result = await ctx.context.internalAdapter.verifyVerificationValue(
+				`2fa-otp-${key}`,
+				{
+					allowedAttempts: options?.allowedAttempts || 5,
+					async matches(storedCode) {
+						const [storedValue, inputValue] = await decryptOrHashForComparison(
+							ctx,
+							storedCode,
+							ctx.body.code,
+						);
+						return constantTimeEqual(
+							new TextEncoder().encode(storedValue),
+							new TextEncoder().encode(inputValue),
+						);
+					},
+				},
+			);
+			if (result.status === "exhausted") {
 				throw APIError.from(
 					"BAD_REQUEST",
 					TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
 				);
 			}
-			const [storedValue, inputValue] = await decryptOrHashForComparison(
-				ctx,
-				otp!,
-				ctx.body.code,
-			);
-			const isCodeValid = constantTimeEqual(
-				new TextEncoder().encode(storedValue),
-				new TextEncoder().encode(inputValue),
-			);
+			if (result.status === "vetoed") {
+				throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
+					message: "Unable to complete OTP verification",
+				});
+			}
+			if (result.status !== "verified" && result.status !== "invalid") {
+				throw APIError.from(
+					"BAD_REQUEST",
+					TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
+				);
+			}
+			const isCodeValid = result.status === "verified";
 			if (isCodeValid) {
 				if (twoFactor) {
 					await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
@@ -405,18 +407,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				}
 				return valid(ctx);
 			}
-			// Wrong code within budget: re-arm the row with the incremented counter
-			// and the original expiry and creation time. The recreated counter is
-			// the durable record of the attempt, so the next submission either keeps
-			// guessing or hits the lock-out guard above. The original expiry caps
-			// the whole burst. A code sent while this one was being checked
-			// replaces it, so the re-arm yields to it.
-			await restoreVerification(ctx, {
-				value: `${otp}:${attempts + 1}`,
-				identifier: `2fa-otp-${key}`,
-				expiresAt: consumed.expiresAt,
-				createdAt: consumed.createdAt,
-			});
+			// The attempt was counted before the comparison, so nothing is written.
 			if (twoFactor) {
 				await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
 			}

@@ -6,6 +6,7 @@ import {
 	symmetricEncrypt,
 } from "../../crypto";
 import { createOrFindVerification } from "../../db/verification";
+import { hasAttemptsBesideValue } from "../../db/verification-attempt";
 import { getDate } from "../../utils/date";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
@@ -104,6 +105,7 @@ export async function tryReuseOTP(
 	const [storedOtpValue, attempts] = splitAtLastColon(existing.value);
 	const allowedAttempts = opts.allowedAttempts || 3;
 	if (attempts && parseInt(attempts) >= allowedAttempts) return null;
+	if (await hasAttemptsBesideValue(ctx, existing)) return null;
 
 	const plainOtp = await retrieveOTP(ctx, opts, storedOtpValue);
 	if (!plainOtp) return null;
