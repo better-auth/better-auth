@@ -951,6 +951,26 @@ describe("internal adapter test", async () => {
 		expect(found?.session.createdAt).toEqual(createdAt);
 	});
 
+	it("sets the creation time when an override leaves it undefined", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "created-at-undefined",
+				email: "created-at-undefined@email.com",
+			},
+			{ method: "test" },
+		);
+
+		const session = await internalAdapter.createSession(user.id, false, {
+			createdAt: undefined,
+		});
+
+		const found = await internalAdapter.findSession(session.token);
+		expect(found?.session.createdAt.getTime()).toBeGreaterThan(0);
+		expect(found?.session.createdAt.getTime()).toBe(
+			session.createdAt.getTime(),
+		);
+	});
+
 	it("should delete on secondary storage", async () => {
 		// Create multiple sessions in past and future
 		const now = Date.now();
