@@ -22,7 +22,18 @@ type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 		: false
 	: false;
 
-const normalizeRoleName = (role: string) => role.toLowerCase();
+// Role columns are read through parseRoleList, so a name must read back as itself.
+const normalizeRoleName = (role: string) => {
+	const roleName = role.trim().toLowerCase();
+	const roleList = parseRoleList(roleName);
+	if (roleList.length !== 1 || roleList[0] !== roleName) {
+		throw APIError.from(
+			"BAD_REQUEST",
+			ORGANIZATION_ERROR_CODES.INVALID_ROLE_NAME,
+		);
+	}
+	return roleName;
+};
 const DEFAULT_MAXIMUM_ROLES_PER_ORGANIZATION = Number.POSITIVE_INFINITY;
 
 const getAdditionalFields = <
