@@ -739,13 +739,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					// name with the field that stores this foreign key. A missing one
 					// takes that relation name, or Prisma cannot pair the two sides.
 					const foreignKey = fkFieldAttr?.fieldName || fkFieldKey;
-					const relationName = readRelations(
+					const relationsToThisModel = readRelations(
 						builder.findByType("model", { name: relatedModel }),
-					).find(
+					).filter(
 						(relation) =>
 							relation.type === modelName &&
-							relation.fields.length === 1 &&
-							relation.fields[0] === foreignKey,
+							relation.fields.some((field) => field === foreignKey),
+					);
+					const relationName = (
+						relationsToThisModel.find(
+							(relation) => relation.fields.length === 1,
+						) ?? relationsToThisModel[0]
 					)?.name;
 					const existingBackRelation = readRelations(prismaModel).some(
 						(relation) =>

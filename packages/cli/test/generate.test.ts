@@ -530,6 +530,27 @@ model TenantMember {
 			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/12896
+		 */
+		it("keeps a named back-relation paired with a composite foreign key", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `tenantId      String
+  userSessions  Session[] @relation("UserSessions")
+  accounts      Account[]
+
+  @@unique([tenantId, id])`,
+					sessionRelations: `tenantId  String
+  userId    String
+  user      User     @relation("UserSessions", fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)`,
+				}),
+			);
+
+			expect(code).not.toMatch(/^\s*sessions\s+Session\[\]/m);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
 		const revokedBy = `revokedById String?
   revokedBy   User?    @relation("RevokedBy", fields: [revokedById], references: [id])`;
 		const ownedSession = `userId    String
