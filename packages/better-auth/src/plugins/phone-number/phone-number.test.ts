@@ -2668,3 +2668,129 @@ describe("phone number OTP issuance vetoed by a verification hook", () => {
 		expect(sendPasswordResetOTP).not.toHaveBeenCalled();
 	});
 });
+
+/**
+ * A wrong code consumes the stored one while it is compared and writes it
+ * back afterwards. A code sent and used during that comparison must stay the
+ * only valid one.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11105
+ */
+describe("phone number OTP written back after a newer code was sent", () => {
+	function createSecondaryStorage(): SecondaryStorage {
+		const values = new Map<string, string>();
+		return {
+			get: (key) => values.get(key) ?? null,
+			getAndDelete: (key) => {
+				const value = values.get(key) ?? null;
+				values.delete(key);
+				return value;
+			},
+			increment: (key) => {
+				const value = Number(values.get(key) ?? 0) + 1;
+				values.set(key, String(value));
+				return value;
+			},
+			set: (key, value) => {
+				values.set(key, value);
+			},
+			delete: (key) => {
+				values.delete(key);
+			},
+		};
+	}
+
+	it.for([
+		"database",
+		"database with custom ids",
+		"database with hashed identifiers",
+		"secondary",
+		"secondary with hashed identifiers",
+		"mirrored",
+	] as const)(
+		"does not revive the older code after the newer one was used in %s storage",
+		async (storage) => {
+			const number = "+15550000101";
+			const identifier = `phone-number-otp-${number}`;
+			const codes: string[] = [];
+			const { client, auth } = await getTestInstance(
+				{
+					...(storage === "database with custom ids"
+						? {
+								advanced: {
+									database: { generateId: () => crypto.randomUUID() },
+								},
+							}
+						: {}),
+					...(storage.startsWith("secondary") || storage === "mirrored"
+						? { secondaryStorage: createSecondaryStorage() }
+						: {}),
+					verification: {
+						...(storage.endsWith("hashed identifiers")
+							? { storeIdentifier: "hashed" as const }
+							: {}),
+						...(storage === "mirrored" ? { storeInDatabase: true } : {}),
+					},
+					plugins: [
+						phoneNumber({
+							async sendOTP({ code }) {
+								codes.push(code);
+							},
+							signUpOnVerification: {
+								getTempEmail: (phoneNumber) => `${phoneNumber}@example.com`,
+							},
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [phoneNumberClient()] } },
+			);
+			const { internalAdapter } = await auth.$context;
+			await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
+
+			let releaseCheck: () => void = () => {};
+			const checkReleased = new Promise<void>((resolve) => {
+				releaseCheck = resolve;
+			});
+			let signalCheck: () => void = () => {};
+			const checkStarted = new Promise<void>((resolve) => {
+				signalCheck = resolve;
+			});
+			const consume = internalAdapter.consumeVerificationValue;
+			// The wrong code is compared after it consumed the stored one.
+			vi.spyOn(
+				internalAdapter,
+				"consumeVerificationValue",
+			).mockImplementationOnce(async (id) => {
+				const consumed = await consume(id);
+				signalCheck();
+				await checkReleased;
+				return consumed;
+			});
+			const guess = client.phoneNumber.verify({
+				phoneNumber: number,
+				code: codes[0] === "000000" ? "111111" : "000000",
+			});
+			await checkStarted;
+			await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
+			const newer = await client.phoneNumber.verify({
+				phoneNumber: number,
+				code: codes[1]!,
+			});
+			releaseCheck();
+
+			expect(newer.data?.status).toBe(true);
+			expect((await guess).error?.code).toBe("INVALID_OTP");
+			expect(
+				await internalAdapter.findVerificationValue(identifier),
+			).toBeNull();
+			expect(
+				(
+					await client.phoneNumber.verify({
+						phoneNumber: number,
+						code: codes[0]!,
+					})
+				).error?.code,
+			).toBe("OTP_NOT_FOUND");
+		},
+	);
+});

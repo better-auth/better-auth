@@ -7,6 +7,7 @@ import {
 	encodeDeterministicId,
 	isUniqueViolation,
 } from "@better-auth/core/db/internal";
+import { generateId } from "@better-auth/core/utils/id";
 import { createHash } from "@better-auth/utils/hash";
 import {
 	getStorageOption,
@@ -60,38 +61,182 @@ async function deriveVerificationId(
 	});
 }
 
+type VerificationInput = Parameters<
+	InternalAdapter["createVerificationValue"]
+>[0];
+
 /**
- * Writes a consumed verification value back, such as a code with one more
- * failed attempt, unless a value issued after the consume already holds the
- * identifier. Returns the stored value, which is the newer one when this
- * write yields, or `null` when a `verification.create.before` hook vetoes it.
+ * Names one issuance: `nonce` changes on every issue, and `code` is a digest
+ * of the issued value without its attempt counter, so it also names a code
+ * after its value was written back with more attempts.
+ */
+type Issuance = { nonce: string; code: string };
+
+function toStoredIdentifier(ctx: GenericEndpointContext, identifier: string) {
+	return processIdentifier(
+		identifier,
+		getStorageOption(
+			identifier,
+			ctx.context.options.verification?.storeIdentifier,
+		),
+	);
+}
+
+// Keyed by the stored identifier so `storeIdentifier` hashing also covers it.
+const toIssuanceIdentifier = (storedIdentifier: string) =>
+	`issued:${storedIdentifier}`;
+
+/**
+ * Digests the part of a `<code>:<attempts>` value before the attempt counter.
+ * The code part is already in its stored form, such as hashed or encrypted.
+ */
+function digestCode(value: string) {
+	const separator = value.lastIndexOf(":");
+	return createHash("SHA-256", "base64urlnopad").digest(
+		separator === -1 ? value : value.slice(0, separator),
+	);
+}
+
+async function findIssuance(
+	ctx: GenericEndpointContext,
+	storedIdentifier: string,
+): Promise<Issuance | null> {
+	const issuance = await ctx.context.internalAdapter.findVerificationValue(
+		toIssuanceIdentifier(storedIdentifier),
+	);
+	if (!issuance || new Date(issuance.expiresAt).getTime() <= Date.now()) {
+		return null;
+	}
+	const [nonce, code] = issuance.value.split(".");
+	return nonce && code ? { nonce, code } : null;
+}
+
+/**
+ * Replaces the OTP stored under an identifier with a newly issued
+ * `<code>:<attempts>` value, through {@link createOrFindVerification}.
+ * Resolves to `null` when a `verification.create.before` hook vetoes a write.
+ *
+ * It also records the issuance under a marker that outlives the value, so a
+ * write-back from {@link consumeVerification} can tell that a newer code was
+ * issued after the consumed one, even once that code is gone too. The marker
+ * is written after the old value is deleted and before the new one exists, so
+ * a consume that read the previous marker cannot have taken an older code
+ * than the one it names.
+ */
+export async function issueVerification(
+	ctx: GenericEndpointContext,
+	data: VerificationInput,
+): Promise<Verification | null> {
+	const { internalAdapter } = ctx.context;
+	const issuanceIdentifier = toIssuanceIdentifier(
+		await toStoredIdentifier(ctx, data.identifier),
+	);
+	await Promise.all([
+		internalAdapter.deleteVerificationByIdentifier(data.identifier),
+		internalAdapter.deleteVerificationByIdentifier(issuanceIdentifier),
+	]);
+	const issuance = await createOrFindVerification(ctx, {
+		identifier: issuanceIdentifier,
+		value: `${generateId()}.${await digestCode(data.value)}`,
+		expiresAt: data.expiresAt,
+	});
+	if (!issuance) return null;
+	return createOrFindVerification(ctx, data);
+}
+
+/**
+ * Extends the expiry of the OTP stored under an identifier, together with its
+ * issuance marker.
+ */
+export async function extendVerification(
+	ctx: GenericEndpointContext,
+	identifier: string,
+	expiresAt: Date,
+) {
+	const { internalAdapter } = ctx.context;
+	await Promise.all([
+		internalAdapter.updateVerificationByIdentifier(identifier, { expiresAt }),
+		internalAdapter.updateVerificationByIdentifier(
+			toIssuanceIdentifier(await toStoredIdentifier(ctx, identifier)),
+			{ expiresAt },
+		),
+	]);
+}
+
+/**
+ * Consumes the OTP stored under an identifier, so only one caller at a time
+ * can check a guess against it. Returns `null` when there is no valid value
+ * to consume.
+ *
+ * `restore` writes the value back, such as a code with one more failed
+ * attempt, keeping its expiry and creation time. It resolves to `"restored"`,
+ * to `"vetoed"` when a `verification.create.before` hook vetoes the write, or
+ * to `"superseded"` when the write yields because a code was issued after the
+ * consumed one, whether that code is still live or already used.
+ */
+export async function consumeVerification(
+	ctx: GenericEndpointContext,
+	identifier: string,
+) {
+	const { internalAdapter } = ctx.context;
+	const storedIdentifier = await toStoredIdentifier(ctx, identifier);
+	const issuance = await findIssuance(ctx, storedIdentifier);
+	const verification =
+		await internalAdapter.consumeVerificationValue(identifier);
+	if (!verification) return null;
+	return {
+		verification,
+		restore: (value: string) =>
+			restoreVerification(
+				ctx,
+				{
+					value,
+					identifier,
+					expiresAt: verification.expiresAt,
+					createdAt: verification.createdAt,
+				},
+				{ storedIdentifier, issuance },
+			),
+	};
+}
+
+/**
+ * The write-back proceeds while the marker names the issuance read before the
+ * consume. A different marker means a code was issued since, which the
+ * consume took only if the marker names the consumed code and the earlier one
+ * did not. A marker that disappeared may have been replaced, so it yields. A
+ * code issued before markers existed has none before or after, and proceeds.
  *
  * The consume removes every value under the stored identifier, so a live value
  * found there was issued after it. A row under the plain identifier, left from
  * before `storeIdentifier` hashing, is not. Neither storage offers a
- * conditional write for every id strategy, so a value issued between this read
- * and the write can still be replaced.
+ * conditional write for every id strategy, so a code issued between these
+ * reads and the write can still be replaced.
  */
-export async function restoreVerification(
+async function restoreVerification(
 	ctx: GenericEndpointContext,
-	data: Parameters<InternalAdapter["createVerificationValue"]>[0] & {
-		createdAt: Date;
-	},
-) {
-	const { internalAdapter, options } = ctx.context;
-	const [issued, storedIdentifier] = await Promise.all([
-		internalAdapter.findVerificationValue(data.identifier),
-		processIdentifier(
-			data.identifier,
-			getStorageOption(data.identifier, options.verification?.storeIdentifier),
-		),
+	data: VerificationInput & { createdAt: Date },
+	consumed: { storedIdentifier: string; issuance: Issuance | null },
+): Promise<"restored" | "superseded" | "vetoed"> {
+	const [live, issuance, code] = await Promise.all([
+		ctx.context.internalAdapter.findVerificationValue(data.identifier),
+		findIssuance(ctx, consumed.storedIdentifier),
+		digestCode(data.value),
 	]);
+	const before = consumed.issuance;
+	const latest = issuance
+		? issuance.nonce === before?.nonce ||
+			(issuance.code === code && before?.code !== code)
+		: !before;
 	if (
-		issued &&
-		issued.identifier === storedIdentifier &&
-		new Date(issued.expiresAt).getTime() > Date.now()
+		!latest ||
+		(live &&
+			live.identifier === consumed.storedIdentifier &&
+			new Date(live.expiresAt).getTime() > Date.now())
 	) {
-		return issued;
+		return "superseded";
 	}
-	return createOrFindVerification(ctx, data);
+	const restored = await createOrFindVerification(ctx, data);
+	if (!restored) return "vetoed";
+	return restored.value === data.value ? "restored" : "superseded";
 }

@@ -5,7 +5,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
-import { createOrFindVerification } from "../../db/verification";
+import { extendVerification, issueVerification } from "../../db/verification";
 import { getDate } from "../../utils/date";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
@@ -108,9 +108,7 @@ export async function tryReuseOTP(
 	const plainOtp = await retrieveOTP(ctx, opts, storedOtpValue);
 	if (!plainOtp) return null;
 
-	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
-		expiresAt: getDate(opts.expiresIn, "sec"),
-	});
+	await extendVerification(ctx, identifier, getDate(opts.expiresIn, "sec"));
 
 	return plainOtp;
 }
@@ -130,8 +128,7 @@ export async function issueOTP(
 		identifier,
 		expiresAt: getDate(opts.expiresIn, "sec"),
 	};
-	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
-	const stored = await createOrFindVerification(ctx, verification);
+	const stored = await issueVerification(ctx, verification);
 	// A verification.create.before hook can veto the create by returning false.
 	if (!stored) return null;
 	if (stored.value === verification.value) return otp;

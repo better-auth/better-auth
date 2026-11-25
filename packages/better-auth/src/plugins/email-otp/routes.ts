@@ -13,7 +13,7 @@ import { setCookieCache, setSessionCookie } from "../../cookies";
 import { symmetricDecrypt } from "../../crypto";
 import { revokeUnprovenAccountAccess } from "../../db/revoke-unproven-account-access";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
-import { restoreVerification } from "../../db/verification";
+import { consumeVerification } from "../../db/verification";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
@@ -1303,14 +1303,14 @@ async function atomicVerifyOTP(
 		throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
 	}
 
-	const consumed =
-		await ctx.context.internalAdapter.consumeVerificationValue(identifier);
+	const claim = await consumeVerification(ctx, identifier);
 
 	// A null result means the record was missing, already consumed by a racing
 	// request, or expired: there is nothing valid left to verify against.
-	if (!consumed) {
+	if (!claim) {
 		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 	}
+	const consumed = claim.verification;
 
 	const [otpValue, attempts] = splitAtLastColon(consumed.value);
 	const allowedAttempts = opts?.allowedAttempts || 3;
@@ -1325,29 +1325,21 @@ async function atomicVerifyOTP(
 	const verified = await verifyStoredOTP(ctx, opts, otpValue, providedOTP);
 	// A code issued while this one was being checked replaces it, so the
 	// write-back yields to it instead of reviving the old code.
-	const writeBack = (value: string) =>
-		restoreVerification(ctx, {
-			value,
-			identifier,
-			expiresAt: consumed.expiresAt,
-			createdAt: consumed.createdAt,
-		});
-
 	if (!verified) {
-		await writeBack(`${otpValue}:${usedAttempts + 1}`);
+		await claim.restore(`${otpValue}:${usedAttempts + 1}`);
 		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 	}
 
 	if (successDisposition === "consume") return;
 
-	const restored = await writeBack(consumed.value);
+	const restored = await claim.restore(consumed.value);
 	// A verification.create.before hook can veto the restore by returning false.
-	if (!restored) {
+	if (restored === "vetoed") {
 		throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
 			message: "Unable to complete OTP verification",
 		});
 	}
-	if (restored.value !== consumed.value) {
+	if (restored === "superseded") {
 		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 	}
 }

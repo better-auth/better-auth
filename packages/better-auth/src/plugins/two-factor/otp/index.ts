@@ -9,7 +9,10 @@ import {
 	symmetricEncrypt,
 } from "../../../crypto";
 import { parseUserOutput } from "../../../db/schema";
-import { restoreVerification } from "../../../db/verification";
+import {
+	consumeVerification,
+	issueVerification,
+} from "../../../db/verification";
 import { PACKAGE_VERSION } from "../../../version";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { replaceSession } from "../session";
@@ -218,12 +221,22 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			const { session, key } = await verifyTwoFactor(ctx);
 			const code = generateRandomString(opts.digits, "0-9");
 			const hashedCode = await storeOTP(ctx, code);
-			const verification =
-				await ctx.context.internalAdapter.createVerificationValue({
-					value: `${hashedCode}:0`,
-					identifier: `2fa-otp-${key}`,
-					expiresAt: new Date(Date.now() + opts.period),
-				});
+			const identifier = `2fa-otp-${key}`;
+			const value = `${hashedCode}:0`;
+			const expiresAt = new Date(Date.now() + opts.period);
+			const verification = await issueVerification(ctx, {
+				value,
+				identifier,
+				expiresAt,
+			});
+			// A concurrent send stored its code first. This one is sent, so it
+			// replaces that one.
+			if (verification && verification.value !== value) {
+				await ctx.context.internalAdapter.updateVerificationByIdentifier(
+					identifier,
+					{ value, expiresAt, createdAt: new Date() },
+				);
+			}
 			if (!verification) {
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
@@ -345,16 +358,14 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			// rejected, so a burst of guesses cannot all read the same attempt
 			// counter before any write lands. Expiry is gated inside the consume,
 			// so a stale row returns null without minting a session.
-			const consumed =
-				await ctx.context.internalAdapter.consumeVerificationValue(
-					`2fa-otp-${key}`,
-				);
-			if (!consumed) {
+			const claim = await consumeVerification(ctx, `2fa-otp-${key}`);
+			if (!claim) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
 				);
 			}
+			const consumed = claim.verification;
 			const [otp, counter] = consumed.value?.split(":") ?? [];
 			const allowedAttempts = options?.allowedAttempts || 5;
 			const attempts = parseInt(counter!, 10) || 0;
@@ -411,12 +422,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			// guessing or hits the lock-out guard above. The original expiry caps
 			// the whole burst. A code sent while this one was being checked
 			// replaces it, so the re-arm yields to it.
-			await restoreVerification(ctx, {
-				value: `${otp}:${attempts + 1}`,
-				identifier: `2fa-otp-${key}`,
-				expiresAt: consumed.expiresAt,
-				createdAt: consumed.createdAt,
-			});
+			await claim.restore(`${otp}:${attempts + 1}`);
 			if (twoFactor) {
 				await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
 			}

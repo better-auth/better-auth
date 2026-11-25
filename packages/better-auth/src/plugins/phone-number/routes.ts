@@ -8,10 +8,7 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
-import {
-	createOrFindVerification,
-	restoreVerification,
-} from "../../db/verification";
+import { consumeVerification, issueVerification } from "../../db/verification";
 import { HIDE_METADATA } from "../../utils";
 import { getDate } from "../../utils/date";
 import {
@@ -953,11 +950,11 @@ async function verifyPhoneNumberOTP(
 	}
 
 	const allowedAttempts = opts?.allowedAttempts ?? 3;
-	const consumed =
-		await ctx.context.internalAdapter.consumeVerificationValue(identifier);
-	if (!consumed) {
+	const claim = await consumeVerification(ctx, identifier);
+	if (!claim) {
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
+	const consumed = claim.verification;
 
 	const [otpValue, rawAttempts] = consumed.value.split(":");
 	const attempts = parseVerificationAttempts(rawAttempts);
@@ -969,27 +966,20 @@ async function verifyPhoneNumberOTP(
 	}
 	// A code issued while this one was being checked replaces it, so the
 	// write-back yields to it instead of reviving the old code.
-	const writeBack = (value: string) =>
-		restoreVerification(ctx, {
-			value,
-			identifier,
-			expiresAt: consumed.expiresAt,
-			createdAt: consumed.createdAt,
-		});
 	if (otpValue !== providedCode) {
-		await writeBack(`${otpValue}:${attempts + 1}`);
+		await claim.restore(`${otpValue}:${attempts + 1}`);
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
 	if (successDisposition === "consume") return;
 
-	const restored = await writeBack(consumed.value);
+	const restored = await claim.restore(consumed.value);
 	// A verification.create.before hook can veto the restore by returning false.
-	if (!restored) {
+	if (restored === "vetoed") {
 		throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
 			message: "Unable to complete OTP verification",
 		});
 	}
-	if (restored.value !== consumed.value) {
+	if (restored === "superseded") {
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
 }
@@ -1005,8 +995,7 @@ async function issuePhoneNumberOTP(
 		identifier,
 		expiresAt: getDate(opts.expiresIn, "sec"),
 	};
-	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
-	const stored = await createOrFindVerification(ctx, verification);
+	const stored = await issueVerification(ctx, verification);
 	// A verification.create.before hook can veto the create by returning false.
 	if (!stored) return null;
 	if (stored.value === verification.value) return code;

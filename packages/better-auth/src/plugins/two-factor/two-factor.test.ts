@@ -2064,6 +2064,139 @@ describe("OTP resent while a wrong guess is checked", () => {
 	);
 });
 
+/**
+ * A wrong code consumes the stored one while it is compared and writes it
+ * back afterwards. A code sent and used during that comparison must stay the
+ * only valid one.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11105
+ */
+describe("OTP written back after a newer code was used", () => {
+	function createSecondaryStorage(): SecondaryStorage {
+		const values = new Map<string, string>();
+		return {
+			get: (key) => values.get(key) ?? null,
+			getAndDelete: (key) => {
+				const value = values.get(key) ?? null;
+				values.delete(key);
+				return value;
+			},
+			increment: (key) => {
+				const value = Number(values.get(key) ?? 0) + 1;
+				values.set(key, String(value));
+				return value;
+			},
+			set: (key, value) => {
+				values.set(key, value);
+			},
+			delete: (key) => {
+				values.delete(key);
+			},
+		};
+	}
+
+	it.for([
+		"database",
+		"database with custom ids",
+		"database with hashed identifiers",
+		"secondary",
+		"secondary with hashed identifiers",
+		"mirrored",
+	] as const)(
+		"does not revive the older code in %s storage",
+		async (storage) => {
+			const codes: string[] = [];
+			let heldGuess: string | undefined;
+			let releaseCheck: () => void = () => {};
+			const checkReleased = new Promise<void>((resolve) => {
+				releaseCheck = resolve;
+			});
+			let signalCheck: () => void = () => {};
+			const checkStarted = new Promise<void>((resolve) => {
+				signalCheck = resolve;
+			});
+			const { auth, signInWithTestUser, testUser } = await getTestInstance({
+				secret: DEFAULT_SECRET,
+				...(storage === "database with custom ids"
+					? {
+							advanced: {
+								database: { generateId: () => crypto.randomUUID() },
+							},
+						}
+					: {}),
+				...(storage.startsWith("secondary") || storage === "mirrored"
+					? { secondaryStorage: createSecondaryStorage() }
+					: {}),
+				verification: {
+					...(storage.endsWith("hashed identifiers")
+						? { storeIdentifier: "hashed" as const }
+						: {}),
+					...(storage === "mirrored" ? { storeInDatabase: true } : {}),
+				},
+				plugins: [
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp }) {
+								codes.push(otp);
+							},
+							storeOTP: {
+								async hash(token) {
+									// The wrong guess is compared after it consumed the code.
+									if (token === heldGuess) {
+										heldGuess = undefined;
+										signalCheck();
+										await checkReleased;
+									}
+									return `custom_${token}`;
+								},
+							},
+						},
+					}),
+				],
+			});
+			const { headers: signInHeaders } = await signInWithTestUser();
+			const enabled = await auth.api.enableTwoFactor({
+				body: { password: testUser.password, method: "otp" },
+				headers: signInHeaders,
+				asResponse: true,
+			});
+			const headers = convertSetCookieToCookie(enabled.headers);
+			const current = await auth.api.getSession({ headers });
+			const identifier = `2fa-otp-${current!.user.id}!${current!.session.id}`;
+			await auth.api.sendTwoFactorOTP({ headers, body: {} });
+
+			const wrong = codes[0] === "000000" ? "111111" : "000000";
+			heldGuess = wrong;
+			const guess = auth.api.verifyTwoFactorOTP({
+				headers,
+				body: { code: wrong },
+				asResponse: true,
+			});
+			await checkStarted;
+			await auth.api.sendTwoFactorOTP({ headers, body: {} });
+			const newer = await auth.api.verifyTwoFactorOTP({
+				headers,
+				body: { code: codes[1]! },
+				asResponse: true,
+			});
+			releaseCheck();
+
+			expect(newer.status).toBe(200);
+			expect((await guess).status).toBe(401);
+			const { internalAdapter } = await auth.$context;
+			expect(
+				await internalAdapter.findVerificationValue(identifier),
+			).toBeNull();
+			const stale = await auth.api.verifyTwoFactorOTP({
+				headers,
+				body: { code: codes[0]! },
+				asResponse: true,
+			});
+			expect(stale.status).toBe(400);
+		},
+	);
+});
+
 describe("pre-migration twoFactor rows (verified absent)", async () => {
 	it("should complete enrollment when verified is null", async () => {
 		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({

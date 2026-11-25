@@ -537,3 +537,215 @@ describe("email OTP preflight attempt accounting", () => {
 		},
 	);
 });
+
+const usedCodeStorages = [
+	"database",
+	"database with custom ids",
+	"database with hashed identifiers",
+	"secondary",
+	"secondary with hashed identifiers",
+	"mirrored",
+] as const;
+
+function usedCodeStorageOptions(storage: (typeof usedCodeStorages)[number]) {
+	const hashed = storage.endsWith("hashed identifiers");
+	return {
+		...(storage === "database with custom ids"
+			? {
+					advanced: {
+						database: { generateId: () => crypto.randomUUID() },
+					},
+				}
+			: {}),
+		...(storage.startsWith("secondary") || storage === "mirrored"
+			? { secondaryStorage: createSecondaryStorage() }
+			: {}),
+		verification: {
+			...(hashed ? { storeIdentifier: "hashed" as const } : {}),
+			...(storage === "mirrored" ? { storeInDatabase: true } : {}),
+		},
+	};
+}
+
+/**
+ * A wrong guess consumes the code while it is compared and writes it back
+ * afterwards. A code sent and used during that comparison must stay the only
+ * valid one.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11105
+ */
+describe("email OTP written back after a newer code was sent", () => {
+	it.for(usedCodeStorages)(
+		"does not revive the older code after the newer one was used in %s storage",
+		async (storage) => {
+			const codes = ["111111", "222222"];
+			let releaseCheck: () => void = () => {};
+			const checkReleased = new Promise<void>((resolve) => {
+				releaseCheck = resolve;
+			});
+			let signalCheck: () => void = () => {};
+			const checkStarted = new Promise<void>((resolve) => {
+				signalCheck = resolve;
+			});
+			const { client, auth, testUser } = await getTestInstance(
+				{
+					...usedCodeStorageOptions(storage),
+					plugins: [
+						emailOTP({
+							generateOTP: () => codes.shift(),
+							async sendVerificationOTP() {},
+							storeOTP: {
+								async hash(otp) {
+									// The wrong guess is compared after it consumed the code.
+									if (otp === "000000") {
+										signalCheck();
+										await checkReleased;
+									}
+									return `stored-${otp}`;
+								},
+							},
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [emailOTPClient()] } },
+			);
+			const email = testUser.email;
+			await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+			const guess = client.emailOtp.checkVerificationOtp({
+				email,
+				type: "sign-in",
+				otp: "000000",
+			});
+			await checkStarted;
+			await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+			const newer = await client.signIn.emailOtp({ email, otp: "222222" });
+			releaseCheck();
+
+			expect(newer.data?.token).toBeDefined();
+			expect((await guess).error?.code).toBe("INVALID_OTP");
+			expect(
+				await (await auth.$context).internalAdapter.findVerificationValue(
+					toOTPIdentifier("sign-in", email),
+				),
+			).toBeNull();
+			expect(
+				(await client.signIn.emailOtp({ email, otp: "111111" })).error?.code,
+			).toBe("INVALID_OTP");
+		},
+	);
+
+	it("keeps a code issued without an issuance marker after a wrong guess", async () => {
+		const { client, auth, testUser } = await getTestInstance(
+			{
+				plugins: [emailOTP({ async sendVerificationOTP() {} })],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		const email = testUser.email;
+		const identifier = toOTPIdentifier("sign-in", email);
+		// Stored the way codes were before issuances were recorded.
+		await (await auth.$context).internalAdapter.createVerificationValue({
+			identifier,
+			value: "111111:0",
+			expiresAt: new Date(Date.now() + 60_000),
+		});
+
+		expect(
+			(
+				await client.emailOtp.checkVerificationOtp({
+					email,
+					type: "sign-in",
+					otp: "000000",
+				})
+			).error?.code,
+		).toBe("INVALID_OTP");
+		expect(
+			(await client.signIn.emailOtp({ email, otp: "111111" })).data?.token,
+		).toBeDefined();
+	});
+
+	it.for(usedCodeStorages)(
+		"keeps the newer code when both codes are written back in %s storage",
+		async (storage) => {
+			const codes = ["111111", "222222"];
+			const held = new Map<
+				string,
+				{ started: Promise<void>; signal: () => void; release: () => void }
+			>();
+			const gates = new Map<string, Promise<void>>();
+			for (const guess of ["000000", "999999"]) {
+				let signal: () => void = () => {};
+				const started = new Promise<void>((resolve) => {
+					signal = resolve;
+				});
+				let release: () => void = () => {};
+				gates.set(
+					guess,
+					new Promise<void>((resolve) => {
+						release = resolve;
+					}),
+				);
+				held.set(guess, { started, signal, release });
+			}
+			const { client, auth, testUser } = await getTestInstance(
+				{
+					...usedCodeStorageOptions(storage),
+					plugins: [
+						emailOTP({
+							generateOTP: () => codes.shift(),
+							async sendVerificationOTP() {},
+							storeOTP: {
+								async hash(otp) {
+									const gate = held.get(otp);
+									if (gate) {
+										held.delete(otp);
+										gate.signal();
+										await gates.get(otp);
+									}
+									return `stored-${otp}`;
+								},
+							},
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [emailOTPClient()] } },
+			);
+			const email = testUser.email;
+			const first = held.get("000000")!;
+			const second = held.get("999999")!;
+			await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+			const olderGuess = client.emailOtp.checkVerificationOtp({
+				email,
+				type: "sign-in",
+				otp: "000000",
+			});
+			await first.started;
+			await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+			const newerGuess = client.emailOtp.checkVerificationOtp({
+				email,
+				type: "sign-in",
+				otp: "999999",
+			});
+			await second.started;
+			first.release();
+			expect((await olderGuess).error?.code).toBe("INVALID_OTP");
+			second.release();
+			expect((await newerGuess).error?.code).toBe("INVALID_OTP");
+
+			const stored = await (
+				await auth.$context
+			).internalAdapter.findVerificationValue(
+				toOTPIdentifier("sign-in", email),
+			);
+			expect(stored?.value).toBe("stored-222222:1");
+			expect(
+				(await client.signIn.emailOtp({ email, otp: "111111" })).error?.code,
+			).toBe("INVALID_OTP");
+			expect(
+				(await client.signIn.emailOtp({ email, otp: "222222" })).data?.token,
+			).toBeDefined();
+		},
+	);
+});
