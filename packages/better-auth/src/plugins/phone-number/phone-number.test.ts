@@ -2607,3 +2607,64 @@ describe("phone-number verification rows", () => {
 		expect(res.data?.status).toBe(true);
 	});
 });
+
+/**
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("phone number OTP issuance vetoed by a verification hook", () => {
+	const phoneNumberValue = "+251911121314";
+
+	async function setup() {
+		const sendOTP = vi.fn();
+		const sendPasswordResetOTP = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+			plugins: [phoneNumber({ sendOTP, sendPasswordResetOTP })],
+		});
+		const ctx = await auth.$context;
+		const user = await ctx.internalAdapter.findUserByEmail(testUser.email);
+		await ctx.internalAdapter.updateUser(user!.user.id, {
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: true,
+		});
+		return { auth, sendOTP, sendPasswordResetOTP };
+	}
+
+	it("refuses to send a verification code that was not stored", async () => {
+		const { auth, sendOTP } = await setup();
+
+		const res = await auth.api.sendPhoneNumberOTP({
+			body: { phoneNumber: phoneNumberValue },
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(sendOTP).not.toHaveBeenCalled();
+	});
+
+	it("does not send a password reset code that was not stored, and does not reveal the account", async () => {
+		const { auth, sendPasswordResetOTP } = await setup();
+		const request = (phoneNumber: string) =>
+			auth.api.requestPasswordResetPhoneNumber({
+				body: { phoneNumber },
+				asResponse: true,
+			});
+
+		const known = await request(phoneNumberValue);
+		const unknown = await request("+251900000000");
+
+		expect(known.status).toBe(200);
+		expect(unknown.status).toBe(200);
+		expect(await known.json()).toEqual(await unknown.json());
+		expect(sendPasswordResetOTP).not.toHaveBeenCalled();
+	});
+});

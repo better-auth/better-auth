@@ -2599,3 +2599,77 @@ describe("oauth authorize - without requireOpenId", async () => {
 		expect(new URL(location).searchParams.get("code")).toBeTruthy();
 	});
 });
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("oauth authorize - authorization code vetoed by a verification hook", () => {
+	it("redirects with server_error instead of a code that was not stored", async () => {
+		const authServerBaseUrl = "http://localhost:3000";
+		const redirectUri = "http://localhost:5000/api/auth/callback/test";
+		const veto = { active: false };
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: authServerBaseUrl,
+				databaseHooks: {
+					verification: {
+						create: {
+							async before() {
+								return veto.active ? false : undefined;
+							},
+						},
+					},
+				},
+				plugins: [
+					oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+					jwt(),
+				],
+			},
+		);
+		const { headers } = await signInWithTestUser();
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl, headers },
+		});
+		const authUrl = await createAuthorizationURL({
+			id: "test",
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+			},
+			redirectURI: redirectUri,
+			state: "vetoed-state",
+			scopes: ["openid"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			codeVerifier: generateRandomString(64),
+		});
+		veto.active = true;
+
+		let location = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const callback = new URL(location);
+		expect(`${callback.origin}${callback.pathname}`).toBe(redirectUri);
+		expect(callback.searchParams.get("error")).toBe("server_error");
+		expect(callback.searchParams.get("state")).toBe("vetoed-state");
+		expect(callback.searchParams.get("iss")).toBe(
+			`${authServerBaseUrl}/api/auth`,
+		);
+		expect(callback.searchParams.has("code")).toBe(false);
+	});
+});

@@ -136,6 +136,12 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						opts,
 						phoneNumberOTPIdentifier(phoneNumber),
 					);
+					if (!otp) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+						);
+					}
 					if (opts.sendOTP) {
 						await ctx.context.runInBackgroundOrAwait(
 							opts.sendOTP(
@@ -294,6 +300,12 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				opts,
 				phoneNumberOTPIdentifier(ctx.body.phoneNumber),
 			);
+			if (!code) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 			const sendOTPResult = opts.sendOTP(
 				{
 					phoneNumber: ctx.body.phoneNumber,
@@ -764,6 +776,12 @@ export const requestPasswordResetPhoneNumber = (
 					status: true,
 				});
 			}
+			// A vetoed code is not sent, and the reply does not reveal the account.
+			if (!code) {
+				return ctx.json({
+					status: true,
+				});
+			}
 			if (opts.sendPasswordResetOTP) {
 				await ctx.context.runInBackgroundOrAwait(
 					opts.sendPasswordResetOTP(
@@ -989,7 +1007,9 @@ async function issuePhoneNumberOTP(
 	};
 	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
 	const stored = await createOrFindVerification(ctx, verification);
-	if (!stored || stored.value === verification.value) return code;
+	// A verification.create.before hook can veto the create by returning false.
+	if (!stored) return null;
+	if (stored.value === verification.value) return code;
 
 	const [storedCode, attempts] = stored.value.split(":");
 	const reusable =

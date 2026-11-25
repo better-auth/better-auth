@@ -129,11 +129,24 @@ export const requestPasswordReset = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: user.user.id,
-			identifier: `reset-password:${verificationToken}`,
-			expiresAt,
-		});
+		const verification =
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: user.user.id,
+				identifier: `reset-password:${verificationToken}`,
+				expiresAt,
+			});
+		// A vetoed token is not sent, and the response matches the one for an
+		// unknown email so it does not reveal that the account exists.
+		if (!verification) {
+			ctx.context.logger.warn(
+				"Reset Password: a verification hook vetoed the reset token",
+			);
+			return ctx.json({
+				status: true,
+				message:
+					"If this email exists in our system, check your email for the reset link",
+			});
+		}
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.runInBackgroundOrAwait(
