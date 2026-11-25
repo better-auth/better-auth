@@ -82,6 +82,22 @@ it("detects Kysely in the full build", async () => {
 	assert.ok((await bundledKyselyBytes("full")) > 0);
 });
 
+// Apps and SDKs install `@better-auth/core` without its optional peers to use
+// the DPoP client, so the entry must import nothing but Web Crypto code.
+it("bundles the DPoP client without other modules", async () => {
+	const { metafile } = await bundle("dpop-client", { format: "esm" });
+	const inputs = Object.keys(metafile.inputs).filter(
+		(path) => path !== "src/dpop-client.ts",
+	);
+	assert.ok(inputs.length > 0);
+	assert.deepStrictEqual(
+		inputs.filter(
+			(path) => !/\/dist\/oauth2\/dpop-(client|protocol)\.mjs$/.test(path),
+		),
+		[],
+	);
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/10865
  */
