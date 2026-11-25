@@ -770,9 +770,14 @@ describe("oauth-provider - revocation records vetoed by a verification hook", as
 		const ctx = await server.auth.$context;
 		const stored = await ctx.adapter.findOne<{ revoked: Date | null }>({
 			model: "oauthRefreshToken",
-			where: [{ field: "clientId", value: server.oauthClient.client_id }],
-			sortBy: { field: "createdAt", direction: "desc" },
+			where: [
+				{
+					field: "grantId",
+					value: decodeJwt(grant.accessToken).grant_id as string,
+				},
+			],
 		});
+		expect(stored).not.toBeNull();
 		expect(stored?.revoked ?? null).toBe(null);
 
 		expect((await revoke(server, grant.refreshToken!)).error).toBe(null);
