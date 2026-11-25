@@ -1218,7 +1218,7 @@ describe("prisma-adapter", () => {
 		it("restores input order when the caller select omits id", async () => {
 			const createManyAndReturn = vi.fn(
 				async ({ select }: { select?: Record<string, boolean> }) => {
-					expect(select === undefined || select.id === true).toBe(true);
+					expect(select).toEqual({ name: true, id: true });
 					return [
 						{ id: "b", name: "Bob" },
 						{ id: "a", name: "Ada" },
