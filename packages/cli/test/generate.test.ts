@@ -435,9 +435,6 @@ ${extraModels}`;
 			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
 		});
 
-		/**
-		 * @see https://github.com/better-auth/better-auth/pull/12896
-		 */
 		it("adds a missing back-relation under the relation name of the owning side", async () => {
 			const { code } = await generate(
 				existing({
@@ -453,9 +450,6 @@ ${extraModels}`;
 			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
 		});
 
-		/**
-		 * @see https://github.com/better-auth/better-auth/pull/12896
-		 */
 		it("adds a missing optional back-relation under the relation name of a unique foreign key", async () => {
 			const { code } = await generate(
 				existing({
@@ -501,9 +495,6 @@ model Profile {
 			expect(userFieldsOfType(code, "Profile")).toHaveLength(1);
 		});
 
-		/**
-		 * @see https://github.com/better-auth/better-auth/pull/12896
-		 */
 		it("takes the relation name from the relation to this model when a composite key shares the foreign key", async () => {
 			const { code } = await generate(
 				existing({
@@ -530,9 +521,6 @@ model TenantMember {
 			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
 		});
 
-		/**
-		 * @see https://github.com/better-auth/better-auth/pull/12896
-		 */
 		it("keeps a named back-relation paired with a composite foreign key", async () => {
 			const { code } = await generate(
 				existing({
@@ -549,6 +537,41 @@ model TenantMember {
 
 			expect(code).not.toMatch(/^\s*sessions\s+Session\[\]/m);
 			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
+		const twoCompoundUsers = (userBackRelations: string) =>
+			existing({
+				userRelations: `tenantId      String
+  orgId         String
+  ${userBackRelations}
+  accounts      Account[]
+
+  @@unique([tenantId, id])
+  @@unique([orgId, id])`,
+				sessionRelations: `tenantId  String
+  orgId     String
+  userId    String
+  tenantUser User    @relation("TenantSessions", fields: [tenantId, userId], references: [tenantId, id])
+  orgUser    User    @relation("OrgSessions", fields: [orgId, userId], references: [orgId, id])`,
+			});
+
+		it("names the back-relation after the only compound relation still missing one", async () => {
+			const { code } = await generate(
+				twoCompoundUsers(
+					'tenantSessions Session[] @relation("TenantSessions")',
+				),
+			);
+
+			expect(code).toMatch(
+				/^\s*sessions\s+Session\[\]\s+@relation\("OrgSessions"\)\s*$/m,
+			);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(2);
+		});
+
+		it("refuses to guess between compound relations that all lack a back-relation", async () => {
+			await expect(generate(twoCompoundUsers(""))).rejects.toThrow(
+				/"TenantSessions".*"OrgSessions"/,
+			);
 		});
 
 		const revokedBy = `revokedById String?

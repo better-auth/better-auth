@@ -746,18 +746,30 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							relation.type === modelName &&
 							relation.fields.some((field) => field === foreignKey),
 					);
-					const relationName = (
-						relationsToThisModel.find(
-							(relation) => relation.fields.length === 1,
-						) ?? relationsToThisModel[0]
-					)?.name;
-					const existingBackRelation = readRelations(prismaModel).some(
-						(relation) =>
-							relation.type === relatedModel &&
-							relation.fields.length === 0 &&
-							relation.name === relationName,
+					const singleColumnRelations = relationsToThisModel.filter(
+						(relation) => relation.fields.length === 1,
 					);
-					if (!existingField && !existingBackRelation) {
+					const candidateNames = (
+						singleColumnRelations.length
+							? singleColumnRelations
+							: relationsToThisModel
+					).map((relation) => relation.name);
+					const backRelationNames = readRelations(prismaModel)
+						.filter(
+							(relation) =>
+								relation.type === relatedModel && relation.fields.length === 0,
+						)
+						.map((relation) => relation.name);
+					const unpairedNames = (
+						candidateNames.length ? candidateNames : [undefined]
+					).filter((name) => !backRelationNames.includes(name));
+					if (unpairedNames.length > 1) {
+						throw new BetterAuthError(
+							`Model "${relatedModel}" has several relations to "${modelName}" through "${foreignKey}" without a back-relation: ${unpairedNames.map((name) => name ?? "an unnamed relation").join(", ")}. Add the back-relations to "${modelName}", then generate the schema again.`,
+						);
+					}
+					const relationName = unpairedNames[0];
+					if (!existingField && unpairedNames.length === 1) {
 						const backRelation = builder
 							.model(modelName)
 							.field(fieldName, `${relatedModel}${isUnique ? "?" : "[]"}`);
