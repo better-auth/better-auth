@@ -6,6 +6,7 @@ import type {
 	CleanedWhere,
 	CustomAdapter,
 	CustomAdapterFindManyLimit,
+	DBAdapter,
 	Where,
 } from "./index";
 import type {
@@ -617,6 +618,9 @@ describe("createAdapterFactory findMany limit", () => {
 		expectTypeOf<
 			CustomAdapterFindManyLimit<boolean>["limit"]
 		>().toEqualTypeOf<number>();
+		expectTypeOf<Parameters<DBAdapter["findAll"]>[0]>().not.toMatchTypeOf<{
+			limit: number;
+		}>();
 	});
 
 	it("accepts a separately typed AdapterFactoryConfig", () => {

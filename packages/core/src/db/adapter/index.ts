@@ -474,6 +474,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 			| undefined;
 		offset?: number | undefined;
 		join?: JoinOption | undefined;
+		limit?: never;
 	}) => Promise<T[]>;
 	count: (data: {
 		model: string;
