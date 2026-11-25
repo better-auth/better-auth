@@ -27,7 +27,7 @@ const CONTENTION_RETRIES = 5;
  * Splits a stored value into the code and the attempts counted against it. A
  * value without a numeric `:<attempts>` suffix is a code with none counted.
  */
-export function splitVerificationAttempts(value: string): [string, number] {
+function splitVerificationAttempts(value: string): [string, number] {
 	const index = value.lastIndexOf(":");
 	const count = index === -1 ? "" : value.slice(index + 1);
 	if (!/^\d+$/.test(count)) return [value, 0];
