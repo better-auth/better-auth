@@ -659,7 +659,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			// removes it directly. After any other failure, the provider stays only
 			// when this request's token is stored, because an after hook can throw
 			// once both records exist (inside the write, without AsyncLocalStorage).
-			// When that check fails, both records are removed so a retry works.
+			// When that check fails, only the provider is removed: the token row may
+			// not be this request's, and a retry writes a fresh one.
 			let createdId: string | undefined;
 			let tokenVetoed = false;
 			const tokenIdentifier = () =>
@@ -673,9 +674,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						);
 					return stored?.value === domainVerificationToken;
 				} catch {
-					await ctx.context.internalAdapter
-						.deleteVerificationByIdentifier(tokenIdentifier())
-						.catch(() => {});
 					return false;
 				}
 			};

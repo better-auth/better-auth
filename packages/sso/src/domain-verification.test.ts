@@ -1204,10 +1204,10 @@ describe("domain verification tokens vetoed by a verification hook", () => {
 		expect(await providers()).toEqual([]);
 	});
 
-	it("removes both records when an after hook fails and the token lookup fails", async () => {
+	it("removes only the provider when an after hook fails and the token lookup fails", async () => {
 		const { auth, register, providers } = await setup();
 		const ctx = await auth.$context;
-		const findVerificationValue = ctx.internalAdapter.findVerificationValue;
+		const identifier = "_better-auth-token-vetoed-domain-provider";
 		const lookup = vi
 			.spyOn(ctx.internalAdapter, "findVerificationValue")
 			.mockRejectedValue(new Error("lookup failed"));
@@ -1216,10 +1216,20 @@ describe("domain verification tokens vetoed by a verification hook", () => {
 		await expect(register()).rejects.toThrow("after hook failed");
 
 		lookup.mockRestore();
+		afterCreate.fail = false;
 		expect(await providers()).toEqual([]);
+		const leftover =
+			await ctx.internalAdapter.findVerificationValue(identifier);
+		expect(leftover).not.toBeNull();
+
+		const retry = await register();
+
+		expect(retry.status).toBe(200);
+		const { domainVerificationToken } = await retry.json();
+		expect(domainVerificationToken).not.toBe(leftover!.value);
 		expect(
-			await findVerificationValue("_better-auth-token-vetoed-domain-provider"),
-		).toBeNull();
+			(await ctx.internalAdapter.findVerificationValue(identifier))?.value,
+		).toBe(domainVerificationToken);
 	});
 
 	it("does not return a requested token that was not stored", async () => {
