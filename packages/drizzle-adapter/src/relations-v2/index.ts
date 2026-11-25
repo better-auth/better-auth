@@ -241,9 +241,9 @@ export interface DrizzleAdapterConfig {
 	 */
 	debugLogs?: DBAdapterDebugLogOption | undefined;
 	/**
-	 * By default snake case is used for table and field names
-	 * when the CLI is used to generate the schema. If you want
-	 * to use camel case, set this to true.
+	 * Generate schemas with Drizzle's `camelCase` helper instead of `snakeCase`.
+	 * The CLI uses unnamed column builders so Drizzle applies the casing.
+	 * Explicit field name mappings are preserved without conversion.
 	 * @default false
 	 */
 	camelCase?: boolean | undefined;
@@ -261,7 +261,7 @@ export interface DrizzleAdapterConfig {
 	 * Only applies to PostgreSQL. It will generate something like this:
 	 *
 	 * ```ts
-	 * export const authSchema = pgSchema("auth");
+	 * export const authSchema = snakeCase.schema("auth");
 	 *
 	 * export const user = authSchema.table("user", {...});
 	 * export const session = authSchema.table("session", {...});
