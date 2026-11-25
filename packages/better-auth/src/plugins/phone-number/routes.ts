@@ -8,7 +8,10 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
-import { createOrFindVerification } from "../../db/verification";
+import {
+	createOrFindVerification,
+	restoreVerification,
+} from "../../db/verification";
 import { HIDE_METADATA } from "../../utils";
 import { getDate } from "../../utils/date";
 import {
@@ -946,8 +949,10 @@ async function verifyPhoneNumberOTP(
 			PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 		);
 	}
+	// A code issued while this one was being checked replaces it, so the
+	// write-back yields to it instead of reviving the old code.
 	const writeBack = (value: string) =>
-		createOrFindVerification(ctx, {
+		restoreVerification(ctx, {
 			value,
 			identifier,
 			expiresAt: consumed.expiresAt,
@@ -959,13 +964,6 @@ async function verifyPhoneNumberOTP(
 	}
 	if (successDisposition === "consume") return;
 
-	// A code issued while this one was being checked replaces it, so writing
-	// the old code back would revive it over the new one.
-	const replacement =
-		await ctx.context.internalAdapter.findVerificationValue(identifier);
-	if (replacement) {
-		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
-	}
 	const restored = await writeBack(consumed.value);
 	// A verification.create.before hook can veto the restore by returning false.
 	if (!restored) {

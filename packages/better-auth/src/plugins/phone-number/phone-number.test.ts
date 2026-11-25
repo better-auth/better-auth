@@ -1,3 +1,4 @@
+import type { SecondaryStorage } from "@better-auth/core/db";
 import {
 	afterEach,
 	beforeEach,
@@ -2416,6 +2417,76 @@ describe("phone-number verification rows", () => {
 
 		expect(codes).toHaveLength(2);
 		expect(guess.error?.code).toBe("INVALID_OTP");
+		const latest = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[1]!,
+		});
+		expect(latest.data?.status).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
+	it("accepts the newest code sent while a wrong guess is checked in secondary storage", async () => {
+		const number = "+15550000006";
+		const codes: string[] = [];
+		const values = new Map<string, string>();
+		let onConsume: (() => Promise<void>) | undefined;
+		const secondaryStorage: SecondaryStorage = {
+			get: (key) => values.get(key) ?? null,
+			async getAndDelete(key) {
+				const value = values.get(key) ?? null;
+				values.delete(key);
+				const consumed = onConsume;
+				onConsume = undefined;
+				// Runs once the wrong guess has consumed the stored code.
+				await consumed?.();
+				return value;
+			},
+			increment: (key) => {
+				const value = Number(values.get(key) ?? 0) + 1;
+				values.set(key, String(value));
+				return value;
+			},
+			set: (key, value) => {
+				values.set(key, value);
+			},
+			delete: (key) => {
+				values.delete(key);
+			},
+		};
+		const { client, auth } = await getTestInstance(
+			{
+				secondaryStorage,
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							codes.push(code);
+						},
+						signUpOnVerification: {
+							getTempEmail: (phoneNumber) => `${phoneNumber}@example.com`,
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [phoneNumberClient()] } },
+		);
+		await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
+
+		onConsume = async () => {
+			await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
+		};
+		const guess = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[0] === "000000" ? "111111" : "000000",
+		});
+
+		expect(codes).toHaveLength(2);
+		expect(guess.error?.code).toBe("INVALID_OTP");
+		const stored = await (
+			await auth.$context
+		).internalAdapter.findVerificationValue(`phone-number-otp-${number}`);
+		expect(stored?.value).toBe(`${codes[1]}:0`);
 		const latest = await client.phoneNumber.verify({
 			phoneNumber: number,
 			code: codes[1]!,
