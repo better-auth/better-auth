@@ -562,15 +562,25 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "@mailkite/better-auth-inbox",
+		url: "https://github.com/mailkite/mailkite-better-auth-inbox",
+		description:
+			"Give your app a real mailbox. Receive inbound email as signature-verified webhooks, then list, read, thread and reply through session-scoped endpoints — scoped per user or per organization.",
+		author: {
+			name: "MailKite",
+			github: "mailkite",
+			avatar: "https://github.com/mailkite.png",
+		},
+	},
+	{
 		name: "better-auth-dodo-entitlements",
 		url: "https://github.com/OMEE-Y/better-auth-dodo-entitlements",
 		description:
 			"Bridge Dodo Payments post-purchase entitlements into Better Auth. Support passwordless license key sign-in and device activation, plan and feature flag gating, and webhook-synced metered credit wallets.",
 		author: {
-			name: "Om Yewale",
+			name: "OMEE-Y",
 			github: "OMEE-Y",
 			avatar: "https://github.com/OMEE-Y.png",
 		},
 	},
-	
 ];
