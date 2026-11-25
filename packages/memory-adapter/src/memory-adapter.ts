@@ -331,24 +331,19 @@ export const memoryAdapter = (
 							}
 						};
 
-						let records = table.filter((record: any) => {
-							if (!where.length || where.length === 0) {
-								return true;
-							}
+						const andClauses = where.filter(
+							(clause) => clause.connector !== "OR",
+						);
+						const orClauses = where.filter(
+							(clause) => clause.connector === "OR",
+						);
 
-							let result = evalClause(record, where[0]!);
-							for (const clause of where) {
-								const clauseResult = evalClause(record, clause);
-
-								if (clause.connector === "OR") {
-									result = result || clauseResult;
-								} else {
-									result = result && clauseResult;
-								}
-							}
-
-							return result;
-						});
+						let records = table.filter(
+							(record: any) =>
+								andClauses.every((clause) => evalClause(record, clause)) &&
+								(orClauses.length === 0 ||
+									orClauses.some((clause) => evalClause(record, clause))),
+						);
 						if (select?.length && select.length > 0) {
 							records = records.map((record: any) =>
 								Object.fromEntries(
