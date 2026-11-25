@@ -800,7 +800,7 @@ function createResolverState(
 				Date.now(),
 			);
 			const savedBy =
-				shared && staleIfErrorMs !== null ? new WeakSet<object>() : undefined;
+				staleIfErrorMs !== null ? new WeakSet<object>() : undefined;
 			if (nextEntry && savedBy) nextEntry.savedBy = savedBy;
 			// A retired fetch leaves the cache and pacing to the fetch that replaced
 			// it. When the lease retired it and no fetch for the client started
@@ -949,7 +949,9 @@ function createResolverState(
 				if (
 					isAPIError(error) &&
 					error.status === "BAD_REQUEST" &&
-					(shared || storedClientWithinStaleBound())
+					(shared ||
+						terminalFailures.has(clientId) ||
+						storedClientWithinStaleBound())
 				) {
 					savedBy?.delete(ctx.context.adapter);
 					recordTerminalFailure(clientId, savedBy);
@@ -1007,7 +1009,11 @@ function createResolverState(
 					await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
 				} catch (error) {
 					recordFetchFailure(clientId, error);
-					if (shared || storedClientWithinStaleBound())
+					if (
+						shared ||
+						terminalFailures.has(clientId) ||
+						storedClientWithinStaleBound()
+					)
 						recordTerminalFailure(clientId);
 					throw error;
 				}
@@ -1045,7 +1051,7 @@ function createResolverState(
 					return serveStoredClient(storedClient, describeFetchFailure(error));
 				}
 				if (
-					(shared || storedClient) &&
+					(shared || storedClient || terminalFailures.has(clientId)) &&
 					!isTransientMetadataFetchFailure(error) &&
 					!isMetadataFetchRefusal(error) &&
 					!isMetadataFetchCapacityRefusal(error) &&

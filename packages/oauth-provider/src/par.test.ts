@@ -23,7 +23,7 @@ async function setup(
 	},
 	authOptions: Pick<
 		BetterAuthOptions,
-		"secondaryStorage" | "session" | "verification"
+		"databaseHooks" | "secondaryStorage" | "session" | "verification"
 	> = {},
 ) {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
@@ -399,6 +399,76 @@ describe("pushed authorization requests in the database and secondary storage", 
 		const retries = [await visit(), await visit(), await visit()];
 		const codes = retries.filter((url) => url.searchParams.get("code"));
 		expect(codes).toHaveLength(1);
+	});
+});
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc9126#section-2.3
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("pushed authorization requests vetoed by a verification hook", async () => {
+	let vetoedSuffix: string | undefined;
+	const { createClient, authorizationParams, pushRequest, authorize } =
+		await setup(
+			{ pushedAuthorizationRequests: { enabled: true } },
+			{
+				databaseHooks: {
+					verification: {
+						create: {
+							async before(verification) {
+								if (
+									vetoedSuffix !== undefined &&
+									verification.identifier.startsWith(
+										"pushed_authorization_request:",
+									) &&
+									verification.identifier.endsWith(vetoedSuffix)
+								) {
+									return false;
+								}
+							},
+						},
+					},
+				},
+			},
+		);
+	const client = await createClient();
+	const credentials = {
+		client_id: client.client_id,
+		client_secret: client.client_secret!,
+	};
+
+	afterEach(() => {
+		vetoedSuffix = undefined;
+	});
+
+	it("returns server_error instead of a request_uri that was not stored", async () => {
+		const { params } = await authorizationParams(client.client_id);
+		vetoedSuffix = "";
+
+		const pushed = await pushRequest({ ...params, ...credentials });
+
+		expect(pushed.response.status).toBe(500);
+		expect(pushed.body.error).toBe("server_error");
+		expect(pushed.body).not.toHaveProperty("request_uri");
+	});
+
+	it("rejects the request_uri at once when its first visit cannot store it", async () => {
+		const { params } = await authorizationParams(client.client_id);
+		const pushed = await pushRequest({ ...params, ...credentials });
+		expect(pushed.response.status).toBe(201);
+		vetoedSuffix = ":loaded";
+
+		// Without a session, a stored request would continue to the login page.
+		const location = await authorize(
+			{
+				client_id: client.client_id,
+				request_uri: pushed.body.request_uri as string,
+			},
+			new Headers(),
+		);
+
+		expect(location.pathname).not.toBe("/login");
+		expect(location.searchParams.get("error")).toBe("invalid_request_uri");
 	});
 });
 

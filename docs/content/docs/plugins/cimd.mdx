@@ -158,7 +158,7 @@ export const cimdOptionsType = {
 		type: "string[]",
 		default: '["post_logout_redirect_uris"]',
 		description:
-			"Metadata URL fields that must share the client_id origin. Only post_logout_redirect_uris is bound by default. redirect_uris is excluded because authorization still requires exact redirect URI matching. The informative URIs client_uri, logo_uri, tos_uri, and policy_uri are never bound by default. Authority-free private-use URIs such as com.example.app:/logout have no origin and are exempt; host-bearing custom-scheme URIs in post_logout_redirect_uris must still match the client_id origin.",
+			"Metadata URL fields that must share the client_id origin. Only post_logout_redirect_uris is bound by default. redirect_uris is excluded because authorization still requires exact redirect URI matching. The informative URIs client_uri, logo_uri, tos_uri, and policy_uri are never bound by default. HTTP(S) loopback redirect URLs are exempt in both fields. In redirect_uris, any private-use redirect is exempt. In post_logout_redirect_uris, only the authority-free private-use form, such as com.example.app:/logout, is exempt.",
 	},
 	isMetadataDocumentUrlAllowed: {
 		type: "(clientIdUrl, context) => boolean | Promise<boolean>",
@@ -187,7 +187,7 @@ export const cimdOptionsType = {
 
 ### Origin-bound fields
 
-`originBoundFields` stops a metadata document from claiming URIs on a domain other than its own. By default, only `post_logout_redirect_uris` must share the `client_id` origin.
+`originBoundFields` stops a metadata document from claiming URIs on a domain other than its own. By default, it checks only `post_logout_redirect_uris`. HTTP(S) loopback redirect URLs are exempt from this check in both fields. In `redirect_uris`, any private-use redirect is exempt. In `post_logout_redirect_uris`, only the authority-free private-use form, such as `com.example.app:/logout`, is exempt.
 
 The informative URIs `client_uri`, `logo_uri`, `tos_uri`, and `policy_uri` are not origin-bound by default. An application's website is often hosted apart from its metadata document. [CIMD draft-03 §4.4](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-4.4) forbids an authorization server from requiring `client_uri` to share the origin of the `client_id` or of any redirect URI. If you add `client_uri` to `originBoundFields`, that is your own policy, and it contradicts the draft. Clients whose website is on another origin then fail to register.
 
@@ -284,13 +284,15 @@ A failed refresh then returns the stored client unchanged and logs a warning whe
 
 Only a successful refresh advances `updatedAt`. An administrator's edit of the client, such as setting its `client_credentials_scopes`, does not, so it cannot extend the bound. While it serves a stored client, Better Auth fetches the document at most once a minute. The document's cache directives, including `no-store`, do not apply, because the stored client is a registration rather than a cached response.
 
-Every other failure rejects the request as before. A terminal failure also stops this instance from serving the stored client until a refresh succeeds, so an owner can revoke a client by removing its document. A failure is terminal when a document was retrieved and rejected (any other status, a redirect, or an invalid document), when the OAuth provider refuses to save the refreshed document, or when the `client_id` URL is refused. Other transport errors, such as `ENOTFOUND`, reject the request without stopping stale serving. A `metadataFetchPolicy` limit or the Node transport's DNS lookup limit serves the stored client only within 5 minutes of its last transient failure.
+A `metadataFetchPolicy` limit or the Node transport's DNS lookup limit can also serve the stored client within the configured age limit, provided the last transient failure for that client occurred within five minutes. Otherwise the refusal returns `temporarily_unavailable`.
+
+Other failures reject the request. A terminal failure also stops this instance from serving the stored client until a refresh succeeds, so an owner can revoke a client by removing its document. A failure is terminal when a document was retrieved and rejected (any other status, a redirect, or an invalid document), when the OAuth provider refuses to save the refreshed document, or when the `client_id` URL is refused. Other transport errors, such as `ENOTFOUND`, reject the request without stopping stale serving.
 
 <Callout type="warn">
   While a stored client is served, changes to its document, such as new redirect URIs, keys, or a new domain owner, are not seen. Terminal failures are recorded in memory, so another instance or a restarted one can still serve the stored client. Choose the shortest bound that covers the outages you expect.
 </Callout>
 
-For a `private_key_jwt` client with a `jwks_uri`, the option also keeps its cached keys in use under the same rules, counted from the last successful key fetch. Keys are cached in memory only, so after a restart they must be fetched before the client can authenticate. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).
+For a `private_key_jwt` client with a `jwks_uri`, the option can extend the existing ten-minute fallback for cached keys during a transient failure. Key age is measured from the last successful key fetch. A shorter setting leaves that fallback in place. Keys are cached in memory only, so after a restart they must be fetched before the client can authenticate. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).
 
 ## Security boundary
 

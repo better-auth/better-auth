@@ -4,6 +4,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import * as z from "zod";
 import { APIError } from "../../api";
@@ -80,11 +81,18 @@ export const siwe = (options: SIWEPluginOptions) => {
 					});
 				}
 
-				await ctx.context.internalAdapter.createVerificationValue({
-					identifier: `${SIWE_VERIFICATION_IDENTIFIER_PREFIX}${nonce}`,
-					value: nonce,
-					expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-				});
+				const verification =
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: `${SIWE_VERIFICATION_IDENTIFIER_PREFIX}${nonce}`,
+						value: nonce,
+						expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+					});
+				if (!verification) {
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+					);
+				}
 
 				return ctx.json({ nonce });
 			},

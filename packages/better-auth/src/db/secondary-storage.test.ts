@@ -627,6 +627,258 @@ describe("secondary storage - deleteUser", () => {
 			}),
 		).toHaveLength(0);
 	});
+
+	it("revokes a session created after the session rows are deleted", async () => {
+		const store = new Map<string, string>();
+		let lateSessionToken: string | undefined;
+		let createLateSession: (() => Promise<void>) | undefined;
+		const { auth } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: { storeSessionInDatabase: true },
+			databaseHooks: {
+				account: {
+					delete: {
+						// Runs after the session rows are gone and before the user row
+						// is deleted, like a sign-in that finishes in that window.
+						before: async () => {
+							await createLateSession?.();
+						},
+					},
+				},
+			},
+			rateLimit: { enabled: false },
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser(
+			{
+				name: "Late Session User",
+				email: "late-session-user@test.com",
+			},
+			{ method: "test" },
+		);
+		await internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "credential",
+			accountId: user.id,
+		});
+		await internalAdapter.createSession(user.id);
+		createLateSession = async () => {
+			createLateSession = undefined;
+			lateSessionToken = (await internalAdapter.createSession(user.id)).token;
+		};
+
+		await internalAdapter.deleteUser(user.id);
+
+		expect(lateSessionToken).toBeDefined();
+		expect(await internalAdapter.findSession(lateSessionToken!)).toBeNull();
+	});
+
+	it("revokes cached sessions when a hook vetoes the session row delete", async () => {
+		const store = new Map<string, string>();
+		const { auth } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: { storeSessionInDatabase: true },
+			databaseHooks: {
+				session: {
+					delete: {
+						before: async () => false,
+					},
+				},
+			},
+			rateLimit: { enabled: false },
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser(
+			{
+				name: "Vetoed Session User",
+				email: "vetoed-session-user@test.com",
+			},
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+
+		await internalAdapter.deleteUser(user.id);
+
+		expect(await internalAdapter.findUserById(user.id)).toBeNull();
+		expect(store.has(session.token)).toBe(false);
+		expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+		expect(store.has(`revoked-sessions-before-${user.id}`)).toBe(true);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10884
+ */
+describe("secondary storage - session cached while the user read missed", () => {
+	async function signInWhileTheUserReadMisses() {
+		const db = {
+			user: [] as { id: string }[],
+			session: [],
+			account: [],
+			verification: [],
+		};
+		const store = new Map<string, string>();
+		let missNextUserRead = false;
+		let userReadsFail = false;
+		const database = (
+			options: Parameters<ReturnType<typeof memoryAdapter>>[0],
+		) => {
+			const adapter = memoryAdapter(db)(options);
+			return {
+				...adapter,
+				findOne: async <T>(data: Parameters<typeof adapter.findOne>[0]) => {
+					const readsUserById =
+						data.model === "user" &&
+						data.where.some((condition) => condition.field === "id");
+					if (readsUserById && userReadsFail) {
+						throw new Error("database read timed out");
+					}
+					if (readsUserById && missNextUserRead) {
+						missNextUserRead = false;
+						return null;
+					}
+					return adapter.findOne<T>(data);
+				},
+			};
+		};
+		const { auth, client, testUser, sessionSetter } = await getTestInstance({
+			database,
+			secondaryStorage: createStringSecondaryStorage(store),
+			rateLimit: { enabled: false },
+		});
+		const headers = new Headers();
+		missNextUserRead = true;
+		const signedIn = await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: sessionSetter(headers), throw: true },
+		);
+		expect(missNextUserRead).toBe(false);
+		expect(JSON.parse(store.get(signedIn.token)!).user).toBeNull();
+		return {
+			auth,
+			client,
+			headers,
+			token: signedIn.token,
+			testUser,
+			failUserReads: () => {
+				userReadsFail = true;
+			},
+		};
+	}
+
+	it("returns the session with its user from getSession", async () => {
+		const { client, headers, testUser } = await signInWhileTheUserReadMisses();
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+
+		expect(session.error).toBeNull();
+		expect(session.data?.user.email).toBe(testUser.email);
+	});
+
+	it("returns the session with its user from findSessions", async () => {
+		const { auth, token, testUser } = await signInWhileTheUserReadMisses();
+		const { internalAdapter } = await auth.$context;
+
+		const sessions = await internalAdapter.findSessions([token]);
+
+		expect(sessions).toHaveLength(1);
+		expect(sessions[0]?.user.email).toBe(testUser.email);
+	});
+
+	it("rejects findSessions when reading the missing user fails", async () => {
+		const { auth, token, failUserReads } = await signInWhileTheUserReadMisses();
+		const { internalAdapter } = await auth.$context;
+
+		failUserReads();
+
+		await expect(internalAdapter.findSessions([token])).rejects.toThrow(
+			"database read timed out",
+		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11326
+ */
+describe("secondary storage - bulk revocation when cache writes fail", () => {
+	it.each([
+		{ storeSessionInDatabase: false, preserveSessionInDatabase: false },
+		{ storeSessionInDatabase: true, preserveSessionInDatabase: false },
+		{ storeSessionInDatabase: true, preserveSessionInDatabase: true },
+	])(
+		"does not report success while the cached session stays usable (storeSessionInDatabase: $storeSessionInDatabase, preserveSessionInDatabase: $preserveSessionInDatabase)",
+		async ({ storeSessionInDatabase, preserveSessionInDatabase }) => {
+			const store = new Map<string, string>();
+			const storage = createStringSecondaryStorage(store);
+			let rejectWrites = false;
+			const { client, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: {
+					...storage,
+					set(key, value, ttl) {
+						if (rejectWrites) throw new Error("READONLY replica");
+						return storage.set(key, value, ttl);
+					},
+					delete(key) {
+						if (rejectWrites) throw new Error("READONLY replica");
+						return storage.delete(key);
+					},
+				},
+				session: { storeSessionInDatabase, preserveSessionInDatabase },
+				rateLimit: { enabled: false },
+			});
+			const { headers } = await signInWithTestUser();
+
+			rejectWrites = true;
+			const revoked = await client.revokeSessions({
+				fetchOptions: { headers },
+			});
+			const session = await client.getSession({
+				query: { disableCookieCache: true },
+				fetchOptions: { headers },
+			});
+
+			expect(session.data).not.toBeNull();
+			expect(revoked.data?.status).not.toBe(true);
+			expect(revoked.error?.status).toBe(500);
+		},
+	);
+
+	it("runs the user delete.after hooks when the cache eviction fails", async () => {
+		const store = new Map<string, string>();
+		const storage = createStringSecondaryStorage(store);
+		let rejectWrites = false;
+		const deletedUsers: string[] = [];
+		const { auth, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: {
+				...storage,
+				set(key, value, ttl) {
+					if (rejectWrites) throw new Error("READONLY replica");
+					return storage.set(key, value, ttl);
+				},
+				delete(key) {
+					if (rejectWrites) throw new Error("READONLY replica");
+					return storage.delete(key);
+				},
+			},
+			databaseHooks: {
+				user: {
+					delete: {
+						async after(user) {
+							deletedUsers.push(user.id);
+						},
+					},
+				},
+			},
+		});
+		const { user } = await signInWithTestUser();
+		const { internalAdapter } = await auth.$context;
+
+		rejectWrites = true;
+		await expect(internalAdapter.deleteUser(user.id)).rejects.toThrow(
+			"READONLY replica",
+		);
+		expect(deletedUsers).toEqual([user.id]);
+	});
 });
 
 /**
@@ -1143,4 +1395,208 @@ describe("secondary storage - bulk revocation during a pending delete hook", () 
 			},
 		});
 	});
+});
+
+describe("secondary storage - revocation when an earlier after hook throws", () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it.for([true, false])(
+		"revokes the cached sessions on password reset when a verification delete.after hook throws (storeSessionInDatabase: %s)",
+		async (storeSessionInDatabase) => {
+			const store = new Map<string, string>();
+			let resetToken = "";
+			let throwNextAfterHook = false;
+			const { client, testUser, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: createStringSecondaryStorage(store),
+				session: { storeSessionInDatabase },
+				verification: { storeInDatabase: true },
+				emailAndPassword: {
+					enabled: true,
+					revokeSessionsOnPasswordReset: true,
+					async sendResetPassword({ token }) {
+						resetToken = token;
+					},
+				},
+				databaseHooks: {
+					verification: {
+						delete: {
+							async after() {
+								if (!throwNextAfterHook) return;
+								throwNextAfterHook = false;
+								throw new Error("verification delete.after hook failed");
+							},
+						},
+					},
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			await client.requestPasswordReset({
+				email: testUser.email,
+				redirectTo: "http://localhost:3000",
+			});
+			vi.setSystemTime(Date.now() + 1000);
+
+			throwNextAfterHook = true;
+			const reset = await client.resetPassword({
+				newPassword: "new-password-1234",
+				token: resetToken,
+			});
+			expect(reset.error).not.toBeNull();
+
+			const session = await client.getSession({
+				query: { disableCookieCache: true },
+				fetchOptions: { headers },
+			});
+			expect(session.data).toBeNull();
+		},
+	);
+
+	it("revokes the cached sessions on user deletion when a session delete.after hook throws", async () => {
+		const store = new Map<string, string>();
+		let throwNextAfterHook = false;
+		const { client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: { storeSessionInDatabase: true },
+			user: { deleteUser: { enabled: true } },
+			databaseHooks: {
+				session: {
+					delete: {
+						async after() {
+							if (!throwNextAfterHook) return;
+							throwNextAfterHook = false;
+							throw new Error("session delete.after hook failed");
+						},
+					},
+				},
+			},
+		});
+		const other = await signInWithTestUser();
+		const { headers } = await signInWithTestUser();
+		vi.setSystemTime(Date.now() + 1000);
+
+		throwNextAfterHook = true;
+		const deleted = await client.deleteUser({
+			fetchOptions: { headers },
+		});
+		expect(deleted.error).not.toBeNull();
+
+		for (const signedIn of [headers, other.headers]) {
+			const session = await client.getSession({
+				query: { disableCookieCache: true },
+				fetchOptions: { headers: signedIn },
+			});
+			expect(session.data).toBeNull();
+		}
+	});
+
+	it.for([true, false])(
+		"revokes the cached sessions on user deletion when a user delete.after hook throws (storeSessionInDatabase: %s)",
+		async (storeSessionInDatabase) => {
+			const store = new Map<string, string>();
+			let throwNextAfterHook = false;
+			const { client, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: createStringSecondaryStorage(store),
+				session: { storeSessionInDatabase },
+				user: { deleteUser: { enabled: true } },
+				databaseHooks: {
+					user: {
+						delete: {
+							async after() {
+								if (!throwNextAfterHook) return;
+								throwNextAfterHook = false;
+								throw new Error("user delete.after hook failed");
+							},
+						},
+					},
+				},
+			});
+			const other = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
+			vi.setSystemTime(Date.now() + 1000);
+
+			throwNextAfterHook = true;
+			const deleted = await client.deleteUser({
+				fetchOptions: { headers },
+			});
+			expect(deleted.error).not.toBeNull();
+
+			for (const signedIn of [headers, other.headers]) {
+				const session = await client.getSession({
+					query: { disableCookieCache: true },
+					fetchOptions: { headers: signedIn },
+				});
+				expect(session.data).toBeNull();
+			}
+		},
+	);
+
+	it.for([
+		{ storeSessionInDatabase: true, model: "session" },
+		{ storeSessionInDatabase: false, model: "user" },
+	] as const)(
+		"revokes a session created while a $model delete.before hook runs when its delete.after hook throws (storeSessionInDatabase: $storeSessionInDatabase)",
+		async ({ storeSessionInDatabase, model }) => {
+			const store = new Map<string, string>();
+			let pauseNextDelete = false;
+			let throwNextAfterHook = false;
+			let hookStarted!: () => void;
+			let resumeHook!: () => void;
+			const started = new Promise<void>((resolve) => {
+				hookStarted = resolve;
+			});
+			const resumed = new Promise<void>((resolve) => {
+				resumeHook = resolve;
+			});
+			// Single-connection SQLite would serialize the write below behind the transaction.
+			const { auth, client, signInWithTestUser } = await getTestInstance(
+				{
+					secondaryStorage: createStringSecondaryStorage(store),
+					session: { storeSessionInDatabase },
+					user: { deleteUser: { enabled: true } },
+					databaseHooks: {
+						[model]: {
+							delete: {
+								async before() {
+									if (!pauseNextDelete) return;
+									pauseNextDelete = false;
+									hookStarted();
+									await resumed;
+								},
+								async after() {
+									if (!throwNextAfterHook) return;
+									throwNextAfterHook = false;
+									throw new Error(`${model} delete.after hook failed`);
+								},
+							},
+						},
+					},
+				},
+				{ testWith: "postgres", transaction: true },
+			);
+			const { internalAdapter } = await auth.$context;
+			const { headers, user } = await signInWithTestUser();
+			vi.setSystemTime(Date.now() + 1000);
+
+			pauseNextDelete = true;
+			throwNextAfterHook = true;
+			const deleting = client.deleteUser({
+				fetchOptions: { headers },
+			});
+			await started;
+			// Created in the same millisecond as the revocation cutoff.
+			vi.setSystemTime(Date.now() + 1000);
+			const concurrent = await internalAdapter.createSession(user.id);
+			resumeHook();
+			const deleted = await deleting;
+			expect(deleted.error).not.toBeNull();
+
+			expect(await internalAdapter.findSession(concurrent.token)).toBeNull();
+		},
+	);
 });

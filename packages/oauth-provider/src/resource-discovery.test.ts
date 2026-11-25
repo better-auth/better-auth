@@ -1105,6 +1105,50 @@ describe("canonical client metadata document registration", () => {
 		).rejects.toBe(circularError);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12357
+	 */
+	it("does not read collision words in the wrapped query params as a unique violation", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/wrapped-non-unique.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const metadata = {
+			client_id: clientId,
+			client_name: "Duplicate key, unique key",
+			redirect_uris: ["https://client.example.com/callback"],
+			token_endpoint_auth_method: "none" as const,
+		};
+		await registerClientMetadataDocument(endpointContext, instance.opts, {
+			clientId,
+			clientDiscoveryId: "test-client-discovery",
+			metadata,
+		});
+		const failure = new Error(
+			`Failed query: insert into "oauth_client" ("client_id", "name") values ($1, $2)\nparams: ${clientId},${metadata.client_name}`,
+			{ cause: new Error("Connection terminated unexpectedly") },
+		);
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) =>
+				originalTransaction(async (transactionAdapter) => {
+					vi.spyOn(transactionAdapter, "create").mockRejectedValueOnce(failure);
+					return callback(transactionAdapter);
+				}),
+		);
+
+		await expect(
+			registerClientMetadataDocument(endpointContext, instance.opts, {
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata,
+			}),
+		).rejects.toBe(failure);
+	});
+
 	it("does not take over a managed client after a fixed-ID registration race", async () => {
 		const instance = await boot();
 		const clientId = "https://client.example.com/managed-race.json";

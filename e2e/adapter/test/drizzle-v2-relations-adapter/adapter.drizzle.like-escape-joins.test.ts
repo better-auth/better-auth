@@ -28,7 +28,7 @@ const relations = defineRelationsPart(tables, () => ({ user: {} }));
 
 describe("drizzle relations-v2 adapter: LIKE escaping on the joins path", () => {
 	const sqliteDb = new Database(":memory:");
-	const db = drizzle({ client: sqliteDb, schema: tables, relations });
+	const db = drizzle({ client: sqliteDb, relations });
 
 	const adapter = drizzleAdapter(db, {
 		schema: { ...tables, relations },

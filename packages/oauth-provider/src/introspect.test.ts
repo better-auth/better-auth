@@ -191,7 +191,9 @@ describe("oauth introspect", async () => {
 			},
 		);
 		expect(introspection.error?.status).toBe(401);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 		expect(responseHeaders?.get("Access-Control-Expose-Headers")).toBe(
 			"WWW-Authenticate",
 		);

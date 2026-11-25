@@ -8,6 +8,7 @@ import {
 	ResourceUriSchema,
 } from "@better-auth/oauth-provider";
 import {
+	BASIC_CHALLENGE,
 	createOAuthEndpoint,
 	getAuthEndpointUrl,
 	parseClientMetadata,
@@ -46,7 +47,7 @@ const NON_PLAIN_TEXT = /[\p{Cc}\p{Cf}]/u;
  * an unknown client, no client identifier, no client authentication, or an
  * unsupported method.
  * RFC 9110 §15.5.2 requires a challenge on a 401, so a challenge the client
- * authentication already set is kept and `Basic` is sent otherwise.
+ * authentication already set is kept and a `Basic` challenge is sent otherwise.
  */
 async function authenticateBackchannelClient<T>(
 	authenticate: () => T | Promise<T>,
@@ -72,7 +73,7 @@ async function authenticateBackchannelClient<T>(
 		}
 		const headers = new Headers(error.headers);
 		if (!headers.has("WWW-Authenticate")) {
-			headers.set("WWW-Authenticate", "Basic");
+			headers.set("WWW-Authenticate", BASIC_CHALLENGE);
 		}
 		headers.set("Access-Control-Expose-Headers", "WWW-Authenticate");
 		throw new APIError(

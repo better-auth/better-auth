@@ -1,3 +1,4 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
@@ -3160,5 +3161,558 @@ describe("email-otp send origin/CSRF protection", async () => {
 		const response = await auth.handler(legitimateRequest);
 		expect(response.status).toBe(200);
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+	});
+});
+
+function uniqueVerificationIdentifier() {
+	return {
+		id: "unique-verification-identifier",
+		schema: {
+			verification: {
+				fields: {
+					identifier: {
+						type: "string",
+						required: true,
+						index: true,
+						unique: true,
+					},
+				},
+			},
+		},
+	} satisfies BetterAuthPlugin;
+}
+
+describe("email-otp verification rows", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10437
+	 */
+	it("keeps one row per identifier when a code is resent after a wrong guess", async () => {
+		const codes = ["111111", "222222"];
+		const { client, auth, testUser } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						generateOTP: () => codes.shift(),
+						storeOTP: "hashed",
+						async sendVerificationOTP() {},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		const email = testUser.email;
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const wrong = await client.signIn.emailOtp({ email, otp: "000000" });
+		expect(wrong.error?.code).toBe("INVALID_OTP");
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+		const rows = await (await auth.$context).adapter.findMany({
+			model: "verification",
+			where: [{ field: "identifier", value: `sign-in-otp-${email}` }],
+		});
+		expect(rows).toHaveLength(1);
+		const superseded = await client.signIn.emailOtp({ email, otp: "111111" });
+		expect(superseded.error?.code).toBe("INVALID_OTP");
+		const latest = await client.signIn.emailOtp({ email, otp: "222222" });
+		expect(latest.data?.token).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10437
+	 */
+	it("accepts the newest code sent while a wrong guess is checked", async () => {
+		const codes = ["111111", "222222"];
+		let holdCheck = false;
+		let releaseCheck: () => void = () => {};
+		const checkReleased = new Promise<void>((resolve) => {
+			releaseCheck = resolve;
+		});
+		let signalCheck: () => void = () => {};
+		const checkStarted = new Promise<void>((resolve) => {
+			signalCheck = resolve;
+		});
+		const { client, testUser } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						generateOTP: () => codes.shift(),
+						async sendVerificationOTP() {},
+						storeOTP: {
+							async hash(otp) {
+								if (holdCheck && otp === "000000") {
+									holdCheck = false;
+									signalCheck();
+									await checkReleased;
+								}
+								return `stored-${otp}`;
+							},
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		const email = testUser.email;
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+		holdCheck = true;
+		vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
+		const guess = client.signIn.emailOtp({ email, otp: "000000" });
+		await checkStarted;
+		vi.setSystemTime(new Date("2026-01-01T00:00:02.000Z"));
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		vi.setSystemTime(new Date("2026-01-01T00:00:03.000Z"));
+		releaseCheck();
+
+		expect((await guess).error?.code).toBe("INVALID_OTP");
+		const latest = await client.signIn.emailOtp({ email, otp: "222222" });
+		expect(latest.data?.token).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
+	it("accepts the newest code when overlapping resends share a millisecond", async () => {
+		let issued = 0;
+		let firstDelivered: () => void = () => {};
+		const firstDelivery = new Promise<void>((resolve) => {
+			firstDelivered = resolve;
+		});
+		let finishFirstDelivery: () => void = () => {};
+		const firstDeliveryPending = new Promise<void>((resolve) => {
+			finishFirstDelivery = resolve;
+		});
+		const delivered: string[] = [];
+		const { auth, testUser } = await getTestInstance({
+			plugins: [
+				emailOTP({
+					generateOTP: () => String(++issued).padStart(6, "0"),
+					async sendVerificationOTP({ otp }) {
+						delivered.push(otp);
+						if (delivered.length === 1) {
+							firstDelivered();
+							await firstDeliveryPending;
+						}
+					},
+				}),
+			],
+		});
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		const body = { email: testUser.email, type: "sign-in" as const };
+
+		const first = auth.api.sendVerificationOTP({ body });
+		await firstDelivery;
+		await auth.api.sendVerificationOTP({ body });
+		finishFirstDelivery();
+		await first;
+
+		expect(delivered).toEqual(["000001", "000002"]);
+		const check = (otp: string) =>
+			auth.api.checkVerificationOTP({
+				body: { ...body, otp },
+				asResponse: true,
+			});
+		expect((await check("000002")).status).toBe(200);
+		expect((await check("000001")).status).toBe(400);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10437
+	 */
+	it("accepts the newest code sent while a checked code is written back", async () => {
+		const codes = ["111111", "222222"];
+		let sendDuringRestore = false;
+		const body = { email: "", type: "sign-in" as const };
+		const { auth, client, testUser } = await getTestInstance(
+			{
+				databaseHooks: {
+					verification: {
+						create: {
+							// Runs after the check found no replacement.
+							async before(verification) {
+								if (
+									!sendDuringRestore ||
+									verification.value !== "stored-111111:0"
+								) {
+									return;
+								}
+								sendDuringRestore = false;
+								vi.setSystemTime(new Date("2026-01-01T00:00:02.000Z"));
+								await auth.api.sendVerificationOTP({ body });
+							},
+						},
+					},
+				},
+				plugins: [
+					emailOTP({
+						generateOTP: () => codes.shift(),
+						async sendVerificationOTP() {},
+						storeOTP: {
+							async hash(otp) {
+								return `stored-${otp}`;
+							},
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		body.email = testUser.email;
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		await auth.api.sendVerificationOTP({ body });
+
+		sendDuringRestore = true;
+		vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
+		const check = await client.emailOtp.checkVerificationOtp({
+			...body,
+			otp: "111111",
+		});
+
+		expect(codes).toHaveLength(0);
+		expect(check.error?.code).toBe("INVALID_OTP");
+		const superseded = await client.signIn.emailOtp({
+			email: body.email,
+			otp: "111111",
+		});
+		expect(superseded.error?.code).toBe("INVALID_OTP");
+		const latest = await client.signIn.emailOtp({
+			email: body.email,
+			otp: "222222",
+		});
+		expect(latest.data?.token).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
+	it("keeps a code sent while an expired code is checked", async () => {
+		const codes = ["111111", "222222"];
+		let sendDuringCheck = false;
+		const body = { email: "", type: "sign-in" as const };
+		const { auth, client, testUser } = await getTestInstance(
+			{
+				databaseHooks: {
+					verification: {
+						delete: {
+							// Runs when the check's lookup drops the expired code.
+							async after() {
+								if (!sendDuringCheck) return;
+								sendDuringCheck = false;
+								await auth.api.sendVerificationOTP({ body });
+							},
+						},
+					},
+				},
+				plugins: [
+					emailOTP({
+						generateOTP: () => codes.shift(),
+						async sendVerificationOTP() {},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		body.email = testUser.email;
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		await auth.api.sendVerificationOTP({ body });
+
+		vi.setSystemTime(new Date("2026-01-01T00:10:00.000Z"));
+		sendDuringCheck = true;
+		const stale = await client.signIn.emailOtp({
+			email: body.email,
+			otp: "111111",
+		});
+
+		expect(codes).toHaveLength(0);
+		expect(stale.error?.code).toBe("OTP_EXPIRED");
+		const latest = await client.signIn.emailOtp({
+			email: body.email,
+			otp: "222222",
+		});
+		expect(latest.data?.token).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11181
+	 */
+	it("leaves one valid code when concurrent hashed sends collide", async () => {
+		let arrivals = 0;
+		let openBarrier: () => void = () => {};
+		const barrier = new Promise<void>((resolve) => {
+			openBarrier = resolve;
+		});
+		const delivered: string[] = [];
+		const codes = ["111111", "222222"];
+		const { auth, testUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before() {
+							arrivals++;
+							if (arrivals === 2) openBarrier();
+							if (arrivals <= 2) await barrier;
+						},
+					},
+				},
+			},
+			plugins: [
+				emailOTP({
+					storeOTP: "hashed",
+					generateOTP: () => codes.shift(),
+					async sendVerificationOTP({ otp }) {
+						delivered.push(otp);
+					},
+				}),
+			],
+		});
+		const body = { email: testUser.email, type: "sign-in" as const };
+
+		await Promise.all([
+			auth.api.sendVerificationOTP({ body }),
+			auth.api.sendVerificationOTP({ body }),
+		]);
+
+		expect(delivered).toHaveLength(2);
+		const statuses: number[] = [];
+		for (const otp of delivered) {
+			const res = await auth.api.checkVerificationOTP({
+				body: { ...body, otp },
+				asResponse: true,
+			});
+			statuses.push(res.status);
+		}
+		expect(statuses.sort()).toEqual([200, 400]);
+	});
+
+	it("does not read a failed verification create hook as a collision", async () => {
+		let failCreate = true;
+		const delivered: string[] = [];
+		const { auth, testUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async after() {
+							if (!failCreate) return;
+							failCreate = false;
+							throw new Error("create hook failed");
+						},
+					},
+				},
+			},
+			plugins: [
+				emailOTP({
+					storeOTP: "encrypted",
+					async sendVerificationOTP({ otp }) {
+						delivered.push(otp);
+					},
+				}),
+			],
+		});
+
+		await expect(
+			auth.api.sendVerificationOTP({
+				body: { email: testUser.email, type: "sign-in" },
+			}),
+		).rejects.toThrow("create hook failed");
+		expect(delivered).toHaveLength(0);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11181
+	 */
+	it.for(["default", "unique identifier"] as const)(
+		"keeps every delivered code valid when concurrent first sends collide (%s schema)",
+		async (schema) => {
+			let arrivals = 0;
+			let openBarrier: () => void = () => {};
+			const barrier = new Promise<void>((resolve) => {
+				openBarrier = resolve;
+			});
+			const delivered: string[] = [];
+			const { auth, testUser } = await getTestInstance({
+				databaseHooks: {
+					verification: {
+						create: {
+							// Hold the first two inserts until both requests reach them.
+							async before() {
+								arrivals++;
+								if (arrivals === 2) openBarrier();
+								if (arrivals <= 2) await barrier;
+							},
+						},
+					},
+				},
+				plugins: [
+					...(schema === "unique identifier"
+						? [uniqueVerificationIdentifier()]
+						: []),
+					emailOTP({
+						storeOTP: "encrypted",
+						async sendVerificationOTP({ otp }) {
+							delivered.push(otp);
+						},
+					}),
+				],
+			});
+			const body = { email: testUser.email, type: "sign-in" as const };
+
+			await Promise.all([
+				auth.api.sendVerificationOTP({ body }),
+				auth.api.sendVerificationOTP({ body }),
+			]);
+
+			expect(delivered).toHaveLength(2);
+			for (const otp of delivered) {
+				const res = await auth.api.checkVerificationOTP({
+					body: { ...body, otp },
+					asResponse: true,
+				});
+				expect(res.status).toBe(200);
+			}
+		},
+	);
+});
+
+/**
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("email OTP issuance vetoed by a verification hook", () => {
+	async function setup() {
+		const veto = { active: false };
+		const sendVerificationOTP = vi.fn();
+		const { auth, testUser, signInWithTestUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before() {
+							return veto.active ? false : undefined;
+						},
+					},
+				},
+			},
+			plugins: [
+				emailOTP({ sendVerificationOTP, changeEmail: { enabled: true } }),
+			],
+		});
+		return { auth, testUser, signInWithTestUser, veto, sendVerificationOTP };
+	}
+
+	it("refuses to send a sign-in code that was not stored", async () => {
+		const { auth, testUser, veto, sendVerificationOTP } = await setup();
+		veto.active = true;
+
+		const res = await auth.api.sendVerificationOTP({
+			body: { email: testUser.email, type: "sign-in" },
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+	});
+
+	it.for(["email-verification", "forget-password"] as const)(
+		"does not send a %s code that was not stored, and does not reveal the account",
+		async (type) => {
+			const { auth, testUser, veto, sendVerificationOTP } = await setup();
+			veto.active = true;
+			const send = (email: string) =>
+				auth.api.sendVerificationOTP({
+					body: { email, type },
+					asResponse: true,
+				});
+
+			const known = await send(testUser.email);
+			const unknown = await send("missing@test.com");
+
+			expect(known.status).toBe(200);
+			expect(unknown.status).toBe(200);
+			expect(await known.json()).toEqual(await unknown.json());
+			expect(sendVerificationOTP).not.toHaveBeenCalled();
+		},
+	);
+
+	it.for(["requestPasswordResetEmailOTP", "forgetPasswordEmailOTP"] as const)(
+		"does not send a %s code that was not stored, and does not reveal the account",
+		async (endpoint) => {
+			const { auth, testUser, veto, sendVerificationOTP } = await setup();
+			veto.active = true;
+			const request = (email: string) =>
+				auth.api[endpoint]({ body: { email }, asResponse: true });
+
+			const known = await request(testUser.email);
+			const unknown = await request("missing@test.com");
+
+			expect(known.status).toBe(200);
+			expect(unknown.status).toBe(200);
+			expect(await known.json()).toEqual(await unknown.json());
+			expect(sendVerificationOTP).not.toHaveBeenCalled();
+		},
+	);
+
+	it("completes sign-up without sending a sign-up code that was not stored", async () => {
+		const veto = { active: false };
+		const sendVerificationOTP = vi.fn();
+		const { auth } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before() {
+							return veto.active ? false : undefined;
+						},
+					},
+				},
+			},
+			plugins: [
+				emailOTP({ sendVerificationOTP, sendVerificationOnSignUp: true }),
+			],
+		});
+		sendVerificationOTP.mockClear();
+		veto.active = true;
+
+		const res = await auth.api.signUpEmail({
+			body: { email: "new@test.com", password: "password123", name: "new" },
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(200);
+		expect((await res.json()).user.email).toBe("new@test.com");
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+	});
+
+	it("does not send a change-email code that was not stored, and does not reveal the address", async () => {
+		const { auth, signInWithTestUser, veto, sendVerificationOTP } =
+			await setup();
+		const { headers } = await signInWithTestUser();
+		await auth.api.signUpEmail({
+			body: { email: "taken@test.com", password: "password123", name: "t" },
+		});
+		veto.active = true;
+		const request = (newEmail: string) =>
+			auth.api.requestEmailChangeEmailOTP({
+				body: { newEmail },
+				headers,
+				asResponse: true,
+			});
+
+		const free = await request("free@test.com");
+		const taken = await request("taken@test.com");
+
+		expect(free.status).toBe(200);
+		expect(taken.status).toBe(200);
+		expect(await free.json()).toEqual(await taken.json());
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
 	});
 });

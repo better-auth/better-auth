@@ -30,6 +30,12 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12930](https://github.com/better-auth/better-auth/pull/12930) [`34ae0ce`](https://github.com/better-auth/better-auth/commit/34ae0cedfdd3fcf276715a0e27daaf2cd5308e4a) Thanks [@jonathansamines](https://github.com/jonathansamines)! - Stripe subscription lookups now filter `active` and `trialing` status in the database instead of loading every row for a reference and filtering in memory. List, checkout, cancel, restore, billing-portal, and trial-eligibility paths no longer miss the current or past-trial subscription once canceled history exceeds the adapter `findMany` cap.
+
 ## 1.7.27
 
 ## 1.7.26

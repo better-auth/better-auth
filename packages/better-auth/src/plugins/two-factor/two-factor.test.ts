@@ -1,8 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import type { SecondaryStorage } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthMiddleware } from "../../api";
 import { createAuthClient } from "../../client";
 import { applySetCookies, parseSetCookieHeader } from "../../cookies";
@@ -204,6 +205,117 @@ describe("two-factor enrollment session authority", () => {
 		expect(
 			await ctx.internalAdapter.listSessions(current.user.id),
 		).toHaveLength(0);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9132
+ */
+describe("backup codes with a stale cookie-cached session", async () => {
+	/**
+	 * Signs in twice, enrolls TOTP from the first session, and returns the
+	 * headers of the second session, whose cached user predates enrollment.
+	 */
+	async function enrollFromAnotherSession() {
+		const instance = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [twoFactor()],
+		});
+		const { auth, client, testUser, cookieSetter } = instance;
+		const staleHeaders = new Headers();
+		const enrollingHeaders = new Headers();
+		for (const headers of [staleHeaders, enrollingHeaders]) {
+			await client.signIn.email(
+				{ email: testUser.email, password: testUser.password },
+				{ onSuccess: cookieSetter(headers) },
+			);
+		}
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers: enrollingHeaders,
+		});
+		const ctx = await auth.$context;
+		const user = (await auth.api.getSession({ headers: enrollingHeaders }))!
+			.user;
+		const record = await ctx.adapter.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: user.id }],
+		});
+		const secret = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: record!.secret,
+		});
+		const verified = await auth.api.verifyTOTP({
+			body: { code: await createOTP(secret).totp() },
+			headers: enrollingHeaders,
+			asResponse: true,
+		});
+		expect(verified.status).toBe(200);
+		const stored = await ctx.internalAdapter.findUserById(user.id);
+		expect((stored as UserWithTwoFactor).twoFactorEnabled).toBe(true);
+		const cached = await client.getSession({
+			fetchOptions: { headers: staleHeaders },
+		});
+		expect(
+			(cached.data?.user as UserWithTwoFactor).twoFactorEnabled,
+		).toBeFalsy();
+		return { ...instance, staleHeaders, user };
+	}
+
+	it("generates backup codes after two factor was enabled from another session", async () => {
+		const { auth, testUser, staleHeaders, user } =
+			await enrollFromAnotherSession();
+		const ctx = await auth.$context;
+		const before = await ctx.adapter.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: user.id }],
+		});
+
+		const result = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers: staleHeaders,
+		});
+
+		expect(result.status).toBe(true);
+		expect(result.backupCodes.length).toBeGreaterThan(0);
+		const after = await ctx.adapter.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(after?.backupCodes).not.toBe(before?.backupCodes);
+	});
+
+	it("still rejects backup code generation when two factor is not enabled", async () => {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [twoFactor()],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await expect(
+			auth.api.generateBackupCodes({
+				body: { password: testUser.password },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: { code: "TWO_FACTOR_NOT_ENABLED" },
+		});
+	});
+
+	it("rejects backup code generation once the cached session is revoked", async () => {
+		const { auth, testUser, staleHeaders } = await enrollFromAnotherSession();
+		const ctx = await auth.$context;
+		const session = await auth.api.getSession({ headers: staleHeaders });
+		await ctx.internalAdapter.deleteSession(session!.session.token);
+
+		await expect(
+			auth.api.generateBackupCodes({
+				body: { password: testUser.password },
+				headers: staleHeaders,
+			}),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
 	});
 });
 
@@ -1966,6 +2078,131 @@ describe("OTP storage modes", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11105
+ */
+describe("OTP resent while a wrong guess is checked", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	function createSecondaryStorage(): SecondaryStorage {
+		const values = new Map<string, string>();
+		return {
+			get: (key) => values.get(key) ?? null,
+			getAndDelete: (key) => {
+				const value = values.get(key) ?? null;
+				values.delete(key);
+				return value;
+			},
+			increment: (key) => {
+				const value = Number(values.get(key) ?? 0) + 1;
+				values.set(key, String(value));
+				return value;
+			},
+			set: (key, value) => {
+				values.set(key, value);
+			},
+			delete: (key) => {
+				values.delete(key);
+			},
+		};
+	}
+
+	it.for(["database", "secondary", "mirrored"] as const)(
+		"accepts the resent code in %s storage",
+		async (storage) => {
+			const codes: string[] = [];
+			let heldGuess: string | undefined;
+			let releaseCheck: () => void = () => {};
+			const checkReleased = new Promise<void>((resolve) => {
+				releaseCheck = resolve;
+			});
+			let signalCheck: () => void = () => {};
+			const checkStarted = new Promise<void>((resolve) => {
+				signalCheck = resolve;
+			});
+			const { auth, signInWithTestUser, testUser } = await getTestInstance({
+				secret: DEFAULT_SECRET,
+				...(storage === "database"
+					? {}
+					: {
+							secondaryStorage: createSecondaryStorage(),
+							...(storage === "mirrored"
+								? { verification: { storeInDatabase: true } }
+								: {}),
+						}),
+				plugins: [
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp }) {
+								codes.push(otp);
+							},
+							storeOTP: {
+								async hash(token) {
+									// The wrong guess is compared after it consumed the code.
+									if (token === heldGuess) {
+										heldGuess = undefined;
+										signalCheck();
+										await checkReleased;
+									}
+									return `custom_${token}`;
+								},
+							},
+						},
+					}),
+				],
+			});
+			const { headers: sessionHeaders } = await signInWithTestUser();
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password, method: "otp" },
+				headers: sessionHeaders,
+			});
+			const signInRes = await auth.api.signInEmail({
+				body: { email: testUser.email, password: testUser.password },
+				asResponse: true,
+			});
+			const headers = convertSetCookieToCookie(signInRes.headers);
+			vi.useFakeTimers({ toFake: ["Date"] });
+			vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+			await auth.api.sendTwoFactorOTP({ headers, body: {} });
+
+			const wrong = codes[0] === "000000" ? "111111" : "000000";
+			heldGuess = wrong;
+			vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
+			const guess = auth.api.verifyTwoFactorOTP({
+				headers,
+				body: { code: wrong },
+				asResponse: true,
+			});
+			await checkStarted;
+			vi.setSystemTime(new Date("2026-01-01T00:00:02.000Z"));
+			await auth.api.sendTwoFactorOTP({ headers, body: {} });
+			vi.setSystemTime(new Date("2026-01-01T00:00:03.000Z"));
+			releaseCheck();
+
+			expect((await guess).status).toBe(401);
+			expect(codes).toHaveLength(2);
+			// Two random sends can produce the same digits, which makes the
+			// first code also the current one.
+			if (codes[0] !== codes[1]) {
+				const stale = await auth.api.verifyTwoFactorOTP({
+					headers,
+					body: { code: codes[0]! },
+					asResponse: true,
+				});
+				expect(stale.status).toBe(401);
+			}
+			const latest = await auth.api.verifyTwoFactorOTP({
+				headers,
+				body: { code: codes[1]! },
+				asResponse: true,
+			});
+			expect(latest.status).toBe(200);
+		},
+	);
+});
+
 describe("pre-migration twoFactor rows (verified absent)", async () => {
 	it("should complete enrollment when verified is null", async () => {
 		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
@@ -2500,6 +2737,257 @@ describe("two factor password still required for credential accounts", async () 
 			asResponse: true,
 		});
 		expect(res.status).toBe(400);
+	});
+});
+
+describe("two-factor session rotation", () => {
+	it.for([
+		{
+			name: "enabling OTP",
+			path: "/two-factor/enable",
+			body: { method: "otp" },
+		},
+		{
+			name: "enabling TOTP with verification skipped",
+			path: "/two-factor/enable",
+			body: {},
+		},
+		{
+			name: "disabling",
+			path: "/two-factor/disable",
+			body: {},
+		},
+	])(
+		"$name keeps the session creation time for an account without a password",
+		async ({ path, body }) => {
+			const { auth, client, db, cookieSetter } = await getTestInstance(
+				{
+					secret: DEFAULT_SECRET,
+					plugins: [
+						anonymous(),
+						twoFactor({
+							allowPasswordless: true,
+							skipVerificationOnEnable: true,
+							otpOptions: {
+								async sendOTP() {},
+							},
+						}),
+					],
+				},
+				{ disableTestUser: true },
+			);
+			const headers = new Headers();
+			await client.$fetch("/sign-in/anonymous", {
+				method: "POST",
+				onSuccess: cookieSetter(headers),
+			});
+			const source = await auth.api.getSession({ headers });
+			const createdAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+			await db.update({
+				model: "session",
+				where: [{ field: "id", value: source!.session.id }],
+				update: { createdAt },
+			});
+
+			const res = await client.$fetch(path, {
+				method: "POST",
+				body,
+				headers,
+				onSuccess: cookieSetter(headers),
+			});
+			expect(res.error).toBeNull();
+
+			const rotated = await auth.api.getSession({ headers });
+			expect(rotated?.session.token).not.toBe(source!.session.token);
+			expect(rotated?.session.createdAt).toEqual(createdAt);
+			const listed = await client.listSessions({ fetchOptions: { headers } });
+			expect(listed.error).toMatchObject({
+				status: 403,
+				code: "SESSION_NOT_FRESH",
+			});
+		},
+	);
+
+	it("keeps the session creation time when TOTP enrollment completes", async () => {
+		const { auth, client, db, cookieSetter } = await getTestInstance(
+			{
+				secret: DEFAULT_SECRET,
+				plugins: [anonymous(), twoFactor({ allowPasswordless: true })],
+			},
+			{ disableTestUser: true },
+		);
+		const headers = new Headers();
+		await client.$fetch("/sign-in/anonymous", {
+			method: "POST",
+			onSuccess: cookieSetter(headers),
+		});
+		const source = await auth.api.getSession({ headers });
+		const enrollment = await client.$fetch("/two-factor/enable", {
+			method: "POST",
+			body: {},
+			headers,
+		});
+		expect(enrollment.error).toBeNull();
+		const twoFactorRecord = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: source!.user.id }],
+		});
+		const secret = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactorRecord!.secret,
+		});
+		const code = await createOTP(secret).totp();
+		const createdAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+		await db.update({
+			model: "session",
+			where: [{ field: "id", value: source!.session.id }],
+			update: { createdAt },
+		});
+
+		const res = await client.$fetch("/two-factor/verify-totp", {
+			method: "POST",
+			body: { code },
+			headers,
+			onSuccess: cookieSetter(headers),
+		});
+		expect(res.error).toBeNull();
+
+		const rotated = await auth.api.getSession({ headers });
+		expect(rotated?.user.twoFactorEnabled).toBe(true);
+		expect(rotated?.session.token).not.toBe(source!.session.token);
+		expect(rotated?.session.createdAt).toEqual(createdAt);
+		const listed = await client.listSessions({ fetchOptions: { headers } });
+		expect(listed.error).toMatchObject({
+			status: 403,
+			code: "SESSION_NOT_FRESH",
+		});
+	});
+
+	it("keeps the session creation time when OTP enrollment completes", async () => {
+		const sent: string[] = [];
+		const { auth, client, db, cookieSetter } = await getTestInstance(
+			{
+				secret: DEFAULT_SECRET,
+				plugins: [
+					anonymous(),
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp }) {
+								sent.push(otp);
+							},
+						},
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const headers = new Headers();
+		await client.$fetch("/sign-in/anonymous", {
+			method: "POST",
+			onSuccess: cookieSetter(headers),
+		});
+		const source = await auth.api.getSession({ headers });
+		const createdAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+		await db.update({
+			model: "session",
+			where: [{ field: "id", value: source!.session.id }],
+			update: { createdAt },
+		});
+		const sendRes = await client.$fetch("/two-factor/send-otp", {
+			method: "POST",
+			body: {},
+			headers,
+		});
+		expect(sendRes.error).toBeNull();
+
+		const res = await client.$fetch("/two-factor/verify-otp", {
+			method: "POST",
+			body: { code: sent[0] },
+			headers,
+			onSuccess: cookieSetter(headers),
+		});
+		expect(res.error).toBeNull();
+
+		const rotated = await auth.api.getSession({ headers });
+		expect(rotated?.user.twoFactorEnabled).toBe(true);
+		expect(rotated?.session.token).not.toBe(source!.session.token);
+		expect(rotated?.session.createdAt).toEqual(createdAt);
+		const listed = await client.listSessions({ fetchOptions: { headers } });
+		expect(listed.error).toMatchObject({
+			status: 403,
+			code: "SESSION_NOT_FRESH",
+		});
+	});
+
+	it("keeps the session creation time when disabling with the password", async () => {
+		const { auth, client, db, cookieSetter, testUser, signInWithTestUser } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [twoFactor({ allowPasswordless: true })],
+			});
+		const { headers } = await signInWithTestUser();
+		const source = await auth.api.getSession({ headers });
+		const createdAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+		await db.update({
+			model: "session",
+			where: [{ field: "id", value: source!.session.id }],
+			update: { createdAt },
+		});
+
+		const res = await client.$fetch("/two-factor/disable", {
+			method: "POST",
+			body: { password: testUser.password },
+			headers,
+			onSuccess: cookieSetter(headers),
+		});
+		expect(res.error).toBeNull();
+
+		const rotated = await auth.api.getSession({ headers });
+		expect(rotated?.session.token).not.toBe(source!.session.token);
+		expect(rotated?.session.createdAt).toEqual(createdAt);
+		const listed = await client.listSessions({ fetchOptions: { headers } });
+		expect(listed.error).toMatchObject({
+			status: 403,
+			code: "SESSION_NOT_FRESH",
+		});
+	});
+
+	it("gives the replacement session fresh default field values", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				secret: DEFAULT_SECRET,
+				session: {
+					additionalFields: {
+						deviceKey: {
+							type: "string",
+							unique: true,
+							defaultValue: () => crypto.randomUUID(),
+						},
+					},
+				},
+				plugins: [anonymous(), twoFactor({ allowPasswordless: true })],
+			},
+			{ disableTestUser: true },
+		);
+		const headers = new Headers();
+		await client.$fetch("/sign-in/anonymous", {
+			method: "POST",
+			onSuccess: cookieSetter(headers),
+		});
+		const source = await auth.api.getSession({ headers });
+
+		const res = await client.$fetch("/two-factor/disable", {
+			method: "POST",
+			body: {},
+			headers,
+			onSuccess: cookieSetter(headers),
+		});
+		expect(res.error).toBeNull();
+
+		const rotated = await auth.api.getSession({ headers });
+		expect(rotated?.session.token).not.toBe(source!.session.token);
+		expect(rotated?.session.deviceKey).toEqual(expect.any(String));
+		expect(rotated?.session.deviceKey).not.toBe(source!.session.deviceKey);
 	});
 });
 

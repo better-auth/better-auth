@@ -932,7 +932,9 @@ describe("mcp refresh_token grant client authentication", async () => {
 
 		// Failed HTTP Basic authentication returns its registered challenge.
 		expect(response.status).toBe(401);
-		expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+		expect(response.headers.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 		expect(body?.error).toBe("invalid_client");
 		expect(body?.access_token).toBeUndefined();
 	});

@@ -10,6 +10,7 @@ export {
 	resolveDatabaseSchemaIndexes,
 	resolveDatabaseTableIndexes,
 } from "./database-index";
+export { isUniqueViolation } from "./errors";
 export { getAuthTablesWithResolvedIndexes } from "./get-tables";
 export {
 	checksSchema,
@@ -31,3 +32,4 @@ export {
 	SchemaMismatchError,
 	type SchemaSource,
 } from "./schema-diff";
+export { redactSecondaryStorageErrors } from "./secondary-storage-errors";

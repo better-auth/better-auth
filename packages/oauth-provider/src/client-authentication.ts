@@ -15,6 +15,7 @@ import type {
 } from "./types";
 import {
 	assertConfirmation,
+	BASIC_CHALLENGE,
 	challengeHeaders,
 	getClient,
 	isPublicClient,
@@ -157,7 +158,7 @@ function basicToClientCredentials(authorization: string) {
 				error_description: "invalid authorization header format",
 				error: "invalid_client",
 			},
-			challengeHeaders("Basic"),
+			challengeHeaders(BASIC_CHALLENGE),
 		);
 	}
 }
@@ -196,11 +197,13 @@ export function throwInvalidClient(
 		scheme?: string;
 	},
 ): never {
+	const scheme = authentication?.scheme;
 	const attemptedBasicAuthentication =
+		scheme?.toLowerCase() === "basic" ||
 		authentication?.method === "client_secret_basic";
-	const challengeScheme =
-		authentication?.scheme ??
-		(attemptedBasicAuthentication ? "Basic" : undefined);
+	const challengeScheme = attemptedBasicAuthentication
+		? BASIC_CHALLENGE
+		: scheme;
 	throw new APIError(
 		challengeScheme ? "UNAUTHORIZED" : "BAD_REQUEST",
 		{

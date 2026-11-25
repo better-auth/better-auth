@@ -1734,6 +1734,64 @@ describe("SAML SSO", async () => {
 		});
 	});
 
+	it("should enforce the provider cap when more providers exist than findMany returns", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso({ providersLimit: 2 })],
+			advanced: { database: { defaultFindManyLimit: 1 } },
+		});
+		const { headers, user } = await signInWithTestUser();
+
+		const registerBody = (providerId: string) => ({
+			providerId,
+			issuer: "http://localhost:8081",
+			domain: "http://localhost:8081",
+			samlConfig: {
+				entryPoint: sharedMockIdP.metadataUrl,
+				cert: certificate,
+				idpMetadata: mockIdentityProviderMetadata,
+				wantAssertionsSigned: false,
+				signatureAlgorithm: "sha256",
+				digestAlgorithm: "sha256",
+				spMetadata: {
+					metadata: spMetadata,
+				},
+			},
+		});
+
+		await auth.api.registerSSOProvider({
+			body: registerBody("saml-provider-1"),
+			headers,
+		});
+		await auth.api.registerSSOProvider({
+			body: registerBody("saml-provider-2"),
+			headers,
+		});
+
+		const context = await auth.$context;
+		const listedProviders = await context.adapter.findMany({
+			model: "ssoProvider",
+			where: [{ field: "userId", value: user.id }],
+		});
+		const providerCount = await context.adapter.count({
+			model: "ssoProvider",
+			where: [{ field: "userId", value: user.id }],
+		});
+		expect(listedProviders).toHaveLength(1);
+		expect(providerCount).toBe(2);
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: registerBody("saml-provider-3"),
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: {
+				message: "You have reached the maximum number of SSO providers",
+			},
+		});
+	});
+
 	it("should reject registration when no cert source is provided", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso()],
@@ -9610,5 +9668,56 @@ describe("SAML SSO Hardening", () => {
 			expect(redirectUrl.pathname).toBe("/global-idp-redirect");
 			expect(redirectUrl.searchParams.get("error")).toBe("saml_error");
 		});
+	});
+});
+
+/**
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("SAML AuthnRequest vetoed by a verification hook", () => {
+	it("does not redirect to the IdP when the AuthnRequest was not stored", async () => {
+		const veto = { active: false };
+		const { auth, signInWithTestUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before(verification) {
+							const isAuthnRequest = verification.identifier.startsWith(
+								"saml-authn-request:",
+							);
+							return veto.active && isAuthnRequest ? false : undefined;
+						},
+					},
+				},
+			},
+			plugins: [sso()],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "vetoed-authn-request",
+				issuer: "http://localhost:8081",
+				domain: "vetoed-authn-request.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					idpMetadata: { metadata: idpMetadata },
+					spMetadata: { metadata: spMetadata },
+				},
+			},
+			headers,
+		});
+		veto.active = true;
+
+		const res = await auth.api.signInSSO({
+			body: {
+				providerId: "vetoed-authn-request",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
 	});
 });

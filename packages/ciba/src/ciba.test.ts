@@ -893,7 +893,7 @@ describe("ciba backchannel request validation", () => {
 		const expectChallenge = (res: Awaited<ReturnType<typeof bcAuthorize>>) => {
 			expect(res.status).toBe(401);
 			expect(res.body.error).toBe("invalid_client");
-			expect(res.headers.get("www-authenticate")).toBe("Basic");
+			expect(res.headers.get("www-authenticate")).toBe('Basic realm="oauth"');
 			expect(res.headers.get("access-control-expose-headers")).toContain(
 				"WWW-Authenticate",
 			);

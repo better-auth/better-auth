@@ -1,3 +1,6 @@
+import { getAuthTables } from "@better-auth/core/db";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
@@ -271,7 +274,7 @@ describe("oauth-provider device-code composition", () => {
 		expect(getUnauthorizedResponse(composedDocument)).toMatchObject({
 			headers: {
 				"WWW-Authenticate": {
-					schema: { type: "string", example: "Basic" },
+					schema: { type: "string", example: 'Basic realm="oauth"' },
 				},
 			},
 			content: {
@@ -1358,7 +1361,9 @@ describe("oauth-provider device-code grant", async () => {
 
 		expect(response.error?.status).toBe(401);
 		expect((response.error as TokenErrorBody)?.error).toBe("invalid_client");
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	/**
@@ -2882,5 +2887,147 @@ describe("oauth-provider device approval through the consent flow", async () => 
 			},
 		});
 		expect(tokens.access_token).toEqual(expect.any(String));
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11933
+ * @see https://www.prisma.io/docs/orm/prisma-schema/data-model/models#type-modifiers
+ */
+describe("oauth-provider device-code grant on scalar list columns", async () => {
+	const baseURL = "http://localhost:3000";
+	const resource = "https://api.example.com";
+	const database: Record<string, Record<string, unknown>[]> = {};
+	const createMemoryAdapter = memoryAdapter(database);
+
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		database: (options) => {
+			const tables = getAuthTables(options);
+			const listFields = (model: string) =>
+				Object.entries(tables[model]?.fields ?? {})
+					.filter(([, field]) => field.type === "string[]")
+					.map(([name]) => name);
+			for (const model of Object.keys(tables)) database[model] ??= [];
+			const adapter = createMemoryAdapter(options);
+			const rejectNullLists = (model: string, data: object) => {
+				for (const field of listFields(model)) {
+					if ((data as Record<string, unknown>)[field] === null) {
+						throw new Error(`Argument \`${field}\` must not be null.`);
+					}
+				}
+			};
+			const readListsAsArrays = <T>(model: string, row: T): T => {
+				if (!row) return row;
+				const copy = { ...row } as Record<string, unknown>;
+				for (const field of listFields(model)) copy[field] ??= [];
+				return copy as T;
+			};
+			return {
+				...adapter,
+				create: (async (args) => {
+					rejectNullLists(args.model, args.data);
+					return adapter.create(args);
+				}) as DBAdapter["create"],
+				update: (async (args) => {
+					rejectNullLists(args.model, args.update);
+					return readListsAsArrays(args.model, await adapter.update(args));
+				}) as DBAdapter["update"],
+				updateMany: (async (args) => {
+					rejectNullLists(args.model, args.update);
+					return adapter.updateMany(args);
+				}) as DBAdapter["updateMany"],
+				incrementOne: (async (args) => {
+					rejectNullLists(args.model, args.set ?? {});
+					return readListsAsArrays(
+						args.model,
+						await adapter.incrementOne(args),
+					);
+				}) as DBAdapter["incrementOne"],
+				findOne: (async (args) =>
+					readListsAsArrays(
+						args.model,
+						await adapter.findOne(args),
+					)) as DBAdapter["findOne"],
+				findMany: (async (args) =>
+					(await adapter.findMany(args)).map((row) =>
+						readListsAsArrays(args.model, row),
+					)) as DBAdapter["findMany"],
+			};
+		},
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [{ identifier: resource, allowedScopes: ["openid"] }],
+			}),
+			oauthDeviceAuthorization(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const { client_id: clientId } = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: "none",
+			grant_types: [DEVICE_CODE_GRANT_TYPE],
+			scope: "openid",
+			application_type: "native",
+		},
+	});
+
+	async function approveWithoutResource() {
+		const codes = await client.$fetch<{
+			device_code: string;
+			user_code: string;
+		}>("/device/code", {
+			method: "POST",
+			body: new URLSearchParams({ client_id: clientId, scope: "openid" }),
+			headers: FORM_HEADERS,
+		});
+		expect(codes.error).toBeNull();
+		const { device_code, user_code } = codes.data!;
+		await answerDeviceConsent(client, user_code, headers);
+		return device_code;
+	}
+
+	function pollToken(body: Record<string, string>) {
+		return client.$fetch<Record<string, unknown>>("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams(body),
+			headers: FORM_HEADERS,
+		});
+	}
+
+	it("issues tokens for a device code requested without a resource", async () => {
+		const deviceCode = await approveWithoutResource();
+
+		const res = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data).toMatchObject({
+			access_token: expect.any(String),
+			token_type: "Bearer",
+			scope: "openid",
+		});
+		expect(decodeJwt(res.data!.id_token as string)).not.toHaveProperty("amr");
+	});
+
+	it("rejects a resource the user did not approve for a code requested without one", async () => {
+		const deviceCode = await approveWithoutResource();
+
+		const res = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+			resource,
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect((res.error as TokenErrorBody)?.error).toBe("invalid_target");
 	});
 });

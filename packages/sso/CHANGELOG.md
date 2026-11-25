@@ -55,6 +55,12 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12929](https://github.com/better-auth/better-auth/pull/12929) [`be3a757`](https://github.com/better-auth/better-auth/commit/be3a757479b2495bfda97f3682a6b655c07e47ce) Thanks [@jonathansamines](https://github.com/jonathansamines)! - SSO provider registration now enforces `providersLimit` even when the account already has more providers than `findMany` would return.
+
 ## 1.7.27
 
 ## 1.7.26

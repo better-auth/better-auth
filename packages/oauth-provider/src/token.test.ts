@@ -1,4 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { getAuthTables } from "@better-auth/core/db";
+import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { APIError, createAuthEndpoint } from "better-auth/api";
@@ -1546,7 +1548,9 @@ describe("oauth token - refresh_token", async () => {
 			expect((response.error as { error?: string })?.error).toBe(
 				"invalid_client",
 			);
-			expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+			expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+				'Basic realm="oauth"',
+			);
 		});
 	});
 
@@ -3993,7 +3997,9 @@ describe("oauth token - client_credentials", async () => {
 		expect((response.error as { error?: string })?.error).toBe(
 			"invalid_client",
 		);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("challenges client_secret_basic authentication without a secret", async () => {
@@ -4021,7 +4027,9 @@ describe("oauth token - client_credentials", async () => {
 		expect((response.error as { error?: string })?.error).toBe(
 			"invalid_client",
 		);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("challenges an unknown client_secret_basic client", async () => {
@@ -4045,7 +4053,9 @@ describe("oauth token - client_credentials", async () => {
 		expect((response.error as { error?: string })?.error).toBe(
 			"invalid_client",
 		);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("should match created client scopes", async ({ expect }) => {
@@ -4870,7 +4880,7 @@ describe("oauth token - config", async () => {
 			error: "invalid_client",
 		});
 		expect(basic.status).toBe(401);
-		expect(basic.headers.get("WWW-Authenticate")).toBe("Basic");
+		expect(basic.headers.get("WWW-Authenticate")).toBe('Basic realm="oauth"');
 		await expect(post.json()).resolves.toMatchObject({
 			error: "invalid_client",
 		});
@@ -8588,4 +8598,97 @@ describe("DPoP with secondary storage and no database-backed verification", asyn
 			error: "invalid_dpop_proof",
 		});
 	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12675
+ * @see https://www.postgresql.org/docs/current/datatype-character.html
+ */
+describe("oauth client IDs outside RFC 6749 VSCHAR", async () => {
+	const database: Record<string, Record<string, unknown>[]> = {};
+	const createMemoryAdapter = memoryAdapter(database);
+	const hasNul = (value: unknown): boolean =>
+		Array.isArray(value)
+			? value.some(hasNul)
+			: typeof value === "string" && value.includes("\0");
+	const clientLookups: unknown[] = [];
+	const { client } = await getTestInstance({
+		database: (options) => {
+			for (const model of Object.keys(getAuthTables(options))) {
+				database[model] ??= [];
+			}
+			const adapter = createMemoryAdapter(options);
+			const rejectNul = (where?: Where[]) => {
+				if (where?.some((clause) => hasNul(clause.value))) {
+					throw new Error('invalid byte sequence for encoding "UTF8": 0x00');
+				}
+			};
+			return {
+				...adapter,
+				findOne: (async (args) => {
+					if (args.model === "oauthClient") {
+						clientLookups.push(...args.where.map((clause) => clause.value));
+					}
+					rejectNul(args.where);
+					return adapter.findOne(args);
+				}) as DBAdapter["findOne"],
+				findMany: (async (args) => {
+					rejectNul(args.where);
+					return adapter.findMany(args);
+				}) as DBAdapter["findMany"],
+			};
+		},
+		plugins: [
+			jwt(),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+		],
+	});
+
+	const send = async (
+		path: string,
+		clientId: string,
+		basic: boolean,
+	): Promise<unknown> => {
+		const body = new URLSearchParams({
+			grant_type: "client_credentials",
+			token: "token",
+		});
+		const headers = new Headers({
+			"content-type": "application/x-www-form-urlencoded",
+		});
+		if (basic) {
+			headers.set(
+				"authorization",
+				`Basic ${Buffer.from(`${clientId}:secret`).toString("base64")}`,
+			);
+		} else {
+			body.set("client_id", clientId);
+			body.set("client_secret", "secret");
+		}
+		const response = await client.$fetch(path, {
+			method: "POST",
+			body,
+			headers,
+		});
+		return response.error;
+	};
+
+	it.each([
+		["/oauth2/token", false],
+		["/oauth2/token", true],
+		["/oauth2/revoke", false],
+		["/oauth2/introspect", false],
+	])(
+		"answers %s (Basic: %s) as for any unknown client",
+		async (path, basic) => {
+			const unknown = await send(path, "ab", basic);
+			expect(unknown).toMatchObject({ error: "invalid_client" });
+			expect(clientLookups).toContain("ab");
+
+			for (const clientId of ["a\0b", "a\tb", "a\u00e9b"]) {
+				expect(await send(path, clientId, basic)).toEqual(unknown);
+				expect(clientLookups).not.toContain(clientId);
+			}
+		},
+	);
 });

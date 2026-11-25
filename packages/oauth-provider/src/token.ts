@@ -499,7 +499,10 @@ async function createIdToken(
 		...ID_TOKEN_SCOPE_CLAIM_GUARDS,
 		auth_time: authTimeSec,
 		acr: authenticationContext?.acr ?? LEVEL_0_ACR,
-		amr: authenticationContext?.amr,
+		// Adapters with list columns read an omitted amr back as [].
+		amr: authenticationContext?.amr?.length
+			? authenticationContext.amr
+			: undefined,
 		...customClaims,
 		at_hash: atHash,
 		iss: getIssuer(ctx, opts),

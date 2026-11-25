@@ -255,6 +255,427 @@ model Account {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12134
+	 */
+	describe("prisma back-relations that already exist under another name", () => {
+		const existing = ({
+			sessionModel = "Session",
+			userRelations,
+			sessionRelations = `userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)`,
+			extraModels = "",
+		}: {
+			sessionModel?: string;
+			userRelations: string;
+			sessionRelations?: string;
+			extraModels?: string;
+		}) => `generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  ${userRelations}
+
+  @@map("user")
+}
+
+model ${sessionModel} {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  ${sessionRelations}
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+${extraModels}`;
+		const generate = async (
+			schemaPrisma: string,
+			options: Partial<BetterAuthOptions> = {},
+			usePlural = false,
+		) => {
+			const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ba-prisma-"));
+			const file = path.join(tmpDir, "schema.prisma");
+			fs.writeFileSync(file, schemaPrisma);
+			const database = prismaAdapter(
+				{},
+				{
+					provider: "postgresql",
+					usePlural,
+				},
+			);
+			try {
+				return await generatePrismaSchema({
+					file,
+					adapter: database({} as BetterAuthOptions),
+					options: {
+						database,
+						...options,
+					},
+				});
+			} finally {
+				fs.rmSync(tmpDir, { recursive: true, force: true });
+			}
+		};
+		const userFieldsOfType = (code: string | undefined, type: string) => {
+			const user = code?.match(/model User \{([\s\S]*?)\n\}/)?.[1] ?? "";
+			return user.match(new RegExp(`^\\s*\\w+\\s+${type}[[?]`, "gm")) ?? [];
+		};
+
+		it("keeps a camelCase back-relation instead of adding a second one", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `userSessions  Session[]
+  userAccounts  Account[]`,
+				}),
+			);
+
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+			expect(userFieldsOfType(code, "Account")).toHaveLength(1);
+		});
+
+		it("keeps a back-relation to a custom model name with uppercase letters", async () => {
+			const { code } = await generate(
+				existing({
+					sessionModel: "UserSession",
+					userRelations: `userSessions  UserSession[]
+  accounts      Account[]`,
+				}),
+				{ session: { modelName: "UserSession" } },
+			);
+
+			expect(userFieldsOfType(code, "UserSession")).toHaveLength(1);
+			expect(userFieldsOfType(code, "Account")).toHaveLength(1);
+		});
+
+		it("leaves a schema with the generated back-relation names unchanged", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `sessions      Session[]
+  accounts      Account[]`,
+				}),
+			);
+			const { code: again } = await generate(code!);
+
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+			expect(userFieldsOfType(code, "Account")).toHaveLength(1);
+			// An unchanged schema comes back as empty code, so nothing is written.
+			expect(again).toBe("");
+		});
+
+		it("keeps an unnamed back-relation that carries an empty @relation()", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `userSessions  Session[] @relation()
+  accounts      Account[]`,
+				}),
+			);
+
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
+		it("keeps a back-relation paired with the owning side by relation name", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `userSessions  Session[] @relation("UserSessions")
+  accounts      Account[]`,
+					sessionRelations: `userId    String
+  user      User     @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)`,
+				}),
+			);
+
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
+		it("adds a missing back-relation under the relation name of the owning side", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: "accounts      Account[]",
+					sessionRelations: `userId    String
+  user      User     @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)`,
+				}),
+			);
+
+			expect(code).toMatch(
+				/^\s*sessions\s+Session\[\]\s+@relation\("UserSessions"\)\s*$/m,
+			);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
+		it("adds a missing optional back-relation under the relation name of a unique foreign key", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `accounts      Account[]
+  sessions      Session[]`,
+					extraModels: `
+model Profile {
+  id     String @id
+  userId String @unique
+  user   User   @relation("User \\"Profile\\"", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profile")
+}
+`,
+				}),
+				{
+					plugins: [
+						{
+							id: "profile",
+							schema: {
+								profile: {
+									fields: {
+										userId: {
+											type: "string",
+											required: true,
+											unique: true,
+											references: {
+												model: "user",
+												field: "id",
+											},
+										},
+									},
+								},
+							},
+						},
+					],
+				},
+			);
+
+			expect(code).toMatch(
+				/^\s*profile\s+Profile\?\s+@relation\("User \\"Profile\\""\)\s*$/m,
+			);
+			expect(userFieldsOfType(code, "Profile")).toHaveLength(1);
+		});
+
+		it("takes the relation name from the relation to this model when a composite key shares the foreign key", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: "accounts      Account[]",
+					sessionRelations: `tenantId     String?
+  tenantMember TenantMember? @relation("SessionTenantMember", fields: [tenantId, userId], references: [tenantId, userId])
+  userId       String
+  user         User          @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)`,
+					extraModels: `
+model TenantMember {
+  tenantId String
+  userId   String
+  sessions Session[] @relation("SessionTenantMember")
+
+  @@id([tenantId, userId])
+}
+`,
+				}),
+			);
+
+			expect(code).toMatch(
+				/^\s*sessions\s+Session\[\]\s+@relation\("UserSessions"\)\s*$/m,
+			);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
+		it("keeps a named back-relation paired with a composite foreign key", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `tenantId      String
+  userSessions  Session[] @relation("UserSessions")
+  accounts      Account[]
+
+  @@unique([tenantId, id])`,
+					sessionRelations: `tenantId  String
+  userId    String
+  user      User     @relation("UserSessions", fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)`,
+				}),
+			);
+
+			expect(code).not.toMatch(/^\s*sessions\s+Session\[\]/m);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
+		const twoCompoundUsers = (userBackRelations: string) =>
+			existing({
+				userRelations: `tenantId      String
+  orgId         String
+  ${userBackRelations}
+  accounts      Account[]
+
+  @@unique([tenantId, id])
+  @@unique([orgId, id])`,
+				sessionRelations: `tenantId  String
+  orgId     String
+  userId    String
+  tenantUser User    @relation("TenantSessions", fields: [tenantId, userId], references: [tenantId, id])
+  orgUser    User    @relation("OrgSessions", fields: [orgId, userId], references: [orgId, id])`,
+			});
+
+		it("names the back-relation after the only compound relation still missing one", async () => {
+			const { code } = await generate(
+				twoCompoundUsers(
+					'tenantSessions Session[] @relation("TenantSessions")',
+				),
+			);
+
+			expect(code).toMatch(
+				/^\s*sessions\s+Session\[\]\s+@relation\("OrgSessions"\)\s*$/m,
+			);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(2);
+		});
+
+		it("refuses to add a back-relation when its field name belongs to another relation", async () => {
+			await expect(
+				generate(
+					twoCompoundUsers(
+						'sessions      Session[] @relation("TenantSessions")',
+					),
+				),
+			).rejects.toThrow(/"OrgSessions".*"sessions"/);
+		});
+
+		it("refuses to guess between compound relations that all lack a back-relation", async () => {
+			await expect(generate(twoCompoundUsers(""))).rejects.toThrow(
+				/"TenantSessions".*"OrgSessions"/,
+			);
+		});
+
+		const revokedBy = `revokedById String?
+  revokedBy   User?    @relation("RevokedBy", fields: [revokedById], references: [id])`;
+		const ownedSession = `userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)`;
+
+		it.each([
+			[
+				"after the owning side of the foreign key",
+				`${ownedSession}\n  ${revokedBy}`,
+			],
+			[
+				"before the owning side of the foreign key",
+				`${revokedBy}\n  ${ownedSession}`,
+			],
+			["while the foreign key is still missing", revokedBy],
+		])(
+			"adds the back-relation when another named relation exists %s",
+			async (_, sessionRelations) => {
+				const { code } = await generate(
+					existing({
+						userRelations: `revokedSessions Session[] @relation("RevokedBy")
+  accounts        Account[]`,
+						sessionRelations,
+					}),
+				);
+
+				expect(code).toMatch(/^\s*sessions\s+Session\[\]\s*$/m);
+				expect(userFieldsOfType(code, "Session")).toHaveLength(2);
+			},
+		);
+
+		it("keeps a back-relation paired by relation name when usePlural is enabled", async () => {
+			const { code } = await generate("", {}, true);
+			const named = code!
+				.replace(
+					"sessions      Sessions[]",
+					'userSessions  Sessions[] @relation("UserSessions")',
+				)
+				.replace(
+					"users     Users    @relation(fields: [userId]",
+					'users     Users    @relation("UserSessions", fields: [userId]',
+				);
+			const { code: again } = await generate(named, {}, true);
+
+			expect(named).toContain('@relation("UserSessions", fields: [userId]');
+			expect(again || named).not.toMatch(/^\s*sessions\s+Sessions\[\]/m);
+		});
+
+		it("keeps an optional back-relation to a unique foreign key", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `accounts       Account[]
+  sessions       Session[]
+  currentProfile Profile?`,
+					extraModels: `
+model Profile {
+  id     String @id
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profile")
+}
+`,
+				}),
+				{
+					plugins: [
+						{
+							id: "profile",
+							schema: {
+								profile: {
+									fields: {
+										userId: {
+											type: "string",
+											required: true,
+											unique: true,
+											references: {
+												model: "user",
+												field: "id",
+											},
+										},
+									},
+								},
+							},
+						},
+					],
+				},
+			);
+
+			expect(userFieldsOfType(code, "Profile")).toHaveLength(1);
+		});
+	});
+
 	it("should generate prisma schema", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",

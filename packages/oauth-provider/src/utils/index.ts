@@ -411,6 +411,9 @@ export function assertNotTrustedClient(
 	}
 }
 
+// RFC 6749 A.1
+const CLIENT_ID = /^[\x20-\x7E]+$/;
+
 /**
  * Get a client by ID, checking trusted clients first, then database
  */
@@ -419,6 +422,7 @@ export async function getClient(
 	options: OAuthOptions<Scope[]>,
 	clientId: string,
 ) {
+	if (!CLIENT_ID.test(clientId)) return null;
 	const trustedClientCache = getTrustedClientCache(options);
 	const trustedClient = trustedClientCache.get(clientId);
 	if (trustedClient && !trustedClient.clientDiscoveryId) {
@@ -710,6 +714,14 @@ export function applyFormParams(
 	}
 	return merged;
 }
+
+/**
+ * The `WWW-Authenticate` challenge for a failed `Basic` client authentication.
+ * RFC 7617 §2 requires the `realm` parameter, and RFC 6749 §5.2 requires the
+ * challenge on a 401 `invalid_client` for a client that authenticated through
+ * the `Authorization` header.
+ */
+export const BASIC_CHALLENGE = 'Basic realm="oauth"';
 
 /**
  * Headers for a response that carries an authentication challenge.

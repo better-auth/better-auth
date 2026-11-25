@@ -1936,7 +1936,9 @@ describe("base context creation", () => {
 				secondaryStorage: mockStorage,
 			});
 
-			expect(ctx.secondaryStorage).toBe(mockStorage);
+			await ctx.secondaryStorage?.set("key", "value", 60);
+			expect(mockStorage.set).toHaveBeenCalledWith("key", "value", 60);
+			expect(ctx.options.secondaryStorage).toBe(ctx.secondaryStorage);
 			expect(ctx.rateLimit.storage).toBe("secondary-storage");
 		});
 

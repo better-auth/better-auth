@@ -284,3 +284,54 @@ describe("schema check registry", () => {
 		expect(find).toHaveBeenCalledOnce();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12869
+ */
+describe("schema check registry across module copies", () => {
+	afterEach(() => {
+		vi.resetModules();
+	});
+
+	async function loadCopies() {
+		vi.resetModules();
+		const first = await import("./schema-check");
+		vi.resetModules();
+		const second = await import("./schema-check");
+		expect(second.registerSchemaCheck).not.toBe(first.registerSchemaCheck);
+		return { first, second };
+	}
+
+	it("finds a check registered by another copy of the module", async () => {
+		const { first, second } = await loadCopies();
+		const adapter = {};
+		const check = first.createSchemaCheck(async () => [], "drizzle");
+		first.registerSchemaCheck(adapter, check);
+
+		expect(second.schemaCheckFor(adapter)).toBe(check);
+		expect(second.runtimeSchemaCheckFor(adapter)).toBe(check);
+	});
+
+	it("keeps runtime validation disabled across copies", async () => {
+		const { first, second } = await loadCopies();
+		const adapter = {};
+		const check = first.createSchemaCheck(async () => [], "drizzle");
+		first.registerSchemaCheck(adapter, check, { runtimeEnabled: false });
+
+		expect(second.schemaCheckFor(adapter)).toBe(check);
+		expect(second.runtimeSchemaCheckFor(adapter)).toBeUndefined();
+	});
+
+	it("invalidates a check from another copy of the module", async () => {
+		const { first, second } = await loadCopies();
+		const database = {};
+		const find = vi.fn(async () => []);
+		const check = first.createSchemaCheck(find, "drizzle", database);
+		await check();
+		expect(find).toHaveBeenCalledTimes(1);
+
+		second.invalidateSchemaChecks(database);
+		await check();
+		expect(find).toHaveBeenCalledTimes(2);
+	});
+});

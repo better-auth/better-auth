@@ -505,7 +505,9 @@ describe("oauth-provider extensions", async () => {
 		expect((response.error as { error?: string } | undefined)?.error).toBe(
 			"invalid_client",
 		);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("authorizes against the resolved record, not the strategy", async () => {
@@ -2400,7 +2402,9 @@ describe("authenticateClient with an expected client", async () => {
 			basic(basicClient.client_id, basicClient.client_secret!),
 		);
 		expect(otherCredentials.status).toBe(401);
-		expect(otherCredentials.headers.get("WWW-Authenticate")).toBe("Basic");
+		expect(otherCredentials.headers.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 		expect(await otherCredentials.json()).toMatchObject({
 			error: "invalid_client",
 		});

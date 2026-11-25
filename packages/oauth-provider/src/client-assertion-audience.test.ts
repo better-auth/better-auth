@@ -241,7 +241,7 @@ describe("client assertion audience", () => {
 					await methods.private_key_jwt(audience),
 				);
 				expect(token.status).toBe(401);
-				expect(token.challenge).toBe("Basic");
+				expect(token.challenge).toBe('Basic realm="oauth"');
 			},
 		);
 

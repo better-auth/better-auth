@@ -16,13 +16,13 @@ import {
 	upgradeSubscription,
 } from "./routes";
 import { getSchema } from "./schema";
-import type {
-	StripeOptions,
-	StripePlan,
-	Subscription,
-	WithStripeCustomerId,
-} from "./types";
-import { escapeStripeSearchValue, getPlans, isActiveOrTrialing } from "./utils";
+import type { StripeOptions, StripePlan, WithStripeCustomerId } from "./types";
+import {
+	escapeStripeSearchValue,
+	findActiveOrTrialingSubscription,
+	getPlans,
+	isActiveOrTrialing,
+} from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
@@ -204,20 +204,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						);
 						// Canceled subscriptions remain in the organization's history.
 						// Select a current subscription before checking its seat plan.
-						const dbSub = await ctx.adapter.findOne<Subscription>({
-							model: "subscription",
-							where: [
-								{
-									field: "referenceId",
-									value: data.organization.id,
-								},
-								{
-									field: "status",
-									operator: "in",
-									value: ["active", "trialing"],
-								},
-							],
-						});
+						const dbSub = await findActiveOrTrialingSubscription(
+							ctx.adapter,
+							data.organization.id,
+						);
 						if (
 							!dbSub?.stripeSubscriptionId ||
 							!isActiveOrTrialing(dbSub) ||

@@ -383,6 +383,10 @@ async function deleteCurrentUser(ctx: GenericEndpointContext, user: User) {
 	}
 	// Also deletes the user's accounts and stored sessions.
 	await ctx.context.internalAdapter.deleteUser(user.id);
+	const remaining = await ctx.context.internalAdapter.findUserById(user.id);
+	if (remaining) {
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.FAILED_TO_DELETE_USER);
+	}
 	await ctx.context.internalAdapter.deleteUserSessions(user.id);
 	deleteSessionCookie(ctx);
 	const afterDelete = ctx.context.options.user?.deleteUser?.afterDelete;
@@ -547,16 +551,23 @@ export const deleteUser = createAuthEndpoint(
 
 		if (ctx.context.options.user.deleteUser?.sendDeleteAccountVerification) {
 			const token = generateRandomString(32, "0-9", "a-z");
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: session.user.id,
-				identifier: `delete-account-${token}`,
-				expiresAt: new Date(
-					Date.now() +
-						(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
-							60 * 60 * 24) *
-							1000,
-				),
-			});
+			const verification =
+				await ctx.context.internalAdapter.createVerificationValue({
+					value: session.user.id,
+					identifier: `delete-account-${token}`,
+					expiresAt: new Date(
+						Date.now() +
+							(ctx.context.options.user.deleteUser?.deleteTokenExpiresIn ||
+								60 * 60 * 24) *
+								1000,
+					),
+				});
+			if (!verification) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 			const url = `${
 				ctx.context.baseURL
 			}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(

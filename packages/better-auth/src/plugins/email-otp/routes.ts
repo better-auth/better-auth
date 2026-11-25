@@ -10,18 +10,18 @@ import {
 	sensitiveSessionMiddleware,
 } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
-import { generateRandomString, symmetricDecrypt } from "../../crypto";
+import { symmetricDecrypt } from "../../crypto";
 import { revokeUnprovenAccountAccess } from "../../db/revoke-unproven-account-access";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
-import { getDate } from "../../utils/date";
+import { restoreVerification } from "../../db/verification";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
 	resetCredentialPassword,
 } from "../../utils/password";
 import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
-import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
-import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
+import { issueOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
+import type { RequiredEmailOTPOptions } from "./types";
 import { splitAtLastColon, toOTPIdentifier } from "./utils";
 
 const types = [
@@ -42,7 +42,7 @@ async function resolveOTP(
 	opts: RequiredEmailOTPOptions,
 	email: string,
 	type: (typeof types)[number],
-): Promise<string> {
+): Promise<string | null> {
 	const identifier = toOTPIdentifier(type, email);
 
 	if (opts.resendStrategy === "reuse") {
@@ -50,28 +50,10 @@ async function resolveOTP(
 		if (reused) return reused;
 	}
 
-	const otp =
-		opts.generateOTP({ email, type }, ctx) || defaultOTPGenerator(opts);
-	const storedOTP = await storeOTP(ctx, opts, otp);
-
-	await ctx.context.internalAdapter
-		.createVerificationValue({
-			value: `${storedOTP}:0`,
-			identifier,
-			expiresAt: getDate(opts.expiresIn, "sec"),
-		})
-		.catch(async () => {
-			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-				identifier,
-			);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${storedOTP}:0`,
-				identifier,
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
-		});
-
-	return otp;
+	return issueOTP(ctx, opts, identifier, {
+		email,
+		type,
+	});
 }
 
 const sendVerificationOTPBodySchema = z.object({
@@ -162,6 +144,15 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				);
 				return ctx.json({ success: true });
 			}
+			// A vetoed code is not sent. Where the reply hides whether the account
+			// exists, it stays the same.
+			if (!otp) {
+				if (!shouldSendOTP) return ctx.json({ success: true });
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 
 			await ctx.context.runInBackgroundOrAwait(
 				opts.sendVerificationOTP(
@@ -214,15 +205,21 @@ export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email.toLowerCase();
-			const otp =
-				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
-				defaultOTPGenerator(opts);
-			const storedOTP = await storeOTP(ctx, opts, otp);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${storedOTP}:0`,
-				identifier: toOTPIdentifier(ctx.body.type, email),
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
+			const otp = await issueOTP(
+				ctx,
+				opts,
+				toOTPIdentifier(ctx.body.type, email),
+				{
+					email,
+					type: ctx.body.type,
+				},
+			);
+			if (!otp) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 			return otp;
 		},
 	);
@@ -765,6 +762,12 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					success: true,
 				});
 			}
+			// A vetoed code is not sent, and the reply does not reveal the account.
+			if (!otp) {
+				return ctx.json({
+					success: true,
+				});
+			}
 			await ctx.context.runInBackgroundOrAwait(
 				opts.sendVerificationOTP(
 					{
@@ -858,6 +861,12 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					identifier,
 				);
+				return ctx.json({
+					success: true,
+				});
+			}
+			// A vetoed code is not sent, and the reply does not reveal the account.
+			if (!otp) {
 				return ctx.json({
 					success: true,
 				});
@@ -1083,18 +1092,13 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				}
 			}
 
-			const otp =
-				opts.generateOTP({ email: newEmail, type: "change-email" }, ctx) ||
-				defaultOTPGenerator(opts);
-			const storedOTP = await storeOTP(ctx, opts, otp);
 			const identifier = toOTPIdentifier(
 				"change-email",
 				`${ctx.context.session.user.id}:${newEmail}`,
 			);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${storedOTP}:0`,
-				identifier,
-				expiresAt: getDate(opts.expiresIn, "sec"),
+			const otp = await issueOTP(ctx, opts, identifier, {
+				email: newEmail,
+				type: "change-email",
 			});
 
 			const user = await ctx.context.internalAdapter.findUserByEmail(newEmail);
@@ -1102,6 +1106,12 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					identifier,
 				);
+				return ctx.json({
+					success: true,
+				});
+			}
+			// A vetoed code is not sent, and the reply does not reveal the account.
+			if (!otp) {
 				return ctx.json({
 					success: true,
 				});
@@ -1263,9 +1273,6 @@ export const changeEmailEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 	);
 
-const defaultOTPGenerator = (options: EmailOTPOptions) =>
-	generateRandomString(options.otpLength ?? 6, "0-9");
-
 /**
  * Verifies an OTP with race-condition protection.
  *
@@ -1274,7 +1281,8 @@ const defaultOTPGenerator = (options: EmailOTPOptions) =>
  * only one caller at a time can compare a guess. Credential routes leave a
  * successful OTP consumed. The optional preflight restores it unchanged so
  * the documented follow-up call can use it. A wrong guess restores it with
- * one additional attempt and the original expiry. An exhausted record stays
+ * one additional attempt. Both restores keep the original expiry and creation
+ * time, so a code issued meanwhile stays the latest. An exhausted record stays
  * consumed, locking the identifier out.
  */
 async function atomicVerifyOTP(
@@ -1288,12 +1296,10 @@ async function atomicVerifyOTP(
 	// drops expired rows and returns null, which would otherwise be
 	// indistinguishable from a missing record; this read only reports expiry
 	// and never decides the success path, so it does not weaken the race gate.
+	// It must not delete either: a code issued after this read would go with it.
 	const existing =
 		await ctx.context.internalAdapter.findVerificationValue(identifier);
 	if (existing && existing.expiresAt < new Date()) {
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-			identifier,
-		);
 		throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
 	}
 
@@ -1317,34 +1323,31 @@ async function atomicVerifyOTP(
 	}
 
 	const verified = await verifyStoredOTP(ctx, opts, otpValue, providedOTP);
-
-	if (!verified) {
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: `${otpValue}:${usedAttempts + 1}`,
+	// A code issued while this one was being checked replaces it, so the
+	// write-back yields to it instead of reviving the old code.
+	const writeBack = (value: string) =>
+		restoreVerification(ctx, {
+			value,
 			identifier,
 			expiresAt: consumed.expiresAt,
+			createdAt: consumed.createdAt,
 		});
+
+	if (!verified) {
+		await writeBack(`${otpValue}:${usedAttempts + 1}`);
 		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 	}
 
 	if (successDisposition === "consume") return;
 
-	// A code issued while this one was being checked replaces it, so writing
-	// the old code back would revive it over the new one.
-	const replacement =
-		await ctx.context.internalAdapter.findVerificationValue(identifier);
-	if (replacement) {
-		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
-	}
-	const restored = await ctx.context.internalAdapter.createVerificationValue({
-		value: consumed.value,
-		identifier,
-		expiresAt: consumed.expiresAt,
-	});
+	const restored = await writeBack(consumed.value);
 	// A verification.create.before hook can veto the restore by returning false.
 	if (!restored) {
 		throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
 			message: "Unable to complete OTP verification",
 		});
+	}
+	if (restored.value !== consumed.value) {
+		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 	}
 }

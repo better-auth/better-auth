@@ -47,7 +47,7 @@ const relations = defineRelationsPart(tables, (r) => ({
 
 describe("drizzle relations-v2 adapter: join model name ending in 's'", () => {
 	const sqliteDb = new Database(":memory:");
-	const db = drizzle({ client: sqliteDb, schema: tables, relations });
+	const db = drizzle({ client: sqliteDb, relations });
 
 	const adapter = drizzleAdapter(db, {
 		schema: { user: users, address, relations },

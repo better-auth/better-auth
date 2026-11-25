@@ -45,6 +45,8 @@ export const oauthProviderClient = () => {
 						if (typeof body !== "object" || body === null) return;
 						if (Array.isArray(body)) return;
 						if ("oauth_query" in body && body.oauth_query) return;
+						// Without a content type, fetch sends a string body as text/plain.
+						if (!mediaType) ctx.headers.set("content-type", "application/json");
 						ctx.body = JSON.stringify({
 							...body,
 							oauth_query: oauthQuery,

@@ -26,7 +26,7 @@ const relations = defineRelationsPart(schema);
 
 describe("drizzle relations-v2 adapter: joins path honors insensitive mode", () => {
 	const sqliteDb = new Database(":memory:");
-	const db = drizzle({ client: sqliteDb, schema, relations });
+	const db = drizzle({ client: sqliteDb, relations });
 
 	const adapter = drizzleAdapter(db, {
 		schema,

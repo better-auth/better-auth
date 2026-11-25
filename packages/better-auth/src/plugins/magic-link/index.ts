@@ -4,6 +4,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { formCsrfMiddleware, originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -262,15 +263,24 @@ export const magicLink = (options: MagicLinkOptions) => {
 						? await opts.generateToken(email)
 						: generateRandomString(32, "a-z", "A-Z");
 					const storedToken = await storeToken(ctx, verificationToken);
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: magicLinkIdentifier(storedToken),
-						value: JSON.stringify({
-							type: "magic-link",
-							email,
-							name: ctx.body.name,
-						}),
-						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
-					});
+					const verification =
+						await ctx.context.internalAdapter.createVerificationValue({
+							identifier: magicLinkIdentifier(storedToken),
+							value: JSON.stringify({
+								type: "magic-link",
+								email,
+								name: ctx.body.name,
+							}),
+							expiresAt: new Date(
+								Date.now() + (opts.expiresIn || 60 * 5) * 1000,
+							),
+						});
+					if (!verification) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+						);
+					}
 					const realBaseURL = new URL(ctx.context.baseURL);
 					const pathname =
 						realBaseURL.pathname === "/" ? "" : realBaseURL.pathname;
