@@ -6,6 +6,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import { createRateLimitKey, getIP } from "@better-auth/core/utils/ip";
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { RateLimit } from "../../types";
+import { hashIPAddress } from "../../utils/hash-ip-address";
 import { wildcardMatch } from "../../utils/wildcard";
 
 interface MemoryRateLimitEntry {
@@ -354,10 +355,6 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 		);
 		ipWarningLogged = true;
 	}
-	// Fail closed when no client IP can be derived: key on a shared per-path
-	// bucket and still enforce the limit, instead of skipping rate limiting
-	// entirely (which let a client omit the IP header to bypass the limit).
-	const key = createRateLimitKey(ip ?? NO_TRUSTED_IP_KEY, path);
 	const specialRules = getDefaultSpecialRules();
 	const specialRule = specialRules.find((rule) => rule.pathMatcher(path));
 
@@ -407,6 +404,12 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 		}
 	}
 
+	const clientKey =
+		ip && ctx.options.advanced?.ipAddress?.anonymize
+			? await hashIPAddress(ip, ctx.secret, "rate-limit")
+			: ip;
+	// Use a shared per-path bucket when no trusted client IP can be derived.
+	const key = createRateLimitKey(clientKey ?? NO_TRUSTED_IP_KEY, path);
 	return { key, currentWindow, currentMax };
 }
 
@@ -425,13 +428,15 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 		return;
 	}
 	const { key, currentWindow, currentMax } = config;
+	const transformKey = ctx.options.rateLimit?.transformKey;
+	const storageKey = transformKey ? await transformKey(key) : key;
 
 	const storage = getRateLimitStorage(ctx, {
 		window: currentWindow,
 	});
 	const rule = { window: currentWindow, max: currentMax };
 
-	const { allowed, retryAfter } = await storage.consume(key, rule);
+	const { allowed, retryAfter } = await storage.consume(storageKey, rule);
 	if (!allowed) {
 		return rateLimitResponse(retryAfter ?? currentWindow);
 	}

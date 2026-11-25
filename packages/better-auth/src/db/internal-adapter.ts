@@ -23,11 +23,12 @@ import {
 	BetterAuthError,
 } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
-import { getIP } from "@better-auth/core/utils/ip";
+import { getIP, isValidIP, normalizeIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
+import { hashIPAddress } from "../utils/hash-ip-address";
 import {
 	assertValidUserInfo,
 	assertValidUserInfoSource,
@@ -61,6 +62,7 @@ export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
 		options: Omit<BetterAuthOptions, "logger">;
+		secret: string;
 		logger: InternalLogger;
 		hooks: DatabaseHooksEntry[];
 		generateId: AuthContext["generateId"];
@@ -656,6 +658,16 @@ export const createInternalAdapter = (
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			} satisfies Partial<Session>;
+			const ipOptions = options.advanced?.ipAddress;
+			// A replacement session can inherit an IP from an older session.
+			// Only hash IPs so an already hashed value can be carried forward.
+			if (ipOptions?.anonymize && data.ipAddress && isValidIP(data.ipAddress)) {
+				data.ipAddress = await hashIPAddress(
+					normalizeIP(data.ipAddress, ipOptions),
+					ctx.secret,
+					"session",
+				);
+			}
 			const mirrorSessionToSecondaryStorage = async (sessionData: Session) => {
 				if (!secondaryStorage) return sessionData;
 				const currentList = await secondaryStorage.get(
