@@ -442,7 +442,7 @@ describe("runWithTransaction", () => {
 	 * Copies of `@better-auth/core` share one adapter store, so a hook queued
 	 * by one copy may run in a transaction started by another.
 	 *
-	 * @see https://github.com/better-auth/better-auth/pull/12806
+	 * @see https://github.com/better-auth/better-auth/issues/12869
 	 */
 	describe("with another copy of core", () => {
 		type ForeignHookContext<Hook> = {
