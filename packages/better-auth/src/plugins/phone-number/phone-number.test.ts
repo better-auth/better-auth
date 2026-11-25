@@ -2426,7 +2426,6 @@ describe("phone-number verification rows", () => {
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11105
-	 * @see https://github.com/better-auth/better-auth/pull/12893
 	 */
 	it("accepts the newest code sent while a wrong guess is checked in secondary storage", async () => {
 		const number = "+15550000006";

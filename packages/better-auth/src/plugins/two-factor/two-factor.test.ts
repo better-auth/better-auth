@@ -1941,7 +1941,6 @@ describe("OTP storage modes", async () => {
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/11105
- * @see https://github.com/better-auth/better-auth/pull/12893
  */
 describe("OTP resent while a wrong guess is checked", () => {
 	afterEach(() => {

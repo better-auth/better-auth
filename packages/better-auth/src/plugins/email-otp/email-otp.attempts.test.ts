@@ -387,7 +387,6 @@ describe("email OTP preflight attempt accounting", () => {
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11105
-	 * @see https://github.com/better-auth/better-auth/pull/12893
 	 */
 	it.for([
 		{ storage: "database", resendAt: "2026-01-01T00:00:02.000Z" },
@@ -478,7 +477,7 @@ describe("email OTP preflight attempt accounting", () => {
 	);
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/pull/12893
+	 * @see https://github.com/better-auth/better-auth/issues/11105
 	 */
 	it.for(["database", "mirrored"] as const)(
 		"keeps the code after a wrong guess when an older plain-identifier row remains in %s storage",
