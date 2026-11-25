@@ -2146,6 +2146,56 @@ describe("internal adapter test", async () => {
 				}
 			},
 		);
+
+		it("does not report an update to a secondary storage value that is gone", async () => {
+			const { storage } = createMockStorage();
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+
+			const updated = await ctx.internalAdapter.updateVerificationByIdentifier(
+				"missing-update",
+				{ value: "replacement" },
+			);
+
+			expect(updated).toBeNull();
+			expect(
+				await ctx.internalAdapter.findVerificationValue("missing-update"),
+			).toBeNull();
+		});
+
+		it("keeps the secondary storage copy when the database row is gone (both)", async () => {
+			const { storage } = createMockStorage();
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				verification: { storeInDatabase: true },
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "gone-from-database",
+				value: "stored",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			await ctx.adapter.deleteMany({
+				model: "verification",
+				where: [{ field: "identifier", value: "gone-from-database" }],
+			});
+
+			const updated = await ctx.internalAdapter.updateVerificationByIdentifier(
+				"gone-from-database",
+				{ value: "replacement" },
+			);
+
+			expect(updated).toBeNull();
+			const cached =
+				await ctx.internalAdapter.findVerificationValue("gone-from-database");
+			expect(cached?.value).toBe("stored");
+		});
 	});
 
 	describe("safeJSONParse date revival in secondary storage", () => {

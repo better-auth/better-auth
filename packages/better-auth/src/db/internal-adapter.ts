@@ -1775,40 +1775,42 @@ export const createInternalAdapter = (
 				storageOption,
 			);
 
-			return updateWithHooks<Verification>(
+			const cacheKey = `verification:${storedIdentifier}`;
+			const writeCache = async (update: Partial<Verification>) => {
+				const cached = secondaryStorage
+					? await secondaryStorage.get(cacheKey)
+					: null;
+				const parsed = cached ? safeJSONParse<Verification>(cached) : null;
+				if (!secondaryStorage || !parsed) return null;
+				const updated = { ...parsed, ...update };
+				const expiresAt = updated.expiresAt ?? parsed.expiresAt;
+				const ttl = getTTLSeconds(
+					expiresAt instanceof Date ? expiresAt : new Date(expiresAt),
+				);
+				if (ttl > 0) {
+					await secondaryStorage.set(cacheKey, JSON.stringify(updated), ttl);
+				}
+				return updated;
+			};
+
+			if (secondaryStorage && !options.verification?.storeInDatabase) {
+				return updateWithHooks<Verification>(
+					data,
+					[{ field: "identifier", value: storedIdentifier }],
+					"verification",
+					{ fn: writeCache },
+				);
+			}
+			// The database decides whether the update happened, so the cached copy
+			// changes only after it does.
+			const updated = await updateWithHooks<Verification>(
 				data,
 				[{ field: "identifier", value: storedIdentifier }],
 				"verification",
-				secondaryStorage
-					? {
-							async fn(update) {
-								const cached = await secondaryStorage.get(
-									`verification:${storedIdentifier}`,
-								);
-								const parsed = cached
-									? safeJSONParse<Verification>(cached)
-									: null;
-								if (!parsed) {
-									return options.verification?.storeInDatabase ? null : update;
-								}
-								const updated = { ...parsed, ...update };
-								const expiresAt = updated.expiresAt ?? parsed.expiresAt;
-								const ttl = getTTLSeconds(
-									expiresAt instanceof Date ? expiresAt : new Date(expiresAt),
-								);
-								if (ttl > 0) {
-									await secondaryStorage.set(
-										`verification:${storedIdentifier}`,
-										JSON.stringify(updated),
-										ttl,
-									);
-								}
-								return updated;
-							},
-							executeMainFn: options.verification?.storeInDatabase,
-						}
-					: undefined,
+				undefined,
 			);
+			if (updated) await writeCache(updated);
+			return updated;
 		},
 		refreshUserSessions,
 	};

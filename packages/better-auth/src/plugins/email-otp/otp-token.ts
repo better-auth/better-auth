@@ -108,11 +108,13 @@ export async function tryReuseOTP(
 	const plainOtp = await retrieveOTP(ctx, opts, storedOtpValue);
 	if (!plainOtp) return null;
 
-	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
-		expiresAt: getDate(opts.expiresIn, "sec"),
-	});
-
-	return plainOtp;
+	const extended =
+		await ctx.context.internalAdapter.updateVerificationByIdentifier(
+			identifier,
+			{ expiresAt: getDate(opts.expiresIn, "sec") },
+		);
+	// The code may have been consumed since the read, or the extension vetoed.
+	return extended ? plainOtp : null;
 }
 
 export const defaultOTPGenerator = (options: EmailOTPOptions) =>
