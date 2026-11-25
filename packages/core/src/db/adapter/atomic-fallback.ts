@@ -25,7 +25,7 @@ const counterSchema = z.number().nullish();
 type StoredRow = z.output<typeof rowSchema>;
 
 type FallbackContext = {
-	adapter: CustomAdapter;
+	adapter: Pick<CustomAdapter, "findOne" | "deleteMany" | "updateMany">;
 	adapterId: string;
 	mapKeysTransformInput?: Record<string, string> | undefined;
 	mapKeysTransformOutput?: Record<string, string> | undefined;

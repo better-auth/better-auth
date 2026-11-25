@@ -83,7 +83,7 @@ export const kyselyAdapter = (
 	const createCustomAdapter = (
 		db: Kysely<any>,
 		inTransaction = false,
-	): AdapterFactoryCustomizeAdapterCreator => {
+	): AdapterFactoryCustomizeAdapterCreator<true> => {
 		return ({
 			getFieldName,
 			schema,
@@ -698,6 +698,9 @@ export const kyselyAdapter = (
 					sortBy,
 					join,
 				}) {
+					if (limit === 0) {
+						return [];
+					}
 					const { and, or } = convertWhereClause(model, modelKey, where);
 					let query: any = db
 						.selectFrom((eb) => {
@@ -710,13 +713,31 @@ export const kyselyAdapter = (
 											getFieldName({ model: modelKey, field: "id" }),
 										);
 									}
-									b = b.offset(offset).fetch(limit || 100);
-								} else if (limit !== undefined) {
+									// OFFSET does not require FETCH. FETCH must be >= 1, so
+									// unbounded queries omit FETCH instead of using a magic cap.
+									b = b.offset(offset);
+									if (typeof limit === "number") {
+										b = b.fetch(limit);
+									}
+								} else if (typeof limit === "number") {
 									b = b.top(limit);
+								} else if (sortBy?.field) {
+									// ORDER BY in a derived table is invalid on SQL Server
+									// unless TOP, OFFSET, or FOR XML is also specified.
+									b = b.offset(0);
 								}
 							} else {
-								if (limit !== undefined) {
+								if (typeof limit === "number") {
 									b = b.limit(limit);
+								} else if (
+									offset !== undefined &&
+									config?.type !== "postgres"
+								) {
+									// MySQL and SQLite reject OFFSET without LIMIT.
+									// Unknown type: a non-negative cap is valid on both.
+									b = b.limit(
+										config?.type === "sqlite" ? -1 : Number.MAX_SAFE_INTEGER,
+									);
 								}
 								if (offset !== undefined) {
 									b = b.offset(offset);
@@ -1053,7 +1074,7 @@ export const kyselyAdapter = (
 			};
 		};
 	};
-	let adapterOptions: AdapterFactoryOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions<true> | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "kysely",
@@ -1077,6 +1098,7 @@ export const kyselyAdapter = (
 					: false,
 			supportsArrays: false, // Even if field supports JSON, we must pass stringified arrays to the database.
 			supportsUUIDs: config?.type === "postgres" ? true : false,
+			supportsUnboundedFindMany: true,
 			transaction: config?.transaction
 				? (cb) =>
 						db.transaction().execute((trx) => {

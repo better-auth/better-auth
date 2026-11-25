@@ -439,7 +439,9 @@ export type BetterAuthAdvancedOptions = {
 		| {
 				/**
 				 * The default number of records to return from the database
-				 * when using the `findMany` adapter method.
+				 * when using the `findMany` adapter method without a `limit`.
+				 *
+				 * Use `findAll` to skip this default and return every matching row.
 				 *
 				 * @default 100
 				 */

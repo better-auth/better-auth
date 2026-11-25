@@ -9,9 +9,12 @@ import type {
 	Where,
 } from "./index";
 
-export type AdapterFactoryOptions = {
-	config: AdapterFactoryConfig;
-	adapter: AdapterFactoryCustomizeAdapterCreator;
+export type AdapterFactoryOptions<Unbounded extends boolean = false> = {
+	config: AdapterFactoryConfig &
+		(Unbounded extends true
+			? { supportsUnboundedFindMany: true }
+			: { supportsUnboundedFindMany?: false | undefined });
+	adapter: AdapterFactoryCustomizeAdapterCreator<Unbounded>;
 };
 
 export interface AdapterFactoryConfig
@@ -31,7 +34,9 @@ export interface AdapterFactoryConfig
 		| undefined;
 }
 
-export type AdapterFactoryCustomizeAdapterCreator = (config: {
+export type AdapterFactoryCustomizeAdapterCreator<
+	Unbounded extends boolean = false,
+> = (config: {
 	options: BetterAuthOptions;
 	/**
 	 * The schema of the user's Better-Auth instance.
@@ -126,7 +131,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 			| "incrementOne"
 			| "count";
 	}) => W extends undefined ? undefined : CleanedWhere[];
-}) => CustomAdapter;
+}) => CustomAdapter<Unbounded>;
 
 export type AdapterTestDebugLogs = {
 	resetDebugLogs: () => void;

@@ -319,8 +319,17 @@ export const createTestSuite = <
 								},
 								findMany: async (args) => {
 									adapter = await helpers.adapter();
-									const res = await adapter.findMany(args);
-									return res as any;
+									// This wrapper is a CustomAdapter in front of another
+									// public DBAdapter. Omitted `limit` means unbounded here,
+									// but omitted on the inner public API means the default
+									// cap. Forward omitted/null inner limit through
+									// `findAll` so first-party adapters still run their
+									// unbounded path.
+									if (args.limit == null) {
+										const { limit: _limit, ...rest } = args;
+										return (await adapter.findAll(rest)) as any;
+									}
+									return (await adapter.findMany(args)) as any;
 								},
 								update: async (args: any) => {
 									adapter = await helpers.adapter();

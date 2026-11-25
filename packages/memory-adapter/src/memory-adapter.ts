@@ -169,6 +169,7 @@ export const memoryAdapter = (
 				usePlural: false,
 				debugLogs: config?.debugLogs || false,
 				supportsArrays: true,
+				supportsUnboundedFindMany: true,
 				transaction: async (cb) => {
 					// Copy-on-write isolation: run the callback against a clone, then
 					// replay its delta onto the live db on success. On failure the clone
@@ -504,7 +505,7 @@ export const memoryAdapter = (
 							if (offset !== undefined) {
 								paginatedRecords = paginatedRecords.slice(offset);
 							}
-							if (limit !== undefined) {
+							if (typeof limit === "number") {
 								paginatedRecords = paginatedRecords.slice(0, limit);
 							}
 
@@ -517,7 +518,7 @@ export const memoryAdapter = (
 						if (offset !== undefined) {
 							table = table.slice(offset);
 						}
-						if (limit !== undefined) {
+						if (typeof limit === "number") {
 							table = table.slice(0, limit);
 						}
 						return table || [];

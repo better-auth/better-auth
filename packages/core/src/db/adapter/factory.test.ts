@@ -1,8 +1,12 @@
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
 import type { CleanedWhere, CustomAdapter, Where } from "./index";
+import type {
+	AdapterFactoryConfig,
+	AdapterFactoryCustomizeAdapterCreator,
+} from "./types";
 
 function createCustomAdapter(
 	overrides: Partial<CustomAdapter> = {},
@@ -416,6 +420,191 @@ describe("createAdapterFactory serial id where values", () => {
 		});
 
 		expect(seenWhere.map(([w]) => w!.value)).toEqual([null, 2, null, 3]);
+	});
+});
+
+describe("createAdapterFactory findMany limit", () => {
+	function createLimitAdapter({
+		onFindMany,
+		onCount,
+		options,
+		supportsUnboundedFindMany,
+	}: {
+		onFindMany: (params: Parameters<CustomAdapter["findMany"]>[0]) => void;
+		onCount?: (params: Parameters<CustomAdapter["count"]>[0]) => number;
+		options?: BetterAuthOptions;
+		supportsUnboundedFindMany?: boolean;
+	}) {
+		return createAdapterFactory({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				supportsUnboundedFindMany,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					count: async (params) => onCount?.(params) ?? 0,
+					findMany: async <T>(
+						params: Parameters<CustomAdapter["findMany"]>[0],
+					) => {
+						onFindMany(params);
+						return [] as T[];
+					},
+				}),
+		})(options ?? {});
+	}
+
+	it("defaults omitted limit to 100", async () => {
+		let seen: Parameters<CustomAdapter["findMany"]>[0] | undefined;
+		const adapter = createLimitAdapter({
+			onFindMany: (params) => {
+				seen = params;
+			},
+		});
+		await adapter.findMany({ model: "user" });
+		expect(seen).toMatchObject({ limit: 100 });
+		expect(seen && "limit" in seen).toBe(true);
+	});
+
+	it("uses advanced.database.defaultFindManyLimit when limit is omitted", async () => {
+		let seen: Parameters<CustomAdapter["findMany"]>[0] | undefined;
+		const adapter = createLimitAdapter({
+			onFindMany: (params) => {
+				seen = params;
+			},
+			options: { advanced: { database: { defaultFindManyLimit: 25 } } },
+		});
+		await adapter.findMany({ model: "user" });
+		expect(seen).toMatchObject({ limit: 25 });
+	});
+
+	it("passes a numeric limit through", async () => {
+		let seen: Parameters<CustomAdapter["findMany"]>[0] | undefined;
+		const adapter = createLimitAdapter({
+			onFindMany: (params) => {
+				seen = params;
+			},
+		});
+		await adapter.findMany({ model: "user", limit: 7 });
+		expect(seen).toMatchObject({ limit: 7 });
+	});
+
+	it("passes limit 0 through as an empty page", async () => {
+		let seen: Parameters<CustomAdapter["findMany"]>[0] | undefined;
+		const adapter = createLimitAdapter({
+			onFindMany: (params) => {
+				seen = params;
+			},
+		});
+		await adapter.findMany({ model: "user", limit: 0 });
+		expect(seen).toMatchObject({ limit: 0 });
+		expect(seen && "limit" in seen).toBe(true);
+	});
+
+	it("loads every row via count when public findAll is used", async () => {
+		let seen: Parameters<CustomAdapter["findMany"]>[0] | undefined;
+		let counted: Parameters<CustomAdapter["count"]>[0] | undefined;
+		const adapter = createLimitAdapter({
+			onFindMany: (params) => {
+				seen = params;
+			},
+			onCount: (params) => {
+				counted = params;
+				return 101;
+			},
+		});
+		await adapter.findAll({
+			model: "user",
+			where: [{ field: "email", value: "a@b.com" }],
+			offset: 2,
+		});
+		expect(counted).toMatchObject({ model: "user" });
+		expect(counted?.where).toBe(seen?.where);
+		expect(seen).toMatchObject({ limit: 101, offset: 2 });
+		expect(seen && "limit" in seen).toBe(true);
+	});
+
+	it("returns no rows without findMany when unbounded count is 0", async () => {
+		let findManyCalls = 0;
+		const adapter = createLimitAdapter({
+			onFindMany: () => {
+				findManyCalls++;
+			},
+			onCount: () => 0,
+		});
+		await expect(adapter.findAll({ model: "user" })).resolves.toEqual([]);
+		expect(findManyCalls).toBe(0);
+	});
+
+	it("omits CustomAdapter limit when public findAll is used and the adapter is unbounded", async () => {
+		let seen: Parameters<CustomAdapter<true>["findMany"]>[0] | undefined;
+		let countCalls = 0;
+		const adapter = createLimitAdapter({
+			onFindMany: (params) => {
+				seen = params;
+			},
+			onCount: () => {
+				countCalls++;
+				return 101;
+			},
+			supportsUnboundedFindMany: true,
+		});
+		await adapter.findAll({ model: "user", offset: 2 });
+		expect(countCalls).toBe(0);
+		expect(seen && "limit" in seen).toBe(false);
+		expect(seen?.limit).toBeUndefined();
+		expect(seen?.offset).toBe(2);
+	});
+
+	it("types findMany limit as required unless the adapter is unbounded", () => {
+		createAdapterFactory({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+			},
+			adapter: () => ({
+				...createCustomAdapter(),
+				findMany: async ({ limit }) => {
+					expectTypeOf(limit).toEqualTypeOf<number>();
+					return [];
+				},
+			}),
+		});
+		createAdapterFactory({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				supportsUnboundedFindMany: true,
+			},
+			adapter: () => ({
+				...createCustomAdapter(),
+				findMany: async ({ limit }) => {
+					expectTypeOf(limit).toEqualTypeOf<number | undefined>();
+					return [];
+				},
+			}),
+		});
+		type BoundedCreator = AdapterFactoryCustomizeAdapterCreator<false>;
+		type UnboundedCreator = AdapterFactoryCustomizeAdapterCreator<true>;
+		type BoundedAssignableToUnbounded = BoundedCreator extends UnboundedCreator
+			? true
+			: false;
+		expectTypeOf<BoundedAssignableToUnbounded>().toEqualTypeOf<false>();
+	});
+
+	it("accepts a separately typed AdapterFactoryConfig", () => {
+		const config: AdapterFactoryConfig = {
+			adapterId: "test-adapter",
+			adapterName: "Test Adapter",
+		};
+		createAdapterFactory({
+			config,
+			adapter: () => createCustomAdapter(),
+		});
+		createAdapterFactory<BetterAuthOptions>({
+			config,
+			adapter: () => createCustomAdapter(),
+		});
 	});
 });
 

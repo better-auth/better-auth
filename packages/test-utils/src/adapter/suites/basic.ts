@@ -1869,6 +1869,51 @@ export const getNormalTestSuiteTests = (
 			expect(result.length).toEqual(2);
 			expect(users.find((x) => x.id === result[0]!.id)).not.toBeNull();
 		},
+		"findMany - omitted limit defaults to 100": async () => {
+			await insertRandom("user", 101);
+			const defaulted = await adapter.findMany<User>({
+				model: "user",
+			});
+			expect(defaulted.length).toEqual(100);
+		},
+		"findAll - returns every matching row": async () => {
+			await insertRandom("user", 101);
+			const unbounded = await adapter.findAll<User>({
+				model: "user",
+			});
+			expect(unbounded.length).toEqual(101);
+		},
+		"findMany - should return no rows when limit is 0": async () => {
+			await insertRandom("user", 3);
+			const result = await adapter.findMany<User>({
+				model: "user",
+				limit: 0,
+			});
+			expect(result).toEqual([]);
+		},
+		"findMany - should return no rows when limit is 0 even with offset":
+			async () => {
+				await insertRandom("user", 3);
+				const result = await adapter.findMany<User>({
+					model: "user",
+					limit: 0,
+					offset: 1,
+				});
+				expect(result).toEqual([]);
+			},
+		"findAll - with offset returns every remaining row": async () => {
+			await insertRandom("user", 10);
+			const skipped = await adapter.findAll<User>({
+				model: "user",
+				offset: 2,
+			});
+			expect(skipped.length).toEqual(8);
+			const all = await adapter.findAll<User>({
+				model: "user",
+				offset: 0,
+			});
+			expect(all.length).toEqual(10);
+		},
 		"findMany - should find many models with offset": async () => {
 			// Note: The returned rows are ordered in no particular order
 			// This is because databases return rows in whatever order is fastest for the query.
