@@ -2100,6 +2100,52 @@ describe("internal adapter test", async () => {
 			expect(ttl).toBeGreaterThanOrEqual(298);
 			expect(ttl).toBeLessThanOrEqual(300);
 		});
+
+		/**
+		 * @see https://better-auth.com/docs/concepts/database#database-hooks
+		 */
+		it.for([
+			{ mode: "database", secondary: false, storeInDatabase: false },
+			{ mode: "secondary storage", secondary: true, storeInDatabase: false },
+			{ mode: "both", secondary: true, storeInDatabase: true },
+		])(
+			"keeps the stored value when an update.before hook vetoes an update ($mode)",
+			async ({ secondary, storeInDatabase }) => {
+				const { dataMap, storage } = createMockStorage();
+				const veto = vi.fn().mockReturnValue(false);
+				const opts = {
+					database: new DatabaseSync(":memory:"),
+					verification: { storeInDatabase },
+					secondaryStorage: secondary ? storage : undefined,
+					databaseHooks: { verification: { update: { before: veto } } },
+				} satisfies BetterAuthOptions;
+				await (await getMigrations(opts)).runMigrations();
+				const ctx = await init(opts);
+				await ctx.internalAdapter.createVerificationValue({
+					identifier: "veto-update",
+					value: "stored",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+
+				const updated =
+					await ctx.internalAdapter.updateVerificationByIdentifier(
+						"veto-update",
+						{ value: "replacement" },
+					);
+
+				expect(veto).toHaveBeenCalledTimes(1);
+				expect(updated).toBeNull();
+				const found =
+					await ctx.internalAdapter.findVerificationValue("veto-update");
+				expect(found?.value).toBe("stored");
+				if (storeInDatabase) {
+					dataMap.clear();
+					const fromDatabase =
+						await ctx.internalAdapter.findVerificationValue("veto-update");
+					expect(fromDatabase?.value).toBe("stored");
+				}
+			},
+		);
 	});
 
 	describe("safeJSONParse date revival in secondary storage", () => {

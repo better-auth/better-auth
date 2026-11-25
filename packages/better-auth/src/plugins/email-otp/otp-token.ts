@@ -138,10 +138,15 @@ export async function issueOTP(
 
 	const reused = await tryReuseOTP(ctx, opts, identifier);
 	if (reused) return reused;
-	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
-		value: verification.value,
-		expiresAt: verification.expiresAt,
-		createdAt: new Date(),
-	});
-	return otp;
+	const replaced =
+		await ctx.context.internalAdapter.updateVerificationByIdentifier(
+			identifier,
+			{
+				value: verification.value,
+				expiresAt: verification.expiresAt,
+				createdAt: new Date(),
+			},
+		);
+	// A verification.update.before hook can veto the replacement by returning false.
+	return replaced ? otp : null;
 }

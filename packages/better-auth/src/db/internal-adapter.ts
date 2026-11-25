@@ -1775,42 +1775,40 @@ export const createInternalAdapter = (
 				storageOption,
 			);
 
-			if (secondaryStorage) {
-				const cached = await secondaryStorage.get(
-					`verification:${storedIdentifier}`,
-				);
-				if (cached) {
-					const parsed = safeJSONParse<Verification>(cached);
-					if (parsed) {
-						const updated = { ...parsed, ...data };
-						const expiresAt = updated.expiresAt ?? parsed.expiresAt;
-						const ttl = getTTLSeconds(
-							expiresAt instanceof Date ? expiresAt : new Date(expiresAt),
-						);
-						if (ttl > 0) {
-							await secondaryStorage.set(
-								`verification:${storedIdentifier}`,
-								JSON.stringify(updated),
-								ttl,
-							);
+			return updateWithHooks<Verification>(
+				data,
+				[{ field: "identifier", value: storedIdentifier }],
+				"verification",
+				secondaryStorage
+					? {
+							async fn(update) {
+								const cached = await secondaryStorage.get(
+									`verification:${storedIdentifier}`,
+								);
+								const parsed = cached
+									? safeJSONParse<Verification>(cached)
+									: null;
+								if (!parsed) {
+									return options.verification?.storeInDatabase ? null : update;
+								}
+								const updated = { ...parsed, ...update };
+								const expiresAt = updated.expiresAt ?? parsed.expiresAt;
+								const ttl = getTTLSeconds(
+									expiresAt instanceof Date ? expiresAt : new Date(expiresAt),
+								);
+								if (ttl > 0) {
+									await secondaryStorage.set(
+										`verification:${storedIdentifier}`,
+										JSON.stringify(updated),
+										ttl,
+									);
+								}
+								return updated;
+							},
+							executeMainFn: options.verification?.storeInDatabase,
 						}
-						if (!options.verification?.storeInDatabase) {
-							return updated;
-						}
-					}
-				}
-			}
-
-			if (!secondaryStorage || options.verification?.storeInDatabase) {
-				const verification = await updateWithHooks<Verification>(
-					data,
-					[{ field: "identifier", value: storedIdentifier }],
-					"verification",
-					undefined,
-				);
-				return verification;
-			}
-			return data as Verification;
+					: undefined,
+			);
 		},
 		refreshUserSessions,
 	};

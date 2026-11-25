@@ -306,10 +306,16 @@ export interface InternalAdapter<
 		expiresAt: Date;
 	}): Promise<boolean>;
 
+	/**
+	 * Update the verification value stored under `identifier`. Resolves to
+	 * `null` when a `verification.update.before` database hook returns `false`,
+	 * in which case neither storage was changed, or when the database holds no
+	 * value for `identifier`.
+	 */
 	updateVerificationByIdentifier(
 		identifier: string,
 		data: Partial<Verification>,
-	): Promise<Verification>;
+	): Promise<Verification | null>;
 
 	refreshUserSessions(user: User): Promise<void>;
 }

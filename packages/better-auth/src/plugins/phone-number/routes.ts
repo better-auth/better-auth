@@ -1016,12 +1016,17 @@ async function issuePhoneNumberOTP(
 		stored.expiresAt >= new Date() &&
 		parseVerificationAttempts(attempts) < (opts.allowedAttempts ?? 3);
 	if (reusable && storedCode) return storedCode;
-	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
-		value: verification.value,
-		expiresAt: verification.expiresAt,
-		createdAt: new Date(),
-	});
-	return code;
+	const replaced =
+		await ctx.context.internalAdapter.updateVerificationByIdentifier(
+			identifier,
+			{
+				value: verification.value,
+				expiresAt: verification.expiresAt,
+				createdAt: new Date(),
+			},
+		);
+	// A verification.update.before hook can veto the replacement by returning false.
+	return replaced ? code : null;
 }
 
 function parseVerificationAttempts(value: string | undefined) {
