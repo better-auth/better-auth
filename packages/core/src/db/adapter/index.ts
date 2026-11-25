@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "../../types";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
+import type { DBAdapterMigrationPlan } from "./types";
 
 export type DBAdapterDebugLogOption =
 	| boolean
@@ -136,6 +137,25 @@ export interface DBAdapterFactoryConfig<
 						callback: (trx: DBTransactionAdapter<Options>) => Promise<R>,
 				  ) => Promise<R>)
 		  )
+		| undefined;
+	/**
+	 * Return `true` for errors your adapter is going to retry, such as a
+	 * serialization failure.
+	 *
+	 * If code inside a transaction catches one of these, Better Auth still
+	 * hands the original error to your `transaction` implementation. The retry
+	 * itself is up to the adapter. Don't return `true` if the commit might have
+	 * succeeded.
+	 */
+	isRetryableError?: ((error: unknown) => boolean) | undefined;
+	/**
+	 * Plan the adapter's own migrations for `npx auth migrate`.
+	 *
+	 * The CLI shows the plan and only calls `runMigrations` after the user
+	 * confirms, so planning shouldn't change the database.
+	 */
+	getMigrations?:
+		| ((options: Options) => Promise<DBAdapterMigrationPlan>)
 		| undefined;
 	/**
 	 * Disable id generation for the `create` method.
@@ -402,6 +422,10 @@ export type DBTransactionAdapter<
 
 export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	id: string;
+	/** Errors that always reach the adapter's `transaction`, so it can retry them. */
+	isRetryableError?: DBAdapterFactoryConfig<Options>["isRetryableError"];
+	/** Used by `npx auth migrate` instead of the built-in planner. */
+	getMigrations?: DBAdapterFactoryConfig<Options>["getMigrations"];
 	create: <T extends Record<string, any>, R = T>(data: {
 		model: string;
 		data: Omit<T, "id">;

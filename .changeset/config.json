@@ -14,6 +14,7 @@
       "@better-auth/ciba",
       "@better-auth/cimd",
       "@better-auth/drizzle-adapter",
+      "@better-auth/dsql-adapter",
       "@better-auth/electron",
       "@better-auth/expo",
       "@better-auth/i18n",

@@ -1,12 +1,58 @@
 import { DatabaseSync } from "node:sqlite";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import type { DatabaseConnection, Dialect, TableMetadata } from "kysely";
-import { PostgresAdapter, PostgresQueryCompiler } from "kysely";
-import { describe, expect, it } from "vitest";
+import { Kysely, PostgresAdapter, PostgresQueryCompiler } from "kysely";
+import { describe, expect, it, vi } from "vitest";
 import { organization } from "../plugins/organization";
 import { getMigrations, UnsafeMigrationError } from "./get-migration";
 import { getSchema } from "./get-schema";
+
+it("uses a profile's index introspection during migration planning", async () => {
+	const db = new Kysely<unknown>({
+		dialect: new NodeSqliteDialect({ database: new DatabaseSync(":memory:") }),
+	});
+	const options: BetterAuthOptions = {
+		plugins: [
+			{
+				id: "indexed",
+				schema: {
+					record: {
+						fields: { owner: { type: "string" } },
+						indexes: [{ name: "record_owner_idx", fields: ["owner"] }],
+					},
+				},
+			},
+		],
+	};
+	const introspectIndexes = vi.fn(async (_tables: readonly string[]) => []);
+	try {
+		const initial = await getMigrations({
+			...options,
+			database: { db, type: "sqlite" },
+		});
+		await initial.runMigrations();
+		const baseline = await getMigrations({
+			...options,
+			database: { db, type: "sqlite" },
+		});
+		expect(baseline.toBeAddedIndexes).toEqual([]);
+
+		// The introspector reports no indexes, so the planner should want to
+		// create the one SQLite already has.
+		const plan = await getMigrations({
+			...options,
+			database: { db, type: "sqlite", introspectIndexes },
+		});
+		expect(introspectIndexes).toHaveBeenCalledOnce();
+		expect(introspectIndexes.mock.calls[0]?.[0]).toContain("record");
+		expect(plan.toBeCreated).toEqual([]);
+		expect(plan.toBeAddedIndexes.map(({ table }) => table)).toEqual(["record"]);
+	} finally {
+		await db.destroy();
+	}
+});
 
 // A 1.6-shape team/teamMember schema: the 1.7 `memberCount` and `membershipKey`
 // columns are missing, so getMigrations must ADD them to a populated table.

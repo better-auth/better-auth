@@ -14,6 +14,59 @@ export type AdapterFactoryOptions = {
 	adapter: AdapterFactoryCustomizeAdapterCreator;
 };
 
+/**
+ * The migration plan `npx auth migrate` shows before it changes anything.
+ */
+export interface DBAdapterMigrationPlan {
+	/** Tables that will be created. */
+	toBeCreated: { table: string; fields: Record<string, DBFieldAttribute> }[];
+	/** Fields that will be added to existing tables. */
+	toBeAdded: { table: string; fields: Record<string, DBFieldAttribute> }[];
+	/** Indexes that will be created. */
+	toBeAddedIndexes: {
+		table: string;
+		index: { columns: readonly string[]; unique?: boolean | undefined };
+	}[];
+	/** If this isn't empty, the CLI prints the problems and stops. */
+	schemaProblems: string[];
+	/** Applies the plan. The CLI calls this after the user confirms. */
+	runMigrations: () => Promise<void>;
+}
+
+/**
+ * Metadata for a column that participates in a database index.
+ */
+export interface DatabaseIndexColumnMetadata {
+	/**
+	 * Whether the index covers the complete column value rather than a prefix.
+	 */
+	readonly fullLength: boolean;
+	readonly name: string | null;
+	readonly position: number;
+}
+
+/**
+ * Database-agnostic metadata for an index.
+ */
+export interface DatabaseIndexMetadata {
+	readonly columns: readonly DatabaseIndexColumnMetadata[];
+	readonly name: string;
+	readonly partial: boolean;
+	readonly table: string;
+	readonly unique: boolean;
+	/**
+	 * Whether the database reports the index as complete and usable.
+	 */
+	readonly valid: boolean;
+}
+
+/**
+ * Reads normalized index metadata for the provided database tables.
+ */
+export type DatabaseIndexIntrospector = (
+	tableNames: readonly string[],
+) => Promise<readonly DatabaseIndexMetadata[]>;
+
 export interface AdapterFactoryConfig
 	extends Omit<DBAdapterFactoryConfig<BetterAuthOptions>, "transaction"> {
 	/**

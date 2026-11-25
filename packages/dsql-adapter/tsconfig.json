@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["./src"],
+  "references": [
+    {
+      "path": "../core/tsconfig.json"
+    },
+    {
+      "path": "../kysely-adapter/tsconfig.json"
+    },
+    {
+      "path": "../better-auth/tsconfig.json"
+    }
+  ]
+}

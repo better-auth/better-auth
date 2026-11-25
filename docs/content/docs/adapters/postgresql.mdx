@@ -190,6 +190,122 @@ SET search_path TO auth;
 
 Reconnect after changing this default. Run `SHOW search_path` to verify the active value.
 
+## Amazon Aurora DSQL
+
+[Aurora DSQL](https://aws.amazon.com/rds/aurora/dsql/) is PostgreSQL-compatible, but it behaves differently in two ways that matter to Better Auth: indexes are built asynchronously, and a transaction can be aborted at commit if it conflicts with another one. The `@better-auth/dsql-adapter` package takes care of both and uses the same queries and migrations as PostgreSQL for everything else.
+
+### Installation
+
+Install the adapter along with AWS's [node-postgres connector](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/SECTION_program-with-dsql-connector-for-node-postgres.html), which handles IAM authentication for you:
+
+```package-install
+@better-auth/dsql-adapter kysely pg @aws/aurora-dsql-node-postgres-connector
+```
+
+If you're using TypeScript, also add `@types/pg` as a dev dependency.
+
+### Example Usage
+
+```ts title="auth.ts"
+import { AuroraDSQLPool } from "@aws/aurora-dsql-node-postgres-connector";
+import { dsqlAdapter, dsqlDialect } from "@better-auth/dsql-adapter";
+import { betterAuth } from "better-auth";
+import { Kysely } from "kysely";
+
+const pool = new AuroraDSQLPool({
+  host: process.env.DSQL_ENDPOINT!,
+  user: process.env.DSQL_USER!,
+  max: 3,
+});
+
+export const db = new Kysely({ dialect: dsqlDialect({ pool }) });
+
+export const auth = betterAuth({
+  database: dsqlAdapter(db),
+  rateLimit: {
+    storage: "database", // [!code highlight]
+  },
+});
+```
+
+The connector creates a fresh IAM token each time it opens a connection, so there's no password to manage. Make sure the IAM role your app runs as is allowed to connect to the cluster and is mapped to the database user.
+
+Without `secondaryStorage`, rate limits are kept in memory by default. On Lambda every instance has its own memory, which is why the example stores them in the database instead.
+
+<Callout>
+  On Lambda, create the pool outside your handler so warm invocations reuse the same connections.
+</Callout>
+
+DSQL closes every connection after 60 minutes. The connector already replaces pooled connections after 55 minutes, so leave its `maxLifetimeSeconds` at the default, or at least under an hour. `dsqlDialect` handles the rest:
+
+* A connection that has been idle for more than 30 seconds is checked before it's reused, and replaced if it's dead. This covers a Lambda that was frozen for a while.
+* Opening a connection is retried a few times when it fails with a connection error, such as DSQL's connection rate limit.
+* If the pool has no `error` listener, the dialect adds one that logs a dropped idle connection, so it doesn't crash the process.
+
+A query that loses its connection partway through still fails, because there's no way to know whether it ran.
+
+To use a schema other than `public`, pass `schemaName` to the adapter:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  database: dsqlAdapter(db, { schemaName: "auth" }),
+});
+```
+
+### Migrations
+
+Both CLI commands work with the DSQL adapter. Run migrations as a separate step, not from your request handlers.
+
+<Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```package-install
+    npx auth@latest migrate
+    ```
+  </Tab>
+
+  <Tab value="generate">
+    ```package-install
+    npx auth@latest generate
+    ```
+  </Tab>
+</Tabs>
+
+DSQL builds indexes in the background, so the adapter creates them with `CREATE INDEX ASYNC` and waits for each one to finish before moving on. If a migration gets interrupted, just run it again. It waits for any index builds that are still running and creates the ones that are missing. If an index build fails, check `sys.jobs` and fix the index before you run the migration again.
+
+If you apply the SQL from `generate` yourself, run the statements one at a time. Each `CREATE INDEX ASYNC` returns a job ID, and you should wait for it with `CALL sys.wait_for_job('<job_id>');` before relying on the index. AWS covers this in more detail in [asynchronous indexes](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/working-with-create-index-async.html).
+
+You can also run migrations from code:
+
+```ts title="migrate.ts"
+import { getDsqlMigrations } from "@better-auth/dsql-adapter/migration";
+import { auth, db } from "./auth";
+
+try {
+  const migration = await getDsqlMigrations(auth.options, db);
+  await migration.runMigrations();
+} finally {
+  await db.destroy();
+}
+```
+
+If you set `schemaName` on the adapter, pass the same option here as the third argument.
+
+### Transactions and retries
+
+DSQL uses optimistic concurrency. When two transactions touch the same rows, one of them is aborted at commit with a serialization error (`40001`). The adapter runs that transaction again, up to three times with a short backoff. Single queries outside a transaction are retried the same way. Any other error is thrown right away.
+
+Since a transaction can run more than once, so can your `before` [database hooks](/docs/concepts/database#database-hooks) and anything else inside it. Send emails and call external services from `after` hooks, which only run once the transaction has committed. Better Auth already does this for sign-up verification emails.
+
+<Callout type="warn">
+  `secondaryStorage` isn't supported with this adapter. A retried transaction can't undo the writes it already made to an external cache.
+</Callout>
+
+### IDs
+
+String IDs are used by default. If you set `advanced.database.generateId` to `"serial"`, the adapter creates `bigint` identity columns with `CACHE 1`, because DSQL doesn't support `serial`. Expect gaps between IDs.
+
+DSQL doesn't support every PostgreSQL feature. If you add your own tables or plugins, check AWS's [migration guide](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/working-with-postgresql-compatibility-migration-guide.html) for what's different.
+
 ## Additional Information
 
 PostgreSQL is supported under the hood via the [Kysely](https://kysely.dev/) adapter, any database supported by Kysely would also be supported. (<Link href="/docs/adapters/other-relational-databases">Read more here</Link>)

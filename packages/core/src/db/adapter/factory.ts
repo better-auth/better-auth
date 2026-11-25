@@ -857,6 +857,8 @@ export const createAdapterFactory =
 		});
 
 		const adapter: DBAdapter<Options> = {
+			isRetryableError: config.isRetryableError,
+			getMigrations: config.getMigrations,
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {

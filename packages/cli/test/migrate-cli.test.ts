@@ -136,3 +136,68 @@ describe("auth generate: emitting the refused migration with a warning", () => {
 		);
 	});
 });
+
+describe("auth migrate: adapter-owned plans", () => {
+	it("executes a separate adapter's plan and reports no changes on a rerun", async () => {
+		const cacheDir = path.join(
+			process.cwd(),
+			"node_modules",
+			".cache",
+			"migrate-adapter-",
+		);
+		fs.mkdirSync(path.dirname(cacheDir), { recursive: true });
+		const cwd = fs.mkdtempSync(cacheDir);
+		projects.push(cwd);
+		const databasePath = path.join(cwd, "app.db");
+		fs.writeFileSync(
+			path.join(cwd, "auth.ts"),
+			`
+import { betterAuth } from "better-auth";
+import { getMigrations } from "better-auth/db/migration";
+import { kyselyAdapter } from "@better-auth/kysely-adapter";
+import { Kysely, SqliteDialect } from "kysely";
+import Database from "better-sqlite3";
+
+const sqlite = new Database(${JSON.stringify(databasePath)});
+const db = new Kysely({ dialect: new SqliteDialect({ database: sqlite }) });
+export const auth = betterAuth({
+	secret: "a-secret-long-enough-to-keep-the-cli-quiet",
+	baseURL: "http://localhost:3000",
+	advanced: { database: { validateSchema: false } },
+	database: (options) => Object.assign(kyselyAdapter(db, {
+		type: "sqlite",
+		getMigrations: (authOptions) => getMigrations({ ...authOptions, database: sqlite }),
+	})(options), { id: "separate-adapter" }),
+});
+`,
+		);
+		const first = await runCli(
+			["migrate", "--config", "auth.ts", "--yes"],
+			cwd,
+		);
+		expect(first.exitCode).toBe(0);
+		expect(first.output).toContain("migration was completed successfully");
+		const sqlite = new Database(databasePath);
+		try {
+			expect(
+				sqlite
+					.prepare("select name from sqlite_master where type = 'table'")
+					.all(),
+			).toEqual(
+				expect.arrayContaining(
+					["user", "session", "account", "verification"].map((name) => ({
+						name,
+					})),
+				),
+			);
+		} finally {
+			sqlite.close();
+		}
+		const second = await runCli(
+			["migrate", "--config", "auth.ts", "--yes"],
+			cwd,
+		);
+		expect(second.exitCode).toBe(0);
+		expect(second.output).toContain("No migrations needed");
+	});
+});

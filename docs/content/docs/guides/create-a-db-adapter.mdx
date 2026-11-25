@@ -417,6 +417,31 @@ createSchema: async ({ file, tables }) => {
 };
 ```
 
+## Building on the Kysely adapter
+
+If your database works with a Kysely dialect, you may not need to write the adapter methods at all. Pass a profile with your dialect as `database`, and Better Auth will use the Kysely adapter's queries and migrations with it:
+
+* `dialect`: the Kysely dialect.
+* `type`: the SQL family it uses, such as `"postgres"` or `"sqlite"`.
+* `transaction`: whether it supports interactive transactions. Defaults to `false`.
+* `introspectIndexes`: optional. Reads index metadata when the database's catalog differs from `type`.
+
+Cloudflare D1 is set up this way:
+
+```ts title="auth.ts"
+import { createD1Profile } from "@better-auth/kysely-adapter";
+import { betterAuth } from "better-auth";
+import { env } from "cloudflare:workers";
+
+export const auth = betterAuth({
+  database: createD1Profile(env.DB),
+});
+```
+
+Passing the D1 binding directly still works too.
+
+If you need more than a dialect, for example retrying aborted transactions, wrap `kyselyAdapter` and pass [`isRetryableError`](#isretryableerror) and [`getMigrations`](#getmigrations) in its config. The [Aurora DSQL adapter](/docs/adapters/postgresql#amazon-aurora-dsql) is built this way.
+
 ## Test your adapter
 
 We've provided a test suite via the `@better-auth/test-utils` package that you can use to test your adapter. It requires you to use `vitest`.
@@ -528,6 +553,55 @@ With `false`, a write is kept even when a later step in the same request fails, 
   will not be as robust. We recommend using a database that supports transactions
   for better data integrity.
 </Callout>
+
+### `isRetryableError`
+
+Tells Better Auth which errors your adapter is going to retry, such as a serialization failure on a database with optimistic concurrency.
+
+Code inside a transaction sometimes catches a database error and throws its own, like sign-up's `FAILED_TO_CREATE_USER`, or carries on without it. When `isRetryableError` returns `true` for an error from one of your adapter's methods, Better Auth hands that original error back to your `transaction` implementation once the callback finishes, whatever the code inside did with it. That way you can run the transaction again.
+
+Better Auth doesn't retry anything for you. The retry limit, backoff, and restarting the transaction are up to your adapter. Don't return `true` if the commit might have succeeded, like when the connection drops during a commit.
+
+```ts title="Example"
+isRetryableError: (error) =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  error.code === "40001",
+```
+
+<Callout type="warn">
+  A retried transaction runs its callback and `before` hooks again. Anything that talks to the outside world should go in an `after` hook, or be queued with `queueAfterTransactionHook` so it runs once after the commit.
+</Callout>
+
+### `getMigrations`
+
+Lets your adapter plan its own migrations for the [`migrate`](/docs/concepts/cli#migrate) command. When it's set, the CLI uses it instead of the built-in Kysely planner.
+
+It receives the Better Auth options and returns a plan:
+
+* `toBeCreated`: tables to create.
+* `toBeAdded`: fields to add to existing tables.
+* `toBeAddedIndexes`: indexes to create.
+* `schemaProblems`: anything that should stop the migration. If this isn't empty, the CLI prints the problems and exits without changing anything.
+* `runMigrations`: applies the plan.
+
+The CLI shows the plan and asks for confirmation before it calls `runMigrations`, so don't change the database while planning. The `generate` command still uses `createSchema`.
+
+```ts title="Example"
+getMigrations: async (options) => {
+  // ... Compare the expected schema with the database.
+  return {
+    toBeCreated,
+    toBeAdded,
+    toBeAddedIndexes,
+    schemaProblems: [],
+    runMigrations: async () => {
+      // ... Apply the changes.
+    },
+  };
+},
+```
 
 ### `debugLogs`
 

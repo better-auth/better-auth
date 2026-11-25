@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import type { DBAdapterMigrationPlan } from "@better-auth/core/db/adapter";
 import {
 	createTelemetry,
 	getTelemetryAuthConfig,
@@ -50,7 +51,7 @@ export async function migrateAction(opts: any) {
 		process.exit(1);
 	}
 
-	if (db.id !== "kysely") {
+	if (!db.getMigrations && db.id !== "kysely") {
 		if (db.id === "prisma") {
 			console.error(
 				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx auth generate` to create the schema, then use Prisma's migrate or push to apply it.",
@@ -102,12 +103,19 @@ export async function migrateAction(opts: any) {
 
 	const spinner = yoctoSpinner({ text: "preparing migration..." }).start();
 
-	let plan: Awaited<ReturnType<typeof getMigrations>>;
+	let plan: DBAdapterMigrationPlan;
 	try {
-		plan = await getMigrations(config);
+		plan = db.getMigrations
+			? await db.getMigrations(config)
+			: await getMigrations(config);
 	} catch (error) {
 		spinner.stop();
-		if (!(error instanceof UnsafeMigrationError)) throw error;
+		// An adapter's plan can come from the app's copy of `better-auth`, not
+		// the CLI's, so match on the error's name as well.
+		const unsafe =
+			error instanceof UnsafeMigrationError ||
+			(error instanceof Error && error.name === "UnsafeMigrationError");
+		if (!unsafe) throw error;
 		console.error(chalk.red("The migration was refused, and nothing ran."));
 		console.error(error.message);
 		console.error(
@@ -129,7 +137,7 @@ export async function migrateAction(opts: any) {
 		spinner.stop();
 		console.error(
 			chalk.red.bold(
-				`The database has ${plan.schemaProblems.length} ${plan.schemaProblems.length === 1 ? "column" : "columns"} Better Auth cannot write to. Nothing ran.`,
+				`The database has ${plan.schemaProblems.length} schema ${plan.schemaProblems.length === 1 ? "problem" : "problems"} that must be resolved. Nothing ran.`,
 			),
 		);
 		for (const problem of plan.schemaProblems) {
@@ -147,7 +155,7 @@ export async function migrateAction(opts: any) {
 		} catch {}
 		process.exit(1);
 	}
-	const { toBeAdded, toBeAddedIndexes, toBeCreated, runMigrations } = plan;
+	const { toBeAdded, toBeAddedIndexes, toBeCreated } = plan;
 
 	if (!toBeAdded.length && !toBeAddedIndexes.length && !toBeCreated.length) {
 		spinner.stop();
@@ -227,7 +235,7 @@ export async function migrateAction(opts: any) {
 	}
 
 	spinner?.start("migrating...");
-	await runMigrations();
+	await plan.runMigrations();
 	spinner.stop();
 	console.log("🚀 migration was completed successfully!");
 	try {

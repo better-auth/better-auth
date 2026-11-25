@@ -18,6 +18,7 @@ const SCOPE_TO_DOMAIN = new Map(
 		"drizzle-adapter": "database",
 		"prisma-adapter": "database",
 		"kysely-adapter": "database",
+		"dsql-adapter": "database",
 		"mongo-adapter": "database",
 		"memory-adapter": "database",
 
@@ -127,6 +128,7 @@ const PATH_TO_DOMAIN = [
 	["packages/prisma-adapter/", "database"],
 	["packages/mongo-adapter/", "database"],
 	["packages/kysely-adapter/", "database"],
+	["packages/dsql-adapter/", "database"],
 	["packages/memory-adapter/", "database"],
 	["packages/expo/", "platform"],
 	["packages/electron/", "platform"],
@@ -244,6 +246,7 @@ const SCOPE_TO_PACKAGE = new Map(
 		"drizzle-adapter": "@better-auth/drizzle-adapter",
 		"prisma-adapter": "@better-auth/prisma-adapter",
 		"kysely-adapter": "@better-auth/kysely-adapter",
+		"dsql-adapter": "@better-auth/dsql-adapter",
 		"mongo-adapter": "@better-auth/mongo-adapter",
 		"memory-adapter": "@better-auth/memory-adapter",
 		"redis-storage": "@better-auth/redis-storage",
@@ -273,6 +276,7 @@ const PATH_TO_PACKAGE = [
 	["packages/drizzle-adapter/", "@better-auth/drizzle-adapter"],
 	["packages/prisma-adapter/", "@better-auth/prisma-adapter"],
 	["packages/kysely-adapter/", "@better-auth/kysely-adapter"],
+	["packages/dsql-adapter/", "@better-auth/dsql-adapter"],
 	["packages/mongo-adapter/", "@better-auth/mongo-adapter"],
 	["packages/memory-adapter/", "@better-auth/memory-adapter"],
 	// Catch-all: everything in better-auth or core maps to the main package
