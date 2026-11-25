@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { SecondaryStorage } from "@better-auth/core/db";
+import { redactSecondaryStorageErrors } from "@better-auth/core/db/internal";
 import { isWorkerd } from "@better-auth/core/env";
 import { mapConcurrent } from "@better-auth/core/utils/async";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -189,7 +190,7 @@ function getStorageInstance(
 	opts: PredefinedApiKeyOptions,
 ): SecondaryStorage | null {
 	if (opts.customStorage) {
-		return opts.customStorage as SecondaryStorage;
+		return redactSecondaryStorageErrors(opts.customStorage as SecondaryStorage);
 	}
 	return ctx.context.secondaryStorage || null;
 }

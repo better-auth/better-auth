@@ -7,6 +7,7 @@ import { getBetterAuthVersion } from "@better-auth/core/context";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import {
+	redactSecondaryStorageErrors,
 	runtimeSchemaCheckFor,
 	schemaCheckFor,
 } from "@better-auth/core/db/internal";
@@ -199,6 +200,9 @@ Most of the features of Better Auth will not work correctly.`,
 				: "",
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
+		secondaryStorage:
+			options.secondaryStorage &&
+			redactSecondaryStorageErrors(options.secondaryStorage),
 	};
 
 	checkEndpointConflicts(options, logger);
