@@ -417,7 +417,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							const isReplaced = session?.user.id === newSession.user.id;
 							if (isDead || isReplaced) {
 								for (const key of keys) expireDeviceCookie(key);
-								if (!isDead && isReplaced) {
+								// Delete the stale row for a session being replaced, including
+								// expired ones. An impersonation session belongs to the admin
+								// plugin, which deletes it when impersonation stops.
+								if (session && isReplaced && !session.session.impersonatedBy) {
 									tokensToDelete.push(token);
 								}
 								continue;
