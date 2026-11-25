@@ -2,7 +2,6 @@ import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { setSessionCookie } from "../../../cookies";
 import {
 	constantTimeEqual,
 	generateRandomString,
@@ -10,8 +9,10 @@ import {
 	symmetricEncrypt,
 } from "../../../crypto";
 import { parseUserOutput } from "../../../db/schema";
+import { restoreVerification } from "../../../db/verification";
 import { PACKAGE_VERSION } from "../../../version";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { replaceSession } from "../session";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
@@ -217,11 +218,18 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			const { session, key } = await verifyTwoFactor(ctx);
 			const code = generateRandomString(opts.digits, "0-9");
 			const hashedCode = await storeOTP(ctx, code);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${hashedCode}:0`,
-				identifier: `2fa-otp-${key}`,
-				expiresAt: new Date(Date.now() + opts.period),
-			});
+			const verification =
+				await ctx.context.internalAdapter.createVerificationValue({
+					value: `${hashedCode}:0`,
+					identifier: `2fa-otp-${key}`,
+					expiresAt: new Date(Date.now() + opts.period),
+				});
+			if (!verification) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 			const sendOTPResult = options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
 				ctx,
@@ -385,17 +393,10 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 							twoFactorEnabled: true,
 						},
 					);
-					const newSession = await ctx.context.internalAdapter.createSession(
-						session.user.id,
-						false,
+					const newSession = await replaceSession(
+						ctx,
 						session.session,
-					);
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
-					await ctx.context.internalAdapter.deleteSession(
-						session.session.token,
+						updatedUser,
 					);
 					return ctx.json({
 						token: newSession.token,
@@ -405,13 +406,16 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				return valid(ctx);
 			}
 			// Wrong code within budget: re-arm the row with the incremented counter
-			// and the original expiry. The recreated counter is the durable record
-			// of the attempt, so the next submission either keeps guessing or hits
-			// the lock-out guard above. The original expiry caps the whole burst.
-			await ctx.context.internalAdapter.createVerificationValue({
+			// and the original expiry and creation time. The recreated counter is
+			// the durable record of the attempt, so the next submission either keeps
+			// guessing or hits the lock-out guard above. The original expiry caps
+			// the whole burst. A code sent while this one was being checked
+			// replaces it, so the re-arm yields to it.
+			await restoreVerification(ctx, {
 				value: `${otp}:${attempts + 1}`,
 				identifier: `2fa-otp-${key}`,
 				expiresAt: consumed.expiresAt,
+				createdAt: consumed.createdAt,
 			});
 			if (twoFactor) {
 				await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);

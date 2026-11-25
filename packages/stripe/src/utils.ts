@@ -1,5 +1,15 @@
+import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type Stripe from "stripe";
 import type { StripeOptions, StripePlan, Subscription } from "./types";
+
+/**
+ * Adapter `where` clause matching {@link isActiveOrTrialing}.
+ */
+export const activeOrTrialingStatusWhere = {
+	field: "status",
+	operator: "in",
+	value: ["active", "trialing"],
+} satisfies Where;
 
 export async function getPlans(
 	subscriptionOptions: StripeOptions["subscription"],
@@ -25,6 +35,67 @@ export function isActiveOrTrialing(
 	sub: Subscription | Stripe.Subscription,
 ): boolean {
 	return sub.status === "active" || sub.status === "trialing";
+}
+
+/**
+ * Load the current active or trialing subscription for a reference without
+ * scanning canceled history, which `findMany` would cap at
+ * `advanced.database.defaultFindManyLimit`.
+ */
+export function findActiveOrTrialingSubscription(
+	adapter: Pick<DBAdapter, "findOne">,
+	referenceId: string,
+) {
+	return adapter.findOne<Subscription>({
+		model: "subscription",
+		where: [
+			{ field: "referenceId", value: referenceId },
+			activeOrTrialingStatusWhere,
+		],
+	});
+}
+
+/**
+ * Whether this reference has ever used a trial.
+ *
+ * Adapter `where` is a flat AND/OR list without portable grouping, so
+ * `(trialStart != null) OR (trialEnd != null) OR (status = trialing)`
+ * cannot be expressed in one query. Three existence checks short-circuit
+ * in JS instead of loading every subscription row.
+ */
+export async function hasReferenceEverTrialed(
+	adapter: Pick<DBAdapter, "count">,
+	referenceId: string,
+): Promise<boolean> {
+	const referenceIdWhere: Where = {
+		field: "referenceId",
+		value: referenceId,
+	};
+	const trialStartCount = await adapter.count({
+		model: "subscription",
+		where: [
+			referenceIdWhere,
+			{ field: "trialStart", operator: "ne", value: null },
+		],
+	});
+	if (trialStartCount > 0) {
+		return true;
+	}
+	const trialEndCount = await adapter.count({
+		model: "subscription",
+		where: [
+			referenceIdWhere,
+			{ field: "trialEnd", operator: "ne", value: null },
+		],
+	});
+	if (trialEndCount > 0) {
+		return true;
+	}
+	const trialingCount = await adapter.count({
+		model: "subscription",
+		where: [referenceIdWhere, { field: "status", value: "trialing" }],
+	});
+	return trialingCount > 0;
 }
 
 /**

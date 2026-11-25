@@ -106,7 +106,11 @@ describe("challenges expose WWW-Authenticate", async () => {
 	it.each([
 		["a malformed Basic header", "Basic %%%", 'Basic realm="oauth"'],
 		["Basic without credentials", "Basic", 'Basic realm="oauth"'],
-		["Basic with an empty credential", "Basic ", 'Basic realm="oauth"'],
+		[
+			"Basic with an empty credential",
+			`Basic ${btoa(":")}`,
+			'Basic realm="oauth"',
+		],
 		["mixed-case Basic without credentials", "bAsIc", 'Basic realm="oauth"'],
 		[
 			"an unknown Basic client",

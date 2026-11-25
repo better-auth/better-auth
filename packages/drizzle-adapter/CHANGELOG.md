@@ -1,5 +1,11 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12940](https://github.com/better-auth/better-auth/pull/12940) [`35df753`](https://github.com/better-auth/better-auth/commit/35df7535de4064fa7b5a116eacd08aa97a41fb28) Thanks [@elango5292](https://github.com/elango5292)! - The `relations-v2` Drizzle adapter no longer throws `Unexpected 'undefined' in filter value` on drizzle-orm 1.0.0-rc.5 and later when a joined `findMany` has no `where`, such as listing an organization's members or invitations. The query now returns the rows unfiltered.
+
 ## 1.7.27
 
 ## 1.7.26

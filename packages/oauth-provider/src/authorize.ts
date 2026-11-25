@@ -1082,10 +1082,23 @@ async function redirectWithAuthorizationCode(
 			resource: verificationValue.resource,
 		} satisfies VerificationValue),
 	};
-	await ctx.context.internalAdapter.createVerificationValue({
+	const stored = await ctx.context.internalAdapter.createVerificationValue({
 		...data,
 		createdAt: new Date(iat * 1000),
 	});
+	// A verification.create.before hook can veto the create by returning false.
+	if (!stored) {
+		return handleRedirect(
+			ctx,
+			formatErrorURL(
+				verificationValue.query.redirect_uri,
+				"server_error",
+				"unable to issue an authorization code",
+				verificationValue.query.state,
+				getIssuer(ctx, opts),
+			),
+		);
+	}
 
 	const redirectUriWithCode = new URL(verificationValue.query.redirect_uri);
 	redirectUriWithCode.searchParams.set("code", code);

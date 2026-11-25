@@ -277,8 +277,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			continue;
 		}
 		const fields = tables[table]?.fields;
-		for (const field in fields) {
-			const attr = fields[field]!;
+		for (const attr of Object.values(fields ?? {})) {
 			if (attr.references) {
 				const referencedOriginalModel = attr.references.model;
 				if (isMigrationDisabled(referencedOriginalModel)) {
@@ -313,8 +312,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		const modelName = capitalizeFirstLetter(getModelName(customModelName));
 		indexedFields.set(modelName, []);
 
-		for (const field in fields) {
-			const attr = fields[field]!;
+		for (const [field, attr] of Object.entries(fields ?? {})) {
 			if (attr.index && !attr.unique) {
 				const fieldName = attr.fieldName || field;
 				indexedFields.get(modelName)!.push(fieldName);
@@ -428,8 +426,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 			}
 
-			for (const field in fields) {
-				const attr = fields[field]!;
+			for (const [field, attr] of Object.entries(fields ?? {})) {
 				const fieldName = attr.fieldName || field;
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				const useNumberId = options.advanced?.database?.generateId === "serial";
@@ -736,24 +733,52 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						within: prismaModel?.properties,
 					});
 					// Users may name the back-relation anything, so pair it by relation
-					// name with the field that stores this foreign key. A missing one is
-					// generated unnamed.
+					// name with the field that stores this foreign key. A missing one
+					// takes that relation name, or Prisma cannot pair the two sides.
 					const foreignKey = fkFieldAttr?.fieldName || fkFieldKey;
-					const relationName = readRelations(
+					const relationsToThisModel = readRelations(
 						builder.findByType("model", { name: relatedModel }),
-					).find((relation) =>
-						relation.fields.some((field) => field === foreignKey),
-					)?.name;
-					const existingBackRelation = readRelations(prismaModel).some(
+					).filter(
 						(relation) =>
-							relation.type === relatedModel &&
-							relation.fields.length === 0 &&
-							relation.name === relationName,
+							relation.type === modelName &&
+							relation.fields.some((field) => field === foreignKey),
 					);
-					if (!existingField && !existingBackRelation) {
-						builder
+					const singleColumnRelations = relationsToThisModel.filter(
+						(relation) => relation.fields.length === 1,
+					);
+					const candidateNames = (
+						singleColumnRelations.length
+							? singleColumnRelations
+							: relationsToThisModel
+					).map((relation) => relation.name);
+					const backRelationNames = readRelations(prismaModel)
+						.filter(
+							(relation) =>
+								relation.type === relatedModel && relation.fields.length === 0,
+						)
+						.map((relation) => relation.name);
+					const unpairedNames = (
+						candidateNames.length ? candidateNames : [undefined]
+					).filter((name) => !backRelationNames.includes(name));
+					if (unpairedNames.length > 1) {
+						throw new BetterAuthError(
+							`Model "${relatedModel}" has several relations to "${modelName}" through "${foreignKey}" without a back-relation: ${unpairedNames.map((name) => name ?? "an unnamed relation").join(", ")}. Add the back-relations to "${modelName}", then generate the schema again.`,
+						);
+					}
+					const relationName = unpairedNames[0];
+					if (existingField && unpairedNames.length === 1) {
+						throw new BetterAuthError(
+							`Model "${modelName}" needs a back-relation for ${relationName ?? "the unnamed relation"} from "${relatedModel}", but its field "${fieldName}" is already taken. Add the back-relation to "${modelName}" under another field name, then generate the schema again.`,
+						);
+					}
+					if (unpairedNames.length === 1) {
+						const backRelation = builder
 							.model(modelName)
 							.field(fieldName, `${relatedModel}${isUnique ? "?" : "[]"}`);
+						if (relationName !== undefined) {
+							// The parsed name is the quoted literal from the schema.
+							backRelation.attribute(`relation(${relationName})`);
+						}
 					}
 				}
 			}

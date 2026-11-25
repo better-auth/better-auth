@@ -651,7 +651,7 @@ export const createInternalAdapter = (
 				userId,
 				token: generateId(32),
 				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-				createdAt: new Date(),
+				createdAt: rest.createdAt ?? new Date(),
 				updatedAt: new Date(),
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
@@ -1409,7 +1409,7 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 			);
-			return verification as Verification;
+			return verification as Verification | null;
 		},
 		findVerificationValue: async (identifier: string) => {
 			const storageOption = getStorageOption(
