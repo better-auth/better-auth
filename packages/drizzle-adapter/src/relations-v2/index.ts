@@ -34,6 +34,7 @@ import {
 	sql,
 } from "drizzle-orm";
 import { fromDriverDate, toDriverDate } from "../date-columns";
+import { findManyPaging } from "../find-many-paging";
 import type { RelationKeysByModel } from "../join-relation-key";
 import {
 	buildRelationKeysByModel,
@@ -280,7 +281,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	const getRelationKeysByModel = () =>
 		(relationKeysByModel ??= buildRelationKeysByModel(db._?.relations));
 	const createCustomAdapter =
-		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
+		(
+			db: DB,
+			inTransaction = false,
+		): AdapterFactoryCustomizeAdapterCreator<true> =>
 		({ getFieldName, getDefaultModelName, options, schema: baSchema }) => {
 			if (
 				config.provider === "mysql" &&
@@ -834,6 +838,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					offset,
 					join,
 				}) {
+					if (limit === 0) {
+						return [];
+					}
 					const table = getSchema(model);
 					const clause = where
 						? convertWhereClause(where, model, modelKey)
@@ -907,8 +914,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 												{} as Record<string, boolean>,
 											)
 										: undefined,
-								limit: limit ?? 100,
-								offset: offset ?? 0,
+								...findManyPaging(config.provider, limit, offset),
 								orderBy,
 							});
 							const res = await query;
@@ -941,15 +947,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						)
 						.from(table);
 
-					const effectiveLimit = limit;
-					const effectiveOffset = offset;
-
-					if (typeof effectiveLimit !== "undefined") {
-						builder = builder.limit(effectiveLimit);
+					const paging = findManyPaging(config.provider, limit, offset);
+					if (paging.limit !== undefined) {
+						builder = builder.limit(paging.limit);
 					}
-
-					if (typeof effectiveOffset !== "undefined") {
-						builder = builder.offset(effectiveOffset);
+					if (paging.offset !== undefined) {
+						builder = builder.offset(paging.offset);
 					}
 
 					if (sortBy?.field) {
@@ -1160,7 +1163,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				options: config,
 			};
 		};
-	let adapterOptions: AdapterFactoryOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions<true> | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "drizzle",
@@ -1168,6 +1171,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "pg" ? true : false,
+			supportsUnboundedFindMany: true,
 			// All providers generate schemas where Drizzle handles JSON serialization:
 			//   - PostgreSQL: native `jsonb` column.
 			//   - MySQL: `json()` column (Drizzle stringifies the driver value).

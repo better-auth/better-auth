@@ -339,13 +339,13 @@ findOne: async ({ model, where, select, join }) => {
 
 ### `findMany` method
 
-The `findMany` method is used to find multiple records in the database.
+The `findMany` method is used to find multiple records in the database. This is the method your custom adapter implements. Public callers use `findMany` for capped lists and `findAll` for every matching row. Do not implement `findAll` on your custom adapter; the factory provides it.
 
 parameters:
 
 * `model`: The model/table name that the records will be found in.
 * `where`: The `where` clause to find the records by.
-* `limit`: The limit of records to return.
+* `limit`: Maximum number of records to return. `0` returns no rows. Unless you set `supportsUnboundedFindMany`, the factory always passes a number.
 * `select`: The `select` clause to return.
 * `sortBy`: The `sortBy` clause to sort the records by.
 * `offset`: The offset of records to return.
@@ -504,6 +504,14 @@ Whether the database supports booleans. If the database doesn't support booleans
 ### `supportsArrays`
 
 Whether the database supports arrays. Defaults to `false`, in which case array fields (`string[]`, `number[]`) are stored as a serialized `string` and safely parsed back when retrieved. Set this to `true` if your database supports array columns natively.
+
+### `supportsUnboundedFindMany`
+
+Whether your `findMany` can run without a row cap. Defaults to `false`.
+
+Callers use public `findAll` to load every matching row. You do not need this flag for that to work, and you should not add `findAll` to your custom adapter: the factory counts matching rows and calls your `findMany` with that total as `limit` (up to two database calls).
+
+Set this to `true` only if omitted `limit` means no cap in your `findMany` implementation. The factory then skips the count and omits `limit`, and TypeScript types `limit` as optional on your `findMany`. If your database requires `LIMIT` whenever `OFFSET` is set, apply that dialect's unbounded form when `limit` is omitted and `offset` is present. Keep applying a numeric `limit` when it is present, including `0`.
 
 ### `usePlural`
 

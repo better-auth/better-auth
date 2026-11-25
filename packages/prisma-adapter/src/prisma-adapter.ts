@@ -91,7 +91,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		(
 			prisma: PrismaClient,
 			inTransaction = false,
-		): AdapterFactoryCustomizeAdapterCreator =>
+		): AdapterFactoryCustomizeAdapterCreator<true> =>
 		({
 			getFieldName,
 			getModelName,
@@ -543,7 +543,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					const result = await db[model].findMany({
 						where: whereClause,
-						take: limit || 100,
+						...(typeof limit === "number" ? { take: limit } : {}),
 						skip: offset || 0,
 						...(sortBy?.field
 							? {
@@ -881,7 +881,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			};
 		};
 
-	let adapterOptions: AdapterFactoryOptions | null = null;
+	let adapterOptions: AdapterFactoryOptions<true> | null = null;
 	adapterOptions = {
 		config: {
 			adapterId: "prisma",
@@ -889,6 +889,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,
+			supportsUnboundedFindMany: true,
 			supportsArrays:
 				config.provider === "postgresql" || config.provider === "mongodb"
 					? true

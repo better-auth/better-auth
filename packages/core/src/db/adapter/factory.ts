@@ -25,6 +25,7 @@ import type {
 } from "./index";
 import type {
 	AdapterFactoryConfig,
+	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 } from "./types";
@@ -52,11 +53,49 @@ export type AdapterFactory<Options extends BetterAuthOptions> = (
 	options: Options,
 ) => DBAdapter<Options>;
 
-export const createAdapterFactory =
-	<Options extends BetterAuthOptions>({
-		adapter: customAdapter,
-		config: cfg,
-	}: AdapterFactoryOptions): AdapterFactory<Options> =>
+/**
+ * Allows `boolean` and `false`, but not a literal `true`.
+ * Keeps the catch-all factory overload from accepting the opt-in flag
+ * without also requiring an unbounded `findMany`.
+ */
+type NonLiteralTrueFlag<F> = [true] extends [F]
+	? [false] extends [F]
+		? F
+		: never
+	: F;
+
+type StrictAdapterFactoryConfig<Config extends AdapterFactoryConfig> = Config &
+	AdapterFactoryConfig & {
+		[K in Exclude<keyof Config, keyof AdapterFactoryConfig>]: never;
+	} & {
+		supportsUnboundedFindMany?: NonLiteralTrueFlag<
+			Config["supportsUnboundedFindMany"]
+		>;
+	};
+
+type CreateAdapterFactoryFn = {
+	<Options extends BetterAuthOptions>(
+		options: AdapterFactoryOptions<true>,
+	): AdapterFactory<Options>;
+	<Options extends BetterAuthOptions>(
+		options: AdapterFactoryOptions<false>,
+	): AdapterFactory<Options>;
+	<
+		Options extends BetterAuthOptions,
+		Config extends AdapterFactoryConfig = AdapterFactoryConfig,
+	>(options: {
+		config: StrictAdapterFactoryConfig<Config>;
+		adapter: AdapterFactoryCustomizeAdapterCreator<boolean>;
+	}): AdapterFactory<Options>;
+};
+
+export const createAdapterFactory = (<Options extends BetterAuthOptions>({
+	adapter: customAdapter,
+	config: cfg,
+}: {
+	config: AdapterFactoryConfig;
+	adapter: AdapterFactoryCustomizeAdapterCreator<true>;
+}): AdapterFactory<Options> =>
 	(options: Options): DBAdapter<Options> => {
 		const withSpan = createWithSpan(options);
 		const uniqueAdapterFactoryInstanceId = Math.random()
@@ -72,6 +111,7 @@ export const createAdapterFactory =
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 			supportsUUIDs: cfg.supportsUUIDs ?? false,
 			supportsArrays: cfg.supportsArrays ?? false,
+			supportsUnboundedFindMany: cfg.supportsUnboundedFindMany ?? false,
 			transaction: cfg.transaction ?? false,
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
@@ -856,6 +896,136 @@ export const createAdapterFactory =
 			transformWhereClause,
 		});
 
+		const findManyInternal = async <T extends Record<string, any>>({
+			model: inputModel,
+			where: unsafeWhere,
+			limit: unsafeLimit,
+			select,
+			sortBy,
+			offset,
+			join: unsafeJoin,
+		}: {
+			model: string;
+			where?: Where[] | undefined;
+			limit?: number | null | undefined;
+			select?: string[] | undefined;
+			sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
+			offset?: number | undefined;
+			join?: JoinOption | undefined;
+		}) => {
+			transactionId++;
+			const thisTransactionId = transactionId;
+			const modelKey = getDefaultModelName(inputModel);
+			const model = getModelName(modelKey);
+			const where = transformWhereClause({
+				model: modelKey,
+				where: unsafeWhere,
+				action: "findMany",
+			});
+			let join: JoinConfig | undefined;
+			let passJoinToAdapter = true;
+			if (!config.disableTransformJoin) {
+				const result = transformJoinClause(modelKey, unsafeJoin, select);
+				if (result) {
+					join = result.join;
+					select = result.select;
+				}
+				// If joins are disabled and we have joins, don't pass them to the adapter
+				if (
+					!options.advanced?.database?.joins &&
+					join &&
+					Object.keys(join).length > 0
+				) {
+					passJoinToAdapter = false;
+				}
+			} else {
+				// assume it's already transformed if transformation is disabled
+				join = unsafeJoin as never as JoinConfig;
+			}
+			let limit: number | undefined;
+			if (unsafeLimit === null) {
+				if (config.supportsUnboundedFindMany) {
+					limit = undefined;
+				} else {
+					const total = await withSpan(
+						`db count ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "count",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						() =>
+							adapterInstance.count({
+								model,
+								modelKey,
+								where,
+							}),
+					);
+					if (total === 0) {
+						debugLog(
+							{ method: "findMany" },
+							`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+							`${formatMethod("findMany")}:`,
+							{ model, where, limit: 0, sortBy, offset, join },
+						);
+						return [];
+					}
+					limit = total;
+				}
+			} else {
+				limit =
+					unsafeLimit ??
+					options.advanced?.database?.defaultFindManyLimit ??
+					100;
+			}
+			debugLog(
+				{ method: "findMany" },
+				`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+				`${formatMethod("findMany")}:`,
+				{ model, where, limit, sortBy, offset, join },
+			);
+			const res = await withSpan(
+				`db findMany ${model}`,
+				{
+					[ATTR_DB_OPERATION_NAME]: "findMany",
+					[ATTR_DB_COLLECTION_NAME]: model,
+				},
+				() =>
+					adapterInstance.findMany<T>({
+						model,
+						modelKey,
+						where,
+						...(typeof limit === "number" ? { limit } : {}),
+						select,
+						sortBy,
+						offset,
+						join: passJoinToAdapter ? join : undefined,
+					}),
+			);
+			debugLog(
+				{ method: "findMany" },
+				`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+				`${formatMethod("findMany")} ${formatAction("DB Result")}:`,
+				{ model, data: res },
+			);
+
+			let transformed = res as any;
+			if (!config.disableTransformOutput) {
+				transformed = await Promise.all(
+					res.map(async (r: Record<string, any>) => {
+						return await transformOutput(r, modelKey, undefined, join);
+					}),
+				);
+			}
+
+			debugLog(
+				{ method: "findMany" },
+				`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+				`${formatMethod("findMany")} ${formatAction("Parsed Result")}:`,
+				{ model, data: transformed },
+			);
+			return transformed;
+		};
+
 		const adapter: DBAdapter<Options> = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
@@ -1194,15 +1364,7 @@ export const createAdapterFactory =
 				);
 				return transformed;
 			},
-			findMany: async <T extends Record<string, any>>({
-				model: inputModel,
-				where: unsafeWhere,
-				limit: unsafeLimit,
-				select,
-				sortBy,
-				offset,
-				join: unsafeJoin,
-			}: {
+			findMany: async <T extends Record<string, any>>(data: {
 				model: string;
 				where?: Where[] | undefined;
 				limit?: number | undefined;
@@ -1210,88 +1372,20 @@ export const createAdapterFactory =
 				sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
 				offset?: number | undefined;
 				join?: JoinOption | undefined;
-			}) => {
-				transactionId++;
-				const thisTransactionId = transactionId;
-				const limit =
-					unsafeLimit ??
-					options.advanced?.database?.defaultFindManyLimit ??
-					100;
-				const modelKey = getDefaultModelName(inputModel);
-				const model = getModelName(modelKey);
-				const where = transformWhereClause({
-					model: modelKey,
-					where: unsafeWhere,
-					action: "findMany",
-				});
-				let join: JoinConfig | undefined;
-				let passJoinToAdapter = true;
-				if (!config.disableTransformJoin) {
-					const result = transformJoinClause(modelKey, unsafeJoin, select);
-					if (result) {
-						join = result.join;
-						select = result.select;
-					}
-					// If joins are disabled and we have joins, don't pass them to the adapter
-					if (
-						!options.advanced?.database?.joins &&
-						join &&
-						Object.keys(join).length > 0
-					) {
-						passJoinToAdapter = false;
-					}
-				} else {
-					// assume it's already transformed if transformation is disabled
-					join = unsafeJoin as never as JoinConfig;
-				}
-				debugLog(
-					{ method: "findMany" },
-					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
-					`${formatMethod("findMany")}:`,
-					{ model, where, limit, sortBy, offset, join },
-				);
-				const res = await withSpan(
-					`db findMany ${model}`,
-					{
-						[ATTR_DB_OPERATION_NAME]: "findMany",
-						[ATTR_DB_COLLECTION_NAME]: model,
-					},
-					() =>
-						adapterInstance.findMany<T>({
-							model,
-							modelKey,
-							where,
-							limit: limit,
-							select,
-							sortBy,
-							offset,
-							join: passJoinToAdapter ? join : undefined,
-						}),
-				);
-				debugLog(
-					{ method: "findMany" },
-					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
-					`${formatMethod("findMany")} ${formatAction("DB Result")}:`,
-					{ model, data: res },
-				);
-
-				let transformed = res as any;
-				if (!config.disableTransformOutput) {
-					transformed = await Promise.all(
-						res.map(async (r: Record<string, any>) => {
-							return await transformOutput(r, modelKey, undefined, join);
-						}),
-					);
-				}
-
-				debugLog(
-					{ method: "findMany" },
-					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
-					`${formatMethod("findMany")} ${formatAction("Parsed Result")}:`,
-					{ model, data: transformed },
-				);
-				return transformed;
-			},
+			}) =>
+				findManyInternal<T>({
+					...data,
+					limit: data.limit ?? undefined,
+				}),
+			findAll: async <T extends Record<string, any>>(data: {
+				model: string;
+				where?: Where[] | undefined;
+				select?: string[] | undefined;
+				sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
+				offset?: number | undefined;
+				join?: JoinOption | undefined;
+				limit?: never;
+			}) => findManyInternal<T>({ ...data, limit: null }),
 			delete: async ({
 				model: inputModel,
 				where: unsafeWhere,
@@ -1659,7 +1753,7 @@ export const createAdapterFactory =
 				: {}),
 		};
 		return adapter;
-	};
+	}) as CreateAdapterFactoryFn;
 
 function formatTransactionId(transactionId: number) {
 	if (getColorDepth() < 8) {

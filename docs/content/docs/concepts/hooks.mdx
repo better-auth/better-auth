@@ -265,7 +265,7 @@ The password object provider `hash` and `verify`
 
 #### Adapter
 
-Adapter exposes the adapter methods used by Better Auth. Including `findOne`, `findMany`, `create`, `delete`, `update` and `updateMany`. You generally should use your actually `db` instance from your orm rather than this adapter.
+Adapter exposes the adapter methods used by Better Auth. Including `findOne`, `findMany`, `findAll`, `create`, `delete`, `update` and `updateMany`. `findMany` is capped (`defaultFindManyLimit` when `limit` is omitted). `findAll` returns every matching row; call it only from server code you control. You generally should use your actually `db` instance from your orm rather than this adapter.
 
 #### Internal Adapter
 

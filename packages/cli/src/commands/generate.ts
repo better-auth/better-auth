@@ -46,6 +46,9 @@ function createMockAdapter(adapterId: string, dialect?: string): DBAdapter {
 		findMany: async () => {
 			throw new Error("Mock adapter methods should not be called");
 		},
+		findAll: async () => {
+			throw new Error("Mock adapter methods should not be called");
+		},
 		count: async () => {
 			throw new Error("Mock adapter methods should not be called");
 		},

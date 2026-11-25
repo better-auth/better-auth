@@ -123,6 +123,19 @@ export interface DBAdapterFactoryConfig<
 	 */
 	supportsArrays?: boolean | undefined;
 	/**
+	 * Set to `true` if `findMany` treats an omitted `limit` as no cap.
+	 *
+	 * When `false` (default), public `findAll` still returns every matching
+	 * row: the factory counts, then calls `findMany` with that total as
+	 * `limit` (up to two database calls). `CustomAdapter.findMany` still
+	 * receives a required `number`.
+	 *
+	 * When `true`, `CustomAdapter.findMany` types `limit` as optional.
+	 *
+	 * @default false
+	 */
+	supportsUnboundedFindMany?: boolean | undefined;
+	/**
 	 * Execute multiple operations in a transaction.
 	 *
 	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
@@ -422,6 +435,14 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	findMany: <T>(data: {
 		model: string;
 		where?: Where[] | undefined;
+		/**
+		 * Maximum rows to return.
+		 *
+		 * - Omitted (`undefined`): apply `advanced.database.defaultFindManyLimit` (default `100`)
+		 * - A number: that cap (`0` returns no rows)
+		 *
+		 * Use `findAll` to return every matching row.
+		 */
 		limit?: number | undefined;
 		select?: string[] | undefined;
 		sortBy?:
@@ -432,6 +453,28 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 			| undefined;
 		offset?: number | undefined;
 		join?: JoinOption | undefined;
+	}) => Promise<T[]>;
+	/**
+	 * Return every matching row.
+	 *
+	 * Same filters as `findMany` except there is no `limit`. Use this only
+	 * from server code you control; it can return a large result set.
+	 * Joined one-to-many relations still use each join's own limit
+	 * (`defaultFindManyLimit` unless the join sets `limit`).
+	 */
+	findAll: <T>(data: {
+		model: string;
+		where?: Where[] | undefined;
+		select?: string[] | undefined;
+		sortBy?:
+			| {
+					field: string;
+					direction: "asc" | "desc";
+			  }
+			| undefined;
+		offset?: number | undefined;
+		join?: JoinOption | undefined;
+		limit?: never;
 	}) => Promise<T[]>;
 	count: (data: {
 		model: string;
@@ -545,7 +588,34 @@ export type ModelTarget = {
 	modelKey?: string | undefined;
 };
 
-export interface CustomAdapter {
+/**
+ * `findMany` limit on the inner adapter.
+ *
+ * Default adapters always receive a number. Adapters that set
+ * `supportsUnboundedFindMany: true` may omit `limit`, which means unbounded.
+ */
+export type CustomAdapterFindManyLimit<Unbounded extends boolean = false> = [
+	Unbounded,
+] extends [true]
+	? {
+			/**
+			 * Maximum rows to return.
+			 *
+			 * Omitted means unbounded. A number, including `0`, is a hard cap
+			 * (`0` returns no rows).
+			 */
+			limit?: number | undefined;
+		}
+	: {
+			/**
+			 * Maximum rows to return.
+			 *
+			 * The factory always passes a number. `0` returns no rows.
+			 */
+			limit: number;
+		};
+
+export interface CustomAdapter<Unbounded extends boolean = false> {
 	create: <T extends Record<string, any>>({
 		data,
 		model,
@@ -586,12 +656,11 @@ export interface CustomAdapter {
 		join,
 	}: ModelTarget & {
 		where?: CleanedWhere[] | undefined;
-		limit: number;
 		select?: string[] | undefined;
 		sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
 		offset?: number | undefined;
 		join?: JoinConfig | undefined;
-	}) => Promise<T[]>;
+	} & CustomAdapterFindManyLimit<Unbounded>) => Promise<T[]>;
 	delete: ({
 		model,
 		where,
