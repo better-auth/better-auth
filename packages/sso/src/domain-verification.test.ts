@@ -1,11 +1,15 @@
+import { DatabaseSync } from "node:sqlite";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import type { SecondaryStorage } from "better-auth/db";
+import { getMigrations } from "better-auth/db/migration";
 import { bearer, organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
+import { Kysely } from "kysely";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
@@ -1036,39 +1040,51 @@ describe("Domain verification", async () => {
 /**
  * @see https://better-auth.com/docs/concepts/database#database-hooks
  */
-/**
- * A memory adapter whose transactions run without rollback, like an adapter
- * configured with `transaction: false`.
- */
-function memoryWithoutTransactions(): BetterAuthOptions["database"] {
-	const adapter = memoryAdapter({
-		user: [],
-		session: [],
-		account: [],
-		verification: [],
-		ssoProvider: [],
-	});
-	return (options) => {
-		const db = adapter(options);
-		return { ...db, transaction: (run) => run(db) };
-	};
-}
-
 describe("domain verification tokens vetoed by a verification hook", () => {
-	async function setup(database?: BetterAuthOptions["database"]) {
-		const veto = { active: false };
-		const { auth, signInWithTestUser } = await getTestInstance({
-			...(database ? { database } : {}),
-			databaseHooks: {
-				verification: {
-					create: {
-						async before() {
-							return veto.active ? false : undefined;
-						},
-					},
+	const veto = { active: false };
+	const afterCreate = { fail: false };
+	const databaseHooks: BetterAuthOptions["databaseHooks"] = {
+		verification: {
+			create: {
+				async before() {
+					return veto.active ? false : undefined;
+				},
+				async after() {
+					if (afterCreate.fail) throw new Error("after hook failed");
 				},
 			},
-			plugins: [sso({ domainVerification: { enabled: true } })],
+		},
+	};
+
+	afterEach(() => {
+		veto.active = false;
+		afterCreate.fail = false;
+	});
+
+	/**
+	 * With `transaction: false`, registration uses a SQLite database whose
+	 * adapter is configured without transactions.
+	 */
+	async function setup({ transaction = true } = {}) {
+		const sqlite = new DatabaseSync(":memory:");
+		const plugins = [sso({ domainVerification: { enabled: true } })];
+		const database = transaction
+			? undefined
+			: {
+					db: new Kysely({
+						dialect: new NodeSqliteDialect({ database: sqlite }),
+					}),
+					type: "sqlite" as const,
+					transaction: false,
+				};
+		if (database) {
+			const migrations = await getMigrations({ database, plugins });
+			await migrations.runMigrations();
+		}
+		const { auth, signInWithTestUser } = await getTestInstance({
+			...(database ? { database } : {}),
+			databaseHooks,
+			plugins,
 		});
 		const { headers } = await signInWithTestUser();
 		const register = () =>
@@ -1087,24 +1103,22 @@ describe("domain verification tokens vetoed by a verification hook", () => {
 				headers,
 				asResponse: true,
 			});
-		return { auth, headers, veto, register };
+		const providers = async () =>
+			(await auth.$context).adapter.findMany({ model: "ssoProvider" });
+		return { auth, headers, register, providers };
 	}
 
-	it.for([
-		["with transactions", undefined],
-		["without transactions", memoryWithoutTransactions],
-	] as const)(
-		"does not register a provider whose token was not stored %s",
-		async ([, database]) => {
-			const { auth, veto, register } = await setup(database?.());
+	it.for([true, false])(
+		"does not register a provider whose token was not stored (transaction: %s)",
+		async (transaction) => {
+			const { register, providers } = await setup({ transaction });
 			veto.active = true;
 
 			const res = await register();
 
 			expect(res.status).toBe(500);
 			expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
-			const ctx = await auth.$context;
-			expect(await ctx.adapter.findMany({ model: "ssoProvider" })).toEqual([]);
+			expect(await providers()).toEqual([]);
 			veto.active = false;
 			const retry = await register();
 			expect(retry.status).toBe(200);
@@ -1114,8 +1128,26 @@ describe("domain verification tokens vetoed by a verification hook", () => {
 		},
 	);
 
+	it.for([true, false])(
+		"keeps a stored provider and token when an after hook fails (transaction: %s)",
+		async (transaction) => {
+			const { auth, register, providers } = await setup({ transaction });
+			afterCreate.fail = true;
+
+			await expect(register()).rejects.toThrow("after hook failed");
+
+			expect(await providers()).toHaveLength(1);
+			const token = await (
+				await auth.$context
+			).internalAdapter.findVerificationValue(
+				"_better-auth-token-vetoed-domain-provider",
+			);
+			expect(token).not.toBeNull();
+		},
+	);
+
 	it("does not return a requested token that was not stored", async () => {
-		const { auth, headers, veto, register } = await setup();
+		const { auth, headers, register } = await setup();
 		expect((await register()).status).toBe(200);
 		const ctx = await auth.$context;
 		await ctx.internalAdapter.deleteVerificationByIdentifier(

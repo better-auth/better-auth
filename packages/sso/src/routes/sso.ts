@@ -655,8 +655,10 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 
 			// A vetoed domain token must not leave the provider behind, or a retry
 			// fails as a duplicate. Adapters without transactions do not roll back,
-			// so the row this request inserted is removed by its id.
+			// so the row this request inserted is removed by its id. An after hook
+			// that fails once both records are stored leaves them in place.
 			let createdId: string | undefined;
+			let recordsStored = false;
 			const provider = await runWithTransaction(
 				ctx.context.adapter,
 				async () => {
@@ -750,10 +752,11 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							);
 						}
 					}
+					recordsStored = true;
 					return created;
 				},
 			).catch(async (error: unknown) => {
-				if (createdId) {
+				if (createdId && !recordsStored) {
 					await ctx.context.adapter.deleteMany({
 						model: "ssoProvider",
 						where: [{ field: "id", value: createdId }],
