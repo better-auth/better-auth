@@ -5,12 +5,16 @@ import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
 import {
-	invalidateResourceCache,
 	resetSeedStateForTests,
 	resolveResourcePolicy,
 	seedResourcesOnce,
 } from "./resources";
-import type { OAuthClientResource, OAuthOptions, Scope } from "./types";
+import type {
+	OAuthClientResource,
+	OAuthOptions,
+	OAuthResource,
+	Scope,
+} from "./types";
 
 const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	const opts = {
@@ -291,6 +295,11 @@ describe("resolveResourcePolicy — entity path", () => {
 		const { ctx, opts } = await bootProvider({
 			resources: [id],
 		});
+		await ctx.adapter.update({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: id }],
+			update: { allowedScopes: null, policyVersion: 1 },
+		});
 		const policy = await resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
 			resource: id,
 			clientId: "client-x",
@@ -302,17 +311,16 @@ describe("resolveResourcePolicy — entity path", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11725
 	 */
-	it("treats stored empty array allowedScopes as 'no restriction'", async () => {
+	it("keeps a newly seeded resource unrestricted when the adapter stores an empty list", async () => {
 		const id = "https://api.example.com/stored-empty";
 		const { ctx, opts } = await bootProvider({
 			resources: [id],
 		});
-		await ctx.adapter.update({
+		const row = await ctx.adapter.findOne<OAuthResource>({
 			model: "oauthResource",
 			where: [{ field: "identifier", value: id }],
-			update: { allowedScopes: [] },
 		});
-		invalidateResourceCache(id);
+		expect(row).toMatchObject({ allowedScopes: [], policyVersion: 2 });
 		const policy = await resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
 			resource: id,
 			clientId: "client-x",
@@ -613,6 +621,41 @@ describe("resolveResourcePolicy — enforcePerClientResources", () => {
 			requestedScopes: [],
 		});
 		expect(policy.audienceClaim).toBe(id);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("denies every scope for a linked client when a legacy resource has an empty allowlist", async () => {
+		const identifier = "https://api.example.com/legacy-empty";
+		const { ctx, opts } = await bootProvider({
+			enforcePerClientResources: true,
+		});
+		await ctx.adapter.create({
+			model: "oauthResource",
+			data: {
+				identifier,
+				name: "Legacy resource",
+				allowedScopes: [],
+				policyVersion: 1,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		await seedClientLink(ctx, "legacy-client", identifier);
+
+		await expect(
+			resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
+				resource: identifier,
+				clientId: "legacy-client",
+				requestedScopes: ["read"],
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_scope",
+				error_description: `none of the requested scopes are allowed for resource ${identifier}`,
+			},
+		});
 	});
 
 	it("skips linkage check when enforcement is explicitly off", async () => {

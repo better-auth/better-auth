@@ -1,7 +1,13 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isUniqueViolation } from "@better-auth/core/db/internal";
 import { APIError, getSessionFromCtx } from "better-auth/api";
-import { assertIdentifierValid, invalidateResourceCache } from "../resources";
+import {
+	assertIdentifierValid,
+	buildResourceRow,
+	getResourceAllowedScopes,
+	invalidateResourceCache,
+	RESOURCE_POLICY_VERSION,
+} from "../resources";
 import type {
 	OAuthOptions,
 	OAuthResource,
@@ -47,47 +53,10 @@ function decodePathParam(value: string): string {
 // `validateIdentifier` is shared with the seed path — see
 // {@link assertIdentifierValid} in `../resources.ts`.
 
-/**
- * Serializes a resource row for admin responses. Storage keeps `[]` as the
- * "no restriction" sentinel (storable across adapters), but the wire
- * contract uses `null`: a stored `[]` and legacy `null` rows both serialize
- * as `null`, which the admin schemas accept back. Non-empty allowlists pass
- * through untouched.
- *
- * @internal
- */
 function toWireResource(row: OAuthResource): OAuthResource {
 	return {
 		...row,
-		allowedScopes: row.allowedScopes?.length ? row.allowedScopes : null,
-	};
-}
-
-/**
- * Builds the create-payload from a normalized input. Fills in defaults
- * for the fields seedResources uses so the admin-CRUD and seed paths
- * write identical rows. `allowedScopes` defaults to `[]` for "no restriction"
- * so list columns on adapters like Prisma on PostgreSQL can persist it.
- *
- * @internal
- */
-function buildResourceRow(input: OAuthResourceInput, now: Date) {
-	return {
-		identifier: input.identifier,
-		name: input.name ?? input.identifier,
-		accessTokenTtl: input.accessTokenTtl ?? null,
-		refreshTokenTtl: input.refreshTokenTtl ?? null,
-		accessTokenFormat: input.accessTokenFormat ?? null,
-		signingAlgorithm: input.signingAlgorithm ?? null,
-		signingKeyId: input.signingKeyId ?? null,
-		allowedScopes: input.allowedScopes ?? [],
-		customClaims: input.customClaims ?? null,
-		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
-		disabled: input.disabled ?? false,
-		policyVersion: 1,
-		metadata: input.metadata ?? null,
-		createdAt: now,
-		updatedAt: now,
+		allowedScopes: getResourceAllowedScopes(row),
 	};
 }
 
@@ -211,8 +180,8 @@ export async function updateResourceEndpoint(
 		if (!Object.hasOwn(ctx.body, key)) continue;
 		if (key === "allowedScopes") {
 			if (ctx.body.allowedScopes === undefined) continue;
-			update[key] =
-				ctx.body.allowedScopes === null ? [] : ctx.body.allowedScopes;
+			update[key] = ctx.body.allowedScopes ?? [];
+			update.policyVersion = RESOURCE_POLICY_VERSION;
 			continue;
 		}
 		update[key] = ctx.body[key];

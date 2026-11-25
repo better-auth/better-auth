@@ -350,7 +350,10 @@ describe("resource admin CRUD", () => {
 			model: "oauthResource",
 			where: [{ field: "identifier", value: identifier }],
 		});
-		expect(rowAfterCreate?.allowedScopes).toEqual([]);
+		expect(rowAfterCreate).toMatchObject({
+			allowedScopes: [],
+			policyVersion: 2,
+		});
 
 		await instance.auth.api.adminUpdateOAuthResource({
 			params: { identifier },
@@ -972,7 +975,57 @@ describe("path-param decoding for URI-valued identifiers", () => {
 	});
 });
 
-describe("resource allowedScopes — legacy NULL / explicit null gaps", () => {
+describe("resource allowedScopes — legacy rows and explicit null", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("shows a legacy empty allowlist until an admin explicitly replaces it", async () => {
+		const { auth, ctx, signInWithTestUser } = await boot();
+		const { headers } = await signInWithTestUser();
+		const identifier = "https://api.example.com/legacy-admin-empty";
+		const request = { params: { identifier }, headers };
+		await ctx.adapter.create({
+			model: "oauthResource",
+			data: {
+				identifier,
+				name: "Legacy resource",
+				allowedScopes: [],
+				policyVersion: 1,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const listed = await auth.api.adminListOAuthResources({ headers });
+		expect(listed).toContainEqual(
+			expect.objectContaining({
+				identifier,
+				allowedScopes: [],
+				policyVersion: 1,
+			}),
+		);
+		const fetched = await auth.api.adminGetOAuthResource(request);
+		expect(fetched).toMatchObject({ allowedScopes: [], policyVersion: 1 });
+
+		const renamed = await auth.api.adminUpdateOAuthResource({
+			...request,
+			body: { name: "Renamed resource" },
+		});
+		expect(renamed).toMatchObject({
+			name: "Renamed resource",
+			allowedScopes: [],
+			policyVersion: 1,
+		});
+		const unrestricted = await auth.api.adminUpdateOAuthResource({
+			...request,
+			body: { allowedScopes: null },
+		});
+		expect(unrestricted).toMatchObject({
+			allowedScopes: null,
+			policyVersion: 2,
+		});
+	});
+
 	/**
 	 * Explicit `null` on create is the storable-unrestricted insert path:
 	 * the admin schema accepts it, storage persists `[]`, and the wire

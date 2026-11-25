@@ -390,6 +390,36 @@ describe("oauth-provider device-code grant", async () => {
 		});
 	}
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("rejects device code redemption for a legacy empty allowlist", async () => {
+		const identifier = "https://api.example.com/legacy-device";
+		const clientId = await createDeviceClient();
+		const { headers } = await signInWithTestUser();
+		await auth.api.adminCreateOAuthResource({ body: { identifier }, headers });
+		await auth.api.adminLinkClientResource({
+			headers,
+			params: { identifier, client_id: clientId },
+		});
+		const deviceCode = await approvedDeviceCode(clientId, "openid", identifier);
+		const { adapter } = await auth.$context;
+		await adapter.update({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+			update: { allowedScopes: [], policyVersion: 1 },
+		});
+		const { error } = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+		});
+		expect(error).toMatchObject({
+			error: "invalid_scope",
+			error_description: `none of the requested scopes are allowed for resource ${identifier}`,
+		});
+	});
+
 	/** Polls an approved device code with a DPoP proof. */
 	async function createDpopPoller(clientId: string, deviceCode: string) {
 		const key = await createDpopKey();

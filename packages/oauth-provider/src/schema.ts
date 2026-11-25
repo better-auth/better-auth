@@ -260,9 +260,8 @@ export const schema = {
 				type: "date",
 				required: false,
 			},
-			// Forward-migration anchor — lets the runtime branch behavior if claim
-			// emission or validation semantics change without forcing every row to
-			// migrate. This PR ships with policyVersion = 1.
+			// Keep the legacy default. Only writes that set an explicit scope
+			// policy may mark an empty list as unrestricted.
 			policyVersion: {
 				type: "number",
 				required: false,

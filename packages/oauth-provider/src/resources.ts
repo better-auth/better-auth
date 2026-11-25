@@ -214,9 +214,8 @@ export interface ResolvedResourcePolicy {
 	 * resource's `allowedScopes`. When no requested resource defines an
 	 * allowlist, equals `requestedScopes` unchanged.
 	 *
-	 * - A resource with `allowedScopes` set to `null`, `undefined`, or `[]`
-	 *   is treated as "no restriction" for that resource (other resources'
-	 *   allowlists still apply).
+	 * - A resource without an allowlist contributes no narrowing. An empty
+	 *   stored list means no restriction only at policy version 2.
 	 * - A resource whose allowlist excludes every requested scope causes
 	 *   {@link resolveResourcePolicy} to throw `invalid_scope`.
 	 * - Otherwise this is the filtered scope set the token endpoint should
@@ -254,22 +253,23 @@ function normalizeResourceParam(resource: unknown): string[] | undefined {
 export const EMPTY_ALLOWED_SCOPES_MESSAGE =
 	"`allowedScopes` cannot be empty. Omit it (or pass null) to allow every requested scope, or set `disabled: true` to stop issuing tokens for this resource.";
 
+export const RESOURCE_POLICY_VERSION = 2;
+
 /**
- * Normalizes an `allowedScopes` value so `null`, `undefined`, and `[]` all
- * resolve as "no restriction" (`undefined`).
- *
- * `[]` is the stored form of an unrestricted resource, so keep that case: new
- * rows are written as `[]`, and rows stored before the deny→allow flip
- * (including SQL `NULL` list columns read back as `[]`) resolve the same way.
- * It is rejected as input: both the config seed path and the admin schemas
- * refuse an explicit `[]`.
+ * Returns `null` for an unrestricted resource. Older empty lists must keep
+ * denying every scope because the stored value cannot establish intent.
  *
  * @internal
  */
-function normalizeAllowedScopes(
-	value: readonly string[] | null | undefined,
-): readonly string[] | undefined {
-	return Array.isArray(value) && value.length > 0 ? value : undefined;
+export function getResourceAllowedScopes({
+	allowedScopes,
+	policyVersion,
+}: OAuthResource): string[] | null {
+	if (!Array.isArray(allowedScopes)) return null;
+	if (allowedScopes.length === 0 && policyVersion === RESOURCE_POLICY_VERSION) {
+		return null;
+	}
+	return allowedScopes;
 }
 
 /**
@@ -322,8 +322,9 @@ export async function isAudienceClaimAllowed(
  *    confirm the client is linked to every requested resource via
  *    `oauthClientResource`. Unlinked → `invalid_target`.
  * 4. Intersect `requestedScopes` with each resource's `allowedScopes`.
- *    Empty intersection → `invalid_scope`. Resources with a null, undefined,
- *    or empty allowlist contribute no narrowing.
+ *    Empty intersection → `invalid_scope`. Resources with a null or undefined
+ *    allowlist, or an empty one at policy version 2, contribute no narrowing.
+ *    An empty allowlist at policy version 1 denies every scope.
  * 5. Pick the minimum `accessTokenTtl` across requested resources.
  * 6. Pick signing config — only honored for single-resource requests
  *    (a JWT can only have one signature).
@@ -418,12 +419,11 @@ export async function resolveResourcePolicy(
 	//     fails closed with `invalid_scope` for that resource (the caller
 	//     would otherwise mint a token with no scopes for a resource that
 	//     refuses all of them).
-	//   - Resources with a null, undefined, or empty allowlist contribute no
-	//     narrowing (treated as "any requested scope is acceptable here").
+	//   - Unrestricted resources contribute no narrowing.
 	let effectiveScopes: string[] = [...params.requestedScopes];
 	for (const row of resolved) {
-		const allowedScopes = normalizeAllowedScopes(row.allowedScopes);
-		if (!allowedScopes) {
+		const allowedScopes = getResourceAllowedScopes(row);
+		if (allowedScopes === null) {
 			continue;
 		}
 		const allowed = new Set(allowedScopes);
@@ -737,14 +737,6 @@ export async function getResource(
 }
 
 /**
- * Default `name` value when an input doesn't provide one. Mirrors what most
- * admin UIs would show.
- */
-function defaultName(input: OAuthResourceInput): string {
-	return input.name ?? input.identifier;
-}
-
-/**
  * Coerces seed-config `resources` entries — string or object form — into a
  * normalized list of {@link OAuthResourceInput}.
  *
@@ -771,16 +763,15 @@ export function collectResourceInputs(
 }
 
 /**
- * Builds the row payload sent to the adapter for a seed insert. All policy
- * columns default to `null` (= inherit plugin default at issuance time)
- * when the input doesn't specify a value, except `allowedScopes` which
- * defaults to `[]` so adapters with non-nullable list columns (like Prisma on
- * PostgreSQL) can persist it.
+ * Both admin creation and seeding store unrestricted scopes as a versioned
+ * empty list so adapters with non-nullable list columns can persist them.
+ *
+ * @internal
  */
-function buildSeedRow(input: OAuthResourceInput, now: Date) {
+export function buildResourceRow(input: OAuthResourceInput, now: Date) {
 	return {
 		identifier: input.identifier,
-		name: defaultName(input),
+		name: input.name ?? input.identifier,
 		accessTokenTtl: input.accessTokenTtl ?? null,
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
 		accessTokenFormat: input.accessTokenFormat ?? null,
@@ -790,7 +781,7 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
 		customClaims: input.customClaims ?? null,
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
 		disabled: input.disabled ?? false,
-		policyVersion: 1,
+		policyVersion: RESOURCE_POLICY_VERSION,
 		metadata: input.metadata ?? null,
 		createdAt: now,
 		updatedAt: now,
@@ -811,7 +802,7 @@ function buildSeedUpdate(
 	now: Date,
 ): Record<string, unknown> {
 	if (mode === "overwrite") {
-		const row = buildSeedRow(input, now);
+		const row = buildResourceRow(input, now);
 		// Don't overwrite identifier (it's the key we matched on) or createdAt
 		// (preserves original insertion timestamp).
 		const { identifier: _identifier, createdAt: _createdAt, ...rest } = row;
@@ -829,9 +820,10 @@ function buildSeedUpdate(
 		update.signingAlgorithm = input.signingAlgorithm;
 	if (input.signingKeyId !== undefined)
 		update.signingKeyId = input.signingKeyId;
-	if (input.allowedScopes !== undefined)
-		update.allowedScopes =
-			input.allowedScopes === null ? [] : input.allowedScopes;
+	if (input.allowedScopes !== undefined) {
+		update.allowedScopes = input.allowedScopes ?? [];
+		update.policyVersion = RESOURCE_POLICY_VERSION;
+	}
 	if (input.customClaims !== undefined)
 		update.customClaims = input.customClaims;
 	if (input.dpopBoundAccessTokensRequired !== undefined) {
@@ -1023,7 +1015,7 @@ export async function seedResources(
 			try {
 				await ctx.adapter.create({
 					model: modelName,
-					data: buildSeedRow(input, now),
+					data: buildResourceRow(input, now),
 				});
 				onSeeded?.(rawInput);
 				continue;

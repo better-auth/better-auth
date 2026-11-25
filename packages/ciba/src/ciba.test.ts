@@ -779,27 +779,54 @@ describe("ciba poll mode", () => {
 		expect(res.body.error).toBe("invalid_scope");
 	});
 
-	it("keeps the approval when the resource policy no longer allows openid", async () => {
-		const { authReqId, url } = await start({ resource });
-		await approve(url);
-		const ctx = await auth.$context;
-		const where = [{ field: "identifier", value: resource }];
-		await ctx.adapter.update({
-			model: "oauthResource",
-			where,
-			update: { allowedScopes: ["profile"] },
-		});
-		try {
-			expect((await poll(authReqId)).body.error).toBe("invalid_scope");
-		} finally {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it.each([
+		{
+			name: "a policy excluding openid",
+			allowedScopes: ["profile"],
+			policyVersion: 2,
+			errorDescription:
+				"The requested resources do not allow the 'openid' scope",
+		},
+		{
+			name: "a legacy empty allowlist",
+			allowedScopes: [],
+			policyVersion: 1,
+			errorDescription: `none of the requested scopes are allowed for resource ${resource}`,
+		},
+	])(
+		"keeps the approval when $name blocks CIBA redemption",
+		async ({ allowedScopes, policyVersion, errorDescription }) => {
+			await auth.api.adminLinkClientResource({
+				headers,
+				params: { identifier: resource, client_id: pollClient.client_id! },
+			});
+			const { authReqId, url } = await start({ resource });
+			await approve(url);
+			const ctx = await auth.$context;
 			await ctx.adapter.update({
 				model: "oauthResource",
-				where,
-				update: { allowedScopes: null },
+				where: [{ field: "identifier", value: resource }],
+				update: { allowedScopes, policyVersion },
 			});
-		}
-		expect((await poll(authReqId)).status).toBe(200);
-	});
+			try {
+				const { body } = await poll(authReqId);
+				expect(body).toMatchObject({
+					error: "invalid_scope",
+					error_description: errorDescription,
+				});
+			} finally {
+				await auth.api.adminUpdateOAuthResource({
+					headers,
+					params: { identifier: resource },
+					body: { allowedScopes: null },
+				});
+			}
+			expect((await poll(authReqId)).status).toBe(200);
+		},
+	);
 });
 
 describe("ciba backchannel request validation", () => {
