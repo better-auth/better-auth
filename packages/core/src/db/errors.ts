@@ -22,7 +22,12 @@ const NODE_SQLITE_KEY_ERRCODES = new Set([1555, 2579]);
 const UNIQUE_VIOLATION_MESSAGE_PATTERN =
 	/unique(?: key)? constraint|duplicate (?:entry|key)|e11000/i;
 
-// The base SQLite constraint code covers unique, check, and not-null failures alike.
+// These codes cover unique, check, and not-null failures alike, so SQLite's wording decides.
+// libSQL servers report PROXY_ERROR, with the primary's message, for a write sent to a replica.
+const SQLITE_CONSTRAINT_MESSAGE_CODES = new Set([
+	"SQLITE_CONSTRAINT",
+	"PROXY_ERROR",
+]);
 const SQLITE_UNIQUE_MESSAGE_PATTERN = /UNIQUE constraint failed/;
 
 function hasUniqueViolation(error: unknown, seen: Set<object>): boolean {
@@ -49,7 +54,7 @@ function hasUniqueViolation(error: unknown, seen: Set<object>): boolean {
 		return hasUniqueViolation(cause, seen);
 	}
 	if (typeof message !== "string") return false;
-	if (code === "SQLITE_CONSTRAINT") {
+	if (typeof code === "string" && SQLITE_CONSTRAINT_MESSAGE_CODES.has(code)) {
 		return SQLITE_UNIQUE_MESSAGE_PATTERN.test(message);
 	}
 	// Any other driver code names the failure, and its message can echo user input.

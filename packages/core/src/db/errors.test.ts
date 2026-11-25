@@ -98,16 +98,16 @@ describe("isUniqueViolation", () => {
 				},
 			);
 
-		// @libsql/client remote: the base code only, the SQLite message on the cause.
-		const libsqlRemote = (message: string) =>
+		// @libsql/client remote: the base code only, the server message on the cause.
+		const libsqlRemote = (message: string, code = "SQLITE_CONSTRAINT") =>
 			Object.assign(
-				new Error(`SQLITE_CONSTRAINT: ${message}`, {
+				new Error(`${code}: ${message}`, {
 					cause: Object.assign(new Error(message), {
 						name: "ResponseError",
-						code: "SQLITE_CONSTRAINT",
+						code,
 					}),
 				}),
-				{ name: "LibsqlError", code: "SQLITE_CONSTRAINT" },
+				{ name: "LibsqlError", code },
 			);
 
 		it("recognizes @libsql/client local errors through the native cause", () => {
@@ -121,10 +121,30 @@ describe("isUniqueViolation", () => {
 		});
 
 		it("recognizes @libsql/client remote errors by the SQLite message", () => {
-			const error = libsqlRemote("UNIQUE constraint failed: user.email");
+			const error = libsqlRemote(
+				"SQLite error: UNIQUE constraint failed: user.email",
+			);
 
 			expect(isUniqueViolation(error)).toBe(true);
 			expect(isUniqueViolation(wrapLikeDrizzle(error))).toBe(true);
+		});
+
+		/**
+		 * @see https://github.com/tursodatabase/libsql/blob/a1d031cb602fedefbcf55c568e98e998a2274400/libsql-server/src/hrana/stmt.rs#L34-L57
+		 */
+		it("recognizes @libsql/client remote errors for a write forwarded by a replica", () => {
+			const proxied = (message: string) =>
+				libsqlRemote(
+					`error executing a request on the primary: ${message}`,
+					"PROXY_ERROR",
+				);
+
+			expect(
+				isUniqueViolation(proxied("UNIQUE constraint failed: user.email")),
+			).toBe(true);
+			expect(
+				isUniqueViolation(proxied("NOT NULL constraint failed: user.name")),
+			).toBe(false);
 		});
 
 		it("does not treat another @libsql/client constraint failure as unique", () => {
@@ -169,9 +189,6 @@ describe("isUniqueViolation", () => {
 	});
 });
 
-/**
- * @see https://github.com/better-auth/better-auth/pull/12853
- */
 describe("isUniqueViolation with a driver code", () => {
 	const failure = (message: string, fields: Record<string, unknown>) =>
 		Object.assign(new Error(message), fields);
