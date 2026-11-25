@@ -2270,22 +2270,16 @@ describe("OTP replaced by a concurrent send", () => {
 		const firstSendRecorded = new Promise<void>((resolve) => {
 			firstRecorded = resolve;
 		});
-		const update = internalAdapter.updateVerificationByIdentifier;
-		vi.spyOn(
-			internalAdapter,
-			"updateVerificationByIdentifier",
-		).mockImplementation(async (id, data) => {
-			const updated = await update(id, data);
-			if (id.startsWith("issued:")) firstRecorded();
-			return updated;
-		});
 		let otpCreates = 0;
 		const create = internalAdapter.createVerificationValue;
 		vi.spyOn(internalAdapter, "createVerificationValue").mockImplementation(
 			async (data) => {
-				if (!data.identifier.startsWith("issued:") && ++otpCreates === 2) {
-					await firstSendRecorded;
+				if (data.identifier.startsWith("issued:")) {
+					const created = await create(data);
+					firstRecorded();
+					return created;
 				}
+				if (++otpCreates === 2) await firstSendRecorded;
 				return create(data);
 			},
 		);

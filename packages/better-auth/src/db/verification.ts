@@ -98,17 +98,22 @@ function digestCode(ctx: GenericEndpointContext, value: string) {
  * it. The marker outlives the code, so a write-back can tell that another code
  * was stored after the one it consumed, even once that code is used too. It is
  * written once the code is stored and before the code is handed out, so a
- * code can only be used after the marker names it. Resolves to `false` when a
- * verification hook vetoes the write.
+ * code can only be used after the marker names it. Until then, a write-back
+ * yields to the live code. Resolves to `false` when a verification hook vetoes
+ * the write.
  */
 async function recordIssuance(
 	ctx: GenericEndpointContext,
 	data: VerificationInput,
 ) {
+	const { internalAdapter } = ctx.context;
 	const identifier = toIssuanceIdentifier(
 		await toStoredIdentifier(ctx, data.identifier),
 	);
 	const value = await digestCode(ctx, data.value);
+	// Removing earlier markers first keeps one per identifier, also when ids
+	// are not derived from the identifier, and clears an expired one.
+	await internalAdapter.deleteVerificationByIdentifier(identifier);
 	const issuance = await createOrFindVerification(ctx, {
 		identifier,
 		value,
@@ -116,14 +121,11 @@ async function recordIssuance(
 	});
 	if (!issuance) return false;
 	if (issuance.value === value) return true;
-	// Replace the previous marker in place, so no read finds the identifier
-	// without one.
-	const updated =
-		await ctx.context.internalAdapter.updateVerificationByIdentifier(
-			identifier,
-			{ value, expiresAt: data.expiresAt },
-		);
-	return !!updated;
+	// A concurrent send stored its marker between the delete and the create.
+	return !!(await internalAdapter.updateVerificationByIdentifier(identifier, {
+		value,
+		expiresAt: data.expiresAt,
+	}));
 }
 
 /**
@@ -155,13 +157,16 @@ export async function replaceVerification(
 	ctx: GenericEndpointContext,
 	data: VerificationInput,
 ) {
-	const replaced =
-		(await ctx.context.internalAdapter.updateVerificationByIdentifier(
+	const overwrite = () =>
+		ctx.context.internalAdapter.updateVerificationByIdentifier(
 			data.identifier,
 			{ value: data.value, expiresAt: data.expiresAt, createdAt: new Date() },
-		)) ??
-		// The concurrent code was consumed meanwhile, so nothing was replaced.
-		(await createOrFindVerification(ctx, data));
+		);
+	// The concurrent code may be consumed meanwhile, leaving nothing to update.
+	let replaced =
+		(await overwrite()) ?? (await createOrFindVerification(ctx, data));
+	// Another send stored its code in that gap.
+	if (replaced && replaced.value !== data.value) replaced = await overwrite();
 	if (!replaced) return null;
 	return (await recordIssuance(ctx, data)) ? replaced : null;
 }

@@ -575,6 +575,10 @@ function usedCodeStorageOptions(storage: (typeof usedCodeStorages)[number]) {
  * @see https://github.com/better-auth/better-auth/issues/11105
  */
 describe("email OTP written back after a newer code was sent", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it.for(usedCodeStorages)(
 		"does not revive the older code after the newer one was used in %s storage",
 		async (storage) => {
@@ -732,6 +736,97 @@ describe("email OTP written back after a newer code was sent", () => {
 				toOTPIdentifier("sign-in", email),
 			),
 		).toBeNull();
+		expect(
+			(await client.signIn.emailOtp({ email, otp: "111111" })).error?.code,
+		).toBe("INVALID_OTP");
+	});
+
+	it.for(usedCodeStorages)(
+		"sends a new code after the previous one expired in %s storage",
+		async (storage) => {
+			const codes = ["111111", "222222"];
+			const sent: string[] = [];
+			const { client, testUser } = await getTestInstance(
+				{
+					...usedCodeStorageOptions(storage),
+					plugins: [
+						emailOTP({
+							expiresIn: 60,
+							generateOTP: () => codes.shift(),
+							async sendVerificationOTP({ otp }) {
+								sent.push(otp);
+							},
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [emailOTPClient()] } },
+			);
+			const email = testUser.email;
+			vi.useFakeTimers({ toFake: ["Date"] });
+			vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+			await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+			vi.setSystemTime(new Date("2026-01-01T00:01:01.000Z"));
+
+			const resent = await client.emailOtp.sendVerificationOtp({
+				email,
+				type: "sign-in",
+			});
+
+			expect(resent.error).toBeNull();
+			expect(sent).toEqual(["111111", "222222"]);
+			expect(
+				(await client.signIn.emailOtp({ email, otp: "222222" })).data?.token,
+			).toBeDefined();
+		},
+	);
+
+	it("does not revive a code replaced within the same millisecond with custom ids", async () => {
+		const codes = ["111111", "222222"];
+		let releaseCheck: () => void = () => {};
+		const checkReleased = new Promise<void>((resolve) => {
+			releaseCheck = resolve;
+		});
+		let signalCheck: () => void = () => {};
+		const checkStarted = new Promise<void>((resolve) => {
+			signalCheck = resolve;
+		});
+		const { client, testUser } = await getTestInstance(
+			{
+				...usedCodeStorageOptions("database with custom ids"),
+				plugins: [
+					emailOTP({
+						generateOTP: () => codes.shift(),
+						async sendVerificationOTP() {},
+						storeOTP: {
+							async hash(otp) {
+								if (otp === "000000") {
+									signalCheck();
+									await checkReleased;
+								}
+								return `stored-${otp}`;
+							},
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		const email = testUser.email;
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const guess = client.emailOtp.checkVerificationOtp({
+			email,
+			type: "sign-in",
+			otp: "000000",
+		});
+		await checkStarted;
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const newer = await client.signIn.emailOtp({ email, otp: "222222" });
+		releaseCheck();
+
+		expect(newer.data?.token).toBeDefined();
+		expect((await guess).error?.code).toBe("INVALID_OTP");
 		expect(
 			(await client.signIn.emailOtp({ email, otp: "111111" })).error?.code,
 		).toBe("INVALID_OTP");
