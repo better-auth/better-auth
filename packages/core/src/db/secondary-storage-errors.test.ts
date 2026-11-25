@@ -1,6 +1,6 @@
 import { inspect } from "node:util";
 import { runInNewContext } from "node:vm";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { redactSecondaryStorageErrors } from "./secondary-storage-errors";
 import type { SecondaryStorage } from "./type";
 
@@ -394,7 +394,7 @@ describe("redactSecondaryStorageErrors", () => {
 			expect(original.message).toBe("failed for [redacted]");
 		});
 
-		it("falls back to a generic error when redaction itself throws", async () => {
+		it("keeps the message when rewriting a property throws", async () => {
 			const original = new Error("ERR");
 			Object.defineProperty(original, "message", {
 				get: () => `failed for ${TOKEN}`,
@@ -409,9 +409,127 @@ describe("redactSecondaryStorageErrors", () => {
 
 			const error = await rejection(storage.get(TOKEN));
 
-			expect(error).toBeInstanceOf(Error);
+			expect((error as Error).message).toBe("failed for [redacted]");
 			expect(inspect(error)).not.toContain(TOKEN);
-			expect((error as Error).message).not.toBe("setter failed");
+		});
+
+		it("falls back to a generic error when redaction itself throws", async () => {
+			const decode = vi
+				.spyOn(TextDecoder.prototype, "decode")
+				.mockImplementation(() => {
+					throw new Error("decoder failed");
+				});
+			onTestFinished(() => decode.mockRestore());
+			const original = Object.assign(new Error(`failed for ${TOKEN}`), {
+				name: "ReplyError",
+				command: { args: [new Uint8Array([1])] },
+			});
+			const storage = redactSecondaryStorageErrors(
+				storageThatRejects(() => original),
+			);
+
+			const error = await rejection(storage.get(TOKEN));
+
+			expect(error).toMatchObject({
+				name: "ReplyError",
+				message: "Secondary storage operation failed",
+			});
+		});
+
+		it.each([
+			[
+				"a throwing toJSON getter",
+				() => ({
+					get toJSON() {
+						throw new Error("nope");
+					},
+				}),
+			],
+			[
+				"a revoked proxy",
+				() => {
+					const { proxy, revoke } = Proxy.revocable({}, {});
+					revoke();
+					return proxy;
+				},
+			],
+		])(
+			"keeps the message and code when a property holds %s",
+			async (_, extra) => {
+				const original = Object.assign(new Error("READONLY You can't write"), {
+					code: "READONLY",
+					extra: extra(),
+				});
+				const storage = redactSecondaryStorageErrors(
+					storageThatRejects(() => original),
+				);
+
+				const error = await rejection(storage.get(TOKEN));
+
+				expect(error).toMatchObject({
+					message: "READONLY You can't write",
+					code: "READONLY",
+				});
+			},
+		);
+
+		it("does not run getters or toJSON on objects it checks", async () => {
+			const calls = { getter: 0, toJSON: 0 };
+			const client = Object.create({
+				toJSON() {
+					calls.toJSON++;
+					return {};
+				},
+			});
+			Object.defineProperty(client, "connection", {
+				get() {
+					calls.getter++;
+					return {};
+				},
+			});
+			const storage = redactSecondaryStorageErrors(
+				storageThatRejects(() =>
+					Object.assign(new Error(`failed for ${TOKEN}`), { client }),
+				),
+			);
+
+			await rejection(storage.get(TOKEN));
+
+			expect(calls).toEqual({ getter: 0, toJSON: 0 });
+		});
+
+		it("does not pass through a secret printed by a custom inspect hook", async () => {
+			const storage = redactSecondaryStorageErrors(
+				storageThatRejects(() =>
+					Object.assign(new Error("ERR"), {
+						details: {
+							[Symbol.for("nodejs.util.inspect.custom")]: () => TOKEN,
+						},
+					}),
+				),
+			);
+
+			const error = await rejection(storage.get(TOKEN));
+
+			expect(inspect(error, { depth: 10 })).not.toContain(TOKEN);
+			expect((error as Error).message).toBe("ERR");
+		});
+
+		it("bounds the check by the number of entries, not only objects", async () => {
+			const cache = new Map<string, string>();
+			for (let i = 0; i < 50_000; i++) cache.set(`key-${i}`, `value-${i}`);
+			const original = Object.assign(new Error("ERR"), {
+				code: "EBUSY",
+				client: { cache },
+			});
+			const storage = redactSecondaryStorageErrors(
+				storageThatRejects(() => original),
+			);
+
+			const error = await rejection(storage.get(TOKEN));
+
+			expect(error).not.toBe(original);
+			expect(error).toMatchObject({ message: "ERR", code: "EBUSY" });
 		});
 
 		it("replaces a frozen error that has no string message", async () => {
@@ -452,6 +570,20 @@ describe("redactSecondaryStorageErrors", () => {
 			});
 		});
 
+		it("redacts a short key in its URL-encoded form", async () => {
+			const storage = redactSecondaryStorageErrors(
+				storageThatRejects((args) =>
+					Object.assign(new Error("ERR"), {
+						path: encodeURIComponent(String(args[0])),
+					}),
+				),
+			);
+
+			const error = await rejection(storage.get("a b/c"));
+
+			expect(error).toMatchObject({ path: "[redacted]" });
+		});
+
 		it("redacts a short value quoted inside a JSON-encoded command", async () => {
 			const storage = redactSecondaryStorageErrors(
 				storageThatRejects(
@@ -473,6 +605,51 @@ describe("redactSecondaryStorageErrors", () => {
 	});
 
 	describe("the wrapped storage", () => {
+		it("redacts a method read through its property descriptor", async () => {
+			const wrapped = redactSecondaryStorageErrors(
+				storageThatRejects((args) => ioredisReplyError("get", [args[0]])),
+			);
+			const get = Object.getOwnPropertyDescriptor(wrapped, "get")?.value as (
+				key: string,
+			) => Promise<unknown>;
+
+			const error = await rejection(get(TOKEN));
+
+			expect(error).toMatchObject({ command: { args: ["[redacted]"] } });
+		});
+
+		it("keeps redacting when the storage is locked after it was wrapped", async () => {
+			const storage = storageThatRejects((args) =>
+				ioredisReplyError("get", [args[0]]),
+			);
+			const wrapped = redactSecondaryStorageErrors(storage);
+			Object.freeze(storage);
+
+			const error = await rejection(wrapped.get(TOKEN));
+
+			expect(error).toMatchObject({ command: { args: ["[redacted]"] } });
+		});
+
+		it("refuses to freeze its storage methods", async () => {
+			const wrapped = redactSecondaryStorageErrors(
+				storageThatRejects((args) => ioredisReplyError("get", [args[0]])),
+			);
+
+			expect(() => Object.freeze(wrapped)).toThrow(TypeError);
+			const error = await rejection(wrapped.get(TOKEN));
+			expect(error).toMatchObject({ command: { args: ["[redacted]"] } });
+		});
+
+		it("restores the original method when a spy is removed", () => {
+			const storage = storageThatRejects(() => null);
+			const original = storage.get;
+			const wrapped: SecondaryStorage = redactSecondaryStorageErrors(storage);
+
+			vi.spyOn(wrapped, "get").mockRestore();
+
+			expect(storage.get).toBe(original);
+		});
+
 		it("honors a spy installed on it", async () => {
 			const wrapped: SecondaryStorage = redactSecondaryStorageErrors(
 				storageThatRejects(() => null),
