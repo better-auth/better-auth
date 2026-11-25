@@ -578,7 +578,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		description:
 			"Bridge Dodo Payments post-purchase entitlements into Better Auth. Support passwordless license key sign-in and device activation, plan and feature flag gating, and webhook-synced metered credit wallets.",
 		author: {
-			name: "OMEE-Y",
+			name: "Om Yewale",
 			github: "OMEE-Y",
 			avatar: "https://github.com/OMEE-Y.png",
 		},
