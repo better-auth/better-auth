@@ -7,6 +7,7 @@ import { getBetterAuthVersion } from "@better-auth/core/context";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import {
+	redactSecondaryStorageErrors,
 	runtimeSchemaCheckFor,
 	schemaCheckFor,
 } from "@better-auth/core/db/internal";
@@ -25,7 +26,6 @@ import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
 import { createInternalAdapter } from "../db/internal-adapter";
-import { redactSecondaryStorageErrors } from "../db/secondary-storage-errors";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";

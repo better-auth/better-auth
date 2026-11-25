@@ -1,9 +1,9 @@
 import { inspect } from "node:util";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import type { LogLevel } from "@better-auth/core/env";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import { redactSecondaryStorageErrors } from "./secondary-storage-errors";
 
 type StorageMethod = "get" | "set" | "delete";
 
@@ -257,84 +257,53 @@ describe.each(["ioredis", "upstash"] as const)(
 	},
 );
 
-describe("redactSecondaryStorageErrors", () => {
-	function failingStorage(error: (key: string) => unknown): SecondaryStorage {
-		return {
-			...createMemoryStorage(new Map()),
-			get(key) {
-				throw error(key);
-			},
-		};
-	}
-
-	it("rethrows the same error with the key removed from nested causes", async () => {
-		const original = Object.assign(new Error("connection lost"), {
-			cause: ioredisReplyError("get", ["better-auth:secret-token"]),
-		});
-		const storage = redactSecondaryStorageErrors(
-			failingStorage(() => original),
-		);
-
-		const error = await Promise.resolve(storage.get("secret-token")).catch(
-			(e: unknown) => e,
-		);
-
-		expect(error).toBe(original);
-		expect(inspect(error, { depth: 10 })).not.toContain("secret-token");
-		expect(original.cause.command).toEqual({
-			name: "get",
-			args: ["better-auth:[redacted]"],
-		});
+describe("secondary storage supplied by a plugin", () => {
+	let failReads = false;
+	const storage = createMemoryStorage(new Map());
+	const failingStorage = (): SecondaryStorage => ({
+		...storage,
+		get(key) {
+			if (failReads) throw ioredisReplyError("get", [key]);
+			return storage.get(key);
+		},
 	});
 
-	it("replaces an error it cannot rewrite", async () => {
-		const frozen = Object.freeze(
-			Object.assign(new Error("ERR command was: secret-token"), {
-				name: "FrozenError",
+	it.each([
+		[
+			"options",
+			(storage: SecondaryStorage) => ({
+				options: { secondaryStorage: storage },
 			}),
-		);
-		const storage = redactSecondaryStorageErrors(failingStorage(() => frozen));
+		],
+		[
+			"context",
+			(storage: SecondaryStorage) => ({
+				context: { secondaryStorage: storage },
+			}),
+		],
+	] as const)(
+		"redacts errors from storage set through init %s",
+		async (_, init) => {
+			const { auth } = await getTestInstance({
+				plugins: [{ id: "storage-plugin", init: () => init(failingStorage()) }],
+			});
+			const ctx = await auth.$context;
+			const options: BetterAuthOptions = ctx.options;
+			failReads = true;
+			onTestFinished(() => {
+				failReads = false;
+			});
 
-		const error = await Promise.resolve(storage.get("secret-token")).catch(
-			(e: unknown) => e,
-		);
-
-		expect(error).toBeInstanceOf(Error);
-		expect(error).not.toBe(frozen);
-		expect((error as Error).name).toBe("FrozenError");
-		expect((error as Error).message).toBe("ERR command was: [redacted]");
-		expect(inspect(error)).not.toContain("secret-token");
-	});
-
-	it("keeps the storage's own methods, properties, and `this`", async () => {
-		const store = new Map<string, string>([["a", "1"]]);
-		const storage = {
-			store,
-			get(key: string) {
-				return this.store.get(key) ?? null;
-			},
-			getAndDelete(key: string) {
-				return this.store.get(key) ?? null;
-			},
-			increment() {
-				return 1;
-			},
-			set(key: string, value: string) {
-				this.store.set(key, value);
-			},
-			delete(key: string) {
-				this.store.delete(key);
-			},
-			listKeys() {
-				return [...this.store.keys()];
-			},
-		};
-		const wrapped = redactSecondaryStorageErrors(storage) as typeof storage;
-
-		await wrapped.set("b", "2");
-
-		expect(await wrapped.get("a")).toBe("1");
-		expect(wrapped.listKeys()).toEqual(["a", "b"]);
-		expect(wrapped.store).toBe(store);
-	});
+			for (const storage of [ctx.secondaryStorage, options.secondaryStorage]) {
+				if (!storage) continue;
+				const error = await (async () => storage.get("secret-token"))().catch(
+					(e: unknown) => e,
+				);
+				expect(error).toMatchObject({
+					command: { name: "get", args: ["[redacted]"] },
+				});
+			}
+			expect(ctx.secondaryStorage ?? options.secondaryStorage).toBeDefined();
+		},
+	);
 });
