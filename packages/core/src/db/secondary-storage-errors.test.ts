@@ -212,6 +212,62 @@ describe("redactSecondaryStorageErrors", () => {
 		expect(wrapped.store).toBe(store);
 	});
 
+	it("redacts a storage method that shares its function with another property", async () => {
+		const remove = async (key: string) => {
+			throw ioredisReplyError("del", [key]);
+		};
+		const storage = {
+			...storageThatRejects(() => null),
+			del: remove,
+			delete: remove,
+		};
+		const wrapped = redactSecondaryStorageErrors(storage);
+
+		void wrapped.del;
+		const error = await rejection(wrapped.delete(TOKEN));
+
+		expect(error).toMatchObject({
+			command: { name: "del", args: ["[redacted]"] },
+		});
+	});
+
+	it("keeps properties that are not storage methods, such as `constructor`", () => {
+		const storage = storageThatRejects(() => null);
+		const wrapped = redactSecondaryStorageErrors(storage);
+
+		expect(wrapped.constructor).toBe(Object);
+		expect({ ...wrapped }).toHaveProperty("get");
+		expect(Object.keys(wrapped)).toEqual(Object.keys(storage));
+	});
+
+	it("redacts errors from a frozen storage", async () => {
+		const storage = redactSecondaryStorageErrors(
+			Object.freeze(
+				storageThatRejects((args) => ioredisReplyError("get", [args[0]])),
+			),
+		);
+
+		const error = await rejection(storage.get(TOKEN));
+
+		expect(error).toMatchObject({
+			command: { name: "get", args: ["[redacted]"] },
+		});
+	});
+
+	it("keeps the storage error when a key is not valid UTF-16", async () => {
+		const key = `\uD800${TOKEN}`;
+		const storage = redactSecondaryStorageErrors(
+			storageThatRejects((args) => ioredisReplyError("get", [args[0]])),
+		);
+
+		const error = await rejection(storage.get(key));
+
+		expect(error).toMatchObject({
+			name: "ReplyError",
+			command: { name: "get", args: ["[redacted]"] },
+		});
+	});
+
 	it("wraps a storage only once", () => {
 		const storage = redactSecondaryStorageErrors(
 			storageThatRejects(() => null),

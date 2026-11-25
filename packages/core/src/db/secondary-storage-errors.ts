@@ -26,7 +26,11 @@ function secretsOf(args: readonly unknown[]): string[] {
 		if (typeof arg !== "string" || !arg) continue;
 		secrets.add(arg);
 		secrets.add(JSON.stringify(arg).slice(1, -1));
-		secrets.add(encodeURIComponent(arg));
+		try {
+			secrets.add(encodeURIComponent(arg));
+		} catch {
+			// A string with a lone surrogate has no URL encoding to redact.
+		}
 	}
 	// Replace longer secrets first so a key inside a value is not split.
 	return [...secrets].sort((a, b) => b.length - a.length);
@@ -143,19 +147,20 @@ export function redactSecondaryStorageErrors<T extends SecondaryStorage>(
 	if (redactedStorages.has(storage)) return storage;
 	const existing = proxies.get(storage);
 	if (existing) return existing as T;
-	const wrapped = new WeakMap<object, unknown>();
-	const proxy = new Proxy(storage, {
-		get(target, property, receiver) {
-			const value: unknown = Reflect.get(target, property, receiver);
-			if (typeof value !== "function") return value;
-			const cached = wrapped.get(value);
-			if (cached) return cached;
-			let method: unknown;
-			if (typeof property === "string" && STORAGE_METHODS.has(property)) {
+	const redacting = new WeakMap<object, unknown>();
+	const forwarding = new WeakMap<object, unknown>();
+	const read = (property: PropertyKey): unknown => {
+		const value: unknown = Reflect.get(storage, property);
+		if (typeof value !== "function" || property === "constructor") {
+			return value;
+		}
+		if (typeof property === "string" && STORAGE_METHODS.has(property)) {
+			let method = redacting.get(value);
+			if (!method) {
 				method = (...args: unknown[]) => {
 					let result: unknown;
 					try {
-						result = Reflect.apply(value, target, args);
+						result = Reflect.apply(value, storage, args);
 					} catch (error) {
 						throw redactStorageError(error, args);
 					}
@@ -164,13 +169,36 @@ export function redactSecondaryStorageErrors<T extends SecondaryStorage>(
 						throw redactStorageError(error, args);
 					});
 				};
-			} else {
-				// Other methods run against the storage itself, which may keep
-				// private state keyed on its own identity.
-				method = (...args: unknown[]) => Reflect.apply(value, target, args);
+				redacting.set(value, method);
 			}
-			wrapped.set(value, method);
 			return method;
+		}
+		// Other methods run against the storage itself, which may keep private
+		// state keyed on its own identity.
+		let method = forwarding.get(value);
+		if (!method) {
+			method = (...args: unknown[]) => Reflect.apply(value, storage, args);
+			forwarding.set(value, method);
+		}
+		return method;
+	};
+	// The proxy forwards to the storage from a blank target, so it can return
+	// wrapped methods even when the storage is frozen, which a proxy over the
+	// storage itself could not do.
+	const target: T = Object.create(null);
+	const proxy = new Proxy(target, {
+		get: (_, property) => read(property),
+		set: (_, property, value) => Reflect.set(storage, property, value),
+		has: (_, property) => Reflect.has(storage, property),
+		deleteProperty: (_, property) => Reflect.deleteProperty(storage, property),
+		ownKeys: () => Reflect.ownKeys(storage),
+		getPrototypeOf: () => Reflect.getPrototypeOf(storage),
+		getOwnPropertyDescriptor(_, property) {
+			const descriptor = Reflect.getOwnPropertyDescriptor(storage, property);
+			if (!descriptor) return undefined;
+			return "value" in descriptor
+				? { ...descriptor, value: read(property), configurable: true }
+				: { ...descriptor, configurable: true };
 		},
 	});
 	redactedStorages.add(proxy);
