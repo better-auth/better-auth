@@ -2645,7 +2645,7 @@ describe("ciba on scalar list columns", async () => {
 				...adapter,
 				create: (async (args) => {
 					rejectNullLists(args.model, args.data);
-					return adapter.create(args);
+					return readListsAsArrays(args.model, await adapter.create(args));
 				}) as DBAdapter["create"],
 				update: (async (args) => {
 					rejectNullLists(args.model, args.update);
@@ -2720,6 +2720,9 @@ describe("ciba on scalar list columns", async () => {
 
 	it("reads a request made without acr_values or resource as having neither", async () => {
 		const { requestId } = await startWithoutLists();
+		expect(lastNotification).toMatchObject({ requestId });
+		expect(lastNotification!.acrValues).toBeUndefined();
+		expect(lastNotification!.resources).toBeUndefined();
 		const pending = await instance.auth.api.getCibaRequest({
 			body: { requestId, userId: user.id },
 		});
