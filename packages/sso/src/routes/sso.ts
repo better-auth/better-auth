@@ -653,19 +653,31 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			let domainVerificationToken: string | undefined;
 			let domainVerified: boolean | undefined;
 
-			// A vetoed domain token must not leave the provider behind, or a retry
+			// A failed registration must not leave the provider behind, or a retry
 			// fails as a duplicate. Adapters without transactions do not roll back,
-			// so the row this request inserted is removed by its id. Once this
-			// request's token is stored, a later failure, such as an after hook that
-			// throws, leaves both records in place. Without AsyncLocalStorage, after
-			// hooks run inside the write, so the stored row decides, not control flow.
+			// so the row this request inserted is removed by its id. A known veto
+			// removes it directly. After any other failure, the provider stays only
+			// when this request's token is stored, because an after hook can throw
+			// once both records exist (inside the write, without AsyncLocalStorage).
+			// When that check fails, both records are removed so a retry works.
 			let createdId: string | undefined;
-			const tokenStored = async () => {
-				if (!createdId || !domainVerificationToken) return false;
-				const stored = await ctx.context.internalAdapter.findVerificationValue(
-					getVerificationIdentifier(options, body.providerId),
-				);
-				return stored?.value === domainVerificationToken;
+			let tokenVetoed = false;
+			const tokenIdentifier = () =>
+				getVerificationIdentifier(options, body.providerId);
+			const keepProvider = async () => {
+				if (tokenVetoed || !domainVerificationToken) return false;
+				try {
+					const stored =
+						await ctx.context.internalAdapter.findVerificationValue(
+							tokenIdentifier(),
+						);
+					return stored?.value === domainVerificationToken;
+				} catch {
+					await ctx.context.internalAdapter
+						.deleteVerificationByIdentifier(tokenIdentifier())
+						.catch(() => {});
+					return false;
+				}
 			};
 			const provider = await runWithTransaction(
 				ctx.context.adapter,
@@ -746,14 +758,12 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 
 						const verification =
 							await ctx.context.internalAdapter.createVerificationValue({
-								identifier: getVerificationIdentifier(
-									options,
-									created.providerId,
-								),
+								identifier: tokenIdentifier(),
 								value: domainVerificationToken,
 								expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
 							});
 						if (!verification) {
+							tokenVetoed = true;
 							throw APIError.from(
 								"INTERNAL_SERVER_ERROR",
 								BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
@@ -763,7 +773,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					return created;
 				},
 			).catch(async (error: unknown) => {
-				if (createdId && !(await tokenStored())) {
+				if (createdId && !(await keepProvider())) {
 					await ctx.context.adapter.deleteMany({
 						model: "ssoProvider",
 						where: [{ field: "id", value: createdId }],

@@ -1188,6 +1188,40 @@ describe("domain verification tokens vetoed by a verification hook", () => {
 		expect(token).not.toBeNull();
 	});
 
+	it("removes the provider on a veto even when the token lookup fails", async () => {
+		const { auth, register, providers } = await setup();
+		const ctx = await auth.$context;
+		vi.spyOn(ctx.internalAdapter, "findVerificationValue").mockRejectedValue(
+			new Error("lookup failed"),
+		);
+		veto.active = true;
+
+		const res = await register();
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		vi.restoreAllMocks();
+		expect(await providers()).toEqual([]);
+	});
+
+	it("removes both records when an after hook fails and the token lookup fails", async () => {
+		const { auth, register, providers } = await setup();
+		const ctx = await auth.$context;
+		const findVerificationValue = ctx.internalAdapter.findVerificationValue;
+		const lookup = vi
+			.spyOn(ctx.internalAdapter, "findVerificationValue")
+			.mockRejectedValue(new Error("lookup failed"));
+		afterCreate.fail = true;
+
+		await expect(register()).rejects.toThrow("after hook failed");
+
+		lookup.mockRestore();
+		expect(await providers()).toEqual([]);
+		expect(
+			await findVerificationValue("_better-auth-token-vetoed-domain-provider"),
+		).toBeNull();
+	});
+
 	it("does not return a requested token that was not stored", async () => {
 		const { auth, headers, register } = await setup();
 		expect((await register()).status).toBe(200);
