@@ -30,6 +30,17 @@ function getStorageIdentifier(config: PredefinedApiKeyOptions): string {
 		: "secondary-storage";
 }
 
+function getStorageGroups(configurations: PredefinedApiKeyOptions[]) {
+	const storageGroups = new Map<string, PredefinedApiKeyOptions>();
+	for (const config of configurations) {
+		const storageKey = getStorageIdentifier(config);
+		if (!storageGroups.has(storageKey)) {
+			storageGroups.set(storageKey, config);
+		}
+	}
+	return storageGroups;
+}
+
 const listApiKeysQuerySchema = z
 	.object({
 		configId: z
@@ -264,6 +275,8 @@ export function listApiKeys({
 				ctx.query?.limit != null ? Number(ctx.query.limit) : undefined;
 			const offset =
 				ctx.query?.offset != null ? Number(ctx.query.offset) : undefined;
+			const sortBy = ctx.query?.sortBy;
+			const sortDirection = ctx.query?.sortDirection;
 
 			// For organization-owned keys, verify membership and permission
 			if (organizationId) {
@@ -278,91 +291,117 @@ export function listApiKeys({
 			const referenceId = organizationId ?? session.user.id;
 			const expectedReferencesType = organizationId ? "organization" : "user";
 
-			let allApiKeys: ApiKey[] = [];
+			const storageGroups = getStorageGroups(configurations);
+			const storageGroupConfigs = [...storageGroups.values()];
+			const singleStorage =
+				storageGroupConfigs.length === 1 ? storageGroupConfigs[0] : undefined;
+			const resolvedConfig = configId
+				? resolveConfiguration(ctx.context, configurations, configId)
+				: undefined;
+			const databaseConfig = resolvedConfig ?? singleStorage;
+			const listingConfigs = resolvedConfig ? [resolvedConfig] : configurations;
+			const ownershipMatchesListing = listingConfigs.every(
+				(config) => (config.references ?? "user") === expectedReferencesType,
+			);
+			// Page in the database only when in-memory filters cannot drop rows:
+			// one database backend and every listed config matches this ownership
+			// type. `configId` is an exact column match (`"default"` means
+			// `"default"`, not null).
+			const canPageInDatabase =
+				databaseConfig?.storage === "database" &&
+				ownershipMatchesListing &&
+				(resolvedConfig != null || storageGroupConfigs.length === 1);
 
-			if (configId) {
-				const resolvedConfig = resolveConfiguration(
-					ctx.context,
-					configurations,
-					configId,
-				);
+			let paginatedApiKeys: ApiKey[];
+			let total: number;
 
-				const { apiKeys } = await listApiKeysFromStorage(
+			if (canPageInDatabase && databaseConfig) {
+				const result = await listApiKeysFromStorage(
 					ctx,
 					referenceId,
-					resolvedConfig,
+					databaseConfig,
 					{
-						limit: undefined,
-						offset: undefined,
-						sortBy: ctx.query?.sortBy,
-						sortDirection: ctx.query?.sortDirection,
+						limit,
+						offset,
+						sortBy,
+						sortDirection,
+						...(configId
+							? {
+									configId: isDefaultConfigId(configId) ? "default" : configId,
+								}
+							: {}),
 					},
 				);
-				allApiKeys = apiKeys;
+				paginatedApiKeys = result.apiKeys;
+				total = result.total;
 			} else {
-				// When no configId specified, query each unique storage backend
-				// Group configurations by their effective storage to avoid duplicate queries
-				const storageGroups = new Map<string, PredefinedApiKeyOptions>();
-				for (const config of configurations) {
-					const storageKey = getStorageIdentifier(config);
-					if (!storageGroups.has(storageKey)) {
-						storageGroups.set(storageKey, config);
-					}
-				}
+				let allApiKeys: ApiKey[] = [];
 
-				// Query each unique storage backend in parallel and merge results
-				const groupResults = await Promise.all(
-					[...storageGroups.values()].map((opts) =>
-						listApiKeysFromStorage(ctx, referenceId, opts, {
-							limit: undefined,
-							offset: undefined,
-							sortBy: ctx.query?.sortBy,
-							sortDirection: ctx.query?.sortDirection,
-						}),
-					),
-				);
-				const seenIds = new Set<string>();
-				for (const { apiKeys } of groupResults) {
-					for (const key of apiKeys) {
-						if (!seenIds.has(key.id)) {
-							seenIds.add(key.id);
-							allApiKeys.push(key);
+				if (resolvedConfig) {
+					const { apiKeys } = await listApiKeysFromStorage(
+						ctx,
+						referenceId,
+						resolvedConfig,
+						{
+							sortBy,
+							sortDirection,
+						},
+					);
+					allApiKeys = apiKeys;
+				} else {
+					// Across storage backends we still merge in memory, so request
+					// limit/offset cannot be pushed into each store. Omitted
+					// `findMany` limits stay adapter-defined (100 on Prisma/Drizzle).
+					const groupResults = await Promise.all(
+						storageGroupConfigs.map((opts) =>
+							listApiKeysFromStorage(ctx, referenceId, opts, {
+								sortBy,
+								sortDirection,
+							}),
+						),
+					);
+					const seenIds = new Set<string>();
+					for (const { apiKeys } of groupResults) {
+						for (const key of apiKeys) {
+							if (!seenIds.has(key.id)) {
+								seenIds.add(key.id);
+								allApiKeys.push(key);
+							}
 						}
 					}
 				}
-			}
 
-			// Filter by ownership type (user or organization) based on config's references setting
-			let filteredApiKeys = allApiKeys.filter((key) => {
-				const keyConfig = configurations.find((c) => {
-					// Keys with configId null, undefined, or "default" all match the default config
-					if (isDefaultConfigId(key.configId)) {
-						return isDefaultConfigId(c.configId);
-					}
-					return c.configId === key.configId;
+				// Filter by ownership type (user or organization) based on config's references setting
+				let filteredApiKeys = allApiKeys.filter((key) => {
+					const keyConfig = configurations.find((c) => {
+						// Keys with configId null, undefined, or "default" all match the default config
+						if (isDefaultConfigId(key.configId)) {
+							return isDefaultConfigId(c.configId);
+						}
+						return c.configId === key.configId;
+					});
+					const referencesType = keyConfig?.references ?? "user";
+					return (
+						referencesType === expectedReferencesType &&
+						key.referenceId === referenceId
+					);
 				});
-				const referencesType = keyConfig?.references ?? "user";
-				return (
-					referencesType === expectedReferencesType &&
-					key.referenceId === referenceId
-				);
-			});
 
-			if (configId) {
-				filteredApiKeys = filteredApiKeys.filter((key) =>
-					configIdMatches(key.configId, configId),
-				);
-			}
+				if (configId) {
+					filteredApiKeys = filteredApiKeys.filter((key) =>
+						configIdMatches(key.configId, configId),
+					);
+				}
 
-			const total = filteredApiKeys.length;
+				total = filteredApiKeys.length;
 
-			// Apply pagination after filtering
-			let paginatedApiKeys = filteredApiKeys;
-			if (offset !== undefined) {
-				paginatedApiKeys = paginatedApiKeys.slice(offset);
-			}
-			if (limit !== undefined) {
-				paginatedApiKeys = paginatedApiKeys.slice(0, limit);
+				paginatedApiKeys = filteredApiKeys;
+				if (offset !== undefined) {
+					paginatedApiKeys = paginatedApiKeys.slice(offset);
+				}
+				if (limit !== undefined) {
+					paginatedApiKeys = paginatedApiKeys.slice(0, limit);
+				}
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);

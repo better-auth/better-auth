@@ -1946,6 +1946,102 @@ describe("api-key", async () => {
 		});
 	});
 
+	describe("list API keys database pagination", () => {
+		it("should page with limit and offset while total stays the full count", async () => {
+			const { auth: listAuth, signInWithTestUser: signIn } =
+				await getTestInstance(
+					{
+						plugins: [apiKey()],
+					},
+					{
+						clientOptions: {
+							plugins: [apiKeyClient()],
+						},
+					},
+				);
+			const { headers: listHeaders } = await signIn();
+
+			for (const name of ["page-a", "page-b", "page-c"]) {
+				await listAuth.api.createApiKey({
+					body: { name },
+					headers: listHeaders,
+				});
+			}
+
+			const page1 = await listAuth.api.listApiKeys({
+				query: {
+					limit: 2,
+					offset: 0,
+					sortBy: "createdAt",
+					sortDirection: "asc",
+				},
+				headers: listHeaders,
+			});
+			const page2 = await listAuth.api.listApiKeys({
+				query: {
+					limit: 2,
+					offset: 2,
+					sortBy: "createdAt",
+					sortDirection: "asc",
+				},
+				headers: listHeaders,
+			});
+
+			expect(page1.apiKeys.length).toBe(2);
+			expect(page2.apiKeys.length).toBe(1);
+			expect(page1.total).toBe(3);
+			expect(page2.total).toBe(3);
+			const page1Ids = page1.apiKeys.map((key) => key.id);
+			const page2Ids = page2.apiKeys.map((key) => key.id);
+			expect(page1Ids.filter((id) => page2Ids.includes(id))).toEqual([]);
+		});
+
+		it("should return total from the database count when more than 100 keys exist", async () => {
+			const { auth: listAuth, signInWithTestUser: signIn } =
+				await getTestInstance(
+					{
+						plugins: [apiKey()],
+					},
+					{
+						clientOptions: {
+							plugins: [apiKeyClient()],
+						},
+					},
+				);
+			const { headers: listHeaders } = await signIn();
+
+			const keyCount = 101;
+			await Promise.all(
+				Array.from({ length: keyCount }, (_, index) =>
+					listAuth.api.createApiKey({
+						body: { name: `bulk-${index}` },
+						headers: listHeaders,
+					}),
+				),
+			);
+
+			const result = await listAuth.api.listApiKeys({
+				headers: listHeaders,
+			});
+			expect(result.total).toBe(keyCount);
+			expect(result.total).not.toBe(100);
+
+			const page = await listAuth.api.listApiKeys({
+				query: { limit: 10, offset: 0 },
+				headers: listHeaders,
+			});
+			expect(page.apiKeys.length).toBe(10);
+			expect(page.total).toBe(keyCount);
+
+			const lastPage = await listAuth.api.listApiKeys({
+				query: { limit: 10, offset: 100 },
+				headers: listHeaders,
+			});
+			expect(lastPage.apiKeys.length).toBe(1);
+			expect(lastPage.total).toBe(keyCount);
+		});
+	});
+
 	// =========================================================================
 	// Sessions from API keys
 	// =========================================================================
