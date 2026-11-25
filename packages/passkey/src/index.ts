@@ -12,7 +12,6 @@ import {
 } from "./routes";
 import { schema } from "./schema";
 import type { Passkey, PasskeyOptions } from "./types";
-import { wildcardHostCoversRpID } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
@@ -49,10 +48,9 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 			return {
 				context: {
 					passkeyBaseURLFromRequest: !ctx.options.baseURL,
-					passkeyWildcardCoversRpID: wildcardHostCoversRpID(
-						opts,
-						ctx.options.baseURL,
-					),
+					// Core rewrites `options.baseURL` to a string per request, so
+					// keep the allowed hosts to check a per-request `rpID` against.
+					passkeyBaseURL: ctx.options.baseURL,
 				},
 			};
 		},

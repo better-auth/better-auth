@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Passkey } from ".";
+import type { Passkey, PasskeyOptions } from ".";
 import { passkey } from ".";
 import { wildcardHostCoversRpID } from "./utils";
 
@@ -393,7 +393,7 @@ describe("passkey expected origin", () => {
 	])(
 		"treats allowedHosts $allowedHosts as covering rpID $rpID: $covers",
 		({ allowedHosts, rpID, covers }) => {
-			expect(wildcardHostCoversRpID({ rpID }, { allowedHosts })).toBe(covers);
+			expect(wildcardHostCoversRpID(rpID, { allowedHosts })).toBe(covers);
 		},
 	);
 });
@@ -481,9 +481,9 @@ describe("passkey shared across auth instances", () => {
  */
 describe("passkey origin under a wildcard allowed host", () => {
 	const TENANT_ORIGIN = "http://tenant.localhost:3000";
-	const createTenantInstance = () =>
+	const createTenantInstance = (rpID: PasskeyOptions["rpID"] = "localhost") =>
 		getTestInstance({
-			plugins: [passkey({ rpID: "localhost" })],
+			plugins: [passkey({ rpID })],
 			baseURL: {
 				allowedHosts: ["localhost:3000", "*.localhost:3000"],
 				protocol: "http",
@@ -572,5 +572,89 @@ describe("passkey origin under a wildcard allowed host", () => {
 		expect(res.status).toBe(200);
 		const call = serverMocks.verifyRegistrationResponse.mock.calls[0]![0];
 		expect(call.expectedOrigin).toEqual([TENANT_ORIGIN]);
+	});
+
+	/**
+	 * An `rpID` function can resolve a different RP ID per request, so the
+	 * wildcard is checked against the RP ID issued with each challenge.
+	 */
+	describe("with an rpID function", () => {
+		it("rejects a sibling origin when the resolved rpID is covered", async () => {
+			const instance = await createTenantInstance(async () => "localhost");
+			const { status } = await verifyAuthenticationFrom(
+				instance,
+				SIBLING_ORIGIN,
+			);
+			expect(status).toBe(400);
+			expect(serverMocks.verifyAuthenticationResponse).not.toHaveBeenCalled();
+		});
+
+		it("accepts a vouched tenant origin when the resolved rpID is covered", async () => {
+			const instance = await createTenantInstance(async () => "localhost");
+			const { status, call } = await verifyAuthenticationFrom(
+				instance,
+				TENANT_ORIGIN,
+			);
+			expect(status).toBe(200);
+			expect(call.expectedOrigin).toEqual([TENANT_ORIGIN]);
+			expect(call.expectedRPID).toBe("localhost");
+		});
+
+		it("checks the rpID issued with the challenge, not one resolved at verify", async () => {
+			// The verify request would resolve an RP ID the wildcard does not cover.
+			let calls = 0;
+			const resolveRpID = vi.fn(async () =>
+				calls++ === 0 ? "localhost" : "example.com",
+			);
+			const instance = await createTenantInstance(resolveRpID);
+			const { status } = await verifyAuthenticationFrom(
+				instance,
+				SIBLING_ORIGIN,
+			);
+			expect(status).toBe(400);
+			expect(resolveRpID).toHaveBeenCalledTimes(1);
+			expect(serverMocks.verifyAuthenticationResponse).not.toHaveBeenCalled();
+		});
+
+		it("keeps the server origin when the resolved rpID is not covered", async () => {
+			const instance = await createTenantInstance(async () => "example.com");
+			const { status, call } = await verifyAuthenticationFrom(
+				instance,
+				RP_ORIGIN,
+			);
+			expect(status).toBe(200);
+			expect(call.expectedOrigin).toEqual([RP_ORIGIN]);
+			expect(call.expectedRPID).toBe("example.com");
+		});
+
+		it("rejects a sibling origin for registration when the resolved rpID is covered", async () => {
+			const instance = await createTenantInstance(async () => "localhost");
+			const { headers } = await instance.signInWithTestUser();
+			await instance.client.$fetch("/passkey/generate-register-options", {
+				method: "GET",
+				headers,
+				onResponse: instance.cookieSetter(headers),
+			});
+			headers.set("origin", SIBLING_ORIGIN);
+			headers.set("content-type", "application/json");
+			const res = await instance.customFetchImpl(
+				`${SIBLING_ORIGIN}/api/auth/passkey/verify-registration`,
+				{
+					method: "POST",
+					headers,
+					body: JSON.stringify({
+						response: {
+							...mockRegistrationResponse,
+							response: {
+								...mockRegistrationResponse.response,
+								clientDataJSON: encodeClientData(SIBLING_ORIGIN),
+							},
+						},
+					}),
+				},
+			);
+			expect(res.status).toBe(400);
+			expect(serverMocks.verifyRegistrationResponse).not.toHaveBeenCalled();
+		});
 	});
 });

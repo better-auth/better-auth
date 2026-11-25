@@ -40,11 +40,7 @@ import type {
 	PasskeyRegistrationUser,
 	WebAuthnChallengeValue,
 } from "./types";
-import {
-	getExpectedOrigins,
-	resolveExpectedRPID,
-	resolveRpID,
-} from "./utils";
+import { getExpectedOrigins, resolveExpectedRPID, resolveRpID } from "./utils";
 
 type PasskeyCeremony = "registration" | "authentication";
 
@@ -670,20 +666,6 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 		},
 		async (ctx) => {
 			const resp = ctx.body.response;
-			const expectedOrigin = getExpectedOrigins(
-				options,
-				ctx,
-				resp?.response?.clientDataJSON,
-			);
-			if (!expectedOrigin) {
-				throw expectedOriginUnavailable(ctx);
-			}
-			if (expectedOrigin.length === 0) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
-				);
-			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
 			);
@@ -722,6 +704,23 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				);
 			}
+			// Challenges stored before the RP ID was recorded resolve it again.
+			const issuedRPID = rpID || (await resolveRpID(options, ctx));
+			const expectedOrigin = getExpectedOrigins(
+				options,
+				ctx,
+				resp?.response?.clientDataJSON,
+				issuedRPID,
+			);
+			if (!expectedOrigin) {
+				throw expectedOriginUnavailable(ctx);
+			}
+			if (expectedOrigin.length === 0) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+				);
+			}
 
 			const session = requireSession
 				? ctx.context.session
@@ -753,7 +752,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					response: resp,
 					expectedChallenge,
 					expectedOrigin,
-					expectedRPID: await resolveExpectedRPID(options, ctx, rpID),
+					expectedRPID: await resolveExpectedRPID(options, ctx, issuedRPID),
 					requireUserVerification:
 						options.authenticatorSelection?.userVerification === "required",
 				}).catch((e) => {
@@ -937,20 +936,6 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 		},
 		async (ctx) => {
 			const resp = ctx.body.response;
-			const expectedOrigin = getExpectedOrigins(
-				options,
-				ctx,
-				resp?.response?.clientDataJSON,
-			);
-			if (!expectedOrigin) {
-				throw expectedOriginUnavailable(ctx);
-			}
-			if (expectedOrigin.length === 0) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
-				);
-			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
 			);
@@ -986,6 +971,23 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				);
 			}
+			// Challenges stored before the RP ID was recorded resolve it again.
+			const issuedRPID = rpID || (await resolveRpID(options, ctx));
+			const expectedOrigin = getExpectedOrigins(
+				options,
+				ctx,
+				resp?.response?.clientDataJSON,
+				issuedRPID,
+			);
+			if (!expectedOrigin) {
+				throw expectedOriginUnavailable(ctx);
+			}
+			if (expectedOrigin.length === 0) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
+				);
+			}
 			const passkey = await ctx.context.adapter.findOne<Passkey>({
 				model: "passkey",
 				where: [
@@ -1006,7 +1008,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					response: resp as AuthenticationResponseJSON,
 					expectedChallenge,
 					expectedOrigin,
-					expectedRPID: await resolveExpectedRPID(options, ctx, rpID),
+					expectedRPID: await resolveExpectedRPID(options, ctx, issuedRPID),
 					credential: {
 						id: passkey.credentialID,
 						publicKey: base64.decode(passkey.publicKey),

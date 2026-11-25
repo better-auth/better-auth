@@ -36,16 +36,14 @@ export async function resolveRpID(
 export async function resolveExpectedRPID(
 	options: PasskeyOptions,
 	ctx: GenericEndpointContext,
-	issuedRPID: string | undefined,
+	issuedRPID: string,
 ): Promise<string | string[]> {
-	// Challenges stored before the RP ID was recorded fall back to resolving it.
-	const getIssuedRPID = async () => issuedRPID || resolveRpID(options, ctx);
 	if (options.expectedRPID === undefined) {
-		return getIssuedRPID();
+		return issuedRPID;
 	}
 	const expected =
 		typeof options.expectedRPID === "function"
-			? await options.expectedRPID({ ctx, rpID: await getIssuedRPID() })
+			? await options.expectedRPID({ ctx, rpID: issuedRPID })
 			: options.expectedRPID;
 	const list = (Array.isArray(expected) ? expected : [expected]).filter(
 		Boolean,
@@ -65,8 +63,9 @@ export async function resolveExpectedRPID(
  * `trustedOrigins` lists it exactly, which keeps a frontend on another origin
  * working. A wildcard entry does not count, since it also admits sibling hosts
  * that can produce assertions for the same `rpID`. When a wildcard allowed host
- * covers the `rpID`, the request picks the `baseURL` host, so only the reported
- * origin counts, and only when the resolved trusted origins list it exactly.
+ * covers the configured `rpID`, or the one an `rpID` function resolved for this
+ * challenge, the request picks the `baseURL` host, so only the reported origin
+ * counts, and only when the resolved trusted origins list it exactly.
  * Without a configured `baseURL` only the request URL is used, never
  * `x-forwarded-host`, which the client can set.
  *
@@ -79,6 +78,7 @@ export function getExpectedOrigins(
 	options: PasskeyOptions,
 	ctx: GenericEndpointContext,
 	clientDataJSON: unknown,
+	rpID: string,
 ): string[] | null {
 	if (options.origin) {
 		const configured = Array.isArray(options.origin)
@@ -87,9 +87,14 @@ export function getExpectedOrigins(
 		return nonEmpty(configured.filter((origin) => origin.length > 0));
 	}
 	const reported = getReportedOrigin(clientDataJSON);
+	// An unset `rpID` defaults to the host of each request, so it is not checked.
 	if (
-		"passkeyWildcardCoversRpID" in ctx.context &&
-		ctx.context.passkeyWildcardCoversRpID
+		options.rpID &&
+		"passkeyBaseURL" in ctx.context &&
+		wildcardHostCoversRpID(
+			rpID,
+			ctx.context.passkeyBaseURL as BetterAuthOptions["baseURL"],
+		)
 	) {
 		return reported && ctx.context.trustedOrigins.includes(reported)
 			? [reported]
@@ -135,10 +140,9 @@ function getReportedOrigin(clientDataJSON: unknown): string | null {
  * stand in for the relying party's origin there.
  */
 export function wildcardHostCoversRpID(
-	options: PasskeyOptions,
+	rpID: string | undefined,
 	baseURL: BetterAuthOptions["baseURL"],
 ) {
-	const rpID = typeof options.rpID === "string" ? options.rpID : undefined;
 	if (!rpID || typeof baseURL !== "object") {
 		return false;
 	}
