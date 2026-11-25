@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { isUniqueViolation } from "@better-auth/core/db/internal";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { assertIdentifierValid, invalidateResourceCache } from "../resources";
 import type {
@@ -101,8 +102,7 @@ export async function createResourceEndpoint(
 			data: buildResourceRow(input, now),
 		});
 	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		if (/unique|duplicate|UNIQUE/i.test(message)) {
+		if (isUniqueViolation(err)) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
 				error_description: `resource ${input.identifier} already exists`,
@@ -304,8 +304,7 @@ export async function linkClientResourceEndpoint(
 			} as never,
 		});
 	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		if (/unique|duplicate|UNIQUE/i.test(message)) {
+		if (isUniqueViolation(err)) {
 			return ctx.json({ linked: true, alreadyLinked: true });
 		}
 		throw err;

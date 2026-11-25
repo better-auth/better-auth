@@ -34,7 +34,7 @@ const adapterSchema = { user: users };
 
 describe("drizzle relations-v2 adapter: null comparisons in where clauses", () => {
 	const sqliteDb = new Database(":memory:");
-	const db = drizzle({ client: sqliteDb, schema: { users } });
+	const db = drizzle({ client: sqliteDb });
 
 	const adapter = drizzleAdapter(db, {
 		schema: adapterSchema,

@@ -1,3 +1,4 @@
+import type { SecondaryStorage } from "@better-auth/core/db";
 import {
 	afterEach,
 	beforeEach,
@@ -2426,6 +2427,76 @@ describe("phone-number verification rows", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11105
 	 */
+	it("accepts the newest code sent while a wrong guess is checked in secondary storage", async () => {
+		const number = "+15550000006";
+		const codes: string[] = [];
+		const values = new Map<string, string>();
+		let onConsume: (() => Promise<void>) | undefined;
+		const secondaryStorage: SecondaryStorage = {
+			get: (key) => values.get(key) ?? null,
+			async getAndDelete(key) {
+				const value = values.get(key) ?? null;
+				values.delete(key);
+				const consumed = onConsume;
+				onConsume = undefined;
+				// Runs once the wrong guess has consumed the stored code.
+				await consumed?.();
+				return value;
+			},
+			increment: (key) => {
+				const value = Number(values.get(key) ?? 0) + 1;
+				values.set(key, String(value));
+				return value;
+			},
+			set: (key, value) => {
+				values.set(key, value);
+			},
+			delete: (key) => {
+				values.delete(key);
+			},
+		};
+		const { client, auth } = await getTestInstance(
+			{
+				secondaryStorage,
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							codes.push(code);
+						},
+						signUpOnVerification: {
+							getTempEmail: (phoneNumber) => `${phoneNumber}@example.com`,
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [phoneNumberClient()] } },
+		);
+		await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
+
+		onConsume = async () => {
+			await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
+		};
+		const guess = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[0] === "000000" ? "111111" : "000000",
+		});
+
+		expect(codes).toHaveLength(2);
+		expect(guess.error?.code).toBe("INVALID_OTP");
+		const stored = await (
+			await auth.$context
+		).internalAdapter.findVerificationValue(`phone-number-otp-${number}`);
+		expect(stored?.value).toBe(`${codes[1]}:0`);
+		const latest = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[1]!,
+		});
+		expect(latest.data?.status).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
 	it("keeps a code sent while an exhausted code is checked", async () => {
 		const number = "+15550000004";
 		const codes: string[] = [];
@@ -2534,5 +2605,66 @@ describe("phone-number verification rows", () => {
 			code: codes[0]!,
 		});
 		expect(res.data?.status).toBe(true);
+	});
+});
+
+/**
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("phone number OTP issuance vetoed by a verification hook", () => {
+	const phoneNumberValue = "+251911121314";
+
+	async function setup() {
+		const sendOTP = vi.fn();
+		const sendPasswordResetOTP = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+			plugins: [phoneNumber({ sendOTP, sendPasswordResetOTP })],
+		});
+		const ctx = await auth.$context;
+		const user = await ctx.internalAdapter.findUserByEmail(testUser.email);
+		await ctx.internalAdapter.updateUser(user!.user.id, {
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: true,
+		});
+		return { auth, sendOTP, sendPasswordResetOTP };
+	}
+
+	it("refuses to send a verification code that was not stored", async () => {
+		const { auth, sendOTP } = await setup();
+
+		const res = await auth.api.sendPhoneNumberOTP({
+			body: { phoneNumber: phoneNumberValue },
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(sendOTP).not.toHaveBeenCalled();
+	});
+
+	it("does not send a password reset code that was not stored, and does not reveal the account", async () => {
+		const { auth, sendPasswordResetOTP } = await setup();
+		const request = (phoneNumber: string) =>
+			auth.api.requestPasswordResetPhoneNumber({
+				body: { phoneNumber },
+				asResponse: true,
+			});
+
+		const known = await request(phoneNumberValue);
+		const unknown = await request("+251900000000");
+
+		expect(known.status).toBe(200);
+		expect(unknown.status).toBe(200);
+		expect(await known.json()).toEqual(await unknown.json());
+		expect(sendPasswordResetOTP).not.toHaveBeenCalled();
 	});
 });

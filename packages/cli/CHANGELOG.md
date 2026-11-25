@@ -1,5 +1,18 @@
 # auth
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12896](https://github.com/better-auth/better-auth/pull/12896) [`bbe4729`](https://github.com/better-auth/better-auth/commit/bbe4729fcaf6cdcfd1d9588b8a3993ac1df06723) Thanks [@bytaesu](https://github.com/bytaesu)! - `auth info` now redacts secrets written in snake_case, kebab-case or uppercase (such as `api_key`), plural names like `authTokens`, private key passphrases, and values nested under a secret such as a private key JWK.
+
+- [#12896](https://github.com/better-auth/better-auth/pull/12896) [`bbe4729`](https://github.com/better-auth/better-auth/commit/bbe4729fcaf6cdcfd1d9588b8a3993ac1df06723) Thanks [@bytaesu](https://github.com/bytaesu)! - `auth generate` for Prisma no longer adds a second back-relation when the model already has one under another name, which made Prisma reject the schema as an ambiguous relation.
+
+- Updated dependencies [[`47a77c0`](https://github.com/better-auth/better-auth/commit/47a77c0fd36b89db20019ecb60223471e6b6f794), [`47a77c0`](https://github.com/better-auth/better-auth/commit/47a77c0fd36b89db20019ecb60223471e6b6f794), [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7), [`2ba7622`](https://github.com/better-auth/better-auth/commit/2ba762276c39db0ed5e5de3e8180fd3f85039921), [`a3a9d2d`](https://github.com/better-auth/better-auth/commit/a3a9d2d53af69725a61c441a4b660520e1a3aa44), [`a3a9d2d`](https://github.com/better-auth/better-auth/commit/a3a9d2d53af69725a61c441a4b660520e1a3aa44), [`ddec4d7`](https://github.com/better-auth/better-auth/commit/ddec4d7c4630681eb18fec2284fd80ea02f50291), [`a3a9d2d`](https://github.com/better-auth/better-auth/commit/a3a9d2d53af69725a61c441a4b660520e1a3aa44), [`a3a9d2d`](https://github.com/better-auth/better-auth/commit/a3a9d2d53af69725a61c441a4b660520e1a3aa44), [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7), [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7), [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7), [`a879d3d`](https://github.com/better-auth/better-auth/commit/a879d3daa2e778d8ce4b13f4028c4519d017fa1b), [`d079059`](https://github.com/better-auth/better-auth/commit/d079059d51db859d53b6606bbf4cf4ae9cec57dc), [`3011e5c`](https://github.com/better-auth/better-auth/commit/3011e5ccb6cf3d27f37f8b5bf6bf5b9891a2367a)]:
+  - @better-auth/core@1.7.28
+  - better-auth@1.7.28
+  - @better-auth/telemetry@1.7.28
+
 ## 1.7.27
 
 ### Patch Changes

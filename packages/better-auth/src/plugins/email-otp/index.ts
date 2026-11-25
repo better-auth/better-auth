@@ -106,6 +106,15 @@ export const emailOTP = (options: EmailOTPOptions) => {
 									type: "email-verification",
 								},
 							);
+							// Like a failed verification email in core sign-up, a vetoed code
+							// is logged and sign-up still succeeds, so the user can request
+							// a new code.
+							if (otp === null) {
+								ctx.context.logger.error(
+									"Email OTP: a verification hook vetoed the sign-up verification code",
+								);
+								return;
+							}
 							await ctx.context.runInBackgroundOrAwait(
 								options.sendVerificationOTP(
 									{

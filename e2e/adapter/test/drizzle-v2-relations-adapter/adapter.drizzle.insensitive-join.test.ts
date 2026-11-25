@@ -41,7 +41,7 @@ const relations = defineRelationsPart(tables, (r) => ({
 
 describe("drizzle relations-v2 adapter: case-insensitive where on the joins path", () => {
 	const sqliteDb = new Database(":memory:");
-	const db = drizzle({ client: sqliteDb, schema: tables, relations });
+	const db = drizzle({ client: sqliteDb, relations });
 
 	const adapter = drizzleAdapter(db, {
 		schema: { ...tables, relations },

@@ -891,9 +891,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							}
 
 							const query = db.query[queryModel].findMany({
-								where: where
-									? convertNewWhereClause(where, model, modelKey)
-									: undefined,
+								// drizzle-orm 1.0.0-rc.5+ throws on an explicit `undefined`
+								// filter, so leave the key out when there is no `where`.
+								...(where
+									? { where: convertNewWhereClause(where, model, modelKey) }
+									: {}),
 								with: includes,
 								columns:
 									select?.length && select.length > 0

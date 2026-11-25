@@ -389,6 +389,170 @@ describe("dynamic access control", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11303
+	 */
+	describe("role names are a single entry of a role list", () => {
+		it.for(["auditor,owner", ",owner", "owner,", ",", " ", ""])(
+			"rejects the role name %j",
+			async (role) => {
+				await expect(
+					auth.api.createOrgRole({
+						body: {
+							role,
+							permission: {
+								project: ["read"],
+							},
+							additionalFields: {
+								color: "#000000",
+							},
+						},
+						headers,
+					}),
+				).rejects.toMatchObject({
+					status: "BAD_REQUEST",
+					body: { code: "INVALID_ROLE_NAME" },
+				});
+			},
+		);
+
+		it.for([" owner", "owner ", "\tOwner\n"])(
+			"compares the padded role name %j with the predefined roles after trimming",
+			async (role) => {
+				await expect(
+					auth.api.createOrgRole({
+						body: {
+							role,
+							permission: {
+								project: ["read"],
+							},
+							additionalFields: {
+								color: "#000000",
+							},
+						},
+						headers,
+					}),
+				).rejects.toMatchObject({
+					status: "BAD_REQUEST",
+					body: { code: "ROLE_NAME_IS_ALREADY_TAKEN" },
+				});
+			},
+		);
+
+		it("compares a padded role name with existing roles after trimming", async () => {
+			const roleName = `dup-${crypto.randomUUID()}`;
+			await auth.api.createOrgRole({
+				body: {
+					role: roleName,
+					permission: {
+						project: ["read"],
+					},
+					additionalFields: {
+						color: "#000000",
+					},
+				},
+				headers,
+			});
+
+			await expect(
+				auth.api.createOrgRole({
+					body: {
+						role: ` ${roleName} `,
+						permission: {
+							project: ["read"],
+						},
+						additionalFields: {
+							color: "#000000",
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: { code: "ROLE_NAME_IS_ALREADY_TAKEN" },
+			});
+		});
+
+		it("stores a padded role name trimmed", async () => {
+			const roleName = `padded-${crypto.randomUUID()}`;
+			const created = await auth.api.createOrgRole({
+				body: {
+					role: `  ${roleName} `,
+					permission: {
+						project: ["read"],
+					},
+					additionalFields: {
+						color: "#000000",
+					},
+				},
+				headers,
+			});
+			expect(created.roleData.role).toBe(roleName);
+
+			const stored = await auth.api.getOrgRole({
+				query: {
+					roleName,
+				},
+				headers,
+			});
+			expect(stored.id).toBe(created.roleData.id);
+		});
+
+		it("applies the same rule when renaming a role", async () => {
+			const roleName = `rename-${crypto.randomUUID()}`;
+			const created = await auth.api.createOrgRole({
+				body: {
+					role: roleName,
+					permission: {
+						project: ["read"],
+					},
+					additionalFields: {
+						color: "#000000",
+					},
+				},
+				headers,
+			});
+			const roleId = created.roleData.id;
+
+			await expect(
+				auth.api.updateOrgRole({
+					body: {
+						roleId,
+						data: {
+							roleName: `${roleName},owner`,
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: { code: "INVALID_ROLE_NAME" },
+			});
+			await expect(
+				auth.api.updateOrgRole({
+					body: {
+						roleId,
+						data: {
+							roleName: " owner ",
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: { code: "ROLE_NAME_IS_ALREADY_TAKEN" },
+			});
+
+			const stored = await auth.api.getOrgRole({
+				query: {
+					roleId,
+				},
+				headers,
+			});
+			expect(stored.role).toBe(roleName);
+		});
+	});
+
 	it("should delete a role by id", async () => {
 		const testRole = await authClient.organization.createRole(
 			{

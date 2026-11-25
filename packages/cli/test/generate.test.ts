@@ -435,6 +435,155 @@ ${extraModels}`;
 			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
 		});
 
+		it("adds a missing back-relation under the relation name of the owning side", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: "accounts      Account[]",
+					sessionRelations: `userId    String
+  user      User     @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)`,
+				}),
+			);
+
+			expect(code).toMatch(
+				/^\s*sessions\s+Session\[\]\s+@relation\("UserSessions"\)\s*$/m,
+			);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
+		it("adds a missing optional back-relation under the relation name of a unique foreign key", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `accounts      Account[]
+  sessions      Session[]`,
+					extraModels: `
+model Profile {
+  id     String @id
+  userId String @unique
+  user   User   @relation("User \\"Profile\\"", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profile")
+}
+`,
+				}),
+				{
+					plugins: [
+						{
+							id: "profile",
+							schema: {
+								profile: {
+									fields: {
+										userId: {
+											type: "string",
+											required: true,
+											unique: true,
+											references: {
+												model: "user",
+												field: "id",
+											},
+										},
+									},
+								},
+							},
+						},
+					],
+				},
+			);
+
+			expect(code).toMatch(
+				/^\s*profile\s+Profile\?\s+@relation\("User \\"Profile\\""\)\s*$/m,
+			);
+			expect(userFieldsOfType(code, "Profile")).toHaveLength(1);
+		});
+
+		it("takes the relation name from the relation to this model when a composite key shares the foreign key", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: "accounts      Account[]",
+					sessionRelations: `tenantId     String?
+  tenantMember TenantMember? @relation("SessionTenantMember", fields: [tenantId, userId], references: [tenantId, userId])
+  userId       String
+  user         User          @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)`,
+					extraModels: `
+model TenantMember {
+  tenantId String
+  userId   String
+  sessions Session[] @relation("SessionTenantMember")
+
+  @@id([tenantId, userId])
+}
+`,
+				}),
+			);
+
+			expect(code).toMatch(
+				/^\s*sessions\s+Session\[\]\s+@relation\("UserSessions"\)\s*$/m,
+			);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
+		it("keeps a named back-relation paired with a composite foreign key", async () => {
+			const { code } = await generate(
+				existing({
+					userRelations: `tenantId      String
+  userSessions  Session[] @relation("UserSessions")
+  accounts      Account[]
+
+  @@unique([tenantId, id])`,
+					sessionRelations: `tenantId  String
+  userId    String
+  user      User     @relation("UserSessions", fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)`,
+				}),
+			);
+
+			expect(code).not.toMatch(/^\s*sessions\s+Session\[\]/m);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
+		const twoCompoundUsers = (userBackRelations: string) =>
+			existing({
+				userRelations: `tenantId      String
+  orgId         String
+  ${userBackRelations}
+  accounts      Account[]
+
+  @@unique([tenantId, id])
+  @@unique([orgId, id])`,
+				sessionRelations: `tenantId  String
+  orgId     String
+  userId    String
+  tenantUser User    @relation("TenantSessions", fields: [tenantId, userId], references: [tenantId, id])
+  orgUser    User    @relation("OrgSessions", fields: [orgId, userId], references: [orgId, id])`,
+			});
+
+		it("names the back-relation after the only compound relation still missing one", async () => {
+			const { code } = await generate(
+				twoCompoundUsers(
+					'tenantSessions Session[] @relation("TenantSessions")',
+				),
+			);
+
+			expect(code).toMatch(
+				/^\s*sessions\s+Session\[\]\s+@relation\("OrgSessions"\)\s*$/m,
+			);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(2);
+		});
+
+		it("refuses to add a back-relation when its field name belongs to another relation", async () => {
+			await expect(
+				generate(
+					twoCompoundUsers(
+						'sessions      Session[] @relation("TenantSessions")',
+					),
+				),
+			).rejects.toThrow(/"OrgSessions".*"sessions"/);
+		});
+
+		it("refuses to guess between compound relations that all lack a back-relation", async () => {
+			await expect(generate(twoCompoundUsers(""))).rejects.toThrow(
+				/"TenantSessions".*"OrgSessions"/,
+			);
+		});
+
 		const revokedBy = `revokedById String?
   revokedBy   User?    @relation("RevokedBy", fields: [revokedById], references: [id])`;
 		const ownedSession = `userId    String

@@ -8,7 +8,10 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
-import { createOrFindVerification } from "../../db/verification";
+import {
+	createOrFindVerification,
+	restoreVerification,
+} from "../../db/verification";
 import { HIDE_METADATA } from "../../utils";
 import { getDate } from "../../utils/date";
 import {
@@ -133,6 +136,12 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						opts,
 						phoneNumberOTPIdentifier(phoneNumber),
 					);
+					if (!otp) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+						);
+					}
 					if (opts.sendOTP) {
 						await ctx.context.runInBackgroundOrAwait(
 							opts.sendOTP(
@@ -291,6 +300,12 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				opts,
 				phoneNumberOTPIdentifier(ctx.body.phoneNumber),
 			);
+			if (!code) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 			const sendOTPResult = opts.sendOTP(
 				{
 					phoneNumber: ctx.body.phoneNumber,
@@ -761,6 +776,12 @@ export const requestPasswordResetPhoneNumber = (
 					status: true,
 				});
 			}
+			// A vetoed code is not sent, and the reply does not reveal the account.
+			if (!code) {
+				return ctx.json({
+					status: true,
+				});
+			}
 			if (opts.sendPasswordResetOTP) {
 				await ctx.context.runInBackgroundOrAwait(
 					opts.sendPasswordResetOTP(
@@ -946,8 +967,10 @@ async function verifyPhoneNumberOTP(
 			PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 		);
 	}
+	// A code issued while this one was being checked replaces it, so the
+	// write-back yields to it instead of reviving the old code.
 	const writeBack = (value: string) =>
-		createOrFindVerification(ctx, {
+		restoreVerification(ctx, {
 			value,
 			identifier,
 			expiresAt: consumed.expiresAt,
@@ -959,13 +982,6 @@ async function verifyPhoneNumberOTP(
 	}
 	if (successDisposition === "consume") return;
 
-	// A code issued while this one was being checked replaces it, so writing
-	// the old code back would revive it over the new one.
-	const replacement =
-		await ctx.context.internalAdapter.findVerificationValue(identifier);
-	if (replacement) {
-		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
-	}
 	const restored = await writeBack(consumed.value);
 	// A verification.create.before hook can veto the restore by returning false.
 	if (!restored) {
@@ -991,7 +1007,9 @@ async function issuePhoneNumberOTP(
 	};
 	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
 	const stored = await createOrFindVerification(ctx, verification);
-	if (!stored || stored.value === verification.value) return code;
+	// A verification.create.before hook can veto the create by returning false.
+	if (!stored) return null;
+	if (stored.value === verification.value) return code;
 
 	const [storedCode, attempts] = stored.value.split(":");
 	const reusable =

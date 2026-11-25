@@ -10,7 +10,7 @@
     "@better-auth/drizzle-adapter": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
     "better-auth": "workspace:*",
-    "drizzle-orm": "1.0.0-rc.3",
-    "drizzle-kit": "1.0.0-rc.3"
+    "drizzle-orm": "1.0.0-rc.6",
+    "drizzle-kit": "1.0.0-rc.6"
   }
 }

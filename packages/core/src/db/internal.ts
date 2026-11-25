@@ -32,3 +32,4 @@ export {
 	SchemaMismatchError,
 	type SchemaSource,
 } from "./schema-diff";
+export { redactSecondaryStorageErrors } from "./secondary-storage-errors";
