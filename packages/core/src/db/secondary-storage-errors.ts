@@ -426,6 +426,11 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
  * frozen object, the error is replaced with one that keeps its redacted
  * message, name, stack, primitive properties, command name, and cause.
  *
+ * It guards against storage clients that put keys and values into their
+ * errors, such as ioredis, node-redis, Upstash, and wrappers around them, not
+ * against objects built to show the check something other than what a logger
+ * reads.
+ *
  * Reads, writes, property definitions, and spies act on the storage. Storage
  * methods cannot be made non-configurable through the wrapper, so freezing it
  * throws, and locking the storage itself keeps its methods redacted. Results,
@@ -460,11 +465,13 @@ export function redactSecondaryStorageErrors<T extends SecondaryStorage>(
 		),
 	);
 	const locked = new Set<PropertyKey>();
+	// Locked properties that are also read-only, which the proxy must return as is.
+	const fixed = new Set<PropertyKey>();
 	const wrap = (property: PropertyKey, value: unknown): unknown => {
 		if (
 			typeof value !== "function" ||
 			property === "constructor" ||
-			locked.has(property)
+			fixed.has(property)
 		) {
 			return value;
 		}
@@ -536,6 +543,7 @@ export function redactSecondaryStorageErrors<T extends SecondaryStorage>(
 					return false;
 				}
 				locked.add(property);
+				if ("value" in resulting && !resulting.writable) fixed.add(property);
 			}
 			return true;
 		},

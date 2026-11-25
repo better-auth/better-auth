@@ -691,6 +691,22 @@ describe("redactSecondaryStorageErrors", () => {
 			});
 		});
 
+		it("runs a locked but writable method against the storage", () => {
+			const privateState = new WeakMap<object, string>();
+			const storage = {
+				...storageThatRejects(() => null),
+				state() {
+					return privateState.get(this);
+				},
+			};
+			privateState.set(storage, "ready");
+			const wrapped = redactSecondaryStorageErrors(storage);
+
+			Object.defineProperty(wrapped, "state", { configurable: false });
+
+			expect(wrapped.state()).toBe("ready");
+		});
+
 		it("refuses to freeze its storage methods", async () => {
 			const wrapped = redactSecondaryStorageErrors(
 				storageThatRejects((args) => ioredisReplyError("get", [args[0]])),
