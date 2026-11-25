@@ -2,14 +2,62 @@ import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
 } from "@better-auth/core";
+import { BetterAuthError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
 import type { PasskeyOptions } from "./types";
 
-export function getRpID(options: PasskeyOptions, baseURL?: string | undefined) {
-	return (
-		options.rpID || (baseURL ? new URL(baseURL).hostname : "localhost") // default rpID
+function getDefaultRpID(ctx: GenericEndpointContext) {
+	const baseURL = ctx.context.options.baseURL;
+	// Falls back when `baseURL` is unset or empty, as before.
+	return typeof baseURL === "string" && baseURL
+		? new URL(baseURL).hostname
+		: "localhost";
+}
+
+export async function resolveRpID(
+	options: PasskeyOptions,
+	ctx: GenericEndpointContext,
+): Promise<string> {
+	const rpID =
+		typeof options.rpID === "function"
+			? await options.rpID({ ctx })
+			: options.rpID || getDefaultRpID(ctx);
+	if (!rpID) {
+		throw new BetterAuthError("passkey: rpID resolved to an empty value");
+	}
+	return rpID;
+}
+
+/**
+ * The RP ID(s) accepted when verifying a ceremony response. Defaults to the
+ * RP ID sent in the options (`issuedRPID`, stored with the challenge; without
+ * `rpID`, the one resolved again when verifying), which
+ * is also passed to an `expectedRPID` function. An empty value is rejected
+ * rather than passed on, because `@simplewebauthn/server` skips the RP ID
+ * check when it is falsy.
+ */
+export async function resolveExpectedRPID(
+	options: PasskeyOptions,
+	ctx: GenericEndpointContext,
+	issuedRPID: string,
+): Promise<string | string[]> {
+	if (options.expectedRPID === undefined) {
+		return issuedRPID;
+	}
+	const expected =
+		typeof options.expectedRPID === "function"
+			? await options.expectedRPID({ ctx, rpID: issuedRPID })
+			: options.expectedRPID;
+	const list = (Array.isArray(expected) ? expected : [expected]).filter(
+		Boolean,
 	);
+	if (!list.length) {
+		throw new BetterAuthError(
+			"passkey: expectedRPID resolved to an empty value",
+		);
+	}
+	return list;
 }
 
 /**
@@ -19,8 +67,10 @@ export function getRpID(options: PasskeyOptions, baseURL?: string | undefined) {
  * `trustedOrigins` lists it exactly, which keeps a frontend on another origin
  * working. A wildcard entry does not count, since it also admits sibling hosts
  * that can produce assertions for the same `rpID`. When a wildcard allowed host
- * covers the `rpID`, the request picks the `baseURL` host, so only the reported
- * origin counts, and only when the resolved trusted origins list it exactly.
+ * covers an RP ID the verifier accepts (the `rpID` issued with the challenge
+ * when `rpID` is set, and every `expectedRPID`), the request picks the
+ * `baseURL` host, so only the reported origin counts, and only when the
+ * resolved trusted origins list it exactly.
  * Without a configured `baseURL` only the request URL is used, never
  * `x-forwarded-host`, which the client can set.
  *
@@ -33,6 +83,7 @@ export function getExpectedOrigins(
 	options: PasskeyOptions,
 	ctx: GenericEndpointContext,
 	clientDataJSON: unknown,
+	rpIDs: { issued: string; expected: string | string[] },
 ): string[] | null {
 	if (options.origin) {
 		const configured = Array.isArray(options.origin)
@@ -41,10 +92,19 @@ export function getExpectedOrigins(
 		return nonEmpty(configured.filter((origin) => origin.length > 0));
 	}
 	const reported = getReportedOrigin(clientDataJSON);
-	if (
-		"passkeyWildcardCoversRpID" in ctx.context &&
-		ctx.context.passkeyWildcardCoversRpID
-	) {
+	// An unset `rpID` is derived from the `baseURL` of each request (with a
+	// dynamic `baseURL`, its resolved host), so the issued RP ID is checked
+	// only when `rpID` is set. `expectedRPID` widens what the
+	// verifier accepts, so each of its values is checked too.
+	const accepted = [
+		...(options.rpID ? [rpIDs.issued] : []),
+		...(options.expectedRPID !== undefined ? [rpIDs.expected].flat() : []),
+	];
+	const baseURL =
+		"passkeyBaseURL" in ctx.context
+			? (ctx.context.passkeyBaseURL as BetterAuthOptions["baseURL"])
+			: undefined;
+	if (accepted.some((rpID) => wildcardHostCoversRpID(rpID, baseURL))) {
 		return reported && ctx.context.trustedOrigins.includes(reported)
 			? [reported]
 			: [];
@@ -89,16 +149,19 @@ function getReportedOrigin(clientDataJSON: unknown): string | null {
  * stand in for the relying party's origin there.
  */
 export function wildcardHostCoversRpID(
-	options: PasskeyOptions,
+	rpID: string | undefined,
 	baseURL: BetterAuthOptions["baseURL"],
 ) {
-	const rpID = options.rpID;
 	if (!rpID || typeof baseURL !== "object") {
 		return false;
 	}
+	// Host names compare case-insensitively, and a trailing dot names the same host.
+	const normalize = (host: string) => host.toLowerCase().replace(/\.$/, "");
+	const host = normalize(rpID);
 	return baseURL.allowedHosts.some((pattern) => {
-		const hostname =
-			pattern.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").split(/[:/]/)[0] ?? "";
+		const hostname = normalize(
+			pattern.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").split(/[:/]/)[0] ?? "",
+		);
 		const wildcard = Math.max(
 			hostname.lastIndexOf("*"),
 			hostname.lastIndexOf("?"),
@@ -109,9 +172,9 @@ export function wildcardHostCoversRpID(
 		const suffix = hostname.slice(wildcard + 1).replace(/^\./, "");
 		return (
 			!suffix ||
-			suffix === rpID ||
-			suffix.endsWith(`.${rpID}`) ||
-			rpID.endsWith(`.${suffix}`)
+			suffix === host ||
+			suffix.endsWith(`.${host}`) ||
+			host.endsWith(`.${suffix}`)
 		);
 	});
 }

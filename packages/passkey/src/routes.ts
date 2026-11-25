@@ -40,7 +40,7 @@ import type {
 	PasskeyRegistrationUser,
 	WebAuthnChallengeValue,
 } from "./types";
-import { getExpectedOrigins, getRpID } from "./utils";
+import { getExpectedOrigins, resolveExpectedRPID, resolveRpID } from "./utils";
 
 type PasskeyCeremony = "registration" | "authentication";
 
@@ -54,6 +54,12 @@ type StoredChallengeValue = WebAuthnChallengeValue & {
 	registrationSource?:
 		| { type: "session"; tokenHash: string }
 		| { type: "resolver" };
+	/**
+	 * The RP ID sent in the options, so verification checks the RP ID the
+	 * authenticator was asked to use even if a per-request `rpID` resolver
+	 * would pick another one for the verify request.
+	 */
+	rpID?: string;
 };
 
 /**
@@ -349,13 +355,10 @@ export const generatePasskeyRegistrationOptions = (
 			const userID = new TextEncoder().encode(
 				generateRandomString(32, "a-z", "0-9"),
 			);
-			const baseURLString =
-				typeof ctx.context.options.baseURL === "string"
-					? ctx.context.options.baseURL
-					: undefined;
+			const rpID = await resolveRpID(opts, ctx);
 			const options = await generateRegistrationOptions({
 				rpName: opts.rpName || ctx.context.appName,
-				rpID: getRpID(opts, baseURLString),
+				rpID,
 				userID,
 				userName: ctx.query?.name || user.name || user.id,
 				userDisplayName: user.displayName || user.name || user.id,
@@ -393,6 +396,7 @@ export const generatePasskeyRegistrationOptions = (
 							sessionToken,
 						),
 						expectedChallenge: options.challenge,
+						rpID,
 						userData: {
 							id: user.id,
 							name: user.name,
@@ -538,16 +542,13 @@ export const generatePasskeyAuthenticationOptions = (
 					],
 				});
 			}
-			const baseURLString =
-				typeof ctx.context.options.baseURL === "string"
-					? ctx.context.options.baseURL
-					: undefined;
 			const authenticationExtensions = await resolveExtensions(
 				opts.authentication?.extensions,
 				ctx,
 			);
+			const rpID = await resolveRpID(opts, ctx);
 			const options = await generateAuthenticationOptions({
-				rpID: getRpID(opts, baseURLString),
+				rpID,
 				userVerification:
 					opts.authenticatorSelection?.userVerification ?? "preferred",
 				extensions: authenticationExtensions,
@@ -565,6 +566,7 @@ export const generatePasskeyAuthenticationOptions = (
 			const data = {
 				type: "authentication",
 				expectedChallenge: options.challenge,
+				rpID,
 				userData: {
 					id: session?.user.id || "",
 				},
@@ -664,20 +666,6 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 		},
 		async (ctx) => {
 			const resp = ctx.body.response;
-			const expectedOrigin = getExpectedOrigins(
-				options,
-				ctx,
-				resp?.response?.clientDataJSON,
-			);
-			if (!expectedOrigin) {
-				throw expectedOriginUnavailable(ctx);
-			}
-			if (expectedOrigin.length === 0) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
-				);
-			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
 			);
@@ -708,11 +696,35 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				expectedChallenge,
 				userData,
 				context,
+				rpID,
 			} = JSON.parse(data.value) as StoredChallengeValue;
 			if (ceremony !== "registration") {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+				);
+			}
+			// Without `rpID` the RP ID is derived from the `baseURL` of each request
+			// (with a dynamic `baseURL`, its resolved host), so a challenge issued
+			// on one host is not verified for it on another. Challenges stored
+			// before the RP ID was recorded resolve it again.
+			const issuedRPID =
+				(options.rpID && rpID) || (await resolveRpID(options, ctx));
+			// Resolved once, for both the wildcard check and the verifier.
+			const expectedRPID = await resolveExpectedRPID(options, ctx, issuedRPID);
+			const expectedOrigin = getExpectedOrigins(
+				options,
+				ctx,
+				resp?.response?.clientDataJSON,
+				{ issued: issuedRPID, expected: expectedRPID },
+			);
+			if (!expectedOrigin) {
+				throw expectedOriginUnavailable(ctx);
+			}
+			if (expectedOrigin.length === 0) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
 				);
 			}
 
@@ -740,17 +752,13 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 			}
 
 			try {
-				const verifyBaseURL =
-					typeof ctx.context.options.baseURL === "string"
-						? ctx.context.options.baseURL
-						: undefined;
 				// The verifier throws on a rejected response (origin, user verification),
 				// which is a client error, not a server failure.
 				const verification = await verifyRegistrationResponse({
 					response: resp,
 					expectedChallenge,
 					expectedOrigin,
-					expectedRPID: getRpID(options, verifyBaseURL),
+					expectedRPID,
 					requireUserVerification:
 						options.authenticatorSelection?.userVerification === "required",
 				}).catch((e) => {
@@ -934,20 +942,6 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 		},
 		async (ctx) => {
 			const resp = ctx.body.response;
-			const expectedOrigin = getExpectedOrigins(
-				options,
-				ctx,
-				resp?.response?.clientDataJSON,
-			);
-			if (!expectedOrigin) {
-				throw expectedOriginUnavailable(ctx);
-			}
-			if (expectedOrigin.length === 0) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
-				);
-			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
 			);
@@ -972,13 +966,38 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				);
 			}
-			const { type: ceremony, expectedChallenge } = JSON.parse(
-				data.value,
-			) as StoredChallengeValue;
+			const {
+				type: ceremony,
+				expectedChallenge,
+				rpID,
+			} = JSON.parse(data.value) as StoredChallengeValue;
 			if (ceremony !== "authentication") {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+				);
+			}
+			// Without `rpID` the RP ID is derived from the `baseURL` of each request
+			// (with a dynamic `baseURL`, its resolved host), so a challenge issued
+			// on one host is not verified for it on another. Challenges stored
+			// before the RP ID was recorded resolve it again.
+			const issuedRPID =
+				(options.rpID && rpID) || (await resolveRpID(options, ctx));
+			// Resolved once, for both the wildcard check and the verifier.
+			const expectedRPID = await resolveExpectedRPID(options, ctx, issuedRPID);
+			const expectedOrigin = getExpectedOrigins(
+				options,
+				ctx,
+				resp?.response?.clientDataJSON,
+				{ issued: issuedRPID, expected: expectedRPID },
+			);
+			if (!expectedOrigin) {
+				throw expectedOriginUnavailable(ctx);
+			}
+			if (expectedOrigin.length === 0) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
 				);
 			}
 			const passkey = await ctx.context.adapter.findOne<Passkey>({
@@ -997,15 +1016,11 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				);
 			}
 			try {
-				const authBaseURL =
-					typeof ctx.context.options.baseURL === "string"
-						? ctx.context.options.baseURL
-						: undefined;
 				const verification = await verifyAuthenticationResponse({
 					response: resp as AuthenticationResponseJSON,
 					expectedChallenge,
 					expectedOrigin,
-					expectedRPID: getRpID(options, authBaseURL),
+					expectedRPID,
 					credential: {
 						id: passkey.credentialID,
 						publicKey: base64.decode(passkey.publicKey),

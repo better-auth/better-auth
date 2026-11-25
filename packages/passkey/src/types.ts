@@ -37,6 +37,23 @@ export type PasskeyExtensionsResolver =
 			ctx: GenericEndpointContext;
 	  }) => Awaitable<AuthenticationExtensionsClientInputs | undefined>);
 
+export type PasskeyRPIDResolver =
+	| string
+	| ((args: { ctx: GenericEndpointContext }) => Awaitable<string>);
+
+export type PasskeyExpectedRPIDResolver =
+	| string
+	| string[]
+	| ((args: {
+			ctx: GenericEndpointContext;
+			/**
+			 * The RP ID sent in the options for this challenge. Without
+			 * `rpID`, and for challenges stored before it was recorded, the
+			 * RP ID resolved again when verifying.
+			 */
+			rpID: string;
+	  }) => Awaitable<string | string[]>);
+
 export interface PasskeyRegistrationOptions {
 	/**
 	 * Require an authenticated session for passkey registration.
@@ -101,9 +118,30 @@ export interface PasskeyOptions {
 	 * A unique identifier for your website. 'localhost' is okay for
 	 * local dev
 	 *
-	 * @default "localhost"
+	 * Pass a function to resolve it per request, e.g. when one server
+	 * serves several relying parties. It runs on the options endpoints, and
+	 * the resolved value is stored with the challenge for verification.
+	 *
+	 * @default the hostname of `baseURL`, or "localhost"
 	 */
-	rpID?: string | undefined;
+	rpID?: PasskeyRPIDResolver | undefined;
+	/**
+	 * The RP ID(s) a registration or authentication response may be bound
+	 * to. Use this when the RP ID hash in the authenticator data differs from
+	 * the `rpID` sent in the options (Chrome extension pages send the bare
+	 * extension ID, but the hash is of `chrome-extension://<id>`), or to
+	 * accept several RP IDs. A function receives the `rpID` sent in the
+	 * options for the challenge, so it can accept only the RP ID(s) that
+	 * challenge was issued for. Without `rpID`, or for a challenge stored
+	 * before the RP ID was recorded, it receives the RP ID resolved again
+	 * when verifying.
+	 *
+	 * @default the `rpID` sent in the options for the challenge. Without
+	 * `rpID`, the RP ID resolved again when verifying: the hostname of
+	 * `baseURL` (with a dynamic `baseURL`, the host resolved for the verify
+	 * request), or "localhost" without one.
+	 */
+	expectedRPID?: PasskeyExpectedRPIDResolver | undefined;
 	/**
 	 * Human-readable title for your website
 	 *
@@ -116,7 +154,9 @@ export interface PasskeyOptions {
 	 *
 	 * @default the origin of `baseURL`, plus a frontend origin listed exactly in
 	 * `trustedOrigins`. When `rpID` is set and a wildcard in
-	 * `baseURL.allowedHosts` covers it, the default is the origin the credential
+	 * `baseURL.allowedHosts` covers it (for an `rpID` function, the value it
+	 * resolved for the challenge), or a wildcard covers any `expectedRPID`,
+	 * the default is the origin the credential
 	 * reports, if an exact `allowedHosts` entry, the `fallback`, or
 	 * `trustedOrigins` lists it exactly.
 	 */
