@@ -60,7 +60,6 @@ oauthProvider({
 })
 ```
 
-* In the authorization code flow, `profile` and `email` claims go to UserInfo, not the ID token. Add them in `customIdTokenClaims` if a client needs them in the ID token.
 * Better Auth owns the protocol claims (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`). Custom values for these names are dropped with a warning log.
 * Use URI-namespaced names for application claims, as [OIDC Core §5.1.2](https://openid.net/specs/openid-connect-core-1_0.html#AdditionalClaims) recommends.
 * To stop issuance, for example when the user has left the organization, throw from the function.
@@ -70,6 +69,21 @@ When an extension also contributes claims, see [Claim precedence](/docs/plugins/
 Better Auth advertises `acr_values_supported: ["0"]` and **always** issues `acr: "0"`, meaning the authentication did not meet ISO/IEC 29115 level 1 ([OIDC Core §2](https://openid.net/specs/openid-connect-core-1_0.html#IDToken)). Custom ACR policies are not supported. A request for other `acr_values` still succeeds, but an essential `claims.id_token.acr` request that does not allow `"0"` fails. The authorization request ends with an `access_denied` error on the redirect to the client. The [Unmet Authentication Requirements](https://openid.net/specs/openid-connect-unmet-authentication-requirements-1_0.html) specification says the provider SHALL return `unmet_authentication_requirements` in this case. Better Auth returns `access_denied`.
 
 With `disableJwtPlugin: true`, ID tokens are signed with `HS256` using the client secret, so public clients get no ID token. See [Without the JWT plugin](/docs/plugins/oauth-provider/tokens#without-the-jwt-plugin). The OpenID configuration then omits `jwks_uri`, because there are no keys to publish, and lists `["HS256"]` in `id_token_signing_alg_values_supported`. [OIDC Discovery §3](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata) marks `jwks_uri` as required.
+
+### OpenId Id Token Claims
+
+To include the scope-based `profile` and `email` claims in the ID token, call `userNormalClaims` from `customIdTokenClaims`. It returns the same standard claims as the UserInfo endpoint for the granted scopes.
+
+```ts title="auth.ts"
+import { oauthProvider, userNormalClaims } from "@better-auth/oauth-provider";
+
+oauthProvider({
+  customIdTokenClaims: ({ user, scopes }) => {
+    // Adds `name`, `picture`, `email`, etc. based on the granted scopes
+    return userNormalClaims(user, scopes);
+  },
+})
+```
 
 ## UserInfo
 
