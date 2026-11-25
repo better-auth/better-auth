@@ -404,7 +404,7 @@ describe("pushed authorization requests in the database and secondary storage", 
 
 /**
  * @see https://datatracker.ietf.org/doc/html/rfc9126#section-2.3
- * @see https://github.com/better-auth/better-auth/pull/12958
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
  */
 describe("pushed authorization requests vetoed by a verification hook", async () => {
 	let vetoedSuffix: string | undefined;

@@ -193,7 +193,7 @@ describe("server-issued id_token nonce", async () => {
 });
 
 /**
- * @see https://github.com/better-auth/better-auth/pull/12958
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
  */
 describe("server-issued id_token nonce vetoed by a verification hook", () => {
 	it("refuses to return a nonce that was not stored", async () => {
