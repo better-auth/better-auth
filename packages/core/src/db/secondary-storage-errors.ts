@@ -145,15 +145,13 @@ function lookup(value: object, key: PropertyKey): unknown {
 }
 
 /**
- * Whether serializing a value runs code the check cannot read: a custom
- * `util.inspect` hook, or a `toJSON` that is a getter or belongs to an object
- * other than a plain one, such as a client instance.
+ * Whether serializing a value runs code the check does not run: a custom
+ * `util.inspect` hook, or any `toJSON` other than the one dates use.
  */
 function runsCodeWhenPrinted(value: object): boolean {
 	if (lookup(value, INSPECT_CUSTOM) !== undefined) return true;
 	const toJSON = lookup(value, "toJSON");
-	if (toJSON === undefined || value instanceof Date) return false;
-	return toJSON === "accessor" || !isPlain(value);
+	return toJSON !== undefined && toJSON !== Date.prototype.toJSON;
 }
 
 /**
@@ -528,7 +526,15 @@ export function redactSecondaryStorageErrors<T extends SecondaryStorage>(
 			if (locks && STORAGE_METHODS.has(property)) return false;
 			if (!Reflect.defineProperty(storage, property, definition)) return false;
 			if (locks) {
-				Reflect.defineProperty(target, property, definition);
+				// Mirror the storage's resulting property, since a partial
+				// definition leaves its value and other fields unchanged.
+				const resulting = Reflect.getOwnPropertyDescriptor(storage, property);
+				if (
+					!resulting ||
+					!Reflect.defineProperty(target, property, resulting)
+				) {
+					return false;
+				}
 				locked.add(property);
 			}
 			return true;

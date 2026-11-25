@@ -498,6 +498,48 @@ describe("redactSecondaryStorageErrors", () => {
 			expect(calls).toEqual({ getter: 0, toJSON: 0 });
 		});
 
+		it.each([
+			[
+				"the error",
+				() =>
+					Object.assign(new Error("ERR"), {
+						code: "EFAIL",
+						toJSON: () => ({ key: TOKEN }),
+					}),
+			],
+			[
+				"a plain object it holds",
+				() =>
+					Object.assign(new Error("ERR"), {
+						code: "EFAIL",
+						details: { toJSON: () => ({ key: TOKEN }) },
+					}),
+			],
+		])(
+			"does not pass through a secret returned by toJSON on %s",
+			async (_, create) => {
+				const storage = redactSecondaryStorageErrors(
+					storageThatRejects(create),
+				);
+
+				const error = await rejection(storage.get(TOKEN));
+
+				expect(JSON.stringify(error) ?? "").not.toContain(TOKEN);
+				expect(error).toMatchObject({ message: "ERR", code: "EFAIL" });
+			},
+		);
+
+		it("keeps an error that holds a date", async () => {
+			const original = Object.assign(new Error(`failed for ${TOKEN}`), {
+				at: new Date(0),
+			});
+			const storage = redactSecondaryStorageErrors(
+				storageThatRejects(() => original),
+			);
+
+			expect(await rejection(storage.get(TOKEN))).toBe(original);
+		});
+
 		it("does not pass through a secret printed by a custom inspect hook", async () => {
 			const storage = redactSecondaryStorageErrors(
 				storageThatRejects(() =>
@@ -628,6 +670,25 @@ describe("redactSecondaryStorageErrors", () => {
 			const error = await rejection(wrapped.get(TOKEN));
 
 			expect(error).toMatchObject({ command: { args: ["[redacted]"] } });
+		});
+
+		it("reads a property locked with a partial descriptor after wrapping", () => {
+			const wrapped = redactSecondaryStorageErrors({
+				...storageThatRejects(() => null),
+				later: 0,
+			});
+			Reflect.set(wrapped, "later", 2);
+
+			Object.defineProperty(wrapped, "later", {
+				configurable: false,
+				writable: false,
+			});
+
+			expect(Reflect.get(wrapped, "later")).toBe(2);
+			expect(Object.getOwnPropertyDescriptor(wrapped, "later")).toMatchObject({
+				value: 2,
+				configurable: false,
+			});
 		});
 
 		it("refuses to freeze its storage methods", async () => {
