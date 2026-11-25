@@ -1,5 +1,19 @@
 # @better-auth/oauth-provider
 
+## 1.8.0-beta.12
+
+### Patch Changes
+
+- [#12948](https://github.com/better-auth/better-auth/pull/12948) [`ca1a3bd`](https://github.com/better-auth/better-auth/commit/ca1a3bd4a59efe55f63ae3f9c19ac80077682fa2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Approving a device code through the consent page no longer fails with a server error on databases that reject `null` in list columns, such as Prisma with PostgreSQL or MongoDB, when no authentication methods are recorded.
+
+- [#12948](https://github.com/better-auth/better-auth/pull/12948) [`e13743b`](https://github.com/better-auth/better-auth/commit/e13743bf0454b6b74753b240092b2d1a735b6cfd) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - ID tokens leave out the `amr` claim when no authentication methods are recorded, instead of sending an empty list on databases that store list columns as empty arrays.
+
+- [#12867](https://github.com/better-auth/better-auth/pull/12867) [`19e30f1`](https://github.com/better-auth/better-auth/commit/19e30f1a7ca042737b4d82fb95b08afda8417d15) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A token request that races with grant revocation now returns `invalid_grant` when a retry clears a database deadlock during token cleanup. Previously, the first failed delete returned HTTP 500.
+
+- [#12976](https://github.com/better-auth/better-auth/pull/12976) [`42ca3f2`](https://github.com/better-auth/better-auth/commit/42ca3f251ece8df34e16a94d178b13fd0c8d0f23) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A token revocation that a `verification.create.before` hook keeps from being recorded now fails with `server_error`, and `onTokenRevoked` is no longer called for it. Before, `/oauth2/revoke` answered 200 while the token kept working, and every revocation reported the event. This covers revoking a JWT access token with `revocableJwtAccessTokens`, and every grant revocation: revoking a refresh token, replaying a refresh token or an authorization code, deleting a consent, and revoking a user's tokens on password reset, which happens when `emailAndPassword.revokeSessionsOnPasswordReset` is on and `revokeGrantsOnPasswordReset` is not `false`. A refresh token or consent whose revocation fails stays in place, so the request can be retried. A replay, or a password reset that revokes tokens, still deletes the grant's stored tokens before it fails. An authorization code whose reuse record a hook vetoes is now logged, because a replay of that code cannot revoke its grant.
+
+- A pushed authorization request that a `verification.create.before` hook keeps from being stored now fails with `server_error` instead of returning a `request_uri` that cannot be used. If storing it on its first visit fails, the authorization request now fails with `invalid_request_uri` right away, instead of after login and consent.
+
 ## 1.8.0-beta.11
 
 ### Minor Changes
