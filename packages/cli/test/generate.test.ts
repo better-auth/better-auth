@@ -568,6 +568,16 @@ model TenantMember {
 			expect(userFieldsOfType(code, "Session")).toHaveLength(2);
 		});
 
+		it("refuses to add a back-relation when its field name belongs to another relation", async () => {
+			await expect(
+				generate(
+					twoCompoundUsers(
+						'sessions      Session[] @relation("TenantSessions")',
+					),
+				),
+			).rejects.toThrow(/"OrgSessions".*"sessions"/);
+		});
+
 		it("refuses to guess between compound relations that all lack a back-relation", async () => {
 			await expect(generate(twoCompoundUsers(""))).rejects.toThrow(
 				/"TenantSessions".*"OrgSessions"/,
