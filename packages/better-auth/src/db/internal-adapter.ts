@@ -651,7 +651,7 @@ export const createInternalAdapter = (
 				userId,
 				token: generateId(32),
 				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-				createdAt: rest.createdAt ?? new Date(),
+				createdAt: new Date(),
 				updatedAt: new Date(),
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
