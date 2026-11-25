@@ -3117,6 +3117,90 @@ describe("internal adapter test", async () => {
 			}
 		});
 
+		function memoryStorage(): SecondaryStorage {
+			const values = new Map<string, string>();
+			return {
+				get: (key) => values.get(key) ?? null,
+				getAndDelete: (key) => {
+					const value = values.get(key) ?? null;
+					values.delete(key);
+					return value;
+				},
+				increment: (key) => {
+					const value = Number(values.get(key) ?? 0) + 1;
+					values.set(key, String(value));
+					return value;
+				},
+				set: (key, value) => {
+					values.set(key, value);
+				},
+				delete: (key) => {
+					values.delete(key);
+				},
+			};
+		}
+
+		it("reports a kept secondary storage code that expired during the comparison as expired", async () => {
+			const adapter = await makeAdapter({ secondaryStorage: memoryStorage() });
+			await adapter.createVerificationValue({
+				identifier: "attempt:expiring-kv",
+				value: "123456:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				const result = await adapter.verifyVerificationValue(
+					"attempt:expiring-kv",
+					{
+						allowedAttempts: 3,
+						matches: () => {
+							vi.setSystemTime(new Date(Date.now() + 120_000));
+							return true;
+						},
+						keep: true,
+					},
+				);
+
+				expect(result.status).toBe("expired");
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("does not count a refused attempt against a code a check keeps in secondary storage", async () => {
+			const adapter = await makeAdapter({ secondaryStorage: memoryStorage() });
+			await adapter.createVerificationValue({
+				identifier: "attempt:refused",
+				value: "123456:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const verify = (
+				guess: string,
+				options: { keep?: boolean; hold?: Promise<void> } = {},
+			) =>
+				adapter.verifyVerificationValue("attempt:refused", {
+					allowedAttempts: 2,
+					keep: options.keep,
+					matches: async (code) => {
+						await options.hold;
+						return code === guess;
+					},
+				});
+			expect((await verify("000000")).status).toBe("invalid");
+
+			let release: () => void = () => {};
+			const hold = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			const check = verify("123456", { keep: true, hold });
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			expect((await verify("111111")).status).toBe("exhausted");
+			release();
+
+			expect((await check).status).toBe("verified");
+			expect((await verify("123456")).status).toBe("verified");
+		});
+
 		it("returns the attempt of a matching guess it keeps", async () => {
 			const adapter = await makeAdapter();
 			await adapter.createVerificationValue({

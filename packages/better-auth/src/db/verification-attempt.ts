@@ -110,10 +110,21 @@ async function verifyInSecondaryStorage(
 	const [code, attemptsInValue] = splitVerificationAttempts(stored.value);
 	const keys = await attemptKeys(key, stored);
 	const ttl = ttlSeconds(stored.expiresAt);
-	const counted = Number(await storage.increment(keys.counted, ttl));
-	const returned = Number((await storage.get(keys.returned)) ?? 0) || 0;
+	const readCount = async (key: string) =>
+		Number((await storage.get(key)) ?? 0) || 0;
 	// The code stays stored, since a request holding the last attempt may
-	// still be comparing a correct guess.
+	// still be comparing a correct guess. Reading the count first keeps a
+	// refused attempt from taking an attempt such a check returns.
+	if (
+		attemptsInValue +
+			(await readCount(keys.counted)) -
+			(await readCount(keys.returned)) >=
+		allowedAttempts
+	) {
+		return { status: "exhausted" };
+	}
+	const counted = Number(await storage.increment(keys.counted, ttl));
+	const returned = await readCount(keys.returned);
 	if (attemptsInValue + counted - returned > allowedAttempts) {
 		return { status: "exhausted" };
 	}
@@ -121,6 +132,7 @@ async function verifyInSecondaryStorage(
 	if (!(await matches(code))) return { status: "invalid" };
 
 	if (keep) {
+		if (isExpired(stored)) return { status: "expired" };
 		const current = hydrate(await storage.get(key));
 		if (!current || !isSameCode(current, stored)) {
 			return { status: "superseded" };
@@ -333,4 +345,30 @@ export async function hasAttemptsBesideValue(
 		verification,
 	);
 	return Number((await secondaryStorage.get(keys.counted)) ?? 0) > 0;
+}
+
+/**
+ * The attempts counted against `verification`, including those secondary
+ * storage counts beside its value.
+ */
+export async function countVerificationAttempts(
+	ctx: GenericEndpointContext,
+	verification: Verification,
+): Promise<number> {
+	const [, attemptsInValue] = splitVerificationAttempts(verification.value);
+	const { secondaryStorage, options } = ctx.context;
+	if (!secondaryStorage || options.verification?.storeInDatabase) {
+		return attemptsInValue;
+	}
+	const keys = await attemptKeys(
+		`verification:${verification.identifier}`,
+		verification,
+	);
+	const readCount = async (key: string) =>
+		Number((await secondaryStorage.get(key)) ?? 0) || 0;
+	return (
+		attemptsInValue +
+		(await readCount(keys.counted)) -
+		(await readCount(keys.returned))
+	);
 }

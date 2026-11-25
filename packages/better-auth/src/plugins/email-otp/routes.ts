@@ -13,6 +13,7 @@ import { setCookieCache, setSessionCookie } from "../../cookies";
 import { symmetricDecrypt } from "../../crypto";
 import { revokeUnprovenAccountAccess } from "../../db/revoke-unproven-account-access";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
+import { countVerificationAttempts } from "../../db/verification-attempt";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
@@ -284,7 +285,12 @@ export const getVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				await ctx.context.internalAdapter.findVerificationValue(
 					toOTPIdentifier(ctx.query.type, email),
 				);
-			if (!verificationValue || verificationValue.expiresAt < new Date()) {
+			if (
+				!verificationValue ||
+				verificationValue.expiresAt < new Date() ||
+				(await countVerificationAttempts(ctx, verificationValue)) >=
+					(opts.allowedAttempts || 3)
+			) {
 				return ctx.json({
 					otp: null,
 				});

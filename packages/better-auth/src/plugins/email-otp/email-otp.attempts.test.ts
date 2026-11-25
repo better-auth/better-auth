@@ -1238,4 +1238,32 @@ describe("email OTP attempts counted in place", () => {
 			expect((await last).data?.token).toBeDefined();
 		},
 	);
+
+	it.for(["database", "secondary"] as const)(
+		"does not return an exhausted code from getVerificationOTP in %s storage",
+		async (storage) => {
+			const { auth, client, testUser } = await getTestInstance(
+				{
+					...usedCodeStorageOptions(storage),
+					plugins: [
+						emailOTP({
+							generateOTP: () => "222222",
+							async sendVerificationOTP() {},
+							allowedAttempts: 1,
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [emailOTPClient()] } },
+			);
+			const email = testUser.email;
+			await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+			const stored = () =>
+				auth.api.getVerificationOTP({ query: { email, type: "sign-in" } });
+			expect((await stored()).otp).toBe("222222");
+
+			await client.signIn.emailOtp({ email, otp: "000000" });
+
+			expect((await stored()).otp).toBeNull();
+		},
+	);
 });
