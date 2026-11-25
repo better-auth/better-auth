@@ -470,6 +470,7 @@ const EXTENSION_ID = "abcdefghijklmnopabcdefghijklmnop";
 passkey({
     rpID: EXTENSION_ID,
     expectedRPID: `chrome-extension://${EXTENSION_ID}`,
+    origin: `chrome-extension://${EXTENSION_ID}`,
 });
 ```
 
@@ -483,8 +484,11 @@ passkey({
         ctx.headers?.get("x-passkey-client") === "extension" ? EXTENSION_ID : "example.com",
     expectedRPID: ({ rpID }) =>
         rpID === EXTENSION_ID ? `chrome-extension://${rpID}` : rpID,
+    origin: ["https://example.com", `chrome-extension://${EXTENSION_ID}`],
 });
 ```
+
+Configure the extension origin explicitly in `origin`, or list it exactly in `trustedOrigins`. `expectedRPID` controls the RP ID hash check; it does not add trusted WebAuthn origins.
 
 A static list of both RP IDs also works, but accepts a response bound to either RP ID for any challenge. Chrome extension pages do not send an `Origin` header on `GET` requests, so the options endpoints need another signal, such as a header set in the extension's `createAuthClient({ fetchOptions: { headers } })`. Per-call `fetchOptions` passed to `signIn.passkey` or `passkey.addPasskey` apply only to the verify request, not to the options request.
 

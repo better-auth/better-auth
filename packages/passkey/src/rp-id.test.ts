@@ -143,7 +143,12 @@ const WEB_ORIGIN = "http://localhost:3000";
 
 async function setup(options: PasskeyOptions) {
 	const { auth, signInWithTestUser } = await getTestInstance({
-		plugins: [passkey(options)],
+		plugins: [
+			passkey({
+				origin: [WEB_ORIGIN, EXTENSION_ORIGIN],
+				...options,
+			}),
+		],
 	});
 	const { headers: sessionHeaders } = await signInWithTestUser();
 	const authenticator = await createAuthenticator();
@@ -277,6 +282,34 @@ describe("passkey rpID", () => {
 		});
 		expect(extensionAuth.optionsRPID).toBe(EXTENSION_ID);
 		expect(extensionAuth.result.ok).toBe(true);
+	});
+
+	/**
+	 * @see https://www.w3.org/TR/webauthn-3/#sctn-validating-origin
+	 */
+	it("rejects an unconfigured origin even when its expectedRPID is allowed", async () => {
+		const flow = await setup({
+			origin: undefined,
+			rpID: async ({ ctx }) =>
+				ctx.headers?.get("origin") === EXTENSION_ORIGIN
+					? EXTENSION_ID
+					: "localhost",
+			expectedRPID: [EXTENSION_ORIGIN, "localhost"],
+		});
+		const registered = await flow.register({ origin: WEB_ORIGIN });
+		expect(registered.result.ok).toBe(true);
+
+		const registrationRejected = await flow.register({
+			origin: EXTENSION_ORIGIN,
+			signedRPID: EXTENSION_ORIGIN,
+		});
+		expect(registrationRejected.result.ok).toBe(false);
+
+		const authenticationRejected = await flow.authenticate({
+			origin: EXTENSION_ORIGIN,
+			signedRPID: EXTENSION_ORIGIN,
+		});
+		expect(authenticationRejected.result.ok).toBe(false);
 	});
 
 	it("passes the issued rpID to an expectedRPID function", async () => {
