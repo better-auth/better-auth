@@ -703,9 +703,15 @@ export const auth = betterAuth({
 Set custom strategies for ID generation, findMany queries, and database joins.
 
 * `generateId`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: [random base62 string](https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/id.ts)). See the [Database documentation](/docs/concepts/database#id-generation) for more info.
-* `defaultFindManyLimit`: Maximum rows returned by adapter `findMany` when `limit` is omitted. (default: `100`). Use `findAll` to return every matching row. Use `findAll` only from server code you control; it can return a large result set.
+* `defaultFindManyLimit`: Maximum rows returned by adapter `findMany` when `limit` is omitted. (default: `100`). A numeric `limit` is that cap (`0` returns no rows).
 * `joins`: Enable database joins for adapters that support them. When disabled (default), related data is fetched via separate queries. See the [Database documentation](/docs/concepts/database#joins) for more info. (default: `false`)
 * `validateSchema`: Compare the schema with the tables Better Auth writes before the first request and report every difference with its fix. See the [Database documentation](/docs/concepts/database#schema-validation) for more info. (default: `true` outside production)
+
+To return every matching row, call `adapter.findAll` instead of raising `defaultFindManyLimit` or omitting `limit` on `findMany`. `findAll` takes the same filters as `findMany` except there is no `limit`: `model`, `where`, `select`, `sortBy`, `offset`, and `join`.
+
+<Callout type="warn">
+  `findAll` can return a large result set. Call it only from server code you control, and keep `where` scoped to records the caller is allowed to read.
+</Callout>
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -718,6 +724,14 @@ export const auth = betterAuth({
 			joins: true,
 		},
 	},
+});
+```
+
+```ts
+const { adapter } = await auth.$context;
+const members = await adapter.findAll({
+	model: "member",
+	where: [{ field: "organizationId", value: organizationId }],
 });
 ```
 
