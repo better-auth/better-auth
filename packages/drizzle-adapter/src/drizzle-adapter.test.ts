@@ -99,11 +99,11 @@ describe("drizzle-adapter", () => {
 	};
 
 	it.for(adapterFactories)(
-		"createMany keeps $relations sqlite RETURNING order",
+		"createMany restores input order from $relations sqlite RETURNING",
 		async ({ createAdapter }) => {
 			const returning = vi.fn().mockResolvedValue([
-				{ id: "a", name: "Ada" },
 				{ id: "b", name: "Bob" },
+				{ id: "a", name: "Ada" },
 			]);
 			const db = {
 				_: { fullSchema: { user: userTable }, relations: {} },
@@ -123,13 +123,13 @@ describe("drizzle-adapter", () => {
 	);
 
 	it.for(adapterFactories)(
-		"createMany keeps PostgreSQL UUID RETURNING order on $relations",
+		"createMany restores input order when PostgreSQL lowercases UUID ids on $relations",
 		async ({ createAdapter }) => {
 			const adaId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
 			const bobId = "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB";
 			const returning = vi.fn().mockResolvedValue([
-				{ id: adaId.toLowerCase(), name: "Ada" },
 				{ id: bobId.toLowerCase(), name: "Bob" },
+				{ id: adaId.toLowerCase(), name: "Ada" },
 			]);
 			const db = {
 				_: { fullSchema: { user: userTable }, relations: {} },
@@ -168,8 +168,8 @@ describe("drizzle-adapter", () => {
 			const upperId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
 			const lowerId = upperId.toLowerCase();
 			const returning = vi.fn().mockResolvedValue([
-				{ id: upperId, name: "Upper" },
 				{ id: lowerId, name: "Lower" },
+				{ id: upperId, name: "Upper" },
 			]);
 			const db = {
 				_: { fullSchema: { user: userTable }, relations: {} },
@@ -202,11 +202,9 @@ describe("drizzle-adapter", () => {
 	);
 
 	it.for(adapterFactories)(
-		"createMany bulk-inserts generated ids with $relations sqlite RETURNING",
+		"createMany does not use bulk RETURNING when ids are generated on $relations",
 		async ({ createAdapter }) => {
-			const returning = vi
-				.fn()
-				.mockResolvedValue([{ id: "generated-a" }, { id: "generated-b" }]);
+			const returning = vi.fn().mockResolvedValue([{ id: "generated" }]);
 			const values = vi.fn().mockReturnValue({ returning });
 			const db = {
 				_: { fullSchema: { user: userTable }, relations: {} },
@@ -222,10 +220,9 @@ describe("drizzle-adapter", () => {
 					{ name: "Bob", email: "bob@example.com", emailVerified: false },
 				],
 			});
-			expect(values).toHaveBeenCalledTimes(1);
-			expect(values.mock.calls[0]?.[0]).toHaveLength(2);
-			expect(values.mock.calls[0]?.[0][0]).not.toHaveProperty("id");
-			expect(values.mock.calls[0]?.[0][1]).not.toHaveProperty("id");
+			expect(values).toHaveBeenCalledTimes(2);
+			expect(values.mock.calls[0]?.[0]).not.toHaveProperty("id");
+			expect(values.mock.calls[1]?.[0]).not.toHaveProperty("id");
 		},
 	);
 
@@ -305,6 +302,41 @@ describe("drizzle-adapter", () => {
 			expect(values.mock.calls[1]?.[0]).toHaveLength(1);
 		},
 	);
+
+	it("createMany chunks Relations v2 inserts using db._.relations table columns", async () => {
+		const user = sqliteTable("user", {
+			id: sqliteText("id").primaryKey(),
+			name: sqliteText("name"),
+			email: sqliteText("email"),
+			emailVerified: sqliteText("emailVerified"),
+			image: sqliteText("image"),
+			createdAt: sqliteText("createdAt"),
+			updatedAt: sqliteText("updatedAt"),
+			extra: sqliteText("extra").default("x"),
+		});
+		const values = vi.fn((rows: unknown[]) => ({
+			returning: vi.fn().mockResolvedValue(rows),
+		}));
+		const db = {
+			_: { relations: { user: { table: user } } },
+			insert: vi.fn().mockReturnValue({ values }),
+		} as any;
+		const adapter = drizzleRelationsV2Adapter(db, {
+			provider: "sqlite",
+			createManyMaxParameters: 12,
+		})({});
+		await adapter.createMany({
+			model: "user",
+			data: [
+				{ id: "a", name: "Ada" },
+				{ id: "b", name: "Bob" },
+			],
+			forceAllowId: true,
+		});
+		expect(values).toHaveBeenCalledTimes(2);
+		expect(values.mock.calls[0]?.[0]).toHaveLength(1);
+		expect(values.mock.calls[1]?.[0]).toHaveLength(1);
+	});
 
 	it.for(adapterFactories)(
 		"createMany does not wrap extra D1 chunks in an interactive transaction on $relations",

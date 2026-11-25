@@ -255,13 +255,13 @@ describe("kysely-adapter", () => {
 		},
 	];
 
-	it("createMany keeps sqlite RETURNING order", async () => {
+	it("createMany restores input order from sqlite RETURNING", async () => {
 		const insertQuery = {
 			values: vi.fn(() => insertQuery),
 			returningAll: vi.fn(() => insertQuery),
 			execute: vi.fn().mockResolvedValue([
-				{ id: "a", name: "Ada" },
 				{ id: "b", name: "Bob" },
+				{ id: "a", name: "Ada" },
 			]),
 		};
 		const db = {
@@ -279,15 +279,15 @@ describe("kysely-adapter", () => {
 		expect(created.map((row) => row.id)).toEqual(["a", "b"]);
 	});
 
-	it("createMany keeps PostgreSQL UUID RETURNING order", async () => {
+	it("createMany restores input order when PostgreSQL lowercases UUID ids", async () => {
 		const adaId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
 		const bobId = "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB";
 		const insertQuery = {
 			values: vi.fn(() => insertQuery),
 			returningAll: vi.fn(() => insertQuery),
 			execute: vi.fn().mockResolvedValue([
-				{ id: adaId.toLowerCase(), name: "Ada" },
 				{ id: bobId.toLowerCase(), name: "Bob" },
+				{ id: adaId.toLowerCase(), name: "Ada" },
 			]),
 		};
 		const db = {
@@ -326,8 +326,8 @@ describe("kysely-adapter", () => {
 			values: vi.fn(() => insertQuery),
 			returningAll: vi.fn(() => insertQuery),
 			execute: vi.fn().mockResolvedValue([
-				{ id: upperId, name: "Upper" },
 				{ id: lowerId, name: "Lower" },
+				{ id: upperId, name: "Upper" },
 			]),
 		};
 		const db = {
@@ -358,15 +358,13 @@ describe("kysely-adapter", () => {
 		expect(created.map((row) => row.name)).toEqual(["Upper", "Lower"]);
 	});
 
-	it("createMany bulk-inserts generated ids with sqlite RETURNING", async () => {
+	it("createMany does not use bulk RETURNING or OUTPUT when ids are generated", async () => {
 		const insertQuery = {
-			values: vi.fn((_rows: unknown[]) => insertQuery),
+			values: vi.fn(() => insertQuery),
 			returningAll: vi.fn(() => insertQuery),
 			outputAll: vi.fn(() => insertQuery),
-			execute: vi
-				.fn()
-				.mockResolvedValue([{ id: "generated-a" }, { id: "generated-b" }]),
-			executeTakeFirst: vi.fn(),
+			execute: vi.fn(),
+			executeTakeFirst: vi.fn().mockResolvedValue({ id: "generated" }),
 		};
 		const db = {
 			insertInto: vi.fn(() => insertQuery),
@@ -383,11 +381,9 @@ describe("kysely-adapter", () => {
 			],
 		});
 
-		expect(insertQuery.values).toHaveBeenCalledTimes(1);
-		expect(insertQuery.values.mock.calls[0]?.[0]).toHaveLength(2);
-		expect(insertQuery.returningAll).toHaveBeenCalledTimes(1);
-		expect(insertQuery.execute).toHaveBeenCalledTimes(1);
-		expect(insertQuery.executeTakeFirst).not.toHaveBeenCalled();
+		expect(insertQuery.values).toHaveBeenCalledTimes(2);
+		expect(insertQuery.execute).not.toHaveBeenCalled();
+		expect(insertQuery.executeTakeFirst).toHaveBeenCalledTimes(2);
 	});
 
 	it("createMany does not use bulk OUTPUT when ids are generated on mssql", async () => {

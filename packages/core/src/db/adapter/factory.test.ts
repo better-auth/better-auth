@@ -471,6 +471,41 @@ describe("createAdapterFactory createMany", () => {
 		expect(createMany.mock.calls[0]?.[0].select).toEqual(["id", "name"]);
 	});
 
+	it("uses mapped input id keys when deciding whether rows already have ids", async () => {
+		const create = vi.fn(
+			async ({ data }: { data: Record<string, any> }) => data,
+		);
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				disableTransformInput: true,
+				disableTransformOutput: true,
+				mapKeysTransformInput: { id: "_id" },
+			},
+			adapter: () =>
+				createCustomAdapter({
+					create: create as CustomAdapter["create"],
+					createMany: createMany as CustomAdapter["createMany"],
+				}),
+		})({});
+
+		await adapter.createMany({
+			model: "user",
+			data: [
+				{ _id: "a", name: "Ada" },
+				{ _id: "b", name: "Bob" },
+			],
+			forceAllowId: true,
+		});
+
+		expect(createMany).toHaveBeenCalledTimes(1);
+		expect(create).not.toHaveBeenCalled();
+	});
+
 	it("does not forward an empty select list", async () => {
 		const createMany = vi.fn(
 			async ({ data }: { data: Record<string, any>[]; select?: string[] }) =>

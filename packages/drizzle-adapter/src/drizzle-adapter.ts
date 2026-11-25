@@ -850,7 +850,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 						return insertAndReadBack(db);
 					}
-					return (await db.insert(table).values(values).returning()) as T[];
+					const ids = values.map((row) => row[idField] ?? row.id);
+					const rows = (await db
+						.insert(table)
+						.values(values)
+						.returning()) as T[];
+					return orderRowsByIds(ids, rows, idField, model);
 				},
 				async findOne({ model, modelKey = model, where, select, join }) {
 					const table = getSchema(model);
@@ -1288,8 +1293,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						? 100
 						: undefined
 					: 65535),
-			createManyPreservesInsertOrder: config.provider !== "mysql",
-			createManyBulkGeneratedIds: config.provider !== "mysql",
+			createManyPreservesInsertOrder: false,
+			createManyBulkGeneratedIds: false,
 			createManyColumnCount: ({ model, rows }) => {
 				const schema = config.schema || db._?.fullSchema;
 				const table = schema?.[model];

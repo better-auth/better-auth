@@ -499,7 +499,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 					const selectClause = convertSelect(select, modelKey);
 					const idField = getFieldName({ model: modelKey, field: "id" });
+					const orderSelect =
+						selectClause === undefined
+							? undefined
+							: { ...selectClause, [idField]: true };
 					const ids = values.map((row) => row[idField] ?? row.id);
+					const hasAllIds = ids.every((id) => id !== undefined && id !== null);
 					const createSequentially = async () => {
 						const created: T[] = [];
 						for (const row of values) {
@@ -512,14 +517,18 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						}
 						return created;
 					};
+					if (!hasAllIds) {
+						return createSequentially();
+					}
 					if (
 						CREATE_MANY_AND_RETURN_PROVIDERS.has(config.provider) &&
 						typeof db[model].createManyAndReturn === "function"
 					) {
-						return (await db[model].createManyAndReturn({
+						const created = (await db[model].createManyAndReturn({
 							data: values,
-							select: selectClause,
+							select: orderSelect,
 						})) as T[];
+						return orderRowsByIds(ids, created, idField, model);
 					}
 					if (typeof db[model].createMany !== "function") {
 						return createSequentially();
@@ -529,10 +538,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						await client[model]!.createMany({ data: values });
 						const rows = (await client[model]!.findMany({
 							where: { [idField]: { in: ids } },
-							select:
-								selectClause === undefined
-									? undefined
-									: { ...selectClause, [idField]: true },
+							select: orderSelect,
 						})) as T[];
 						return orderRowsByIds(ids, rows, idField, model);
 					};
@@ -977,12 +983,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				config.provider,
 			),
 			createManyMaxRows: config.provider === "sqlserver" ? 1000 : undefined,
-			createManyPreservesInsertOrder: CREATE_MANY_AND_RETURN_PROVIDERS.has(
-				config.provider,
-			),
-			createManyBulkGeneratedIds: CREATE_MANY_AND_RETURN_PROVIDERS.has(
-				config.provider,
-			),
+			createManyPreservesInsertOrder: false,
+			createManyBulkGeneratedIds: false,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,
 			supportsArrays:
 				config.provider === "postgresql" || config.provider === "mongodb"

@@ -682,11 +682,12 @@ export const kyselyAdapter = (
 							.execute();
 						return orderRowsByIds(ids, rows, idField, model) as T[];
 					}
-					return (await db
+					const rows = await db
 						.insertInto(model)
 						.values(encoded)
 						.returningAll()
-						.execute()) as T[];
+						.execute();
+					return orderRowsByIds(ids, rows, idField, model) as T[];
 				},
 				async findOne({ model, modelKey = model, where, select, join }) {
 					const { and, or } = convertWhereClause(model, modelKey, where);
@@ -1132,10 +1133,8 @@ export const kyselyAdapter = (
 				config?.createManyMaxParameters,
 			),
 			createManyMaxRows: config?.type === "mssql" ? 1000 : undefined,
-			createManyPreservesInsertOrder:
-				config?.type !== "mysql" && config?.type !== "mssql",
-			createManyBulkGeneratedIds:
-				config?.type !== "mysql" && config?.type !== "mssql",
+			createManyPreservesInsertOrder: false,
+			createManyBulkGeneratedIds: false,
 			supportsBooleans:
 				config?.type === "sqlite" ||
 				config?.type === "mssql" ||

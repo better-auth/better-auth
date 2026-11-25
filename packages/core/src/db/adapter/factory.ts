@@ -1036,7 +1036,9 @@ export const createAdapterFactory =
 					{ model, data: rows },
 				);
 				const selectedFields = select?.length ? select : undefined;
-				const idField = getFieldName({ model: modelKey, field: "id" });
+				const idField =
+					config.mapKeysTransformInput?.id ??
+					getFieldName({ model: modelKey, field: "id" });
 				const hasAllIds = rows.every((row) => {
 					const id = row[idField] ?? row.id;
 					return id !== undefined && id !== null;

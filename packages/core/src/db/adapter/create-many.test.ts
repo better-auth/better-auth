@@ -41,4 +41,36 @@ describe("createMany helpers", () => {
 			).map((row) => row.name),
 		).toEqual(["Ada", "Bob"]);
 	});
+
+	it("matches UUID ids case-insensitively when the mapping is unique", () => {
+		const adaId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
+		const bobId = "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB";
+		expect(
+			orderRowsByIds(
+				[adaId, bobId],
+				[
+					{ id: bobId.toLowerCase(), name: "Bob" },
+					{ id: adaId.toLowerCase(), name: "Ada" },
+				],
+				"id",
+				"user",
+			).map((row) => row.name),
+		).toEqual(["Ada", "Bob"]);
+	});
+
+	it("keeps case-distinct UUID-shaped text ids", () => {
+		const upperId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
+		const lowerId = upperId.toLowerCase();
+		expect(
+			orderRowsByIds(
+				[upperId, lowerId],
+				[
+					{ id: lowerId, name: "Lower" },
+					{ id: upperId, name: "Upper" },
+				],
+				"id",
+				"user",
+			).map((row) => row.name),
+		).toEqual(["Upper", "Lower"]);
+	});
 });

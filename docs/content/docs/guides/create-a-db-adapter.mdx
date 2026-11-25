@@ -206,7 +206,7 @@ parameters:
 
 Rows usually already include an `id`. When the user uses serial or database-generated IDs, `id` may be missing — still return each generated `id`.
 
-If your database preserves insert order (for example PostgreSQL or SQLite `RETURNING`), return the driver rows as-is. If it does not (MySQL `IN (...)`, SQL Server `OUTPUT`), reorder them to match `data`. If you insert and then query the new rows, run both in one transaction.
+If the database may return rows out of insert order, reorder them to match `data`. If you insert and then query the new rows, run both in one transaction.
 
 Do not split `data` yourself. Better Auth already chunks large batches, inserts mixed-key rows one at a time, and uses sequential `create` when generated ids cannot be returned in bulk.
 
