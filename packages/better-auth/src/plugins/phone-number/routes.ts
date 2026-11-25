@@ -927,7 +927,8 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
  *
  * A matching code is consumed, so the same code can never satisfy two
  * simultaneous verifications. A wrong code leaves it stored with the attempt
- * counted. Once every attempt is used, the code is removed. With
+ * counted. Once every attempt is used, every later attempt is refused until
+ * a new code is sent. With
  * `"restore"`, a matching code stays stored with its attempt returned, so a
  * follow-up call can spend it.
  */

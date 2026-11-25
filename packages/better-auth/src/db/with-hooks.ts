@@ -537,7 +537,7 @@ export function getWithHooks(
 						toRun(actualData as any, context),
 				);
 				if (result === false) return false;
-				if (typeof result === "object" && "data" in result) {
+				if (result && typeof result === "object" && "data" in result) {
 					actualData = { ...actualData, ...result.data };
 				}
 			}

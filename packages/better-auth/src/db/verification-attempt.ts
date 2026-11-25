@@ -38,9 +38,10 @@ function isExpired(verification: Verification) {
 	return new Date(verification.expiresAt).getTime() <= Date.now();
 }
 
+// Rounds up so an attempt count never expires before its code.
 function ttlSeconds(expiresAt: Date) {
 	return Math.max(
-		Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000),
+		Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000),
 		1,
 	);
 }
@@ -61,7 +62,7 @@ function hydrate(raw: unknown): Verification | null {
 function isSameCode(a: Verification, b: Verification) {
 	return (
 		a.value === b.value &&
-		new Date(a.createdAt).getTime() === new Date(b.createdAt).getTime()
+		Object.is(new Date(a.createdAt).getTime(), new Date(b.createdAt).getTime())
 	);
 }
 
@@ -111,9 +112,9 @@ async function verifyInSecondaryStorage(
 	const ttl = ttlSeconds(stored.expiresAt);
 	const counted = Number(await storage.increment(keys.counted, ttl));
 	const returned = Number((await storage.get(keys.returned)) ?? 0) || 0;
+	// The code stays stored, since a request holding the last attempt may
+	// still be comparing a correct guess.
 	if (attemptsInValue + counted - returned > allowedAttempts) {
-		// Without a conditional delete, a code sent since the read goes too.
-		await storage.getAndDelete(key);
 		return { status: "exhausted" };
 	}
 
@@ -239,10 +240,9 @@ async function verifyInDatabase(
 	for (let retry = 0; !claimed; retry++) {
 		if (isExpired(row)) return { status: "expired" };
 		const [, attempts] = splitVerificationAttempts(row.value);
-		if (attempts >= allowedAttempts) {
-			await consume(row, code);
-			return { status: "exhausted" };
-		}
+		// The code stays stored, since a request holding the last attempt may
+		// still be comparing a correct guess.
+		if (attempts >= allowedAttempts) return { status: "exhausted" };
 		const result = await writeAttempts(row, code, attempts + 1);
 		if (result === false) return { status: "vetoed" };
 		if (result) {
@@ -276,7 +276,9 @@ async function verifyInDatabase(
 			await invalidateCache();
 			return { status: "verified", verification: returned };
 		}
-		current = await reread(current, code);
+		const previous: Verification = current;
+		current = await reread(previous, code);
+		if (!current && isExpired(previous)) return { status: "expired" };
 	}
 	return { status: "superseded" };
 }

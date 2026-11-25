@@ -1278,8 +1278,8 @@ export const changeEmailEmailOTP = (opts: RequiredEmailOTPOptions) =>
  * Credential routes consume a matching OTP, so only one concurrent caller
  * succeeds. The optional preflight leaves it stored with its attempt returned,
  * so the documented follow-up call can use it. A wrong guess leaves the OTP
- * stored with the attempt counted. Once every attempt is used, the OTP is
- * removed.
+ * stored with the attempt counted. Once every attempt is used, every later
+ * attempt is refused until a new OTP is sent.
  */
 async function atomicVerifyOTP(
 	ctx: GenericEndpointContext,

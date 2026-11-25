@@ -177,7 +177,7 @@ describe("email OTP preflight attempt accounting", () => {
 					otp,
 				})
 			).error?.code,
-		).toBe("INVALID_OTP");
+		).toBe("TOO_MANY_ATTEMPTS");
 	});
 
 	it("keeps a correct preflight available for email verification", async () => {
@@ -1178,6 +1178,64 @@ describe("email OTP attempts counted in place", () => {
 			expect(
 				(await client.signIn.emailOtp({ email, otp: resent })).data?.token,
 			).toBeDefined();
+		},
+	);
+
+	it.for(usedCodeStorages)(
+		"accepts a correct last attempt while another guess arrives in %s storage",
+		async (storage) => {
+			let releaseCheck: () => void = () => {};
+			const checkReleased = new Promise<void>((resolve) => {
+				releaseCheck = resolve;
+			});
+			let signalCheck: () => void = () => {};
+			const checkStarted = new Promise<void>((resolve) => {
+				signalCheck = resolve;
+			});
+			let holdNext = false;
+			const { client, testUser } = await getTestInstance(
+				{
+					...usedCodeStorageOptions(storage),
+					plugins: [
+						emailOTP({
+							generateOTP: () => "222222",
+							async sendVerificationOTP() {},
+							allowedAttempts: 2,
+							storeOTP: {
+								async hash(otp) {
+									if (holdNext && otp === "222222") {
+										holdNext = false;
+										signalCheck();
+										await checkReleased;
+									}
+									return `stored-${otp}`;
+								},
+							},
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [emailOTPClient()] } },
+			);
+			const email = testUser.email;
+			await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+			expect(
+				(
+					await client.emailOtp.checkVerificationOtp({
+						email,
+						type: "sign-in",
+						otp: "000000",
+					})
+				).error?.code,
+			).toBe("INVALID_OTP");
+
+			holdNext = true;
+			const last = client.signIn.emailOtp({ email, otp: "222222" });
+			await checkStarted;
+			const extra = await client.signIn.emailOtp({ email, otp: "111111" });
+			releaseCheck();
+
+			expect(extra.error?.code).toBe("TOO_MANY_ATTEMPTS");
+			expect((await last).data?.token).toBeDefined();
 		},
 	);
 });

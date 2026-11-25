@@ -964,8 +964,10 @@ describe("reset password guess accounting", async () => {
 			otp: resetOtp,
 			newPassword: "new-password",
 		});
-		expect(reset.data).toBeNull();
-		expect(await internalAdapter.findVerificationValue(identifier)).toBeNull();
+		expect(reset.error?.code).toBe("TOO_MANY_ATTEMPTS");
+		expect(
+			(await internalAdapter.findVerificationValue(identifier))?.value,
+		).toBe(`${resetOtp}:3`);
 	});
 });
 
@@ -2507,25 +2509,11 @@ describe("phone-number verification rows", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11105
 	 */
-	it("keeps a code sent while an exhausted code is checked", async () => {
+	it("accepts a code sent after the previous one was exhausted", async () => {
 		const number = "+15550000004";
 		const codes: string[] = [];
-		let sendDuringCheck = false;
 		const { client, auth } = await getTestInstance(
 			{
-				databaseHooks: {
-					verification: {
-						delete: {
-							async before() {
-								if (!sendDuringCheck) return;
-								sendDuringCheck = false;
-								await auth.api.sendPhoneNumberOTP({
-									body: { phoneNumber: number },
-								});
-							},
-						},
-					},
-				},
 				plugins: [
 					phoneNumber({
 						async sendOTP({ code }) {
@@ -2548,15 +2536,15 @@ describe("phone-number verification rows", () => {
 			});
 			expect(res.error?.code).toBe("INVALID_OTP");
 		}
-
-		sendDuringCheck = true;
 		const exhausted = await client.phoneNumber.verify({
 			phoneNumber: number,
-			code: wrong,
+			code: codes[0]!,
 		});
+		expect(exhausted.error?.code).toBe("TOO_MANY_ATTEMPTS");
+
+		await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
 
 		expect(codes).toHaveLength(2);
-		expect(exhausted.error?.code).toBe("TOO_MANY_ATTEMPTS");
 		const latest = await client.phoneNumber.verify({
 			phoneNumber: number,
 			code: codes[1]!,

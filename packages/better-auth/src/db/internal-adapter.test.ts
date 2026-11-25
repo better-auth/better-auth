@@ -3007,6 +3007,116 @@ describe("internal adapter test", async () => {
 			);
 		});
 
+		it("keeps the attempt count of secondary storage until the code expires", async () => {
+			const values = new Map<string, string>();
+			const ttls = new Map<string, number>();
+			const adapter = await makeAdapter({
+				secondaryStorage: {
+					get: (key) => values.get(key) ?? null,
+					getAndDelete: (key) => {
+						const value = values.get(key) ?? null;
+						values.delete(key);
+						return value;
+					},
+					increment: (key, ttl) => {
+						if (!values.has(key)) ttls.set(key, ttl);
+						const value = Number(values.get(key) ?? 0) + 1;
+						values.set(key, String(value));
+						return value;
+					},
+					set: (key, value) => {
+						values.set(key, value);
+					},
+					delete: (key) => {
+						values.delete(key);
+					},
+				},
+			});
+			const expiresAt = new Date(Date.now() + 10_500);
+			await adapter.createVerificationValue({
+				identifier: "attempt:ttl",
+				value: "123456:0",
+				expiresAt,
+			});
+
+			await adapter.verifyVerificationValue("attempt:ttl", {
+				allowedAttempts: 3,
+				matches: () => false,
+			});
+
+			const [ttl] = [...ttls.values()];
+			expect(Date.now() + ttl! * 1000).toBeGreaterThanOrEqual(
+				expiresAt.getTime(),
+			);
+		});
+
+		it("accepts a secondary storage code stored without a creation time", async () => {
+			const values = new Map<string, string>();
+			const adapter = await makeAdapter({
+				secondaryStorage: {
+					get: (key) => values.get(key) ?? null,
+					getAndDelete: (key) => {
+						const value = values.get(key) ?? null;
+						values.delete(key);
+						return value;
+					},
+					increment: (key) => {
+						const value = Number(values.get(key) ?? 0) + 1;
+						values.set(key, String(value));
+						return value;
+					},
+					set: (key, value) => {
+						values.set(key, value);
+					},
+					delete: (key) => {
+						values.delete(key);
+					},
+				},
+			});
+			values.set(
+				"verification:attempt:legacy",
+				JSON.stringify({
+					identifier: "attempt:legacy",
+					value: "123456:0",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+			);
+
+			const result = await adapter.verifyVerificationValue("attempt:legacy", {
+				allowedAttempts: 3,
+				matches: (code) => code === "123456",
+			});
+
+			expect(result.status).toBe("verified");
+		});
+
+		it("reports a kept code that expired during the comparison as expired", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "attempt:expiring",
+				value: "123456:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				const result = await adapter.verifyVerificationValue(
+					"attempt:expiring",
+					{
+						allowedAttempts: 3,
+						matches: () => {
+							vi.setSystemTime(new Date(Date.now() + 120_000));
+							return true;
+						},
+						keep: true,
+					},
+				);
+
+				expect(result.status).toBe("expired");
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
 		it("returns the attempt of a matching guess it keeps", async () => {
 			const adapter = await makeAdapter();
 			await adapter.createVerificationValue({

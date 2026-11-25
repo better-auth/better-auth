@@ -116,7 +116,8 @@ export type CookieCacheSigner = {
  * - `"invalid"`: the guess was compared and did not match.
  * - `"missing"`: no code is stored.
  * - `"expired"`: the stored code expired.
- * - `"exhausted"`: every allowed attempt was used, so the code was removed.
+ * - `"exhausted"`: every allowed attempt was used. The code stays stored, so
+ *   later attempts are refused until it expires or is replaced.
  * - `"superseded"`: another request consumed or replaced the code during
  *   this attempt.
  * - `"vetoed"`: a `verification.update.before` database hook blocked

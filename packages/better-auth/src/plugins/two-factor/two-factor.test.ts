@@ -2172,6 +2172,10 @@ describe("OTP guessed while a newer code was used", () => {
 				asResponse: true,
 			});
 			await checkStarted;
+			// Two-factor sends keep earlier rows, so the newer one needs a later
+			// creation time to be the latest.
+			vi.useFakeTimers({ toFake: ["Date"] });
+			vi.setSystemTime(new Date(Date.now() + 1_000));
 			await auth.api.sendTwoFactorOTP({ headers, body: {} });
 			const newer = await auth.api.verifyTwoFactorOTP({
 				headers,
@@ -2179,6 +2183,7 @@ describe("OTP guessed while a newer code was used", () => {
 				asResponse: true,
 			});
 			releaseCheck();
+			vi.useRealTimers();
 
 			expect(newer.status).toBe(200);
 			expect((await guess).status).toBe(401);

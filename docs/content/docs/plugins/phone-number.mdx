@@ -428,8 +428,7 @@ phoneNumber({
 
 When a user exceeds the allowed number of verification attempts:
 
-* The OTP code is automatically deleted
-* Further verification attempts will return a 403 (Forbidden) status with "Too many attempts" message
+* Further verification attempts will return a 403 (Forbidden) status with "Too many attempts" message, until the code expires
 * The user will need to request a new OTP code to continue
 
 Example error response after exceeding attempts:

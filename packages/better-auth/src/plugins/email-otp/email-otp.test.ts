@@ -2667,7 +2667,7 @@ describe("race condition protection", async () => {
 		expect(replay.error?.code).toBe("INVALID_OTP");
 	});
 
-	it("should lock out after the attempt budget is exhausted and not recreate the OTP", async () => {
+	it("should keep the OTP locked out after the attempt budget is exhausted", async () => {
 		const email = "race-lockout@domain.com";
 		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
 		const validOtp = otp;
@@ -2684,13 +2684,13 @@ describe("race condition protection", async () => {
 			await authCtx.internalAdapter.findVerificationValue(
 				`sign-in-otp-${email}`,
 			);
-		expect(verificationValue).toBeNull();
+		expect(verificationValue?.value).toBe(`${validOtp}:3`);
 
 		const afterLockout = await client.signIn.emailOtp({
 			email,
 			otp: validOtp,
 		});
-		expect(afterLockout.error?.code).toBe("INVALID_OTP");
+		expect(afterLockout.error?.code).toBe("TOO_MANY_ATTEMPTS");
 	});
 });
 
