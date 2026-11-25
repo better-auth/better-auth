@@ -2225,7 +2225,7 @@ describe("OTP replaced by a concurrent send", () => {
 		const { internalAdapter } = await auth.$context;
 		await auth.api.sendTwoFactorOTP({ headers, body: {} });
 
-		// The guess reads the current issuance, then waits before consuming.
+		// The guess waits before consuming the code.
 		let releaseConsume: () => void = () => {};
 		const consumeReleased = new Promise<void>((resolve) => {
 			releaseConsume = resolve;
@@ -2251,7 +2251,7 @@ describe("OTP replaced by a concurrent send", () => {
 		await consumeStarted;
 
 		// Two sends clear the identifier before either one stores anything.
-		// The first stores its code, then the second replaces it.
+		// The first stores and records its code, then the second replaces it.
 		let deletes = 0;
 		let releaseDeletes: () => void = () => {};
 		const deletesDone = new Promise<void>((resolve) => {
@@ -2263,26 +2263,30 @@ describe("OTP replaced by a concurrent send", () => {
 			"deleteVerificationByIdentifier",
 		).mockImplementation(async (id) => {
 			await remove(id);
-			if (!id.startsWith("issued:")) return;
 			if (++deletes === 2) releaseDeletes();
-			await deletesDone;
+			if (deletes <= 2) await deletesDone;
 		});
-		let firstStored: () => void = () => {};
-		const firstSendStored = new Promise<void>((resolve) => {
-			firstStored = resolve;
+		let firstRecorded: () => void = () => {};
+		const firstSendRecorded = new Promise<void>((resolve) => {
+			firstRecorded = resolve;
 		});
-		let markers = 0;
+		const update = internalAdapter.updateVerificationByIdentifier;
+		vi.spyOn(
+			internalAdapter,
+			"updateVerificationByIdentifier",
+		).mockImplementation(async (id, data) => {
+			const updated = await update(id, data);
+			if (id.startsWith("issued:")) firstRecorded();
+			return updated;
+		});
 		let otpCreates = 0;
 		const create = internalAdapter.createVerificationValue;
 		vi.spyOn(internalAdapter, "createVerificationValue").mockImplementation(
 			async (data) => {
-				if (data.identifier.startsWith("issued:")) {
-					if (++markers === 2) await firstSendStored;
-					return create(data);
+				if (!data.identifier.startsWith("issued:") && ++otpCreates === 2) {
+					await firstSendRecorded;
 				}
-				const created = await create(data);
-				if (++otpCreates === 1) firstStored();
-				return created;
+				return create(data);
 			},
 		);
 		await Promise.all([

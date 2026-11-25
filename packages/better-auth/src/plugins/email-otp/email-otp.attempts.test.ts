@@ -681,16 +681,10 @@ describe("email OTP written back after a newer code was sent", () => {
 			"deleteVerificationByIdentifier",
 		).mockImplementation(async (id) => {
 			await remove(id);
-			if (!id.startsWith("issued:")) return;
 			if (++deletes === 2) releaseDeletes();
-			await deletesDone;
+			if (deletes <= 2) await deletesDone;
 		});
-		// The first send stores its code before the second one writes anything,
-		// and the second send stores its code once the guess consumed the first.
-		let firstStored: () => void = () => {};
-		const firstSendStored = new Promise<void>((resolve) => {
-			firstStored = resolve;
-		});
+		// The second send stores its code once the guess consumed the first.
 		let signalSecondCode: () => void = () => {};
 		const secondCodeReady = new Promise<void>((resolve) => {
 			signalSecondCode = resolve;
@@ -699,22 +693,14 @@ describe("email OTP written back after a newer code was sent", () => {
 		const secondCodeReleased = new Promise<void>((resolve) => {
 			releaseSecondCode = resolve;
 		});
-		let markers = 0;
 		const create = internalAdapter.createVerificationValue;
 		vi.spyOn(internalAdapter, "createVerificationValue").mockImplementation(
 			async (data) => {
-				if (data.identifier.startsWith("issued:")) {
-					if (++markers === 2) await firstSendStored;
-					return create(data);
-				}
 				if (data.value === "stored-222222:0") {
 					signalSecondCode();
 					await secondCodeReleased;
-					return create(data);
 				}
-				const created = await create(data);
-				if (data.value === "stored-111111:0") firstStored();
-				return created;
+				return create(data);
 			},
 		);
 
