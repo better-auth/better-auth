@@ -655,10 +655,18 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 
 			// A vetoed domain token must not leave the provider behind, or a retry
 			// fails as a duplicate. Adapters without transactions do not roll back,
-			// so the row this request inserted is removed by its id. An after hook
-			// that fails once both records are stored leaves them in place.
+			// so the row this request inserted is removed by its id. Once this
+			// request's token is stored, a later failure, such as an after hook that
+			// throws, leaves both records in place. Without AsyncLocalStorage, after
+			// hooks run inside the write, so the stored row decides, not control flow.
 			let createdId: string | undefined;
-			let recordsStored = false;
+			const tokenStored = async () => {
+				if (!createdId || !domainVerificationToken) return false;
+				const stored = await ctx.context.internalAdapter.findVerificationValue(
+					getVerificationIdentifier(options, body.providerId),
+				);
+				return stored?.value === domainVerificationToken;
+			};
 			const provider = await runWithTransaction(
 				ctx.context.adapter,
 				async () => {
@@ -752,11 +760,10 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							);
 						}
 					}
-					recordsStored = true;
 					return created;
 				},
 			).catch(async (error: unknown) => {
-				if (createdId && !recordsStored) {
+				if (createdId && !(await tokenStored())) {
 					await ctx.context.adapter.deleteMany({
 						model: "ssoProvider",
 						where: [{ field: "id", value: createdId }],

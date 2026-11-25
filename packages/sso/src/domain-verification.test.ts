@@ -10,7 +10,7 @@ import { getMigrations } from "better-auth/db/migration";
 import { bearer, organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { Kysely } from "kysely";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
 import type { SSOOptions } from "./types";
@@ -1066,18 +1066,20 @@ describe("domain verification tokens vetoed by a verification hook", () => {
 	 * adapter is configured without transactions.
 	 */
 	async function setup({ transaction = true } = {}) {
-		const sqlite = new DatabaseSync(":memory:");
 		const plugins = [sso({ domainVerification: { enabled: true } })];
 		const database = transaction
 			? undefined
 			: {
 					db: new Kysely({
-						dialect: new NodeSqliteDialect({ database: sqlite }),
+						dialect: new NodeSqliteDialect({
+							database: new DatabaseSync(":memory:"),
+						}),
 					}),
 					type: "sqlite" as const,
 					transaction: false,
 				};
 		if (database) {
+			onTestFinished(() => database.db.destroy());
 			const migrations = await getMigrations({ database, plugins });
 			await migrations.runMigrations();
 		}
@@ -1142,9 +1144,49 @@ describe("domain verification tokens vetoed by a verification hook", () => {
 			).internalAdapter.findVerificationValue(
 				"_better-auth-token-vetoed-domain-provider",
 			);
+
 			expect(token).not.toBeNull();
 		},
 	);
+
+	/**
+	 * Without AsyncLocalStorage, as on runtimes that lack it, queued after hooks
+	 * run inline as each write completes instead of after the callback returns.
+	 */
+	it("keeps a stored provider and token when an after hook fails without AsyncLocalStorage", async () => {
+		const { auth, register, providers } = await setup();
+		const globalContext = (
+			globalThis as { [key: symbol]: { context: object } | undefined }
+		)[Symbol.for("better-auth:global")]!.context;
+		const previous = Object.getOwnPropertyDescriptor(
+			globalContext,
+			"adapterAsyncStorage",
+		);
+		Object.defineProperty(globalContext, "adapterAsyncStorage", {
+			configurable: true,
+			get() {
+				throw new Error("AsyncLocalStorage is unavailable");
+			},
+		});
+		onTestFinished(() => {
+			if (previous) {
+				Object.defineProperty(globalContext, "adapterAsyncStorage", previous);
+			} else {
+				Reflect.deleteProperty(globalContext, "adapterAsyncStorage");
+			}
+		});
+		afterCreate.fail = true;
+
+		await expect(register()).rejects.toThrow("after hook failed");
+
+		expect(await providers()).toHaveLength(1);
+		const token = await (
+			await auth.$context
+		).internalAdapter.findVerificationValue(
+			"_better-auth-token-vetoed-domain-provider",
+		);
+		expect(token).not.toBeNull();
+	});
 
 	it("does not return a requested token that was not stored", async () => {
 		const { auth, headers, register } = await setup();
