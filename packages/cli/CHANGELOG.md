@@ -1,5 +1,14 @@
 # auth
 
+## 1.8.0-beta.12
+
+### Patch Changes
+
+- Updated dependencies [[`ca1a3bd`](https://github.com/better-auth/better-auth/commit/ca1a3bd4a59efe55f63ae3f9c19ac80077682fa2)]:
+  - better-auth@1.8.0-beta.12
+  - @better-auth/core@1.8.0-beta.12
+  - @better-auth/telemetry@1.8.0-beta.12
+
 ## 1.8.0-beta.11
 
 ### Patch Changes

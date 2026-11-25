@@ -1,5 +1,11 @@
 # @better-auth/ciba
 
+## 1.8.0-beta.12
+
+### Patch Changes
+
+- [#12950](https://github.com/better-auth/better-auth/pull/12950) [`82dbf50`](https://github.com/better-auth/better-auth/commit/82dbf50be128660e23a7c7a767b3704ed76a2371) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - CIBA now works on databases that reject `null` in list columns, such as Prisma on PostgreSQL, CockroachDB, and MongoDB. Backchannel authentication requests without `acr_values` or `resource`, and approvals that state no authentication methods, previously failed with a server error. ID tokens for those approvals carry no `amr` claim.
+
 ## 1.8.0-beta.11
 
 ### Minor Changes

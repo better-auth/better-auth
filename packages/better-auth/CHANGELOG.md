@@ -1,5 +1,26 @@
 # better-auth
 
+## 1.8.0-beta.12
+
+### Minor Changes
+
+- [#12948](https://github.com/better-auth/better-auth/pull/12948) [`ca1a3bd`](https://github.com/better-auth/better-auth/commit/ca1a3bd4a59efe55f63ae3f9c19ac80077682fa2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - With a server-side session store, generating two-factor backup codes now requires a session that is still active in the store, like the other sensitive routes, so sessions created from API keys with `enableSessionForAPIKeys` are refused.
+
+### Patch Changes
+
+- The server-issued ID token nonce endpoint, which One Tap also uses, now fails with `FAILED_TO_CREATE_VERIFICATION` when a `verification.create.before` hook keeps the nonce from being stored, instead of returning a nonce that sign-in would reject.
+
+- Phone number sign-in for an account with an unverified number now fails with `FAILED_TO_CREATE_VERIFICATION` when a `verification.create.before` hook keeps the credential proof from being stored. Before, it sent a verification code that could not complete the sign-in.
+
+- Updated dependencies []:
+  - @better-auth/core@1.8.0-beta.12
+  - @better-auth/drizzle-adapter@1.8.0-beta.12
+  - @better-auth/kysely-adapter@1.8.0-beta.12
+  - @better-auth/memory-adapter@1.8.0-beta.12
+  - @better-auth/mongo-adapter@1.8.0-beta.12
+  - @better-auth/prisma-adapter@1.8.0-beta.12
+  - @better-auth/telemetry@1.8.0-beta.12
+
 ## 1.8.0-beta.11
 
 ### Minor Changes
