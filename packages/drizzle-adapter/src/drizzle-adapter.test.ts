@@ -425,6 +425,40 @@ describe("drizzle-adapter", () => {
 		},
 	);
 
+	it.for(adapterFactories)(
+		"createMany throws when MySQL sequential read-back cannot identify a $relations row",
+		async ({ createAdapter }) => {
+			const execute = vi.fn().mockResolvedValue(undefined);
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ execute }),
+				}),
+				select: vi.fn().mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi.fn().mockReturnValue({
+							limit: vi.fn().mockReturnValue({
+								execute: vi.fn().mockResolvedValue([]),
+							}),
+						}),
+					}),
+				}),
+			} as any;
+			const adapter = createAdapter(db, { provider: "mysql" })({
+				advanced: { database: { generateId: false } },
+			});
+			await expect(
+				adapter.createMany({
+					model: "user",
+					data: [
+						{ name: "Ada", email: "ada@example.com", emailVerified: false },
+					],
+				}),
+			).rejects.toThrow(/createMany could not read back inserted "user" row/);
+			expect(execute).toHaveBeenCalledTimes(1);
+		},
+	);
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11258
 	 */

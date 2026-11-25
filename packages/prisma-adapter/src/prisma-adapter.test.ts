@@ -1247,6 +1247,52 @@ describe("prisma-adapter", () => {
 			expect(created.map((row) => row.name)).toEqual(["Ada", "Bob"]);
 		});
 
+		it("returns all fields when select is an empty list", async () => {
+			const createManyAndReturn = vi.fn(
+				async ({ select }: { select?: Record<string, boolean> }) => {
+					expect(select).toBeUndefined();
+					return [
+						{
+							id: "b",
+							name: "Bob",
+							email: "bob@example.com",
+							emailVerified: false,
+						},
+						{
+							id: "a",
+							name: "Ada",
+							email: "ada@example.com",
+							emailVerified: false,
+						},
+					];
+				},
+			);
+			const adapter = prismaAdapter(
+				{
+					$transaction: vi.fn(),
+					user: {
+						createManyAndReturn,
+						createMany: vi.fn(),
+						findMany: vi.fn(),
+					},
+				} as never,
+				{ provider: "postgresql" },
+			)({} as BetterAuthOptions);
+
+			const created = await adapter.createMany({
+				model: "user",
+				data: rows,
+				forceAllowId: true,
+				select: [],
+			});
+
+			expect(created.map((row) => row.name)).toEqual(["Ada", "Bob"]);
+			expect(created.map((row) => row.email)).toEqual([
+				"ada@example.com",
+				"bob@example.com",
+			]);
+		});
+
 		it("does not use createManyAndReturn when ids are generated", async () => {
 			const createManyAndReturn = vi.fn(async () => {
 				throw new Error("createManyAndReturn should not be used");

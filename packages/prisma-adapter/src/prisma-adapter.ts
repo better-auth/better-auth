@@ -172,12 +172,13 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				model: string,
 				join?: JoinConfig | undefined,
 			) => {
-				if (!select && !join) return undefined;
+				const selectedFields = select?.length ? select : undefined;
+				if (!selectedFields && !join) return undefined;
 
 				const result: Record<string, Record<string, any> | boolean> = {};
 
-				if (select) {
-					for (const field of select) {
+				if (selectedFields) {
+					for (const field of selectedFields) {
 						result[getFieldName({ model, field })] = true;
 					}
 				}
@@ -186,7 +187,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// when joining that has a limit, we need to use Prisma's `select` syntax to append the limit to the field
 					// because of such, it also means we need to select all base-model fields as well
 					// should check if `select` is not provided, because then we should select all base-model fields
-					if (!select) {
+					if (!selectedFields) {
 						const fields = schema[getDefaultModelName(model)]?.fields || {};
 						fields.id = { type: "string" }; // make sure there is at least an id field
 						for (const field of Object.keys(fields)) {

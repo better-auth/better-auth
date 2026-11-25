@@ -386,6 +386,36 @@ describe("kysely-adapter", () => {
 		expect(insertQuery.executeTakeFirst).toHaveBeenCalledTimes(2);
 	});
 
+	it("createMany does not use bulk OUTPUT when ids are generated on mssql", async () => {
+		const insertQuery = {
+			values: vi.fn(() => insertQuery),
+			returningAll: vi.fn(() => insertQuery),
+			outputAll: vi.fn(() => insertQuery),
+			execute: vi.fn(),
+			executeTakeFirst: vi.fn().mockResolvedValue({ id: "generated" }),
+		};
+		const db = {
+			insertInto: vi.fn(() => insertQuery),
+		} as any;
+		const adapter = kyselyAdapter(db, { type: "mssql" })({
+			advanced: { database: { generateId: false } },
+		});
+
+		await adapter.createMany({
+			model: "user",
+			data: [
+				{ name: "Ada", email: "ada@example.com", emailVerified: false },
+				{ name: "Bob", email: "bob@example.com", emailVerified: false },
+			],
+		});
+
+		expect(insertQuery.values).toHaveBeenCalledTimes(2);
+		expect(insertQuery.outputAll).toHaveBeenCalledTimes(2);
+		expect(insertQuery.outputAll).toHaveBeenCalledWith("inserted");
+		expect(insertQuery.execute).not.toHaveBeenCalled();
+		expect(insertQuery.executeTakeFirst).toHaveBeenCalledTimes(2);
+	});
+
 	it("inserts sqlite rows sequentially when optional fields differ", async () => {
 		const insertQuery = {
 			values: vi.fn(() => insertQuery),

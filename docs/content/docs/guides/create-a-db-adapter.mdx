@@ -86,9 +86,7 @@ All you need to do is provide the database logic, and the `createAdapterFactory`
             create: async ({ data, model, select }) => {
               // ...
             },
-            createMany: async ({ data, model, select }) => {
-              // Optional. Without it, Better Auth calls `create` once per row.
-            },
+            // Optional: omit createMany to use the sequential create fallback.
             update: async ({ model, where, update }) => {
               // ...
             },

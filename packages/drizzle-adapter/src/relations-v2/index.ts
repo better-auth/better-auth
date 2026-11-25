@@ -38,6 +38,7 @@ import {
 	chunkByMaxRows,
 	getInsertColumnCount,
 	orderInsertedRowsById,
+	requireInsertedRow,
 	rowsShareKeys,
 } from "../create-many-utils";
 import { isD1SqliteClient } from "../d1-sqlite-client";
@@ -777,12 +778,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						const created: T[] = [];
 						for (const row of values) {
 							created.push(
-								(await withReturning(
+								requireInsertedRow(
+									(await withReturning(
+										model,
+										modelKey,
+										db.insert(table).values(row),
+										row,
+									)) as T | null | undefined,
 									model,
-									modelKey,
-									db.insert(table).values(row),
-									row,
-								)) as T,
+								),
 							);
 						}
 						return created;
@@ -790,8 +794,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (!hasAllIds) {
 						return createSequentially();
 					}
-					const maxParameters =
+					const configuredMaxParameters =
 						adapterOptions?.config.createManyMaxParameters ?? 999;
+					const maxParameters =
+						Number.isFinite(configuredMaxParameters) &&
+						configuredMaxParameters >= 1
+							? Math.floor(configuredMaxParameters)
+							: 999;
 					const insertAndReadBack = async (tx: DB, chunk: T[]) => {
 						const chunkIds = chunk.map((row) => row[idField] ?? row.id);
 						await tx.insert(table).values(chunk).execute();

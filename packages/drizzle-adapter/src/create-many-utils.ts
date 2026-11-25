@@ -39,8 +39,21 @@ export function getInsertColumnCount(
 	return Math.max(1, new Set(rows.flatMap((row) => Object.keys(row))).size);
 }
 
+export function requireInsertedRow<T>(
+	row: T | null | undefined,
+	model: string,
+): T {
+	if (row == null) {
+		throw new BetterAuthError(
+			`[# Drizzle Adapter]: createMany could not read back inserted "${model}" row.`,
+		);
+	}
+	return row;
+}
+
 export function chunkByMaxRows<T>(rows: T[], maxRows: number): T[][] {
-	const size = Math.max(1, maxRows);
+	const size =
+		Number.isFinite(maxRows) && maxRows >= 1 ? Math.floor(maxRows) : 1;
 	if (rows.length <= size) return [rows];
 	const chunks: T[][] = [];
 	for (let offset = 0; offset < rows.length; offset += size) {
