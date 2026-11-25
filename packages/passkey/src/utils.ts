@@ -32,7 +32,7 @@ export async function resolveRpID(
 /**
  * The RP ID(s) accepted when verifying a ceremony response. Defaults to the
  * RP ID sent in the options (`issuedRPID`, stored with the challenge; without
- * `rpID`, the one resolved from the verify request), which
+ * `rpID`, the one resolved again when verifying), which
  * is also passed to an `expectedRPID` function. An empty value is rejected
  * rather than passed on, because `@simplewebauthn/server` skips the RP ID
  * check when it is falsy.
@@ -92,8 +92,9 @@ export function getExpectedOrigins(
 		return nonEmpty(configured.filter((origin) => origin.length > 0));
 	}
 	const reported = getReportedOrigin(clientDataJSON);
-	// An unset `rpID` defaults to the host of each request, so the issued RP ID
-	// is checked only when `rpID` is set. `expectedRPID` widens what the
+	// An unset `rpID` is derived from the `baseURL` of each request (with a
+	// dynamic `baseURL`, its resolved host), so the issued RP ID is checked
+	// only when `rpID` is set. `expectedRPID` widens what the
 	// verifier accepts, so each of its values is checked too.
 	const accepted = [
 		...(options.rpID ? [rpIDs.issued] : []),

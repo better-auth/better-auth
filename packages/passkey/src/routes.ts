@@ -704,9 +704,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				);
 			}
-			// Without `rpID` the RP ID is the host of each request, so a challenge
-			// issued on one host is not verified for it on another. Challenges
-			// stored before the RP ID was recorded resolve it again.
+			// Without `rpID` the RP ID is derived from the `baseURL` of each request
+			// (with a dynamic `baseURL`, its resolved host), so a challenge issued
+			// on one host is not verified for it on another. Challenges stored
+			// before the RP ID was recorded resolve it again.
 			const issuedRPID =
 				(options.rpID && rpID) || (await resolveRpID(options, ctx));
 			// Resolved once, for both the wildcard check and the verifier.
@@ -976,9 +977,10 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				);
 			}
-			// Without `rpID` the RP ID is the host of each request, so a challenge
-			// issued on one host is not verified for it on another. Challenges
-			// stored before the RP ID was recorded resolve it again.
+			// Without `rpID` the RP ID is derived from the `baseURL` of each request
+			// (with a dynamic `baseURL`, its resolved host), so a challenge issued
+			// on one host is not verified for it on another. Challenges stored
+			// before the RP ID was recorded resolve it again.
 			const issuedRPID =
 				(options.rpID && rpID) || (await resolveRpID(options, ctx));
 			// Resolved once, for both the wildcard check and the verifier.

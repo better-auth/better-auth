@@ -49,7 +49,7 @@ export type PasskeyExpectedRPIDResolver =
 			/**
 			 * The RP ID sent in the options for this challenge. Without
 			 * `rpID`, and for challenges stored before it was recorded, the
-			 * RP ID resolved from the verify request.
+			 * RP ID resolved again when verifying.
 			 */
 			rpID: string;
 	  }) => Awaitable<string | string[]>);
@@ -132,10 +132,14 @@ export interface PasskeyOptions {
 	 * extension ID, but the hash is of `chrome-extension://<id>`), or to
 	 * accept several RP IDs. A function receives the `rpID` sent in the
 	 * options for the challenge, so it can accept only the RP ID(s) that
-	 * challenge was issued for.
+	 * challenge was issued for. Without `rpID`, or for a challenge stored
+	 * before the RP ID was recorded, it receives the RP ID resolved again
+	 * when verifying.
 	 *
-	 * @default the `rpID` sent in the options for the challenge, or without
-	 * `rpID`, the hostname of the verify request
+	 * @default the `rpID` sent in the options for the challenge. Without
+	 * `rpID`, the RP ID resolved again when verifying: the hostname of
+	 * `baseURL` (with a dynamic `baseURL`, the host resolved for the verify
+	 * request), or "localhost" without one.
 	 */
 	expectedRPID?: PasskeyExpectedRPIDResolver | undefined;
 	/**
