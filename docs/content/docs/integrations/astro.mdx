@@ -35,7 +35,7 @@ Astro supports multiple frontend frameworks, so you can easily import your clien
 If you're not using a frontend framework, you can still import the vanilla client.
 
 <Tabs
-  items={[ "vanilla", "react", "vue", "svelte", "solid",
+  items={[ "vanilla", "react", "vue", "svelte", "solid", "solid-v2",
 ]}
   defaultValue="react"
 >
@@ -70,6 +70,14 @@ If you're not using a frontend framework, you can still import the vanilla clien
   <Tab value="solid" title="lib/auth-client.ts">
     ```ts title="lib/auth-client.ts"
     import { createAuthClient } from "better-auth/solid"
+    export const authClient =  createAuthClient()
+    ```
+  </Tab>
+
+  <Tab value="solid-v2" title="lib/auth-client.ts">
+    ```ts title="lib/auth-client.ts"
+    // For Solid 2 (solid-js 2.x)
+    import { createAuthClient } from "better-auth/solid-v2"
     export const authClient =  createAuthClient()
     ```
   </Tab>

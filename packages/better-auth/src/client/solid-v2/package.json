@@ -1,0 +1,12 @@
+{
+  "name": "@better-auth/solid-v2-dev",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Development-only package that resolves Solid 2 for the better-auth/solid-v2 client sources and tests. Never published.",
+  "type": "module",
+  "devDependencies": {
+    "@solidjs/diagnostics": "2.0.3",
+    "@solidjs/web": "2.0.3",
+    "solid-js": "2.0.3"
+  }
+}

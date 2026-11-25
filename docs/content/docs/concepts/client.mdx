@@ -23,7 +23,7 @@ Import `createAuthClient` from the package for your framework (e.g., "better-aut
 </Callout>
 
 <Tabs
-  items={["react", "vue", "svelte", "solid", 
+  items={["react", "vue", "svelte", "solid", "solid-v2",
 "vanilla"]}
   defaultValue="react"
 >
@@ -71,6 +71,16 @@ Import `createAuthClient` from the package for your framework (e.g., "better-aut
     })
     ```
   </Tab>
+
+  <Tab value="solid-v2" title="lib/auth-client.ts">
+    ```ts title="lib/auth-client.ts"
+    // For Solid 2 (solid-js 2.x). Solid 1 apps, including SolidStart, use "better-auth/solid".
+    import { createAuthClient } from "better-auth/solid-v2" // [!code highlight]
+    export const authClient = createAuthClient({
+        baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
+    })
+    ```
+  </Tab>
 </Tabs>
 
 ## Usage
@@ -95,7 +105,7 @@ In addition to the standard methods, the client provides hooks to easily access 
 
 **Example: useSession**
 
-<Tabs items={["React", "Vue","Svelte", "Solid"]} defaultValue="react">
+<Tabs items={["React", "Vue","Svelte", "Solid", "Solid 2"]} defaultValue="react">
   <Tab value="React">
     ```tsx title="user.tsx"
     //make sure you're using the react client
@@ -201,7 +211,58 @@ In addition to the standard methods, the client provides hooks to easily access 
     }
     ```
   </Tab>
+
+  <Tab value="Solid 2">
+    ```tsx title="user.tsx"
+    import { authClient } from "~/lib/auth-client"; // from "better-auth/solid-v2"
+    import { Errored, Loading, Show, isPending } from "solid-js";
+
+    export default function User() {
+        const session = authClient.useSession()
+        return (
+            <Errored fallback={(error, reset) => <button onClick={reset}>Retry</button>}>
+                <Loading fallback={<p>Loading session…</p>}>
+                    <Show when={session()} fallback={<a href="/sign-in">Sign in</a>}>
+                        {(current) => (
+                            <p class={{ stale: isPending(() => session()) }}>
+                                Signed in as {current().user.email}
+                            </p>
+                        )}
+                    </Show>
+                    <button onClick={() => session.refetch()}>Refresh</button>
+                </Loading>
+            </Errored>
+        );
+    }
+    ```
+  </Tab>
 </Tabs>
+
+#### Solid 2
+
+`better-auth/solid-v2` maps Better Auth's state onto Solid 2's async model. `useSession()` and plugin query hooks such as `useActiveOrganization()` return async accessors:
+
+* In a client-rendered page, reading the accessor suspends to the nearest `<Loading>` boundary until the first response.
+* When signed out, the session accessor returns `null`. A `401` response is treated as signed out, not as an error.
+* If a request fails before the first answer, the error reaches the nearest `<Errored>` boundary, and its `reset` retries the request. Once there is an answer (data or `null`), a failed request keeps that answer on screen.
+* `refetch()` re-requests the data. `isPending(() => session())` is `true` until it settles. The promise it returns always resolves; a failed request does not reject it.
+* Other plugin hooks return plain accessors.
+
+The hooks render nothing themselves. The `<Loading>` and `<Errored>` boundaries are your own components, so you choose their fallbacks and where they sit.
+
+Call hooks in a component body (or another primitive) so their subscription is released with the component. For server setup, see the [Solid 2 integration](/docs/integrations/solid).
+
+During server rendering the client cannot see the request, so it never fetches. Each hook answers once with `null`, or with a value you pass in. To render the signed-in state on the server, pass the request's session, for example one read by a server function:
+
+```tsx title="user.tsx"
+const session = authClient.useSession(() => props.serverSession)
+```
+
+The browser ignores that argument. It keeps the server's answer during hydration, then follows its own request.
+
+<Callout type="warn">
+  Without a server value, the server renders `null`, so a signed-in user sees the signed-out state after hydration until the browser's own session request completes. Pass the request's session, or show a neutral state while `isPending(() => session())` is `true`.
+</Callout>
 
 ### Fetch Options
 

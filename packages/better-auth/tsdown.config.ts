@@ -29,6 +29,7 @@ export default defineConfig({
 		"./src/client/vue/index.ts",
 		"./src/client/svelte/index.ts",
 		"./src/client/solid/index.ts",
+		"./src/client/solid-v2/index.ts",
 		"./src/client/lynx/index.ts",
 		"./src/plugins/index.ts",
 		"./src/plugins/access/index.ts",
