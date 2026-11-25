@@ -561,11 +561,8 @@ export const createInternalAdapter = (
 		},
 		deleteUser: async (userId: string) => {
 			const sessionReferences = await getActiveSessionReferences(userId);
-			let cachedSessionsRevoked = false;
-			const revokeCachedSessions = async () => {
-				await revokeCachedUserSessions(userId, sessionReferences);
-				cachedSessionsRevoked = true;
-			};
+			const revokeCachedSessions = () =>
+				revokeCachedUserSessions(userId, sessionReferences);
 			// One transaction, so a failed delete keeps the sessions and accounts.
 			await runWithTransaction(adapter, async () => {
 				// Revoke before the delete.after hooks, which can throw.
@@ -596,11 +593,7 @@ export const createInternalAdapter = (
 								BASE_ERROR_CODES.FAILED_TO_DELETE_USER,
 							);
 						}
-						// Not yet revoked when sessions live only in secondary storage
-						// or a session delete.before hook vetoed the row delete.
-						if (!cachedSessionsRevoked) {
-							await revokeCachedSessions();
-						}
+						await revokeCachedSessions();
 					},
 					executeMainFn: false,
 				});
@@ -658,7 +651,7 @@ export const createInternalAdapter = (
 				userId,
 				token: generateId(32),
 				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-				createdAt: new Date(),
+				createdAt: rest.createdAt ?? new Date(),
 				updatedAt: new Date(),
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),

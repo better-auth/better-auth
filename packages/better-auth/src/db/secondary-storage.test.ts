@@ -628,33 +628,49 @@ describe("secondary storage - deleteUser", () => {
 		).toHaveLength(0);
 	});
 
-	it("revokes cached sessions once when it deletes the session rows", async () => {
+	it("revokes a session created after the session rows are deleted", async () => {
 		const store = new Map<string, string>();
-		const storage = createStringSecondaryStorage(store);
+		let lateSessionToken: string | undefined;
+		let createLateSession: (() => Promise<void>) | undefined;
 		const { auth } = await getTestInstance({
-			secondaryStorage: storage,
+			secondaryStorage: createStringSecondaryStorage(store),
 			session: { storeSessionInDatabase: true },
+			databaseHooks: {
+				account: {
+					delete: {
+						// Runs after the session rows are gone and before the user row
+						// is deleted, like a sign-in that finishes in that window.
+						before: async () => {
+							await createLateSession?.();
+						},
+					},
+				},
+			},
 			rateLimit: { enabled: false },
 		});
 		const { internalAdapter } = await auth.$context;
 		const user = await internalAdapter.createUser(
 			{
-				name: "Single Revocation User",
-				email: "single-revocation-user@test.com",
+				name: "Late Session User",
+				email: "late-session-user@test.com",
 			},
 			{ method: "test" },
 		);
-		const session = await internalAdapter.createSession(user.id);
-		const revokedBeforeKey = `revoked-sessions-before-${user.id}`;
-		const setSpy = vi.spyOn(storage, "set");
+		await internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "credential",
+			accountId: user.id,
+		});
+		await internalAdapter.createSession(user.id);
+		createLateSession = async () => {
+			createLateSession = undefined;
+			lateSessionToken = (await internalAdapter.createSession(user.id)).token;
+		};
 
 		await internalAdapter.deleteUser(user.id);
 
-		expect(
-			setSpy.mock.calls.filter(([key]) => key === revokedBeforeKey),
-		).toHaveLength(1);
-		expect(store.has(session.token)).toBe(false);
-		expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+		expect(lateSessionToken).toBeDefined();
+		expect(await internalAdapter.findSession(lateSessionToken!)).toBeNull();
 	});
 
 	it("revokes cached sessions when a hook vetoes the session row delete", async () => {
