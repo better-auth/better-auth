@@ -532,16 +532,55 @@ describe("internal adapter test", async () => {
 		deleteSpy.mockRestore();
 	});
 
-	it("should delete a missing user without failing when adapter.delete throws for missing rows", async () => {
-		const deleteSpy = vi
-			.spyOn(authContext.adapter, "delete")
-			.mockRejectedValue(new Error("record not found"));
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/12806
+	 */
+	it("deletes a user that a concurrent request removes after the lookup", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "Concurrently Removed",
+				email: "concurrently-removed@email.com",
+			},
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+		let removedConcurrently = false;
+		const userDeletes: unknown[] = [];
+		const transaction = authContext.adapter.transaction.bind(
+			authContext.adapter,
+		);
+		const transactionSpy = vi
+			.spyOn(authContext.adapter, "transaction")
+			.mockImplementation(async (callback) =>
+				transaction(async (trx) => {
+					const findMany = trx.findMany.bind(trx);
+					vi.spyOn(trx, "findMany").mockImplementation(async (args) => {
+						const rows = await findMany(args);
+						if (args.model === "user" && !removedConcurrently) {
+							removedConcurrently = true;
+							await trx.deleteMany({
+								model: "user",
+								where: [{ field: "id", value: user.id }],
+							});
+						}
+						return rows;
+					});
+					// Prisma's delete throws P2025 when the row is already gone.
+					vi.spyOn(trx, "delete").mockImplementation(async (args) => {
+						if (args.model === "user") userDeletes.push(args);
+						throw new Error("record not found");
+					});
+					return callback(trx);
+				}),
+			);
 
-		await expect(
-			internalAdapter.deleteUser("missing-user-id"),
-		).resolves.toBeUndefined();
+		await expect(internalAdapter.deleteUser(user.id)).resolves.toBeUndefined();
+		transactionSpy.mockRestore();
 
-		deleteSpy.mockRestore();
+		expect(removedConcurrently).toBe(true);
+		expect(userDeletes).toHaveLength(0);
+		expect(await internalAdapter.findUserById(user.id)).toBeNull();
+		expect(map.has(session.token)).toBe(false);
 	});
 
 	describe("verification token storage", () => {
