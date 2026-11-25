@@ -1781,42 +1781,47 @@ export const createInternalAdapter = (
 				storageOption,
 			);
 
-			if (secondaryStorage) {
-				const cached = await secondaryStorage.get(
-					`verification:${storedIdentifier}`,
+			const cacheKey = `verification:${storedIdentifier}`;
+			const writeCache = async (update: Partial<Verification>) => {
+				const cached = secondaryStorage
+					? await secondaryStorage.get(cacheKey)
+					: null;
+				const parsed = cached ? safeJSONParse<Verification>(cached) : null;
+				if (!secondaryStorage || !parsed) return null;
+				const updated = { ...parsed, ...update };
+				const expiresAt = updated.expiresAt ?? parsed.expiresAt;
+				const ttl = getTTLSeconds(
+					expiresAt instanceof Date ? expiresAt : new Date(expiresAt),
 				);
-				if (cached) {
-					const parsed = safeJSONParse<Verification>(cached);
-					if (parsed) {
-						const updated = { ...parsed, ...data };
-						const expiresAt = updated.expiresAt ?? parsed.expiresAt;
-						const ttl = getTTLSeconds(
-							expiresAt instanceof Date ? expiresAt : new Date(expiresAt),
-						);
-						if (ttl > 0) {
-							await secondaryStorage.set(
-								`verification:${storedIdentifier}`,
-								JSON.stringify(updated),
-								ttl,
-							);
-						}
-						if (!options.verification?.storeInDatabase) {
-							return updated;
-						}
-					}
+				if (ttl > 0) {
+					await secondaryStorage.set(cacheKey, JSON.stringify(updated), ttl);
 				}
-			}
+				return updated;
+			};
 
-			if (!secondaryStorage || options.verification?.storeInDatabase) {
-				const verification = await updateWithHooks<Verification>(
+			if (secondaryStorage && !options.verification?.storeInDatabase) {
+				return updateWithHooks<Verification>(
 					data,
 					[{ field: "identifier", value: storedIdentifier }],
 					"verification",
-					undefined,
+					{ fn: writeCache },
 				);
-				return verification;
 			}
-			return data as Verification;
+			// The database decides whether the update happened, so the cached copy
+			// changes only after it does, and before after hooks read it.
+			return updateWithHooks<Verification>(
+				data,
+				[{ field: "identifier", value: storedIdentifier }],
+				"verification",
+				secondaryStorage
+					? {
+							executeMainFn: true,
+							async onUpdated(updated) {
+								await writeCache(updated);
+							},
+						}
+					: undefined,
+			);
 		},
 		refreshUserSessions,
 	};

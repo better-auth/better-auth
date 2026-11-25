@@ -3209,6 +3209,44 @@ describe("phone number OTP issuance vetoed by a verification hook", () => {
 		expect(sendOTP).not.toHaveBeenCalled();
 	});
 
+	it("refuses to send a replacement code that was not stored after a colliding send", async () => {
+		const sendOTP = vi.fn();
+		let collide = true;
+		const { auth } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						// Store a used-up code under the same id before this send's create.
+						async before(verification) {
+							if (!collide) return;
+							collide = false;
+							const ctx = await auth.$context;
+							await ctx.internalAdapter.createVerificationValue({
+								...verification,
+								value: "000000:3",
+							});
+						},
+					},
+					update: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+			plugins: [phoneNumber({ sendOTP })],
+		});
+
+		const res = await auth.api.sendPhoneNumberOTP({
+			body: { phoneNumber: phoneNumberValue },
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(sendOTP).not.toHaveBeenCalled();
+	});
+
 	it("does not send a password reset code that was not stored, and does not reveal the account", async () => {
 		const { auth, sendPasswordResetOTP } = await setup();
 		const request = (phoneNumber: string) =>

@@ -2100,6 +2100,262 @@ describe("internal adapter test", async () => {
 			expect(ttl).toBeGreaterThanOrEqual(298);
 			expect(ttl).toBeLessThanOrEqual(300);
 		});
+
+		/**
+		 * @see https://better-auth.com/docs/concepts/database#database-hooks
+		 */
+		it.for([
+			{ mode: "database", secondary: false, storeInDatabase: false },
+			{ mode: "secondary storage", secondary: true, storeInDatabase: false },
+			{ mode: "both", secondary: true, storeInDatabase: true },
+		])(
+			"keeps the stored value when an update.before hook vetoes an update ($mode)",
+			async ({ secondary, storeInDatabase }) => {
+				const { dataMap, storage } = createMockStorage();
+				const veto = vi.fn().mockReturnValue(false);
+				const opts = {
+					database: new DatabaseSync(":memory:"),
+					verification: { storeInDatabase },
+					secondaryStorage: secondary ? storage : undefined,
+					databaseHooks: { verification: { update: { before: veto } } },
+				} satisfies BetterAuthOptions;
+				await (await getMigrations(opts)).runMigrations();
+				const ctx = await init(opts);
+				await ctx.internalAdapter.createVerificationValue({
+					identifier: "veto-update",
+					value: "stored",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+
+				const updated =
+					await ctx.internalAdapter.updateVerificationByIdentifier(
+						"veto-update",
+						{ value: "replacement" },
+					);
+
+				expect(veto).toHaveBeenCalledTimes(1);
+				expect(updated).toBeNull();
+				const found =
+					await ctx.internalAdapter.findVerificationValue("veto-update");
+				expect(found?.value).toBe("stored");
+				if (storeInDatabase) {
+					dataMap.clear();
+					const fromDatabase =
+						await ctx.internalAdapter.findVerificationValue("veto-update");
+					expect(fromDatabase?.value).toBe("stored");
+				}
+			},
+		);
+
+		/**
+		 * @see https://better-auth.com/docs/concepts/database#database-hooks
+		 */
+		it.for([{ transaction: false }, { transaction: true }])(
+			"shows an update.after hook the updated value in both stores (transaction: $transaction)",
+			async ({ transaction }) => {
+				const { storage } = createMockStorage();
+				const seen: (string | undefined)[] = [];
+				let readVerification: () => Promise<void> = async () => {};
+				const opts = {
+					database: new DatabaseSync(":memory:"),
+					verification: { storeInDatabase: true },
+					secondaryStorage: storage,
+					databaseHooks: {
+						verification: { update: { after: () => readVerification() } },
+					},
+				} satisfies BetterAuthOptions;
+				await (await getMigrations(opts)).runMigrations();
+				const ctx = await init(opts);
+				readVerification = async () => {
+					const found =
+						await ctx.internalAdapter.findVerificationValue("after-update");
+					seen.push(found?.value);
+				};
+				await ctx.internalAdapter.createVerificationValue({
+					identifier: "after-update",
+					value: "stored",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+				const update = () =>
+					ctx.internalAdapter.updateVerificationByIdentifier("after-update", {
+						value: "replacement",
+					});
+
+				if (transaction) {
+					await runWithTransaction(ctx.adapter, update);
+				} else {
+					await update();
+				}
+
+				expect(seen).toEqual(["replacement"]);
+			},
+		);
+
+		it("updates the secondary storage copy when an update.after hook throws (both)", async () => {
+			const { dataMap, storage } = createMockStorage();
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				verification: { storeInDatabase: true },
+				secondaryStorage: storage,
+				databaseHooks: {
+					verification: {
+						update: {
+							async after() {
+								throw new Error("after hook failed");
+							},
+						},
+					},
+				},
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "throwing-after",
+				value: "stored",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			await expect(
+				ctx.internalAdapter.updateVerificationByIdentifier("throwing-after", {
+					value: "replacement",
+				}),
+			).rejects.toThrow("after hook failed");
+
+			const cached = safeJSONParse<{ value: string }>(
+				dataMap.get("verification:throwing-after") ?? "",
+			);
+			expect(cached?.value).toBe("replacement");
+		});
+
+		it.for([
+			{ mode: "secondary storage", secondary: true },
+			{ mode: "database", secondary: false },
+		])(
+			"does not run update.after hooks when no verification value was updated ($mode)",
+			async ({ secondary }) => {
+				const { storage } = createMockStorage();
+				const after = vi.fn();
+				const opts = {
+					database: new DatabaseSync(":memory:"),
+					secondaryStorage: secondary ? storage : undefined,
+					databaseHooks: { verification: { update: { after } } },
+				} satisfies BetterAuthOptions;
+				await (await getMigrations(opts)).runMigrations();
+				const ctx = await init(opts);
+
+				const updated =
+					await ctx.internalAdapter.updateVerificationByIdentifier(
+						"no-such-verification",
+						{ value: "replacement" },
+					);
+
+				expect(updated).toBeNull();
+				expect(after).not.toHaveBeenCalled();
+			},
+		);
+
+		it("does not run user update.after hooks when no user was updated", async () => {
+			const after = vi.fn();
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				databaseHooks: { user: { update: { after } } },
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+
+			const updated = await ctx.internalAdapter.updateUser("no-such-user", {
+				name: "renamed",
+			});
+
+			expect(updated).toBeNull();
+			expect(after).not.toHaveBeenCalled();
+		});
+
+		it("runs update.after hooks and rejects when the cache write fails after the database update (both)", async () => {
+			const { storage } = createMockStorage();
+			let failWrites = false;
+			const after = vi.fn();
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				verification: { storeInDatabase: true },
+				secondaryStorage: {
+					...storage,
+					set(key, value, ttl) {
+						if (failWrites) throw new Error("cache write failed");
+						return storage.set(key, value, ttl);
+					},
+				},
+				databaseHooks: { verification: { update: { after } } },
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "cache-write-fails",
+				value: "stored",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			failWrites = true;
+
+			await expect(
+				ctx.internalAdapter.updateVerificationByIdentifier(
+					"cache-write-fails",
+					{ value: "replacement" },
+				),
+			).rejects.toThrow("cache write failed");
+
+			expect(after).toHaveBeenCalledTimes(1);
+			expect(after.mock.calls[0]![0]).toMatchObject({ value: "replacement" });
+		});
+
+		it("does not report an update to a secondary storage value that is gone", async () => {
+			const { storage } = createMockStorage();
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+
+			const updated = await ctx.internalAdapter.updateVerificationByIdentifier(
+				"missing-update",
+				{ value: "replacement" },
+			);
+
+			expect(updated).toBeNull();
+			expect(
+				await ctx.internalAdapter.findVerificationValue("missing-update"),
+			).toBeNull();
+		});
+
+		it("keeps the secondary storage copy when the database row is gone (both)", async () => {
+			const { storage } = createMockStorage();
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				verification: { storeInDatabase: true },
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "gone-from-database",
+				value: "stored",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			await ctx.adapter.deleteMany({
+				model: "verification",
+				where: [{ field: "identifier", value: "gone-from-database" }],
+			});
+
+			const updated = await ctx.internalAdapter.updateVerificationByIdentifier(
+				"gone-from-database",
+				{ value: "replacement" },
+			);
+
+			expect(updated).toBeNull();
+			const cached =
+				await ctx.internalAdapter.findVerificationValue("gone-from-database");
+			expect(cached?.value).toBe("stored");
+		});
 	});
 
 	describe("safeJSONParse date revival in secondary storage", () => {
