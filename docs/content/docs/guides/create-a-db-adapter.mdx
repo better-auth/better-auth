@@ -599,11 +599,7 @@ const adapter = myAdapter({
 
 The maximum number of bound parameters your database allows in one insert. Better Auth splits large `createMany` batches so they stay at or below this limit. You do not need to chunk inserts in your `createMany` method.
 
-The limit is on parameters, not rows. A bulk insert binds one parameter per column per row, so `INSERT INTO user (id, name, email) VALUES (?, ?, ?), (?, ?, ?)` uses 6 parameters for 2 rows. Better Auth sizes each chunk as `createManyMaxParameters / columnCount`, which means wider rows produce smaller chunks. Column count defaults to the number of distinct keys in the batch. Adapters that bind omitted table defaults can set `createManyColumnCount` to the physical column count.
-
-Set `createManyPreservesInsertOrder` when native `createMany` returns rows in input order. Set `createManyBulkGeneratedIds` as well when it can return database-generated ids for rows that omit `id`.
-
-SQL Server also rejects a single `INSERT ... VALUES` statement with more than 1000 rows, even when the parameter count is under 2099. Built-in SQL Server adapters set `createManyMaxRows` to 1000 so those batches are split.
+The limit is on parameters, not rows. A bulk insert binds one parameter per column per row, so `INSERT INTO user (id, name, email) VALUES (?, ?, ?), (?, ?, ?)` uses 6 parameters for 2 rows. Better Auth sizes each chunk as `createManyMaxParameters / columnCount`. Wider rows produce smaller chunks.
 
 Defaults to `999`, which is safe for SQLite.
 
@@ -611,10 +607,44 @@ Set this when your database's limit is different:
 
 * Cloudflare D1 allows 100 bound parameters. Passing `database: env.DB` or a Drizzle SQLite client that looks like D1 selects 100 automatically. If you wrap D1 in `{ db, type: "sqlite" }`, set `createManyMaxParameters: 100` on the Kysely adapter.
 * PostgreSQL and MySQL typically allow 65535.
-* SQL Server typically allows 2099 parameters and 1000 rows.
+* SQL Server typically allows 2099 parameters. Also set [`createManyMaxRows`](#createmanymaxrows) to 1000.
 * Databases that do not use SQL bind parameters, such as MongoDB, can use a much higher value so batches are not split.
 
 If you set this higher than your database allows, inserts can fail with a bound-parameter error.
+
+### `createManyMaxRows`
+
+The maximum number of rows your database allows in one insert, separate from the bound-parameter limit. Better Auth splits batches so they stay at or below both limits.
+
+There is no default. Omit it unless your database has a row cap.
+
+SQL Server rejects a single `INSERT ... VALUES` statement with more than 1000 rows, even when the parameter count is under 2099. Built-in SQL Server adapters set this to `1000`. Set the same value in a custom adapter that talks to SQL Server.
+
+### `createManyColumnCount`
+
+How many bound parameters one `createMany` row uses when sizing chunks.
+
+By default Better Auth counts the distinct keys in the batch. Set a function when your insert binds omitted table defaults as extra parameters, so chunk size uses the physical column count instead of the keys on each row. The function receives `{ model, modelKey, rows }` and must return a positive integer.
+
+### `createManyPreservesInsertOrder`
+
+Whether native `createMany` always returns rows in the same order as `data`. Defaults to `false`.
+
+When `false`, Better Auth only calls native `createMany` for rows that already include ids, and your method must restore input order (for example by matching ids). When `true`, Better Auth may also send rows without ids if [`createManyBulkGeneratedIds`](#createmanybulkgeneratedids) is set.
+
+<Callout type="warn">
+  Only set this if the driver always returns rows in the same order as `data`. PostgreSQL and SQLite `RETURNING` do not guarantee that. If you set it incorrectly, `createMany` can return rows paired with the wrong input.
+</Callout>
+
+MongoDB `insertMany({ ordered: true })` can set this. Leave it `false` for SQL adapters that reorder by id.
+
+### `createManyBulkGeneratedIds`
+
+Whether native `createMany` can return generated ids for rows that omit `id`. Defaults to `false`.
+
+Set this only together with [`createManyPreservesInsertOrder`](#createmanypreservesinsertorder). Otherwise Better Auth inserts those rows one at a time with `create`.
+
+Use this when the database assigns ids and your bulk insert returns those ids in input order (for example MongoDB `insertMany`). Do not set it for SQL `RETURNING` or Prisma `createManyAndReturn` unless the driver documents a stable order.
 
 ### `disableIdGeneration`
 
