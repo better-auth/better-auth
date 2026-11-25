@@ -353,6 +353,80 @@ describe("oauth revoke", async () => {
 	});
 
 	/**
+	 * A public client authenticates with its `client_id` alone (RFC 7009 §2.1),
+	 * which is why discovery lists "none" for this endpoint.
+	 * @see https://github.com/better-auth/better-auth/issues/12949
+	 */
+	it("revokes a public client's token when it sends only its client_id", async () => {
+		const publicClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "none",
+				skip_consent: true,
+			},
+		});
+		expect(publicClient.client_secret).toBeUndefined();
+
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: { clientId: publicClient.client_id, redirectURI: redirectUri },
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const tokens = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					code: new URL(callbackRedirectUrl).searchParams.get("code")!,
+					code_verifier: codeVerifier,
+					redirect_uri: redirectUri,
+					client_id: publicClient.client_id,
+				}),
+			},
+		);
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const context = await auth.$context;
+		const countAccessTokens = () =>
+			context.adapter.count({
+				model: "oauthAccessToken",
+				where: [{ field: "clientId", value: publicClient.client_id }],
+			});
+		expect(await countAccessTokens()).toBe(1);
+
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: publicClient.client_id,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.error).toBe(null);
+		expect(await countAccessTokens()).toBe(0);
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12679
 	 */
 	it("does not invalidate presenting client's refresh family when revoking a foreign revoked token", async () => {

@@ -37,6 +37,7 @@ export function authServerMetadata(
 		grant_types_supported?: GrantType[];
 		token_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 		endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
+		revocation_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 		jwt_disabled?: boolean;
 		dpop_signing_alg_values_supported?: JWSAlgorithms[];
 	},
@@ -92,11 +93,12 @@ export function authServerMetadata(
 			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
 		revocation_endpoint_auth_methods_supported:
-			overrides?.endpoint_auth_methods_supported ?? [
-				"client_secret_basic",
-				"client_secret_post",
-				"private_key_jwt",
-			],
+			overrides?.revocation_endpoint_auth_methods_supported ??
+				overrides?.endpoint_auth_methods_supported ?? [
+					"client_secret_basic",
+					"client_secret_post",
+					"private_key_jwt",
+				],
 		revocation_endpoint_auth_signing_alg_values_supported: [
 			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
@@ -146,6 +148,11 @@ function buildAuthServerMetadata(
 			advertisedAuthMethods ??
 			getSupportedAuthMethods(opts, { includeNone: publicClientSupported }),
 		endpoint_auth_methods_supported: getSupportedAuthMethods(opts),
+		// Unlike introspection, `/oauth2/revoke` accepts a public client that
+		// sends only its `client_id` (RFC 7009 §2.1).
+		revocation_endpoint_auth_methods_supported: getSupportedAuthMethods(opts, {
+			includeNone: publicClientSupported,
+		}),
 		jwt_disabled: opts.disableJwtPlugin,
 		dpop_signing_alg_values_supported: opts.dpop?.signingAlgorithms,
 	});
