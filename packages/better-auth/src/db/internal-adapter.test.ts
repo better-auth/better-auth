@@ -932,6 +932,45 @@ describe("internal adapter test", async () => {
 		expect(actualTokenExp! - expectedTokenExp).toBeGreaterThanOrEqual(0);
 	});
 
+	it("keeps the creation time an override passes", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "created-at-override",
+				email: "created-at-override@email.com",
+			},
+			{ method: "test" },
+		);
+		const createdAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+
+		const session = await internalAdapter.createSession(user.id, false, {
+			createdAt,
+		});
+
+		expect(session.createdAt).toEqual(createdAt);
+		const found = await internalAdapter.findSession(session.token);
+		expect(found?.session.createdAt).toEqual(createdAt);
+	});
+
+	it("sets the creation time when an override leaves it undefined", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "created-at-undefined",
+				email: "created-at-undefined@email.com",
+			},
+			{ method: "test" },
+		);
+
+		const session = await internalAdapter.createSession(user.id, false, {
+			createdAt: undefined,
+		});
+
+		const found = await internalAdapter.findSession(session.token);
+		expect(found?.session.createdAt.getTime()).toBeGreaterThan(0);
+		expect(found?.session.createdAt.getTime()).toBe(
+			session.createdAt.getTime(),
+		);
+	});
+
 	it("should delete on secondary storage", async () => {
 		// Create multiple sessions in past and future
 		const now = Date.now();

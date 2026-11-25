@@ -2,7 +2,6 @@ import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { setSessionCookie } from "../../../cookies";
 import {
 	constantTimeEqual,
 	generateRandomString,
@@ -12,6 +11,7 @@ import {
 import { parseUserOutput } from "../../../db/schema";
 import { PACKAGE_VERSION } from "../../../version";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
+import { replaceSession } from "../session";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
@@ -385,17 +385,10 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 							twoFactorEnabled: true,
 						},
 					);
-					const newSession = await ctx.context.internalAdapter.createSession(
-						session.user.id,
-						false,
+					const newSession = await replaceSession(
+						ctx,
 						session.session,
-					);
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
-					await ctx.context.internalAdapter.deleteSession(
-						session.session.token,
+						updatedUser,
 					);
 					return ctx.json({
 						token: newSession.token,
