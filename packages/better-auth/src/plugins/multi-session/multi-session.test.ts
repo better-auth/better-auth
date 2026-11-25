@@ -780,7 +780,7 @@ describe("multi-session cookie ownership", async () => {
  * @see https://github.com/better-auth/better-auth/issues/12904
  */
 describe("multi-session cookie secure variants", async () => {
-	const { client, cookieSetter } = await getTestInstance(
+	const { auth, client, cookieSetter } = await getTestInstance(
 		{
 			advanced: { useSecureCookies: false },
 			plugins: [multiSession({ maximumSessions: 1 })],
@@ -897,7 +897,9 @@ describe("multi-session cookie secure variants", async () => {
 				name: "Stale Secure Variant",
 			},
 			{
-				headers: new Headers({ cookie: `${secureName}=${signedValue}` }),
+				headers: new Headers({
+					cookie: `${secureName}=${signedValue}; ${plainName}=${signedValue}`,
+				}),
 				onResponse(context) {
 					setCookie = context.response.headers.get("set-cookie") || "";
 				},
@@ -907,11 +909,48 @@ describe("multi-session cookie secure variants", async () => {
 		const cookies = parseSetCookieHeader(setCookie);
 		expect(cookies.get(secureName)?.["max-age"]).toBe(0);
 		expect(cookies.get(secureName)?.secure).toBe(true);
+		expect(cookies.get(plainName)?.["max-age"]).toBe(0);
 		expect(
 			cookies.get(
 				`better-auth.session_token_multi-${second.data!.token!.toLowerCase()}`,
 			)?.value,
 		).toBeTruthy();
+	});
+
+	it("clears every variant when the same user signs in again", async () => {
+		const headers = new Headers();
+		const user = {
+			email: "replace-both@test.com",
+			password: "password",
+			name: "Replace Both",
+		};
+		const first = await client.signUp.email(user, {
+			onSuccess: cookieSetter(headers),
+		});
+		expect(first.error).toBeNull();
+		const token = first.data!.token!.toLowerCase();
+		const plainName = `better-auth.session_token_multi-${token}`;
+		const secureName = `__Secure-${plainName}`;
+		const signedValue = parseCookies(headers.get("cookie") || "").get(
+			plainName,
+		);
+		expect(signedValue).toBeTruthy();
+
+		let setCookie = "";
+		const second = await client.signIn.email(user, {
+			headers: new Headers({
+				cookie: `${secureName}=${signedValue}; ${plainName}=${signedValue}`,
+			}),
+			onResponse(context) {
+				setCookie = context.response.headers.get("set-cookie") || "";
+			},
+		});
+		expect(second.error).toBeNull();
+		const cookies = parseSetCookieHeader(setCookie);
+		expect(cookies.get(secureName)?.["max-age"]).toBe(0);
+		expect(cookies.get(plainName)?.["max-age"]).toBe(0);
+		const { internalAdapter } = await auth.$context;
+		expect(await internalAdapter.findSession(token)).toBeNull();
 	});
 });
 
