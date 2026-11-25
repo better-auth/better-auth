@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
 import type { CleanedWhere, CustomAdapter, Where } from "./index";
+import type { AdapterFactoryCustomizeAdapterCreator } from "./types";
 
 function createCustomAdapter(
 	overrides: Partial<CustomAdapter> = {},
@@ -583,6 +584,11 @@ describe("createAdapterFactory findMany limit", () => {
 				},
 			}),
 		});
+		expectTypeOf<
+			AdapterFactoryCustomizeAdapterCreator<false> extends AdapterFactoryCustomizeAdapterCreator<true>
+				? true
+				: false
+		>().toEqualTypeOf<false>();
 	});
 });
 

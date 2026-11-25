@@ -53,6 +53,17 @@ export type AdapterFactory<Options extends BetterAuthOptions> = (
 	options: Options,
 ) => DBAdapter<Options>;
 
+/**
+ * Allows `boolean` and `false`, but not a literal `true`.
+ * Keeps the catch-all factory overload from accepting the opt-in flag
+ * without also requiring an unbounded `findMany`.
+ */
+type NonLiteralTrueFlag<F> = [true] extends [F]
+	? [false] extends [F]
+		? F
+		: never
+	: F;
+
 type CreateAdapterFactoryFn = {
 	<Options extends BetterAuthOptions>(
 		options: AdapterFactoryOptions<true>,
@@ -60,8 +71,15 @@ type CreateAdapterFactoryFn = {
 	<Options extends BetterAuthOptions>(
 		options: AdapterFactoryOptions<false>,
 	): AdapterFactory<Options>;
-	<Options extends BetterAuthOptions>(options: {
-		config: AdapterFactoryConfig;
+	<
+		Options extends BetterAuthOptions,
+		Config extends AdapterFactoryConfig,
+	>(options: {
+		config: Config & {
+			supportsUnboundedFindMany?: NonLiteralTrueFlag<
+				Config["supportsUnboundedFindMany"]
+			>;
+		};
 		adapter: AdapterFactoryCustomizeAdapterCreator<boolean>;
 	}): AdapterFactory<Options>;
 };
