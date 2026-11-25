@@ -1,5 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { User } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { role } from "better-auth/plugins/access";
@@ -18,6 +19,50 @@ import type { ApiKey } from "../types";
 import { isAPIError } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { configIdMatches, resolveConfiguration } from ".";
+
+/**
+ * Ban fields added to the user model by the admin plugin. They are absent when
+ * the admin plugin is not installed, in which case no user is ever banned.
+ */
+type UserWithBanFields = User & {
+	banned?: boolean | null | undefined;
+	banExpires?: Date | null | undefined;
+};
+
+/**
+ * Mirrors the admin plugin's session-creation check: a user is banned while
+ * `banned` is set and `banExpires` is absent or has not passed yet.
+ */
+function isUserBanned(user: UserWithBanFields): boolean {
+	if (!user.banned) {
+		return false;
+	}
+	return !user.banExpires || new Date(user.banExpires).getTime() >= Date.now();
+}
+
+/**
+ * Resolve the user that owns a user-referenced key and reject the key when that
+ * user no longer exists or is banned. Banning revokes the user's sessions, but
+ * an API key is a credential of its own and must stop working as well.
+ */
+async function resolveKeyOwner(
+	ctx: GenericEndpointContext,
+	apiKey: ApiKey,
+): Promise<User> {
+	const user = (await ctx.context.internalAdapter.findUserById(
+		apiKey.referenceId,
+	)) as UserWithBanFields | null;
+	if (!user) {
+		throw APIError.from(
+			"UNAUTHORIZED",
+			ERROR_CODES.INVALID_REFERENCE_ID_FROM_API_KEY,
+		);
+	}
+	if (isUserBanned(user)) {
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.USER_BANNED);
+	}
+	return user;
+}
 
 export async function validateApiKey({
 	key,
@@ -162,6 +207,12 @@ export async function validateApiKey({
 		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
 	}
 
+	// Check the owner before claiming usage so a rejected key keeps its quota.
+	const user =
+		(opts.references ?? "user") === "user"
+			? await resolveKeyOwner(ctx, apiKey)
+			: null;
+
 	const usesDatabase =
 		opts.storage === "database" ||
 		(opts.storage === "secondary-storage" && opts.fallbackToDatabase);
@@ -170,7 +221,7 @@ export async function validateApiKey({
 		? await claimUsageInDatabase({ ctx, apiKey, opts, hashedKey })
 		: await claimUsageInSecondaryStorage({ ctx, apiKey, opts, hashedKey });
 
-	return { apiKey: newApiKey, opts };
+	return { apiKey: newApiKey, opts, user };
 }
 
 /**
