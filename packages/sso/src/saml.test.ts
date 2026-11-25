@@ -9670,3 +9670,54 @@ describe("SAML SSO Hardening", () => {
 		});
 	});
 });
+
+/**
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("SAML AuthnRequest vetoed by a verification hook", () => {
+	it("does not redirect to the IdP when the AuthnRequest was not stored", async () => {
+		const veto = { active: false };
+		const { auth, signInWithTestUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before(verification) {
+							const isAuthnRequest = verification.identifier.startsWith(
+								"saml-authn-request:",
+							);
+							return veto.active && isAuthnRequest ? false : undefined;
+						},
+					},
+				},
+			},
+			plugins: [sso()],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "vetoed-authn-request",
+				issuer: "http://localhost:8081",
+				domain: "vetoed-authn-request.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					idpMetadata: { metadata: idpMetadata },
+					spMetadata: { metadata: spMetadata },
+				},
+			},
+			headers,
+		});
+		veto.active = true;
+
+		const res = await auth.api.signInSSO({
+			body: {
+				providerId: "vetoed-authn-request",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+	});
+});

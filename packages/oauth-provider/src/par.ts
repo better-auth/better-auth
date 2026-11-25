@@ -190,7 +190,7 @@ export async function pushedAuthorizationRequestEndpoint(
 	const now = Date.now();
 	// The raw parameters are stored so /oauth2/authorize validates them again,
 	// as it does a front-channel request.
-	await ctx.context.internalAdapter.createVerificationValue({
+	const stored = await ctx.context.internalAdapter.createVerificationValue({
 		identifier: await getStoredIdentifier(opts, id),
 		value: JSON.stringify({
 			clientId,
@@ -200,6 +200,14 @@ export async function pushedAuthorizationRequestEndpoint(
 		updatedAt: new Date(now),
 		expiresAt: new Date(now + expiresIn * 1000),
 	});
+	// A verification.create.before hook can veto the create by returning false.
+	if (!stored) {
+		tokenError(
+			"INTERNAL_SERVER_ERROR",
+			"server_error",
+			"unable to store the pushed authorization request",
+		);
+	}
 	ctx.setStatus(201);
 	return ctx.json({
 		request_uri: `${REQUEST_URI_PREFIX}${id}`,
@@ -271,13 +279,16 @@ export async function loadPushedAuthorizationRequest(
 	const stored: StoredPushedAuthorizationRequest = JSON.parse(pushed.value);
 	if (stored.clientId !== clientId) return { status: "invalid" };
 	const now = Date.now();
-	await internalAdapter.createVerificationValue({
+	const loaded = await internalAdapter.createVerificationValue({
 		identifier: loadedIdentifier,
 		value: pushed.value,
 		createdAt: new Date(now),
 		updatedAt: new Date(now),
 		expiresAt: new Date(now + getSignedQueryExpiresIn(opts) * 1000),
 	});
+	// Without the moved request, code issuance could not use it up. Failing
+	// now spares the user a login and consent that cannot issue a code.
+	if (!loaded) return { status: "not_found" };
 	return { status: "found", query: stored.query };
 }
 

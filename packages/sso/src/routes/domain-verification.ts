@@ -1,3 +1,4 @@
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { AuthContext } from "better-auth";
 import {
 	APIError,
@@ -111,11 +112,18 @@ export const requestDomainVerification = (options: SSOOptions) => {
 			}
 
 			const domainVerificationToken = generateRandomString(24);
-			await ctx.context.internalAdapter.createVerificationValue({
-				identifier,
-				value: domainVerificationToken,
-				expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
-			});
+			const verification =
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier,
+					value: domainVerificationToken,
+					expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
+				});
+			if (!verification) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 
 			ctx.setStatus(201);
 			return ctx.json({

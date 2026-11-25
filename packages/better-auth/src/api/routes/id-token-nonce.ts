@@ -19,11 +19,18 @@ const ISSUED_NONCE_PATTERN = new RegExp(
  */
 export async function issueNonce(ctx: GenericEndpointContext, scope: string) {
 	const nonce = generateRandomString(ISSUED_NONCE_LENGTH, "a-z", "A-Z", "0-9");
-	await ctx.context.internalAdapter.createVerificationValue({
-		identifier: `${scope}:${nonce}`,
-		value: scope,
-		expiresAt: new Date(Date.now() + ISSUED_NONCE_EXPIRES_IN_MS),
-	});
+	const verification =
+		await ctx.context.internalAdapter.createVerificationValue({
+			identifier: `${scope}:${nonce}`,
+			value: scope,
+			expiresAt: new Date(Date.now() + ISSUED_NONCE_EXPIRES_IN_MS),
+		});
+	if (!verification) {
+		throw APIError.from(
+			"INTERNAL_SERVER_ERROR",
+			BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+		);
+	}
 	return nonce;
 }
 

@@ -28,8 +28,7 @@ export function buildSchema(config: BetterAuthOptions) {
 			disableMigrations?: boolean | undefined;
 		}
 	> = {};
-	for (const key in tables) {
-		const table = tables[key]!;
+	for (const table of Object.values(tables)) {
 		const fields = table.fields;
 		const actualFields: Record<string, DBFieldAttribute> = {};
 		Object.entries(fields).forEach(([key, field]) => {

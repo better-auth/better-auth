@@ -1636,7 +1636,7 @@ export async function issueAuthorizationCode(
 		);
 	}
 
-	const { code, expiresAt } = await storeAuthorizationCode(ctx, opts, {
+	const issued = await storeAuthorizationCode(ctx, opts, {
 		query,
 		userId: user.id,
 		sessionId: session.id,
@@ -1646,6 +1646,14 @@ export async function issueAuthorizationCode(
 		resource: resources,
 		serverContext,
 	});
+	if (!issued) {
+		tokenError(
+			"INTERNAL_SERVER_ERROR",
+			"server_error",
+			"unable to issue an authorization code",
+		);
+	}
+	const { code, expiresAt } = issued;
 	return {
 		code,
 		expiresAt,
@@ -1726,7 +1734,7 @@ async function storeAuthorizationCode(
 	const exp = iat + (opts.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN);
 	const expiresAt = new Date(exp * 1000);
 
-	await ctx.context.internalAdapter.createVerificationValue({
+	const stored = await ctx.context.internalAdapter.createVerificationValue({
 		identifier: await storeToken(opts.storeTokens, code, "authorization_code"),
 		createdAt: new Date(iat * 1000),
 		updatedAt: new Date(iat * 1000),
@@ -1744,6 +1752,8 @@ async function storeAuthorizationCode(
 			serverContext: approval.serverContext,
 		} satisfies VerificationValue),
 	});
+	// A verification.create.before hook can veto the create by returning false.
+	if (!stored) return null;
 	return { code, expiresAt };
 }
 
@@ -1770,7 +1780,18 @@ async function createAuthorizationCodeURL(
 	opts: OAuthOptions<Scope[]>,
 	approval: AuthorizationCodeApproval & { query: OAuthAuthorizationQuery },
 ) {
-	const { code } = await storeAuthorizationCode(ctx, opts, approval);
+	const issued = await storeAuthorizationCode(ctx, opts, approval);
+	// RFC 6749 §4.1.2.1: a code that was not stored is never delivered.
+	if (!issued) {
+		return formatErrorURL(
+			approval.query.redirect_uri,
+			"server_error",
+			"unable to issue an authorization code",
+			approval.query.state,
+			getIssuer(ctx, opts),
+		);
+	}
+	const { code } = issued;
 	// The code is stored before the request_uri is used up, so a storage
 	// failure leaves the pushed request usable. The code is never delivered
 	// when the request_uri was already used, and is deleted.

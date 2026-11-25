@@ -1,10 +1,16 @@
+import { DatabaseSync } from "node:sqlite";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
+import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import type { SecondaryStorage } from "better-auth/db";
+import { getMigrations } from "better-auth/db/migration";
 import { bearer, organization } from "better-auth/plugins";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { getTestInstance } from "better-auth/test";
+import { Kysely } from "kysely";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
 import type { SSOOptions } from "./types";
@@ -1028,5 +1034,220 @@ describe("Domain verification", async () => {
 
 			expect(verifyResponse.status).toBe(204);
 		});
+	});
+});
+
+/**
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("domain verification tokens vetoed by a verification hook", () => {
+	const veto = { active: false };
+	const afterCreate = { fail: false };
+	const databaseHooks: BetterAuthOptions["databaseHooks"] = {
+		verification: {
+			create: {
+				async before() {
+					return veto.active ? false : undefined;
+				},
+				async after() {
+					if (afterCreate.fail) throw new Error("after hook failed");
+				},
+			},
+		},
+	};
+
+	afterEach(() => {
+		veto.active = false;
+		afterCreate.fail = false;
+	});
+
+	/**
+	 * With `transaction: false`, registration uses a SQLite database whose
+	 * adapter is configured without transactions.
+	 */
+	async function setup({ transaction = true } = {}) {
+		const plugins = [sso({ domainVerification: { enabled: true } })];
+		const database = transaction
+			? undefined
+			: {
+					db: new Kysely({
+						dialect: new NodeSqliteDialect({
+							database: new DatabaseSync(":memory:"),
+						}),
+					}),
+					type: "sqlite" as const,
+					transaction: false,
+				};
+		if (database) {
+			onTestFinished(() => database.db.destroy());
+			const migrations = await getMigrations({ database, plugins });
+			await migrations.runMigrations();
+		}
+		const { auth, signInWithTestUser } = await getTestInstance({
+			...(database ? { database } : {}),
+			databaseHooks,
+			plugins,
+		});
+		const { headers } = await signInWithTestUser();
+		const register = () =>
+			auth.api.registerSSOProvider({
+				body: {
+					providerId: "vetoed-domain-provider",
+					issuer: "https://idp.vetoed-domain.com",
+					domain: "vetoed-domain.com",
+					samlConfig: {
+						entryPoint: "https://idp.vetoed-domain.com/sso",
+						cert: "the-cert",
+						idpMetadata: { entityID: "https://idp.vetoed-domain.com" },
+						spMetadata: {},
+					},
+				},
+				headers,
+				asResponse: true,
+			});
+		const providers = async () =>
+			(await auth.$context).adapter.findMany({ model: "ssoProvider" });
+		return { auth, headers, register, providers };
+	}
+
+	it.for([true, false])(
+		"does not register a provider whose token was not stored (transaction: %s)",
+		async (transaction) => {
+			const { register, providers } = await setup({ transaction });
+			veto.active = true;
+
+			const res = await register();
+
+			expect(res.status).toBe(500);
+			expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+			expect(await providers()).toEqual([]);
+			veto.active = false;
+			const retry = await register();
+			expect(retry.status).toBe(200);
+			expect((await retry.json()).domainVerificationToken).toEqual(
+				expect.any(String),
+			);
+		},
+	);
+
+	it.for([true, false])(
+		"keeps a stored provider and token when an after hook fails (transaction: %s)",
+		async (transaction) => {
+			const { auth, register, providers } = await setup({ transaction });
+			afterCreate.fail = true;
+
+			await expect(register()).rejects.toThrow("after hook failed");
+
+			expect(await providers()).toHaveLength(1);
+			const token = await (
+				await auth.$context
+			).internalAdapter.findVerificationValue(
+				"_better-auth-token-vetoed-domain-provider",
+			);
+
+			expect(token).not.toBeNull();
+		},
+	);
+
+	/**
+	 * Without AsyncLocalStorage, as on runtimes that lack it, queued after hooks
+	 * run inline as each write completes instead of after the callback returns.
+	 */
+	it("keeps a stored provider and token when an after hook fails without AsyncLocalStorage", async () => {
+		const { auth, register, providers } = await setup();
+		const globalContext = (
+			globalThis as { [key: symbol]: { context: object } | undefined }
+		)[Symbol.for("better-auth:global")]!.context;
+		const previous = Object.getOwnPropertyDescriptor(
+			globalContext,
+			"adapterAsyncStorage",
+		);
+		Object.defineProperty(globalContext, "adapterAsyncStorage", {
+			configurable: true,
+			get() {
+				throw new Error("AsyncLocalStorage is unavailable");
+			},
+		});
+		onTestFinished(() => {
+			if (previous) {
+				Object.defineProperty(globalContext, "adapterAsyncStorage", previous);
+			} else {
+				Reflect.deleteProperty(globalContext, "adapterAsyncStorage");
+			}
+		});
+		afterCreate.fail = true;
+
+		await expect(register()).rejects.toThrow("after hook failed");
+
+		expect(await providers()).toHaveLength(1);
+		const token = await (
+			await auth.$context
+		).internalAdapter.findVerificationValue(
+			"_better-auth-token-vetoed-domain-provider",
+		);
+		expect(token).not.toBeNull();
+	});
+
+	it("removes the provider on a veto even when the token lookup fails", async () => {
+		const { auth, register, providers } = await setup();
+		const ctx = await auth.$context;
+		vi.spyOn(ctx.internalAdapter, "findVerificationValue").mockRejectedValue(
+			new Error("lookup failed"),
+		);
+		veto.active = true;
+
+		const res = await register();
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		vi.restoreAllMocks();
+		expect(await providers()).toEqual([]);
+	});
+
+	it("removes only the provider when an after hook fails and the token lookup fails", async () => {
+		const { auth, register, providers } = await setup();
+		const ctx = await auth.$context;
+		const identifier = "_better-auth-token-vetoed-domain-provider";
+		const lookup = vi
+			.spyOn(ctx.internalAdapter, "findVerificationValue")
+			.mockRejectedValue(new Error("lookup failed"));
+		afterCreate.fail = true;
+
+		await expect(register()).rejects.toThrow("after hook failed");
+
+		lookup.mockRestore();
+		afterCreate.fail = false;
+		expect(await providers()).toEqual([]);
+		const leftover =
+			await ctx.internalAdapter.findVerificationValue(identifier);
+		expect(leftover).not.toBeNull();
+
+		const retry = await register();
+
+		expect(retry.status).toBe(200);
+		const { domainVerificationToken } = await retry.json();
+		expect(domainVerificationToken).not.toBe(leftover!.value);
+		expect(
+			(await ctx.internalAdapter.findVerificationValue(identifier))?.value,
+		).toBe(domainVerificationToken);
+	});
+
+	it("does not return a requested token that was not stored", async () => {
+		const { auth, headers, register } = await setup();
+		expect((await register()).status).toBe(200);
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteVerificationByIdentifier(
+			"_better-auth-token-vetoed-domain-provider",
+		);
+		veto.active = true;
+
+		const res = await auth.api.requestDomainVerification({
+			body: { providerId: "vetoed-domain-provider" },
+			headers,
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
 	});
 });

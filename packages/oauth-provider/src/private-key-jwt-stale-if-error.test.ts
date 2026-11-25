@@ -514,7 +514,7 @@ describe("jwksStaleIfError on a client discovery", () => {
 	it("uses keys refreshed by another request while its own fetch was pending", async () => {
 		const verifier = await createVerifier({ jwksStaleIfError: 3_600 });
 		const rotated = await generateKeyPair("RS256", { extractable: true });
-		const jwk = await exportJWK(rotated.publicKey);
+		const publicJwk = await exportJWK(rotated.publicKey);
 		vi.useFakeTimers({ toFake: ["Date"], now: START_MS });
 		await verifier.verify();
 
@@ -530,7 +530,9 @@ describe("jwksStaleIfError on a client discovery", () => {
 			await started.promise;
 			vi.setSystemTime(Date.now() + 5_000);
 			verifier.transport.mockResolvedValueOnce(
-				Response.json({ keys: [{ ...jwk, kid: "rotated-key", alg: "RS256" }] }),
+				Response.json({
+					keys: [{ ...publicJwk, kid: "rotated-key", alg: "RS256" }],
+				}),
 			);
 			await expect(
 				verifier.verify("rotated-key", rotated.privateKey),

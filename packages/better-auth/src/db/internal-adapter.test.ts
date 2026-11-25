@@ -500,7 +500,7 @@ describe("internal adapter test", async () => {
 		});
 
 		await internalAdapter.deleteVerificationByIdentifier(
-			verification.identifier,
+			verification!.identifier,
 		);
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
@@ -516,7 +516,7 @@ describe("internal adapter test", async () => {
 		// Remove the DB record so the entity no longer exists
 		await authContext.adapter.deleteMany({
 			model: "verification",
-			where: [{ field: "identifier", value: verification.identifier }],
+			where: [{ field: "identifier", value: verification!.identifier }],
 		});
 
 		const deleteSpy = vi.spyOn(authContext.adapter, "delete");
@@ -532,16 +532,55 @@ describe("internal adapter test", async () => {
 		deleteSpy.mockRestore();
 	});
 
-	it("should delete a missing user without failing when adapter.delete throws for missing rows", async () => {
-		const deleteSpy = vi
-			.spyOn(authContext.adapter, "delete")
-			.mockRejectedValue(new Error("record not found"));
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/12806
+	 */
+	it("deletes a user that a concurrent request removes after the lookup", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "Concurrently Removed",
+				email: "concurrently-removed@email.com",
+			},
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+		let removedConcurrently = false;
+		const userDeletes: unknown[] = [];
+		const transaction = authContext.adapter.transaction.bind(
+			authContext.adapter,
+		);
+		const transactionSpy = vi
+			.spyOn(authContext.adapter, "transaction")
+			.mockImplementation(async (callback) =>
+				transaction(async (trx) => {
+					const findMany = trx.findMany.bind(trx);
+					vi.spyOn(trx, "findMany").mockImplementation(async (args) => {
+						const rows = await findMany(args);
+						if (args.model === "user" && !removedConcurrently) {
+							removedConcurrently = true;
+							await trx.deleteMany({
+								model: "user",
+								where: [{ field: "id", value: user.id }],
+							});
+						}
+						return rows;
+					});
+					// Prisma's delete throws P2025 when the row is already gone.
+					vi.spyOn(trx, "delete").mockImplementation(async (args) => {
+						if (args.model === "user") userDeletes.push(args);
+						throw new Error("record not found");
+					});
+					return callback(trx);
+				}),
+			);
 
-		await expect(
-			internalAdapter.deleteUser("missing-user-id"),
-		).resolves.toBeUndefined();
+		await expect(internalAdapter.deleteUser(user.id)).resolves.toBeUndefined();
+		transactionSpy.mockRestore();
 
-		deleteSpy.mockRestore();
+		expect(removedConcurrently).toBe(true);
+		expect(userDeletes).toHaveLength(0);
+		expect(await internalAdapter.findUserById(user.id)).toBeNull();
+		expect(map.has(session.token)).toBe(false);
 	});
 
 	describe("verification token storage", () => {
@@ -564,7 +603,7 @@ describe("internal adapter test", async () => {
 			});
 
 			// Stored identifier should be hashed (not equal to original)
-			expect(verification.identifier).not.toBe("reset-password:my-token-123");
+			expect(verification!.identifier).not.toBe("reset-password:my-token-123");
 
 			// Should be able to find by original identifier
 			const found = await hashedAdapter.findVerificationValue(
@@ -606,7 +645,7 @@ describe("internal adapter test", async () => {
 				value: "user-1",
 				expiresAt: new Date(Date.now() + 60000),
 			});
-			expect(hashedVerification.identifier).not.toBe(
+			expect(hashedVerification!.identifier).not.toBe(
 				"reset-password:token-abc",
 			);
 
@@ -616,7 +655,7 @@ describe("internal adapter test", async () => {
 				value: "user-2",
 				expiresAt: new Date(Date.now() + 60000),
 			});
-			expect(plainVerification.identifier).toBe("magic-link:token-xyz");
+			expect(plainVerification!.identifier).toBe("magic-link:token-xyz");
 		});
 
 		it("should fallback to plain lookup for old tokens", async () => {
@@ -930,6 +969,45 @@ describe("internal adapter test", async () => {
 		// max 1s clock drift between check and set
 		expect(actualTokenExp! - expectedTokenExp).toBeLessThanOrEqual(1);
 		expect(actualTokenExp! - expectedTokenExp).toBeGreaterThanOrEqual(0);
+	});
+
+	it("keeps the creation time an override passes", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "created-at-override",
+				email: "created-at-override@email.com",
+			},
+			{ method: "test" },
+		);
+		const createdAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+
+		const session = await internalAdapter.createSession(user.id, false, {
+			createdAt,
+		});
+
+		expect(session.createdAt).toEqual(createdAt);
+		const found = await internalAdapter.findSession(session.token);
+		expect(found?.session.createdAt).toEqual(createdAt);
+	});
+
+	it("sets the creation time when an override leaves it undefined", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "created-at-undefined",
+				email: "created-at-undefined@email.com",
+			},
+			{ method: "test" },
+		);
+
+		const session = await internalAdapter.createSession(user.id, false, {
+			createdAt: undefined,
+		});
+
+		const found = await internalAdapter.findSession(session.token);
+		expect(found?.session.createdAt.getTime()).toBeGreaterThan(0);
+		expect(found?.session.createdAt.getTime()).toBe(
+			session.createdAt.getTime(),
+		);
 	});
 
 	it("should delete on secondary storage", async () => {
@@ -1860,8 +1938,10 @@ describe("internal adapter test", async () => {
 				expiresAt: new Date(Date.now() + 60000),
 			});
 
-			expect(dataMap.has(`verification:${verification.identifier}`)).toBe(true);
-			expect(ttlMap.has(`verification:${verification.identifier}`)).toBe(true);
+			expect(dataMap.has(`verification:${verification!.identifier}`)).toBe(
+				true,
+			);
+			expect(ttlMap.has(`verification:${verification!.identifier}`)).toBe(true);
 		});
 
 		it("should find verification from secondary storage", async () => {

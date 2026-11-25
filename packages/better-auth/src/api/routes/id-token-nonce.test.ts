@@ -191,3 +191,41 @@ describe("server-issued id_token nonce", async () => {
 		expect(replay.error?.code).toBe("INVALID_ID_TOKEN_NONCE");
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/12958
+ */
+describe("server-issued id_token nonce vetoed by a verification hook", () => {
+	it("refuses to return a nonce that was not stored", async () => {
+		const { auth } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before(verification) {
+							if (verification.identifier.startsWith("id-token-nonce:")) {
+								return false;
+							}
+						},
+					},
+				},
+			},
+			socialProviders: {
+				google: {
+					clientId: "web.googleusercontent.com",
+					clientSecret: "test-secret",
+					requireIssuedIdTokenNonce: true,
+				},
+			},
+		});
+
+		const res = await auth.api.issueIdTokenNonce({
+			body: { provider: "google" },
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(500);
+		const body = await res.json();
+		expect(body.code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(body).not.toHaveProperty("nonce");
+	});
+});

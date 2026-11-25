@@ -627,6 +627,83 @@ describe("secondary storage - deleteUser", () => {
 			}),
 		).toHaveLength(0);
 	});
+
+	it("revokes a session created after the session rows are deleted", async () => {
+		const store = new Map<string, string>();
+		let lateSessionToken: string | undefined;
+		let createLateSession: (() => Promise<void>) | undefined;
+		const { auth } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: { storeSessionInDatabase: true },
+			databaseHooks: {
+				account: {
+					delete: {
+						// Runs after the session rows are gone and before the user row
+						// is deleted, like a sign-in that finishes in that window.
+						before: async () => {
+							await createLateSession?.();
+						},
+					},
+				},
+			},
+			rateLimit: { enabled: false },
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser(
+			{
+				name: "Late Session User",
+				email: "late-session-user@test.com",
+			},
+			{ method: "test" },
+		);
+		await internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "credential",
+			accountId: user.id,
+		});
+		await internalAdapter.createSession(user.id);
+		createLateSession = async () => {
+			createLateSession = undefined;
+			lateSessionToken = (await internalAdapter.createSession(user.id)).token;
+		};
+
+		await internalAdapter.deleteUser(user.id);
+
+		expect(lateSessionToken).toBeDefined();
+		expect(await internalAdapter.findSession(lateSessionToken!)).toBeNull();
+	});
+
+	it("revokes cached sessions when a hook vetoes the session row delete", async () => {
+		const store = new Map<string, string>();
+		const { auth } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: { storeSessionInDatabase: true },
+			databaseHooks: {
+				session: {
+					delete: {
+						before: async () => false,
+					},
+				},
+			},
+			rateLimit: { enabled: false },
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser(
+			{
+				name: "Vetoed Session User",
+				email: "vetoed-session-user@test.com",
+			},
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+
+		await internalAdapter.deleteUser(user.id);
+
+		expect(await internalAdapter.findUserById(user.id)).toBeNull();
+		expect(store.has(session.token)).toBe(false);
+		expect(store.has(`active-sessions-${user.id}`)).toBe(false);
+		expect(store.has(`revoked-sessions-before-${user.id}`)).toBe(true);
+	});
 });
 
 /**

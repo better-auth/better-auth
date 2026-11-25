@@ -13,7 +13,7 @@ import { setCookieCache, setSessionCookie } from "../../cookies";
 import { symmetricDecrypt } from "../../crypto";
 import { revokeUnprovenAccountAccess } from "../../db/revoke-unproven-account-access";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
-import { createOrFindVerification } from "../../db/verification";
+import { restoreVerification } from "../../db/verification";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
@@ -42,7 +42,7 @@ async function resolveOTP(
 	opts: RequiredEmailOTPOptions,
 	email: string,
 	type: (typeof types)[number],
-): Promise<string> {
+): Promise<string | null> {
 	const identifier = toOTPIdentifier(type, email);
 
 	if (opts.resendStrategy === "reuse") {
@@ -144,6 +144,15 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				);
 				return ctx.json({ success: true });
 			}
+			// A vetoed code is not sent. Where the reply hides whether the account
+			// exists, it stays the same.
+			if (!otp) {
+				if (!shouldSendOTP) return ctx.json({ success: true });
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 
 			await ctx.context.runInBackgroundOrAwait(
 				opts.sendVerificationOTP(
@@ -196,10 +205,22 @@ export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email.toLowerCase();
-			return issueOTP(ctx, opts, toOTPIdentifier(ctx.body.type, email), {
-				email,
-				type: ctx.body.type,
-			});
+			const otp = await issueOTP(
+				ctx,
+				opts,
+				toOTPIdentifier(ctx.body.type, email),
+				{
+					email,
+					type: ctx.body.type,
+				},
+			);
+			if (!otp) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
+			return otp;
 		},
 	);
 
@@ -741,6 +762,12 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					success: true,
 				});
 			}
+			// A vetoed code is not sent, and the reply does not reveal the account.
+			if (!otp) {
+				return ctx.json({
+					success: true,
+				});
+			}
 			await ctx.context.runInBackgroundOrAwait(
 				opts.sendVerificationOTP(
 					{
@@ -834,6 +861,12 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					identifier,
 				);
+				return ctx.json({
+					success: true,
+				});
+			}
+			// A vetoed code is not sent, and the reply does not reveal the account.
+			if (!otp) {
 				return ctx.json({
 					success: true,
 				});
@@ -1077,6 +1110,12 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					success: true,
 				});
 			}
+			// A vetoed code is not sent, and the reply does not reveal the account.
+			if (!otp) {
+				return ctx.json({
+					success: true,
+				});
+			}
 
 			await ctx.context.runInBackgroundOrAwait(
 				opts.sendVerificationOTP(
@@ -1284,8 +1323,10 @@ async function atomicVerifyOTP(
 	}
 
 	const verified = await verifyStoredOTP(ctx, opts, otpValue, providedOTP);
+	// A code issued while this one was being checked replaces it, so the
+	// write-back yields to it instead of reviving the old code.
 	const writeBack = (value: string) =>
-		createOrFindVerification(ctx, {
+		restoreVerification(ctx, {
 			value,
 			identifier,
 			expiresAt: consumed.expiresAt,
@@ -1299,13 +1340,6 @@ async function atomicVerifyOTP(
 
 	if (successDisposition === "consume") return;
 
-	// A code issued while this one was being checked replaces it, so writing
-	// the old code back would revive it over the new one.
-	const replacement =
-		await ctx.context.internalAdapter.findVerificationValue(identifier);
-	if (replacement) {
-		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
-	}
 	const restored = await writeBack(consumed.value);
 	// A verification.create.before hook can veto the restore by returning false.
 	if (!restored) {

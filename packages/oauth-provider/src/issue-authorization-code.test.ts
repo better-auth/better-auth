@@ -1628,3 +1628,84 @@ describe("provider.issueAuthorizationCode with serverContext", async () => {
 		expect((stored.query as StoredAuthorizationQuery).dpop_jkt).toBe(key.jkt);
 	});
 });
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("provider.issueAuthorizationCode vetoed by a verification hook", async () => {
+	const redirectUri = "https://client.example.com/callback";
+	const veto = { active: false };
+	const issuer = {
+		id: "test-code-issuer",
+		endpoints: {
+			testIssueCode: createAuthEndpoint(
+				"/test/issue-code",
+				{ method: "POST", use: [sessionMiddleware] },
+				async (ctx) => {
+					const provider = getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+					);
+					const issued = await provider.issueAuthorizationCode({
+						query: ctx.body as StoredAuthorizationQuery,
+						session: ctx.context.session,
+					});
+					return ctx.json({ code: issued.code });
+				},
+			),
+		},
+	} satisfies BetterAuthPlugin;
+
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL: "http://localhost:3000/api/auth/",
+		advanced: { skipTrailingSlashes: true },
+		databaseHooks: {
+			verification: {
+				create: {
+					async before() {
+						return veto.active ? false : undefined;
+					},
+				},
+			},
+		},
+		plugins: [
+			issuer,
+			jwt({ jwt: { issuer: "http://localhost:3000" } }),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	it("fails with server_error instead of returning a code that was not stored", async () => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "client_secret_post",
+				skip_consent: true,
+			},
+		});
+		const challenge = await generateCodeChallenge(generateRandomString(43));
+		veto.active = true;
+		const issued = await client.$fetch<{ code: string }>("/test/issue-code", {
+			method: "POST",
+			headers,
+			body: {
+				response_type: "code",
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
+				redirect_uri: redirectUri,
+				scope: "openid",
+				code_challenge: challenge,
+				code_challenge_method: "S256",
+			},
+		});
+		veto.active = false;
+
+		expect(issued.data).toBeNull();
+		expect(issued.error?.status).toBe(500);
+		expect(issued.error).toMatchObject({ error: "server_error" });
+	});
+});

@@ -1,3 +1,4 @@
+import { inspect } from "node:util";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import type { APIError } from "@better-auth/core/error";
 import { twoFactor } from "better-auth/plugins/two-factor";
@@ -5555,5 +5556,83 @@ describe("api key creation uses a fresh session", async () => {
 		const second = await client.apiKey.create({}, { headers });
 		expect(second.data).toBeNull();
 		expect(second.error?.status).toBe(401);
+	});
+});
+
+describe("api key custom storage errors", async () => {
+	const store = new Map<string, string>();
+	const logs: string[] = [];
+	let failReads = false;
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			logger: {
+				level: "debug",
+				log(level, message, ...args) {
+					logs.push(
+						[
+							level,
+							message,
+							...args.map((arg) => inspect(arg, { depth: 10 })),
+						].join(" "),
+					);
+				},
+			},
+			plugins: [
+				apiKey({
+					storage: "secondary-storage",
+					disableKeyHashing: true,
+					customStorage: {
+						set(key, value) {
+							store.set(key, value);
+						},
+						get(key) {
+							if (failReads) {
+								// ioredis attaches the failed command and its key to reply errors.
+								throw Object.assign(new Error("LOADING Redis is loading"), {
+									name: "ReplyError",
+									command: { name: "get", args: [key] },
+								});
+							}
+							return store.get(key) ?? null;
+						},
+						getAndDelete(key) {
+							const value = store.get(key) ?? null;
+							store.delete(key);
+							return value;
+						},
+						increment(key) {
+							const count = Number(store.get(key) ?? 0) + 1;
+							store.set(key, String(count));
+							return count;
+						},
+						delete(key) {
+							store.delete(key);
+						},
+					},
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [apiKeyClient()] } },
+	);
+
+	/**
+	 * @see https://github.com/redis/ioredis/blob/v5.11.1/lib/DataHandler.ts
+	 */
+	it("keeps the API key out of the validation failure log", async () => {
+		const { headers } = await signInWithTestUser();
+		const { data: created } = await client.apiKey.create({}, { headers });
+		expect(created?.key).toBeTruthy();
+
+		failReads = true;
+		logs.length = 0;
+		const result = await auth.api.verifyApiKey({ body: { key: created!.key } });
+		failReads = false;
+
+		expect(result.valid).toBe(false);
+		const output = logs.join("\n");
+		expect(output).toContain("Failed to validate API key:");
+		expect(output).toContain("LOADING Redis is loading");
+		expect(output).toContain("name: 'get'");
+		expect(output).not.toContain(created!.key);
 	});
 });

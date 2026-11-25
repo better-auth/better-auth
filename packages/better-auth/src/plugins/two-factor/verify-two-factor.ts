@@ -119,19 +119,23 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 						ctx.context.secret,
 						`${user.id}!${trustIdentifier}`,
 					);
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: user.id,
-						identifier: trustIdentifier,
-						expiresAt: new Date(Date.now() + maxAge * 1000),
-					});
-					await ctx.setSignedCookie(
-						trustDeviceCookie.name,
-						`${token}!${trustIdentifier}`,
-						ctx.context.secret,
-						trustDeviceCookie.attributes,
-					);
-					// delete the dont remember me cookie
-					expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
+					const trustRecord =
+						await ctx.context.internalAdapter.createVerificationValue({
+							value: user.id,
+							identifier: trustIdentifier,
+							expiresAt: new Date(Date.now() + maxAge * 1000),
+						});
+					// A vetoed record leaves the device untrusted.
+					if (trustRecord) {
+						await ctx.setSignedCookie(
+							trustDeviceCookie.name,
+							`${token}!${trustIdentifier}`,
+							ctx.context.secret,
+							trustDeviceCookie.attributes,
+						);
+						// delete the dont remember me cookie
+						expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
+					}
 				}
 				return ctx.json({
 					token: session.token,

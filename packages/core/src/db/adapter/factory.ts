@@ -210,17 +210,20 @@ export const createAdapterFactory =
 				forceAllowId: forceAllowId && "id" in data,
 			});
 			for (const field in fields) {
-				let value = data[field];
 				const fieldAttributes = fields[field];
+				if (!fieldAttributes) {
+					continue;
+				}
+				let value = data[field];
 
 				const newFieldName: string =
-					newMappedKeys[field] || fields[field]!.fieldName || field;
+					newMappedKeys[field] || fieldAttributes.fieldName || field;
 				if (
 					value === undefined &&
-					((fieldAttributes!.defaultValue === undefined &&
-						!fieldAttributes!.transform?.input &&
-						!(action === "update" && fieldAttributes!.onUpdate)) ||
-						(action === "update" && !fieldAttributes!.onUpdate))
+					((fieldAttributes.defaultValue === undefined &&
+						!fieldAttributes.transform?.input &&
+						!(action === "update" && fieldAttributes.onUpdate)) ||
+						(action === "update" && !fieldAttributes.onUpdate))
 				) {
 					continue;
 				}
@@ -229,7 +232,6 @@ export const createAdapterFactory =
 				// we might receive a date as a string (this is because of the client converting the Date to a string
 				// when sending to the server). Because of this, we'll convert the string to a Date.
 				if (
-					fieldAttributes &&
 					fieldAttributes.type === "date" &&
 					!(value instanceof Date) &&
 					typeof value === "string"
@@ -245,15 +247,15 @@ export const createAdapterFactory =
 				}
 
 				// If the value is undefined, but the fieldAttr provides a `defaultValue`, then we'll use that.
-				let newValue = withApplyDefault(value, fieldAttributes!, action);
+				let newValue = withApplyDefault(value, fieldAttributes, action);
 
 				// If the field attr provides a custom transform input, then we'll let it handle the value transformation.
 				// Afterwards, we'll continue to apply the default transformations just to make sure it saves in the correct format.
-				if (fieldAttributes!.transform?.input) {
-					newValue = await fieldAttributes!.transform.input(newValue);
+				if (fieldAttributes.transform?.input) {
+					newValue = await fieldAttributes.transform.input(newValue);
 				}
 
-				if (fieldAttributes!.references?.field === "id" && useNumberId) {
+				if (fieldAttributes.references?.field === "id" && useNumberId) {
 					if (Array.isArray(newValue)) {
 						newValue = newValue.map((x) => (x !== null ? Number(x) : null));
 					} else {
@@ -262,20 +264,20 @@ export const createAdapterFactory =
 				} else if (
 					config.supportsJSON === false &&
 					typeof newValue === "object" &&
-					fieldAttributes!.type === "json"
+					fieldAttributes.type === "json"
 				) {
 					newValue = JSON.stringify(newValue);
 				} else if (
 					config.supportsArrays === false &&
 					Array.isArray(newValue) &&
-					(fieldAttributes!.type === "string[]" ||
-						fieldAttributes!.type === "number[]")
+					(fieldAttributes.type === "string[]" ||
+						fieldAttributes.type === "number[]")
 				) {
 					newValue = JSON.stringify(newValue);
 				} else if (
 					config.supportsDates === false &&
 					newValue instanceof Date &&
-					fieldAttributes!.type === "date"
+					fieldAttributes.type === "date"
 				) {
 					newValue = newValue.toISOString();
 				} else if (
@@ -290,7 +292,7 @@ export const createAdapterFactory =
 						data: newValue,
 						action,
 						field: newFieldName,
-						fieldAttributes: fieldAttributes!,
+						fieldAttributes,
 						model: getModelName(defaultModelName),
 						schema,
 						options,
