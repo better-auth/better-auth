@@ -325,9 +325,10 @@ export const createInternalAdapter = (
 		const store = await getCurrentDBAdapterAsyncLocalStorage()
 			.then((als) => als.getStore())
 			.catch(() => undefined);
-		const nativeTransaction =
-			typeof adapter.options?.adapterConfig.transaction === "function";
-		if (store?.isTransactionActive && nativeTransaction) return fn();
+		const holdsConnection =
+			store?.isTransactionActive &&
+			adapter.options?.adapterConfig.transaction !== false;
+		if (holdsConnection) return fn();
 		const previous = verificationConsumeLocks.get(key) ?? Promise.resolve();
 		let release!: () => void;
 		const current = new Promise<void>((resolve) => {

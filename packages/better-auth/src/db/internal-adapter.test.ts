@@ -2377,60 +2377,72 @@ describe("internal adapter test", async () => {
 			expect(remaining?.value).toBe("second");
 		});
 
-		it("does not wait on the consume lock inside a transaction", async () => {
+		/** A migrated in-memory SQLite database, which has a single connection. */
+		async function createSqliteKysely() {
 			const database = new DatabaseSync(":memory:");
 			const migrations = await getMigrations({ database });
 			await migrations.runMigrations();
-			const db = new Kysely<Record<string, never>>({
+			return new Kysely<Record<string, never>>({
 				dialect: new NodeSqliteDialect({ database }),
 			});
-			let transactions = 0;
-			const ctx = await init({
-				database: (options) => {
-					const base = kyselyAdapter(db, {
-						type: "sqlite",
-						transaction: true,
-					})(options);
-					return {
-						...base,
-						transaction: (callback) => {
-							transactions++;
-							return base.transaction(callback);
-						},
-					};
-				},
-			});
-			const adapter = ctx.internalAdapter;
-			await adapter.createVerificationValue({
-				identifier: "consume:in-transaction",
-				value: "user-held",
-				expiresAt: new Date(Date.now() + 60_000),
-			});
-			let open = () => {};
-			const gate = new Promise<void>((resolve) => {
-				open = resolve;
-			});
+		}
 
-			// The transaction holds the only SQLite connection until `open`.
-			const inTransaction = runWithTransaction(ctx.adapter, async () => {
-				await gate;
-				return adapter.consumeVerificationValue("consume:in-transaction");
-			});
-			await vi.waitFor(() => expect(transactions).toBe(1));
-			// This consume takes the lock, then queues for the connection.
-			const outside = adapter.consumeVerificationValue(
-				"consume:in-transaction",
-			);
-			await vi.waitFor(() => expect(transactions).toBe(2));
-			open();
+		it.for([
+			{ adapterShape: "a factory adapter", keepOptions: true },
+			{ adapterShape: "an adapter without options", keepOptions: false },
+		])(
+			"does not wait on the consume lock inside a transaction on $adapterShape",
+			async ({ keepOptions }) => {
+				const db = await createSqliteKysely();
+				let transactions = 0;
+				const ctx = await init({
+					database: (options) => {
+						const base = kyselyAdapter(db, {
+							type: "sqlite",
+							transaction: true,
+						})(options);
+						return {
+							...base,
+							options: keepOptions ? base.options : undefined,
+							transaction: (callback) => {
+								transactions++;
+								return base.transaction(callback);
+							},
+						};
+					},
+				});
+				const adapter = ctx.internalAdapter;
+				await adapter.createVerificationValue({
+					identifier: "consume:in-transaction",
+					value: "user-held",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+				let open = () => {};
+				const gate = new Promise<void>((resolve) => {
+					open = resolve;
+				});
 
-			const stillWaiting = new Promise((resolve) =>
-				setTimeout(resolve, 1_000, "still waiting"),
-			);
-			const settled = await Promise.race([inTransaction, stillWaiting]);
-			expect(settled).toMatchObject({ value: "user-held" });
-			expect(await outside).toBeNull();
-		});
+				// The transaction holds the only SQLite connection until `open`.
+				const inTransaction = runWithTransaction(ctx.adapter, async () => {
+					await gate;
+					return adapter.consumeVerificationValue("consume:in-transaction");
+				});
+				await vi.waitFor(() => expect(transactions).toBe(1));
+				// This consume takes the lock, then queues for the connection.
+				const outside = adapter.consumeVerificationValue(
+					"consume:in-transaction",
+				);
+				await vi.waitFor(() => expect(transactions).toBe(2));
+				open();
+
+				const stillWaiting = new Promise((resolve) =>
+					setTimeout(resolve, 1_000, "still waiting"),
+				);
+				const settled = await Promise.race([inTransaction, stillWaiting]);
+				expect(settled).toMatchObject({ value: "user-held" });
+				expect(await outside).toBeNull();
+			},
+		);
 
 		it.for([
 			{ adapterShape: "factory", wrap: false },
@@ -2438,12 +2450,7 @@ describe("internal adapter test", async () => {
 		])(
 			"still orders consumes inside a transaction on a $adapterShape adapter without transactions",
 			async ({ wrap }) => {
-				const database = new DatabaseSync(":memory:");
-				const migrations = await getMigrations({ database });
-				await migrations.runMigrations();
-				const db = new Kysely<Record<string, never>>({
-					dialect: new NodeSqliteDialect({ database }),
-				});
+				const db = await createSqliteKysely();
 				let release = () => {};
 				const held = new Promise<boolean>((resolve) => {
 					release = () => resolve(true);
