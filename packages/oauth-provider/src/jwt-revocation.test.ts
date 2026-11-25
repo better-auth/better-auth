@@ -765,6 +765,15 @@ describe("oauth-provider - revocation records vetoed by a verification hook", as
 		expect(revocation.error?.status).toBe(500);
 		expect(revocation.error).toMatchObject({ error: "server_error" });
 		expect(onTokenRevoked).not.toHaveBeenCalled();
+		// Nothing was revoked: the grant's JWT and the refresh token still work.
+		await expectActive(server, grant.accessToken);
+		const ctx = await server.auth.$context;
+		const stored = await ctx.adapter.findOne<{ revoked: Date | null }>({
+			model: "oauthRefreshToken",
+			where: [{ field: "clientId", value: server.oauthClient.client_id }],
+			sortBy: { field: "createdAt", direction: "desc" },
+		});
+		expect(stored?.revoked ?? null).toBe(null);
 
 		expect((await revoke(server, grant.refreshToken!)).error).toBe(null);
 		await expectRevoked(server, grant.accessToken);
@@ -786,6 +795,62 @@ describe("oauth-provider - revocation records vetoed by a verification hook", as
 
 		// The family is still torn down, so the grant cannot be refreshed.
 		expect((await refresh(server, rotated.refresh_token!)).error?.status).toBe(
+			400,
+		);
+	});
+
+	it("fails an authorization code replay whose grant mark was not stored, without notifying", async () => {
+		const grant = await authorize(server, { offline: true });
+
+		const replay = await vetoing("oauth-revoked-grant:", grant.redeem);
+		expect(replay.error?.status).toBe(500);
+		expect(replay.error).toMatchObject({ error: "server_error" });
+		expect(onTokenRevoked).not.toHaveBeenCalled();
+
+		// The code's stored tokens are still deleted.
+		expect((await refresh(server, grant.refreshToken!)).error?.status).toBe(
+			400,
+		);
+	});
+
+	it("fails a consent deletion whose grant mark was not stored, and keeps the consent and tokens for a retry", async () => {
+		const grant = await authorize(server, { offline: true });
+		const ctx = await server.auth.$context;
+		const refreshRow = await ctx.adapter.findOne<{ userId: string }>({
+			model: "oauthRefreshToken",
+			where: [{ field: "clientId", value: server.oauthClient.client_id }],
+		});
+		const consent = await ctx.adapter.create<{ id: string }>({
+			model: "oauthConsent",
+			data: {
+				clientId: server.oauthClient.client_id,
+				userId: refreshRow!.userId,
+				scopes: ["openid", "offline_access"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const deleteConsent = () =>
+			server.auth.api.deleteOAuthConsent({
+				headers: server.headers,
+				body: { id: consent.id },
+			});
+
+		await expect(
+			vetoing("oauth-revoked-grant:", deleteConsent),
+		).rejects.toMatchObject({ statusCode: 500 });
+		expect(onTokenRevoked).not.toHaveBeenCalled();
+		expect(
+			await ctx.adapter.findOne({
+				model: "oauthConsent",
+				where: [{ field: "id", value: consent.id }],
+			}),
+		).not.toBeNull();
+		await expectActive(server, grant.accessToken);
+
+		await deleteConsent();
+		await expectRevoked(server, grant.accessToken);
+		expect((await refresh(server, grant.refreshToken!)).error?.status).toBe(
 			400,
 		);
 	});
