@@ -3549,31 +3549,97 @@ describe("email-otp verification rows", () => {
  * @see https://better-auth.com/docs/concepts/database#database-hooks
  */
 describe("email OTP issuance vetoed by a verification hook", () => {
-	it.for(["sign-in", "email-verification", "forget-password"] as const)(
-		"refuses to send a %s code that was not stored",
-		async (type) => {
-			const sendVerificationOTP = vi.fn();
-			const { auth, testUser } = await getTestInstance({
-				databaseHooks: {
-					verification: {
-						create: {
-							async before() {
-								return false;
-							},
+	async function setup() {
+		const veto = { active: false };
+		const sendVerificationOTP = vi.fn();
+		const { auth, testUser, signInWithTestUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before() {
+							return veto.active ? false : undefined;
 						},
 					},
 				},
-				plugins: [emailOTP({ sendVerificationOTP })],
-			});
+			},
+			plugins: [
+				emailOTP({ sendVerificationOTP, changeEmail: { enabled: true } }),
+			],
+		});
+		return { auth, testUser, signInWithTestUser, veto, sendVerificationOTP };
+	}
 
-			const res = await auth.api.sendVerificationOTP({
-				body: { email: testUser.email, type },
-				asResponse: true,
-			});
+	it("refuses to send a sign-in code that was not stored", async () => {
+		const { auth, testUser, veto, sendVerificationOTP } = await setup();
+		veto.active = true;
 
-			expect(res.status).toBe(500);
-			expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		const res = await auth.api.sendVerificationOTP({
+			body: { email: testUser.email, type: "sign-in" },
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+	});
+
+	it.for(["email-verification", "forget-password"] as const)(
+		"does not send a %s code that was not stored, and does not reveal the account",
+		async (type) => {
+			const { auth, testUser, veto, sendVerificationOTP } = await setup();
+			veto.active = true;
+			const send = (email: string) =>
+				auth.api.sendVerificationOTP({
+					body: { email, type },
+					asResponse: true,
+				});
+
+			const known = await send(testUser.email);
+			const unknown = await send("missing@test.com");
+
+			expect(known.status).toBe(200);
+			expect(await known.json()).toEqual(await unknown.json());
 			expect(sendVerificationOTP).not.toHaveBeenCalled();
 		},
 	);
+
+	it.for(["requestPasswordResetEmailOTP", "forgetPasswordEmailOTP"] as const)(
+		"does not send a %s code that was not stored, and does not reveal the account",
+		async (endpoint) => {
+			const { auth, testUser, veto, sendVerificationOTP } = await setup();
+			veto.active = true;
+			const request = (email: string) =>
+				auth.api[endpoint]({ body: { email }, asResponse: true });
+
+			const known = await request(testUser.email);
+			const unknown = await request("missing@test.com");
+
+			expect(known.status).toBe(200);
+			expect(await known.json()).toEqual(await unknown.json());
+			expect(sendVerificationOTP).not.toHaveBeenCalled();
+		},
+	);
+
+	it("does not send a change-email code that was not stored, and does not reveal the address", async () => {
+		const { auth, signInWithTestUser, veto, sendVerificationOTP } =
+			await setup();
+		const { headers } = await signInWithTestUser();
+		await auth.api.signUpEmail({
+			body: { email: "taken@test.com", password: "password123", name: "t" },
+		});
+		veto.active = true;
+		const request = (newEmail: string) =>
+			auth.api.requestEmailChangeEmailOTP({
+				body: { newEmail },
+				headers,
+				asResponse: true,
+			});
+
+		const free = await request("free@test.com");
+		const taken = await request("taken@test.com");
+
+		expect(free.status).toBe(200);
+		expect(await free.json()).toEqual(await taken.json());
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+	});
 });

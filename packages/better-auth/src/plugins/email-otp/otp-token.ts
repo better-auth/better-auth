@@ -1,5 +1,4 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	constantTimeEqual,
 	generateRandomString,
@@ -124,7 +123,7 @@ export async function issueOTP(
 	opts: RequiredEmailOTPOptions,
 	identifier: string,
 	data: Parameters<RequiredEmailOTPOptions["generateOTP"]>[0],
-): Promise<string> {
+): Promise<string | null> {
 	const otp = opts.generateOTP(data, ctx) || defaultOTPGenerator(opts);
 	const verification = {
 		value: `${await storeOTP(ctx, opts, otp)}:0`,
@@ -134,12 +133,7 @@ export async function issueOTP(
 	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
 	const stored = await createOrFindVerification(ctx, verification);
 	// A verification.create.before hook can veto the create by returning false.
-	if (!stored) {
-		throw APIError.from(
-			"INTERNAL_SERVER_ERROR",
-			BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
-		);
-	}
+	if (!stored) return null;
 	if (stored.value === verification.value) return otp;
 
 	const reused = await tryReuseOTP(ctx, opts, identifier);

@@ -10,15 +10,18 @@ import { getTestInstance } from "../test-utils/test-instance";
 
 /**
  * A `verification.create.before` hook that vetoes only while `veto.active` is
- * set, so each test can finish its setup before the call under test.
+ * set, so each test can finish its setup before the call under test. `matches`
+ * narrows the veto to some identifiers.
  */
-function vetoingHooks() {
+function vetoingHooks(matches: (identifier: string) => boolean = () => true) {
 	const veto = { active: false };
 	const databaseHooks: BetterAuthOptions["databaseHooks"] = {
 		verification: {
 			create: {
-				async before() {
-					return veto.active ? false : undefined;
+				async before(verification) {
+					return veto.active && matches(verification.identifier)
+						? false
+						: undefined;
 				},
 			},
 		},
@@ -103,6 +106,27 @@ describe("verification records vetoed by a database hook", () => {
 		);
 	});
 
+	it("completes sign-in without the set-ott header when the token is not stored", async () => {
+		const { veto, databaseHooks } = vetoingHooks((identifier) =>
+			identifier.startsWith("one-time-token:"),
+		);
+		const { auth, testUser } = await getTestInstance({
+			databaseHooks,
+			plugins: [oneTimeToken({ setOttHeaderOnNewSession: true })],
+		});
+		veto.active = true;
+
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(200);
+		const cookies = parseSetCookieHeader(res.headers.get("set-cookie") ?? "");
+		expect(cookies.get("better-auth.session_token")?.value).toBeTruthy();
+		expect(res.headers.has("set-ott")).toBe(false);
+	});
+
 	it("does not return a SIWE nonce that was not stored", async () => {
 		const { veto, databaseHooks } = vetoingHooks();
 		const { auth } = await getTestInstance({
@@ -127,8 +151,8 @@ describe("verification records vetoed by a database hook", () => {
 	});
 
 	describe("two-factor", () => {
-		async function setup() {
-			const { veto, databaseHooks } = vetoingHooks();
+		async function setup(matches?: (identifier: string) => boolean) {
+			const { veto, databaseHooks } = vetoingHooks(matches);
 			const sentCodes: string[] = [];
 			const sendOTP = vi.fn(({ otp }: { otp: string }) => {
 				sentCodes.push(otp);
@@ -174,6 +198,22 @@ describe("verification records vetoed by a database hook", () => {
 			const cookies = parseSetCookieHeader(res.headers.get("set-cookie") ?? "");
 			expect(cookies.get("better-auth.session_token")?.value ?? "").toBe("");
 			expect(await sessionIds()).toEqual(before);
+		});
+
+		it("removes the stored challenge when its attempt counter is not stored", async () => {
+			const { ctx, veto, signIn } = await setup((identifier) =>
+				identifier.startsWith("2fa-attempts-"),
+			);
+			veto.active = true;
+
+			await expectVerificationFailure(await signIn());
+
+			const rows = await ctx.adapter.findMany<{ identifier: string }>({
+				model: "verification",
+			});
+			expect(rows.filter((row) => row.identifier.startsWith("2fa-"))).toEqual(
+				[],
+			);
 		});
 
 		it("does not send a two-factor OTP that was not stored", async () => {

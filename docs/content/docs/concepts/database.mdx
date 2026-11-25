@@ -881,7 +881,10 @@ There are two types of hooks you can define:
 #### 1. Before Hook
 
 * **Purpose**: This hook is called before the respective entity (user, session, or account) is created, updated, or deleted.
-* **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload. When a `verification` create is aborted, endpoints that would hand out the code, link, or token it backs fail with `FAILED_TO_CREATE_VERIFICATION` instead. The OAuth authorization endpoint redirects to the client with `error=server_error`. On MongoDB with transactions, a before hook can run more than once for one operation: when MongoDB aborts the transaction because of a concurrent write, the adapter runs it again. Send emails and call other services from an after hook instead.
+* **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload. On MongoDB with transactions, a before hook can run more than once for one operation: when MongoDB aborts the transaction because of a concurrent write, the adapter runs it again. Send emails and call other services from an after hook instead. When a `verification` create is aborted, endpoints that would hand out the code, link, or token it backs fail with `FAILED_TO_CREATE_VERIFICATION` instead. A few endpoints handle it differently:
+  * Endpoints whose reply hides whether an account exists, such as password reset and the email OTP and phone number reset requests, send nothing and return their usual reply.
+  * The OAuth authorization endpoint redirects to the client with `error=server_error`.
+  * Optional records, such as a trusted device or the `set-ott` header on sign-in, are skipped, and sign-in still succeeds.
 
 #### 2. After Hook
 

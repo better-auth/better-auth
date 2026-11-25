@@ -2580,16 +2580,19 @@ describe("phone number OTP issuance vetoed by a verification hook", () => {
 		expect(sendOTP).not.toHaveBeenCalled();
 	});
 
-	it("refuses to send a password reset code that was not stored", async () => {
+	it("does not send a password reset code that was not stored, and does not reveal the account", async () => {
 		const { auth, sendPasswordResetOTP } = await setup();
+		const request = (phoneNumber: string) =>
+			auth.api.requestPasswordResetPhoneNumber({
+				body: { phoneNumber },
+				asResponse: true,
+			});
 
-		const res = await auth.api.requestPasswordResetPhoneNumber({
-			body: { phoneNumber: phoneNumberValue },
-			asResponse: true,
-		});
+		const known = await request(phoneNumberValue);
+		const unknown = await request("+251900000000");
 
-		expect(res.status).toBe(500);
-		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(known.status).toBe(200);
+		expect(await known.json()).toEqual(await unknown.json());
 		expect(sendPasswordResetOTP).not.toHaveBeenCalled();
 	});
 });

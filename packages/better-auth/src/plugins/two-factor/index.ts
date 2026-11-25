@@ -644,6 +644,9 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								expiresAt,
 							});
 						if (!attemptCounter) {
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								identifier,
+							);
 							throw APIError.from(
 								"INTERNAL_SERVER_ERROR",
 								BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,

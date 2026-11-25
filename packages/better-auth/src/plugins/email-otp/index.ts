@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { PACKAGE_VERSION } from "../../version";
 import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
@@ -106,6 +107,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 									type: "email-verification",
 								},
 							);
+							if (!otp) {
+								throw APIError.from(
+									"INTERNAL_SERVER_ERROR",
+									BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+								);
+							}
 							await ctx.context.runInBackgroundOrAwait(
 								options.sendVerificationOTP(
 									{

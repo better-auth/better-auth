@@ -650,101 +650,105 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
-			const provider = await ctx.context.adapter.create<
-				Record<string, any>,
-				SSOProvider<O>
-			>({
-				model: "ssoProvider",
-				data: {
-					issuer: body.issuer,
-					domain: body.domain,
-					domainVerified: false,
-					...additionalFields,
-					oidcConfig: (() => {
-						const config = buildOIDCConfig();
-						if (config) {
-							const parsed = JSON.parse(config) as {
-								tokenEndpointAuthentication?: string;
-								clientSecret?: string;
-							};
-							if (
-								parsed.tokenEndpointAuthentication !== "private_key_jwt" &&
-								!parsed.clientSecret
-							) {
-								throw new APIError("BAD_REQUEST", {
-									message:
-										"clientSecret is required when using client_secret_basic or client_secret_post authentication",
-								});
-							}
-							if (
-								parsed.tokenEndpointAuthentication === "private_key_jwt" &&
-								!options?.resolvePrivateKey &&
-								!options?.defaultSSO?.some(
-									(p: Record<string, unknown>) =>
-										p.providerId === body.providerId &&
-										"privateKey" in p &&
-										p.privateKey,
-								)
-							) {
-								throw new APIError("BAD_REQUEST", {
-									message:
-										"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
-								});
-							}
-						}
-						return config;
-					})(),
-					samlConfig: body.samlConfig
-						? JSON.stringify({
-								issuer: body.issuer,
-								entryPoint: body.samlConfig.entryPoint,
-								cert: body.samlConfig.cert,
-								audience: body.samlConfig.audience,
-								callbackUrl: body.samlConfig.callbackUrl,
-								idpInitiatedCallbackUrl:
-									body.samlConfig.idpInitiatedCallbackUrl,
-								idpMetadata: body.samlConfig.idpMetadata,
-								spMetadata: body.samlConfig.spMetadata,
-								wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
-								authnRequestsSigned: body.samlConfig.authnRequestsSigned,
-								signatureAlgorithm: body.samlConfig.signatureAlgorithm,
-								digestAlgorithm: body.samlConfig.digestAlgorithm,
-								identifierFormat: body.samlConfig.identifierFormat,
-								privateKey: body.samlConfig.privateKey,
-								mapping: body.samlConfig.mapping,
-							})
-						: null,
-					organizationId: body.organizationId,
-					userId: ctx.context.session.user.id,
-					providerId: body.providerId,
-				},
-			});
-
 			let domainVerificationToken: string | undefined;
 			let domainVerified: boolean | undefined;
 
-			if (options?.domainVerification?.enabled) {
-				domainVerified = false;
-				domainVerificationToken = generateRandomString(24);
-
-				const verification =
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: getVerificationIdentifier(options, provider.providerId),
-						value: domainVerificationToken as string,
-						expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
-					});
-				// Remove the provider so a retry can register it again.
-				if (!verification) {
-					await ctx.context.adapter.delete({
+			// A vetoed domain token rolls back the provider so registration can be retried.
+			const provider = await runWithTransaction(
+				ctx.context.adapter,
+				async () => {
+					const created = await (
+						await getCurrentAdapter(ctx.context.adapter)
+					).create<Record<string, any>, SSOProvider<O>>({
 						model: "ssoProvider",
-						where: [{ field: "providerId", value: provider.providerId }],
+						data: {
+							issuer: body.issuer,
+							domain: body.domain,
+							domainVerified: false,
+							...additionalFields,
+							oidcConfig: (() => {
+								const config = buildOIDCConfig();
+								if (config) {
+									const parsed = JSON.parse(config) as {
+										tokenEndpointAuthentication?: string;
+										clientSecret?: string;
+									};
+									if (
+										parsed.tokenEndpointAuthentication !== "private_key_jwt" &&
+										!parsed.clientSecret
+									) {
+										throw new APIError("BAD_REQUEST", {
+											message:
+												"clientSecret is required when using client_secret_basic or client_secret_post authentication",
+										});
+									}
+									if (
+										parsed.tokenEndpointAuthentication === "private_key_jwt" &&
+										!options?.resolvePrivateKey &&
+										!options?.defaultSSO?.some(
+											(p: Record<string, unknown>) =>
+												p.providerId === body.providerId &&
+												"privateKey" in p &&
+												p.privateKey,
+										)
+									) {
+										throw new APIError("BAD_REQUEST", {
+											message:
+												"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
+										});
+									}
+								}
+								return config;
+							})(),
+							samlConfig: body.samlConfig
+								? JSON.stringify({
+										issuer: body.issuer,
+										entryPoint: body.samlConfig.entryPoint,
+										cert: body.samlConfig.cert,
+										audience: body.samlConfig.audience,
+										callbackUrl: body.samlConfig.callbackUrl,
+										idpInitiatedCallbackUrl:
+											body.samlConfig.idpInitiatedCallbackUrl,
+										idpMetadata: body.samlConfig.idpMetadata,
+										spMetadata: body.samlConfig.spMetadata,
+										wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
+										authnRequestsSigned: body.samlConfig.authnRequestsSigned,
+										signatureAlgorithm: body.samlConfig.signatureAlgorithm,
+										digestAlgorithm: body.samlConfig.digestAlgorithm,
+										identifierFormat: body.samlConfig.identifierFormat,
+										privateKey: body.samlConfig.privateKey,
+										mapping: body.samlConfig.mapping,
+									})
+								: null,
+							organizationId: body.organizationId,
+							userId: ctx.context.session.user.id,
+							providerId: body.providerId,
+						},
 					});
-					throw APIError.from(
-						"INTERNAL_SERVER_ERROR",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
-					);
-				}
-			}
+
+					if (options?.domainVerification?.enabled) {
+						domainVerified = false;
+						domainVerificationToken = generateRandomString(24);
+
+						const verification =
+							await ctx.context.internalAdapter.createVerificationValue({
+								identifier: getVerificationIdentifier(
+									options,
+									created.providerId,
+								),
+								value: domainVerificationToken,
+								expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
+							});
+						if (!verification) {
+							throw APIError.from(
+								"INTERNAL_SERVER_ERROR",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+							);
+						}
+					}
+					return created;
+				},
+			);
 
 			type SSOProviderResponse = {
 				redirectURI: string;

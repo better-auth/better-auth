@@ -114,13 +114,8 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 				identifier: `one-time-token:${storedToken}`,
 				expiresAt,
 			});
-		if (!verification) {
-			throw APIError.from(
-				"INTERNAL_SERVER_ERROR",
-				BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
-			);
-		}
-		return token;
+		// A verification.create.before hook can veto the token by returning false.
+		return verification ? token : null;
 	}
 
 	return {
@@ -157,6 +152,12 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 					}
 					const session = c.context.session;
 					const token = await generateToken(c, session);
+					if (!token) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+						);
+					}
 					return c.json({ token });
 				},
 			),
@@ -237,8 +238,12 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 									.map((header) => header.trim())
 									.filter(Boolean),
 							);
-							headersSet.add("set-ott");
 							const token = await generateToken(ctx, ctx.context.newSession);
+							// Sign-in stands without the optional header when the token is vetoed.
+							if (!token) {
+								return;
+							}
+							headersSet.add("set-ott");
 							ctx.setHeader("set-ott", token);
 							ctx.setHeader(
 								"Access-Control-Expose-Headers",
