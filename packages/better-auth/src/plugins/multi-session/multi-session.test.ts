@@ -950,7 +950,7 @@ describe("multi-session cookie secure variants", async () => {
 		expect(cookies.get(secureName)?.["max-age"]).toBe(0);
 		expect(cookies.get(plainName)?.["max-age"]).toBe(0);
 		const { internalAdapter } = await auth.$context;
-		expect(await internalAdapter.findSession(token)).toBeNull();
+		expect(await internalAdapter.findSession(first.data!.token!)).toBeNull();
 	});
 });
 

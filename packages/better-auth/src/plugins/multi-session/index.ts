@@ -399,10 +399,9 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							// This works for custom token formats and ignores cookies
 							// another app signed or named differently.
 							if (key !== `${name}_multi-${token.toLowerCase()}`) continue;
-							const dedupeKey = token.toLowerCase();
-							const group = cookiesByToken.get(dedupeKey);
+							const group = cookiesByToken.get(token);
 							if (group) group.keys.push(key);
-							else cookiesByToken.set(dedupeKey, { token, keys: [key] });
+							else cookiesByToken.set(token, { token, keys: [key] });
 						}
 
 						const tokensToDelete: string[] = [];
@@ -418,7 +417,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							const isReplaced = session?.user.id === newSession.user.id;
 							if (isDead || isReplaced) {
 								for (const key of keys) expireDeviceCookie(key);
-								if (session && isReplaced) {
+								if (!isDead && isReplaced) {
 									tokensToDelete.push(token);
 								}
 								continue;
