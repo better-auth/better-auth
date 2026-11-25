@@ -1466,8 +1466,9 @@ export interface OAuthOptions<
 		 *
 		 * Changes only what discovery advertises. It does not change which
 		 * clients the token endpoint accepts, and it does not open
-		 * `POST /oauth2/register`. The introspection and revocation lists are
-		 * not affected.
+		 * `POST /oauth2/register`. The revocation list includes `"none"` exactly
+		 * when this list does, since `/oauth2/revoke` accepts public clients.
+		 * The introspection list is not affected.
 		 *
 		 * @default derived: `"none"` is listed when
 		 * `allowUnauthenticatedClientRegistration` is `true` or an extension
