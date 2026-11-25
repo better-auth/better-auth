@@ -687,6 +687,34 @@ function applySortingAndPagination(
 }
 
 /**
+ * Read a reference's API keys from the database.
+ *
+ * Counts first so that a read without an explicit `limit` returns every key
+ * instead of stopping at `advanced.database.defaultFindManyLimit`.
+ */
+async function listApiKeysFromDatabase(
+	ctx: GenericEndpointContext,
+	referenceId: string,
+	{ limit, offset, sortBy, sortDirection }: ListApiKeysOptions,
+): Promise<ListApiKeysResult> {
+	const where = [{ field: "referenceId", value: referenceId }];
+	const total = await ctx.context.adapter.count({ model: "apikey", where });
+	if (total === 0) {
+		return { apiKeys: [], total };
+	}
+	const apiKeys = await ctx.context.adapter.findMany<ApiKey>({
+		model: "apikey",
+		where,
+		limit: limit ?? total,
+		offset,
+		sortBy: sortBy
+			? { field: sortBy, direction: sortDirection || "asc" }
+			: undefined,
+	});
+	return { apiKeys, total };
+}
+
+/**
  * List API keys for a reference (user or org) with support for all storage modes
  */
 export async function listApiKeys(
@@ -700,32 +728,12 @@ export async function listApiKeys(
 
 	// Database mode only
 	if (opts.storage === "database") {
-		const [apiKeys, total] = await Promise.all([
-			ctx.context.adapter.findMany<ApiKey>({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-				limit,
-				offset,
-				sortBy: sortBy
-					? { field: sortBy, direction: sortDirection || "asc" }
-					: undefined,
-			}),
-			ctx.context.adapter.count({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-			}),
-		]);
-		return { apiKeys, total };
+		return listApiKeysFromDatabase(ctx, referenceId, {
+			limit,
+			offset,
+			sortBy,
+			sortDirection,
+		});
 	}
 
 	// Secondary storage mode with fallback
@@ -767,31 +775,14 @@ export async function listApiKeys(
 			}
 		}
 		// Fallback to database
-		const [dbKeys, total] = await Promise.all([
-			ctx.context.adapter.findMany<ApiKey>({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-				limit,
-				offset,
-				sortBy: sortBy
-					? { field: sortBy, direction: sortDirection || "asc" }
-					: undefined,
-			}),
-			ctx.context.adapter.count({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-			}),
-		]);
+		// Read every key, not just the requested page: the cache is rebuilt
+		// below with this result, and a partial id list would hide the
+		// remaining keys from later reads served by secondary storage.
+		const { apiKeys: dbKeys, total } = await listApiKeysFromDatabase(
+			ctx,
+			referenceId,
+			{ sortBy, sortDirection },
+		);
 
 		// Rebuild from DB truth:
 		// per-key entries fan out,
@@ -807,7 +798,16 @@ export async function listApiKeys(
 			await storage.set(refKey, JSON.stringify(keyIds));
 		}
 
-		return { apiKeys: dbKeys, total };
+		return {
+			apiKeys: applySortingAndPagination(
+				dbKeys,
+				undefined,
+				undefined,
+				limit,
+				offset,
+			),
+			total,
+		};
 	}
 
 	// Secondary storage mode only
@@ -853,30 +853,10 @@ export async function listApiKeys(
 	}
 
 	// Default fallback
-	const [apiKeys, total] = await Promise.all([
-		ctx.context.adapter.findMany<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "referenceId",
-					value: referenceId,
-				},
-			],
-			limit,
-			offset,
-			sortBy: sortBy
-				? { field: sortBy, direction: sortDirection || "asc" }
-				: undefined,
-		}),
-		ctx.context.adapter.count({
-			model: "apikey",
-			where: [
-				{
-					field: "referenceId",
-					value: referenceId,
-				},
-			],
-		}),
-	]);
-	return { apiKeys, total };
+	return listApiKeysFromDatabase(ctx, referenceId, {
+		limit,
+		offset,
+		sortBy,
+		sortDirection,
+	});
 }
