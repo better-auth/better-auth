@@ -390,6 +390,8 @@ describe("passkey expected origin", () => {
 			covers: false,
 		},
 		{ allowedHosts: ["*.localhost:3000"], rpID: undefined, covers: false },
+		{ allowedHosts: ["*.localhost:3000"], rpID: "LOCALHOST.", covers: true },
+		{ allowedHosts: ["*.Example.COM"], rpID: "example.com", covers: true },
 	])(
 		"treats allowedHosts $allowedHosts as covering rpID $rpID: $covers",
 		({ allowedHosts, rpID, covers }) => {
@@ -616,6 +618,22 @@ describe("passkey origin under a wildcard allowed host", () => {
 			expect(serverMocks.verifyAuthenticationResponse).not.toHaveBeenCalled();
 		});
 
+		it("keeps the server origin when only the rpID resolved at verify is covered", async () => {
+			let calls = 0;
+			const resolveRpID = vi.fn(async () =>
+				calls++ === 0 ? "example.com" : "localhost",
+			);
+			const instance = await createTenantInstance(resolveRpID);
+			const { status, call } = await verifyAuthenticationFrom(
+				instance,
+				RP_ORIGIN,
+			);
+			expect(status).toBe(200);
+			expect(call.expectedOrigin).toEqual([RP_ORIGIN]);
+			expect(call.expectedRPID).toBe("example.com");
+			expect(resolveRpID).toHaveBeenCalledTimes(1);
+		});
+
 		it("keeps the server origin when the resolved rpID is not covered", async () => {
 			const instance = await createTenantInstance(async () => "example.com");
 			const { status, call } = await verifyAuthenticationFrom(
@@ -655,6 +673,83 @@ describe("passkey origin under a wildcard allowed host", () => {
 			);
 			expect(res.status).toBe(400);
 			expect(serverMocks.verifyRegistrationResponse).not.toHaveBeenCalled();
+		});
+	});
+
+	/**
+	 * `expectedRPID` sets which RP IDs the verifier accepts, so a sibling host
+	 * that can sign for one of them must not get the request-host default.
+	 */
+	describe("with expectedRPID", () => {
+		const APP_ORIGIN = "http://app.localhost:3000";
+		const PREVIEW_SIBLING_ORIGIN = "http://evil.preview.localhost:3000";
+
+		const verifyFromSibling = async (
+			passkeyOptions: PasskeyOptions,
+			allowedHosts: string[],
+			issuedFrom: string,
+			sibling: string,
+		) => {
+			const instance = await getTestInstance({
+				plugins: [passkey(passkeyOptions)],
+				baseURL: { allowedHosts, protocol: "http" },
+			});
+			const headers = new Headers();
+			await prepareAuthentication(instance, headers, issuedFrom);
+			headers.set("origin", sibling);
+			headers.set("content-type", "application/json");
+			const res = await instance.customFetchImpl(
+				`${sibling}/api/auth/passkey/verify-authentication`,
+				{
+					method: "POST",
+					headers,
+					body: JSON.stringify({
+						response: {
+							...mockAuthenticationResponse,
+							response: {
+								...mockAuthenticationResponse.response,
+								clientDataJSON: encodeClientData(sibling),
+							},
+						},
+					}),
+				},
+			);
+			return res.status;
+		};
+
+		it("rejects a sibling origin when an expectedRPID is covered and rpID is not", async () => {
+			const status = await verifyFromSibling(
+				{ rpID: "app.localhost", expectedRPID: ["app.localhost", "localhost"] },
+				["app.localhost:3000", "*.preview.localhost:3000"],
+				APP_ORIGIN,
+				PREVIEW_SIBLING_ORIGIN,
+			);
+			expect(status).toBe(400);
+			expect(serverMocks.verifyAuthenticationResponse).not.toHaveBeenCalled();
+		});
+
+		it("rejects a sibling origin when only expectedRPID is set and covered", async () => {
+			const status = await verifyFromSibling(
+				{ expectedRPID: "localhost" },
+				["localhost:3000", "*.localhost:3000"],
+				RP_ORIGIN,
+				SIBLING_ORIGIN,
+			);
+			expect(status).toBe(400);
+			expect(serverMocks.verifyAuthenticationResponse).not.toHaveBeenCalled();
+		});
+
+		it("control: keeps the server origin when no accepted RP ID is covered", async () => {
+			const status = await verifyFromSibling(
+				{ rpID: "app.localhost", expectedRPID: ["app.localhost"] },
+				["app.localhost:3000", "*.preview.localhost:3000"],
+				APP_ORIGIN,
+				APP_ORIGIN,
+			);
+			expect(status).toBe(200);
+			const call = serverMocks.verifyAuthenticationResponse.mock.calls[0]![0];
+			expect(call.expectedOrigin).toEqual([APP_ORIGIN]);
+			expect(call.expectedRPID).toEqual(["app.localhost"]);
 		});
 	});
 });

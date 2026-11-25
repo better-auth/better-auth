@@ -502,7 +502,7 @@ passkey({
 });
 ```
 
-When `rpID` is set and a wildcard in `baseURL.allowedHosts` covers it, the default changes. For an `rpID` function, the check uses the RP ID it resolved for each challenge. Every host under that wildcard can create passkey responses for the shared `rpID`, and the client picks the host it sends. So the plugin ignores the request host. It accepts the origin the passkey reports only when that exact origin is trusted:
+When `rpID` is set and a wildcard in `baseURL.allowedHosts` covers it, or a wildcard covers any RP ID in `expectedRPID`, the default changes. For an `rpID` function, the check uses the RP ID it resolved for each challenge. Every host under that wildcard can create passkey responses for the shared `rpID`, and the client picks the host it sends. So the plugin ignores the request host. It accepts the origin the passkey reports only when that exact origin is trusted:
 
 * an exact entry in `baseURL.allowedHosts`, such as `example.com`
 * the `baseURL.fallback` origin

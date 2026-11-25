@@ -63,9 +63,10 @@ export async function resolveExpectedRPID(
  * `trustedOrigins` lists it exactly, which keeps a frontend on another origin
  * working. A wildcard entry does not count, since it also admits sibling hosts
  * that can produce assertions for the same `rpID`. When a wildcard allowed host
- * covers the configured `rpID`, or the one an `rpID` function resolved for this
- * challenge, the request picks the `baseURL` host, so only the reported origin
- * counts, and only when the resolved trusted origins list it exactly.
+ * covers an RP ID the verifier accepts (the `rpID` issued with the challenge
+ * when `rpID` is set, and every `expectedRPID`), the request picks the
+ * `baseURL` host, so only the reported origin counts, and only when the
+ * resolved trusted origins list it exactly.
  * Without a configured `baseURL` only the request URL is used, never
  * `x-forwarded-host`, which the client can set.
  *
@@ -78,7 +79,7 @@ export function getExpectedOrigins(
 	options: PasskeyOptions,
 	ctx: GenericEndpointContext,
 	clientDataJSON: unknown,
-	rpID: string,
+	rpIDs: { issued: string; expected: string | string[] },
 ): string[] | null {
 	if (options.origin) {
 		const configured = Array.isArray(options.origin)
@@ -87,15 +88,18 @@ export function getExpectedOrigins(
 		return nonEmpty(configured.filter((origin) => origin.length > 0));
 	}
 	const reported = getReportedOrigin(clientDataJSON);
-	// An unset `rpID` defaults to the host of each request, so it is not checked.
-	if (
-		options.rpID &&
-		"passkeyBaseURL" in ctx.context &&
-		wildcardHostCoversRpID(
-			rpID,
-			ctx.context.passkeyBaseURL as BetterAuthOptions["baseURL"],
-		)
-	) {
+	// An unset `rpID` defaults to the host of each request, so the issued RP ID
+	// is checked only when `rpID` is set. `expectedRPID` widens what the
+	// verifier accepts, so each of its values is checked too.
+	const accepted = [
+		...(options.rpID ? [rpIDs.issued] : []),
+		...(options.expectedRPID !== undefined ? [rpIDs.expected].flat() : []),
+	];
+	const baseURL =
+		"passkeyBaseURL" in ctx.context
+			? (ctx.context.passkeyBaseURL as BetterAuthOptions["baseURL"])
+			: undefined;
+	if (accepted.some((rpID) => wildcardHostCoversRpID(rpID, baseURL))) {
 		return reported && ctx.context.trustedOrigins.includes(reported)
 			? [reported]
 			: [];
@@ -146,9 +150,13 @@ export function wildcardHostCoversRpID(
 	if (!rpID || typeof baseURL !== "object") {
 		return false;
 	}
+	// Host names compare case-insensitively, and a trailing dot names the same host.
+	const normalize = (host: string) => host.toLowerCase().replace(/\.$/, "");
+	const host = normalize(rpID);
 	return baseURL.allowedHosts.some((pattern) => {
-		const hostname =
-			pattern.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").split(/[:/]/)[0] ?? "";
+		const hostname = normalize(
+			pattern.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").split(/[:/]/)[0] ?? "",
+		);
 		const wildcard = Math.max(
 			hostname.lastIndexOf("*"),
 			hostname.lastIndexOf("?"),
@@ -159,9 +167,9 @@ export function wildcardHostCoversRpID(
 		const suffix = hostname.slice(wildcard + 1).replace(/^\./, "");
 		return (
 			!suffix ||
-			suffix === rpID ||
-			suffix.endsWith(`.${rpID}`) ||
-			rpID.endsWith(`.${suffix}`)
+			suffix === host ||
+			suffix.endsWith(`.${host}`) ||
+			host.endsWith(`.${suffix}`)
 		);
 	});
 }

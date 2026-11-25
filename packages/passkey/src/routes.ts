@@ -706,11 +706,13 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 			}
 			// Challenges stored before the RP ID was recorded resolve it again.
 			const issuedRPID = rpID || (await resolveRpID(options, ctx));
+			// Resolved once, for both the wildcard check and the verifier.
+			const expectedRPID = await resolveExpectedRPID(options, ctx, issuedRPID);
 			const expectedOrigin = getExpectedOrigins(
 				options,
 				ctx,
 				resp?.response?.clientDataJSON,
-				issuedRPID,
+				{ issued: issuedRPID, expected: expectedRPID },
 			);
 			if (!expectedOrigin) {
 				throw expectedOriginUnavailable(ctx);
@@ -752,7 +754,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					response: resp,
 					expectedChallenge,
 					expectedOrigin,
-					expectedRPID: await resolveExpectedRPID(options, ctx, issuedRPID),
+					expectedRPID,
 					requireUserVerification:
 						options.authenticatorSelection?.userVerification === "required",
 				}).catch((e) => {
@@ -973,11 +975,13 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			}
 			// Challenges stored before the RP ID was recorded resolve it again.
 			const issuedRPID = rpID || (await resolveRpID(options, ctx));
+			// Resolved once, for both the wildcard check and the verifier.
+			const expectedRPID = await resolveExpectedRPID(options, ctx, issuedRPID);
 			const expectedOrigin = getExpectedOrigins(
 				options,
 				ctx,
 				resp?.response?.clientDataJSON,
-				issuedRPID,
+				{ issued: issuedRPID, expected: expectedRPID },
 			);
 			if (!expectedOrigin) {
 				throw expectedOriginUnavailable(ctx);
@@ -1008,7 +1012,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					response: resp as AuthenticationResponseJSON,
 					expectedChallenge,
 					expectedOrigin,
-					expectedRPID: await resolveExpectedRPID(options, ctx, issuedRPID),
+					expectedRPID,
 					credential: {
 						id: passkey.credentialID,
 						publicKey: base64.decode(passkey.publicKey),

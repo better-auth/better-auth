@@ -150,7 +150,8 @@ export interface PasskeyOptions {
 	 * @default the origin of `baseURL`, plus a frontend origin listed exactly in
 	 * `trustedOrigins`. When `rpID` is set and a wildcard in
 	 * `baseURL.allowedHosts` covers it (for an `rpID` function, the value it
-	 * resolved for the challenge), the default is the origin the credential
+	 * resolved for the challenge), or a wildcard covers any `expectedRPID`,
+	 * the default is the origin the credential
 	 * reports, if an exact `allowedHosts` entry, the `fallback`, or
 	 * `trustedOrigins` lists it exactly.
 	 */
