@@ -9,6 +9,7 @@ import {
 } from "@better-auth/core/db/internal";
 import { generateId } from "@better-auth/core/utils/id";
 import { createHash } from "@better-auth/utils/hash";
+import { createHMAC } from "@better-auth/utils/hmac";
 import {
 	getStorageOption,
 	processIdentifier,
@@ -88,11 +89,13 @@ const toIssuanceIdentifier = (storedIdentifier: string) =>
 
 /**
  * Digests the part of a `<code>:<attempts>` value before the attempt counter.
- * The code part is already in its stored form, such as hashed or encrypted.
+ * It is keyed by the secret because a short plain or unsalted hashed code
+ * would otherwise be recoverable from the digest.
  */
-function digestCode(value: string) {
+function digestCode(ctx: GenericEndpointContext, value: string) {
 	const separator = value.lastIndexOf(":");
-	return createHash("SHA-256", "base64urlnopad").digest(
+	return createHMAC("SHA-256", "base64urlnopad").sign(
+		ctx.context.secret,
 		separator === -1 ? value : value.slice(0, separator),
 	);
 }
@@ -121,7 +124,9 @@ async function findIssuance(
  * issued after the consumed one, even once that code is gone too. The marker
  * is written after the old value is deleted and before the new one exists, so
  * a consume that read the previous marker cannot have taken an older code
- * than the one it names.
+ * than the one it names. When a concurrent send stored its code first, the
+ * marker is pointed at that code, which is returned. A caller that replaces
+ * it uses {@link replaceVerification}.
  */
 export async function issueVerification(
 	ctx: GenericEndpointContext,
@@ -131,17 +136,63 @@ export async function issueVerification(
 	const issuanceIdentifier = toIssuanceIdentifier(
 		await toStoredIdentifier(ctx, data.identifier),
 	);
-	await Promise.all([
-		internalAdapter.deleteVerificationByIdentifier(data.identifier),
-		internalAdapter.deleteVerificationByIdentifier(issuanceIdentifier),
-	]);
+	// The marker goes only once the old code is gone, so a consume that finds
+	// no marker cannot take the old code.
+	await internalAdapter.deleteVerificationByIdentifier(data.identifier);
+	await internalAdapter.deleteVerificationByIdentifier(issuanceIdentifier);
+	if (!(await recordIssuance(ctx, issuanceIdentifier, data))) return null;
+	const stored = await createOrFindVerification(ctx, data);
+	// A concurrent send stored its code first, so the marker names that code.
+	if (stored && stored.value !== data.value) {
+		if (!(await recordIssuance(ctx, issuanceIdentifier, stored))) return null;
+	}
+	return stored;
+}
+
+/**
+ * Overwrites the live OTP under an identifier with a newly issued value, such
+ * as after a concurrent send stored its code first, recording the issuance
+ * before the value changes. Resolves to `null` when a
+ * `verification.create.before` hook vetoes the issuance marker.
+ */
+export async function replaceVerification(
+	ctx: GenericEndpointContext,
+	data: VerificationInput,
+) {
+	const issuanceIdentifier = toIssuanceIdentifier(
+		await toStoredIdentifier(ctx, data.identifier),
+	);
+	if (!(await recordIssuance(ctx, issuanceIdentifier, data))) return null;
+	return ctx.context.internalAdapter.updateVerificationByIdentifier(
+		data.identifier,
+		{ value: data.value, expiresAt: data.expiresAt, createdAt: new Date() },
+	);
+}
+
+/**
+ * Points the issuance marker at a new issuance. A marker a concurrent send
+ * stored first is overwritten, so the marker never keeps naming an issuance
+ * older than a code stored after it.
+ */
+async function recordIssuance(
+	ctx: GenericEndpointContext,
+	issuanceIdentifier: string,
+	data: VerificationInput,
+) {
+	const value = `${generateId()}.${await digestCode(ctx, data.value)}`;
 	const issuance = await createOrFindVerification(ctx, {
 		identifier: issuanceIdentifier,
-		value: `${generateId()}.${await digestCode(data.value)}`,
+		value,
 		expiresAt: data.expiresAt,
 	});
-	if (!issuance) return null;
-	return createOrFindVerification(ctx, data);
+	if (!issuance) return false;
+	if (issuance.value !== value) {
+		await ctx.context.internalAdapter.updateVerificationByIdentifier(
+			issuanceIdentifier,
+			{ value, expiresAt: data.expiresAt },
+		);
+	}
+	return true;
 }
 
 /**
@@ -201,11 +252,11 @@ export async function consumeVerification(
 }
 
 /**
- * The write-back proceeds while the marker names the issuance read before the
- * consume. A different marker means a code was issued since, which the
- * consume took only if the marker names the consumed code and the earlier one
- * did not. A marker that disappeared may have been replaced, so it yields. A
- * code issued before markers existed has none before or after, and proceeds.
+ * The write-back proceeds only while the marker names the consumed code, and
+ * either still names the issuance read before the consume or names a code that
+ * marker did not, which is a code issued while the consume ran. A marker that
+ * disappeared may have been replaced, so it yields. A code issued before
+ * markers existed has none before or after, and proceeds.
  *
  * The consume removes every value under the stored identifier, so a live value
  * found there was issued after it. A row under the plain identifier, left from
@@ -221,12 +272,12 @@ async function restoreVerification(
 	const [live, issuance, code] = await Promise.all([
 		ctx.context.internalAdapter.findVerificationValue(data.identifier),
 		findIssuance(ctx, consumed.storedIdentifier),
-		digestCode(data.value),
+		digestCode(ctx, data.value),
 	]);
 	const before = consumed.issuance;
 	const latest = issuance
-		? issuance.nonce === before?.nonce ||
-			(issuance.code === code && before?.code !== code)
+		? issuance.code === code &&
+			(issuance.nonce === before?.nonce || before?.code !== code)
 		: !before;
 	if (
 		!latest ||

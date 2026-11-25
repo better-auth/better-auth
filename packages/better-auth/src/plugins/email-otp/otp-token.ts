@@ -5,7 +5,11 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
-import { extendVerification, issueVerification } from "../../db/verification";
+import {
+	extendVerification,
+	issueVerification,
+	replaceVerification,
+} from "../../db/verification";
 import { getDate } from "../../utils/date";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
@@ -135,10 +139,6 @@ export async function issueOTP(
 
 	const reused = await tryReuseOTP(ctx, opts, identifier);
 	if (reused) return reused;
-	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
-		value: verification.value,
-		expiresAt: verification.expiresAt,
-		createdAt: new Date(),
-	});
+	if (!(await replaceVerification(ctx, verification))) return null;
 	return otp;
 }

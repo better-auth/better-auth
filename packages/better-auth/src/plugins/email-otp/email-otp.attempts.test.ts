@@ -635,6 +635,122 @@ describe("email OTP written back after a newer code was sent", () => {
 		},
 	);
 
+	it("does not revive an older code that a concurrent send stored first", async () => {
+		const codes = ["111111", "222222"];
+		let releaseCheck: () => void = () => {};
+		const checkReleased = new Promise<void>((resolve) => {
+			releaseCheck = resolve;
+		});
+		let signalCheck: () => void = () => {};
+		const checkStarted = new Promise<void>((resolve) => {
+			signalCheck = resolve;
+		});
+		const { client, auth, testUser } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						generateOTP: () => codes.shift(),
+						async sendVerificationOTP() {},
+						storeOTP: {
+							async hash(otp) {
+								// The wrong guess is compared after it consumed the code.
+								if (otp === "000000") {
+									signalCheck();
+									await checkReleased;
+								}
+								return `stored-${otp}`;
+							},
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		const email = testUser.email;
+		const { internalAdapter } = await auth.$context;
+
+		// Both sends clear the identifier before either one stores anything.
+		let deletes = 0;
+		let releaseDeletes: () => void = () => {};
+		const deletesDone = new Promise<void>((resolve) => {
+			releaseDeletes = resolve;
+		});
+		const remove = internalAdapter.deleteVerificationByIdentifier;
+		vi.spyOn(
+			internalAdapter,
+			"deleteVerificationByIdentifier",
+		).mockImplementation(async (id) => {
+			await remove(id);
+			if (!id.startsWith("issued:")) return;
+			if (++deletes === 2) releaseDeletes();
+			await deletesDone;
+		});
+		// The first send stores its code before the second one writes anything,
+		// and the second send stores its code once the guess consumed the first.
+		let firstStored: () => void = () => {};
+		const firstSendStored = new Promise<void>((resolve) => {
+			firstStored = resolve;
+		});
+		let signalSecondCode: () => void = () => {};
+		const secondCodeReady = new Promise<void>((resolve) => {
+			signalSecondCode = resolve;
+		});
+		let releaseSecondCode: () => void = () => {};
+		const secondCodeReleased = new Promise<void>((resolve) => {
+			releaseSecondCode = resolve;
+		});
+		let markers = 0;
+		const create = internalAdapter.createVerificationValue;
+		vi.spyOn(internalAdapter, "createVerificationValue").mockImplementation(
+			async (data) => {
+				if (data.identifier.startsWith("issued:")) {
+					if (++markers === 2) await firstSendStored;
+					return create(data);
+				}
+				if (data.value === "stored-222222:0") {
+					signalSecondCode();
+					await secondCodeReleased;
+					return create(data);
+				}
+				const created = await create(data);
+				if (data.value === "stored-111111:0") firstStored();
+				return created;
+			},
+		);
+
+		const firstSend = client.emailOtp.sendVerificationOtp({
+			email,
+			type: "sign-in",
+		});
+		const secondSend = client.emailOtp.sendVerificationOtp({
+			email,
+			type: "sign-in",
+		});
+		await firstSend;
+		await secondCodeReady;
+		const guess = client.emailOtp.checkVerificationOtp({
+			email,
+			type: "sign-in",
+			otp: "000000",
+		});
+		await checkStarted;
+		releaseSecondCode();
+		await secondSend;
+		const newer = await client.signIn.emailOtp({ email, otp: "222222" });
+		releaseCheck();
+
+		expect(newer.data?.token).toBeDefined();
+		expect((await guess).error?.code).toBe("INVALID_OTP");
+		expect(
+			await internalAdapter.findVerificationValue(
+				toOTPIdentifier("sign-in", email),
+			),
+		).toBeNull();
+		expect(
+			(await client.signIn.emailOtp({ email, otp: "111111" })).error?.code,
+		).toBe("INVALID_OTP");
+	});
+
 	it("keeps a code issued without an issuance marker after a wrong guess", async () => {
 		const { client, auth, testUser } = await getTestInstance(
 			{

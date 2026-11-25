@@ -12,6 +12,7 @@ import { parseUserOutput } from "../../../db/schema";
 import {
 	consumeVerification,
 	issueVerification,
+	replaceVerification,
 } from "../../../db/verification";
 import { PACKAGE_VERSION } from "../../../version";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
@@ -224,19 +225,14 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			const identifier = `2fa-otp-${key}`;
 			const value = `${hashedCode}:0`;
 			const expiresAt = new Date(Date.now() + opts.period);
-			const verification = await issueVerification(ctx, {
-				value,
-				identifier,
-				expiresAt,
-			});
+			const data = { value, identifier, expiresAt };
+			const stored = await issueVerification(ctx, data);
 			// A concurrent send stored its code first. This one is sent, so it
 			// replaces that one.
-			if (verification && verification.value !== value) {
-				await ctx.context.internalAdapter.updateVerificationByIdentifier(
-					identifier,
-					{ value, expiresAt, createdAt: new Date() },
-				);
-			}
+			const verification =
+				stored && stored.value !== value
+					? await replaceVerification(ctx, data)
+					: stored;
 			if (!verification) {
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",

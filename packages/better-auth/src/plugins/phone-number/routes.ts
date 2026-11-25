@@ -8,7 +8,11 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
-import { consumeVerification, issueVerification } from "../../db/verification";
+import {
+	consumeVerification,
+	issueVerification,
+	replaceVerification,
+} from "../../db/verification";
 import { HIDE_METADATA } from "../../utils";
 import { getDate } from "../../utils/date";
 import {
@@ -1005,11 +1009,7 @@ async function issuePhoneNumberOTP(
 		stored.expiresAt >= new Date() &&
 		parseVerificationAttempts(attempts) < (opts.allowedAttempts ?? 3);
 	if (reusable && storedCode) return storedCode;
-	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
-		value: verification.value,
-		expiresAt: verification.expiresAt,
-		createdAt: new Date(),
-	});
+	if (!(await replaceVerification(ctx, verification))) return null;
 	return code;
 }
 

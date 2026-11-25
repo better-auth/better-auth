@@ -2197,6 +2197,112 @@ describe("OTP written back after a newer code was used", () => {
 	);
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11105
+ */
+describe("OTP replaced by a concurrent send", () => {
+	it("keeps the replacing code after a wrong guess that consumed it", async () => {
+		const codes: string[] = [];
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							codes.push(otp);
+						},
+					},
+				}),
+			],
+		});
+		const { headers: signInHeaders } = await signInWithTestUser();
+		const enabled = await auth.api.enableTwoFactor({
+			body: { password: testUser.password, method: "otp" },
+			headers: signInHeaders,
+			asResponse: true,
+		});
+		const headers = convertSetCookieToCookie(enabled.headers);
+		const { internalAdapter } = await auth.$context;
+		await auth.api.sendTwoFactorOTP({ headers, body: {} });
+
+		// The guess reads the current issuance, then waits before consuming.
+		let releaseConsume: () => void = () => {};
+		const consumeReleased = new Promise<void>((resolve) => {
+			releaseConsume = resolve;
+		});
+		let signalConsume: () => void = () => {};
+		const consumeStarted = new Promise<void>((resolve) => {
+			signalConsume = resolve;
+		});
+		const consume = internalAdapter.consumeVerificationValue;
+		vi.spyOn(
+			internalAdapter,
+			"consumeVerificationValue",
+		).mockImplementationOnce(async (id) => {
+			signalConsume();
+			await consumeReleased;
+			return consume(id);
+		});
+		const guess = auth.api.verifyTwoFactorOTP({
+			headers,
+			body: { code: "not-a-code" },
+			asResponse: true,
+		});
+		await consumeStarted;
+
+		// Two sends clear the identifier before either one stores anything.
+		// The first stores its code, then the second replaces it.
+		let deletes = 0;
+		let releaseDeletes: () => void = () => {};
+		const deletesDone = new Promise<void>((resolve) => {
+			releaseDeletes = resolve;
+		});
+		const remove = internalAdapter.deleteVerificationByIdentifier;
+		vi.spyOn(
+			internalAdapter,
+			"deleteVerificationByIdentifier",
+		).mockImplementation(async (id) => {
+			await remove(id);
+			if (!id.startsWith("issued:")) return;
+			if (++deletes === 2) releaseDeletes();
+			await deletesDone;
+		});
+		let firstStored: () => void = () => {};
+		const firstSendStored = new Promise<void>((resolve) => {
+			firstStored = resolve;
+		});
+		let markers = 0;
+		let otpCreates = 0;
+		const create = internalAdapter.createVerificationValue;
+		vi.spyOn(internalAdapter, "createVerificationValue").mockImplementation(
+			async (data) => {
+				if (data.identifier.startsWith("issued:")) {
+					if (++markers === 2) await firstSendStored;
+					return create(data);
+				}
+				const created = await create(data);
+				if (++otpCreates === 1) firstStored();
+				return created;
+			},
+		);
+		await Promise.all([
+			auth.api.sendTwoFactorOTP({ headers, body: {} }),
+			auth.api.sendTwoFactorOTP({ headers, body: {} }),
+		]);
+		vi.restoreAllMocks();
+		releaseConsume();
+
+		expect(codes).toHaveLength(3);
+		expect((await guess).status).toBe(401);
+		const latest = await auth.api.verifyTwoFactorOTP({
+			headers,
+			body: { code: codes[2]! },
+			asResponse: true,
+		});
+		expect(latest.status).toBe(200);
+	});
+});
+
 describe("pre-migration twoFactor rows (verified absent)", async () => {
 	it("should complete enrollment when verified is null", async () => {
 		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
