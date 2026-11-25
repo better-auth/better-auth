@@ -25,6 +25,7 @@ import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
 import { createInternalAdapter } from "../db/internal-adapter";
+import { redactSecondaryStorageErrors } from "../db/secondary-storage-errors";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
@@ -199,6 +200,9 @@ Most of the features of Better Auth will not work correctly.`,
 				: "",
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
+		secondaryStorage:
+			options.secondaryStorage &&
+			redactSecondaryStorageErrors(options.secondaryStorage),
 	};
 
 	checkEndpointConflicts(options, logger);
