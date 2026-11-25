@@ -17,7 +17,12 @@ import type {
 	OAuthTokenRevokedEvent,
 	Scope,
 } from "./types";
-import { getJwksSource, getStoredToken, JWT_ACCESS_TOKEN_TYPE } from "./utils";
+import {
+	getJwksSource,
+	getStoredToken,
+	JWT_ACCESS_TOKEN_TYPE,
+	tokenError,
+} from "./utils";
 
 /** Signature, issuer, and `azp` are verified; audience and client are not. */
 export type JwtAccessTokenPayload = JWTPayload & { azp: string; sid?: string };
@@ -287,11 +292,26 @@ export async function markGrantRevoked(
 	grant: { grantId?: string | null; clientId: string },
 ) {
 	if (!grant.grantId) return;
-	await ctx.context.internalAdapter.createVerificationValue({
+	const stored = await ctx.context.internalAdapter.createVerificationValue({
 		identifier: grantRevocationIdentifier(grant.grantId),
 		value: grant.clientId,
 		expiresAt: grantRevocationExpiresAt(opts),
 	});
+	if (!stored) revocationNotRecorded();
+}
+
+/**
+ * Fails a revocation whose record a `verification.create.before` hook vetoed.
+ * The token stays usable, so the revocation must not be reported as done
+ * (RFC 7009 §2.2). The veto is a policy, not a temporary condition, so this is
+ * a server error rather than a retryable 503 (RFC 7009 §2.2.1).
+ */
+export function revocationNotRecorded(): never {
+	tokenError(
+		"INTERNAL_SERVER_ERROR",
+		"server_error",
+		"unable to record the revocation",
+	);
 }
 
 export async function isGrantRevoked(

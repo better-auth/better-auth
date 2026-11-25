@@ -212,6 +212,8 @@ A request that fails either check is rejected and the tokens stay valid. This in
 
 The tokens issued from a code can outlive the code, so the provider remembers a redeemed code for as long as those tokens can still be valid. The record lasts for the longer of `accessTokenExpiresIn` and `refreshTokenExpiresIn` after redemption (30 days by default), where a function `accessTokenExpiresIn` counts as its [`accessTokenMaxExpiresIn`](#per-grant-access-token-lifetime), and each refresh-token rotation extends it by the same amount. A reuse after the code expires still revokes the tokens while that record exists.
 
+The record is a [verification](/docs/concepts/database#verification) value whose identifier starts with `oauth_consumed_code:`, unless `verification.storeIdentifier` hashes it. If a `verification.create.before` hook returns `false` for it, the token request still succeeds, and the provider logs an error. A later reuse of that code is then rejected without revoking its grant.
+
 Two token requests can send one code at the same time, for example when a client retries a request it thinks timed out. The request that consumes the code starts issuing tokens. The other one is a reuse, so it fails and revokes the code's grant. If the first request is still issuing tokens, it finds the [grant revoked](#grant-revocation-entries) and also fails with `invalid_grant`. If it already finished, the revocation revokes the tokens it returned, as for any reuse. Either way, the client must start a new authorization request.
 
 Two requests with the same DPoP proof can end differently, because the server records the proof's `jti` before it consumes the code. If the second request finds the code before the first consumes it, the second then fails on the recorded `jti` with `invalid_dpop_proof`. It revokes nothing, and the first request keeps its tokens. If it arrives after the code is consumed, it is a reuse as described above.
@@ -667,6 +669,7 @@ Each authorization code redemption and each refresh looks up its grant's entry a
 These entries are ordinary verification values:
 
 * **Your verification hooks see them.** `databaseHooks.verification` runs for each entry the provider writes. The identifier starts with `oauth-revoked-grant:`, unless `verification.storeIdentifier` hashes it. To act on revocations, use [`onTokenRevoked`](#observe-revocations) instead of these entries.
+* **A hook that vetoes an entry fails the revocation.** If `verification.create.before` returns `false` for a grant entry, the request that revoked the grant fails with 500 `server_error`, and `onTokenRevoked` is not called. Revoking a refresh token or deleting a consent then leaves the token or consent in place, so the request can be retried. A replay of a refresh token or an authorization code, and a password reset, still delete the grant's stored tokens, but its JWT access tokens stay valid until they expire.
 * **Reads must see earlier writes.** If your verification store reads from a replica that lags behind writes, a request can miss an entry written moments earlier and keep its tokens.
 * **Secondary storage holds them if you use it.** The entries go there and expire on their own. If the storage drops an entry before it expires, a request that was issuing tokens when the grant was revoked can keep them.
 * **Writes are bounded by the rate limit.** Each grant revocation writes one entry. When rate limiting is enabled, which is the default in production, the [rate limits](/docs/plugins/oauth-provider/reference#rate-limits) bound how fast entries are written: 30 requests per 60 seconds for `/oauth2/revoke`, and 20 for `/oauth2/token`. If you turn rate limiting off, nothing bounds them. Deleting a consent through `deleteOAuthConsent` has no limit of its own and writes one entry for each grant of the consent.
@@ -682,6 +685,8 @@ oauthProvider({
 ```
 
 Revoking a JWT access token then returns 200 and stores its `jti` in the [verification store](/docs/concepts/database#verification) until the token's `exp`. After that, the token is reported inactive by introspection, rejected by UserInfo with 401 `invalid_token`, and reported inactive by `validateAccessToken`. Revoking the same token again returns 200.
+
+If a `verification.create.before` hook returns `false` for the entry, whose identifier starts with `oauth-revoked-access-token:` unless `verification.storeIdentifier` hashes it, the revocation fails with 500 `server_error`, the token stays valid, and `onTokenRevoked` is not called.
 
 Before you turn it on, consider:
 

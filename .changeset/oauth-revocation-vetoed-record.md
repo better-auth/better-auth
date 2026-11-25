@@ -1,0 +1,5 @@
+---
+"@better-auth/oauth-provider": patch
+---
+
+A token revocation that a `verification.create.before` hook keeps from being recorded now fails with `server_error`, and `onTokenRevoked` is no longer called for it. Before, `/oauth2/revoke` answered 200 while the token kept working, and every revocation reported the event. This covers revoking a JWT access token with `revocableJwtAccessTokens`, and every grant revocation: revoking a refresh token, replaying a refresh token or an authorization code, deleting a consent, and revoking a user's tokens on password reset, which happens when `emailAndPassword.revokeSessionsOnPasswordReset` is on and `revokeGrantsOnPasswordReset` is not `false`. A refresh token or consent whose revocation fails stays in place, so the request can be retried. A replay, or a password reset that revokes tokens, still deletes the grant's stored tokens before it fails. An authorization code whose reuse record a hook vetoes is now logged, because a replay of that code cannot revoke its grant.

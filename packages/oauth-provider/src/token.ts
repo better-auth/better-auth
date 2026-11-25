@@ -1039,7 +1039,7 @@ async function recordConsumedAuthorizationCode(
 	>,
 ) {
 	try {
-		await ctx.context.internalAdapter.createVerificationValue({
+		const stored = await ctx.context.internalAdapter.createVerificationValue({
 			identifier: consumedAuthorizationCodeIdentifier(authorizationCodeId),
 			value: JSON.stringify({
 				clientId: query.client_id,
@@ -1048,6 +1048,11 @@ async function recordConsumedAuthorizationCode(
 			} satisfies z.infer<typeof consumedAuthorizationCodeSchema>),
 			expiresAt: consumedAuthorizationCodeExpiresAt(opts),
 		});
+		if (!stored) {
+			ctx.context.logger.error(
+				"consumed authorization code record vetoed by a verification hook; a replay of this code will not revoke its grant",
+			);
+		}
 	} catch (error) {
 		ctx.context.logger.error(
 			"failed to record consumed authorization code",
