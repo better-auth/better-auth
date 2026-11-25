@@ -9,6 +9,11 @@ import type { BetterAuthOptions } from "../../types";
 import { safeJSONParse } from "../../utils/json";
 import { getAuthTables } from "../get-tables";
 import { createAtomicFallbacks } from "./atomic-fallback";
+import {
+	chunkByMaxRows,
+	finitePositiveInt,
+	rowsShareKeys,
+} from "./create-many";
 import { initGetDefaultFieldName } from "./get-default-field-name";
 import { initGetDefaultModelName } from "./get-default-model-name";
 import { initGetFieldAttributes } from "./get-field-attributes";
@@ -48,13 +53,6 @@ const createAsIsTransaction =
 	<R>(fn: (trx: DBTransactionAdapter<Options>) => Promise<R>) =>
 		fn(adapter);
 
-function finitePositiveInt(value: number | undefined): number | undefined {
-	if (typeof value !== "number" || !Number.isFinite(value) || value < 1) {
-		return undefined;
-	}
-	return Math.floor(value);
-}
-
 export type AdapterFactory<Options extends BetterAuthOptions> = (
 	options: Options,
 ) => DBAdapter<Options>;
@@ -85,6 +83,10 @@ export const createAdapterFactory =
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
 			createManyMaxParameters: cfg.createManyMaxParameters ?? 999,
 			createManyMaxRows: cfg.createManyMaxRows,
+			createManyColumnCount: cfg.createManyColumnCount,
+			createManyPreservesInsertOrder:
+				cfg.createManyPreservesInsertOrder ?? false,
+			createManyBulkGeneratedIds: cfg.createManyBulkGeneratedIds ?? false,
 		} satisfies AdapterFactoryConfig;
 
 		const useNumberId = options.advanced?.database?.generateId === "serial";
@@ -1033,9 +1035,25 @@ export const createAdapterFactory =
 					`${formatMethod("createMany")} ${formatAction("Parsed Input")}:`,
 					{ model, data: rows },
 				);
+				const selectedFields = select?.length ? select : undefined;
+				const idField = getFieldName({ model: modelKey, field: "id" });
+				const hasAllIds = rows.every((row) => {
+					const id = row[idField] ?? row.id;
+					return id !== undefined && id !== null;
+				});
+				const useNative =
+					typeof adapterInstance.createMany === "function" &&
+					rowsShareKeys(rows) &&
+					(hasAllIds ||
+						(config.createManyBulkGeneratedIds &&
+							config.createManyPreservesInsertOrder));
 				const columnCount = Math.max(
 					1,
-					new Set(rows.flatMap((row) => Object.keys(row))).size,
+					config.createManyColumnCount?.({
+						model,
+						modelKey,
+						rows,
+					}) ?? new Set(rows.flatMap((row) => Object.keys(row))).size,
 				);
 				const parameterLimit = finitePositiveInt(
 					config.createManyMaxParameters ?? 999,
@@ -1051,9 +1069,9 @@ export const createAdapterFactory =
 						? parameterChunkSize
 						: Math.min(parameterChunkSize, maxRows),
 				);
+				const chunks = useNative ? chunkByMaxRows(rows, chunkSize) : [rows];
 				const results: Record<string, unknown>[] = [];
-				for (let offset = 0; offset < rows.length; offset += chunkSize) {
-					const chunk = rows.slice(offset, offset + chunkSize);
+				for (const chunk of chunks) {
 					const res = await withSpan(
 						`db createMany ${model}`,
 						{
@@ -1061,12 +1079,12 @@ export const createAdapterFactory =
 							[ATTR_DB_COLLECTION_NAME]: model,
 						},
 						async () => {
-							if (adapterInstance.createMany) {
+							if (useNative && adapterInstance.createMany) {
 								return adapterInstance.createMany({
 									data: chunk,
 									model,
 									modelKey,
-									select,
+									select: selectedFields,
 								});
 							}
 							const created: Record<string, unknown>[] = [];
@@ -1076,7 +1094,7 @@ export const createAdapterFactory =
 										data,
 										model,
 										modelKey,
-										select,
+										select: selectedFields,
 									}),
 								);
 							}
@@ -1089,6 +1107,11 @@ export const createAdapterFactory =
 						);
 					}
 					for (const row of res) {
+						if (row == null) {
+							throw new BetterAuthError(
+								`Adapter "${config.adapterId}" createMany could not read back an inserted "${model}" row.`,
+							);
+						}
 						results.push(row);
 					}
 				}
@@ -1103,7 +1126,12 @@ export const createAdapterFactory =
 					transformed = [];
 					for (const row of results) {
 						transformed.push(
-							(await transformOutput(row, modelKey, select, undefined)) as R,
+							(await transformOutput(
+								row,
+								modelKey,
+								selectedFields,
+								undefined,
+							)) as R,
 						);
 					}
 				}

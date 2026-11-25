@@ -99,11 +99,11 @@ describe("drizzle-adapter", () => {
 	};
 
 	it.for(adapterFactories)(
-		"createMany restores input order from $relations sqlite RETURNING",
+		"createMany keeps $relations sqlite RETURNING order",
 		async ({ createAdapter }) => {
 			const returning = vi.fn().mockResolvedValue([
-				{ id: "b", name: "Bob" },
 				{ id: "a", name: "Ada" },
+				{ id: "b", name: "Bob" },
 			]);
 			const db = {
 				_: { fullSchema: { user: userTable }, relations: {} },
@@ -123,13 +123,13 @@ describe("drizzle-adapter", () => {
 	);
 
 	it.for(adapterFactories)(
-		"createMany restores input order when PostgreSQL lowercases UUID ids on $relations",
+		"createMany keeps PostgreSQL UUID RETURNING order on $relations",
 		async ({ createAdapter }) => {
 			const adaId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
 			const bobId = "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB";
 			const returning = vi.fn().mockResolvedValue([
-				{ id: bobId.toLowerCase(), name: "Bob" },
 				{ id: adaId.toLowerCase(), name: "Ada" },
+				{ id: bobId.toLowerCase(), name: "Bob" },
 			]);
 			const db = {
 				_: { fullSchema: { user: userTable }, relations: {} },
@@ -168,8 +168,8 @@ describe("drizzle-adapter", () => {
 			const upperId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
 			const lowerId = upperId.toLowerCase();
 			const returning = vi.fn().mockResolvedValue([
-				{ id: lowerId, name: "Lower" },
 				{ id: upperId, name: "Upper" },
+				{ id: lowerId, name: "Lower" },
 			]);
 			const db = {
 				_: { fullSchema: { user: userTable }, relations: {} },
@@ -202,9 +202,11 @@ describe("drizzle-adapter", () => {
 	);
 
 	it.for(adapterFactories)(
-		"createMany does not use bulk RETURNING when ids are generated on $relations",
+		"createMany bulk-inserts generated ids with $relations sqlite RETURNING",
 		async ({ createAdapter }) => {
-			const returning = vi.fn().mockResolvedValue([{ id: "generated" }]);
+			const returning = vi
+				.fn()
+				.mockResolvedValue([{ id: "generated-a" }, { id: "generated-b" }]);
 			const values = vi.fn().mockReturnValue({ returning });
 			const db = {
 				_: { fullSchema: { user: userTable }, relations: {} },
@@ -220,9 +222,10 @@ describe("drizzle-adapter", () => {
 					{ name: "Bob", email: "bob@example.com", emailVerified: false },
 				],
 			});
-			expect(values).toHaveBeenCalledTimes(2);
-			expect(values.mock.calls[0]?.[0]).not.toHaveProperty("id");
-			expect(values.mock.calls[1]?.[0]).not.toHaveProperty("id");
+			expect(values).toHaveBeenCalledTimes(1);
+			expect(values.mock.calls[0]?.[0]).toHaveLength(2);
+			expect(values.mock.calls[0]?.[0][0]).not.toHaveProperty("id");
+			expect(values.mock.calls[0]?.[0][1]).not.toHaveProperty("id");
 		},
 	);
 
@@ -350,13 +353,9 @@ describe("drizzle-adapter", () => {
 	);
 
 	it.for(adapterFactories)(
-		"createMany does not require a MySQL transaction when falling back to sequential inserts on $relations",
+		"createMany reads MySQL rows back without a transaction on $relations",
 		async ({ createAdapter }) => {
 			const execute = vi.fn().mockResolvedValue(undefined);
-			const selectExecute = vi
-				.fn()
-				.mockResolvedValueOnce([{ id: "a", name: "Ada" }])
-				.mockResolvedValueOnce([{ id: "b", name: "Bob" }]);
 			const db = {
 				_: { fullSchema: { user: userTable }, relations: {} },
 				insert: vi.fn().mockReturnValue({
@@ -364,11 +363,10 @@ describe("drizzle-adapter", () => {
 				}),
 				select: vi.fn().mockReturnValue({
 					from: vi.fn().mockReturnValue({
-						where: vi.fn().mockReturnValue({
-							limit: vi.fn().mockReturnValue({
-								execute: selectExecute,
-							}),
-						}),
+						where: vi.fn().mockResolvedValue([
+							{ id: "b", name: "Bob" },
+							{ id: "a", name: "Ada" },
+						]),
 					}),
 				}),
 			} as any;
@@ -378,14 +376,14 @@ describe("drizzle-adapter", () => {
 				data: createManyRows,
 				forceAllowId: true,
 			});
-			expect(db.insert).toHaveBeenCalledTimes(2);
-			expect(execute).toHaveBeenCalledTimes(2);
+			expect(db.insert).toHaveBeenCalledTimes(1);
+			expect(execute).toHaveBeenCalledTimes(1);
 			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
 		},
 	);
 
 	it.for(adapterFactories)(
-		"createMany inserts mixed-key MySQL rows in one $relations transaction",
+		"createMany inserts mixed-key MySQL rows sequentially on $relations",
 		async ({ createAdapter }) => {
 			const insertExecute = vi.fn().mockResolvedValue(undefined);
 			const trx = {
@@ -394,16 +392,22 @@ describe("drizzle-adapter", () => {
 				}),
 				select: vi.fn().mockReturnValue({
 					from: vi.fn().mockReturnValue({
-						where: vi
-							.fn()
-							.mockResolvedValueOnce([{ id: "a" }])
-							.mockResolvedValueOnce([{ id: "b" }]),
+						where: vi.fn().mockReturnValue({
+							limit: vi.fn().mockReturnValue({
+								execute: vi
+									.fn()
+									.mockResolvedValueOnce([{ id: "a" }])
+									.mockResolvedValueOnce([{ id: "b" }]),
+							}),
+						}),
 					}),
 				}),
 			};
 			const db = {
 				_: { fullSchema: { user: userTable }, relations: {} },
-				insert: vi.fn(),
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ execute: insertExecute }),
+				}),
 				select: vi.fn(),
 				transaction: vi.fn((cb: (tx: typeof trx) => Promise<unknown>) =>
 					cb(trx),
@@ -418,9 +422,8 @@ describe("drizzle-adapter", () => {
 				],
 				forceAllowId: true,
 			});
-			expect(db.transaction).toHaveBeenCalledTimes(1);
-			expect(trx.insert).toHaveBeenCalledTimes(2);
-			expect(db.insert).not.toHaveBeenCalled();
+			expect(db.insert).toHaveBeenCalledTimes(2);
+			expect(db.transaction).toHaveBeenCalledTimes(2);
 			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
 		},
 	);
@@ -454,7 +457,9 @@ describe("drizzle-adapter", () => {
 						{ name: "Ada", email: "ada@example.com", emailVerified: false },
 					],
 				}),
-			).rejects.toThrow(/createMany could not read back inserted "user" row/);
+			).rejects.toThrow(
+				/createMany could not read back an inserted "user" row/,
+			);
 			expect(execute).toHaveBeenCalledTimes(1);
 		},
 	);

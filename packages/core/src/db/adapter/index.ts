@@ -166,6 +166,37 @@ export interface DBAdapterFactoryConfig<
 	 */
 	createManyMaxRows?: number | undefined;
 	/**
+	 * How many bound parameters one `createMany` row uses.
+	 *
+	 * Defaults to the number of distinct keys in the batch. Adapters that
+	 * bind omitted table defaults should count every physical column.
+	 */
+	createManyColumnCount?:
+		| ((args: {
+				model: string;
+				modelKey: string;
+				rows: Record<string, unknown>[];
+		  }) => number)
+		| undefined;
+	/**
+	 * Native `createMany` returns rows in the same order as `data`.
+	 *
+	 * When true, Better Auth trusts the driver result instead of matching
+	 * ids. Required for bulk inserts of database-generated ids.
+	 *
+	 * @default false
+	 */
+	createManyPreservesInsertOrder?: boolean | undefined;
+	/**
+	 * Native `createMany` can return generated ids for rows that omit `id`.
+	 *
+	 * Set this only when `createManyPreservesInsertOrder` is also true.
+	 * Otherwise Better Auth inserts those rows with sequential `create`.
+	 *
+	 * @default false
+	 */
+	createManyBulkGeneratedIds?: boolean | undefined;
+	/**
 	 * Disable id generation for the `create` method.
 	 *
 	 * This is useful for databases that don't support custom id values and would auto-generate them for you.
@@ -612,8 +643,8 @@ export interface CustomAdapter {
 	 *
 	 * Rows usually already include `id`. When the user uses serial or
 	 * database-generated ids, `id` may be omitted — still return each
-	 * generated id. Do not split `data`; Better Auth chunks large batches
-	 * using `createManyMaxParameters`.
+	 * generated id in the same order as `data`. Do not split `data`;
+	 * Better Auth chunks large batches using `createManyMaxParameters`.
 	 */
 	createMany?: <T extends Record<string, any>>(
 		data: ModelTarget & {
@@ -752,6 +783,7 @@ export interface DBAdapterInstance<
 	(options: BetterAuthOptions): DBAdapter<Options>;
 }
 
+export * from "./create-many";
 export * from "./factory";
 export * from "./types";
 export * from "./utils";

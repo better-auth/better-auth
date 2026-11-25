@@ -471,6 +471,150 @@ describe("createAdapterFactory createMany", () => {
 		expect(createMany.mock.calls[0]?.[0].select).toEqual(["id", "name"]);
 	});
 
+	it("does not forward an empty select list", async () => {
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[]; select?: string[] }) =>
+				data,
+		);
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				createMany: createMany as CustomAdapter["createMany"],
+			}),
+		});
+
+		await adapter.createMany({
+			model: "user",
+			data: [{ name: "Ada", email: "ada@example.com", emailVerified: false }],
+			select: [],
+		});
+
+		expect(createMany.mock.calls[0]?.[0].select).toBeUndefined();
+	});
+
+	it("uses sequential create for generated ids unless the adapter can return them in bulk", async () => {
+		const create = vi.fn(async ({ data }: { data: Record<string, any> }) => ({
+			...data,
+			id: "generated",
+		}));
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const sequential = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				disableTransformInput: true,
+				disableTransformOutput: true,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					create: create as CustomAdapter["create"],
+					createMany: createMany as CustomAdapter["createMany"],
+				}),
+		})({
+			advanced: { database: { generateId: false } },
+		});
+		const bulk = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				disableTransformInput: true,
+				disableTransformOutput: true,
+				createManyPreservesInsertOrder: true,
+				createManyBulkGeneratedIds: true,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					create: create as CustomAdapter["create"],
+					createMany: createMany as CustomAdapter["createMany"],
+				}),
+		})({
+			advanced: { database: { generateId: false } },
+		});
+		const rows = [
+			{ name: "Ada", email: "ada@example.com", emailVerified: false },
+			{ name: "Bob", email: "bob@example.com", emailVerified: false },
+		];
+
+		await sequential.createMany({ model: "user", data: rows });
+		expect(create).toHaveBeenCalledTimes(2);
+		expect(createMany).not.toHaveBeenCalled();
+
+		create.mockClear();
+		createMany.mockClear();
+		await bulk.createMany({ model: "user", data: rows });
+		expect(create).not.toHaveBeenCalled();
+		expect(createMany).toHaveBeenCalledTimes(1);
+		expect(createMany.mock.calls[0]?.[0].data).toHaveLength(2);
+	});
+
+	it("uses sequential create for mixed-key batches", async () => {
+		const create = vi.fn(
+			async ({ data }: { data: Record<string, any> }) => data,
+		);
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				disableTransformInput: true,
+				disableTransformOutput: true,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					create: create as CustomAdapter["create"],
+					createMany: createMany as CustomAdapter["createMany"],
+				}),
+		})({});
+
+		await adapter.createMany({
+			model: "user",
+			data: [
+				{ id: "a", name: "Ada", email: "ada@example.com" },
+				{ id: "b", image: "https://example.com/b.png" },
+			],
+			forceAllowId: true,
+		});
+
+		expect(create).toHaveBeenCalledTimes(2);
+		expect(createMany).not.toHaveBeenCalled();
+	});
+
+	it("chunks with createManyColumnCount when the adapter binds omitted defaults", async () => {
+		const createMany = vi.fn(
+			async ({ data }: { data: Record<string, any>[] }) => data,
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				disableTransformInput: true,
+				disableTransformOutput: true,
+				createManyMaxParameters: 12,
+				createManyColumnCount: () => 8,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					createMany: createMany as CustomAdapter["createMany"],
+				}),
+		})({});
+
+		await adapter.createMany({
+			model: "user",
+			data: [
+				{ id: "a", name: "Ada" },
+				{ id: "b", name: "Bob" },
+			],
+			forceAllowId: true,
+		});
+
+		expect(createMany).toHaveBeenCalledTimes(2);
+		expect(createMany.mock.calls[0]?.[0].data).toHaveLength(1);
+		expect(createMany.mock.calls[1]?.[0].data).toHaveLength(1);
+	});
+
 	it("deletes ignored ids when input transformation is disabled", async () => {
 		const createMany = vi.fn(
 			async ({ data }: { data: Record<string, any>[] }) => data,
@@ -481,6 +625,8 @@ describe("createAdapterFactory createMany", () => {
 				adapterName: "Test Adapter",
 				disableTransformInput: true,
 				disableTransformOutput: true,
+				createManyPreservesInsertOrder: true,
+				createManyBulkGeneratedIds: true,
 			},
 			adapter: () =>
 				createCustomAdapter({
@@ -599,7 +745,7 @@ describe("createAdapterFactory createMany", () => {
 		expect(created[count - 1]?.id).toBe(`row-${count - 1}`);
 	});
 
-	it("chunks from the union of keys, not the widest single row", async () => {
+	it("chunks native createMany from the number of keys on uniform rows", async () => {
 		const createMany = vi.fn(
 			async ({ data }: { data: Record<string, any>[] }) => data,
 		);
@@ -621,14 +767,13 @@ describe("createAdapterFactory createMany", () => {
 			model: "user",
 			data: [
 				{ id: "a", name: "Ada", email: "ada@example.com" },
-				{ id: "b", image: "https://example.com/b.png" },
+				{ id: "b", name: "Bob", email: "bob@example.com" },
 			],
 			forceAllowId: true,
 		});
 
-		expect(createMany).toHaveBeenCalledTimes(2);
-		expect(createMany.mock.calls[0]?.[0].data).toHaveLength(1);
-		expect(createMany.mock.calls[1]?.[0].data).toHaveLength(1);
+		expect(createMany).toHaveBeenCalledTimes(1);
+		expect(createMany.mock.calls[0]?.[0].data).toHaveLength(2);
 	});
 
 	it("splits a user-shaped batch of 15 rows at the D1 bind limit and keeps it in one statement on SQLite", async () => {

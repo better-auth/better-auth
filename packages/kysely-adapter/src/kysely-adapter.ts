@@ -8,7 +8,10 @@ import type {
 	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	createAdapterFactory,
+	orderRowsByIds,
+} from "@better-auth/core/db/adapter";
 import {
 	checksSchema,
 	createSchemaCheck,
@@ -43,69 +46,6 @@ function createManyMaxParametersForType(
 	if (type === "postgres" || type === "mysql") return 65535;
 	if (type === "mssql") return 2099;
 	return undefined;
-}
-
-function rowsShareKeys(rows: Record<string, unknown>[]): boolean {
-	const first = rows[0];
-	if (!first || rows.length < 2) return true;
-	const expected = new Set(Object.keys(first));
-	return rows.every((row) => {
-		const keys = Object.keys(row);
-		return (
-			keys.length === expected.size && keys.every((key) => expected.has(key))
-		);
-	});
-}
-
-const uuidPattern =
-	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function rowId<T extends Record<string, unknown>>(
-	row: T,
-	idField: string,
-): string {
-	return String(row[idField] ?? row.id);
-}
-
-function uuidKey(id: unknown): string | undefined {
-	const value = String(id);
-	return uuidPattern.test(value) ? value.toLowerCase() : undefined;
-}
-
-function orderInsertedRowsById<T extends Record<string, unknown>>(
-	ids: unknown[],
-	rows: T[],
-	idField: string,
-	model: string,
-): T[] {
-	const byExactId = new Map<string, T>();
-	const byUuid = new Map<string, T>();
-	const ambiguousUuids = new Set<string>();
-
-	for (const row of rows) {
-		const exact = rowId(row, idField);
-		byExactId.set(exact, row);
-		const normalized = uuidKey(exact);
-		if (!normalized || ambiguousUuids.has(normalized)) continue;
-		const existing = byUuid.get(normalized);
-		if (existing && rowId(existing, idField) !== exact) {
-			byUuid.delete(normalized);
-			ambiguousUuids.add(normalized);
-			continue;
-		}
-		byUuid.set(normalized, row);
-	}
-
-	return ids.map((id) => {
-		const exact = String(id);
-		const row = byExactId.get(exact) ?? byUuid.get(uuidKey(id) ?? "");
-		if (!row) {
-			throw new BetterAuthError(
-				`[Kysely Adapter] createMany could not read back inserted "${model}" row ${String(id)}.`,
-			);
-		}
-		return row;
-	});
 }
 
 interface KyselyAdapterConfig {
@@ -716,25 +656,6 @@ export const kyselyAdapter = (
 					const encoded = data.map((row) => encodeJSONArrays(modelKey, row));
 					const idField = getFieldName({ model: modelKey, field: "id" });
 					const ids = encoded.map((row) => row[idField] ?? row.id);
-					const hasAllIds = ids.every((id) => id !== undefined && id !== null);
-					const createSequentially = async () => {
-						const created: T[] = [];
-						for (const row of encoded) {
-							created.push(
-								(await withReturning(
-									row,
-									db.insertInto(model).values(row),
-									model,
-									modelKey,
-									[],
-								)) as T,
-							);
-						}
-						return created;
-					};
-					if (!hasAllIds || !rowsShareKeys(encoded)) {
-						return createSequentially();
-					}
 					if (config?.type === "mysql") {
 						const insertAndReadBack = async (trx: Kysely<any>) => {
 							await trx.insertInto(model).values(encoded).execute();
@@ -743,7 +664,7 @@ export const kyselyAdapter = (
 								.selectAll()
 								.where(idField, "in", ids)
 								.execute();
-							return orderInsertedRowsById(ids, rows, idField, model) as T[];
+							return orderRowsByIds(ids, rows, idField, model) as T[];
 						};
 						if (inTransaction) {
 							return insertAndReadBack(db);
@@ -751,7 +672,7 @@ export const kyselyAdapter = (
 						if (typeof db.transaction === "function") {
 							return db.transaction().execute(insertAndReadBack);
 						}
-						return createSequentially();
+						return insertAndReadBack(db);
 					}
 					if (config?.type === "mssql") {
 						const rows = await db
@@ -759,14 +680,13 @@ export const kyselyAdapter = (
 							.values(encoded)
 							.outputAll("inserted")
 							.execute();
-						return orderInsertedRowsById(ids, rows, idField, model) as T[];
+						return orderRowsByIds(ids, rows, idField, model) as T[];
 					}
-					const rows = await db
+					return (await db
 						.insertInto(model)
 						.values(encoded)
 						.returningAll()
-						.execute();
-					return orderInsertedRowsById(ids, rows, idField, model) as T[];
+						.execute()) as T[];
 				},
 				async findOne({ model, modelKey = model, where, select, join }) {
 					const { and, or } = convertWhereClause(model, modelKey, where);
@@ -1212,6 +1132,10 @@ export const kyselyAdapter = (
 				config?.createManyMaxParameters,
 			),
 			createManyMaxRows: config?.type === "mssql" ? 1000 : undefined,
+			createManyPreservesInsertOrder:
+				config?.type !== "mysql" && config?.type !== "mssql",
+			createManyBulkGeneratedIds:
+				config?.type !== "mysql" && config?.type !== "mssql",
 			supportsBooleans:
 				config?.type === "sqlite" ||
 				config?.type === "mssql" ||

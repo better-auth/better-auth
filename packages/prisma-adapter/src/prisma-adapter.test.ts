@@ -1106,8 +1106,8 @@ describe("prisma-adapter", () => {
 			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
 		});
 
-		it("reorders createManyAndReturn rows to match input order", async () => {
-			const createManyAndReturn = vi.fn(async () => [...rows].reverse());
+		it("keeps createManyAndReturn driver order", async () => {
+			const createManyAndReturn = vi.fn(async () => rows);
 			const adapter = prismaAdapter(
 				{
 					$transaction: vi.fn(),
@@ -1134,8 +1134,8 @@ describe("prisma-adapter", () => {
 			const adaId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
 			const bobId = "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB";
 			const createManyAndReturn = vi.fn(async () => [
-				{ id: bobId.toLowerCase(), name: "Bob" },
 				{ id: adaId.toLowerCase(), name: "Ada" },
+				{ id: bobId.toLowerCase(), name: "Bob" },
 			]);
 			const adapter = prismaAdapter(
 				{
@@ -1177,8 +1177,8 @@ describe("prisma-adapter", () => {
 			const upperId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
 			const lowerId = upperId.toLowerCase();
 			const createManyAndReturn = vi.fn(async () => [
-				{ id: lowerId, name: "Lower" },
 				{ id: upperId, name: "Upper" },
+				{ id: lowerId, name: "Lower" },
 			]);
 			const adapter = prismaAdapter(
 				{
@@ -1215,14 +1215,11 @@ describe("prisma-adapter", () => {
 			expect(created.map((row) => row.name)).toEqual(["Upper", "Lower"]);
 		});
 
-		it("restores input order when the caller select omits id", async () => {
+		it("forwards a caller select that omits id", async () => {
 			const createManyAndReturn = vi.fn(
 				async ({ select }: { select?: Record<string, boolean> }) => {
-					expect(select === undefined || select.id === true).toBe(true);
-					return [
-						{ id: "b", name: "Bob" },
-						{ id: "a", name: "Ada" },
-					];
+					expect(select).toEqual({ name: true });
+					return [{ name: "Ada" }, { name: "Bob" }];
 				},
 			);
 			const adapter = prismaAdapter(
@@ -1253,15 +1250,15 @@ describe("prisma-adapter", () => {
 					expect(select).toBeUndefined();
 					return [
 						{
-							id: "b",
-							name: "Bob",
-							email: "bob@example.com",
-							emailVerified: false,
-						},
-						{
 							id: "a",
 							name: "Ada",
 							email: "ada@example.com",
+							emailVerified: false,
+						},
+						{
+							id: "b",
+							name: "Bob",
+							email: "bob@example.com",
 							emailVerified: false,
 						},
 					];
@@ -1293,16 +1290,14 @@ describe("prisma-adapter", () => {
 			]);
 		});
 
-		it("does not use createManyAndReturn when ids are generated", async () => {
-			const createManyAndReturn = vi.fn(async () => {
-				throw new Error("createManyAndReturn should not be used");
-			});
-			const create = vi.fn(
-				async ({ data }: { data: Record<string, unknown> }) => ({
-					id: "generated",
-					...data,
-				}),
+		it("uses createManyAndReturn for generated ids", async () => {
+			const createManyAndReturn = vi.fn(
+				async ({ data }: { data: Record<string, unknown>[] }) => [
+					{ id: "generated-a", name: "Ada" },
+					{ id: "generated-b", name: "Bob" },
+				],
 			);
+			const create = vi.fn();
 			const adapter = prismaAdapter(
 				{
 					$transaction: vi.fn(),
@@ -1326,8 +1321,9 @@ describe("prisma-adapter", () => {
 				],
 			});
 
-			expect(createManyAndReturn).not.toHaveBeenCalled();
-			expect(create).toHaveBeenCalledTimes(2);
+			expect(createManyAndReturn).toHaveBeenCalledTimes(1);
+			expect(createManyAndReturn.mock.calls[0]?.[0].data).toHaveLength(2);
+			expect(create).not.toHaveBeenCalled();
 		});
 
 		it("reads MySQL rows back in the same transaction as the insert", async () => {

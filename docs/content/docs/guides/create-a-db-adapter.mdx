@@ -206,9 +206,9 @@ parameters:
 
 Rows usually already include an `id`. When the user uses serial or database-generated IDs, `id` may be missing — still return each generated `id`.
 
-If your database returns rows in a different order than `data`, reorder them before returning. If you insert and then query the new rows, run both in one transaction.
+If your database preserves insert order (for example PostgreSQL or SQLite `RETURNING`), return the driver rows as-is. If it does not (MySQL `IN (...)`, SQL Server `OUTPUT`), reorder them to match `data`. If you insert and then query the new rows, run both in one transaction.
 
-Do not split `data` yourself. Better Auth already chunks large batches using [`createManyMaxParameters`](#createmanymaxparameters).
+Do not split `data` yourself. Better Auth already chunks large batches, inserts mixed-key rows one at a time, and uses sequential `create` when generated ids cannot be returned in bulk.
 
 <Callout>
   `forceAllowId` is handled internally, the same as `create`. You do not need to implement it.
@@ -599,7 +599,9 @@ const adapter = myAdapter({
 
 The maximum number of bound parameters your database allows in one insert. Better Auth splits large `createMany` batches so they stay at or below this limit. You do not need to chunk inserts in your `createMany` method.
 
-The limit is on parameters, not rows. A bulk insert binds one parameter per column per row, so `INSERT INTO user (id, name, email) VALUES (?, ?, ?), (?, ?, ?)` uses 6 parameters for 2 rows. Better Auth sizes each chunk as `createManyMaxParameters / columnCount`, which means wider rows produce smaller chunks. Column count is the number of distinct keys in the batch, including optional fields that appear on only some rows.
+The limit is on parameters, not rows. A bulk insert binds one parameter per column per row, so `INSERT INTO user (id, name, email) VALUES (?, ?, ?), (?, ?, ?)` uses 6 parameters for 2 rows. Better Auth sizes each chunk as `createManyMaxParameters / columnCount`, which means wider rows produce smaller chunks. Column count defaults to the number of distinct keys in the batch. Adapters that bind omitted table defaults can set `createManyColumnCount` to the physical column count.
+
+Set `createManyPreservesInsertOrder` when native `createMany` returns rows in input order. Set `createManyBulkGeneratedIds` as well when it can return database-generated ids for rows that omit `id`.
 
 SQL Server also rejects a single `INSERT ... VALUES` statement with more than 1000 rows, even when the parameter count is under 2099. Built-in SQL Server adapters set `createManyMaxRows` to 1000 so those batches are split.
 

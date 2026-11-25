@@ -171,6 +171,8 @@ export const memoryAdapter = (
 				usePlural: false,
 				debugLogs: config?.debugLogs || false,
 				createManyMaxParameters: Number.MAX_SAFE_INTEGER,
+				createManyPreservesInsertOrder: true,
+				createManyBulkGeneratedIds: true,
 				supportsArrays: true,
 				transaction: async (cb) => {
 					// Copy-on-write isolation: run the callback against a clone, then

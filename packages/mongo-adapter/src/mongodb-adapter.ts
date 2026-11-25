@@ -1078,6 +1078,8 @@ export const mongodbAdapter = (
 			usePlural: config?.usePlural ?? false,
 			debugLogs: config?.debugLogs ?? false,
 			createManyMaxParameters: 100000,
+			createManyPreservesInsertOrder: true,
+			createManyBulkGeneratedIds: true,
 			mapKeysTransformInput: {
 				id: "_id",
 			},
