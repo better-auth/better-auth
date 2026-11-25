@@ -5,7 +5,7 @@ import type {
 	HookEndpointContext,
 } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import type { BetterAuthPlugin } from "better-auth";
@@ -77,17 +77,24 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		const identifier = generateRandomString(32, "a-z", "A-Z", "0-9");
 		const codeExpiresInMs = opts.codeExpiresIn * 1000;
 		const expiresAt = new Date(Date.now() + codeExpiresInMs);
-		await ctx.context.internalAdapter.createVerificationValue({
-			identifier: `electron:${identifier}`,
-			value: JSON.stringify({
-				userId: source.user.id,
-				// A later hook can still revoke this session (e.g. a pending second factor).
-				sourceSessionTokenHash: await hashSessionToken(source.session.token),
-				codeChallenge: code_challenge,
-				state,
-			}),
-			expiresAt,
-		});
+		const verification =
+			await ctx.context.internalAdapter.createVerificationValue({
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: source.user.id,
+					// A later hook can still revoke this session (e.g. a pending second factor).
+					sourceSessionTokenHash: await hashSessionToken(source.session.token),
+					codeChallenge: code_challenge,
+					state,
+				}),
+				expiresAt,
+			});
+		if (!verification) {
+			throw APIError.from(
+				"INTERNAL_SERVER_ERROR",
+				BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+			);
+		}
 
 		const redirectToken = base64Url.encode(
 			new TextEncoder().encode(JSON.stringify({ identifier, state })),

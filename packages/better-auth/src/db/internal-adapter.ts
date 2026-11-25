@@ -1409,7 +1409,7 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 			);
-			return verification as Verification;
+			return verification as Verification | null;
 		},
 		findVerificationValue: async (identifier: string) => {
 			const storageOption = getStorageOption(

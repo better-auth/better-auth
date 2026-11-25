@@ -123,7 +123,7 @@ export async function issueOTP(
 	opts: RequiredEmailOTPOptions,
 	identifier: string,
 	data: Parameters<RequiredEmailOTPOptions["generateOTP"]>[0],
-): Promise<string> {
+): Promise<string | null> {
 	const otp = opts.generateOTP(data, ctx) || defaultOTPGenerator(opts);
 	const verification = {
 		value: `${await storeOTP(ctx, opts, otp)}:0`,
@@ -132,7 +132,9 @@ export async function issueOTP(
 	};
 	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
 	const stored = await createOrFindVerification(ctx, verification);
-	if (!stored || stored.value === verification.value) return otp;
+	// A verification.create.before hook can veto the create by returning false.
+	if (!stored) return null;
+	if (stored.value === verification.value) return otp;
 
 	const reused = await tryReuseOTP(ctx, opts, identifier);
 	if (reused) return reused;
