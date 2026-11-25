@@ -1,8 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
+import type { AuthContext } from "@better-auth/core";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { getAdapter } from "../db/adapter-kysely";
-import { jwt } from "../plugins";
+import { admin, jwt } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
@@ -1848,6 +1849,97 @@ describe("base context creation", () => {
 			});
 
 			expect(ctx.internalAdapter).toBeDefined();
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12711
+		 */
+		it("should run plugin database hooks through the internal adapter a plugin received in init", async () => {
+			let initAdapter: AuthContext["internalAdapter"] | undefined;
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "captures-internal-adapter",
+						init(ctx) {
+							initAdapter = ctx.internalAdapter;
+						},
+					},
+					admin(),
+				],
+			});
+			if (!initAdapter) {
+				throw new Error("plugin init did not receive an internal adapter");
+			}
+
+			const user = await initAdapter.createUser<{ role?: string }>(
+				{
+					email: "init-adapter@example.com",
+					name: "Init Adapter",
+					emailVerified: false,
+				},
+				{ method: "test" },
+			);
+			// admin()'s defaultRole hook only runs if plugin hooks reach this adapter
+			expect(user.role).toBe("user");
+			expect(initAdapter).toBe(ctx.internalAdapter);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12711
+		 */
+		it("should run plugin and user database hooks in order through an adapter kept by a later plugin", async () => {
+			const calls: string[] = [];
+			let initAdapter: AuthContext["internalAdapter"] | undefined;
+			await initBase({
+				databaseHooks: {
+					user: {
+						create: {
+							before: async () => {
+								calls.push("user");
+							},
+						},
+					},
+				},
+				plugins: [
+					{
+						id: "registers-hook",
+						init() {
+							return {
+								options: {
+									databaseHooks: {
+										user: {
+											create: {
+												before: async () => {
+													calls.push("plugin");
+												},
+											},
+										},
+									},
+								},
+							};
+						},
+					},
+					{
+						id: "captures-internal-adapter",
+						init(ctx) {
+							initAdapter = ctx.internalAdapter;
+						},
+					},
+				],
+			});
+			if (!initAdapter) {
+				throw new Error("plugin init did not receive an internal adapter");
+			}
+
+			await initAdapter.createUser(
+				{
+					email: "init-adapter-order@example.com",
+					name: "Init Adapter Order",
+					emailVerified: false,
+				},
+				{ method: "test" },
+			);
+			expect(calls).toEqual(["plugin", "user"]);
 		});
 	});
 

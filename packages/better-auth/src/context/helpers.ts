@@ -21,6 +21,7 @@ import {
 } from "../utils/url";
 
 export async function runPluginInit(context: AuthContext) {
+	const initialInternalAdapter = context.internalAdapter;
 	let options = context.options;
 	const plugins = options.plugins || [];
 	const pluginTrustedOrigins: NonNullable<
@@ -88,12 +89,19 @@ export async function runPluginInit(context: AuthContext) {
 		dbHooks.push({ source: "user", hooks: options.databaseHooks });
 	}
 
-	context.internalAdapter = createInternalAdapter(context.adapter, {
+	const internalAdapter = createInternalAdapter(context.adapter, {
 		options,
 		logger: context.logger,
 		hooks: dbHooks,
 		generateId: context.generateId,
 	});
+	// Plugins may keep the internal adapter they received in `init`. Update that
+	// object in place so it runs the plugin database hooks collected above,
+	// the same as `ctx.context.internalAdapter` in endpoints.
+	context.internalAdapter = Object.assign(
+		initialInternalAdapter,
+		internalAdapter,
+	);
 	context.options = options;
 }
 
