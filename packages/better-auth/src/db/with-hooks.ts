@@ -106,8 +106,10 @@ export function getWithHooks(
 		model: BaseModelNames,
 		customUpdateFn?:
 			| {
-					fn: (data: Record<string, any>) => void | Promise<any>;
+					fn?: (data: Record<string, any>) => void | Promise<any>;
 					executeMainFn?: boolean;
+					/** Runs after a successful update and before the `update.after` hooks. */
+					onUpdated?: (updated: T) => Promise<void>;
 			  }
 			| undefined,
 	) {
@@ -141,7 +143,7 @@ export function getWithHooks(
 			}
 		}
 
-		const customUpdated = customUpdateFn
+		const customUpdated = customUpdateFn?.fn
 			? await customUpdateFn.fn(actualData)
 			: null;
 
@@ -153,6 +155,9 @@ export function getWithHooks(
 						where,
 					})
 				: customUpdated;
+		if (updated && customUpdateFn?.onUpdated) {
+			await customUpdateFn.onUpdated(updated);
+		}
 
 		for (const { source, hooks } of hooksEntries) {
 			const toRun = hooks[model]?.update?.after;

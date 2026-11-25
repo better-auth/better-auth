@@ -1802,15 +1802,20 @@ export const createInternalAdapter = (
 				);
 			}
 			// The database decides whether the update happened, so the cached copy
-			// changes only after it does.
-			const updated = await updateWithHooks<Verification>(
+			// changes only after it does, and before after hooks read it.
+			return updateWithHooks<Verification>(
 				data,
 				[{ field: "identifier", value: storedIdentifier }],
 				"verification",
-				undefined,
+				secondaryStorage
+					? {
+							executeMainFn: true,
+							async onUpdated(updated) {
+								await writeCache(updated);
+							},
+						}
+					: undefined,
 			);
-			if (updated) await writeCache(updated);
-			return updated;
 		},
 		refreshUserSessions,
 	};
