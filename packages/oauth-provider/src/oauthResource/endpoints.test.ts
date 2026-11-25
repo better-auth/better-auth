@@ -451,7 +451,7 @@ describe("client/resource linking", () => {
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/12357
- * @see https://github.com/better-auth/better-auth/pull/12853
+ * @see https://github.com/better-auth/better-auth/issues/12314
  */
 describe("ORM-wrapped database errors", () => {
 	// Drizzle wraps the driver error and puts the query params in its own
