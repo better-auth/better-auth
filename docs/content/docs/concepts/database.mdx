@@ -174,6 +174,8 @@ betterAuth({
 });
 ```
 
+When verification values live only in secondary storage, one-time codes count attempts under separate `increment` keys. `SecondaryStorage` has no conditional delete, so if a new code is sent at the moment a correct guess consumes the previous one, the new code can be removed too and the user needs to request another. To avoid this, set [`verification.storeInDatabase: true`](/docs/reference/options#verification).
+
 ### Redis Storage
 
 For most applications, we recommend using the official Redis storage package,
@@ -885,6 +887,8 @@ There are two types of hooks you can define:
   * Endpoints whose reply hides whether an account exists, such as password reset and the email OTP and phone number reset requests, send nothing and return their usual reply.
   * The OAuth authorization endpoint redirects to the client with `error=server_error`.
   * Optional records, such as a trusted device or the `set-ott` header on sign-in, are skipped, and sign-in still succeeds.
+
+OTP verification in the email OTP, phone number, and two-factor plugins also updates the `verification` row to count each attempt. The `update` hooks receive the stored value as `<code>:<attempts>`, with the code hashed or encrypted when the plugin's `storeOTP` option asks for it. If `update.before` returns `false`, the attempt isn't counted and the guess fails with a server error without being compared. With [secondary storage](#secondary-storage) only, attempts are counted outside the row and these hooks don't run.
 
 #### 2. After Hook
 

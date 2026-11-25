@@ -38,10 +38,19 @@ function isExpired(verification: Verification) {
 	return new Date(verification.expiresAt).getTime() <= Date.now();
 }
 
-// Rounds up so an attempt count never expires before its code.
-function ttlSeconds(expiresAt: Date) {
+/**
+ * An attempt count outlives its code by one more lifetime. A reuse resend
+ * that raced the first counted guess can extend the code once before it sees
+ * the count, and `increment` sets the expiry only when it creates the key.
+ */
+function attemptCountTtl(verification: Verification) {
+	const expiresAt = new Date(verification.expiresAt).getTime();
+	const remaining = Math.ceil((expiresAt - Date.now()) / 1000);
+	const lifetime = Math.ceil(
+		(expiresAt - new Date(verification.createdAt).getTime()) / 1000,
+	);
 	return Math.max(
-		Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000),
+		remaining + (Number.isFinite(lifetime) ? lifetime : remaining),
 		1,
 	);
 }
@@ -109,7 +118,7 @@ async function verifyInSecondaryStorage(
 
 	const [code, attemptsInValue] = splitVerificationAttempts(stored.value);
 	const keys = await attemptKeys(key, stored);
-	const ttl = ttlSeconds(stored.expiresAt);
+	const ttl = attemptCountTtl(stored);
 	const readCount = async (key: string) =>
 		Number((await storage.get(key)) ?? 0) || 0;
 	// The code stays stored, since a request holding the last attempt may
@@ -123,16 +132,21 @@ async function verifyInSecondaryStorage(
 	) {
 		return { status: "exhausted" };
 	}
+	// The claim itself is the bound. A refused claim returns the attempt it
+	// took, so a request that passed the read above alongside a check that
+	// keeps the code cannot leave the follow-up call without one.
 	const counted = Number(await storage.increment(keys.counted, ttl));
 	const returned = await readCount(keys.returned);
 	if (attemptsInValue + counted - returned > allowedAttempts) {
+		await storage.increment(keys.returned, ttl);
 		return { status: "exhausted" };
 	}
 
 	if (!(await matches(code))) return { status: "invalid" };
+	// A slow comparison can outlast the code.
+	if (isExpired(stored)) return { status: "expired" };
 
 	if (keep) {
-		if (isExpired(stored)) return { status: "expired" };
 		const current = hydrate(await storage.get(key));
 		if (!current || !isSameCode(current, stored)) {
 			return { status: "superseded" };
@@ -141,9 +155,15 @@ async function verifyInSecondaryStorage(
 		return { status: "verified", verification: stored };
 	}
 
+	// A code sent during the comparison replaced this one, so it stays.
+	const current = hydrate(await storage.get(key));
+	if (!current || !isSameCode(current, stored)) {
+		return { status: "superseded" };
+	}
 	const taken = hydrate(await storage.getAndDelete(key));
-	// A code sent since the read was taken instead. It is dropped rather than
-	// written back, since writing back could revive a code that was used.
+	// Without a conditional delete, a code sent between these two calls is
+	// taken instead. It is dropped rather than written back, since writing back
+	// could revive a code that was used.
 	if (!taken || !isSameCode(taken, stored)) return { status: "superseded" };
 	await Promise.all(
 		identifiers
@@ -220,6 +240,7 @@ async function verifyInDatabase(
 						where: [
 							{ field: "id", value: target.id },
 							{ field: "value", value: target.value },
+							{ field: "expiresAt", operator: "gt", value: new Date() },
 						],
 					});
 				},
@@ -248,8 +269,8 @@ async function verifyInDatabase(
 
 	let row: Verification = latest;
 	const [code] = splitVerificationAttempts(row.value);
-	let claimed: Verification | null = null;
-	for (let retry = 0; !claimed; retry++) {
+	let claimed: Verification;
+	for (let retry = 0; ; retry++) {
 		if (isExpired(row)) return { status: "expired" };
 		const [, attempts] = splitVerificationAttempts(row.value);
 		// The code stays stored, since a request holding the last attempt may
@@ -270,12 +291,13 @@ async function verifyInDatabase(
 	await invalidateCache();
 
 	if (!(await matches(code))) return { status: "invalid" };
+	// A slow comparison can outlast the code.
+	if (isExpired(claimed)) return { status: "expired" };
 
 	if (!keep) {
 		const taken = await consume(claimed, code);
-		return taken
-			? { status: "verified", verification: taken }
-			: { status: "superseded" };
+		if (taken) return { status: "verified", verification: taken };
+		return { status: isExpired(claimed) ? "expired" : "superseded" };
 	}
 
 	let current: Verification | null = claimed;

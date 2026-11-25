@@ -1257,13 +1257,200 @@ describe("email OTP attempts counted in place", () => {
 			);
 			const email = testUser.email;
 			await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
-			const stored = () =>
+			const readStoredOtp = () =>
 				auth.api.getVerificationOTP({ query: { email, type: "sign-in" } });
-			expect((await stored()).otp).toBe("222222");
+			expect((await readStoredOtp()).otp).toBe("222222");
 
 			await client.signIn.emailOtp({ email, otp: "000000" });
 
-			expect((await stored()).otp).toBeNull();
+			expect((await readStoredOtp()).otp).toBeNull();
 		},
 	);
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11105
+ */
+describe("email OTP resent while it is verified", () => {
+	it("keeps a code sent while a correct guess against the previous one is compared in secondary storage", async () => {
+		const codes = ["111111", "222222"];
+		let holdNext = false;
+		let releaseCheck: () => void = () => {};
+		const checkReleased = new Promise<void>((resolve) => {
+			releaseCheck = resolve;
+		});
+		let signalCheck: () => void = () => {};
+		const checkStarted = new Promise<void>((resolve) => {
+			signalCheck = resolve;
+		});
+		const { client, testUser } = await getTestInstance(
+			{
+				...usedCodeStorageOptions("secondary"),
+				plugins: [
+					emailOTP({
+						generateOTP: () => codes.shift(),
+						async sendVerificationOTP() {},
+						storeOTP: {
+							async hash(otp) {
+								if (holdNext && otp === "111111") {
+									holdNext = false;
+									signalCheck();
+									await checkReleased;
+								}
+								return `stored-${otp}`;
+							},
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		const email = testUser.email;
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+		holdNext = true;
+		const older = client.signIn.emailOtp({ email, otp: "111111" });
+		await checkStarted;
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		releaseCheck();
+
+		expect((await older).error?.code).toBe("INVALID_OTP");
+		expect(
+			(await client.signIn.emailOtp({ email, otp: "222222" })).data?.token,
+		).toBeDefined();
+	});
+
+	it.for(
+		usedCodeStorages.filter((storage) => !storage.startsWith("secondary")),
+	)(
+		"accepts a correct guess while a reuse resend extends the code in %s storage",
+		async (storage) => {
+			let resendDuringClaim = false;
+			let resend: () => Promise<unknown> = async () => {};
+			const { client, testUser } = await getTestInstance(
+				{
+					...usedCodeStorageOptions(storage),
+					databaseHooks: {
+						verification: {
+							update: {
+								// Runs right before the attempt is counted.
+								async before(data) {
+									if (!resendDuringClaim || !("value" in data)) return;
+									resendDuringClaim = false;
+									await resend();
+								},
+							},
+						},
+					},
+					plugins: [
+						emailOTP({
+							resendStrategy: "reuse",
+							generateOTP: () => "222222",
+							async sendVerificationOTP() {},
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [emailOTPClient()] } },
+			);
+			const email = testUser.email;
+			resend = () =>
+				client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+			await resend();
+
+			resendDuringClaim = true;
+			const signIn = await client.signIn.emailOtp({ email, otp: "222222" });
+
+			expect(resendDuringClaim).toBe(false);
+			expect(signIn.data?.token).toBeDefined();
+		},
+	);
+
+	it("sends a new code when a guess is counted while a reuse resend extends the code in secondary storage", async () => {
+		const codes = ["111111", "222222"];
+		const sent: string[] = [];
+		let guessDuringExtension = false;
+		let guess: () => Promise<unknown> = async () => {};
+		const { client, testUser } = await getTestInstance(
+			{
+				...usedCodeStorageOptions("secondary"),
+				databaseHooks: {
+					verification: {
+						update: {
+							// Runs after the reuse check, before the expiry is extended.
+							async before() {
+								if (!guessDuringExtension) return;
+								guessDuringExtension = false;
+								await guess();
+							},
+						},
+					},
+				},
+				plugins: [
+					emailOTP({
+						resendStrategy: "reuse",
+						generateOTP: () => codes.shift(),
+						async sendVerificationOTP({ otp }) {
+							sent.push(otp);
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		const email = testUser.email;
+		guess = () => client.signIn.emailOtp({ email, otp: "000000" });
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+		guessDuringExtension = true;
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+		// The counted guess keeps the first code's original expiry, so it is
+		// not extended.
+		expect(sent).toEqual(["111111", "222222"]);
+		expect(
+			(await client.signIn.emailOtp({ email, otp: "222222" })).data?.token,
+		).toBeDefined();
+	});
+
+	/**
+	 * Secondary storage has no conditional delete, so a code stored between
+	 * the consume's last read and its `getAndDelete` is removed with the old
+	 * one. This pins that limit until storage offers a compare-and-delete.
+	 */
+	it("drops a code sent between the last read and the consume in secondary storage", async () => {
+		const codes = ["111111", "222222"];
+		const storage = createSecondaryStorage();
+		const getAndDelete = storage.getAndDelete;
+		let sendBeforeConsume: (() => Promise<unknown>) | undefined;
+		storage.getAndDelete = async (key) => {
+			const send = sendBeforeConsume;
+			sendBeforeConsume = undefined;
+			await send?.();
+			return getAndDelete(key);
+		};
+		const { client, testUser } = await getTestInstance(
+			{
+				secondaryStorage: storage,
+				plugins: [
+					emailOTP({
+						generateOTP: () => codes.shift(),
+						async sendVerificationOTP() {},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [emailOTPClient()] } },
+		);
+		const email = testUser.email;
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+		sendBeforeConsume = () =>
+			client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const older = await client.signIn.emailOtp({ email, otp: "111111" });
+
+		expect(codes).toHaveLength(0);
+		expect(older.error?.code).toBe("INVALID_OTP");
+		expect(
+			(await client.signIn.emailOtp({ email, otp: "222222" })).error?.code,
+		).toBe("INVALID_OTP");
+	});
 });

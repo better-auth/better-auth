@@ -119,7 +119,8 @@ export type CookieCacheSigner = {
  * - `"exhausted"`: every allowed attempt was used. The code stays stored, so
  *   later attempts are refused until it expires or is replaced.
  * - `"superseded"`: another request consumed or replaced the code during
- *   this attempt.
+ *   this attempt, or a `verification.delete.before` database hook blocked
+ *   consuming it.
  * - `"vetoed"`: a `verification.update.before` database hook blocked
  *   counting the attempt or returning it.
  */
@@ -322,13 +323,18 @@ export interface InternalAdapter<
 	 * The stored value is the code followed by `:<attempts>`. A guess is
 	 * compared only once it has claimed one of `allowedAttempts`, so
 	 * concurrent guesses can never compare more often than that. A wrong guess
-	 * leaves the code stored with the attempt counted, and a matching one
-	 * consumes it, so exactly one concurrent caller receives `"verified"`.
-	 * With `keep`, a matching guess leaves the code stored and returns its
-	 * attempt, so a follow-up call can use the code.
+	 * leaves the code stored with the attempt counted. By default, a matching
+	 * guess consumes the code, so exactly one concurrent caller receives
+	 * `"verified"`. With `keep`, a matching guess leaves the code stored and
+	 * returns its attempt, so a follow-up call can use the code, and several
+	 * concurrent matching calls can each receive `"verified"`.
 	 *
 	 * With secondary storage only, attempts are counted beside the stored
-	 * value rather than in it.
+	 * value rather than in it, under keys that outlive the code by one more
+	 * lifetime, so extend a code's expiry at most once after its first
+	 * counted attempt. Secondary storage has no conditional delete, so a code
+	 * stored between a matching guess's last read and its consume is removed
+	 * as well, and that guess receives `"superseded"`.
 	 */
 	verifyVerificationValue(
 		identifier: string,

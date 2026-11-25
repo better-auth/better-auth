@@ -2071,6 +2071,10 @@ describe("OTP resent while a wrong guess is checked", () => {
  * @see https://github.com/better-auth/better-auth/issues/11105
  */
 describe("OTP guessed while a newer code was used", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	function createSecondaryStorage(): SecondaryStorage {
 		const values = new Map<string, string>();
 		return {
@@ -2154,12 +2158,12 @@ describe("OTP guessed while a newer code was used", () => {
 				],
 			});
 			const { headers: signInHeaders } = await signInWithTestUser();
-			const enabled = await auth.api.enableTwoFactor({
+			const enableRes = await auth.api.enableTwoFactor({
 				body: { password: testUser.password, method: "otp" },
 				headers: signInHeaders,
 				asResponse: true,
 			});
-			const headers = convertSetCookieToCookie(enabled.headers);
+			const headers = convertSetCookieToCookie(enableRes.headers);
 			const current = await auth.api.getSession({ headers });
 			const identifier = `2fa-otp-${current!.user.id}!${current!.session.id}`;
 			await auth.api.sendTwoFactorOTP({ headers, body: {} });
@@ -2205,6 +2209,10 @@ describe("OTP guessed while a newer code was used", () => {
  * @see https://github.com/better-auth/better-auth/issues/11105
  */
 describe("OTP attempts counted in place", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	const storages = [
 		"database",
 		"database with custom ids",
@@ -2268,12 +2276,12 @@ describe("OTP attempts counted in place", () => {
 			],
 		});
 		const { headers: signInHeaders } = await signInWithTestUser();
-		const enabled = await auth.api.enableTwoFactor({
+		const enableRes = await auth.api.enableTwoFactor({
 			body: { password: testUser.password, method: "otp" },
 			headers: signInHeaders,
 			asResponse: true,
 		});
-		const headers = convertSetCookieToCookie(enabled.headers);
+		const headers = convertSetCookieToCookie(enableRes.headers);
 		const { internalAdapter } = await auth.$context;
 		const verifyValue = internalAdapter.verifyVerificationValue;
 		// Slow every comparison so concurrent requests overlap.

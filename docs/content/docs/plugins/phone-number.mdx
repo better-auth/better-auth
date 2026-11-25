@@ -417,7 +417,7 @@ export const phoneNumberUserTableFields = [
 
 ### OTP Verification Attempts
 
-The phone number plugin includes a built-in protection against brute force attacks by limiting the number of verification attempts for each OTP code. Every attempt counts, including attempts sent at the same time.
+The phone number plugin includes a built-in protection against brute force attacks by limiting the number of verification attempts for each OTP code. Every wrong code counts, including codes submitted at the same time.
 
 ```typescript
 phoneNumber({

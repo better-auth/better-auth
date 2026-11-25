@@ -116,7 +116,11 @@ export async function tryReuseOTP(
 			{ expiresAt: getDate(opts.expiresIn, "sec") },
 		);
 	// The code may have been consumed since the read, or the extension vetoed.
-	return extended ? plainOtp : null;
+	if (!extended) return null;
+	// A guess counted during the extension keeps the original expiry, so the
+	// code is replaced instead of outliving its attempt count.
+	if (await hasAttemptsBesideValue(ctx, existing)) return null;
+	return plainOtp;
 }
 
 export const defaultOTPGenerator = (options: EmailOTPOptions) =>
