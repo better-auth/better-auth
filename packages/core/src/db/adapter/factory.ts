@@ -64,6 +64,15 @@ type NonLiteralTrueFlag<F> = [true] extends [F]
 		: never
 	: F;
 
+type StrictAdapterFactoryConfig<Config extends AdapterFactoryConfig> = Config &
+	AdapterFactoryConfig & {
+		[K in Exclude<keyof Config, keyof AdapterFactoryConfig>]: never;
+	} & {
+		supportsUnboundedFindMany?: NonLiteralTrueFlag<
+			Config["supportsUnboundedFindMany"]
+		>;
+	};
+
 type CreateAdapterFactoryFn = {
 	<Options extends BetterAuthOptions>(
 		options: AdapterFactoryOptions<true>,
@@ -73,13 +82,9 @@ type CreateAdapterFactoryFn = {
 	): AdapterFactory<Options>;
 	<
 		Options extends BetterAuthOptions,
-		Config extends AdapterFactoryConfig,
+		Config extends AdapterFactoryConfig = AdapterFactoryConfig,
 	>(options: {
-		config: Config & {
-			supportsUnboundedFindMany?: NonLiteralTrueFlag<
-				Config["supportsUnboundedFindMany"]
-			>;
-		};
+		config: StrictAdapterFactoryConfig<Config>;
 		adapter: AdapterFactoryCustomizeAdapterCreator<boolean>;
 	}): AdapterFactory<Options>;
 };

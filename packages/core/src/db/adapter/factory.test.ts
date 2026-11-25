@@ -3,7 +3,10 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
 import type { CleanedWhere, CustomAdapter, Where } from "./index";
-import type { AdapterFactoryCustomizeAdapterCreator } from "./types";
+import type {
+	AdapterFactoryConfig,
+	AdapterFactoryCustomizeAdapterCreator,
+} from "./types";
 
 function createCustomAdapter(
 	overrides: Partial<CustomAdapter> = {},
@@ -584,11 +587,27 @@ describe("createAdapterFactory findMany limit", () => {
 				},
 			}),
 		});
-		expectTypeOf<
-			AdapterFactoryCustomizeAdapterCreator<false> extends AdapterFactoryCustomizeAdapterCreator<true>
-				? true
-				: false
-		>().toEqualTypeOf<false>();
+		type BoundedCreator = AdapterFactoryCustomizeAdapterCreator<false>;
+		type UnboundedCreator = AdapterFactoryCustomizeAdapterCreator<true>;
+		type BoundedAssignableToUnbounded = BoundedCreator extends UnboundedCreator
+			? true
+			: false;
+		expectTypeOf<BoundedAssignableToUnbounded>().toEqualTypeOf<false>();
+	});
+
+	it("accepts a separately typed AdapterFactoryConfig", () => {
+		const config: AdapterFactoryConfig = {
+			adapterId: "test-adapter",
+			adapterName: "Test Adapter",
+		};
+		createAdapterFactory({
+			config,
+			adapter: () => createCustomAdapter(),
+		});
+		createAdapterFactory<BetterAuthOptions>({
+			config,
+			adapter: () => createCustomAdapter(),
+		});
 	});
 });
 
