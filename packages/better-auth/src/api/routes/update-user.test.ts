@@ -965,6 +965,61 @@ describe("delete user", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12139
+	 */
+	it("should keep the delete token usable after another user presents it", async () => {
+		let token = "";
+		const { client, signInWithTestUser, signInWithUser, testUser, db } =
+			await getTestInstance({
+				user: {
+					deleteUser: {
+						enabled: true,
+						async sendDeleteAccountVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			});
+		const other = {
+			email: "other-user@test.com",
+			password: "other-password",
+		};
+		await client.signUp.email({ ...other, name: "Other User" });
+		const { headers: otherHeaders } = await signInWithUser(
+			other.email,
+			other.password,
+		);
+		const { headers: ownerHeaders } = await signInWithTestUser();
+
+		const requestRes = await client.deleteUser({
+			password: testUser.password,
+			fetchOptions: { headers: ownerHeaders },
+		});
+		expect(requestRes.data).toMatchObject({ success: true });
+		expect(token.length).toBe(32);
+
+		const wrongOwnerRes = await client.deleteUser({
+			token,
+			fetchOptions: { headers: otherHeaders },
+		});
+		expect(wrongOwnerRes.error?.status).toBe(404);
+		const remaining = await db.findMany({
+			model: "verification",
+			where: [{ field: "identifier", value: `delete-account-${token}` }],
+		});
+		expect(remaining.length).toBe(1);
+
+		const ownerRes = await client.deleteUser({
+			token,
+			fetchOptions: { headers: ownerHeaders },
+		});
+		expect(ownerRes.data).toMatchObject({
+			success: true,
+			message: "User deleted",
+		});
+	});
+
 	it("should ignore cookie cache for sensitive operations like changePassword", async () => {
 		const { client: cacheClient, sessionSetter: cacheSessionSetter } =
 			await getTestInstance(
