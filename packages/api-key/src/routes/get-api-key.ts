@@ -225,7 +225,9 @@ export function getApiKey({
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
-			deleteAllExpiredApiKeys(ctx.context);
+			if (opts.keyExpiration.autoCleanup) {
+				deleteAllExpiredApiKeys(ctx.context);
+			}
 
 			// Migrate legacy double-stringified metadata if needed
 			const metadata = await migrateDoubleStringifiedMetadata(

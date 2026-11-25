@@ -279,18 +279,21 @@ export function listApiKeys({
 			const expectedReferencesType = organizationId ? "organization" : "user";
 
 			let allApiKeys: ApiKey[] = [];
+			const requestedConfig = configId
+				? resolveConfiguration(ctx.context, configurations, configId)
+				: null;
+			const cleanupConfigs = requestedConfig
+				? [requestedConfig]
+				: configurations.filter(
+						(config) =>
+							(config.references ?? "user") === expectedReferencesType,
+					);
 
-			if (configId) {
-				const resolvedConfig = resolveConfiguration(
-					ctx.context,
-					configurations,
-					configId,
-				);
-
+			if (requestedConfig) {
 				const { apiKeys } = await listApiKeysFromStorage(
 					ctx,
 					referenceId,
-					resolvedConfig,
+					requestedConfig,
 					{
 						limit: undefined,
 						offset: undefined,
@@ -365,7 +368,13 @@ export function listApiKeys({
 				paginatedApiKeys = paginatedApiKeys.slice(0, limit);
 			}
 
-			deleteAllExpiredApiKeys(ctx.context);
+			const shouldAutoCleanup =
+				cleanupConfigs.length > 0 &&
+				cleanupConfigs.every((config) => config.keyExpiration.autoCleanup);
+
+			if (shouldAutoCleanup) {
+				deleteAllExpiredApiKeys(ctx.context);
+			}
 
 			// Build response with parsed metadata (synchronous, no DB calls)
 			const returningApiKeys = paginatedApiKeys.map((apiKey) => {
