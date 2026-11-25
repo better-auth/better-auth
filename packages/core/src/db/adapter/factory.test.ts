@@ -2,7 +2,12 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
-import type { CleanedWhere, CustomAdapter, Where } from "./index";
+import type {
+	CleanedWhere,
+	CustomAdapter,
+	CustomAdapterFindManyLimit,
+	Where,
+} from "./index";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryCustomizeAdapterCreator,
@@ -609,21 +614,9 @@ describe("createAdapterFactory findMany limit", () => {
 			? true
 			: false;
 		expectTypeOf<BoundedAssignableToUnbounded>().toEqualTypeOf<false>();
-		const flag: boolean = true;
-		createAdapterFactory({
-			config: {
-				adapterId: "test-adapter",
-				adapterName: "Test Adapter",
-				supportsUnboundedFindMany: flag,
-			},
-			adapter: () => ({
-				...createCustomAdapter(),
-				findMany: async ({ limit }) => {
-					expectTypeOf(limit).toEqualTypeOf<number>();
-					return [];
-				},
-			}),
-		});
+		expectTypeOf<
+			CustomAdapterFindManyLimit<boolean>["limit"]
+		>().toEqualTypeOf<number>();
 	});
 
 	it("accepts a separately typed AdapterFactoryConfig", () => {
