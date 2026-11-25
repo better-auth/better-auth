@@ -701,3 +701,107 @@ describe("oauth-provider - grant revocation in secondary storage", async () => {
 		);
 	});
 });
+
+/**
+ * A revocation the server could not record is a failure, not a revoked token.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
+ * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("oauth-provider - revocation records vetoed by a verification hook", async () => {
+	const veto = { prefix: "" };
+	const onTokenRevoked = vi.fn();
+	const server = await setup(
+		{ revocableJwtAccessTokens: true, onTokenRevoked },
+		{
+			databaseHooks: {
+				verification: {
+					create: {
+						async before(verification) {
+							if (
+								veto.prefix &&
+								verification.identifier.startsWith(veto.prefix)
+							)
+								return false;
+						},
+					},
+				},
+			},
+		},
+	);
+	const vetoing = async <T>(prefix: string, run: () => Promise<T>) => {
+		veto.prefix = prefix;
+		onTokenRevoked.mockClear();
+		try {
+			return await run();
+		} finally {
+			veto.prefix = "";
+		}
+	};
+
+	it("fails a JWT access token revocation whose marker was not stored, without notifying", async () => {
+		const token = await getAccessToken(server);
+
+		const revocation = await vetoing("oauth-revoked-access-token:", () =>
+			revoke(server, token),
+		);
+		expect(revocation.error?.status).toBe(500);
+		expect(revocation.error).toMatchObject({ error: "server_error" });
+		expect(onTokenRevoked).not.toHaveBeenCalled();
+		await expectActive(server, token);
+
+		// The client can retry once the marker can be stored.
+		expect((await revoke(server, token)).error).toBe(null);
+		await expectRevoked(server, token);
+	});
+
+	it("fails a refresh token revocation whose grant mark was not stored, and keeps the token retryable", async () => {
+		const grant = await authorize(server, { offline: true });
+
+		const revocation = await vetoing("oauth-revoked-grant:", () =>
+			revoke(server, grant.refreshToken!),
+		);
+		expect(revocation.error?.status).toBe(500);
+		expect(revocation.error).toMatchObject({ error: "server_error" });
+		expect(onTokenRevoked).not.toHaveBeenCalled();
+
+		expect((await revoke(server, grant.refreshToken!)).error).toBe(null);
+		await expectRevoked(server, grant.accessToken);
+		expect((await refresh(server, grant.refreshToken!)).error?.status).toBe(
+			400,
+		);
+	});
+
+	it("fails a refresh token replay whose grant mark was not stored, without notifying", async () => {
+		const first = await authorize(server, { offline: true });
+		const rotated = (await refresh(server, first.refreshToken!)).data!;
+
+		const replay = await vetoing("oauth-revoked-grant:", () =>
+			refresh(server, first.refreshToken!),
+		);
+		expect(replay.error?.status).toBe(500);
+		expect(replay.error).toMatchObject({ error: "server_error" });
+		expect(onTokenRevoked).not.toHaveBeenCalled();
+
+		// The family is still torn down, so the grant cannot be refreshed.
+		expect((await refresh(server, rotated.refresh_token!)).error?.status).toBe(
+			400,
+		);
+	});
+
+	it("logs an authorization code whose reuse record was not stored", async () => {
+		const { redeem } = await authorizeCode(server, { offline: true });
+		const ctx = await server.auth.$context;
+		const logError = vi.spyOn(ctx.logger, "error");
+		try {
+			const tokens = await vetoing("oauth_consumed_code:", redeem);
+			expect(tokens.error).toBe(null);
+			expect(logError).toHaveBeenCalledWith(
+				expect.stringContaining("consumed authorization code"),
+			);
+		} finally {
+			logError.mockRestore();
+		}
+	});
+});

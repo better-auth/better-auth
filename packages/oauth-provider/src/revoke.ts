@@ -21,6 +21,7 @@ import {
 	jwtRevocationMarker,
 	markGrantRevoked,
 	notifyTokenRevoked,
+	revocationNotRecorded,
 } from "./token-lookup";
 import type { OAuthOptions, OAuthRefreshToken, Scope } from "./types";
 import {
@@ -64,10 +65,11 @@ async function revokeJwtAccessToken(
 	}
 	const marker = jwtRevocationMarker(opts, payload);
 	if (marker) {
-		await ctx.context.internalAdapter.createVerificationValue({
+		const stored = await ctx.context.internalAdapter.createVerificationValue({
 			...marker,
 			value: payload.azp,
 		});
+		if (!stored) revocationNotRecorded();
 		await notifyTokenRevoked(opts, {
 			type: "access_token",
 			reason: "revocation_request",
