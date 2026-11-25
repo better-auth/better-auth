@@ -2227,6 +2227,86 @@ describe("internal adapter test", async () => {
 			expect(cached?.value).toBe("replacement");
 		});
 
+		it.for([
+			{ mode: "secondary storage", secondary: true },
+			{ mode: "database", secondary: false },
+		])(
+			"does not run update.after hooks when no verification value was updated ($mode)",
+			async ({ secondary }) => {
+				const { storage } = createMockStorage();
+				const after = vi.fn();
+				const opts = {
+					database: new DatabaseSync(":memory:"),
+					secondaryStorage: secondary ? storage : undefined,
+					databaseHooks: { verification: { update: { after } } },
+				} satisfies BetterAuthOptions;
+				await (await getMigrations(opts)).runMigrations();
+				const ctx = await init(opts);
+
+				const updated =
+					await ctx.internalAdapter.updateVerificationByIdentifier(
+						"no-such-verification",
+						{ value: "replacement" },
+					);
+
+				expect(updated).toBeNull();
+				expect(after).not.toHaveBeenCalled();
+			},
+		);
+
+		it("does not run user update.after hooks when no user was updated", async () => {
+			const after = vi.fn();
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				databaseHooks: { user: { update: { after } } },
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+
+			const updated = await ctx.internalAdapter.updateUser("no-such-user", {
+				name: "renamed",
+			});
+
+			expect(updated).toBeNull();
+			expect(after).not.toHaveBeenCalled();
+		});
+
+		it("runs update.after hooks and rejects when the cache write fails after the database update (both)", async () => {
+			const { storage } = createMockStorage();
+			let failWrites = false;
+			const after = vi.fn();
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				verification: { storeInDatabase: true },
+				secondaryStorage: {
+					...storage,
+					set(key, value, ttl) {
+						if (failWrites) throw new Error("cache write failed");
+						return storage.set(key, value, ttl);
+					},
+				},
+				databaseHooks: { verification: { update: { after } } },
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "cache-write-fails",
+				value: "stored",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			failWrites = true;
+
+			await expect(
+				ctx.internalAdapter.updateVerificationByIdentifier(
+					"cache-write-fails",
+					{ value: "replacement" },
+				),
+			).rejects.toThrow("cache write failed");
+
+			expect(after).toHaveBeenCalledTimes(1);
+			expect(after.mock.calls[0]![0]).toMatchObject({ value: "replacement" });
+		});
+
 		it("does not report an update to a secondary storage value that is gone", async () => {
 			const { storage } = createMockStorage();
 			const opts = {

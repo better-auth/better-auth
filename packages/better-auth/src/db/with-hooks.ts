@@ -155,8 +155,18 @@ export function getWithHooks(
 						where,
 					})
 				: customUpdated;
-		if (updated && customUpdateFn?.onUpdated) {
-			await customUpdateFn.onUpdated(updated);
+		// Nothing matched, so there is no record to hand to the after hooks.
+		if (!updated) return updated;
+
+		// The update already happened, so the after hooks run even when this
+		// fails; the failure is rethrown once they are queued.
+		let onUpdatedError: { error: unknown } | undefined;
+		if (customUpdateFn?.onUpdated) {
+			try {
+				await customUpdateFn.onUpdated(updated);
+			} catch (error) {
+				onUpdatedError = { error };
+			}
 		}
 
 		for (const { source, hooks } of hooksEntries) {
@@ -177,6 +187,7 @@ export function getWithHooks(
 				});
 			}
 		}
+		if (onUpdatedError) throw onUpdatedError.error;
 		return updated;
 	}
 
