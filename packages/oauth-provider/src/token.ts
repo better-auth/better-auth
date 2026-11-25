@@ -16,6 +16,7 @@ import {
 	isDpopProofError,
 	verifyDpopProof,
 } from "better-auth/oauth2";
+import type { UserWithRole } from "better-auth/plugins";
 import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
@@ -1233,6 +1234,22 @@ function replayRefreshTokenRotationResponse(
 	});
 }
 
+function assertUserNotBanned(
+	user:
+		| (User & Partial<Pick<UserWithRole, "banned" | "banExpires">>)
+		| null
+		| undefined,
+) {
+	if (!user?.banned) return;
+	if (user.banExpires && new Date(user.banExpires).getTime() <= Date.now()) {
+		return;
+	}
+	throw new APIError("BAD_REQUEST", {
+		error_description: "user is banned",
+		error: "invalid_grant",
+	});
+}
+
 async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -1250,6 +1267,8 @@ async function createUserTokens(
 		authTime,
 		verificationValue,
 	} = params;
+
+	assertUserNotBanned(user);
 
 	const iat = Math.floor(Date.now() / 1000);
 	const baseExpiry = user
@@ -2131,6 +2150,9 @@ async function handleRefreshTokenGrant(
 				replayRequest,
 			);
 			if (replay) {
+				assertUserNotBanned(
+					await ctx.context.internalAdapter.findUserById(refreshToken.userId),
+				);
 				return replayRefreshTokenRotationResponse(ctx, replay);
 			}
 			throw new APIError("BAD_REQUEST", {
