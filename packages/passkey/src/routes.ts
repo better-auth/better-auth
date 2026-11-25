@@ -704,8 +704,11 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				);
 			}
-			// Challenges stored before the RP ID was recorded resolve it again.
-			const issuedRPID = rpID || (await resolveRpID(options, ctx));
+			// Without `rpID` the RP ID is the host of each request, so a challenge
+			// issued on one host is not verified for it on another. Challenges
+			// stored before the RP ID was recorded resolve it again.
+			const issuedRPID =
+				(options.rpID && rpID) || (await resolveRpID(options, ctx));
 			// Resolved once, for both the wildcard check and the verifier.
 			const expectedRPID = await resolveExpectedRPID(options, ctx, issuedRPID);
 			const expectedOrigin = getExpectedOrigins(
@@ -973,8 +976,11 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				);
 			}
-			// Challenges stored before the RP ID was recorded resolve it again.
-			const issuedRPID = rpID || (await resolveRpID(options, ctx));
+			// Without `rpID` the RP ID is the host of each request, so a challenge
+			// issued on one host is not verified for it on another. Challenges
+			// stored before the RP ID was recorded resolve it again.
+			const issuedRPID =
+				(options.rpID && rpID) || (await resolveRpID(options, ctx));
 			// Resolved once, for both the wildcard check and the verifier.
 			const expectedRPID = await resolveExpectedRPID(options, ctx, issuedRPID);
 			const expectedOrigin = getExpectedOrigins(

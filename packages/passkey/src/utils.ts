@@ -9,7 +9,10 @@ import type { PasskeyOptions } from "./types";
 
 function getDefaultRpID(ctx: GenericEndpointContext) {
 	const baseURL = ctx.context.options.baseURL;
-	return typeof baseURL === "string" ? new URL(baseURL).hostname : "localhost";
+	// Falls back when `baseURL` is unset or empty, as before.
+	return typeof baseURL === "string" && baseURL
+		? new URL(baseURL).hostname
+		: "localhost";
 }
 
 export async function resolveRpID(
@@ -28,7 +31,8 @@ export async function resolveRpID(
 
 /**
  * The RP ID(s) accepted when verifying a ceremony response. Defaults to the
- * RP ID sent in the options (`issuedRPID`, stored with the challenge), which
+ * RP ID sent in the options (`issuedRPID`, stored with the challenge; without
+ * `rpID`, the one resolved from the verify request), which
  * is also passed to an `expectedRPID` function. An empty value is rejected
  * rather than passed on, because `@simplewebauthn/server` skips the RP ID
  * check when it is falsy.

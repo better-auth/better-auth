@@ -47,9 +47,9 @@ export type PasskeyExpectedRPIDResolver =
 	| ((args: {
 			ctx: GenericEndpointContext;
 			/**
-			 * The RP ID sent in the options for this challenge. Challenges
-			 * stored before it was recorded resolve it again from the verify
-			 * request.
+			 * The RP ID sent in the options for this challenge. Without
+			 * `rpID`, and for challenges stored before it was recorded, the
+			 * RP ID resolved from the verify request.
 			 */
 			rpID: string;
 	  }) => Awaitable<string | string[]>);
@@ -134,7 +134,8 @@ export interface PasskeyOptions {
 	 * options for the challenge, so it can accept only the RP ID(s) that
 	 * challenge was issued for.
 	 *
-	 * @default the `rpID` sent in the options for the challenge
+	 * @default the `rpID` sent in the options for the challenge, or without
+	 * `rpID`, the hostname of the verify request
 	 */
 	expectedRPID?: PasskeyExpectedRPIDResolver | undefined;
 	/**

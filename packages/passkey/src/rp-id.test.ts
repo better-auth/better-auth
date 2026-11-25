@@ -439,3 +439,86 @@ describe("passkey rpID", () => {
 		);
 	});
 });
+
+/**
+ * Without `rpID`, each request's host is the RP ID. A sibling host under a
+ * wildcard allowed host must not verify an assertion signed for the parent
+ * host, even with a challenge the parent host issued.
+ */
+describe("passkey default rpID under a wildcard allowed host", () => {
+	const PARENT_ORIGIN = "http://localhost:3000";
+	const SIBLING_ORIGIN = "http://evil.localhost:3000";
+
+	async function setupParentCredential() {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [passkey()],
+			baseURL: {
+				allowedHosts: ["localhost:3000", "*.localhost:3000"],
+				protocol: "http",
+			},
+		});
+		const authenticator = await createAuthenticator();
+		const at = (origin: string, cookie?: string | null) => {
+			const headers = new Headers({ host: new URL(origin).host, origin });
+			if (cookie) headers.set("cookie", cookie);
+			return headers;
+		};
+		const challengeCookie = (headers: Headers) =>
+			headers.get("set-cookie")?.split(";")[0] ?? null;
+
+		const { headers: sessionHeaders } = await signInWithTestUser();
+		const session = sessionHeaders.get("cookie");
+		const registration = await auth.api.generatePasskeyRegistrationOptions({
+			headers: at(PARENT_ORIGIN, session),
+			returnHeaders: true,
+		});
+		await auth.api.verifyPasskeyRegistration({
+			headers: at(
+				PARENT_ORIGIN,
+				[session, challengeCookie(registration.headers)].join("; "),
+			),
+			body: {
+				response: await authenticator.register({
+					rpID: "localhost",
+					challenge: registration.response.challenge,
+					origin: PARENT_ORIGIN,
+				}),
+			},
+		});
+
+		// Options come from the parent host; the assertion is signed for the
+		// parent RP ID on `signedOrigin` and submitted from `verifyOrigin`.
+		return async (signedOrigin: string, verifyOrigin: string) => {
+			const options = await auth.api.generatePasskeyAuthenticationOptions({
+				headers: at(PARENT_ORIGIN),
+				returnHeaders: true,
+			});
+			expect(options.response.rpId).toBe("localhost");
+			return auth.api
+				.verifyPasskeyAuthentication({
+					headers: at(verifyOrigin, challengeCookie(options.headers)),
+					body: {
+						response: await authenticator.authenticate({
+							rpID: "localhost",
+							challenge: options.response.challenge,
+							origin: signedOrigin,
+						}),
+					},
+				})
+				.then(
+					() => true,
+					() => false,
+				);
+		};
+	}
+
+	it("rejects a sibling host verifying an assertion for the parent RP ID", async () => {
+		const authenticate = await setupParentCredential();
+		expect(await authenticate(SIBLING_ORIGIN, SIBLING_ORIGIN)).toBe(false);
+	});
+
+	it("control: verifies on the host that issued the options", async () => {
+		const authenticate = await setupParentCredential();
+		expect(await authenticate(PARENT_ORIGIN, PARENT_ORIGIN)).toBe(true);
+	});
+});
