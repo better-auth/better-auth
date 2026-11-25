@@ -2045,12 +2045,16 @@ describe("OTP resent while a wrong guess is checked", () => {
 
 			expect((await guess).status).toBe(401);
 			expect(codes).toHaveLength(2);
-			const stale = await auth.api.verifyTwoFactorOTP({
-				headers,
-				body: { code: codes[0]! },
-				asResponse: true,
-			});
-			expect(stale.status).toBe(401);
+			// Two random sends can produce the same digits, which makes the
+			// first code also the current one.
+			if (codes[0] !== codes[1]) {
+				const stale = await auth.api.verifyTwoFactorOTP({
+					headers,
+					body: { code: codes[0]! },
+					asResponse: true,
+				});
+				expect(stale.status).toBe(401);
+			}
 			const latest = await auth.api.verifyTwoFactorOTP({
 				headers,
 				body: { code: codes[1]! },

@@ -293,7 +293,12 @@ describe("email OTP preflight attempt accounting", () => {
 		).toBe("INVALID_OTP");
 	});
 
-	it.for(["database", "secondary", "mirrored"] as const)(
+	it.for([
+		"database",
+		"database with custom ids",
+		"secondary",
+		"mirrored",
+	] as const)(
 		"does not revive a code that was replaced while it was being checked in %s storage",
 		async (storage) => {
 			const codes = ["111111", "222222"];
@@ -310,12 +315,18 @@ describe("email OTP preflight attempt accounting", () => {
 				{
 					...(storage === "database"
 						? {}
-						: {
-								secondaryStorage: createSecondaryStorage(),
-								...(storage === "mirrored"
-									? { verification: { storeInDatabase: true } }
-									: {}),
-							}),
+						: storage === "database with custom ids"
+							? {
+									advanced: {
+										database: { generateId: () => crypto.randomUUID() },
+									},
+								}
+							: {
+									secondaryStorage: createSecondaryStorage(),
+									...(storage === "mirrored"
+										? { verification: { storeInDatabase: true } }
+										: {}),
+								}),
 					plugins: [
 						emailOTP({
 							generateOTP: () => codes.shift(),
@@ -378,9 +389,15 @@ describe("email OTP preflight attempt accounting", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/11105
 	 * @see https://github.com/better-auth/better-auth/pull/12893
 	 */
-	it.for(["database", "secondary", "mirrored"] as const)(
-		"keeps a code resent while a wrong guess is checked in %s storage",
-		async (storage) => {
+	it.for([
+		{ storage: "database", resendAt: "2026-01-01T00:00:02.000Z" },
+		{ storage: "secondary", resendAt: "2026-01-01T00:00:02.000Z" },
+		{ storage: "mirrored", resendAt: "2026-01-01T00:00:02.000Z" },
+		// The server that resends has a clock behind the one checking the guess.
+		{ storage: "secondary", resendAt: "2025-12-31T23:59:59.000Z" },
+	] as const)(
+		"keeps a code resent at $resendAt while a wrong guess is checked in $storage storage",
+		async ({ storage, resendAt }) => {
 			const codes = ["111111", "222222"];
 			let releaseCheck: () => void = () => {};
 			const checkReleased = new Promise<void>((resolve) => {
@@ -434,7 +451,7 @@ describe("email OTP preflight attempt accounting", () => {
 				otp: "000000",
 			});
 			await checkStarted;
-			vi.setSystemTime(new Date("2026-01-01T00:00:02.000Z"));
+			vi.setSystemTime(new Date(resendAt));
 			await client.emailOtp.sendVerificationOtp({
 				email,
 				type: "sign-in",

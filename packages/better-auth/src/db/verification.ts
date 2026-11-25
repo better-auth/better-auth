@@ -64,12 +64,11 @@ async function deriveVerificationId(
  * identifier. Returns the stored value, which is the newer one when this
  * write yields, or `null` when a `verification.create.before` hook vetoes it.
  *
- * In the database, the derived id of `createOrFindVerification` makes the
- * write yield. Secondary storage has no conditional write, so it is read
- * first, and a value issued between that read and the write can still be
- * replaced. Only an unexpired value created no earlier than the consumed one
- * counts as issued after it; an older row, such as one stored under the plain
- * identifier before `storeIdentifier` hashing, does not.
+ * The consume removes every value under the stored identifier, so a live value
+ * found there was issued after it. A row under the plain identifier, left from
+ * before `storeIdentifier` hashing, is not. Neither storage offers a
+ * conditional write for every id strategy, so a value issued between this read
+ * and the write can still be replaced.
  */
 export async function restoreVerification(
 	ctx: GenericEndpointContext,
@@ -77,17 +76,20 @@ export async function restoreVerification(
 		createdAt: Date;
 	},
 ) {
-	if (ctx.context.secondaryStorage) {
-		const issued = await ctx.context.internalAdapter.findVerificationValue(
+	const { internalAdapter, options } = ctx.context;
+	const [issued, storedIdentifier] = await Promise.all([
+		internalAdapter.findVerificationValue(data.identifier),
+		processIdentifier(
 			data.identifier,
-		);
-		if (
-			issued &&
-			new Date(issued.expiresAt).getTime() > Date.now() &&
-			new Date(issued.createdAt).getTime() >= new Date(data.createdAt).getTime()
-		) {
-			return issued;
-		}
+			getStorageOption(data.identifier, options.verification?.storeIdentifier),
+		),
+	]);
+	if (
+		issued &&
+		issued.identifier === storedIdentifier &&
+		new Date(issued.expiresAt).getTime() > Date.now()
+	) {
+		return issued;
 	}
 	return createOrFindVerification(ctx, data);
 }
