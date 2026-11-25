@@ -459,6 +459,8 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	 *
 	 * Same filters as `findMany` except there is no `limit`. Use this only
 	 * from server code you control; it can return a large result set.
+	 * Joined one-to-many relations still use each join's own limit
+	 * (`defaultFindManyLimit` unless the join sets `limit`).
 	 */
 	findAll: <T>(data: {
 		model: string;

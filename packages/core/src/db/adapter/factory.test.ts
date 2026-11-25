@@ -448,7 +448,7 @@ describe("createAdapterFactory findMany limit", () => {
 						params: Parameters<CustomAdapter["findMany"]>[0],
 					) => {
 						onFindMany(params);
-						return [] as T[];
+						return [{ id: "row" }] as T[];
 					},
 				}),
 		})(options ?? {});
@@ -501,6 +501,21 @@ describe("createAdapterFactory findMany limit", () => {
 		expect(seen && "limit" in seen).toBe(true);
 	});
 
+	it("treats a null findMany limit as the default cap", async () => {
+		let seen: Parameters<CustomAdapter["findMany"]>[0] | undefined;
+		const adapter = createLimitAdapter({
+			onFindMany: (params) => {
+				seen = params;
+			},
+		});
+		await adapter.findMany({
+			model: "user",
+			limit: null as never,
+		});
+		expect(seen).toMatchObject({ limit: 100 });
+		expect(seen && "limit" in seen).toBe(true);
+	});
+
 	it("loads every row via count when public findAll is used", async () => {
 		let seen: Parameters<CustomAdapter["findMany"]>[0] | undefined;
 		let counted: Parameters<CustomAdapter["count"]>[0] | undefined;
@@ -513,11 +528,13 @@ describe("createAdapterFactory findMany limit", () => {
 				return 101;
 			},
 		});
-		await adapter.findAll({
-			model: "user",
-			where: [{ field: "email", value: "a@b.com" }],
-			offset: 2,
-		});
+		await expect(
+			adapter.findAll({
+				model: "user",
+				where: [{ field: "email", value: "a@b.com" }],
+				offset: 2,
+			}),
+		).resolves.toEqual([{ id: "row" }]);
 		expect(counted).toMatchObject({ model: "user" });
 		expect(counted?.where).toBe(seen?.where);
 		expect(seen).toMatchObject({ limit: 101, offset: 2 });
@@ -549,7 +566,9 @@ describe("createAdapterFactory findMany limit", () => {
 			},
 			supportsUnboundedFindMany: true,
 		});
-		await adapter.findAll({ model: "user", offset: 2 });
+		await expect(
+			adapter.findAll({ model: "user", offset: 2 }),
+		).resolves.toEqual([{ id: "row" }]);
 		expect(countCalls).toBe(0);
 		expect(seen && "limit" in seen).toBe(false);
 		expect(seen?.limit).toBeUndefined();
@@ -590,6 +609,21 @@ describe("createAdapterFactory findMany limit", () => {
 			? true
 			: false;
 		expectTypeOf<BoundedAssignableToUnbounded>().toEqualTypeOf<false>();
+		const flag: boolean = true;
+		createAdapterFactory({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				supportsUnboundedFindMany: flag,
+			},
+			adapter: () => ({
+				...createCustomAdapter(),
+				findMany: async ({ limit }) => {
+					expectTypeOf(limit).toEqualTypeOf<number>();
+					return [];
+				},
+			}),
+		});
 	});
 
 	it("accepts a separately typed AdapterFactoryConfig", () => {

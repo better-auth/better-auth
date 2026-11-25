@@ -1372,7 +1372,11 @@ export const createAdapterFactory = (<Options extends BetterAuthOptions>({
 				sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
 				offset?: number | undefined;
 				join?: JoinOption | undefined;
-			}) => findManyInternal<T>(data),
+			}) =>
+				findManyInternal<T>({
+					...data,
+					limit: data.limit ?? undefined,
+				}),
 			findAll: async <T extends Record<string, any>>(data: {
 				model: string;
 				where?: Where[] | undefined;

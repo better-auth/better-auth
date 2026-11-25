@@ -41,6 +41,8 @@ describe("mongodb-adapter", () => {
 	});
 
 	it("still sends $limit for a negative numeric cap", async () => {
+		// A negative number must not be treated as unbounded. MongoDB will
+		// reject `$limit: -1`; that is preferred to returning every row.
 		const pipelines: Record<string, unknown>[][] = [];
 		const db = {
 			collection: vi.fn(() => ({

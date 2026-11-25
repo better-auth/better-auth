@@ -707,7 +707,7 @@ Set custom strategies for ID generation, findMany queries, and database joins.
 * `joins`: Enable database joins for adapters that support them. When disabled (default), related data is fetched via separate queries. See the [Database documentation](/docs/concepts/database#joins) for more info. (default: `false`)
 * `validateSchema`: Compare the schema with the tables Better Auth writes before the first request and report every difference with its fix. See the [Database documentation](/docs/concepts/database#schema-validation) for more info. (default: `true` outside production)
 
-To return every matching row, call `adapter.findAll` instead of raising `defaultFindManyLimit` or omitting `limit` on `findMany`. `findAll` takes the same filters as `findMany` except there is no `limit`: `model`, `where`, `select`, `sortBy`, `offset`, and `join`.
+To return every matching row, call `adapter.findAll` instead of raising `defaultFindManyLimit` or omitting `limit` on `findMany`. `findAll` takes the same filters as `findMany` except there is no `limit`: `model`, `where`, `select`, `sortBy`, `offset`, and `join`. Joined one-to-many relations still use each join's own limit.
 
 <Callout type="warn">
   `findAll` can return a large result set. Call it only from server code you control, and keep `where` scoped to records the caller is allowed to read.
