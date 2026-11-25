@@ -155,7 +155,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "better-auth-flutterwave",
 		url: "https://github.com/alexasomba/better-auth-flutterwave",
 		description:
-			"Flutterwave plugin for Better Auth — integrates Flutterwave payments, subscriptions, organization billing, marketplace split payments, webhooks, refunds, reconciliation, and more.",
+			"Flutterwave plugin for Better Auth â€” integrates Flutterwave payments, subscriptions, organization billing, marketplace split payments, webhooks, refunds, reconciliation, and more.",
 		author: {
 			name: "alexasomba",
 			github: "alexasomba",
@@ -230,7 +230,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "better-auth-razorpay",
 		url: "https://github.com/iamjasonkendrick/better-auth-razorpay",
 		description:
-			"Razorpay payment plugin for Better Auth — integrates Razorpay payments, webhooks, and subscription flows.",
+			"Razorpay payment plugin for Better Auth â€” integrates Razorpay payments, webhooks, and subscription flows.",
 		author: {
 			name: "iamjasonkendrick",
 			github: "iamjasonkendrick",
@@ -241,7 +241,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "better-auth-payu",
 		url: "https://github.com/iamjasonkendrick/better-auth-payu",
 		description:
-			"PayU payment plugin for Better Auth — integrates PayU payments, webhooks, and subscription flows.",
+			"PayU payment plugin for Better Auth â€” integrates PayU payments, webhooks, and subscription flows.",
 		author: {
 			name: "iamjasonkendrick",
 			github: "iamjasonkendrick",
@@ -328,7 +328,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "@dbsc-toolkit/better-auth",
 		url: "https://www.npmjs.com/package/@dbsc-toolkit/better-auth",
 		description:
-			"Device Bound Session Credentials (DBSC) — binds sessions to a device-resident key so a stolen cookie can't be replayed from another machine. Native binding via TPM or Secure Enclave on Chromium 145+, with a Web Crypto polyfill for Firefox, Safari, and older Chromium.",
+			"Device Bound Session Credentials (DBSC) â€” binds sessions to a device-resident key so a stolen cookie can't be replayed from another machine. Native binding via TPM or Secure Enclave on Chromium 145+, with a Web Crypto polyfill for Firefox, Safari, and older Chromium.",
 		author: {
 			name: "SulimanAbdulrazzaq",
 			github: "SulimanAbdulrazzaq",
@@ -349,7 +349,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "@amank-root/better-auth-razorpay",
 		url: "https://github.com/Amank-root/better-auth-razorpay",
 		description:
-			"Full Razorpay integration plugin for Better Auth — subscriptions, one-time payments, invoices, refunds, customers, add-ons, items, and webhook handling.",
+			"Full Razorpay integration plugin for Better Auth â€” subscriptions, one-time payments, invoices, refunds, customers, add-ons, items, and webhook handling.",
 		author: {
 			name: "Aman Kushwaha",
 			github: "Amank-root",
@@ -400,7 +400,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "better-auth-email-challenge",
 		url: "https://github.com/lapluviosilla/better-auth-email-challenge",
 		description:
-			"Passwordless, multi-device email challenge — one challenge completable by an approval link or OTP, with browser-bound session issuance for safe cross-device sign-in.",
+			"Passwordless, multi-device email challenge â€” one challenge completable by an approval link or OTP, with browser-bound session issuance for safe cross-device sign-in.",
 		author: {
 			name: "lapluviosilla",
 			github: "lapluviosilla",
@@ -512,7 +512,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		description:
 			"Better Auth for Tauri desktop apps: browser sign-in with PKCE handed back by deep link or loopback, a session held in Rust (OS keychain), and a webview that never sees a token. Tauri 2 (0.1) and Tauri 3 alpha (0.2).",
 		author: {
-			name: "Enes Koç",
+			name: "Enes KoÃ§",
 			github: "laakal",
 			avatar: "https://github.com/laakal.png",
 		},
@@ -565,11 +565,23 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "@mailkite/better-auth-inbox",
 		url: "https://github.com/mailkite/mailkite-better-auth-inbox",
 		description:
-			"Give your app a real mailbox. Receive inbound email as signature-verified webhooks, then list, read, thread and reply through session-scoped endpoints — scoped per user or per organization.",
+			"Give your app a real mailbox. Receive inbound email as signature-verified webhooks, then list, read, thread and reply through session-scoped endpoints â€” scoped per user or per organization.",
 		author: {
 			name: "MailKite",
 			github: "mailkite",
 			avatar: "https://github.com/mailkite.png",
 		},
 	},
+	{
+		name: "better-auth-dodo-entitlements",
+		url: "https://github.com/OMEE-Y/better-auth-dodo-entitlements",
+		description:
+			"Bridge Dodo Payments post-purchase entitlements into Better Auth. Support passwordless license key sign-in and device activation, plan and feature flag gating, and webhook-synced metered credit wallets.",
+		author: {
+			name: "Om Yewale",
+			github: "OMEE-Y",
+			avatar: "https://github.com/OMEE-Y.png",
+		},
+	},
+    
 ];
