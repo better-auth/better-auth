@@ -1,3 +1,5 @@
+import { getAuthTables } from "@better-auth/core/db";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import type {
 	OAuthActorClaim,
 	OAuthAuthenticationContext,
@@ -7,6 +9,7 @@ import type {
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError } from "better-auth/api";
 import { deriveDpopJkt } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -2602,5 +2605,161 @@ describe("ciba getCibaRequest", () => {
 			expiresAt: lastNotification!.expiresAt,
 		});
 		expect(lastNotification!.resources).toEqual([resource]);
+	});
+});
+
+/**
+ * Prisma on PostgreSQL, CockroachDB, and MongoDB rejects `null` for a scalar
+ * list column and reads an omitted one back as `[]`.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11933
+ * @see https://www.prisma.io/docs/orm/prisma-schema/data-model/models#type-modifiers
+ */
+describe("ciba on scalar list columns", async () => {
+	const database: Record<string, Record<string, unknown>[]> = {};
+	const createMemoryAdapter = memoryAdapter(database);
+	const instance = await getTestInstance({
+		baseURL,
+		database: (options) => {
+			const tables = getAuthTables(options);
+			const listFields = (model: string) =>
+				Object.entries(tables[model]?.fields ?? {})
+					.filter(([, field]) => field.type === "string[]")
+					.map(([name]) => name);
+			for (const model of Object.keys(tables)) database[model] ??= [];
+			const adapter = createMemoryAdapter(options);
+			const rejectNullLists = (model: string, data: object) => {
+				for (const field of listFields(model)) {
+					if ((data as Record<string, unknown>)[field] === null) {
+						throw new Error(`Argument \`${field}\` must not be null.`);
+					}
+				}
+			};
+			const readListsAsArrays = <T>(model: string, row: T): T => {
+				if (!row) return row;
+				const copy = { ...row } as Record<string, unknown>;
+				for (const field of listFields(model)) copy[field] ??= [];
+				return copy as T;
+			};
+			return {
+				...adapter,
+				create: (async (args) => {
+					rejectNullLists(args.model, args.data);
+					return readListsAsArrays(args.model, await adapter.create(args));
+				}) as DBAdapter["create"],
+				update: (async (args) => {
+					rejectNullLists(args.model, args.update);
+					return readListsAsArrays(args.model, await adapter.update(args));
+				}) as DBAdapter["update"],
+				updateMany: (async (args) => {
+					rejectNullLists(args.model, args.update);
+					return adapter.updateMany(args);
+				}) as DBAdapter["updateMany"],
+				incrementOne: (async (args) => {
+					rejectNullLists(args.model, args.set ?? {});
+					return readListsAsArrays(
+						args.model,
+						await adapter.incrementOne(args),
+					);
+				}) as DBAdapter["incrementOne"],
+				findOne: (async (args) =>
+					readListsAsArrays(
+						args.model,
+						await adapter.findOne(args),
+					)) as DBAdapter["findOne"],
+				findMany: (async (args) =>
+					(await adapter.findMany(args)).map((row) =>
+						readListsAsArrays(args.model, row),
+					)) as DBAdapter["findMany"],
+			};
+		},
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			ciba({ resultPage: "/ciba", sendNotification }),
+		],
+	});
+	const { headers: userHeaders, user } = await instance.signInWithTestUser();
+	const client = await instance.auth.api.adminCreateOAuthClient({
+		headers: userHeaders,
+		body: { grant_types: [CIBA_GRANT_TYPE], scope: "openid", metadata: POLL },
+	});
+
+	/** A request without `acr_values` or `resource`. */
+	async function startWithoutLists() {
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: user.email },
+			client,
+			instance.customFetchImpl,
+		);
+		expect(res.status).toBe(200);
+		return {
+			authReqId: res.body.auth_req_id as string,
+			requestId: lastNotification!.requestId,
+			url: lastNotification!.url!,
+		};
+	}
+
+	async function redirectOwn(url: string, body?: Record<string, unknown>) {
+		const requestHeaders = new Headers(userHeaders);
+		requestHeaders.set("accept", "application/json");
+		if (body) requestHeaders.set("content-type", "application/json");
+		const res = await instance.customFetchImpl(url, {
+			method: body ? "POST" : "GET",
+			headers: requestHeaders,
+			body: body ? JSON.stringify(body) : undefined,
+		});
+		const json = (await res.json()) as { url?: string };
+		if (!json.url) throw new Error(`No redirect from ${url}: ${res.status}`);
+		return new URL(json.url, baseURL);
+	}
+
+	function pollOwn(authReqId: string) {
+		return poll(authReqId, client, {}, [], instance.customFetchImpl);
+	}
+
+	it("reads a request made without acr_values or resource as having neither", async () => {
+		const { requestId } = await startWithoutLists();
+		expect(lastNotification).toMatchObject({ requestId });
+		expect(lastNotification!.acrValues).toBeUndefined();
+		expect(lastNotification!.resources).toBeUndefined();
+		const pending = await instance.auth.api.getCibaRequest({
+			body: { requestId, userId: user.id },
+		});
+		expect(pending).toMatchObject({ requestId, scopes: ["openid"] });
+		expect(pending?.acrValues).toBeUndefined();
+		expect(pending?.resources).toBeUndefined();
+	});
+
+	it("issues tokens without an amr claim after completeCibaRequest states none", async () => {
+		const { authReqId, requestId } = await startWithoutLists();
+		await instance.auth.api.completeCibaRequest({
+			body: { requestId, userId: user.id, decision: "approved" },
+		});
+		const issued = await pollOwn(authReqId);
+		expect(issued.status).toBe(200);
+		expect(issued.body.token_type).toBe("Bearer");
+		const claims = decodeJwt(issued.body.id_token as string);
+		expect(claims.sub).toBe(user.id);
+		expect(claims).not.toHaveProperty("amr");
+	});
+
+	it("issues tokens without an amr claim after the user approves on the consent page", async () => {
+		const { authReqId, url } = await startWithoutLists();
+		const consent = await redirectOwn(url);
+		expect(consent.pathname).toBe("/consent");
+		expect(consent.searchParams.has("acr_values")).toBe(false);
+		const result = await redirectOwn(`${baseURL}/api/auth/oauth2/consent`, {
+			accept: true,
+			oauth_query: consent.search.slice(1),
+		});
+		expect(result.toString()).toBe(`${baseURL}/ciba?status=approved`);
+
+		const issued = await pollOwn(authReqId);
+		expect(issued.status).toBe(200);
+		expect(issued.body.token_type).toBe("Bearer");
+		const claims = decodeJwt(issued.body.id_token as string);
+		expect(claims.sub).toBe(user.id);
+		expect(claims).not.toHaveProperty("amr");
 	});
 });

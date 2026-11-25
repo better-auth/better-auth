@@ -37,7 +37,7 @@ export function toPendingRequest(
 		scopes: parseScopes(request.scope),
 		resources: request.resources?.length ? request.resources : undefined,
 		bindingMessage: request.bindingMessage ?? undefined,
-		acrValues: request.acrValues ?? undefined,
+		acrValues: request.acrValues?.length ? request.acrValues : undefined,
 		authorizationDetails: readAuthorizationDetails(
 			request.authorizationDetails,
 		),
@@ -158,7 +158,7 @@ export function cibaApprovalRequest(
 							approvedViaConsent: true,
 							authTime: new Date(approval.authTime),
 							acr: approval.acr ?? null,
-							amr: approval.amr ?? null,
+							...(approval.amr?.length ? { amr: approval.amr } : {}),
 						},
 					);
 					return resultURL(ctx, "approved");
@@ -269,7 +269,7 @@ export const createCompleteCibaRequest = (
 				scope: scopes.join(" "),
 				authTime: ctx.body.authTime ?? null,
 				acr: acr ?? null,
-				amr: amr?.length ? amr : null,
+				...(amr?.length ? { amr } : {}),
 				authorizationDetails,
 			});
 			return ctx.json({ status: true });

@@ -165,7 +165,7 @@ export const createCibaGrantHandler =
 			grantRequest: request,
 			authTime: request.authTime ?? undefined,
 			acr: request.acr ?? undefined,
-			amr: request.amr ?? undefined,
+			amr: request.amr?.length ? request.amr : undefined,
 			// A DPoP proof on this poll, or a sender-constraint proved at client
 			// authentication, binds the issued token.
 			confirmation: binding,
