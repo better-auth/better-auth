@@ -286,4 +286,16 @@ export const communityAdapters: CommunityAdapter[] = [
 			avatar: "https://github.com/ismailkarsli.png",
 		},
 	},
+	{
+		name: "mongozod",
+		url: "https://mongozod.dev/docs/adapters/better-auth",
+		database: "MongoDB",
+		databaseUrl: "https://www.mongodb.com",
+		author: {
+			name: "Tobías D. Serdeiro",
+			url: "https://x.com/tserdeiro",
+			avatar:
+				"https://gravatar.com/avatar/031f50497b8573298c1f8f4177fe4f22a8e71fee624f2a1185efdf1268f89895",
+		},
+	},
 ];
