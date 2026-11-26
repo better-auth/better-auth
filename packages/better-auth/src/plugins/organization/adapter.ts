@@ -294,57 +294,39 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				| undefined;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const members = await Promise.all([
-				adapter.findMany<InferMember<O, false>>({
-					model: "member",
-					where: [
-						{ field: "organizationId", value: data.organizationId },
-						...(data.filter?.field
-							? [
-									{
-										field: data.filter?.field,
-										value: data.filter?.value,
-										...(data.filter.operator
-											? { operator: data.filter.operator }
-											: {}),
-									},
-								]
-							: []),
-					],
-					limit:
-						data.limit ||
-						(typeof options?.membershipLimit === "number"
-							? options.membershipLimit
-							: 100) ||
-						100,
-					offset: data.offset || 0,
-					sortBy: data.sortBy
-						? { field: data.sortBy, direction: data.sortOrder || "asc" }
-						: undefined,
-				}),
-				adapter.count({
-					model: "member",
-					where: [
-						{ field: "organizationId", value: data.organizationId },
-						...(data.filter?.field
-							? [
-									{
-										field: data.filter?.field,
-										value: data.filter?.value,
-										...(data.filter.operator
-											? { operator: data.filter.operator }
-											: {}),
-									},
-								]
-							: []),
-					],
-				}),
-			]);
+			const where = [
+				{ field: "organizationId", value: data.organizationId },
+				...(data.filter?.field
+					? [
+							{
+								field: data.filter?.field,
+								value: data.filter?.value,
+								...(data.filter.operator
+									? { operator: data.filter.operator }
+									: {}),
+							},
+						]
+					: []),
+			];
+			const page = await adapter.findPage<InferMember<O, false>>({
+				model: "member",
+				where,
+				limit:
+					data.limit ||
+					(typeof options?.membershipLimit === "number"
+						? options.membershipLimit
+						: 100) ||
+					100,
+				offset: data.offset || 0,
+				sortBy: data.sortBy
+					? { field: data.sortBy, direction: data.sortOrder || "asc" }
+					: undefined,
+			});
 			// An empty `in` list is a syntax error on Postgres and MSSQL.
-			if (members[0].length === 0) {
+			if (page.items.length === 0) {
 				return {
 					members: [],
-					total: members[1],
+					total: page.total,
 				};
 			}
 			// Prisma/Drizzle default findMany to ~100 when limit is omitted.
@@ -354,14 +336,14 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				where: [
 					{
 						field: "id",
-						value: members[0].map((member) => member.userId),
+						value: page.items.map((member) => member.userId),
 						operator: "in",
 					},
 				],
-				limit: members[0].length,
+				limit: page.items.length,
 			});
 			return {
-				members: members[0].map((member) => {
+				members: page.items.map((member) => {
 					const user = users.find((user) => user.id === member.userId);
 					if (!user) {
 						throw new BetterAuthError(
@@ -378,7 +360,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						},
 					};
 				}),
-				total: members[1],
+				total: page.total,
 			};
 		},
 		findMemberByOrgId: async (data: {

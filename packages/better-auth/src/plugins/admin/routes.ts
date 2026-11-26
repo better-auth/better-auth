@@ -3,7 +3,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
-import type { Session } from "@better-auth/core/db";
+import type { Session, User } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
@@ -870,27 +870,27 @@ export const listUsers = (opts: AdminOptions) =>
 			}
 
 			try {
-				const users = await ctx.context.internalAdapter.listUsers(
-					Number(ctx.query?.limit) || undefined,
-					Number(ctx.query?.offset) || undefined,
-					ctx.query?.sortBy
+				const limit = Number(ctx.query?.limit) || undefined;
+				const offset = Number(ctx.query?.offset) || undefined;
+				const page = await ctx.context.adapter.findPage<User>({
+					model: "user",
+					where: where.length ? where : undefined,
+					limit,
+					offset,
+					sortBy: ctx.query?.sortBy
 						? {
 								field: ctx.query.sortBy,
 								direction: ctx.query.sortDirection || "asc",
 							}
 						: undefined,
-					where.length ? where : undefined,
-				);
-				const total = await ctx.context.internalAdapter.countTotalUsers(
-					where.length ? where : undefined,
-				);
+				});
 				return ctx.json({
-					users: users.map((user) =>
+					users: page.items.map((user) =>
 						parseUserOutput(ctx.context.options, user),
 					) as UserWithRole[],
-					total: total,
-					limit: Number(ctx.query?.limit) || undefined,
-					offset: Number(ctx.query?.offset) || undefined,
+					total: page.total,
+					limit,
+					offset,
 				});
 			} catch {
 				return ctx.json({
