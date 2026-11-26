@@ -594,8 +594,11 @@ function grantRevokedDuringIssuance() {
 }
 
 /**
- * Tear down the entire refresh-token family for a (client, user) pair, plus
+ * Tear down the refresh-token family for a (client, user) pair — scoped to
+ * `authorizationCodeId` when provided so concurrent logins stay isolated — plus
  * any access tokens that reference those refresh rows, per RFC 9700 §4.14.
+ * Grants without an `authorizationCodeId` (such as device-code grants) still fall
+ * back to tearing down all matching (client, user) rows.
  * Access tokens are deleted first so the parent rows' foreign-key children
  * do not block the refresh-row delete.
  *
