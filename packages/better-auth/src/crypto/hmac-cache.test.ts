@@ -93,14 +93,25 @@ describe("HMAC CryptoKey caching", () => {
 		expect(importKeySpy).not.toHaveBeenCalled();
 	});
 
-	it("evicts oldest cached secrets once cache capacity is exceeded without breaking verification", async () => {
-		const firstSecret = `evict-first-${Math.random()}-padding-32-chars`;
-		const firstSig = await signHmacSha256(firstSecret, "data");
-		for (let i = 0; i < 65; i++) {
+	it("evicts least-recently-used secrets once cache capacity is exceeded without breaking verification", async () => {
+		const promotedSecret = `evict-promoted-${Math.random()}-padding-32-chars`;
+		const coldSecret = `evict-cold-${Math.random()}-padding-32-chars`;
+		const promotedSig = await signHmacSha256(promotedSecret, "data");
+		const coldSig = await signHmacSha256(coldSecret, "data");
+
+		// Promote the older secret to most-recently-used before filling capacity.
+		await getCryptoKey(promotedSecret);
+		for (let i = 0; i < 63; i++) {
 			await getCryptoKey(`evict-filler-${i}-${Math.random()}-32-chars`);
 		}
+
 		const importKeySpy = vi.spyOn(globalThis.crypto.subtle, "importKey");
-		expect(await verifyHmacSha256(firstSecret, "data", firstSig)).toBe(true);
+		expect(await verifyHmacSha256(promotedSecret, "data", promotedSig)).toBe(
+			true,
+		);
+		expect(importKeySpy).not.toHaveBeenCalled();
+
+		expect(await verifyHmacSha256(coldSecret, "data", coldSig)).toBe(true);
 		expect(importKeySpy).toHaveBeenCalledTimes(1);
 	});
 
