@@ -10,12 +10,14 @@ import type { MemoryDB } from "better-auth/adapters/memory";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
-import { SCIM_MAX_GROUP_MEMBERS } from "./group-schemas";
 import type { SCIMSubject } from "./persistence";
 
 const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
+
+/** Larger than the former 1,000-member cap and SQLite's 999 bound-variable limit. */
+const LARGE_GROUP_MEMBER_COUNT = 1_001;
 
 interface GroupRow {
 	id: string;
@@ -50,20 +52,10 @@ function findWhereValue(where: readonly Where[], field: string): unknown {
 	return where.find((clause) => clause.field === field)?.value;
 }
 
-function createDeferred() {
-	let resolve!: () => void;
-	const promise = new Promise<void>((resolvePromise) => {
-		resolve = resolvePromise;
-	});
-	return { promise, resolve };
-}
-
 function createCardinalityRaceAdapter(
 	data: MemoryDB & { scimGroup: GroupRow[] },
 ) {
 	const groupLockTails = new Map<string, Promise<void>>();
-	const cardinalityReadsMayContinue = createDeferred();
-	let cardinalityReadCount = 0;
 
 	return (options: BetterAuthOptions): DBAdapter => {
 		const adapter = memoryAdapter(data)(options);
@@ -100,8 +92,6 @@ function createCardinalityRaceAdapter(
 								release = resolve;
 							});
 							groupLockTails.set(groupId, currentTail);
-							if (previousTail !== undefined)
-								cardinalityReadsMayContinue.resolve();
 							await previousTail;
 							heldGroupIds.add(groupId);
 							releases.push(() => {
@@ -119,21 +109,8 @@ function createCardinalityRaceAdapter(
 							}
 							return transaction.incrementOne<Row>(input);
 						};
-						const count: DBTransactionAdapter["count"] = async (input) => {
-							if (
-								input.model === "scimGroupMember" &&
-								typeof findWhereValue(input.where ?? [], "groupId") === "string"
-							) {
-								cardinalityReadCount++;
-								if (cardinalityReadCount === 2) {
-									cardinalityReadsMayContinue.resolve();
-								}
-								await cardinalityReadsMayContinue.promise;
-							}
-							return transaction.count(input);
-						};
 
-						return callback({ ...transaction, count, incrementOne });
+						return callback({ ...transaction, incrementOne });
 					});
 				} finally {
 					for (const release of releases.reverse()) release();
@@ -191,6 +168,32 @@ function createMemberReferences(count: number, prefix = "candidate") {
 	}));
 }
 
+function seedConnectionUsers(
+	data: { scimUser: SCIMUserRow[] },
+	count: number,
+	prefix = "member",
+) {
+	const members = createMemberReferences(count, prefix);
+	data.scimUser.push(
+		...members.map((member) => ({
+			id: member.value,
+			connectionId: "workforce",
+			displayName: member.value,
+		})),
+	);
+	return members;
+}
+
+function membershipIdsOf(
+	data: { scimGroupMember: GroupMemberRow[] },
+	groupId: string,
+) {
+	return data.scimGroupMember
+		.filter((membership) => membership.groupId === groupId)
+		.map((membership) => membership.scimUserId)
+		.sort();
+}
+
 async function createGroupWithPersistedMembers(
 	{ auth, data, headers }: ReturnType<typeof createFixture>,
 	displayName: string,
@@ -204,16 +207,10 @@ async function createGroupWithPersistedMembers(
 		headers,
 	});
 	const createdAt = new Date();
-	const persistedMembers = createMemberReferences(
+	const persistedMembers = seedConnectionUsers(
+		data,
 		memberCount,
 		`${group.id}-persisted`,
-	);
-	data.scimUser.push(
-		...persistedMembers.map((member) => ({
-			id: member.value,
-			connectionId: "workforce",
-			displayName: member.value,
-		})),
 	);
 	data.scimGroupMember.push(
 		...persistedMembers.map((member, index) => ({
@@ -225,42 +222,34 @@ async function createGroupWithPersistedMembers(
 			createdAt,
 		})),
 	);
-	return group;
-}
-
-function expectCardinalityError(error: unknown, expectSCIMType = true) {
-	expect(error).toMatchObject({
-		statusCode: 400,
-		body: expect.objectContaining({
-			status: "400",
-			...(expectSCIMType ? { scimType: "invalidValue" } : {}),
-		}),
-	});
+	return { group, persistedMembers };
 }
 
 describe("SCIM Group direct-member cardinality", () => {
-	it("rejects an over-limit Group create without writing the Group", async () => {
+	it("creates a Group with more than 1000 unique members", async () => {
 		const { auth, data, headers } = createFixture();
+		const members = seedConnectionUsers(
+			data,
+			LARGE_GROUP_MEMBER_COUNT,
+			"create",
+		);
 
-		try {
-			await auth.api.createSCIMGroup({
-				body: {
-					schemas: [GROUP_SCHEMA],
-					displayName: "Engineering",
-					members: createMemberReferences(SCIM_MAX_GROUP_MEMBERS + 1),
-				},
-				headers,
-			});
-			throw new Error("Expected Group creation to fail");
-		} catch (error) {
-			expectCardinalityError(error, false);
-		}
+		const group = await auth.api.createSCIMGroup({
+			body: {
+				schemas: [GROUP_SCHEMA],
+				displayName: "Engineering",
+				members,
+			},
+			headers,
+		});
 
-		expect(data.scimGroup).toEqual([]);
-		expect(data.scimGroupMember).toEqual([]);
+		expect(membershipIdsOf(data, group.id)).toEqual(
+			members.map((member) => member.value).sort(),
+		);
+		expect(group.members).toHaveLength(LARGE_GROUP_MEMBER_COUNT);
 	});
 
-	it("rejects an over-limit Group replacement without partial writes", async () => {
+	it("replaces a Group with more than 1000 unique members without dropping the Group", async () => {
 		const { auth, data, headers } = createFixture();
 		const user = await auth.api.createSCIMUser({
 			body: { schemas: [USER_SCHEMA], userName: "ada@example.com" },
@@ -274,31 +263,33 @@ describe("SCIM Group direct-member cardinality", () => {
 			},
 			headers,
 		});
+		const members = seedConnectionUsers(
+			data,
+			LARGE_GROUP_MEMBER_COUNT,
+			"replace",
+		);
 
-		try {
-			await auth.api.replaceSCIMGroup({
-				params: { groupId: group.id },
-				body: {
-					schemas: [GROUP_SCHEMA],
-					displayName: "Renamed Engineering",
-					members: createMemberReferences(SCIM_MAX_GROUP_MEMBERS + 1),
-				},
-				headers,
-			});
-			throw new Error("Expected Group replacement to fail");
-		} catch (error) {
-			expectCardinalityError(error, false);
-		}
+		const replaced = await auth.api.replaceSCIMGroup({
+			params: { groupId: group.id },
+			body: {
+				schemas: [GROUP_SCHEMA],
+				displayName: "Renamed Engineering",
+				members,
+			},
+			headers,
+		});
 
 		expect(data.scimGroup.find((row) => row.id === group.id)).toMatchObject({
-			displayName: "Engineering",
+			displayName: "Renamed Engineering",
 		});
-		expect(data.scimGroupMember).toEqual([
-			expect.objectContaining({ groupId: group.id, scimUserId: user.id }),
-		]);
+		expect(membershipIdsOf(data, group.id)).toEqual(
+			members.map((member) => member.value).sort(),
+		);
+		expect(replaced.members).toHaveLength(LARGE_GROUP_MEMBER_COUNT);
+		expect(membershipIdsOf(data, group.id)).not.toContain(user.id);
 	});
 
-	it("rejects an over-limit membership add without partial writes", async () => {
+	it("adds a member past 1000 without dropping existing memberships", async () => {
 		const { auth, data, headers } = createFixture();
 		const user = await auth.api.createSCIMUser({
 			body: { schemas: [USER_SCHEMA], userName: "ada@example.com" },
@@ -312,82 +303,108 @@ describe("SCIM Group direct-member cardinality", () => {
 			headers,
 		});
 		const createdAt = new Date();
+		const existing = seedConnectionUsers(
+			data,
+			LARGE_GROUP_MEMBER_COUNT - 1,
+			"existing",
+		);
 		data.scimGroupMember.push(
-			...createMemberReferences(SCIM_MAX_GROUP_MEMBERS, "existing").map(
-				(member, index) => ({
-					id: `membership-${index}`,
-					connectionId: "workforce",
-					groupId: group.id,
-					scimUserId: member.value,
-					membershipKey: `membership-key-${index}`,
-					createdAt,
-				}),
-			),
+			...existing.map((member, index) => ({
+				id: `membership-${index}`,
+				connectionId: "workforce",
+				groupId: group.id,
+				scimUserId: member.value,
+				membershipKey: `membership-key-${index}`,
+				createdAt,
+			})),
 		);
-		const groupUpdatedAt = data.scimGroup.find(
-			(row) => row.id === group.id,
-		)?.updatedAt;
 
-		try {
-			await auth.api.patchSCIMGroup({
-				params: { groupId: group.id },
-				body: {
-					schemas: [PATCH_SCHEMA],
-					Operations: [
-						{ op: "add", path: "members", value: [{ value: user.id }] },
-					],
-				},
-				headers,
-			});
-			throw new Error("Expected Group membership addition to fail");
-		} catch (error) {
-			expectCardinalityError(error);
-		}
+		const patched = await auth.api.patchSCIMGroup({
+			params: { groupId: group.id },
+			body: {
+				schemas: [PATCH_SCHEMA],
+				Operations: [
+					{ op: "add", path: "members", value: [{ value: user.id }] },
+				],
+			},
+			headers,
+		});
 
-		expect(data.scimGroupMember).toHaveLength(SCIM_MAX_GROUP_MEMBERS);
-		expect(data.scimGroupMember).not.toContainEqual(
-			expect.objectContaining({ scimUserId: user.id }),
+		expect(membershipIdsOf(data, group.id)).toHaveLength(
+			LARGE_GROUP_MEMBER_COUNT,
 		);
-		expect(
-			data.scimGroup.find((row) => row.id === group.id)?.updatedAt,
-		).toEqual(groupUpdatedAt);
+		expect(membershipIdsOf(data, group.id)).toContain(user.id);
+		expect(patched.members).toHaveLength(LARGE_GROUP_MEMBER_COUNT);
 	});
 
-	it("bounds a Group response when persisted state violates the invariant", async () => {
+	it("returns every persisted member for a Group with more than 1000 members", async () => {
 		const fixture = createFixture();
 		const { auth, headers } = fixture;
-		const group = await createGroupWithPersistedMembers(
+		const { group, persistedMembers } = await createGroupWithPersistedMembers(
 			fixture,
 			"Engineering",
-			SCIM_MAX_GROUP_MEMBERS + 1,
+			LARGE_GROUP_MEMBER_COUNT,
 		);
 
-		await expect(
-			auth.api.getSCIMGroup({
-				params: { groupId: group.id },
-				headers,
-			}),
-		).rejects.toMatchObject({
-			statusCode: 500,
-			body: expect.objectContaining({ status: "500" }),
+		const resource = await auth.api.getSCIMGroup({
+			params: { groupId: group.id },
+			headers,
 		});
+		const listed = await auth.api.listSCIMGroups({
+			query: { filter: 'displayName eq "Engineering"' },
+			headers,
+		});
+
+		expect(resource.members).toHaveLength(LARGE_GROUP_MEMBER_COUNT);
+		expect(resource.members?.map((member) => member.value).sort()).toEqual(
+			persistedMembers.map((member) => member.value).sort(),
+		);
+		expect(listed.Resources).toHaveLength(1);
+		expect(listed.Resources[0]?.members).toHaveLength(LARGE_GROUP_MEMBER_COUNT);
+	});
+
+	it("omits members for a large Group when excludedAttributes=members", async () => {
+		const fixture = createFixture();
+		const { auth, headers } = fixture;
+		const { group } = await createGroupWithPersistedMembers(
+			fixture,
+			"Engineering",
+			LARGE_GROUP_MEMBER_COUNT,
+		);
+
+		const resource = await auth.api.getSCIMGroup({
+			params: { groupId: group.id },
+			query: { excludedAttributes: "members" },
+			headers,
+		});
+		const listed = await auth.api.listSCIMGroups({
+			query: {
+				filter: 'displayName eq "Engineering"',
+				excludedAttributes: "members",
+			},
+			headers,
+		});
+
+		expect(resource).not.toHaveProperty("members");
+		expect(listed.Resources).toHaveLength(1);
+		expect(listed.Resources[0]).not.toHaveProperty("members");
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12066
 	 */
-	it("empties and deletes Groups whose persisted state violates the invariant", async () => {
+	it("empties and deletes Groups with more than 1000 persisted members", async () => {
 		const fixture = createFixture();
 		const { auth, data, headers } = fixture;
-		const replaced = await createGroupWithPersistedMembers(
+		const { group: replaced } = await createGroupWithPersistedMembers(
 			fixture,
 			"Engineering",
-			SCIM_MAX_GROUP_MEMBERS + 10,
+			LARGE_GROUP_MEMBER_COUNT + 9,
 		);
-		const deleted = await createGroupWithPersistedMembers(
+		const { group: deleted } = await createGroupWithPersistedMembers(
 			fixture,
 			"Platform",
-			SCIM_MAX_GROUP_MEMBERS + 10,
+			LARGE_GROUP_MEMBER_COUNT + 9,
 		);
 
 		await auth.api.replaceSCIMGroup({
@@ -408,7 +425,36 @@ describe("SCIM Group direct-member cardinality", () => {
 		expect(data.scimGroup.map((group) => group.id)).toEqual([replaced.id]);
 	});
 
-	it("serializes concurrent additions before enforcing the member limit", async () => {
+	it("rejects an invalid member in a large create without writing the Group", async () => {
+		const { auth, data, headers } = createFixture();
+		const members = seedConnectionUsers(
+			data,
+			LARGE_GROUP_MEMBER_COUNT - 1,
+			"valid",
+		);
+
+		await expect(
+			auth.api.createSCIMGroup({
+				body: {
+					schemas: [GROUP_SCHEMA],
+					displayName: "Engineering",
+					members: [...members, { value: "missing-user" }],
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: expect.objectContaining({
+				status: "400",
+				scimType: "invalidValue",
+			}),
+		});
+
+		expect(data.scimGroup).toEqual([]);
+		expect(data.scimGroupMember).toEqual([]);
+	});
+
+	it("serializes concurrent additions so both members persist", async () => {
 		const data = {
 			user: [] as User[],
 			session: [] as { id: string }[],
@@ -455,19 +501,6 @@ describe("SCIM Group direct-member cardinality", () => {
 			body: { schemas: [GROUP_SCHEMA], displayName: "Engineering" },
 			headers,
 		});
-		const createdAt = new Date();
-		data.scimGroupMember.push(
-			...createMemberReferences(SCIM_MAX_GROUP_MEMBERS - 1, "existing").map(
-				(member, index) => ({
-					id: `membership-${index}`,
-					connectionId: "workforce",
-					groupId: group.id,
-					scimUserId: member.value,
-					membershipKey: `membership-key-${index}`,
-					createdAt,
-				}),
-			),
-		);
 
 		const mutations = await Promise.allSettled(
 			[firstCandidate.id, secondCandidate.id].map((scimUserId) =>
@@ -490,25 +523,13 @@ describe("SCIM Group direct-member cardinality", () => {
 
 		expect(
 			mutations.filter(({ status }) => status === "fulfilled"),
-		).toHaveLength(1);
-		const rejectedMutation = mutations.find(
-			(mutation) => mutation.status === "rejected",
-		);
-		expect(rejectedMutation).toMatchObject({
-			status: "rejected",
-			reason: {
-				statusCode: 400,
-				body: expect.objectContaining({
-					status: "400",
-					scimType: "invalidValue",
-				}),
-			},
-		});
+		).toHaveLength(2);
 		expect(
-			data.scimGroupMember.filter(
-				(membership) => membership.groupId === group.id,
-			),
-		).toHaveLength(SCIM_MAX_GROUP_MEMBERS);
+			data.scimGroupMember
+				.filter((membership) => membership.groupId === group.id)
+				.map((membership) => membership.scimUserId)
+				.sort(),
+		).toEqual([firstCandidate.id, secondCandidate.id].sort());
 		await expect(
 			auth.api.getSCIMGroup({ params: { groupId: group.id }, headers }),
 		).resolves.toMatchObject({ id: group.id });
