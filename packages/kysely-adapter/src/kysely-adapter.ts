@@ -1077,37 +1077,55 @@ export const kyselyAdapter = (
 						}
 						return query;
 					};
-					if (config?.type === "mysql") {
+					if (config?.type === "mysql" || config?.type === "mssql") {
 						const incrementInTransaction = async (trx: any) => {
 							const updated: unknown[] = [];
 							for (const row of sorted) {
 								const expectedId = findSensitiveIdEq(row.where, idField).value;
-								const target = await applyRowWhere(
-									trx
-										.selectFrom(model)
-										.select(`${model}.${idField}`)
-										.forUpdate(),
+								// Default MySQL and SQL Server collations can match
+								// `id = 'ABC'` to stored `'abc'`. Lock one row, then
+								// skip unless the stored id equals the guard exactly.
+								// Do not COLLATE the id column: that fails on
+								// uniqueidentifier and is lossy on non-Latin text.
+								const lockQuery = applyRowWhere(
+									config?.type === "mssql"
+										? trx
+												.selectFrom(
+													// cspell:ignore UPDLOCK
+													sql`${sql.table(model)} as ${sql.table(model)} WITH (UPDLOCK, ROWLOCK)` as never,
+												)
+												.select(`${model}.${idField}`)
+										: trx
+												.selectFrom(model)
+												.select(`${model}.${idField}`)
+												.forUpdate(),
 									row.where,
-								)
-									.limit(1)
-									.executeTakeFirst();
+								);
+								const target = await (config?.type === "mssql"
+									? lockQuery.top(1)
+									: lockQuery.limit(1)
+								).executeTakeFirst();
 								if (!target) continue;
 								const targetId = target[idField] ?? target.id;
-								// MySQL's default collation can match `id = 'ABC'` to
-								// stored `'abc'`. Skip that hit so the row is not
-								// incremented once per case variant.
 								if (
 									targetId === undefined ||
 									targetId === null ||
 									targetId !== expectedId
 								)
 									continue;
-								const result = await applyRowWhere(
+								const updateQuery = applyRowWhere(
 									trx.updateTable(model).set(assignments),
 									row.where,
-								)
-									.where(`${model}.${idField}`, "=", targetId)
-									.executeTakeFirst();
+								).where(`${model}.${idField}`, "=", targetId);
+								if (config?.type === "mssql") {
+									const next =
+										(await updateQuery
+											.outputAll("inserted")
+											.executeTakeFirst()) ?? null;
+									if (next) updated.push(next);
+									continue;
+								}
+								const result = await updateQuery.executeTakeFirst();
 								if (Number(result.numUpdatedRows) === 0) continue;
 								const next =
 									(await trx
@@ -1124,8 +1142,8 @@ export const kyselyAdapter = (
 							? incrementInTransaction(db)
 							: db.transaction().execute(incrementInTransaction);
 					}
-					const applyRowsWhere = (query: any) => {
-						query = query.where((eb: any) =>
+					const applyRowsWhere = (query: any) =>
+						query.where((eb: any) =>
 							eb.or(
 								sorted.map((row) => {
 									const { and, or } = convertWhereClause(
@@ -1146,31 +1164,10 @@ export const kyselyAdapter = (
 								}),
 							),
 						);
-						if (config?.type === "mssql") {
-							const expectedIds = sorted.map(
-								(row) => findSensitiveIdEq(row.where, idField).value,
-							);
-							if (expectedIds.every((id) => typeof id === "string")) {
-								// Default SQL Server collations match `id = 'ABC'`
-								// to stored `'abc'`. Force a binary compare so the
-								// case-sensitive id guard holds on lock and update.
-								// cspell:ignore Latin1
-								query = query.where(
-									sql`${sql.ref(`${model}.${idField}`)} COLLATE Latin1_General_BIN`,
-									"in",
-									expectedIds,
-								);
-							}
-						}
-						return query;
-					};
 					const executeUpdate = async (trx: typeof db) => {
 						const updateQuery = applyRowsWhere(
 							trx.updateTable(model).set(assignments),
 						);
-						if (config?.type === "mssql") {
-							return await updateQuery.outputAll("inserted").execute();
-						}
 						return await updateQuery.returningAll().execute();
 					};
 					if (config?.type === "postgres") {
@@ -1181,25 +1178,6 @@ export const kyselyAdapter = (
 									.select(`${model}.${idField}`)
 									.orderBy(`${model}.${idField}`, "asc")
 									.forUpdate(),
-							).execute();
-							return executeUpdate(trx);
-						};
-						return inTransaction
-							? incrementInTransaction(db)
-							: db.transaction().execute(incrementInTransaction);
-					}
-					if (config?.type === "mssql") {
-						const incrementInTransaction = async (trx: typeof db) => {
-							await applyRowsWhere(
-								trx
-									.selectFrom(
-										// SQL Server wants `FROM table AS alias WITH (UPDLOCK, ROWLOCK)`.
-										// Kysely's `.as()` emits `WITH (...) as alias`, which is invalid.
-										// cspell:ignore UPDLOCK
-										sql`${sql.table(model)} as ${sql.table(model)} WITH (UPDLOCK, ROWLOCK)` as never,
-									)
-									.selectAll()
-									.orderBy(sql.ref(`${model}.${idField}`), "asc"),
 							).execute();
 							return executeUpdate(trx);
 						};

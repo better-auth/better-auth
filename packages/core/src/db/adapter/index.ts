@@ -710,10 +710,10 @@ export interface CustomAdapter {
 	 * order so concurrent batches deadlock-avoid the same way.
 	 * PostgreSQL should lock matching rows with
 	 * `SELECT ... ORDER BY id FOR UPDATE` before the guarded `UPDATE`.
-	 * SQL Server should lock with `WITH (UPDLOCK, ROWLOCK)` and
-	 * `ORDER BY id`. MySQL should update one locked row
-	 * at a time in id order. SQLite serializes writers, so the guarded
-	 * `UPDATE` is enough.
+	 * MySQL and SQL Server should update one locked row at a time in id
+	 * order. SQL Server should take that lock with
+	 * `WITH (UPDLOCK, ROWLOCK)`. SQLite serializes writers, so the
+	 * guarded `UPDATE` is enough.
 	 *
 	 * This is not `updateMany` with arithmetic. Do not share one `WHERE
 	 * id IN (…)` across rows that carry different expected revisions.
