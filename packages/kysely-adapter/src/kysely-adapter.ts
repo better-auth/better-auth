@@ -10,6 +10,7 @@ import type {
 import {
 	createAdapterFactory,
 	findSensitiveIdEq,
+	incrementManyStoredIdMatches,
 	sortIncrementManyRows,
 } from "@better-auth/core/db/adapter";
 import {
@@ -1110,7 +1111,9 @@ export const kyselyAdapter = (
 								if (
 									targetId === undefined ||
 									targetId === null ||
-									targetId !== expectedId
+									!incrementManyStoredIdMatches(targetId, expectedId, {
+										ignoreGuidCase: config?.type === "mssql",
+									})
 								)
 									continue;
 								const updateQuery = applyRowWhere(

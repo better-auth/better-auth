@@ -5,6 +5,7 @@ import {
 	chunkIncrementManyRows,
 	compareAdapterIds,
 	findSensitiveIdEq,
+	incrementManyStoredIdMatches,
 	sortIncrementManyRows,
 } from "./increment-many";
 
@@ -41,6 +42,19 @@ describe("incrementMany helpers", () => {
 				"id",
 			),
 		).toThrow(/duplicate ids/);
+	});
+
+	it("treats uniqueidentifier hex case as the same id only when asked", () => {
+		const guid = "550e8400-e29b-41d4-a716-446655440000";
+		expect(incrementManyStoredIdMatches(guid.toUpperCase(), guid)).toBe(false);
+		expect(
+			incrementManyStoredIdMatches(guid.toUpperCase(), guid, {
+				ignoreGuidCase: true,
+			}),
+		).toBe(true);
+		expect(
+			incrementManyStoredIdMatches("ABC", "abc", { ignoreGuidCase: true }),
+		).toBe(false);
 	});
 
 	it("sorts numeric ids numerically and string ids by code unit", () => {
