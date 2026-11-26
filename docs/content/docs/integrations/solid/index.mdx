@@ -40,6 +40,8 @@ export default defineConfig({
 			start: {
 				middleware: "./src/middleware.ts", // [!code highlight]
 			},
+			ssr: true, // [!code highlight]
+			serverFunctions: true, // [!code highlight]
 		}),
 	],
 });
@@ -59,7 +61,7 @@ export const authClient = createAuthClient();
 
 ### Read the session on the server
 
-During server rendering the client never fetches, so `useSession()` answers with `null` unless you pass the request's session. Read it in a server function with `getRequestEvent()` (enable the plugin's `serverFunctions` option):
+During server rendering the client never fetches, so `useSession()` answers with `null` unless you pass the request's session. Read it in a server function with `getRequestEvent()` (this needs the `ssr` and `serverFunctions` options from [Mount the handler](#mount-the-handler)):
 
 ```ts title="src/lib/session.ts"
 import { getRequestEvent } from "@solidjs/web";

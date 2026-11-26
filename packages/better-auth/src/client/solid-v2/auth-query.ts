@@ -72,7 +72,18 @@ function toOutcome<T>(state: AuthQueryState<T>): AuthQueryOutcome<T> {
 	return { kind: "value", value: state.data };
 }
 
-function authQuerySource<T>(store: AuthQueryAtom<T>): FromSource<T | null> {
+/**
+ * Subscribes to an auth-query atom as a `from()` source.
+ *
+ * @param store - The auth-query atom.
+ * @param answered - Whether the reader already holds an answer, such as the
+ * server's answer adopted during hydration. A failed request then keeps that
+ * answer instead of reaching `<Errored>`.
+ */
+function authQuerySource<T>(
+	store: AuthQueryAtom<T>,
+	answered: boolean,
+): FromSource<T | null> {
 	return (next, error) => {
 		// Subscribing while the query is already failed means an `<Errored>`
 		// boundary is retrying: re-request instead of re-throwing the old error.
@@ -83,7 +94,7 @@ function authQuerySource<T>(store: AuthQueryAtom<T>): FromSource<T | null> {
 		// Once the query has answered (data or `null`), a later failed request
 		// keeps showing that answer: only a failure before any answer reaches
 		// `<Errored>`. Erroring here would also close the subscription.
-		let hasAnswered = false;
+		let hasAnswered = answered;
 		return store.subscribe((state) => {
 			const outcome = toOutcome(state);
 			const skipStaleError = isRetry && outcome.kind === "error";
@@ -122,11 +133,13 @@ function createAuthQueryAccessor<T>(
 	store: AuthQueryAtom<T>,
 	options: AuthQueryAccessorOptions<T> = {},
 ): AuthQueryAccessor<T> {
-	const data = createMemo(() => {
+	// `prev` is the reader's current answer. After hydration Solid re-runs this
+	// with the server's adopted answer, which must survive a failed request.
+	const data = createMemo<T | null>((prev) => {
 		if (isServer()) {
 			return from(serverSource(options.serverValue?.() ?? null));
 		}
-		return from(authQuerySource(store));
+		return from(authQuerySource(store, prev !== undefined));
 	});
 	const refetch = action(function* (queryParams?: AuthQueryRefetchParams) {
 		affects(data);

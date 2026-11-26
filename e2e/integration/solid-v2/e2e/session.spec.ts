@@ -90,6 +90,42 @@ test.describe("solid-v2", () => {
 		});
 	});
 
+	/**
+	 * After hydration the session hook keeps the server's answer when the
+	 * browser's first session request fails, instead of reaching `<Errored>`.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/13000
+	 */
+	test("keeps the server session when the first browser session request fails", async ({
+		page,
+	}) => {
+		await signIn(page.request);
+		// Only the browser's request fails; server rendering still reads the session.
+		await page.route("**/api/auth/get-session*", (route) =>
+			route.fulfill({
+				status: 500,
+				json: { message: "Internal Server Error" },
+			}),
+		);
+
+		await page.goto(ref.baseURL);
+		await waitForHydration(page);
+		// Wait until the failed request has reached the session atom.
+		await expect
+			.poll(() =>
+				runClient(
+					page,
+					({ client }) => client.$store.atoms.session.get().error?.status,
+				),
+			)
+			.toBe(500);
+
+		await expect(
+			page.getByRole("heading", { name: "Signed in as Test User" }),
+		).toBeVisible();
+		expect(await page.getByRole("alert").count()).toBe(0);
+	});
+
 	test("updates the page when the user signs in and out in the browser", async ({
 		page,
 	}) => {

@@ -87,6 +87,14 @@ describe("solid-v2 createAuthClient", () => {
 		});
 	});
 
+	it("does not create hooks for $-prefixed signal atoms", () => {
+		const { client } = createClient();
+		// A missing route falls through to the client's path proxy.
+		expect(isProxy(Reflect.get(client, "use$signal"))).toBe(true);
+		expect(isProxy(Reflect.get(client, "use$test"))).toBe(true);
+		expect(isProxy(client.useComputedAtom)).toBe(false);
+	});
+
 	it("exposes the real $fetch and $store", () => {
 		const { client } = createClient();
 		expect(isProxy(client.$fetch)).toBe(false);

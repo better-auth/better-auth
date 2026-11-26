@@ -13,7 +13,13 @@ import type { AuthQueryAccessor } from "./auth-query";
 import { createAuthQueryHook } from "./auth-query";
 import { useStore } from "./solid-store";
 
-/** The hook a plugin atom resolves to: async for auth queries, sync otherwise. */
+/**
+ * The hook a plugin atom resolves to: async for auth queries, sync otherwise.
+ *
+ * Types can't see the runtime brand that marks an auth query, so this checks
+ * the atom's value shape instead. Create auth-query atoms with `useAuthQuery`,
+ * which applies the brand the runtime checks.
+ */
 type ResolvedHook<Value> = [Value] extends [AuthQueryState<infer Data>]
 	? (serverValue?: Accessor<Data | null>) => AuthQueryAccessor<Data>
 	: () => Accessor<Value>;
@@ -121,11 +127,11 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		}
 		return () => useStore(atom);
 	};
+	// `$`-prefixed atoms are internal signals, which `HookAtomKey` also excludes.
 	const resolvedHooks = Object.fromEntries(
-		Object.entries(pluginsAtoms).map(([key, atom]) => [
-			toHookName(key),
-			createHook(atom),
-		]),
+		Object.entries(pluginsAtoms)
+			.filter(([key]) => !key.startsWith("$"))
+			.map(([key, atom]) => [toHookName(key), createHook(atom)]),
 	);
 
 	const routes = {
