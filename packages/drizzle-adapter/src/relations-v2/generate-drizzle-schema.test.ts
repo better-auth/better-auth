@@ -191,6 +191,7 @@ describe("relations-v2 schema generator", () => {
 		expect(code).toMatch(/slug: text\(["']slug["']\)\.notNull\(\)\.unique\(\)/);
 		expect(code).not.toContain("uniqueIndex");
 		expect(code).not.toContain("slug_uidx");
+		expect(code).not.toContain("slug_idx");
 		expect(typeErrors(code)).toEqual([]);
 	});
 
