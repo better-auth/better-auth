@@ -394,15 +394,13 @@ async function reconcileProjectionUserState(
 			createdAt: now,
 			updatedAt: now,
 		}));
-	if (addedGrants.length > 0) {
-		await database.createMany<
-			Omit<SCIMProjectionGrant, "id">,
-			SCIMProjectionGrant
-		>({
-			model: "scimProjectionGrant",
-			data: addedGrants,
-		});
-	}
+	await database.createMany<
+		Omit<SCIMProjectionGrant, "id">,
+		SCIMProjectionGrant
+	>({
+		model: "scimProjectionGrant",
+		data: addedGrants,
+	});
 	if (!projection) return;
 
 	const grants: SCIMProjectedRoleGrant[] = [...desiredGrants]

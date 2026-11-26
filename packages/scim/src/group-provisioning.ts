@@ -531,7 +531,6 @@ async function createGroupMemberships(
 		createdAt: Date;
 	},
 ): Promise<SCIMGroupMember[]> {
-	if (input.scimUserIds.length === 0) return [];
 	return adapter.createMany<Omit<SCIMGroupMember, "id">, SCIMGroupMember>({
 		model: "scimGroupMember",
 		data: input.scimUserIds.map((scimUserId) => ({
