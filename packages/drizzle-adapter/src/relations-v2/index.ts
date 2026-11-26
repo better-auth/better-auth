@@ -2,8 +2,8 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
-	BuiltInCustomAdapter,
-	BuiltInDBAdapter,
+	CustomAdapter,
+	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
@@ -300,7 +300,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			getDefaultModelName,
 			options,
 			schema: baSchema,
-		}): BuiltInCustomAdapter => {
+		}): CustomAdapter => {
 			if (
 				config.provider === "mysql" &&
 				options.advanced?.database?.generateId === false &&
@@ -1288,7 +1288,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		adapter: createCustomAdapter(db),
 	};
 	const adapter = createAdapterFactory(adapterOptions);
-	return (options: BetterAuthOptions): BuiltInDBAdapter<BetterAuthOptions> => {
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		const instance = adapter(options);
 		const schemaCheck = createSchemaCheck(() => {

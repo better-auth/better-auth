@@ -758,25 +758,6 @@ export interface CustomAdapter {
 	options?: Record<string, any> | undefined;
 }
 
-/**
- * Inner adapter implemented by Better Auth's built-in database adapters.
- * Native `createMany` is required. `CustomAdapter.createMany` stays optional
- * so third-party adapters can fall back to sequential `create`.
- */
-export type BuiltInCustomAdapter = CustomAdapter & {
-	createMany: NonNullable<CustomAdapter["createMany"]>;
-};
-
-/**
- * Adapter contract returned by Better Auth's built-in database adapters.
- * `createMany` is required. Hand-built `DBAdapter` objects without it fail
- * typecheck; the factory still exposes `createMany` when wrapping a custom
- * adapter that omitted the native method.
- */
-export type BuiltInDBAdapter<
-	Options extends BetterAuthOptions = BetterAuthOptions,
-> = DBAdapter<Options>;
-
 export interface DBAdapterInstance<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > {

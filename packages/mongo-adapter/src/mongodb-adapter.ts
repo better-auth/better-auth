@@ -2,8 +2,8 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
-	BuiltInCustomAdapter,
-	BuiltInDBAdapter,
+	CustomAdapter,
+	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
@@ -187,7 +187,7 @@ export const mongodbAdapter = (
 			getModelName,
 			schema,
 			options,
-		}): BuiltInCustomAdapter => {
+		}): CustomAdapter => {
 			const customIdGen = getCustomIdGenerator(options);
 			const useUUIDs = options.advanced?.database?.generateId === "uuid";
 			const resolvedIndexesByModel = new Map<
@@ -1068,7 +1068,7 @@ export const mongodbAdapter = (
 		};
 
 	let lazyAdapter:
-		| ((options: BetterAuthOptions) => BuiltInDBAdapter<BetterAuthOptions>)
+		| ((options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>)
 		| null = null;
 	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
@@ -1217,7 +1217,7 @@ export const mongodbAdapter = (
 	};
 	lazyAdapter = createAdapterFactory(adapterOptions);
 
-	return (options: BetterAuthOptions): BuiltInDBAdapter<BetterAuthOptions> => {
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return lazyAdapter(options);
 	};

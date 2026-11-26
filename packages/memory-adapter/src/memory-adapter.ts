@@ -1,8 +1,8 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
-	BuiltInCustomAdapter,
-	BuiltInDBAdapter,
 	CleanedWhere,
+	CustomAdapter,
+	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
 } from "@better-auth/core/db/adapter";
@@ -193,7 +193,7 @@ export const memoryAdapter = (
 				getFieldName,
 				getDefaultFieldName,
 				options,
-			}): BuiltInCustomAdapter => {
+			}): CustomAdapter => {
 				const applySortToRecords = (
 					records: any[],
 					sortBy: { field: string; direction: "asc" | "desc" } | undefined,
@@ -642,7 +642,7 @@ export const memoryAdapter = (
 		});
 
 	const adapterCreator = buildAdapterFactory(db);
-	return (options: BetterAuthOptions): BuiltInDBAdapter<BetterAuthOptions> => {
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return adapterCreator(options);
 	};

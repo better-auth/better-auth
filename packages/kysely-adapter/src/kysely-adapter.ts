@@ -2,8 +2,8 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
-	BuiltInCustomAdapter,
-	BuiltInDBAdapter,
+	CustomAdapter,
+	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
 	Where,
@@ -115,7 +115,7 @@ export const kyselyAdapter = (
 			getFieldAttributes,
 			getModelName,
 			options,
-		}): BuiltInCustomAdapter => {
+		}): CustomAdapter => {
 			if (
 				config?.type === "mysql" &&
 				options.advanced?.database?.generateId === false &&
@@ -1171,7 +1171,7 @@ export const kyselyAdapter = (
 
 	const adapter = createAdapterFactory(adapterOptions);
 
-	return (options: BetterAuthOptions): BuiltInDBAdapter<BetterAuthOptions> => {
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		const instance = adapter(options);
 		const schemaCheck = createSchemaCheck(
