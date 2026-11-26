@@ -106,20 +106,19 @@ export const customSession = <
 						returnHeaders: true,
 					});
 
-					const sessionPayload = response ? await fn(response, ctx) : null;
-
-					if (!response || sessionPayload !== null) {
-						for (const cookie of headers.getSetCookie()) {
-							for (const [name, attributes] of parseSetCookieHeader(cookie)) {
-								ctx.setCookie(
-									name,
-									attributes.value,
-									toCookieOptions(attributes),
-								);
-							}
+					for (const cookie of headers.getSetCookie()) {
+						for (const [name, attributes] of parseSetCookieHeader(cookie)) {
+							ctx.setCookie(
+								name,
+								attributes.value,
+								toCookieOptions(attributes),
+							);
 						}
 					}
 					headers.delete("set-cookie");
+
+					const sessionPayload = response ? await fn(response, ctx) : null;
+
 					headers.forEach((value, name) => ctx.setHeader(name, value));
 
 					return ctx.json(sessionPayload);

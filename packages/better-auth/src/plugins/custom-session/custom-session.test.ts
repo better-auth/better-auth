@@ -647,9 +647,25 @@ describe("Custom Session Plugin Tests", async () => {
 		expect(
 			expiredSetCookies.some((c) => c.includes("better-auth.session_token=;")),
 		).toBe(true);
+		expect(
+			expiredSetCookies.some(
+				(c) =>
+					c.startsWith("better-auth.session_token=") &&
+					!c.includes("better-auth.session_token=;"),
+			),
+		).toBe(false);
+		expect(
+			expiredSetCookies.some(
+				(c) =>
+					(c.startsWith("better-auth.session_data=") ||
+						c.startsWith("better-auth.session_data.")) &&
+					!c.includes("=;"),
+			),
+		).toBe(false);
 		expect(cookieJar.has("better-auth.session_token")).toBe(false);
 		expect(cookieJar.has("better-auth.session_data")).toBe(false);
 
+		// Disable invalidation so a null follow-up proves the cookie jar cleared the session cookies.
 		shouldInvalidate = false;
 		const nextHeaders = new Headers();
 		if (cookieJar.size > 0) {
@@ -665,6 +681,46 @@ describe("Custom Session Plugin Tests", async () => {
 		});
 		expect(followUp.data).toBeNull();
 		expect(followUp.error).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12988
+	 */
+	it("should preserve inner session refresh cookies when customSession returns null without expiring them", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			session: {
+				expiresIn: 100,
+				updateAge: 0,
+				cookieCache: {
+					enabled: true,
+					maxAge: 10,
+				},
+			},
+			plugins: [customSession(async () => null)],
+		});
+
+		const { headers } = await signInWithTestUser();
+		const res = await auth.api.getSession({
+			headers,
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(200);
+		expect(res.headers.get("cache-control")).toBe("no-store");
+		expect(await res.json()).toBeNull();
+
+		const setCookies = res.headers.getSetCookie();
+		const parsed = setCookies.flatMap((c) => [...parseSetCookieHeader(c)]);
+		const sessionToken = parsed.find(
+			([name]) => name === "better-auth.session_token",
+		);
+		const sessionData = parsed.find(
+			([name]) => name === "better-auth.session_data",
+		);
+		expect(sessionToken?.[1].value).toBeTruthy();
+		expect(sessionToken?.[1]["max-age"]).not.toBe(0);
+		expect(sessionData?.[1].value).toBeTruthy();
+		expect(sessionData?.[1]["max-age"]).not.toBe(0);
 	});
 
 	/**
