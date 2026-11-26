@@ -387,20 +387,20 @@ async function reconcileProjectionUserState(
 	}
 
 	const now = new Date();
-	for (const desiredGrant of desiredGrants) {
-		if (existingGrantByKey.has(desiredGrant.grantKey)) continue;
-		const { source: _source, ...grantRecord } = desiredGrant;
-		await database.create<Omit<SCIMProjectionGrant, "id">, SCIMProjectionGrant>(
-			{
-				model: "scimProjectionGrant",
-				data: {
-					...grantRecord,
-					createdAt: now,
-					updatedAt: now,
-				},
-			},
-		);
-	}
+	const addedGrants = desiredGrants
+		.filter((grant) => !existingGrantByKey.has(grant.grantKey))
+		.map(({ source: _source, ...grantRecord }) => ({
+			...grantRecord,
+			createdAt: now,
+			updatedAt: now,
+		}));
+	await database.createMany<
+		Omit<SCIMProjectionGrant, "id">,
+		SCIMProjectionGrant
+	>({
+		model: "scimProjectionGrant",
+		data: addedGrants,
+	});
 	if (!projection) return;
 
 	const grants: SCIMProjectedRoleGrant[] = [...desiredGrants]
