@@ -2,7 +2,6 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
-	CustomAdapter,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
@@ -115,7 +114,7 @@ export const kyselyAdapter = (
 			getFieldAttributes,
 			getModelName,
 			options,
-		}): CustomAdapter => {
+		}) => {
 			if (
 				config?.type === "mysql" &&
 				options.advanced?.database?.generateId === false &&

@@ -1,7 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	CleanedWhere,
-	CustomAdapter,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
@@ -189,11 +188,7 @@ export const memoryAdapter = (
 					return result;
 				},
 			},
-			adapter: ({
-				getFieldName,
-				getDefaultFieldName,
-				options,
-			}): CustomAdapter => {
+			adapter: ({ getFieldName, getDefaultFieldName, options }) => {
 				const applySortToRecords = (
 					records: any[],
 					sortBy: { field: string; direction: "asc" | "desc" } | undefined,

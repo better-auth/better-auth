@@ -2,7 +2,6 @@ import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
-	CustomAdapter,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
@@ -116,7 +115,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			getFieldAttributes,
 			getDefaultModelName,
 			schema,
-		}): CustomAdapter => {
+		}) => {
 			const db = prisma as PrismaClientInternal;
 
 			const convertSelect = (

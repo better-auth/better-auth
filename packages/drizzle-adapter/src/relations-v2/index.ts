@@ -2,7 +2,6 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
-	CustomAdapter,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
@@ -295,12 +294,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		(relationKeysByModel ??= buildRelationKeysByModel(db._?.relations));
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
-		({
-			getFieldName,
-			getDefaultModelName,
-			options,
-			schema: baSchema,
-		}): CustomAdapter => {
+		({ getFieldName, getDefaultModelName, options, schema: baSchema }) => {
 			if (
 				config.provider === "mysql" &&
 				options.advanced?.database?.generateId === false &&

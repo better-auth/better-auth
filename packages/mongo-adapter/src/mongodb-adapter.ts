@@ -2,7 +2,6 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
-	CustomAdapter,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
@@ -181,13 +180,7 @@ export const mongodbAdapter = (
 			db: Db,
 			session?: ClientSession | undefined,
 		): AdapterFactoryCustomizeAdapterCreator =>
-		({
-			getFieldAttributes,
-			getFieldName,
-			getModelName,
-			schema,
-			options,
-		}): CustomAdapter => {
+		({ getFieldAttributes, getFieldName, getModelName, schema, options }) => {
 			const customIdGen = getCustomIdGenerator(options);
 			const useUUIDs = options.advanced?.database?.generateId === "uuid";
 			const resolvedIndexesByModel = new Map<
