@@ -1,0 +1,102 @@
+---
+icon: integrationsSolid
+sidebarTitle: "Solid (2.0)"
+title: Solid 2 Integration
+description: Integrate Better Auth with a Solid 2 app.
+---
+
+This guide is for apps on Solid 2 (`solid-js` 2.x) served by `@solidjs/vite-plugin` in start mode. SolidStart runs on Solid 1; for a SolidStart app, follow the [SolidStart integration](/docs/integrations/solid/solid-start). To move a SolidStart app to Solid 2, see [Migrate to Solid 2](/docs/integrations/solid/solid-start#migrate-to-solid-2).
+
+Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
+
+### Mount the handler
+
+Start mode runs middleware before your routes. Each middleware receives the request event and a `next()` function. Send requests for Better Auth's base path (`/api/auth` by default) to `auth.handler`, and pass everything else on.
+
+```ts title="src/middleware.ts"
+import type { StartMiddleware } from "@solidjs/vite-plugin";
+import { auth } from "./lib/auth"; // path to your auth file
+
+const authMiddleware: StartMiddleware = (event, next) => {
+	const { pathname } = new URL(event.request.url);
+	if (pathname.startsWith("/api/auth")) {
+		return auth.handler(event.request);
+	}
+	return next();
+};
+
+export default [authMiddleware];
+```
+
+Register the module in the plugin's `start.middleware` option:
+
+```ts title="vite.config.ts"
+import solid from "@solidjs/vite-plugin";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+	plugins: [
+		solid({
+			start: {
+				middleware: "./src/middleware.ts", // [!code highlight]
+			},
+			ssr: true, // [!code highlight]
+			serverFunctions: true, // [!code highlight]
+		}),
+	],
+});
+```
+
+### Create a client
+
+Create the client from `better-auth/solid-v2`:
+
+```ts title="src/lib/auth-client.ts"
+import { createAuthClient } from "better-auth/solid-v2";
+
+export const authClient = createAuthClient();
+```
+
+`useSession()` and plugin query hooks return async accessors. They suspend to the nearest `<Loading>` boundary until the first answer, and an error before that answer reaches the nearest `<Errored>` boundary. The hooks render nothing themselves: the boundaries and their fallbacks are yours. See [Client](/docs/concepts/client#solid-2) for the full behavior.
+
+### Read the session on the server
+
+During server rendering the client never fetches, so `useSession()` answers with `null` unless you pass the request's session. Read it in a server function with `getRequestEvent()` (this needs the `ssr` and `serverFunctions` options from [Mount the handler](#mount-the-handler)):
+
+```ts title="src/lib/session.ts"
+import { getRequestEvent } from "@solidjs/web";
+import { auth } from "./auth";
+
+export async function getServerSession() {
+	"use server";
+	const event = getRequestEvent();
+	if (!event) {
+		return null;
+	}
+	return auth.api.getSession({ headers: event.request.headers });
+}
+```
+
+Pass it to `useSession()`. The browser ignores the argument: it keeps the server's answer during hydration, then follows its own request.
+
+```tsx title="src/components/user.tsx"
+import { createMemo, Loading, Show } from "solid-js";
+import { authClient } from "~/lib/auth-client";
+import { getServerSession } from "~/lib/session";
+
+export function User() {
+	const serverSession = createMemo(() => getServerSession());
+	const session = authClient.useSession(serverSession);
+	return (
+		<Loading fallback={<p>Loading session…</p>}>
+			<Show when={session()} fallback={<a href="/sign-in">Sign in</a>}>
+				{(current) => <p>Signed in as {current().user.email}</p>}
+			</Show>
+		</Loading>
+	);
+}
+```
+
+<Callout type="warn">
+  Without a server value, the server renders `null`, so a signed-in user sees the signed-out state after hydration until the browser's own session request completes.
+</Callout>

@@ -1,0 +1,6 @@
+{
+  "title": "Solid",
+  "icon": "integrationsSolid",
+  "pagesIndex": "index",
+  "pages": ["solid-start", "..."]
+}

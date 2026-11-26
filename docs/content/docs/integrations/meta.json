@@ -9,7 +9,7 @@
     "nuxt",
     "electron",
     "svelte-kit",
-    "solid-start",
+    "solid",
     "tanstack",
     "waku",
     "---Backend---",

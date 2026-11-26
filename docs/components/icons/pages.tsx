@@ -455,6 +455,7 @@ export const pageIcons = {
 	integrationsElectron: brandIcons.electron,
 	integrationsSvelteKit: brandIcons.svelteKit,
 	integrationsSolidStart: brandIcons.solidStart,
+	integrationsSolid: brandIcons.solidStart,
 	integrationsTanStack: brandIcons.tanstack,
 	integrationsWaku: brandIcons.waku,
 	integrationsHono: brandIcons.hono,

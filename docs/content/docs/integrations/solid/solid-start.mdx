@@ -1,0 +1,60 @@
+---
+icon: integrationsSolidStart
+sidebarTitle: "Legacy (SolidStart)"
+title: SolidStart Integration
+description: Integrate Better Auth with SolidStart.
+---
+
+<Callout>
+  For new apps, we recommend Solid 2 with `better-auth/solid-v2`. See the [Solid 2 integration](/docs/integrations/solid). SolidStart runs on Solid 1, so it can't use `better-auth/solid-v2`. Use `better-auth/solid-start` and `better-auth/solid` as shown below, or [migrate to Solid 2](#migrate-to-solid-2).
+</Callout>
+
+Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
+
+### Mount the handler
+
+We need to mount the handler to SolidStart server. Put the following code in your `[...auth].ts` file inside `/routes/api/auth` folder.
+
+```ts title="[...auth].ts"
+import { auth } from "~/lib/auth";
+import { toSolidStartHandler } from "better-auth/solid-start";
+
+export const { GET, POST } = toSolidStartHandler(auth);
+```
+
+### Create a client
+
+Create the client from `better-auth/solid`, the Solid 1 client:
+
+```ts title="lib/auth-client.ts"
+import { createAuthClient } from "better-auth/solid";
+
+export const authClient = createAuthClient();
+```
+
+`useSession()` returns an accessor for the session state. Its `data` is the session, or `null` when signed out:
+
+```tsx title="components/user.tsx"
+import { Show } from "solid-js";
+import { authClient } from "~/lib/auth-client";
+
+export function User() {
+	const session = authClient.useSession();
+	return (
+		<Show when={session().data} fallback={<a href="/sign-in">Sign in</a>}>
+			{(current) => <p>Signed in as {current().user.email}</p>}
+		</Show>
+	);
+}
+```
+
+See [Client](/docs/concepts/client) for the full client API.
+
+## Migrate to Solid 2
+
+Moving a SolidStart app to Solid 2 isn't an in-place upgrade: Solid 2 full-stack apps run on `@solidjs/vite-plugin` start mode instead of the SolidStart runtime. Follow Solid's [migration guide from SolidStart](https://docs.solidjs.com/migration/from-solid-start/) for the project, routing and server-function changes. For Better Auth, the changes are:
+
+* **Handler**: remove the `routes/api/auth/[...auth].ts` route and `toSolidStartHandler`. Send Better Auth's base path to `auth.handler` from start-mode middleware, as shown in [Mount the handler](/docs/integrations/solid#mount-the-handler).
+* **Client**: import `createAuthClient` from `better-auth/solid-v2` instead of `better-auth/solid`.
+* **Session reads**: `useSession()` returns the session itself, or `null` when signed out, instead of `{ data, isPending, error }`. Replace `session().data` with `session()`, wrap readers in a `<Loading>` boundary instead of checking `isPending`, handle errors with an `<Errored>` boundary, and call `session.refetch()` instead of `session().refetch()`. See [Client](/docs/concepts/client#solid-2).
+* **Server session**: read the session in a `"use server"` function with `getRequestEvent()` from `@solidjs/web`, and pass it to `useSession()` so the server renders the signed-in state. See [Read the session on the server](/docs/integrations/solid#read-the-session-on-the-server).

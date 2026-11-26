@@ -244,7 +244,7 @@ description: Learn how to configure Better Auth in your project.
       objects and offers helper functions for popular frameworks.
     </Callout>
 
-    <Tabs items={["next-js-app-router", "next-js-pages-router", "nuxt", "svelte-kit", "react-router", "solid-start", "hono", "cloudflare-workers", "express", "elysia", "tanstack-start", "expo"]} defaultValue="next-js-app-router">
+    <Tabs items={["next-js-app-router", "next-js-pages-router", "nuxt", "svelte-kit", "react-router", "solid-start", "solid-v2", "hono", "cloudflare-workers", "express", "elysia", "tanstack-start", "expo"]} defaultValue="next-js-app-router">
       <Tab value="next-js-app-router">
         ```ts title="/app/api/auth/[...all]/route.ts"
         import { auth } from "@/lib/auth"; // path to your auth file
@@ -308,6 +308,23 @@ description: Learn how to configure Better Auth in your project.
         import { toSolidStartHandler } from "better-auth/solid-start";
 
         export const { GET, POST } = toSolidStartHandler(auth);
+        ```
+      </Tab>
+
+      <Tab value="solid-v2">
+        ```ts title="src/middleware.ts"
+        // Solid 2 with @solidjs/vite-plugin start mode; register this file in start.middleware.
+        import type { StartMiddleware } from "@solidjs/vite-plugin";
+        import { auth } from "./lib/auth"; // path to your auth file
+
+        const authMiddleware: StartMiddleware = (event, next) => {
+            if (new URL(event.request.url).pathname.startsWith("/api/auth")) {
+                return auth.handler(event.request);
+            }
+            return next();
+        };
+
+        export default [authMiddleware];
         ```
       </Tab>
 
@@ -500,7 +517,7 @@ description: Learn how to configure Better Auth in your project.
     </Callout>
 
     <Tabs
-      items={["react", "vue", "svelte", "solid",
+      items={["react", "vue", "svelte", "solid", "solid-v2",
 "vanilla"]}
       defaultValue="react"
     >
@@ -547,6 +564,17 @@ description: Learn how to configure Better Auth in your project.
       <Tab value="solid" title="lib/auth-client.ts">
         ```ts title="lib/auth-client.ts"
         import { createAuthClient } from "better-auth/solid"
+        export const authClient = createAuthClient({
+            /** The base URL of the server (optional if you're using the same domain) */ // [!code highlight]
+            baseURL: "http://localhost:3000" // [!code highlight]
+        })
+        ```
+      </Tab>
+
+      <Tab value="solid-v2" title="lib/auth-client.ts">
+        ```ts title="lib/auth-client.ts"
+        // For Solid 2 (solid-js 2.x). Solid 1 apps, including SolidStart, use "better-auth/solid".
+        import { createAuthClient } from "better-auth/solid-v2"
         export const authClient = createAuthClient({
             /** The base URL of the server (optional if you're using the same domain) */ // [!code highlight]
             baseURL: "http://localhost:3000" // [!code highlight]
