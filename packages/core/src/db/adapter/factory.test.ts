@@ -991,14 +991,17 @@ describe("createAdapterFactory findPage", () => {
 		})(options ?? {});
 	}
 
-	it("runs findMany and count with the same where", async () => {
+	it("runs findMany then count with the same where", async () => {
 		let seenFindMany: Parameters<CustomAdapter["findMany"]>[0] | undefined;
 		let seenCount: Parameters<CustomAdapter["count"]>[0] | undefined;
+		const order: string[] = [];
 		const adapter = createPageAdapter({
 			onFindMany: (params) => {
+				order.push("findMany");
 				seenFindMany = params;
 			},
 			onCount: (params) => {
+				order.push("count");
 				seenCount = params;
 				return 5;
 			},
@@ -1027,6 +1030,7 @@ describe("createAdapterFactory findPage", () => {
 		});
 		expect(seenCount).toMatchObject({ model: "user" });
 		expect(seenCount?.where).toEqual(seenFindMany?.where);
+		expect(order).toEqual(["findMany", "count"]);
 	});
 
 	it("skips findMany when limit is 0 and still counts", async () => {

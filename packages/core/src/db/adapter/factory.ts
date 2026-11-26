@@ -1318,21 +1318,19 @@ export const createAdapterFactory =
 						hasMore: total > offset,
 					};
 				}
-				const [items, total] = await Promise.all([
-					adapter.findMany<T>({
-						model: data.model,
-						where: data.where,
-						limit,
-						offset,
-						select: data.select,
-						sortBy: data.sortBy,
-						join: data.join,
-					}),
-					adapter.count({
-						model: data.model,
-						where: data.where,
-					}),
-				]);
+				const items = await adapter.findMany<T>({
+					model: data.model,
+					where: data.where,
+					limit,
+					offset,
+					select: data.select,
+					sortBy: data.sortBy,
+					join: data.join,
+				});
+				const total = await adapter.count({
+					model: data.model,
+					where: data.where,
+				});
 				return {
 					items,
 					total,
