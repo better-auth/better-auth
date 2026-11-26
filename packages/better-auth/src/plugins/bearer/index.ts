@@ -1,9 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
 import { setRequestCookie } from "../../cookies/cookie-utils";
+import { verifyHmacSha256 } from "../../crypto";
 import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
@@ -84,10 +84,7 @@ export const bearer = (options?: BearerOptions | undefined) => {
 							decodedToken = tryDecode(signed);
 						}
 						try {
-							const isValid = await createHMAC(
-								"SHA-256",
-								"base64urlnopad",
-							).verify(
+							const isValid = await verifyHmacSha256(
 								c.context.secret,
 								decodedToken.split(".")[0]!,
 								decodedToken.split(".")[1]!,

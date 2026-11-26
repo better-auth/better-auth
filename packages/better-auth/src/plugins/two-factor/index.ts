@@ -7,7 +7,6 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
 import {
@@ -17,7 +16,7 @@ import {
 } from "../../api";
 import { isSessionOutsideStore } from "../../api/state/session-source";
 import { deleteSessionCookie, expireCookie } from "../../cookies";
-import { symmetricEncrypt } from "../../crypto";
+import { signHmacSha256, symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
 import { shouldRequirePassword, validatePassword } from "../../utils/password";
@@ -92,7 +91,7 @@ async function readSignInTwoFactorState(
 			trustDeviceCookie,
 		};
 	}
-	const expectedToken = await createHMAC("SHA-256", "base64urlnopad").sign(
+	const expectedToken = await signHmacSha256(
 		ctx.context.secret,
 		`${data.user.id}!${trustIdentifier}`,
 	);
@@ -523,10 +522,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								trustIdentifier,
 							);
 							const newTrustIdentifier = `trust-device-${generateRandomString(32)}`;
-							const newToken = await createHMAC(
-								"SHA-256",
-								"base64urlnopad",
-							).sign(
+							const newToken = await signHmacSha256(
 								ctx.context.secret,
 								`${data.user.id}!${newTrustIdentifier}`,
 							);
