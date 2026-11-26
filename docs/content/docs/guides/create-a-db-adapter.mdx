@@ -630,7 +630,7 @@ By default Better Auth counts the distinct keys in the batch. Set a function whe
 
 Whether native `createMany` always returns rows in the same order as `data`. Defaults to `false`.
 
-When `false`, Better Auth only calls native `createMany` for rows that already include ids, and your method must restore input order (for example by matching ids). When `true`, Better Auth may also send rows without ids if [`createManyBulkGeneratedIds`](#createmanybulkgeneratedids) is set.
+When `false`, Better Auth only calls native `createMany` when every row in the batch already includes an id; mixed-id batches use sequential `create`. Your method must restore input order (for example by matching ids). When `true`, Better Auth may also send rows without ids if [`createManyBulkGeneratedIds`](#createmanybulkgeneratedids) is set.
 
 <Callout type="warn">
   Only set this if the driver always returns rows in the same order as `data`. PostgreSQL and SQLite `RETURNING` do not guarantee that. If you set it incorrectly, `createMany` can return rows paired with the wrong input.
