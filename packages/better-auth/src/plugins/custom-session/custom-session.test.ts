@@ -1,6 +1,10 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
+import {
+	deleteSessionCookie,
+	expireCookie,
+	parseSetCookieHeader,
+} from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { BetterAuthOptions } from "../../types";
 import { inferAdditionalFields } from "../additional-fields/client";
@@ -545,5 +549,189 @@ describe("Custom Session Plugin Tests", async () => {
 		expectTypeOf<CustomData>().toMatchObjectType<{
 			message: string;
 		}>();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12988
+	 */
+	it("should allow returning null from customSession while preserving $Infer.Session and cookie expiry", async () => {
+		let shouldInvalidate = false;
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				session: {
+					expiresIn: 100,
+					updateAge: 0,
+					cookieCache: {
+						enabled: true,
+						maxAge: 10,
+					},
+				},
+				plugins: [
+					customSession(async ({ user, session }, ctx) => {
+						if (shouldInvalidate) {
+							expireCookie(ctx, ctx.context.authCookies.sessionData);
+							deleteSessionCookie(ctx);
+							return null;
+						}
+						return {
+							user,
+							session,
+							customFlag: true,
+						};
+					}),
+				],
+			},
+		);
+
+		type ServerInferredSession = typeof auth.$Infer.Session;
+		expectTypeOf<ServerInferredSession>().not.toBeNullable();
+		expectTypeOf<
+			ServerInferredSession["customFlag"]
+		>().toEqualTypeOf<boolean>();
+
+		type ApiSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
+		expectTypeOf<null>().toExtend<ApiSessionResult>();
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [customSessionClient<typeof auth>()],
+			fetchOptions: { customFetchImpl },
+		});
+
+		type ClientInferredSession = typeof client.$Infer.Session;
+		expectTypeOf<ClientInferredSession>().not.toBeNullable();
+		expectTypeOf<
+			ClientInferredSession["customFlag"]
+		>().toEqualTypeOf<boolean>();
+
+		const { headers } = await signInWithTestUser();
+
+		const validSession = await auth.api.getSession({ headers });
+		expect(validSession?.customFlag).toBe(true);
+
+		shouldInvalidate = true;
+		const invalidatedApi = await auth.api.getSession({ headers });
+		expect(invalidatedApi).toBeNull();
+
+		let expiredSetCookies: string[] = [];
+		const invalidatedHttp = await auth.api.getSession({
+			headers,
+			asResponse: true,
+		});
+		expect(invalidatedHttp.status).toBe(200);
+		expect(invalidatedHttp.headers.get("cache-control")).toBe("no-store");
+		expect(await invalidatedHttp.json()).toBeNull();
+		expiredSetCookies = invalidatedHttp.headers.getSetCookie();
+
+		const cookieJar = new Map<string, string>();
+		for (const rawCookie of (headers.get("cookie") ?? "").split(";")) {
+			const trimmed = rawCookie.trim();
+			if (!trimmed) continue;
+			const eqIdx = trimmed.indexOf("=");
+			if (eqIdx > 0) {
+				cookieJar.set(trimmed.slice(0, eqIdx), trimmed.slice(eqIdx + 1));
+			}
+		}
+		for (const setCookieStr of expiredSetCookies) {
+			for (const [name, attrs] of parseSetCookieHeader(
+				setCookieStr,
+			).entries()) {
+				if (attrs["max-age"] === 0 || attrs.value === "") {
+					cookieJar.delete(name);
+				} else {
+					cookieJar.set(name, attrs.value);
+				}
+			}
+		}
+
+		expect(
+			expiredSetCookies.some((c) => c.includes("better-auth.session_token=;")),
+		).toBe(true);
+		expect(cookieJar.has("better-auth.session_token")).toBe(false);
+		expect(cookieJar.has("better-auth.session_data")).toBe(false);
+
+		shouldInvalidate = false;
+		const nextHeaders = new Headers();
+		if (cookieJar.size > 0) {
+			nextHeaders.set(
+				"cookie",
+				Array.from(cookieJar.entries())
+					.map(([k, v]) => `${k}=${v}`)
+					.join("; "),
+			);
+		}
+		const followUp = await client.getSession({
+			fetchOptions: { headers: nextHeaders },
+		});
+		expect(followUp.data).toBeNull();
+		expect(followUp.error).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12988
+	 */
+	it("should filter null results from mutated list-device-sessions response", async () => {
+		const multiOptions = {
+			plugins: [multiSession()],
+		} satisfies BetterAuthOptions;
+
+		let skipToken: string | undefined;
+		const { auth, customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				...multiOptions.plugins,
+				customSession(
+					async ({ user, session }) => {
+						if (session.token === skipToken) {
+							return null;
+						}
+						return {
+							user,
+							session,
+							kept: true,
+						};
+					},
+					multiOptions,
+					{ shouldMutateListDeviceSessionsEndpoint: true },
+				),
+			],
+		});
+
+		const localClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [customSessionClient<typeof auth>(), multiSessionClient()],
+			fetchOptions: { customFetchImpl },
+		});
+
+		const headers = new Headers();
+		await localClient.signUp.email(
+			{
+				name: "First User",
+				email: "multi-filter-first@test.com",
+				password: "password123",
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		await localClient.signUp.email(
+			{
+				name: "Second User",
+				email: "multi-filter-second@test.com",
+				password: "password123",
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+
+		const beforeFilter = await auth.api.listDeviceSessions({ headers });
+		expect(beforeFilter).toHaveLength(2);
+
+		const active = await auth.api.getSession({ headers });
+		skipToken = active?.session.token;
+		expect(skipToken).toBeDefined();
+
+		const sessions = await auth.api.listDeviceSessions({ headers });
+		expect(sessions).toHaveLength(1);
+		expect(sessions[0]).toMatchObject({
+			user: { email: "multi-filter-first@test.com" },
+			kept: true,
+		});
 	});
 });
