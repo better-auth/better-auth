@@ -10,7 +10,6 @@ import type {
 import {
 	createAdapterFactory,
 	findSensitiveIdEq,
-	incrementManyStoredIdMatches,
 	sortIncrementManyRows,
 } from "@better-auth/core/db/adapter";
 import {
@@ -1108,12 +1107,13 @@ export const kyselyAdapter = (
 								).executeTakeFirst();
 								if (!target) continue;
 								const targetId = target[idField] ?? target.id;
+								// Compare stored and guard ids exactly. Folding GUID
+								// hex case would treat mixed-case duplicates as two
+								// rows and would make varchar UUID ids case-insensitive.
 								if (
 									targetId === undefined ||
 									targetId === null ||
-									!incrementManyStoredIdMatches(targetId, expectedId, {
-										ignoreGuidCase: config?.type === "mssql",
-									})
+									targetId !== expectedId
 								)
 									continue;
 								const updateQuery = applyRowWhere(

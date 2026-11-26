@@ -16,36 +16,6 @@ function isAdapterId(value: unknown): value is string | number {
 	return typeof value === "string" || typeof value === "number";
 }
 
-const GUID_STRING =
-	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isGuidString(value: string): boolean {
-	return GUID_STRING.test(value);
-}
-
-/**
- * True when a locked row is the record this `incrementMany` entry pinned.
- * String ids compare exactly, except SQL Server `uniqueidentifier` values
- * which drivers may return with different hex case than the guard.
- */
-export function incrementManyStoredIdMatches(
-	stored: unknown,
-	expected: string | number,
-	options?: { ignoreGuidCase?: boolean | undefined },
-): boolean {
-	if (stored === expected) return true;
-	if (
-		options?.ignoreGuidCase &&
-		typeof stored === "string" &&
-		typeof expected === "string" &&
-		isGuidString(stored) &&
-		isGuidString(expected)
-	) {
-		return stored.toLowerCase() === expected.toLowerCase();
-	}
-	return false;
-}
-
 /**
  * Each `incrementMany` row must pin exactly one record by a case-sensitive
  * `id` equality. Extra clauses are the rest of the guard.
