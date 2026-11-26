@@ -89,6 +89,48 @@ it("keeps model identity when a custom name matches another schema key", async (
 	expect(session?.user.email).toBe("ada@example.com");
 });
 
+describe("memory adapter findPage", () => {
+	it("returns a page of rows plus the matching total", async () => {
+		const { adapter } = setup();
+		await seedWidget(adapter, "1", "alice");
+		await seedWidget(adapter, "2", "bob");
+		await seedWidget(adapter, "3", "carol");
+
+		const page = await adapter.findPage<{ id: string; name: string }>({
+			model: "widget",
+			limit: 2,
+			offset: 0,
+			sortBy: { field: "name", direction: "asc" },
+		});
+
+		expect(page.items.map((row) => row.name)).toEqual(["alice", "bob"]);
+		expect(page.total).toBe(3);
+		expect(page.limit).toBe(2);
+		expect(page.offset).toBe(0);
+		expect(page.hasMore).toBe(true);
+	});
+
+	it("skips findMany when limit is 0 and still counts", async () => {
+		const { adapter } = setup();
+		await seedWidget(adapter, "1", "alice");
+		await seedWidget(adapter, "2", "bob");
+
+		const page = await adapter.findPage({
+			model: "widget",
+			limit: 0,
+			offset: 1,
+		});
+
+		expect(page).toEqual({
+			items: [],
+			total: 2,
+			limit: 0,
+			offset: 1,
+			hasMore: true,
+		});
+	});
+});
+
 describe("memory adapter singular mutation with empty predicate", () => {
 	it("singular update with an empty where is a no-op and leaves every row untouched", async () => {
 		const { adapter } = setup();

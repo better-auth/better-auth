@@ -1,8 +1,13 @@
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
-import type { CleanedWhere, CustomAdapter, Where } from "./index";
+import type {
+	CleanedWhere,
+	CustomAdapter,
+	FindPageResult,
+	Where,
+} from "./index";
 
 function createCustomAdapter(
 	overrides: Partial<CustomAdapter> = {},
@@ -955,5 +960,159 @@ describe("legacy adapter atomic fallbacks", () => {
 		expect(
 			await first.incrementOne({ ...missing, increment: { attempts: 1 } }),
 		).toBeNull();
+	});
+});
+
+describe("createAdapterFactory findPage", () => {
+	function createPageAdapter({
+		onFindMany,
+		onCount,
+		options,
+	}: {
+		onFindMany: (params: Parameters<CustomAdapter["findMany"]>[0]) => void;
+		onCount?: (params: Parameters<CustomAdapter["count"]>[0]) => number;
+		options?: BetterAuthOptions;
+	}) {
+		return createAdapterFactory({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+			},
+			adapter: () =>
+				createCustomAdapter({
+					count: async (params) => onCount?.(params) ?? 0,
+					findMany: async <T>(
+						params: Parameters<CustomAdapter["findMany"]>[0],
+					) => {
+						onFindMany(params);
+						return [{ id: "row" }] as T[];
+					},
+				}),
+		})(options ?? {});
+	}
+
+	it("runs findMany and count with the same where", async () => {
+		let seenFindMany: Parameters<CustomAdapter["findMany"]>[0] | undefined;
+		let seenCount: Parameters<CustomAdapter["count"]>[0] | undefined;
+		const adapter = createPageAdapter({
+			onFindMany: (params) => {
+				seenFindMany = params;
+			},
+			onCount: (params) => {
+				seenCount = params;
+				return 5;
+			},
+		});
+		const where = [{ field: "email", value: "a@b.com" }];
+		await expect(
+			adapter.findPage({
+				model: "user",
+				where,
+				limit: 2,
+				offset: 1,
+				sortBy: { field: "email", direction: "asc" },
+			}),
+		).resolves.toEqual({
+			items: [{ id: "row" }],
+			total: 5,
+			limit: 2,
+			offset: 1,
+			hasMore: true,
+		});
+		expect(seenFindMany).toMatchObject({
+			model: "user",
+			limit: 2,
+			offset: 1,
+			sortBy: { field: "email", direction: "asc" },
+		});
+		expect(seenCount).toMatchObject({ model: "user" });
+		expect(seenCount?.where).toEqual(seenFindMany?.where);
+	});
+
+	it("skips findMany when limit is 0 and still counts", async () => {
+		let findManyCalls = 0;
+		let seenCount: Parameters<CustomAdapter["count"]>[0] | undefined;
+		const adapter = createPageAdapter({
+			onFindMany: () => {
+				findManyCalls++;
+			},
+			onCount: (params) => {
+				seenCount = params;
+				return 3;
+			},
+		});
+		await expect(
+			adapter.findPage({
+				model: "user",
+				limit: 0,
+				offset: 1,
+			}),
+		).resolves.toEqual({
+			items: [],
+			total: 3,
+			limit: 0,
+			offset: 1,
+			hasMore: true,
+		});
+		expect(findManyCalls).toBe(0);
+		expect(seenCount).toMatchObject({ model: "user" });
+	});
+
+	it("defaults omitted limit to 100 and offset to 0", async () => {
+		let seen: Parameters<CustomAdapter["findMany"]>[0] | undefined;
+		const adapter = createPageAdapter({
+			onFindMany: (params) => {
+				seen = params;
+			},
+			onCount: () => 1,
+		});
+		await expect(adapter.findPage({ model: "user" })).resolves.toEqual({
+			items: [{ id: "row" }],
+			total: 1,
+			limit: 100,
+			offset: 0,
+			hasMore: false,
+		});
+		expect(seen).toMatchObject({ limit: 100, offset: 0 });
+	});
+
+	it("uses advanced.database.defaultFindManyLimit when limit is omitted", async () => {
+		let seen: Parameters<CustomAdapter["findMany"]>[0] | undefined;
+		const adapter = createPageAdapter({
+			onFindMany: (params) => {
+				seen = params;
+			},
+			onCount: () => 40,
+			options: { advanced: { database: { defaultFindManyLimit: 25 } } },
+		});
+		await expect(adapter.findPage({ model: "user" })).resolves.toMatchObject({
+			limit: 25,
+			hasMore: true,
+		});
+		expect(seen).toMatchObject({ limit: 25 });
+	});
+
+	it("sets hasMore false when the page includes the last row", async () => {
+		const adapter = createPageAdapter({
+			onFindMany: () => {},
+			onCount: () => 3,
+		});
+		await expect(
+			adapter.findPage({ model: "user", limit: 2, offset: 2 }),
+		).resolves.toMatchObject({
+			hasMore: false,
+			total: 3,
+		});
+	});
+
+	it("types findPage as a factory result, not a custom-adapter method", () => {
+		expectTypeOf<CustomAdapter>().not.toHaveProperty("findPage");
+		expectTypeOf<FindPageResult<{ id: string }>>().toEqualTypeOf<{
+			items: { id: string }[];
+			total: number;
+			limit: number;
+			offset: number;
+			hasMore: boolean;
+		}>();
 	});
 });

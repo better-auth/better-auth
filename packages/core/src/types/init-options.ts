@@ -439,7 +439,8 @@ export type BetterAuthAdvancedOptions = {
 		| {
 				/**
 				 * The default number of records to return from the database
-				 * when using the `findMany` adapter method.
+				 * when using the `findMany` or `findPage` adapter methods
+				 * without a `limit`.
 				 *
 				 * @default 100
 				 */
