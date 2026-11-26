@@ -5,26 +5,25 @@ title: Solid 2 Integration
 description: Integrate Better Auth with a Solid 2 app.
 ---
 
-This guide is for apps on Solid 2 (`solid-js` 2.x) served by `@solidjs/vite-plugin` in start mode. SolidStart runs on Solid 1; for a SolidStart app, follow the [SolidStart integration](/docs/integrations/solid-start).
+This guide is for apps on Solid 2 (`solid-js` 2.x) served by `@solidjs/vite-plugin` in start mode. SolidStart runs on Solid 1; for a SolidStart app, follow the [SolidStart integration](/docs/integrations/solid/solid-start). To move a SolidStart app to Solid 2, see [Migrate to Solid 2](/docs/integrations/solid/solid-start#migrate-to-solid-2).
 
 Before you start, make sure you have a Better Auth instance configured. If you haven't done that yet, check out the [installation](/docs/installation).
 
 ### Mount the handler
 
-Start mode runs fetch-style middleware before your routes. Send requests for Better Auth's base path (`/api/auth` by default) to `auth.handler`, and pass everything else on.
+Start mode runs middleware before your routes. Each middleware receives the request event and a `next()` function. Send requests for Better Auth's base path (`/api/auth` by default) to `auth.handler`, and pass everything else on.
 
 ```ts title="src/middleware.ts"
+import type { StartMiddleware } from "@solidjs/vite-plugin";
 import { auth } from "./lib/auth"; // path to your auth file
 
-type Next = (request?: Request) => Response | Promise<Response>;
-
-function authMiddleware(request: Request, next: Next) {
-	const { pathname } = new URL(request.url);
+const authMiddleware: StartMiddleware = (event, next) => {
+	const { pathname } = new URL(event.request.url);
 	if (pathname.startsWith("/api/auth")) {
-		return auth.handler(request);
+		return auth.handler(event.request);
 	}
 	return next();
-}
+};
 
 export default [authMiddleware];
 ```

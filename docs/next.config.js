@@ -62,6 +62,11 @@ const nextConfig = {
 				permanent: true,
 			},
 			{
+				source: "/docs/integrations/solid-start",
+				destination: "/docs/integrations/solid/solid-start",
+				permanent: true,
+			},
+			{
 				source: "/docs/agent-tools/ask-ai",
 				destination: "/docs/ai-resources",
 				permanent: true,

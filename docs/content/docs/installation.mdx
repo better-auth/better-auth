@@ -314,16 +314,15 @@ description: Learn how to configure Better Auth in your project.
       <Tab value="solid-v2">
         ```ts title="src/middleware.ts"
         // Solid 2 with @solidjs/vite-plugin start mode; register this file in start.middleware.
+        import type { StartMiddleware } from "@solidjs/vite-plugin";
         import { auth } from "./lib/auth"; // path to your auth file
 
-        type Next = (request?: Request) => Response | Promise<Response>;
-
-        function authMiddleware(request: Request, next: Next) {
-            if (new URL(request.url).pathname.startsWith("/api/auth")) {
-                return auth.handler(request);
+        const authMiddleware: StartMiddleware = (event, next) => {
+            if (new URL(event.request.url).pathname.startsWith("/api/auth")) {
+                return auth.handler(event.request);
             }
             return next();
-        }
+        };
 
         export default [authMiddleware];
         ```

@@ -1105,7 +1105,7 @@ const moreFrameworks = [
 	{
 		name: "Solid Start",
 		icon: "solidStart",
-		href: "/docs/integrations/solid-start",
+		href: "/docs/integrations/solid/solid-start",
 	},
 	{ name: "Express", icon: "express", href: "/docs/integrations/express" },
 	{ name: "Fastify", icon: "fastify", href: "/docs/integrations/fastify" },
