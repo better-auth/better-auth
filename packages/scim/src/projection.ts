@@ -160,24 +160,27 @@ async function acquireProjectionSubjectLocks(
 	}
 
 	const updatedAt = new Date();
-	for (const userId of userIds) {
+	const rows = userIds.map((userId) => {
 		const subject = subjectByUserId.get(userId);
 		if (!subject) {
 			throw new BetterAuthError(
 				"A SCIM User selected for projection has no subject aggregate.",
 			);
 		}
-		const acquired = await database.incrementOne<SCIMSubject>({
-			model: "scimSubject",
+		return {
 			where: [
 				{ field: "id", value: subject.id },
 				{ field: "revision", value: subject.revision },
 			],
-			increment: { revision: 1 },
-			set: { updatedAt },
-		});
-		if (!acquired) concurrentProjectionSubjectMutation();
-	}
+		};
+	});
+	const acquired = await database.incrementMany<SCIMSubject>({
+		model: "scimSubject",
+		increment: { revision: 1 },
+		set: { updatedAt },
+		rows,
+	});
+	if (acquired.length !== rows.length) concurrentProjectionSubjectMutation();
 }
 
 function createProjectionGrantKey(input: {

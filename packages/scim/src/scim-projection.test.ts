@@ -118,6 +118,24 @@ type SCIMConnectionBindingRow = {
 
 type IncrementOneRequest = Parameters<DBAdapter["incrementOne"]>[0];
 
+function incrementManyThroughIncrementOne(
+	incrementOne: DBAdapter["incrementOne"],
+): DBAdapter["incrementMany"] {
+	return async <Row>(input: Parameters<DBAdapter["incrementMany"]>[0]) => {
+		const updated: Row[] = [];
+		for (const row of input.rows) {
+			const result = await incrementOne<Row>({
+				model: input.model,
+				where: row.where,
+				increment: input.increment,
+				set: input.set,
+			});
+			if (result) updated.push(result);
+		}
+		return updated;
+	};
+}
+
 function createBindingLockingMemoryAdapter(
 	data: MemoryDB,
 	callbacks: {
@@ -165,6 +183,7 @@ function createBindingLockingMemoryAdapter(
 		return {
 			...adapter,
 			incrementOne,
+			incrementMany: incrementManyThroughIncrementOne(incrementOne),
 			transaction: async <Result>(
 				callback: (transaction: DBTransactionAdapter) => Promise<Result>,
 			) => {
@@ -186,7 +205,11 @@ function createBindingLockingMemoryAdapter(
 							return transaction.incrementOne<Row>(request);
 						};
 
-						return callback({ ...transaction, incrementOne });
+						return callback({
+							...transaction,
+							incrementOne,
+							incrementMany: incrementManyThroughIncrementOne(incrementOne),
+						});
 					});
 				} finally {
 					releaseBindingLock?.();

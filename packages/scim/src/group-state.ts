@@ -7,6 +7,7 @@ import type { DBAdapter, DBTransactionAdapter } from "better-auth";
 import type { SCIMConnection } from "./configuration";
 import { isSCIMIdentityMutationConflict } from "./identity";
 import type { SCIMGroup } from "./persistence";
+import { chunkSCIMIds } from "./persistence";
 import { isSCIMProjectionSubjectConflict } from "./projection";
 import { createSCIMError } from "./scim-error";
 
@@ -110,18 +111,50 @@ export async function acquireSCIMGroupMutationLocks(
 	connection: SCIMConnection,
 	groupIds: readonly string[],
 ): Promise<SCIMGroup[]> {
-	const groups: SCIMGroup[] = [];
-	for (const groupId of [...new Set(groupIds)].sort()) {
-		groups.push(
-			await acquireSCIMGroupMutationLock(
-				database,
-				connection,
-				groupId,
-				"conflict",
-			),
+	const uniqueGroupIds = [...new Set(groupIds)].sort();
+	if (uniqueGroupIds.length === 0) return [];
+
+	const foundGroups: SCIMGroup[] = [];
+	for (const chunk of chunkSCIMIds(uniqueGroupIds)) {
+		foundGroups.push(
+			...(await database.findMany<SCIMGroup>({
+				model: "scimGroup",
+				where: [
+					{ field: "id", value: chunk, operator: "in" },
+					{ field: "connectionId", value: connection.id },
+				],
+				limit: chunk.length,
+			})),
 		);
 	}
-	return groups;
+	const groupById = new Map(foundGroups.map((group) => [group.id, group]));
+	const groups = uniqueGroupIds.map((groupId) => {
+		const group = groupById.get(groupId);
+		if (!group) throwConcurrentSCIMGroupMutation();
+		if (group.provisioningDomainId !== connection.provisioningDomainId) {
+			throw createSCIMError("CONFLICT", {
+				detail:
+					"The connection provisioningDomainId changed after resources were created",
+			});
+		}
+		return group;
+	});
+
+	const lockedGroups = await database.incrementMany<SCIMGroup>({
+		model: "scimGroup",
+		increment: { revision: 1 },
+		rows: groups.map((group) => ({
+			where: [
+				{ field: "id", value: group.id },
+				{ field: "connectionId", value: connection.id },
+				{ field: "revision", value: group.revision },
+			],
+		})),
+	});
+	if (lockedGroups.length !== groups.length) {
+		throwConcurrentSCIMGroupMutation();
+	}
+	return lockedGroups;
 }
 
 export async function markSCIMGroupsModified(
@@ -130,17 +163,20 @@ export async function markSCIMGroupsModified(
 	groups: readonly SCIMGroup[],
 	updatedAt: Date,
 ): Promise<void> {
-	for (const group of groups) {
-		const updatedGroup = await database.incrementOne<SCIMGroup>({
-			model: "scimGroup",
+	if (groups.length === 0) return;
+	const updatedGroups = await database.incrementMany<SCIMGroup>({
+		model: "scimGroup",
+		increment: {},
+		set: { updatedAt },
+		rows: groups.map((group) => ({
 			where: [
 				{ field: "id", value: group.id },
 				{ field: "connectionId", value: connectionId },
 				{ field: "revision", value: group.revision },
 			],
-			increment: {},
-			set: { updatedAt },
-		});
-		if (!updatedGroup) throwConcurrentSCIMGroupMutation();
+		})),
+	});
+	if (updatedGroups.length !== groups.length) {
+		throwConcurrentSCIMGroupMutation();
 	}
 }

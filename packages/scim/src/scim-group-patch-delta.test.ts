@@ -36,6 +36,26 @@ interface IncrementOneInput {
 	set?: Record<string, unknown>;
 }
 
+function incrementManyThroughIncrementOne(
+	incrementOne: DBTransactionAdapter["incrementOne"],
+): DBTransactionAdapter["incrementMany"] {
+	return async <Row>(
+		input: Parameters<DBTransactionAdapter["incrementMany"]>[0],
+	) => {
+		const updated: Row[] = [];
+		for (const row of input.rows) {
+			const result = await incrementOne<Row>({
+				model: input.model,
+				where: row.where,
+				increment: input.increment,
+				set: input.set,
+			});
+			if (result) updated.push(result);
+		}
+		return updated;
+	};
+}
+
 function createSubjectLockingMemoryAdapter(
 	data: MemoryDB & { scimSubject: SCIMSubject[] },
 	onSubjectLockWait: () => void,
@@ -97,7 +117,11 @@ function createSubjectLockingMemoryAdapter(
 							return transaction.incrementOne<Row>(input);
 						};
 
-						return callback({ ...transaction, incrementOne });
+						return callback({
+							...transaction,
+							incrementOne,
+							incrementMany: incrementManyThroughIncrementOne(incrementOne),
+						});
 					});
 				} finally {
 					for (const release of releases.reverse()) release();
@@ -140,7 +164,12 @@ function createMutationOrderMemoryAdapter(
 						return transaction.deleteMany(input);
 					};
 
-					return callback({ ...transaction, deleteMany, incrementOne });
+					return callback({
+						...transaction,
+						deleteMany,
+						incrementOne,
+						incrementMany: incrementManyThroughIncrementOne(incrementOne),
+					});
 				}),
 		};
 	};
