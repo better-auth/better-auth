@@ -7,7 +7,10 @@ import type {
 	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	createAdapterFactory,
+	orderRowsByIds,
+} from "@better-auth/core/db/adapter";
 import {
 	checksSchema,
 	createSchemaCheck,
@@ -33,6 +36,16 @@ import {
 } from "./query-builders";
 import { findSchemaProblems } from "./schema-check";
 import type { KyselyDatabaseType } from "./types";
+
+function createManyMaxParametersForType(
+	type: KyselyDatabaseType | undefined,
+	createManyMaxParameters?: number,
+): number | undefined {
+	if (createManyMaxParameters !== undefined) return createManyMaxParameters;
+	if (type === "postgres" || type === "mysql") return 65535;
+	if (type === "mssql") return 2099;
+	return undefined;
+}
 
 interface KyselyAdapterConfig {
 	/**
@@ -72,6 +85,15 @@ interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Maximum number of bound parameters allowed in one `createMany` insert.
+	 * Large batches are split so they stay at or below this limit.
+	 *
+	 * SQLite defaults to 999. Cloudflare D1 allows 100; set this to 100 when
+	 * you pass a D1 database to `kyselyAdapter`. PostgreSQL and MySQL use
+	 * 65535, and SQL Server uses 2099, when `type` is set.
+	 */
+	createManyMaxParameters?: number | undefined;
 }
 
 export const kyselyAdapter = (
@@ -621,6 +643,51 @@ export const kyselyAdapter = (
 					);
 					return returned;
 				},
+				async createMany<T extends Record<string, any>>({
+					data,
+					model,
+					modelKey = model,
+				}: {
+					data: T[];
+					model: string;
+					modelKey?: string;
+				}): Promise<T[]> {
+					const encoded = data.map((row) => encodeJSONArrays(modelKey, row));
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const ids = encoded.map((row) => row[idField] ?? row.id);
+					if (config?.type === "mysql") {
+						const insertAndReadBack = async (trx: Kysely<any>) => {
+							await trx.insertInto(model).values(encoded).execute();
+							const rows = await trx
+								.selectFrom(model)
+								.selectAll()
+								.where(idField, "in", ids)
+								.execute();
+							return orderRowsByIds(ids, rows, idField, model) as T[];
+						};
+						if (inTransaction) {
+							return insertAndReadBack(db);
+						}
+						if (typeof db.transaction === "function") {
+							return db.transaction().execute(insertAndReadBack);
+						}
+						return insertAndReadBack(db);
+					}
+					if (config?.type === "mssql") {
+						const rows = await db
+							.insertInto(model)
+							.values(encoded)
+							.outputAll("inserted")
+							.execute();
+						return orderRowsByIds(ids, rows, idField, model) as T[];
+					}
+					const rows = await db
+						.insertInto(model)
+						.values(encoded)
+						.returningAll()
+						.execute();
+					return orderRowsByIds(ids, rows, idField, model) as T[];
+				},
 				async findOne({ model, modelKey = model, where, select, join }) {
 					const { and, or } = convertWhereClause(model, modelKey, where);
 					let query: any = db
@@ -1060,6 +1127,13 @@ export const kyselyAdapter = (
 			adapterName: "Kysely Adapter",
 			usePlural: config?.usePlural,
 			debugLogs: config?.debugLogs,
+			createManyMaxParameters: createManyMaxParametersForType(
+				config?.type,
+				config?.createManyMaxParameters,
+			),
+			createManyMaxRows: config?.type === "mssql" ? 1000 : undefined,
+			createManyPreservesInsertOrder: false,
+			createManyBulkGeneratedIds: false,
 			supportsBooleans:
 				config?.type === "sqlite" ||
 				config?.type === "mssql" ||

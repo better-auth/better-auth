@@ -691,6 +691,28 @@ export const mongodbAdapter = (
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
+				async createMany<T extends Record<string, any>>({
+					model,
+					modelKey = model,
+					data: values,
+				}: {
+					model: string;
+					modelKey?: string;
+					data: T[];
+				}): Promise<T[]> {
+					retryFieldIndexSetup();
+					await ensureModelIndexes(model, modelKey);
+					const res = await db
+						.collection(model)
+						.insertMany(values, { session, ordered: true });
+					return values.map((row, index) => {
+						const insertedId = res.insertedIds[index];
+						return {
+							_id: insertedId ? String(insertedId) : undefined,
+							...row,
+						} as T;
+					});
+				},
 				async findOne({ model, modelKey = model, where, select, join }) {
 					retryFieldIndexSetup();
 					const matchStage = where
@@ -1048,6 +1070,9 @@ export const mongodbAdapter = (
 			adapterName: "MongoDB Adapter",
 			usePlural: config?.usePlural ?? false,
 			debugLogs: config?.debugLogs ?? false,
+			createManyMaxParameters: 100000,
+			createManyPreservesInsertOrder: true,
+			createManyBulkGeneratedIds: true,
 			mapKeysTransformInput: {
 				id: "_id",
 			},

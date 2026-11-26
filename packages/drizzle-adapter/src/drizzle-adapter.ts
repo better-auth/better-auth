@@ -6,7 +6,10 @@ import type {
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	createAdapterFactory,
+	orderRowsByIds,
+} from "@better-auth/core/db/adapter";
 import {
 	checksSchema,
 	createSchemaCheck,
@@ -36,6 +39,8 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
+import { getInsertColumnCount } from "./create-many-utils";
+import { isD1SqliteClient } from "./d1-sqlite-client";
 import { fromDriverDate, toDriverDate } from "./date-columns";
 import type { RelationKeysByModel } from "./join-relation-key";
 import {
@@ -181,6 +186,14 @@ export interface DrizzleAdapterConfig {
 	 * @default undefined
 	 */
 	schemaName?: string | undefined;
+	/**
+	 * Maximum number of bound parameters allowed in one `createMany` insert.
+	 * Large batches are split so they stay at or below this limit.
+	 *
+	 * SQLite defaults to 999. Cloudflare D1 is detected automatically and
+	 * uses 100. Set this only when that detection is wrong.
+	 */
+	createManyMaxParameters?: number | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -350,9 +363,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					return null;
 				};
 
-				return inTransaction
-					? fetchInserted(db)
-					: db.transaction(fetchInserted);
+				if (inTransaction) return fetchInserted(db);
+				if (typeof db.transaction === "function") {
+					return db.transaction(fetchInserted);
+				}
+				return fetchInserted(db);
 			};
 			function convertWhereClause(
 				where: Where[],
@@ -802,6 +817,45 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					);
 					return returned;
 				},
+				async createMany<T extends Record<string, any>>({
+					model,
+					modelKey = model,
+					data: values,
+				}: {
+					model: string;
+					modelKey?: string;
+					data: T[];
+				}): Promise<T[]> {
+					const table = getSchema(model);
+					for (const row of values) {
+						checkMissingFields(table, modelKey, row);
+					}
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					if (config.provider === "mysql") {
+						const insertAndReadBack = async (tx: DB) => {
+							const ids = values.map((row) => row[idField] ?? row.id);
+							await tx.insert(table).values(values).execute();
+							const rows = (await tx
+								.select()
+								.from(table)
+								.where(inArray(table[idField], ids))) as T[];
+							return orderRowsByIds(ids, rows, idField, model);
+						};
+						if (inTransaction) {
+							return insertAndReadBack(db);
+						}
+						if (typeof db.transaction === "function") {
+							return db.transaction(insertAndReadBack);
+						}
+						return insertAndReadBack(db);
+					}
+					const ids = values.map((row) => row[idField] ?? row.id);
+					const rows = (await db
+						.insert(table)
+						.values(values)
+						.returning()) as T[];
+					return orderRowsByIds(ids, rows, idField, model);
+				},
 				async findOne({ model, modelKey = model, where, select, join }) {
 					const table = getSchema(model);
 					const clause = convertWhereClause(where, model, modelKey);
@@ -1231,6 +1285,22 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			createManyMaxParameters:
+				config.createManyMaxParameters ??
+				(config.provider === "sqlite"
+					? isD1SqliteClient(db)
+						? 100
+						: undefined
+					: 65535),
+			createManyPreservesInsertOrder: false,
+			createManyBulkGeneratedIds: false,
+			createManyColumnCount: ({ model, rows }) => {
+				const schema = config.schema || db._?.fullSchema;
+				const table = schema?.[model];
+				return table
+					? getInsertColumnCount(table, rows)
+					: Math.max(1, new Set(rows.flatMap((row) => Object.keys(row))).size);
+			},
 			supportsUUIDs: config.provider === "pg" ? true : false,
 			supportsJSON:
 				config.provider === "pg" // even though mysql also supports it, mysql requires to pass stringified json anyway.

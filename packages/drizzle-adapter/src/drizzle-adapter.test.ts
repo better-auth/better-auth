@@ -6,12 +6,26 @@ import {
 	text,
 	timestamp,
 } from "drizzle-orm/pg-core";
+import { sqliteTable, text as sqliteText } from "drizzle-orm/sqlite-core";
 import { describe, expect, it, vi } from "vitest";
 import type { DB } from "./drizzle-adapter";
 import { drizzleAdapter } from "./drizzle-adapter";
 import { drizzleAdapter as drizzleRelationsV2Adapter } from "./relations-v2";
 
 describe("drizzle-adapter", () => {
+	const adapterFactories = [
+		{
+			relations: "Relations v1",
+			createAdapter: drizzleAdapter,
+			relationMetadata: { schema: {} },
+		},
+		{
+			relations: "Relations v2",
+			createAdapter: drizzleRelationsV2Adapter,
+			relationMetadata: { relations: {} },
+		},
+	] as const;
+
 	it("should create drizzle adapter", () => {
 		const db = {
 			_: {
@@ -25,23 +39,467 @@ describe("drizzle-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	it("raises createManyMaxParameters for postgres and keeps sqlite at the default", () => {
+		const db = {
+			_: {
+				fullSchema: {},
+			},
+		} as any;
+		const sqlite = drizzleAdapter(db, { provider: "sqlite" })({});
+		const postgres = drizzleAdapter(db, { provider: "pg" })({});
+		const sqliteV2 = drizzleRelationsV2Adapter(db, { provider: "sqlite" })({});
+		const postgresV2 = drizzleRelationsV2Adapter(db, { provider: "pg" })({});
+
+		expect(sqlite.options?.adapterConfig.createManyMaxParameters).toBe(999);
+		expect(postgres.options?.adapterConfig.createManyMaxParameters).toBe(65535);
+		expect(sqliteV2.options?.adapterConfig.createManyMaxParameters).toBe(999);
+		expect(postgresV2.options?.adapterConfig.createManyMaxParameters).toBe(
+			65535,
+		);
+	});
+
+	it("sets the D1 bind limit when the sqlite client has batch, prepare, and exec", () => {
+		const db = {
+			_: { fullSchema: {} },
+			$client: {
+				batch: vi.fn(),
+				prepare: vi.fn(),
+				exec: vi.fn(),
+			},
+		} as any;
+		const sqlite = drizzleAdapter(db, { provider: "sqlite" })({});
+		const sqliteV2 = drizzleRelationsV2Adapter(db, { provider: "sqlite" })({});
+
+		expect(sqlite.options?.adapterConfig.createManyMaxParameters).toBe(100);
+		expect(sqliteV2.options?.adapterConfig.createManyMaxParameters).toBe(100);
+	});
+
+	const createManyRows = [
+		{
+			id: "a",
+			name: "Ada",
+			email: "ada@example.com",
+			emailVerified: false,
+		},
+		{
+			id: "b",
+			name: "Bob",
+			email: "bob@example.com",
+			emailVerified: false,
+		},
+	];
+	const userTable = {
+		id: { name: "id" },
+		name: { name: "name" },
+		email: { name: "email" },
+		emailVerified: { name: "emailVerified" },
+		image: { name: "image" },
+		createdAt: { name: "createdAt" },
+		updatedAt: { name: "updatedAt" },
+	};
+
+	it.for(adapterFactories)(
+		"createMany restores input order from $relations sqlite RETURNING",
+		async ({ createAdapter }) => {
+			const returning = vi.fn().mockResolvedValue([
+				{ id: "b", name: "Bob" },
+				{ id: "a", name: "Ada" },
+			]);
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ returning }),
+				}),
+			} as any;
+			const adapter = createAdapter(db, { provider: "sqlite" })({});
+			const created = await adapter.createMany({
+				model: "user",
+				data: createManyRows,
+				forceAllowId: true,
+			});
+			expect(returning).toHaveBeenCalledTimes(1);
+			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany restores input order when PostgreSQL lowercases UUID ids on $relations",
+		async ({ createAdapter }) => {
+			const adaId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
+			const bobId = "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB";
+			const returning = vi.fn().mockResolvedValue([
+				{ id: bobId.toLowerCase(), name: "Bob" },
+				{ id: adaId.toLowerCase(), name: "Ada" },
+			]);
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ returning }),
+				}),
+			} as any;
+			const adapter = createAdapter(db, { provider: "pg" })({
+				advanced: { database: { generateId: "uuid" } },
+			});
+			const created = await adapter.createMany({
+				model: "user",
+				data: [
+					{
+						id: adaId,
+						name: "Ada",
+						email: "ada@example.com",
+						emailVerified: false,
+					},
+					{
+						id: bobId,
+						name: "Bob",
+						email: "bob@example.com",
+						emailVerified: false,
+					},
+				],
+				forceAllowId: true,
+			});
+			expect(created.map((row) => row.name)).toEqual(["Ada", "Bob"]);
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany preserves case-distinct UUID-shaped text ids on $relations",
+		async ({ createAdapter }) => {
+			const upperId = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA";
+			const lowerId = upperId.toLowerCase();
+			const returning = vi.fn().mockResolvedValue([
+				{ id: lowerId, name: "Lower" },
+				{ id: upperId, name: "Upper" },
+			]);
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ returning }),
+				}),
+			} as any;
+			const adapter = createAdapter(db, { provider: "sqlite" })({});
+			const created = await adapter.createMany({
+				model: "user",
+				data: [
+					{
+						id: upperId,
+						name: "Upper",
+						email: "upper@example.com",
+						emailVerified: false,
+					},
+					{
+						id: lowerId,
+						name: "Lower",
+						email: "lower@example.com",
+						emailVerified: false,
+					},
+				],
+				forceAllowId: true,
+			});
+			expect(created.map((row) => row.id)).toEqual([upperId, lowerId]);
+			expect(created.map((row) => row.name)).toEqual(["Upper", "Lower"]);
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany does not use bulk RETURNING when ids are generated on $relations",
+		async ({ createAdapter }) => {
+			const returning = vi.fn().mockResolvedValue([{ id: "generated" }]);
+			const values = vi.fn().mockReturnValue({ returning });
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn().mockReturnValue({ values }),
+			} as any;
+			const adapter = createAdapter(db, { provider: "sqlite" })({
+				advanced: { database: { generateId: false } },
+			});
+			await adapter.createMany({
+				model: "user",
+				data: [
+					{ name: "Ada", email: "ada@example.com", emailVerified: false },
+					{ name: "Bob", email: "bob@example.com", emailVerified: false },
+				],
+			});
+			expect(values).toHaveBeenCalledTimes(2);
+			expect(values.mock.calls[0]?.[0]).not.toHaveProperty("id");
+			expect(values.mock.calls[1]?.[0]).not.toHaveProperty("id");
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany reads MySQL rows back in the same $relations transaction as the insert",
+		async ({ createAdapter }) => {
+			const readError = new Error("read failed");
+			const insertExecute = vi.fn().mockResolvedValue(undefined);
+			const trx = {
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ execute: insertExecute }),
+				}),
+				select: vi.fn().mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi.fn().mockRejectedValue(readError),
+					}),
+				}),
+			};
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn(),
+				select: vi.fn(),
+				transaction: vi.fn((cb: (tx: typeof trx) => Promise<unknown>) =>
+					cb(trx),
+				),
+			} as any;
+			const adapter = createAdapter(db, { provider: "mysql" })({});
+			await expect(
+				adapter.createMany({
+					model: "user",
+					data: createManyRows,
+					forceAllowId: true,
+				}),
+			).rejects.toBe(readError);
+			expect(db.transaction).toHaveBeenCalledTimes(1);
+			expect(trx.insert).toHaveBeenCalledTimes(1);
+			expect(insertExecute).toHaveBeenCalledTimes(1);
+			expect(trx.select).toHaveBeenCalledTimes(1);
+			expect(db.insert).not.toHaveBeenCalled();
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany chunks sqlite inserts by table columns including omitted defaults on $relations",
+		async ({ createAdapter }) => {
+			const user = sqliteTable("user", {
+				id: sqliteText("id").primaryKey(),
+				name: sqliteText("name"),
+				email: sqliteText("email"),
+				emailVerified: sqliteText("emailVerified"),
+				image: sqliteText("image"),
+				createdAt: sqliteText("createdAt"),
+				updatedAt: sqliteText("updatedAt"),
+				extra: sqliteText("extra").default("x"),
+			});
+			const values = vi.fn((rows: unknown[]) => ({
+				returning: vi.fn().mockResolvedValue(rows),
+			}));
+			const db = {
+				_: { fullSchema: { user }, relations: {} },
+				insert: vi.fn().mockReturnValue({ values }),
+			} as any;
+			const adapter = createAdapter(db, {
+				provider: "sqlite",
+				createManyMaxParameters: 12,
+			})({});
+			await adapter.createMany({
+				model: "user",
+				data: [
+					{ id: "a", name: "Ada" },
+					{ id: "b", name: "Bob" },
+				],
+				forceAllowId: true,
+			});
+			expect(values).toHaveBeenCalledTimes(2);
+			expect(values.mock.calls[0]?.[0]).toHaveLength(1);
+			expect(values.mock.calls[1]?.[0]).toHaveLength(1);
+		},
+	);
+
+	it("createMany chunks Relations v2 inserts using db._.relations table columns", async () => {
+		const user = sqliteTable("user", {
+			id: sqliteText("id").primaryKey(),
+			name: sqliteText("name"),
+			email: sqliteText("email"),
+			emailVerified: sqliteText("emailVerified"),
+			image: sqliteText("image"),
+			createdAt: sqliteText("createdAt"),
+			updatedAt: sqliteText("updatedAt"),
+			extra: sqliteText("extra").default("x"),
+		});
+		const values = vi.fn((rows: unknown[]) => ({
+			returning: vi.fn().mockResolvedValue(rows),
+		}));
+		const db = {
+			_: { relations: { user: { table: user } } },
+			insert: vi.fn().mockReturnValue({ values }),
+		} as any;
+		const adapter = drizzleRelationsV2Adapter(db, {
+			provider: "sqlite",
+			createManyMaxParameters: 12,
+		})({});
+		await adapter.createMany({
+			model: "user",
+			data: [
+				{ id: "a", name: "Ada" },
+				{ id: "b", name: "Bob" },
+			],
+			forceAllowId: true,
+		});
+		expect(values).toHaveBeenCalledTimes(2);
+		expect(values.mock.calls[0]?.[0]).toHaveLength(1);
+		expect(values.mock.calls[1]?.[0]).toHaveLength(1);
+	});
+
+	it.for(adapterFactories)(
+		"createMany does not wrap extra D1 chunks in an interactive transaction on $relations",
+		async ({ createAdapter }) => {
+			const user = sqliteTable("user", {
+				id: sqliteText("id").primaryKey(),
+				name: sqliteText("name"),
+				email: sqliteText("email"),
+				emailVerified: sqliteText("emailVerified"),
+				image: sqliteText("image"),
+				createdAt: sqliteText("createdAt"),
+				updatedAt: sqliteText("updatedAt"),
+				extra: sqliteText("extra").default("x"),
+			});
+			const values = vi.fn((rows: unknown[]) => ({
+				returning: vi.fn().mockResolvedValue(rows),
+			}));
+			const transaction = vi.fn(async () => {
+				throw new Error("D1 does not support interactive transactions");
+			});
+			const db = {
+				_: { fullSchema: { user }, relations: {} },
+				$client: {
+					batch: vi.fn(),
+					prepare: vi.fn(),
+					exec: vi.fn(),
+				},
+				insert: vi.fn().mockReturnValue({ values }),
+				transaction,
+			} as any;
+			const adapter = createAdapter(db, {
+				provider: "sqlite",
+				createManyMaxParameters: 12,
+			})({});
+			await adapter.createMany({
+				model: "user",
+				data: [
+					{ id: "a", name: "Ada" },
+					{ id: "b", name: "Bob" },
+				],
+				forceAllowId: true,
+			});
+			expect(transaction).not.toHaveBeenCalled();
+			expect(values).toHaveBeenCalledTimes(2);
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany reads MySQL rows back without a transaction on $relations",
+		async ({ createAdapter }) => {
+			const execute = vi.fn().mockResolvedValue(undefined);
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ execute }),
+				}),
+				select: vi.fn().mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi.fn().mockResolvedValue([
+							{ id: "b", name: "Bob" },
+							{ id: "a", name: "Ada" },
+						]),
+					}),
+				}),
+			} as any;
+			const adapter = createAdapter(db, { provider: "mysql" })({});
+			const created = await adapter.createMany({
+				model: "user",
+				data: createManyRows,
+				forceAllowId: true,
+			});
+			expect(db.insert).toHaveBeenCalledTimes(1);
+			expect(execute).toHaveBeenCalledTimes(1);
+			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany inserts mixed-key MySQL rows sequentially on $relations",
+		async ({ createAdapter }) => {
+			const insertExecute = vi.fn().mockResolvedValue(undefined);
+			const trx = {
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ execute: insertExecute }),
+				}),
+				select: vi.fn().mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi.fn().mockReturnValue({
+							limit: vi.fn().mockReturnValue({
+								execute: vi
+									.fn()
+									.mockResolvedValueOnce([{ id: "a" }])
+									.mockResolvedValueOnce([{ id: "b" }]),
+							}),
+						}),
+					}),
+				}),
+			};
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ execute: insertExecute }),
+				}),
+				select: vi.fn(),
+				transaction: vi.fn((cb: (tx: typeof trx) => Promise<unknown>) =>
+					cb(trx),
+				),
+			} as any;
+			const adapter = createAdapter(db, { provider: "mysql" })({});
+			const created = await adapter.createMany({
+				model: "user",
+				data: [
+					{ ...createManyRows[0]!, image: "https://example.com/ada.png" },
+					createManyRows[1]!,
+				],
+				forceAllowId: true,
+			});
+			expect(db.insert).toHaveBeenCalledTimes(2);
+			expect(db.transaction).toHaveBeenCalledTimes(2);
+			expect(created.map((row) => row.id)).toEqual(["a", "b"]);
+		},
+	);
+
+	it.for(adapterFactories)(
+		"createMany throws when MySQL sequential read-back cannot identify a $relations row",
+		async ({ createAdapter }) => {
+			const execute = vi.fn().mockResolvedValue(undefined);
+			const db = {
+				_: { fullSchema: { user: userTable }, relations: {} },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({ execute }),
+				}),
+				select: vi.fn().mockReturnValue({
+					from: vi.fn().mockReturnValue({
+						where: vi.fn().mockReturnValue({
+							limit: vi.fn().mockReturnValue({
+								execute: vi.fn().mockResolvedValue([]),
+							}),
+						}),
+					}),
+				}),
+			} as any;
+			const adapter = createAdapter(db, { provider: "mysql" })({
+				advanced: { database: { generateId: false } },
+			});
+			await expect(
+				adapter.createMany({
+					model: "user",
+					data: [
+						{ name: "Ada", email: "ada@example.com", emailVerified: false },
+					],
+				}),
+			).rejects.toThrow(
+				/createMany could not read back an inserted "user" row/,
+			);
+			expect(execute).toHaveBeenCalledTimes(1);
+		},
+	);
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11258
 	 */
 	describe("lazy database initialization", () => {
-		const adapterFactories = [
-			{
-				relations: "Relations v1",
-				createAdapter: drizzleAdapter,
-				relationMetadata: { schema: {} },
-			},
-			{
-				relations: "Relations v2",
-				createAdapter: drizzleRelationsV2Adapter,
-				relationMetadata: { relations: {} },
-			},
-		] as const;
-
 		it.for(adapterFactories)(
 			"should not initialize a lazy database during $relations adapter construction",
 			({ createAdapter }) => {
@@ -53,6 +511,11 @@ describe("drizzle-adapter", () => {
 
 				expect(() =>
 					createAdapter(db, { provider: "pg" })({
+						secret: "test-secret-that-is-at-least-32-chars-long!!",
+					}),
+				).not.toThrow();
+				expect(() =>
+					createAdapter(db, { provider: "sqlite" })({
 						secret: "test-secret-that-is-at-least-32-chars-long!!",
 					}),
 				).not.toThrow();

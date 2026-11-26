@@ -9,6 +9,7 @@ export type DBAdapterDebugLogOption =
 			 */
 			logCondition?: (() => boolean) | undefined;
 			create?: boolean | undefined;
+			createMany?: boolean | undefined;
 			update?: boolean | undefined;
 			updateMany?: boolean | undefined;
 			findOne?: boolean | undefined;
@@ -137,6 +138,64 @@ export interface DBAdapterFactoryConfig<
 				  ) => Promise<R>)
 		  )
 		| undefined;
+	/**
+	 * Maximum number of bound parameters your database allows in one
+	 * `createMany` insert. Large batches are split so they stay at or below
+	 * this limit. You do not need to chunk inserts in `createMany`.
+	 *
+	 * The limit is on parameters, not rows: each column in each row uses one
+	 * parameter, so chunk size is `createManyMaxParameters / columnCount`.
+	 * Column count is the number of distinct keys in the batch.
+	 *
+	 * Keep the default (999) for SQLite. Set `100` for Cloudflare D1.
+	 * PostgreSQL and MySQL typically allow 65535; SQL Server typically
+	 * allows 2099. Raise this for databases that do not use SQL bind
+	 * parameters. SQL Server also limits a single `INSERT ... VALUES`
+	 * statement to 1000 rows; set `createManyMaxRows` to 1000 for it.
+	 *
+	 * @default 999
+	 */
+	createManyMaxParameters?: number | undefined;
+	/**
+	 * Maximum number of rows your database allows in one `createMany`
+	 * insert, separate from the bound-parameter limit. Large batches are
+	 * split so they stay at or below both limits.
+	 *
+	 * SQL Server rejects `INSERT ... VALUES` statements with more than
+	 * 1000 rows even when the parameter count is under 2099.
+	 */
+	createManyMaxRows?: number | undefined;
+	/**
+	 * How many bound parameters one `createMany` row uses.
+	 *
+	 * Defaults to the number of distinct keys in the batch. Adapters that
+	 * bind omitted table defaults should count every physical column.
+	 */
+	createManyColumnCount?:
+		| ((args: {
+				model: string;
+				modelKey: string;
+				rows: Record<string, unknown>[];
+		  }) => number)
+		| undefined;
+	/**
+	 * Native `createMany` returns rows in the same order as `data`.
+	 *
+	 * When true, Better Auth trusts the driver result instead of matching
+	 * ids. Required for bulk inserts of database-generated ids.
+	 *
+	 * @default false
+	 */
+	createManyPreservesInsertOrder?: boolean | undefined;
+	/**
+	 * Native `createMany` can return generated ids for rows that omit `id`.
+	 *
+	 * Set this only when `createManyPreservesInsertOrder` is also true.
+	 * Otherwise Better Auth inserts those rows with sequential `create`.
+	 *
+	 * @default false
+	 */
+	createManyBulkGeneratedIds?: boolean | undefined;
 	/**
 	 * Disable id generation for the `create` method.
 	 *
@@ -413,6 +472,24 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		 */
 		forceAllowId?: boolean | undefined;
 	}) => Promise<R>;
+	/**
+	 * Insert multiple rows of one model.
+	 *
+	 * Returns one created row per input, in the same order as `data`. Empty
+	 * `data` returns `[]`. Like `create`, ids in the payload are ignored
+	 * unless `forceAllowId` is true.
+	 */
+	createMany: <T extends Record<string, any>, R = T>(data: {
+		model: string;
+		data: Array<Omit<T, "id">>;
+		select?: string[] | undefined;
+		/**
+		 * By default, any `id` provided in a row will be ignored.
+		 *
+		 * If you want to force the `id` to be the same as the row's `id`, set this to `true`.
+		 */
+		forceAllowId?: boolean | undefined;
+	}) => Promise<R[]>;
 	findOne: <T>(data: {
 		model: string;
 		where: Where[];
@@ -554,6 +631,27 @@ export interface CustomAdapter {
 		data: T;
 		select?: string[] | undefined;
 	}) => Promise<T>;
+	/**
+	 * Optional native multi-row insert.
+	 *
+	 * Implement this when your database can insert many rows at once (for
+	 * example `INSERT ... VALUES (...), (...)`, `createManyAndReturn`,
+	 * `insertMany`). Return one inserted row per input, in the same order as
+	 * `data`. Insert every row or throw. If you cannot return the inserted
+	 * rows, omit this method; Better Auth will insert sequentially with
+	 * `create`.
+	 *
+	 * Rows usually already include `id`. When the user uses serial or
+	 * database-generated ids, `id` may be omitted — still return each
+	 * generated id in the same order as `data`. Do not split `data`;
+	 * Better Auth chunks large batches using `createManyMaxParameters`.
+	 */
+	createMany?: <T extends Record<string, any>>(
+		data: ModelTarget & {
+			data: T[];
+			select?: string[] | undefined;
+		},
+	) => Promise<T[]>;
 	update: <T>(
 		data: ModelTarget & {
 			where: CleanedWhere[];
@@ -666,6 +764,7 @@ export interface DBAdapterInstance<
 	(options: BetterAuthOptions): DBAdapter<Options>;
 }
 
+export * from "./create-many";
 export * from "./factory";
 export * from "./types";
 export * from "./utils";

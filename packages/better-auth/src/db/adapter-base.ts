@@ -36,5 +36,42 @@ export async function getBaseAdapter(
 		};
 	}
 
+	if (typeof adapter.createMany !== "function") {
+		logger.warn(
+			"Adapter does not correctly implement createMany, patching it automatically with sequential create. Please update your adapter implementation.",
+		);
+		const patchCreateMany = (
+			target: Pick<DBAdapter<BetterAuthOptions>, "create" | "createMany">,
+		) => {
+			if (typeof target.createMany === "function") return;
+			target.createMany = async ({ data, model, select, forceAllowId }) => {
+				const created: unknown[] = [];
+				for (const row of data) {
+					created.push(
+						await target.create({
+							data: row,
+							model,
+							select,
+							forceAllowId,
+						}),
+					);
+				}
+				return created as never;
+			};
+		};
+		patchCreateMany(adapter);
+		const originalTransaction = adapter.transaction;
+		if (typeof originalTransaction === "function") {
+			const runTransaction: typeof originalTransaction =
+				originalTransaction.bind(adapter);
+			adapter.transaction = async (callback) => {
+				return runTransaction(async (trx) => {
+					patchCreateMany(trx);
+					return callback(trx);
+				});
+			};
+		}
+	}
+
 	return adapter;
 }

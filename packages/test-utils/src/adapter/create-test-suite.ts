@@ -361,6 +361,20 @@ export const createTestSuite = <
 									(createdRows[model] ??= []).push({ id: res.id });
 									return res as any;
 								},
+								async createMany({ data, model, select }) {
+									const defaultModelName = getDefaultModelName(model);
+									adapter = await helpers.adapter();
+									const res = await adapter.createMany({
+										data,
+										model: defaultModelName,
+										select,
+										forceAllowId: true,
+									});
+									for (const row of res) {
+										(createdRows[model] ??= []).push({ id: row.id });
+									}
+									return res as any;
+								},
 								options: adapter.options,
 							};
 						},

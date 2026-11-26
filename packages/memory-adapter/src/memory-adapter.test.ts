@@ -45,6 +45,13 @@ async function seedWidget(
 	});
 }
 
+it("does not inherit the sqlite bind-parameter chunk limit", () => {
+	const { adapter } = setup();
+	expect(adapter.options?.adapterConfig.createManyMaxParameters).toBe(
+		Number.MAX_SAFE_INTEGER,
+	);
+});
+
 it("keeps model identity when a custom name matches another schema key", async () => {
 	const db: MemoryDB = { account: [], identity: [], session: [] };
 	const adapter = memoryAdapter(db)({

@@ -268,6 +268,7 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 class D1SqliteQueryCompiler extends SqliteQueryCompiler {}
 
 export class D1SqliteDialect implements Dialect {
+	readonly isD1 = true;
 	readonly #config: D1SqliteDialectConfig;
 
 	constructor(config: D1SqliteDialectConfig) {

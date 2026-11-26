@@ -7,7 +7,10 @@ import type {
 	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	createAdapterFactory,
+	orderRowsByIds,
+} from "@better-auth/core/db/adapter";
 import {
 	checksSchema,
 	createSchemaCheck,
@@ -68,6 +71,20 @@ function isPrismaNotFoundError(e: any): boolean {
 	return e?.code === "P2025";
 }
 
+const CREATE_MANY_AND_RETURN_PROVIDERS = new Set<PrismaConfig["provider"]>([
+	"postgresql",
+	"cockroachdb",
+	"sqlite",
+]);
+
+function createManyMaxParametersForProvider(
+	provider: PrismaConfig["provider"],
+): number | undefined {
+	if (provider === "sqlite") return undefined;
+	if (provider === "sqlserver") return 2099;
+	return 65535;
+}
+
 type PrismaClientInternal = {
 	$transaction: (
 		callback: (db: PrismaClient) => Awaitable<any>,
@@ -106,12 +123,13 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				model: string,
 				join?: JoinConfig | undefined,
 			) => {
-				if (!select && !join) return undefined;
+				const selectedFields = select?.length ? select : undefined;
+				if (!selectedFields && !join) return undefined;
 
 				const result: Record<string, Record<string, any> | boolean> = {};
 
-				if (select) {
-					for (const field of select) {
+				if (selectedFields) {
+					for (const field of selectedFields) {
 						result[getFieldName({ model, field })] = true;
 					}
 				}
@@ -120,7 +138,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// when joining that has a limit, we need to use Prisma's `select` syntax to append the limit to the field
 					// because of such, it also means we need to select all base-model fields as well
 					// should check if `select` is not provided, because then we should select all base-model fields
-					if (!select) {
+					if (!selectedFields) {
 						const fields = schema[getDefaultModelName(model)]?.fields || {};
 						fields.id = { type: "string" }; // make sure there is at least an id field
 						for (const field of Object.keys(fields)) {
@@ -461,6 +479,78 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						select: convertSelect(select, modelKey),
 					});
 					return result;
+				},
+				async createMany<T extends Record<string, any>>({
+					model,
+					modelKey = model,
+					data: values,
+					select,
+				}: {
+					model: string;
+					modelKey?: string;
+					data: T[];
+					select?: string[];
+				}): Promise<T[]> {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+					const selectClause = convertSelect(select, modelKey);
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const orderSelect =
+						selectClause === undefined
+							? undefined
+							: { ...selectClause, [idField]: true };
+					const ids = values.map((row) => row[idField] ?? row.id);
+					const hasAllIds = ids.every((id) => id !== undefined && id !== null);
+					const createSequentially = async () => {
+						const created: T[] = [];
+						for (const row of values) {
+							created.push(
+								await db[model]!.create({
+									data: row,
+									select: selectClause,
+								}),
+							);
+						}
+						return created;
+					};
+					if (!hasAllIds) {
+						return createSequentially();
+					}
+					if (
+						CREATE_MANY_AND_RETURN_PROVIDERS.has(config.provider) &&
+						typeof db[model].createManyAndReturn === "function"
+					) {
+						const created = (await db[model].createManyAndReturn({
+							data: values,
+							select: orderSelect,
+						})) as T[];
+						return orderRowsByIds(ids, created, idField, model);
+					}
+					if (typeof db[model].createMany !== "function") {
+						return createSequentially();
+					}
+					const insertAndReadBack = async (tx: PrismaClient) => {
+						const client = tx as PrismaClientInternal;
+						await client[model]!.createMany({ data: values });
+						const rows = (await client[model]!.findMany({
+							where: { [idField]: { in: ids } },
+							select: orderSelect,
+						})) as T[];
+						return orderRowsByIds(ids, rows, idField, model);
+					};
+					if (config.provider === "mongodb" && !config.transaction) {
+						return createSequentially();
+					}
+					if (inTransaction) {
+						return insertAndReadBack(db);
+					}
+					if (typeof db.$transaction === "function") {
+						return db.$transaction(insertAndReadBack);
+					}
+					return createSequentially();
 				},
 				async findOne({ model, modelKey = model, where, select, join }) {
 					// this is just "JoinOption" type because we disabled join transformation in adapter config
@@ -888,6 +978,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			adapterName: "Prisma Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			createManyMaxParameters: createManyMaxParametersForProvider(
+				config.provider,
+			),
+			createManyMaxRows: config.provider === "sqlserver" ? 1000 : undefined,
+			createManyPreservesInsertOrder: false,
+			createManyBulkGeneratedIds: false,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,
 			supportsArrays:
 				config.provider === "postgresql" || config.provider === "mongodb"
