@@ -124,6 +124,8 @@ test.describe("solid-v2", () => {
 			page.getByRole("heading", { name: "Signed in as Test User" }),
 		).toBeVisible();
 		expect(await page.getByRole("alert").count()).toBe(0);
+		// The kept answer is settled, not stuck waiting on the failed request.
+		await expect(page.getByTestId("session-pending")).toHaveText("Settled");
 	});
 
 	test("updates the page when the user signs in and out in the browser", async ({

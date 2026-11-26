@@ -1,4 +1,11 @@
-import { createMemo, Errored, Loading, onSettled, Show } from "solid-js";
+import {
+	createMemo,
+	Errored,
+	isPending,
+	Loading,
+	onSettled,
+	Show,
+} from "solid-js";
 import { client } from "./lib/auth-client";
 import { getServerSession } from "./lib/session";
 
@@ -15,6 +22,9 @@ export default function App() {
 					<Show when={session()} fallback={<a href="/sign-in">Sign in</a>}>
 						{(current) => <h1>Signed in as {current().user.name}</h1>}
 					</Show>
+					<p data-testid="session-pending">
+						{isPending(() => session()) ? "Refreshing" : "Settled"}
+					</p>
 				</Loading>
 			</Errored>
 			<p>Ready</p>

@@ -76,13 +76,13 @@ function toOutcome<T>(state: AuthQueryState<T>): AuthQueryOutcome<T> {
  * Subscribes to an auth-query atom as a `from()` source.
  *
  * @param store - The auth-query atom.
- * @param answered - Whether the reader already holds an answer, such as the
- * server's answer adopted during hydration. A failed request then keeps that
- * answer instead of reaching `<Errored>`.
+ * @param initial - The answer the reader already holds, such as the server's
+ * answer adopted during hydration. A failed request then keeps that answer
+ * instead of reaching `<Errored>`.
  */
 function authQuerySource<T>(
 	store: AuthQueryAtom<T>,
-	answered: boolean,
+	initial: { value: T | null } | undefined,
 ): FromSource<T | null> {
 	return (next, error) => {
 		// Subscribing while the query is already failed means an `<Errored>`
@@ -94,7 +94,7 @@ function authQuerySource<T>(
 		// Once the query has answered (data or `null`), a later failed request
 		// keeps showing that answer: only a failure before any answer reaches
 		// `<Errored>`. Erroring here would also close the subscription.
-		let hasAnswered = answered;
+		let answer = initial;
 		return store.subscribe((state) => {
 			const outcome = toOutcome(state);
 			const skipStaleError = isRetry && outcome.kind === "error";
@@ -104,11 +104,15 @@ function authQuerySource<T>(
 			}
 			switch (outcome.kind) {
 				case "value":
-					hasAnswered = true;
+					answer = { value: outcome.value };
 					next(outcome.value);
 					return;
 				case "error":
-					if (!hasAnswered) {
+					// Re-emit the kept answer: a source that has not emitted since
+					// hydration would otherwise leave the read pending.
+					if (answer) {
+						next(answer.value);
+					} else {
 						error(outcome.error);
 					}
 					return;
@@ -139,7 +143,9 @@ function createAuthQueryAccessor<T>(
 		if (isServer()) {
 			return from(serverSource(options.serverValue?.() ?? null));
 		}
-		return from(authQuerySource(store, prev !== undefined));
+		return from(
+			authQuerySource(store, prev === undefined ? undefined : { value: prev }),
+		);
 	});
 	const refetch = action(function* (queryParams?: AuthQueryRefetchParams) {
 		affects(data);
