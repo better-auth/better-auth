@@ -305,14 +305,32 @@ export const memoryAdapter = (
 										return record[field] != null;
 									}
 									return record[field] !== value;
+								// A null field never satisfies a comparison, as in SQL. JS
+								// would coerce it to 0, so `null < new Date()` is true.
 								case "gt":
-									return value != null && Boolean(record[field] > value);
+									return (
+										value != null &&
+										record[field] != null &&
+										record[field] > value
+									);
 								case "gte":
-									return value != null && Boolean(record[field] >= value);
+									return (
+										value != null &&
+										record[field] != null &&
+										record[field] >= value
+									);
 								case "lt":
-									return value != null && Boolean(record[field] < value);
+									return (
+										value != null &&
+										record[field] != null &&
+										record[field] < value
+									);
 								case "lte":
-									return value != null && Boolean(record[field] <= value);
+									return (
+										value != null &&
+										record[field] != null &&
+										record[field] <= value
+									);
 								default:
 									if (isInsensitive) {
 										return insensitiveCompare(record[field], value);
