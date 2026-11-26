@@ -332,14 +332,15 @@ parameters:
 
 ```ts title="Example"
 incrementMany: async ({ model, increment, set, rows }) => {
+  const assignments = { ...set };
+  for (const [field, delta] of Object.entries(increment)) {
+    assignments[field] = sql`${model[field]} + ${delta}`;
+  }
   const updated = [];
   for (const { where } of rows) {
     const [row] = await db
       .update(model)
-      .set({
-        ...set,
-        count: sql`${model.count} + ${increment.count ?? 0}`,
-      })
+      .set(assignments)
       .where(where)
       .returning();
     if (row) updated.push(row);
@@ -349,7 +350,7 @@ incrementMany: async ({ model, increment, set, rows }) => {
 ```
 
 <Callout type="warn">
-  `incrementMany` is optional. Without it, Better Auth calls `incrementOne` for each row. When the adapter supports transactions, a multi-row fallback runs in one transaction. Without transactions, a multi-row update is not all-or-nothing.
+  `incrementMany` is optional. Without it, Better Auth calls `incrementOne` for each row. Native implementations are also called in chunks so each statement stays under the adapter's bind and row limits; a native call may receive only a subset of `rows`. When the adapter supports transactions, a multi-row call runs in one transaction. Without transactions, a multi-row or multi-chunk update is not all-or-nothing.
 </Callout>
 
 ### `findOne` method

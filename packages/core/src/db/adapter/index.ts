@@ -555,10 +555,10 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	 * Always defined on the factory-wrapped adapter. The factory sorts by
 	 * `id` and chunks to the database bind/row limits before calling a
 	 * native method. Without a native method, it loops `incrementOne` in
-	 * that `id` order. When the adapter supports transactions, more than
-	 * one native chunk or a multi-row sequential fallback runs in one
-	 * transaction. Without transactions, sequential fallback and
-	 * multi-chunk native calls are not all-or-nothing across rows.
+	 * that `id` order. When the adapter supports transactions, a multi-row
+	 * call runs in one transaction. Without transactions, sequential
+	 * fallback and multi-chunk native calls are not all-or-nothing across
+	 * rows.
 	 *
 	 * A no-op may return a snapshot without writing. Returned rows do not
 	 * by themselves mean exclusive ownership of those records.

@@ -8,6 +8,7 @@ import type {
 } from "@better-auth/core/db/adapter";
 import {
 	createAdapterFactory,
+	findSensitiveIdEq,
 	sortIncrementManyRows,
 } from "@better-auth/core/db/adapter";
 import {
@@ -1256,6 +1257,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						const mutateInTransaction = async (tx: DB) => {
 							const updated: unknown[] = [];
 							for (const row of sorted) {
+								const expectedId = findSensitiveIdEq(row.where, idField).value;
 								const clause = convertWhereClause(row.where, model, modelKey);
 								const found = await tx
 									.select()
@@ -1266,7 +1268,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								const target = found[0];
 								if (!target) continue;
 								const targetId = target[idField] ?? (target as any).id;
-								if (targetId === undefined || targetId === null || !idColumn) {
+								// MySQL's default collation can match `id = 'ABC'` to
+								// stored `'abc'`. Skip that hit so the row is not
+								// incremented once per case variant.
+								if (
+									targetId === undefined ||
+									targetId === null ||
+									!idColumn ||
+									targetId !== expectedId
+								) {
 									continue;
 								}
 								await tx

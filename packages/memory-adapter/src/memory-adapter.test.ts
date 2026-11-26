@@ -314,7 +314,7 @@ describe("memory adapter incrementOne", () => {
 });
 
 describe("memory adapter incrementMany", () => {
-	it("increments matching rows, omits guard misses, and preserves lock order", async () => {
+	it("increments matching rows and omits guard misses", async () => {
 		const { adapter } = setup();
 		await adapter.create({
 			model: "widget",

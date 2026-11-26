@@ -801,6 +801,61 @@ describe("drizzle-adapter", () => {
 			expect(predicate).toContain(userTable.attempts);
 		});
 
+		it("does not increment a mysql row twice when two guards differ only by case", async () => {
+			let updates = 0;
+			const stored = { id: "abc", attempts: 1 };
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				select: vi.fn(() => ({
+					from: vi.fn(() => ({
+						where: vi.fn(() => ({
+							for: vi.fn(() => ({
+								limit: vi.fn(async () => [stored]),
+							})),
+							limit: vi.fn(() => ({
+								execute: vi.fn(async () => [
+									{ id: "abc", attempts: stored.attempts + updates },
+								]),
+							})),
+						})),
+					})),
+				})),
+				update: vi.fn(() => ({
+					set: vi.fn(() => ({
+						where: vi.fn(() => ({
+							execute: vi.fn(async () => {
+								updates += 1;
+							}),
+						})),
+					})),
+				})),
+				transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(db)),
+			} as any;
+			const adapter = adapterFactory(db, { provider: "mysql" })({
+				secret: defaultSecret,
+				user: {
+					additionalFields: {
+						attempts: { type: "number", required: false },
+					},
+				},
+			});
+
+			const result = await adapter.incrementMany<{
+				id: string;
+				attempts: number;
+			}>({
+				model: "user",
+				increment: { attempts: 1 },
+				rows: [
+					{ where: [{ field: "id", value: "ABC" }] },
+					{ where: [{ field: "id", value: "abc" }] },
+				],
+			});
+
+			expect(updates).toBe(1);
+			expect(result).toEqual([{ id: "abc", attempts: 2 }]);
+		});
+
 		it("locks matching postgres rows in id order before the update", async () => {
 			const steps: string[] = [];
 			const returning = vi.fn(async () => {

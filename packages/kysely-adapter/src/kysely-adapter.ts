@@ -9,6 +9,7 @@ import type {
 } from "@better-auth/core/db/adapter";
 import {
 	createAdapterFactory,
+	findSensitiveIdEq,
 	sortIncrementManyRows,
 } from "@better-auth/core/db/adapter";
 import {
@@ -1080,6 +1081,7 @@ export const kyselyAdapter = (
 						const incrementInTransaction = async (trx: any) => {
 							const updated: unknown[] = [];
 							for (const row of sorted) {
+								const expectedId = findSensitiveIdEq(row.where, idField).value;
 								const target = await applyRowWhere(
 									trx
 										.selectFrom(model)
@@ -1091,7 +1093,15 @@ export const kyselyAdapter = (
 									.executeTakeFirst();
 								if (!target) continue;
 								const targetId = target[idField] ?? target.id;
-								if (targetId === undefined || targetId === null) continue;
+								// MySQL's default collation can match `id = 'ABC'` to
+								// stored `'abc'`. Skip that hit so the row is not
+								// incremented once per case variant.
+								if (
+									targetId === undefined ||
+									targetId === null ||
+									targetId !== expectedId
+								)
+									continue;
 								const result = await applyRowWhere(
 									trx.updateTable(model).set(assignments),
 									row.where,

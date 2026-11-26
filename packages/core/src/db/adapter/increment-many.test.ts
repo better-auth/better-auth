@@ -54,6 +54,23 @@ describe("incrementMany helpers", () => {
 		).toEqual(["a", "c"]);
 	});
 
+	it("returns no chunks for empty input", () => {
+		expect(chunkIncrementManyRows([], { maxParameters: 999 })).toEqual([]);
+	});
+
+	it("caps chunk size with maxRows", () => {
+		const rows = Array.from({ length: 10 }, (_, index) => ({
+			where: [idWhere(`id-${index}`)],
+		}));
+		expect(
+			chunkIncrementManyRows(rows, {
+				maxParameters: 999,
+				maxRows: 3,
+				assignmentBinds: 1,
+			}).map((chunk) => chunk.length),
+		).toEqual([3, 3, 3, 1]);
+	});
+
 	it("chunks (id, revision) plus one increment bind to 499 under the SQLite 999 cap", () => {
 		const rows = Array.from({ length: 1000 }, (_, index) => ({
 			where: [

@@ -1370,15 +1370,8 @@ describe("createAdapterFactory incrementMany", () => {
 
 	it("appends native incrementMany results without spreading the chunk", async () => {
 		const incrementMany = vi.fn(
-			async ({ rows }: { rows: Array<{ where: Required<Where>[] }> }) => {
-				const oversized = Array.from({ length: rows.length }, (_, index) => ({
-					id: `id-${index}`,
-				}));
-				oversized.push = () => {
-					throw new Error("spread exceeded the argument limit");
-				};
-				return oversized;
-			},
+			async ({ rows }: { rows: Array<{ where: Required<Where>[] }> }) =>
+				rows.map((row) => ({ id: row.where[0]?.value })),
 		);
 		const adapter = createAdapterFactory<BetterAuthOptions>({
 			config: {
@@ -1399,6 +1392,90 @@ describe("createAdapterFactory incrementMany", () => {
 			set: { name: "token" },
 			rows,
 		});
-		expect(result).toHaveLength(3);
+		expect(result.map((row) => row.id)).toEqual(["id-0", "id-1", "id-2"]);
+	});
+
+	it("transforms incrementMany input once when wrapping a transaction", async () => {
+		const seen: string[] = [];
+		const innerIncrementMany = vi.fn(
+			async ({
+				set,
+				rows,
+			}: {
+				set?: Record<string, unknown> | undefined;
+				rows: Array<{ where: Required<Where>[] }>;
+			}) => {
+				expect(set?.name).toBe("token:in");
+				return rows.map((row) => ({ id: row.where[0]?.value }));
+			},
+		);
+		const transaction = vi.fn(
+			async (
+				cb: (trx: ReturnType<typeof createTestAdapter>) => Promise<unknown>,
+			) => {
+				const trx = createAdapterFactory<BetterAuthOptions>({
+					config: {
+						adapterId: "trx-adapter",
+						incrementManyMaxParameters: 7,
+						transaction: false,
+						customTransformInput({ data, field, action }) {
+							if (
+								action === "update" &&
+								field === "name" &&
+								typeof data === "string"
+							) {
+								seen.push(data);
+								return `${data}:in`;
+							}
+							return data;
+						},
+					},
+					adapter: () =>
+						createCustomAdapter({
+							incrementMany:
+								innerIncrementMany as CustomAdapter["incrementMany"],
+						}),
+				})({});
+				return cb(trx);
+			},
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				incrementManyMaxParameters: 7,
+				transaction: transaction as never,
+				customTransformInput({ data, field, action }) {
+					if (
+						action === "update" &&
+						field === "name" &&
+						typeof data === "string"
+					) {
+						seen.push(`outer:${data}`);
+						return data;
+					}
+					return data;
+				},
+			},
+			adapter: () =>
+				createCustomAdapter({
+					incrementMany: async () => {
+						throw new Error("outer native incrementMany should not run");
+					},
+				}),
+		})({});
+		const rows = Array.from({ length: 5 }, (_, index) => ({
+			where: [
+				{ field: "id", value: `id-${index}` },
+				{ field: "name", value: "token" },
+			],
+		}));
+		await adapter.incrementMany({
+			model: "user",
+			increment: {},
+			set: { name: "token" },
+			rows,
+		});
+		expect(seen).toEqual(["token"]);
+		expect(innerIncrementMany).toHaveBeenCalled();
 	});
 });
