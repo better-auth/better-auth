@@ -2,7 +2,7 @@
 
 import { atom, onMount } from "nanostores";
 import { createRoot, flush } from "solid-js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { useStore } from "./solid-store";
 
 /**
@@ -29,10 +29,12 @@ describe("useStore", () => {
 		}));
 		expect(value()).toBe(1);
 		$count.set(2);
-		// `from()` delivers a push to a waiting reader on the next microtask.
-		await Promise.resolve();
-		flush();
-		expect(value()).toBe(2);
+		// `from()` delivers a push asynchronously, after a delay that varies
+		// across Solid releases, so poll until the reader sees it.
+		await vi.waitFor(() => {
+			flush();
+			expect(value()).toBe(2);
+		});
 		dispose();
 	});
 
