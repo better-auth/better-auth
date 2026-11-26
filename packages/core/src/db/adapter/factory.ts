@@ -1583,6 +1583,21 @@ export const createAdapterFactory =
 						"incrementMany requires a non-empty `increment` or `set`; both were empty.",
 					);
 				}
+				// Wrap before transforming guards or `set`. Re-entering after
+				// `transformWhereClause` / `transformInput` would run
+				// `customTransformInput`, onUpdate, and field `transform.input`
+				// twice. The transaction-scoped adapter has
+				// `transaction: false`, so the inner call executes.
+				if (typeof config.transaction === "function" && unsafeRows.length > 1) {
+					return adapter.transaction((trx) =>
+						trx.incrementMany<T>({
+							model: inputModel,
+							increment: unsafeIncrement,
+							set: unsafeSet,
+							rows: unsafeRows,
+						}),
+					);
+				}
 				transactionId++;
 				const thisTransactionId = transactionId;
 				const modelKey = getDefaultModelName(inputModel);
@@ -1599,21 +1614,6 @@ export const createAdapterFactory =
 				}));
 				assertUniqueIncrementManyIds(rows, idField);
 				const sorted = sortIncrementManyRows(rows, idField);
-				// Wrap before transforming `set`. Re-entering after
-				// `transformInput` would run onUpdate, field `transform.input`,
-				// and `customTransformInput` twice and discard the first
-				// results. The transaction-scoped adapter has
-				// `transaction: false`, so the inner call executes.
-				if (typeof config.transaction === "function" && sorted.length > 1) {
-					return adapter.transaction((trx) =>
-						trx.incrementMany<T>({
-							model: inputModel,
-							increment: unsafeIncrement,
-							set: unsafeSet,
-							rows: unsafeRows,
-						}),
-					);
-				}
 				debugLog(
 					{ method: "incrementMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,

@@ -1396,7 +1396,8 @@ describe("createAdapterFactory incrementMany", () => {
 	});
 
 	it("transforms incrementMany input once when wrapping a transaction", async () => {
-		const seen: string[] = [];
+		const setSeen: string[] = [];
+		const whereSeen: string[] = [];
 		const innerIncrementMany = vi.fn(
 			async ({
 				set,
@@ -1409,6 +1410,27 @@ describe("createAdapterFactory incrementMany", () => {
 				return rows.map((row) => ({ id: row.where[0]?.value }));
 			},
 		);
+		const trackTransform =
+			(scope: "outer" | "inner") =>
+			({
+				data,
+				field,
+				action,
+			}: {
+				data: unknown;
+				field: string;
+				action: string;
+			}) => {
+				if (field !== "name" || typeof data !== "string") return data;
+				if (action === "update") {
+					setSeen.push(scope === "outer" ? `outer:${data}` : data);
+					return scope === "inner" ? `${data}:in` : data;
+				}
+				if (action === "incrementMany") {
+					whereSeen.push(scope === "outer" ? `outer:${data}` : data);
+				}
+				return data;
+			};
 		const transaction = vi.fn(
 			async (
 				cb: (trx: ReturnType<typeof createTestAdapter>) => Promise<unknown>,
@@ -1418,17 +1440,7 @@ describe("createAdapterFactory incrementMany", () => {
 						adapterId: "trx-adapter",
 						incrementManyMaxParameters: 7,
 						transaction: false,
-						customTransformInput({ data, field, action }) {
-							if (
-								action === "update" &&
-								field === "name" &&
-								typeof data === "string"
-							) {
-								seen.push(data);
-								return `${data}:in`;
-							}
-							return data;
-						},
+						customTransformInput: trackTransform("inner"),
 					},
 					adapter: () =>
 						createCustomAdapter({
@@ -1444,17 +1456,7 @@ describe("createAdapterFactory incrementMany", () => {
 				adapterId: "test-adapter",
 				incrementManyMaxParameters: 7,
 				transaction: transaction as never,
-				customTransformInput({ data, field, action }) {
-					if (
-						action === "update" &&
-						field === "name" &&
-						typeof data === "string"
-					) {
-						seen.push(`outer:${data}`);
-						return data;
-					}
-					return data;
-				},
+				customTransformInput: trackTransform("outer"),
 			},
 			adapter: () =>
 				createCustomAdapter({
@@ -1475,7 +1477,8 @@ describe("createAdapterFactory incrementMany", () => {
 			set: { name: "token" },
 			rows,
 		});
-		expect(seen).toEqual(["token"]);
+		expect(setSeen).toEqual(["token"]);
+		expect(whereSeen).toEqual(["token", "token", "token", "token", "token"]);
 		expect(innerIncrementMany).toHaveBeenCalled();
 	});
 });

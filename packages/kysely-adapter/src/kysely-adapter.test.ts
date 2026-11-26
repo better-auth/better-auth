@@ -226,9 +226,14 @@ describe("kysely-adapter", () => {
 		expect(lock).toMatch(/as "counters" with \(updlock, rowlock\)/i);
 		expect(lock).not.toMatch(/for update/i);
 		expect(lock).not.toMatch(/with \(updlock, rowlock\) as/i);
-		expect(executedSql.some((sql) => /output "inserted"/i.test(sql))).toBe(
-			true,
-		);
+		expect(lock).toMatch(/collate latin1_general_bin/i);
+		expect(
+			executedSql.some(
+				(sql) =>
+					/output "inserted"/i.test(sql) &&
+					/collate latin1_general_bin/i.test(sql),
+			),
+		).toBe(true);
 	});
 
 	/**

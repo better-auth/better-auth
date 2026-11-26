@@ -324,11 +324,11 @@ The `incrementMany` method applies the same numeric deltas and optional set valu
 parameters:
 
 * `model`: The model/table name to update.
-* `increment`: Numeric deltas applied to every matching row, such as `{ count: 1 }` or `{ remaining: -1 }`.
+* `increment`: Numeric deltas applied to every matching row, such as `{ count: 1 }` or `{ remaining: -1 }`. Empty `increment` together with empty `set` throws.
 * `set`: Optional fields to set on every matching row in the same atomic operation. `undefined` leaves a field unchanged, while `null` clears it.
-* `rows`: Per-row `where` clauses. Each must include exactly one case-sensitive `id` equality. Extra clauses must still match for that row's increment to apply. Duplicate ids throw.
+* `rows`: Per-row `where` clauses. Each must include exactly one case-sensitive `id` equality. Extra clauses must still match for that row's increment to apply. Duplicate ids throw. Empty `rows` returns `[]`.
 
-**Returns** `Promise<T[]>`: the updated records. Rows whose `where` did not match are omitted. Each input row must update at most one matching record. Result order is not input order; do not zip the result to `rows`.
+**Returns** `Promise<T[]>`: the updated records. Empty `rows` returns `[]`. Rows whose `where` did not match are omitted. Each input row must update at most one matching record. Result order is not input order; do not zip the result to `rows`.
 
 ```ts title="Example"
 incrementMany: async ({ model, increment, set, rows }) => {

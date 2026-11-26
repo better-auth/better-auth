@@ -1124,8 +1124,8 @@ export const kyselyAdapter = (
 							? incrementInTransaction(db)
 							: db.transaction().execute(incrementInTransaction);
 					}
-					const applyRowsWhere = (query: any) =>
-						query.where((eb: any) =>
+					const applyRowsWhere = (query: any) => {
+						query = query.where((eb: any) =>
 							eb.or(
 								sorted.map((row) => {
 									const { and, or } = convertWhereClause(
@@ -1146,6 +1146,24 @@ export const kyselyAdapter = (
 								}),
 							),
 						);
+						if (config?.type === "mssql") {
+							const expectedIds = sorted.map(
+								(row) => findSensitiveIdEq(row.where, idField).value,
+							);
+							if (expectedIds.every((id) => typeof id === "string")) {
+								// Default SQL Server collations match `id = 'ABC'`
+								// to stored `'abc'`. Force a binary compare so the
+								// case-sensitive id guard holds on lock and update.
+								// cspell:ignore Latin1
+								query = query.where(
+									sql`${sql.ref(`${model}.${idField}`)} COLLATE Latin1_General_BIN`,
+									"in",
+									expectedIds,
+								);
+							}
+						}
+						return query;
+					};
 					const executeUpdate = async (trx: typeof db) => {
 						const updateQuery = applyRowsWhere(
 							trx.updateTable(model).set(assignments),
