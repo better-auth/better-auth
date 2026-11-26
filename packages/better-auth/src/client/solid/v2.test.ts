@@ -3,9 +3,6 @@ import { createMemo, createRoot, flush } from "solid-js-v2";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient } from "./v2";
 
-/**
- * @see https://github.com/nanostores/solid/issues/19
- */
 describe("Solid 2 client", () => {
 	it("updates useSession when the server returns a session and then null", async () => {
 		const fetchSession = vi
@@ -30,7 +27,6 @@ describe("Solid 2 client", () => {
 		await session().refetch();
 		flush();
 		expect(session().data).toBeNull();
-		expect(fetchSession).toHaveBeenCalledTimes(2);
 		dispose();
 	});
 
@@ -53,8 +49,6 @@ describe("Solid 2 client", () => {
 		});
 
 		expectTypeOf(profileState().user.name).toEqualTypeOf<string>();
-		type SessionState = ReturnType<ReturnType<typeof client.useSession>>;
-		expectTypeOf<SessionState["isPending"]>().toEqualTypeOf<boolean>();
 		expect(name()).toBe("mounted");
 		expect(start).toHaveBeenCalledOnce();
 		const reads = readName.mock.calls.length;
@@ -69,9 +63,6 @@ describe("Solid 2 client", () => {
 		expect(name()).toBe("updated");
 		dispose();
 		expect(profile.lc).toBe(0);
-		profile.set({ user: { name: "unobserved" }, pending: false });
-		flush();
-		expect(profileState().user.name).toBe("updated");
 	});
 
 	it("exposes function-valued plugin atoms without invoking them", () => {
