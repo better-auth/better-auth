@@ -101,6 +101,11 @@
       "types": "./dist/client/solid/index.d.mts",
       "default": "./dist/client/solid/index.mjs"
     },
+    "./solid/v2": {
+      "dev-source": "./src/client/solid/v2.ts",
+      "types": "./dist/client/solid/v2.d.mts",
+      "default": "./dist/client/solid/v2.mjs"
+    },
     "./lynx": {
       "dev-source": "./src/client/lynx/index.ts",
       "types": "./dist/client/lynx/index.d.mts",
@@ -374,6 +379,9 @@
       "solid": [
         "./dist/client/solid/index.d.mts"
       ],
+      "solid/v2": [
+        "./dist/client/solid/v2.d.mts"
+      ],
       "lynx": [
         "./dist/client/lynx/index.d.mts"
       ],
@@ -542,6 +550,7 @@
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "solid-js": "^1.9.11",
+    "solid-js-v2": "npm:solid-js@^2.0.0",
     "tsdown": "catalog:",
     "type-fest": "^5.7.0",
     "typescript": "catalog:",
@@ -563,7 +572,7 @@
     "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
-    "solid-js": "^1.0.0",
+    "solid-js": "^1.0.0 || ^2.0.0",
     "svelte": "^4.0.0 || ^5.0.0",
     "vitest": "^2.0.0 || ^3.0.0 || ^4.0.0 || ^5.0.0",
     "vue": "^3.0.0"

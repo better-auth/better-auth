@@ -3,6 +3,8 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
 	dts: { build: true, incremental: true },
 	format: ["esm"],
+	deps: { neverBundle: ["solid-js-v2"] },
+	outputOptions: { paths: { "solid-js-v2": "solid-js" } },
 	entry: [
 		"./src/index.ts",
 		"./src/auth/minimal.ts",
@@ -28,6 +30,7 @@ export default defineConfig({
 		"./src/client/vue/index.ts",
 		"./src/client/svelte/index.ts",
 		"./src/client/solid/index.ts",
+		"./src/client/solid/v2.ts",
 		"./src/client/lynx/index.ts",
 		"./src/plugins/index.ts",
 		"./src/plugins/access/index.ts",
