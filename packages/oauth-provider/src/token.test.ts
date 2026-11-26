@@ -6338,6 +6338,7 @@ describe("oauth token - in-flight issuance without foreign keys", async () => {
 		const [family] = database.oauthRefreshToken as {
 			clientId: string;
 			userId: string;
+			authorizationCodeId?: string;
 		}[];
 		for (let i = 0; i < 101; i++) {
 			const sibling = await context.adapter.create<{ id: string }>({
@@ -6346,6 +6347,7 @@ describe("oauth token - in-flight issuance without foreign keys", async () => {
 					token: `sibling-refresh-${i}`,
 					clientId: family!.clientId,
 					userId: family!.userId,
+					authorizationCodeId: family!.authorizationCodeId,
 					scopes: ["openid", "offline_access"],
 					createdAt: new Date(),
 					expiresAt: new Date(Date.now() + 60_000),
@@ -6357,6 +6359,7 @@ describe("oauth token - in-flight issuance without foreign keys", async () => {
 					token: `sibling-access-${i}`,
 					clientId: family!.clientId,
 					userId: family!.userId,
+					authorizationCodeId: family!.authorizationCodeId,
 					refreshId: sibling.id,
 					scopes: ["openid"],
 					createdAt: new Date(),
@@ -6510,6 +6513,29 @@ describe("oauth token - refresh family revocation with serial ids", async () => 
 		expect(reused.error).toMatchObject({ error: "invalid_grant" });
 		expect(database.oauthAccessToken).toHaveLength(1);
 		expect(database.oauthAccessToken?.[0]?.refreshId).toBeUndefined();
+	});
+
+	it("only invalidates the affected login's refresh family on reuse for the same client and user", async () => {
+		const loginA = await issue(["openid", "offline_access"]);
+		const loginB = await issue(["openid", "offline_access"]);
+		const refreshA1 = loginA.data!.refresh_token!;
+		const refreshB1 = loginB.data!.refresh_token!;
+
+		const rotatedA = await refresh(refreshA1);
+		expect(rotatedA.error).toBeNull();
+		const refreshA2 = rotatedA.data!.refresh_token!;
+
+		// Reusing stale refresh token from login A invalidates login A's family.
+		const reusedA = await refresh(refreshA1);
+		expect(reusedA.error).toMatchObject({ error: "invalid_grant" });
+		expect((await refresh(refreshA2)).error).toMatchObject({
+			error: "invalid_grant",
+		});
+
+		// Login B for the same (clientId, userId) must remain active.
+		const rotatedB = await refresh(refreshB1);
+		expect(rotatedB.error).toBeNull();
+		expect(rotatedB.data?.refresh_token).toBeDefined();
 	});
 });
 

@@ -490,6 +490,79 @@ describe("oauth revoke", async () => {
 		);
 		expect(reused.error?.status).toBe(400);
 	});
+
+	it("only invalidates the revoked token's login family for the same client and user", async () => {
+		const loginA = await getTokens();
+		const loginB = await getTokens();
+		const firstRefreshA = loginA.data!.refresh_token!;
+		const refreshB = loginB.data!.refresh_token!;
+
+		const rotatedA = await client.oauth2.token(
+			{
+				grant_type: "refresh_token",
+				refresh_token: firstRefreshA,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		const currentRefreshA = rotatedA.data!.refresh_token!;
+
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: firstRefreshA,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(revocation.error?.status).toBe(400);
+
+		const reusedA = await client.oauth2.token(
+			{
+				grant_type: "refresh_token",
+				refresh_token: currentRefreshA,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(reusedA.error?.status).toBe(400);
+
+		// Concurrent login B's refresh token must remain valid.
+		const refreshedB = await client.oauth2.token(
+			{
+				grant_type: "refresh_token",
+				refresh_token: refreshB,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(refreshedB.error).toBeNull();
+		expect(refreshedB.data?.refresh_token).toBeDefined();
+	});
 });
 
 describe("oauth revoke - config", async () => {
