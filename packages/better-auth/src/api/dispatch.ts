@@ -125,6 +125,36 @@ function mergeResponseHeaders(
 	});
 }
 
+function mergeHeadersForResponse(
+	response: Response,
+	accumulated: Headers | null | undefined,
+	stripEndpointErrorLocation = false,
+): Headers | undefined {
+	if (!accumulated) return undefined;
+	const merged = new Headers();
+	accumulated.forEach((value, key) => {
+		const lower = key.toLowerCase();
+		if (lower === "set-cookie") {
+			merged.append(key, value);
+			return;
+		}
+		if (lower === "access-control-expose-headers") {
+			const existing = response.headers.get(key);
+			if (existing && !merged.has(key)) {
+				mergeHeader(merged, key, existing);
+			}
+			mergeHeader(merged, key, value);
+			return;
+		}
+		// Never overwrite headers a hook already set on its own Response, and do
+		// not leak Location from a replaced endpoint APIError (e.g. ctx.redirect).
+		if (response.headers.has(key)) return;
+		if (stripEndpointErrorLocation && lower === "location") return;
+		mergeHeader(merged, key, value);
+	});
+	return merged;
+}
+
 /**
  * Combine the two header sources an `APIError` can carry into one set:
  * - `kAPIErrorHeaderSymbol`: `ctx.responseHeaders` accumulated via
@@ -410,7 +440,12 @@ export async function dispatchAuthEndpoint(
 					// accumulated (`c.setHeader` / `c.setCookie`), not the request headers.
 					const responseHeaders = internalContext.context.responseHeaders;
 					return shouldReturnResponse
-						? toResponse(before, { headers: responseHeaders })
+						? toResponse(before, {
+								headers:
+									before instanceof Response
+										? mergeHeadersForResponse(before, responseHeaders)
+										: responseHeaders,
+							})
 						: input.returnHeaders
 							? { headers: responseHeaders, response: before }
 							: before;
@@ -446,6 +481,7 @@ export async function dispatchAuthEndpoint(
 					return result;
 				}
 
+				const endpointErrored = isAPIError(result.response);
 				internalContext.context.returned = result.response;
 				// Merge onto what the before hooks set, so the handler wins on overlap.
 				mergeResponseHeaders(internalContext.context, result.headers);
@@ -483,9 +519,18 @@ export async function dispatchAuthEndpoint(
 					throw result.response;
 				}
 
+				const responseHeaders =
+					result.response instanceof Response
+						? mergeHeadersForResponse(
+								result.response,
+								result.headers,
+								endpointErrored && after.response !== undefined,
+							)
+						: (result.headers ?? undefined);
+
 				return shouldReturnResponse
 					? toResponse(result.response, {
-							headers: result.headers ?? undefined,
+							headers: responseHeaders,
 							status: result.status,
 						})
 					: input.returnHeaders

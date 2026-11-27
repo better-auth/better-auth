@@ -1581,3 +1581,76 @@ describe("Access-Control-Expose-Headers on APIError", async () => {
 		);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/13008
+ */
+describe("after hook Response headers", async () => {
+	it("preserves Location and other headers on a Response returned by an after hook over an endpoint redirect", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				{
+					id: "redirect-override-repro",
+					endpoints: {
+						jump: createAuthEndpoint(
+							"/repro/jump",
+							{ method: "GET" },
+							async (ctx) => {
+								ctx.setCookie("from_endpoint", "1");
+								throw ctx.redirect("https://example.com/from-endpoint");
+							},
+						),
+						replaceWithJson: createAuthEndpoint(
+							"/repro/replace",
+							{ method: "GET" },
+							async (ctx) => {
+								throw ctx.redirect("https://example.com/from-endpoint");
+							},
+						),
+					},
+					hooks: {
+						after: [
+							{
+								matcher: (ctx) => ctx.path === "/repro/jump",
+								handler: createAuthMiddleware(
+									async () =>
+										new Response(null, {
+											status: 302,
+											headers: {
+												Location: "https://example.com/from-after-hook",
+											},
+										}),
+								),
+							},
+							{
+								matcher: (ctx) => ctx.path === "/repro/replace",
+								handler: createAuthMiddleware(
+									async () =>
+										new Response(JSON.stringify({ handled: true }), {
+											status: 200,
+											headers: { "Content-Type": "application/json" },
+										}),
+								),
+							},
+						],
+					},
+				},
+			],
+		});
+
+		const redirectRes = await auth.handler(
+			new Request("http://localhost:3000/api/auth/repro/jump"),
+		);
+		expect(redirectRes.status).toBe(302);
+		expect(redirectRes.headers.get("location")).toBe(
+			"https://example.com/from-after-hook",
+		);
+		expect(redirectRes.headers.get("set-cookie")).toContain("from_endpoint=1");
+
+		const replacedRes = await auth.handler(
+			new Request("http://localhost:3000/api/auth/repro/replace"),
+		);
+		expect(replacedRes.status).toBe(200);
+		expect(replacedRes.headers.get("location")).toBeNull();
+	});
+});
