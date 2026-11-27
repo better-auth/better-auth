@@ -529,6 +529,70 @@ describe("organization", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12278
+	 */
+	it("rejects acceptInvitation when the inviter is no longer a member", async () => {
+		const { headers: ownerHeaders } = await signInWithTestUser();
+		const inviter = {
+			email: `inviter-${crypto.randomUUID()}@test.com`,
+			password: "password1234",
+			name: "Inviter",
+		};
+		const invitee = {
+			email: `invitee-${crypto.randomUUID()}@test.com`,
+			password: "password1234",
+			name: "Invitee",
+		};
+		await client.signUp.email(inviter);
+		const { headers: inviterHeaders, res: inviterSignIn } =
+			await signInWithUser(inviter.email, inviter.password);
+		await auth.api.addMember({
+			body: {
+				userId: inviterSignIn.user.id,
+				role: "admin",
+				organizationId,
+			},
+			headers: ownerHeaders,
+		});
+		const invite = await client.organization.inviteMember({
+			organizationId,
+			email: invitee.email,
+			role: "admin",
+			fetchOptions: { headers: inviterHeaders },
+		});
+		expect(invite.data?.id).toBeDefined();
+
+		await client.organization.removeMember({
+			memberIdOrEmail: inviter.email,
+			organizationId,
+			fetchOptions: { headers: ownerHeaders },
+		});
+
+		await client.signUp.email(invitee);
+		const { headers: inviteeHeaders } = await signInWithUser(
+			invitee.email,
+			invitee.password,
+		);
+		const get = await client.organization.getInvitation({
+			query: { id: invite.data!.id! },
+			fetchOptions: { headers: inviteeHeaders },
+		});
+		expect(get.error?.code).toBe(
+			ORGANIZATION_ERROR_CODES.INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION
+				.code,
+		);
+
+		const accept = await client.organization.acceptInvitation({
+			invitationId: invite.data!.id!,
+			fetchOptions: { headers: inviteeHeaders },
+		});
+		expect(accept.error?.code).toBe(
+			ORGANIZATION_ERROR_CODES.INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION
+				.code,
+		);
+	});
+
 	it("should create invitation with multiple roles", async () => {
 		const invite = await client.organization.inviteMember({
 			organizationId: organizationId,
