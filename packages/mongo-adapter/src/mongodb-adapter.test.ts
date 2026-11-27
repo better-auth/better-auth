@@ -54,7 +54,9 @@ describe("mongodb-adapter", () => {
 		const client = new MongoClient("mongodb://localhost:27017");
 		const session = client.startSession();
 		vi.spyOn(client, "startSession").mockReturnValue(session);
-		vi.spyOn(session, "withTransaction").mockImplementation(async (cb) => cb());
+		vi.spyOn(session, "withTransaction").mockImplementation(async (cb) =>
+			cb(session),
+		);
 		const adapter = mongodbAdapter(client.db("test"), { client })({});
 		const transaction = adapter.options?.adapterConfig.transaction;
 		if (typeof transaction !== "function") {
