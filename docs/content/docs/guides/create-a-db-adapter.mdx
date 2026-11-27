@@ -330,7 +330,7 @@ parameters:
 
 **Returns** `Promise<T[]>`: the updated records. Guard misses are omitted. Result order is not input order; do not zip the result to `rows`.
 
-Do not use a shared `WHERE id IN (…)` when extra guards differ per row. A single `UPDATE` that ORs each row's guard is the batch shape when `id` comparison is case-sensitive. On case-insensitive collations, update one locked row at a time and skip unless the stored `id` equals the guard.
+Do not use a shared `WHERE id IN (…)` when extra guards differ per row. A single `UPDATE` that ORs each row's guard is the batch shape when `id` comparison is case-sensitive; lock those rows in `id` order first (`SELECT ... ORDER BY id FOR UPDATE` on PostgreSQL). Sorting `rows` does not control lock order. On case-insensitive collations, update one locked row at a time in `id` order and skip unless the stored `id` equals the guard.
 
 ```ts title="Example"
 incrementMany: async ({ model, increment, set, rows }) => {
