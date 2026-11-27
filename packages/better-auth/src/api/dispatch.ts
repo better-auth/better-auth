@@ -128,7 +128,6 @@ function mergeResponseHeaders(
 function mergeHeadersForResponse(
 	response: Response,
 	accumulated: Headers | null | undefined,
-	stripEndpointErrorLocation = false,
 ): Headers | undefined {
 	if (!accumulated) return undefined;
 	const merged = new Headers();
@@ -146,10 +145,8 @@ function mergeHeadersForResponse(
 			mergeHeader(merged, key, value);
 			return;
 		}
-		// Never overwrite headers a hook already set on its own Response, and do
-		// not leak Location from a replaced endpoint APIError (e.g. ctx.redirect).
+		// Never overwrite headers a hook already set on its own Response.
 		if (response.headers.has(key)) return;
-		if (stripEndpointErrorLocation && lower === "location") return;
 		mergeHeader(merged, key, value);
 	});
 	return merged;
@@ -279,6 +276,8 @@ async function runAfterHooks(
 	operationId: string,
 ) {
 	const withSpan = createWithSpan(context.context.options);
+	let afterHookSetLocation = false;
+	let replacedResponse = false;
 	for (const hook of hooks) {
 		if (!hook.matcher(context as HookEndpointContext)) continue;
 
@@ -308,14 +307,20 @@ async function runAfterHooks(
 			response: unknown;
 			headers?: Headers | null;
 		};
+		if (result.headers?.has("location")) {
+			afterHookSetLocation = true;
+		}
 		mergeResponseHeaders(context.context, result.headers);
 		if (result.response !== undefined) {
 			context.context.returned = result.response;
+			replacedResponse = true;
 		}
 	}
 	return {
 		response: context.context.returned,
 		headers: context.context.responseHeaders,
+		afterHookSetLocation,
+		replacedResponse,
 	};
 }
 
@@ -519,14 +524,22 @@ export async function dispatchAuthEndpoint(
 					throw result.response;
 				}
 
+				const stripReplacedErrorLocation =
+					endpointErrored &&
+					after.replacedResponse &&
+					!after.afterHookSetLocation;
+				const accumulatedHeaders =
+					stripReplacedErrorLocation && result.headers?.has("location")
+						? (() => {
+								const headers = new Headers(result.headers);
+								headers.delete("location");
+								return headers;
+							})()
+						: (result.headers ?? undefined);
 				const responseHeaders =
 					result.response instanceof Response
-						? mergeHeadersForResponse(
-								result.response,
-								result.headers,
-								endpointErrored && after.response !== undefined,
-							)
-						: (result.headers ?? undefined);
+						? mergeHeadersForResponse(result.response, accumulatedHeaders)
+						: accumulatedHeaders;
 
 				return shouldReturnResponse
 					? toResponse(result.response, {
@@ -536,12 +549,12 @@ export async function dispatchAuthEndpoint(
 					: input.returnHeaders
 						? input.returnStatus
 							? {
-									headers: result.headers,
+									headers: responseHeaders ?? null,
 									response: result.response,
 									status: result.status,
 								}
 							: {
-									headers: result.headers,
+									headers: responseHeaders ?? null,
 									response: result.response,
 								}
 						: input.returnStatus

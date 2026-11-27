@@ -1597,6 +1597,7 @@ describe("after hook Response headers", async () => {
 							{ method: "GET" },
 							async (ctx) => {
 								ctx.setCookie("from_endpoint", "1");
+								ctx.setHeader("X-Endpoint-Header", "keep-me");
 								throw ctx.redirect("https://example.com/from-endpoint");
 							},
 						),
@@ -1604,6 +1605,14 @@ describe("after hook Response headers", async () => {
 							"/repro/replace",
 							{ method: "GET" },
 							async (ctx) => {
+								throw ctx.redirect("https://example.com/from-endpoint");
+							},
+						),
+						setHeaderRedirect: createAuthEndpoint(
+							"/repro/set-header-redirect",
+							{ method: "GET" },
+							async (ctx) => {
+								ctx.setCookie("from_endpoint", "2");
 								throw ctx.redirect("https://example.com/from-endpoint");
 							},
 						),
@@ -1618,6 +1627,7 @@ describe("after hook Response headers", async () => {
 											status: 302,
 											headers: {
 												Location: "https://example.com/from-after-hook",
+												"X-Hook-Header": "from-hook",
 											},
 										}),
 								),
@@ -1631,6 +1641,13 @@ describe("after hook Response headers", async () => {
 											headers: { "Content-Type": "application/json" },
 										}),
 								),
+							},
+							{
+								matcher: (ctx) => ctx.path === "/repro/set-header-redirect",
+								handler: createAuthMiddleware(async (ctx) => {
+									ctx.setHeader("Location", "https://example.com/recovery");
+									return new Response(null, { status: 302 });
+								}),
 							},
 						],
 					},
@@ -1646,11 +1663,27 @@ describe("after hook Response headers", async () => {
 			"https://example.com/from-after-hook",
 		);
 		expect(redirectRes.headers.get("set-cookie")).toContain("from_endpoint=1");
+		expect(redirectRes.headers.get("x-endpoint-header")).toBe("keep-me");
+		expect(redirectRes.headers.get("x-hook-header")).toBe("from-hook");
 
 		const replacedRes = await auth.handler(
 			new Request("http://localhost:3000/api/auth/repro/replace"),
 		);
 		expect(replacedRes.status).toBe(200);
 		expect(replacedRes.headers.get("location")).toBeNull();
+
+		const setHeaderRes = await auth.handler(
+			new Request("http://localhost:3000/api/auth/repro/set-header-redirect"),
+		);
+		expect(setHeaderRes.status).toBe(302);
+		expect(setHeaderRes.headers.get("location")).toBe(
+			"https://example.com/recovery",
+		);
+		expect(setHeaderRes.headers.get("set-cookie")).toContain("from_endpoint=2");
+
+		const apiReplaced = await auth.api.replaceWithJson({
+			returnHeaders: true,
+		});
+		expect(apiReplaced.headers?.get("location")).toBeNull();
 	});
 });
