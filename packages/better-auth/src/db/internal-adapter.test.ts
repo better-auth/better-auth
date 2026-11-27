@@ -491,6 +491,7 @@ describe("internal adapter test", async () => {
 				"consume-cleanup:resilient",
 			);
 			expect(consumed?.value).toBe("valid-token");
+			expect(deleteManySpy).toHaveBeenCalledTimes(1);
 		} finally {
 			deleteManySpy.mockRestore();
 		}
