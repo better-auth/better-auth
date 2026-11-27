@@ -178,9 +178,19 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 		return state;
 	}
 
+	function matchesChallengePath(path: string | undefined) {
+		if (!path) {
+			return false;
+		}
+		return (
+			signInPaths.has(path) ||
+			(options?.challengePaths?.includes(path) ?? false)
+		);
+	}
+
 	async function shouldRequireTwoFactor(ctx: GenericEndpointContext) {
-		// Only the built-in sign-in paths are gated by the after hook
-		if (!signInPaths.has(ctx.path)) {
+		// Only the built-in sign-in paths (and configured challengePaths) are gated by the after hook
+		if (!matchesChallengePath(ctx.path)) {
 			return false;
 		}
 		return (await getSignInTwoFactorState(ctx)).requiresTwoFactor;
@@ -502,7 +512,9 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 			after: [
 				{
 					matcher(context) {
-						return signInPaths.has(context.path ?? "");
+						return (
+							!context.context.session && matchesChallengePath(context.path)
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const data = ctx.context.newSession;
