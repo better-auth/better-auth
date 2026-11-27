@@ -1009,7 +1009,7 @@ describe("getConfig", async () => {
 		expect(config).not.toBe(null);
 		expect(config).toMatchObject({
 			emailAndPassword: { enabled: true },
-			baseURL: "http://localhost:3000",
+			trustedOrigins: ["http://localhost:3000"],
 		});
 	});
 
