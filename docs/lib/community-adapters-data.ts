@@ -287,6 +287,17 @@ export const communityAdapters: CommunityAdapter[] = [
 		},
 	},
 	{
+		name: "better-auth-elasticsearch",
+		url: "https://github.com/cemcevik/better-auth-elasticsearch",
+		database: "Elasticsearch",
+		databaseUrl: "https://www.elastic.co/elasticsearch",
+		author: {
+			name: "cemcevik",
+			url: "https://github.com/cemcevik",
+			avatar: "https://github.com/cemcevik.png",
+		},
+	},
+  {
 		name: "mongozod",
 		url: "https://mongozod.dev/docs/adapters/better-auth",
 		database: "MongoDB",
