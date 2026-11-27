@@ -1084,24 +1084,19 @@ export function createSCIMManagedConnectionEndpoints(
 				const limit = ctx.body.limit;
 				const offset = ctx.body.offset;
 				const sortDirection = ctx.body.sortDirection;
-				const [events, total] = await Promise.all([
-					database.findMany<ManagedConnectionEventRow>({
-						model: "scimManagedConnectionEvent",
-						where: [...where],
-						limit,
-						offset,
-						sortBy: {
-							field: "sequence",
-							direction: sortDirection ?? "desc",
-						},
-					}),
-					database.count({
-						model: "scimManagedConnectionEvent",
-						where: [...where],
-					}),
-				]);
+				const page = await database.findPage<ManagedConnectionEventRow>({
+					model: "scimManagedConnectionEvent",
+					where: [...where],
+					limit,
+					offset,
+					sortBy: {
+						field: "sequence",
+						direction: sortDirection ?? "desc",
+					},
+				});
 				const orderedEvents =
-					sortDirection == null ? [...events].reverse() : events;
+					sortDirection == null ? [...page.items].reverse() : page.items;
+				const total = page.total;
 				return ctx.json({
 					events: orderedEvents.map(
 						(event): SCIMManagedConnectionEvent => ({

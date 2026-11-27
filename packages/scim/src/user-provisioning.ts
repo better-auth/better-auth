@@ -912,20 +912,15 @@ export function listSCIMUsers(authMiddleware: SCIMConnectionMiddleware) {
 				ctx.context.scimConnection.id,
 				filters,
 			);
-			const totalResults = await adapter.count({
+			const page = await adapter.findPage<SCIMUser>({
 				model: "scimUser",
 				where,
+				limit: pagination.count,
+				offset: pagination.offset,
+				sortBy: { field: "orderKey", direction: "asc" },
 			});
-			const scimUsers =
-				pagination.count === 0
-					? []
-					: await adapter.findMany<SCIMUser>({
-							model: "scimUser",
-							where,
-							limit: pagination.count,
-							offset: pagination.offset,
-							sortBy: { field: "orderKey", direction: "asc" },
-						});
+			const totalResults = page.total;
+			const scimUsers = page.items;
 
 			const resources = scimUsers.map((scimUser) =>
 				projectSCIMResourceAttributes(

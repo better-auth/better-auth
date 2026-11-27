@@ -1153,20 +1153,15 @@ export function listSCIMGroups(authMiddleware: SCIMConnectionMiddleware) {
 				ctx.context.scimConnection.id,
 				filters,
 			);
-			const totalResults = await adapter.count({
+			const page = await adapter.findPage<SCIMGroup>({
 				model: "scimGroup",
 				where,
+				limit: pagination.count,
+				offset: pagination.offset,
+				sortBy: { field: "orderKey", direction: "asc" },
 			});
-			const groups =
-				pagination.count === 0
-					? []
-					: await adapter.findMany<SCIMGroup>({
-							model: "scimGroup",
-							where,
-							limit: pagination.count,
-							offset: pagination.offset,
-							sortBy: { field: "orderKey", direction: "asc" },
-						});
+			const totalResults = page.total;
+			const groups = page.items;
 			const resources = await createProjectedGroupResources(
 				adapter,
 				ctx.context.baseURL,

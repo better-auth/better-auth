@@ -644,6 +644,29 @@ export interface ListApiKeysResult {
 	total: number;
 }
 
+async function listApiKeysFromDatabase(
+	ctx: GenericEndpointContext,
+	referenceId: string,
+	paginationOpts?: ListApiKeysOptions,
+): Promise<ListApiKeysResult> {
+	const { limit, offset, sortBy, sortDirection } = paginationOpts || {};
+	const page = await ctx.context.adapter.findPage<ApiKey>({
+		model: "apikey",
+		where: [
+			{
+				field: "referenceId",
+				value: referenceId,
+			},
+		],
+		limit,
+		offset,
+		sortBy: sortBy
+			? { field: sortBy, direction: sortDirection || "asc" }
+			: undefined,
+	});
+	return { apiKeys: page.items, total: page.total };
+}
+
 /**
  * Apply sorting and pagination to an array of API keys in memory
  * Used for secondary storage mode where we can't rely on database operations
@@ -701,32 +724,7 @@ export async function listApiKeys(
 
 	// Database mode only
 	if (opts.storage === "database") {
-		const [apiKeys, total] = await Promise.all([
-			ctx.context.adapter.findMany<ApiKey>({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-				limit,
-				offset,
-				sortBy: sortBy
-					? { field: sortBy, direction: sortDirection || "asc" }
-					: undefined,
-			}),
-			ctx.context.adapter.count({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-			}),
-		]);
-		return { apiKeys, total };
+		return listApiKeysFromDatabase(ctx, referenceId, paginationOpts);
 	}
 
 	// Secondary storage mode with fallback
@@ -768,31 +766,11 @@ export async function listApiKeys(
 			}
 		}
 		// Fallback to database
-		const [dbKeys, total] = await Promise.all([
-			ctx.context.adapter.findMany<ApiKey>({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-				limit,
-				offset,
-				sortBy: sortBy
-					? { field: sortBy, direction: sortDirection || "asc" }
-					: undefined,
-			}),
-			ctx.context.adapter.count({
-				model: "apikey",
-				where: [
-					{
-						field: "referenceId",
-						value: referenceId,
-					},
-				],
-			}),
-		]);
+		const { apiKeys: dbKeys, total } = await listApiKeysFromDatabase(
+			ctx,
+			referenceId,
+			paginationOpts,
+		);
 
 		// Rebuild from DB truth:
 		// per-key entries fan out,
@@ -854,30 +832,5 @@ export async function listApiKeys(
 	}
 
 	// Default fallback
-	const [apiKeys, total] = await Promise.all([
-		ctx.context.adapter.findMany<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "referenceId",
-					value: referenceId,
-				},
-			],
-			limit,
-			offset,
-			sortBy: sortBy
-				? { field: sortBy, direction: sortDirection || "asc" }
-				: undefined,
-		}),
-		ctx.context.adapter.count({
-			model: "apikey",
-			where: [
-				{
-					field: "referenceId",
-					value: referenceId,
-				},
-			],
-		}),
-	]);
-	return { apiKeys, total };
+	return listApiKeysFromDatabase(ctx, referenceId, paginationOpts);
 }
