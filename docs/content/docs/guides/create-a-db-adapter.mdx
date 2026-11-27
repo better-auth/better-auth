@@ -328,7 +328,9 @@ parameters:
 * `set`: Optional fields to set on every matching row in the same atomic operation. `undefined` leaves a field unchanged, while `null` clears it.
 * `rows`: Per-row `where` clauses. Each must include exactly one case-sensitive `id` equality. Extra clauses must still match for that row's increment to apply. Duplicate ids throw. Empty `rows` returns `[]`.
 
-**Returns** `Promise<T[]>`: the updated records. Empty `rows` returns `[]`. Rows whose `where` did not match are omitted. Each input row must update at most one matching record. Result order is not input order; do not zip the result to `rows`.
+**Returns** `Promise<T[]>`: the updated records. Guard misses are omitted. Result order is not input order; do not zip the result to `rows`.
+
+Do not use a shared `WHERE id IN (…)` when extra guards differ per row. Keep the stored `id` an exact match for the guard, including on case-insensitive collations. Update in `id` order and lock as your database requires so concurrent batches do not deadlock.
 
 ```ts title="Example"
 incrementMany: async ({ model, increment, set, rows }) => {
@@ -350,7 +352,7 @@ incrementMany: async ({ model, increment, set, rows }) => {
 ```
 
 <Callout type="warn">
-  `incrementMany` is optional. Without it, Better Auth calls `incrementOne` for each row. Native implementations are also called in chunks so each statement stays under the adapter's bind and row limits; a native call may receive only a subset of `rows`. When the adapter supports transactions, a multi-row call runs in one transaction. Without transactions, a multi-row or multi-chunk update is not all-or-nothing.
+  `incrementMany` is optional. Without it, Better Auth calls `incrementOne` for each row. The factory sorts by `id` and chunks native calls to bind and row limits, so a native method may receive only a subset of `rows`. When the adapter supports transactions, a multi-row call runs in one transaction. Without transactions, a multi-row or multi-chunk update is not all-or-nothing.
 </Callout>
 
 ### `findOne` method
@@ -552,6 +554,20 @@ const adapter = myAdapter({
   usePlural: true,
 });
 ```
+
+### `incrementManyMaxParameters`
+
+A native `incrementMany` statement binds every `increment`/`set` assignment plus each row's `where`. Databases reject a statement that exceeds their bind cap. Better Auth splits large batches so each native call stays under the cap. You do not need to chunk `rows` in your method.
+
+Defaults to `999`, which is SQLite's usual limit. Lower it when the driver is stricter — Cloudflare D1 allows 100. Do not raise it past what the database allows, or the native call fails with a bound-parameter error.
+
+This applies only to native `incrementMany`. The sequential `incrementOne` fallback already runs one row at a time.
+
+### `incrementManyMaxRows`
+
+Some databases also cap how many rows one statement may update, even when the parameter count still fits. Set this when your engine has that cap so Better Auth splits the batch instead of sending an oversized statement.
+
+There is no default. Omit it unless your database has a row cap.
 
 ### `transaction`
 
