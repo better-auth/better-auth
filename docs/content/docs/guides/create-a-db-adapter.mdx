@@ -559,7 +559,7 @@ const adapter = myAdapter({
 
 A native `incrementMany` statement binds every `increment`/`set` assignment plus each row's `where`. Databases reject a statement that exceeds their bind cap. Better Auth splits large batches so each native call stays under the cap. You do not need to chunk `rows` in your method.
 
-Defaults to `999`, which is SQLite's usual limit. Lower it when the driver is stricter — Cloudflare D1 allows 100. Do not raise it past what the database allows, or the native call fails with a bound-parameter error.
+Defaults to `999`, a conservative cap that fits older SQLite builds and many stricter drivers. Lower it when the driver allows fewer parameters — Cloudflare D1 allows 100. Do not raise it past what the database allows, or the native call fails with a bound-parameter error.
 
 This applies only to native `incrementMany`. The sequential `incrementOne` fallback already runs one row at a time.
 
