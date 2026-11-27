@@ -27,7 +27,7 @@ import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
-import { getDate } from "../utils/date";
+import { capSessionExpiresAt, getDate } from "../utils/date";
 import {
 	assertValidUserInfo,
 	assertValidUserInfoSource,
@@ -690,6 +690,11 @@ export const createInternalAdapter = (
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			} satisfies Partial<Session>;
+			data.expiresAt = capSessionExpiresAt(
+				options,
+				data.createdAt,
+				data.expiresAt,
+			);
 			const mirrorSessionToSecondaryStorage = async (sessionData: Session) => {
 				if (!secondaryStorage) return sessionData;
 				const currentList = await secondaryStorage.get(
@@ -796,7 +801,11 @@ export const createInternalAdapter = (
 					if (!user) return null;
 					const parsedSession = parseSessionOutput(ctx.options, {
 						...s.session,
-						expiresAt: new Date(s.session.expiresAt),
+						expiresAt: capSessionExpiresAt(
+							ctx.options,
+							s.session.createdAt,
+							new Date(s.session.expiresAt),
+						),
 						createdAt: new Date(s.session.createdAt),
 						updatedAt: new Date(s.session.updatedAt),
 					});
@@ -833,7 +842,14 @@ export const createInternalAdapter = (
 			// Bulk revocation deletes database rows, so a row read here outlived
 			// it. Its `createdAt` may be rounded, so the cutoff is not compared.
 			if (!user) return null;
-			const parsedSession = parseSessionOutput(ctx.options, session);
+			const parsedSession = parseSessionOutput(ctx.options, {
+				...session,
+				expiresAt: capSessionExpiresAt(
+					ctx.options,
+					session.createdAt,
+					session.expiresAt,
+				),
+			});
 			const parsedUser = parseUserOutput(ctx.options, user);
 			return {
 				session: parsedSession,

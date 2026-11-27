@@ -1071,6 +1071,15 @@ export type BetterAuthOptions = {
 				 */
 				updateAge?: number;
 				/**
+				 * Absolute session lifetime in seconds, measured from the session's
+				 * `createdAt`. Refreshes never extend a session past it, so the user
+				 * has to sign in again once it elapses, while `expiresIn` and
+				 * `updateAge` keep acting as the inactivity timeout.
+				 *
+				 * Unset or `0` disables it.
+				 */
+				absoluteExpiresIn?: number;
+				/**
 				 * Disable session refresh so that the session is not updated
 				 * regardless of the `updateAge` option.
 				 *

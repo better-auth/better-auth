@@ -53,6 +53,25 @@ export const auth = betterAuth({
 })
 ```
 
+### Absolute Session Lifetime
+
+`expiresIn` and `updateAge` act as an inactivity timeout: an active session keeps being extended. To also require users to sign in again a fixed time after they authenticated, set `absoluteExpiresIn` (in seconds). It is measured from the session's `createdAt`, and refreshes never extend the session or its cookie past it.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    //... other config options
+    session: {
+        expiresIn: 60 * 60, // 1 hour of inactivity
+        updateAge: 60 * 5, // 5 minutes
+        absoluteExpiresIn: 60 * 60 * 24 // sign in again after 24 hours
+    }
+})
+```
+
+Sessions created before you enable or lower `absoluteExpiresIn` are rejected once they pass the limit, but may still appear in `listSessions` and middleware cookie checks until their stored expiration.
+
 ### Defer Session Refresh
 
 By default, `GET /get-session` performs database writes to refresh the session. This can cause issues with read-replica database setups where GET requests are routed to read-only replicas.

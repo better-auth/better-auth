@@ -24,7 +24,7 @@ import {
 } from "../crypto/jwt";
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
-import { getDate } from "../utils/date";
+import { getDate, getSessionExpiryLimit } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
 import { isDynamicBaseURLConfig } from "../utils/url";
@@ -353,6 +353,22 @@ export async function decodeCookieCache(
 		: null;
 }
 
+/**
+ * Max-Age of a remembered session token cookie, so the cookie never outlives
+ * `session.absoluteExpiresIn`.
+ */
+export function getSessionCookieMaxAge(
+	ctx: GenericEndpointContext,
+	createdAt: Date | string,
+) {
+	const limit = getSessionExpiryLimit(ctx.context.options, createdAt);
+	const secondsLeft = Math.ceil((limit - Date.now()) / 1000);
+	return Math.max(
+		0,
+		Math.min(ctx.context.sessionConfig.expiresIn, secondsLeft),
+	);
+}
+
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
 	session: {
@@ -373,7 +389,7 @@ export async function setSessionCookie(
 	const options = ctx.context.authCookies.sessionToken.attributes;
 	const maxAge = dontRememberMe
 		? undefined
-		: ctx.context.sessionConfig.expiresIn;
+		: getSessionCookieMaxAge(ctx, session.session.createdAt);
 	await ctx.setSignedCookie(
 		ctx.context.authCookies.sessionToken.name,
 		session.session.token,
