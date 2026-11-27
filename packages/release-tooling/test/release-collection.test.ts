@@ -10,7 +10,11 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { findPreviousTag } from "../src/release-notes/collect.ts";
+import type { GitHubReader } from "../src/github.ts";
+import {
+	collectEntries,
+	findPreviousTag,
+} from "../src/release-notes/collect.ts";
 import {
 	parseSchema,
 	releaseManifestSchema,
@@ -182,11 +186,13 @@ function createChangesetStateFixture(
 }
 
 interface ReleaseFixtureOptions {
+	longOrphanChangeset?: string;
 	mergeVersionPR?: boolean;
 	consumeLaterChangeset?: boolean;
 	includePRWithoutChangeset?: boolean;
 	splitVersionCommit?: boolean;
 	separateChangesetCommit?: boolean;
+	secondChangesetInPR?: string;
 	staleReleaseTag?: boolean;
 	supersedeChangeset?: boolean;
 	uppercaseChangesetId?: boolean;
@@ -236,6 +242,19 @@ function createReleaseWithFollowUpCommit(options: ReleaseFixtureOptions = {}): {
 		git(workspace, ["add", "."]);
 		git(workspace, ["commit", "-m", "chore: add release changeset"]);
 	}
+	if (options.secondChangesetInPR) {
+		writeFixtureFile(
+			workspace,
+			".changeset/second-intent.md",
+			[
+				"---",
+				'"better-auth": patch',
+				"---",
+				"",
+				options.secondChangesetInPR,
+			].join("\n"),
+		);
+	}
 	writeFixtureFile(
 		workspace,
 		"packages/better-auth/src/session.ts",
@@ -280,6 +299,26 @@ function createReleaseWithFollowUpCommit(options: ReleaseFixtureOptions = {}): {
 		]);
 	}
 
+	if (options.longOrphanChangeset) {
+		writeFixtureFile(
+			workspace,
+			".changeset/long-orphan.md",
+			[
+				"---",
+				'"better-auth": patch',
+				"---",
+				"",
+				options.longOrphanChangeset,
+			].join("\n"),
+		);
+		git(workspace, ["add", "."]);
+		git(workspace, ["commit", "-m", "chore: add long orphan changeset"]);
+		rmSync(resolve(workspace, ".changeset/long-orphan.md"));
+	}
+
+	if (options.secondChangesetInPR) {
+		rmSync(resolve(workspace, ".changeset/second-intent.md"));
+	}
 	rmSync(resolve(workspace, changesetPath));
 	if (options.splitVersionCommit) {
 		git(workspace, ["add", "."]);
@@ -464,6 +503,126 @@ describe("release changeset collection", () => {
 				"Require an explicit migration after the release.",
 			);
 			expect(result.stdout).toContain('"changeType": "breaking"');
+		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("keeps the PR title for every changeset a PR adds", () => {
+		const fixture = createReleaseWithFollowUpCommit({
+			secondChangesetInPR: "Also validate the migration target.",
+		});
+		try {
+			const result = collectReleaseNotes("2.0.0", {
+				branch: "HEAD",
+				commitRef: fixture.commitRef,
+				workspace: fixture.workspace,
+			});
+
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toContain(
+				"Loaded 2 changeset descriptions, 0 orphans",
+			);
+			const context = JSON.parse(
+				result.stdout.slice(result.stdout.indexOf("{")),
+			);
+			expect(context).toMatchObject({
+				"pr-42": {
+					changesetDescription:
+						"Require an explicit migration after the release.",
+					prNumber: 42,
+					changeType: "breaking",
+				},
+				"pr-42:second-intent": {
+					title: "require explicit migration",
+					changesetDescription: "Also validate the migration target.",
+					prNumber: 42,
+					changeType: "fix",
+				},
+			});
+		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("credits the authors of the squash commit for every changeset of a PR", async () => {
+		const fixture = createReleaseWithFollowUpCommit({
+			secondChangesetInPR: "Also validate the migration target.",
+		});
+		const requested: string[] = [];
+		const github: GitHubReader = {
+			async getPullRequest() {
+				return null;
+			},
+			async getCommitAuthors(sha) {
+				requested.push(sha);
+				return ["octocat", "jane-doe"];
+			},
+			async getReleaseBody() {
+				return null;
+			},
+		};
+		const cwd = process.cwd();
+		try {
+			process.chdir(fixture.workspace);
+			const entries = await collectEntries(
+				github,
+				"2.0.0",
+				"HEAD",
+				fixture.commitRef,
+			);
+
+			expect(requested).toEqual([
+				git(fixture.workspace, [
+					"log",
+					"--format=%H",
+					"--fixed-strings",
+					"--grep=(#42)",
+				]),
+			]);
+			expect(
+				entries.map(({ rewriteKey, commitAuthors }) => ({
+					rewriteKey,
+					commitAuthors,
+				})),
+			).toEqual([
+				{
+					rewriteKey: "pr-42",
+					commitAuthors: ["octocat", "jane-doe"],
+				},
+				{
+					rewriteKey: "pr-42:second-intent",
+					commitAuthors: ["octocat", "jane-doe"],
+				},
+			]);
+		} finally {
+			process.chdir(cwd);
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("shortens orphan titles taken from a long first line", () => {
+		const longLine =
+			`Orphan changes ${"keep working across restarts ".repeat(30)}`.trim();
+		const fixture = createReleaseWithFollowUpCommit({
+			longOrphanChangeset: longLine,
+		});
+		try {
+			const result = collectReleaseNotes("2.0.0", {
+				branch: "HEAD",
+				commitRef: fixture.commitRef,
+				workspace: fixture.workspace,
+			});
+
+			expect(result.status, result.stderr).toBe(0);
+			const title = result.stdout.match(
+				/"title": "(Orphan changes[^"]*)"/,
+			)?.[1];
+			expect(title).toBeDefined();
+			expect(title!.length).toBeLessThanOrEqual(500);
+			expect(title).toMatch(/\w…$/);
+			expect(longLine.startsWith(`${title!.slice(0, -1)} `)).toBe(true);
+			expect(result.stdout).toContain(`"changesetDescription": "${longLine}"`);
 		} finally {
 			rmSync(fixture.workspace, { recursive: true });
 		}

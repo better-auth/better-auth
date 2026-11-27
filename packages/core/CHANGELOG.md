@@ -1,5 +1,253 @@
 # @better-auth/core
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12806](https://github.com/better-auth/better-auth/pull/12806) [`47a77c0`](https://github.com/better-auth/better-auth/commit/47a77c0fd36b89db20019ecb60223471e6b6f794) Thanks [@bytaesu](https://github.com/bytaesu)! - After-commit hooks queued with `onError` now still run when an earlier queued hook throws.
+
+- [#12858](https://github.com/better-auth/better-auth/pull/12858) [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7) Thanks [@bytaesu](https://github.com/bytaesu)! - Deleting a user no longer reports success when a database read fails, a `user.delete.before` hook vetoes the delete, or the database skips it without an error. A failed read now surfaces as an error. A veto or a skipped delete answers `FAILED_TO_DELETE_USER` and keeps the user's sessions and accounts, on databases with transactions for a skipped delete. `user.delete.before` now runs before the session and account deletes.
+
+- [#12850](https://github.com/better-auth/better-auth/pull/12850) [`ddec4d7`](https://github.com/better-auth/better-auth/commit/ddec4d7c4630681eb18fec2284fd80ea02f50291) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A timed-out JWKS refresh no longer blocks a refresh against a newer cached key set.
+
+- [#12858](https://github.com/better-auth/better-auth/pull/12858) [`7e229f0`](https://github.com/better-auth/better-auth/commit/7e229f009731969ed183860feddcd58e62b70ad7) Thanks [@bytaesu](https://github.com/bytaesu)! - Revoking all of a user's sessions now fails when `secondaryStorage` cannot clean up the cached sessions, after the remaining delete hooks have run. Previously the call reported success, and the cached sessions could keep working until they expired.
+
+- [#12905](https://github.com/better-auth/better-auth/pull/12905) [`a879d3d`](https://github.com/better-auth/better-auth/commit/a879d3daa2e778d8ce4b13f4028c4519d017fa1b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed the Drizzle schema check being dropped when a project resolves two copies of `@better-auth/core`, for example one per `better-call` peer version. Schema checks registered by an adapter are now visible to every copy that includes this fix.
+
+## 1.7.27
+
+### Patch Changes
+
+- [#12722](https://github.com/better-auth/better-auth/pull/12722) [`5956cb7`](https://github.com/better-auth/better-auth/commit/5956cb7632eaf104eff9b281dcd6e058609b59ca) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed valid access tokens being rejected while the JWKS refetch fails or times out, such as on a slow cold start. After the five-minute key cache expires and the refetch fails, `verifyBearerToken`, `verifyAccessTokenRequest`, and `verifyJwsAccessToken` now verify against the expired key set when it holds the token's `kid` (or the token has no `kid`) and was fetched less than 10 minutes ago. Verification still fails with the key set error with no cached set, such as on a cold start, for a `kid` the set lacks, and once the set is older than 10 minutes. The 10 minutes are a local choice that ignores the key set's `Cache-Control`, so a token signed with a key the issuer already rotated out can still pass for up to 10 minutes after the last successful fetch. `getJwks` and `validateToken` do not use the expired set.
+
+- [#12807](https://github.com/better-auth/better-auth/pull/12807) [`559c837`](https://github.com/better-auth/better-auth/commit/559c837ffad761dd085ef732e886a2a4d72150a3) Thanks [@bytaesu](https://github.com/bytaesu)! - The edge and browser build now uses the runtime's `AsyncLocalStorage` when one exists, so overlapping requests no longer read each other's request state. Where none exists, the fallback no longer keeps the store of a request that has finished or thrown.
+
+## 1.7.26
+
+### Patch Changes
+
+- [#12620](https://github.com/better-auth/better-auth/pull/12620) [`ddcb9a2`](https://github.com/better-auth/better-auth/commit/ddcb9a25e32ced7ba7528d6a2ca04e9705c51a61) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Authorization URLs now keep empty segments of the authorization endpoint's query, such as a trailing or doubled `&`. The rest of the endpoint's query is sent as published, except for the parameters Better Auth sets, which still replace the endpoint's own values.
+
+- [#12315](https://github.com/better-auth/better-auth/pull/12315) [`836b13e`](https://github.com/better-auth/better-auth/commit/836b13e6d5bebf6b1fec37eab69714c0009943bb) Thanks [@honuuk](https://github.com/honuuk)! - Kakao sign-in now uses PKCE, sending `code_challenge` in the authorization request and `code_verifier` in the token request.
+
+- [#12625](https://github.com/better-auth/better-auth/pull/12625) [`54c1b69`](https://github.com/better-auth/better-auth/commit/54c1b693c64f85ba602584d2f6524fca961fb4e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A DPoP proof's replay reservation now lasts one second past the proof's accepted window. Before, the reservation could expire up to a second before the proof stopped being accepted, so a proof could be reused once in that last second. This affects the in-memory, database, and secondary-storage replay stores.
+
+- [#12692](https://github.com/better-auth/better-auth/pull/12692) [`cbbfab2`](https://github.com/better-auth/better-auth/commit/cbbfab2ad3d331fbdc0ce82bf3ef57b691820f6d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The shared host classifier now treats an IPv6 address as public only inside global unicast `2000::/3`, with the exception of the well-known NAT64 block `64:ff9b::/96`, which is public when the IPv4 address it embeds is public. Addresses inside `2000::/3` keep their class. Addresses outside both that used to classify as public, such as `200::1`, `4000::1`, `8000::1`, `100:0:0:1::1`, and the IPv4-translated `::ffff:0:7f00:1`, now classify as reserved, so `isPublicRoutableHost` rejects them. Loopback, unspecified, link-local, unique local, multicast, and IPv4-mapped addresses keep their existing kinds.
+
+- [#12692](https://github.com/better-auth/better-auth/pull/12692) [`cbbfab2`](https://github.com/better-auth/better-auth/commit/cbbfab2ad3d331fbdc0ce82bf3ef57b691820f6d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The shared host classifier now treats a well-known NAT64 address (`64:ff9b::/96`) as public when the IPv4 address it embeds is public, and as reserved otherwise, as it already does for 6to4. Addresses in this block were always reserved, so on a network with a DNS64 resolver, names with only an A record failed the outbound checks in SSO discovery, CIMD metadata fetches, and client registration. A NAT64 address that embeds a loopback, private, or other non-public IPv4 is still rejected.
+
+- [#12692](https://github.com/better-auth/better-auth/pull/12692) [`cbbfab2`](https://github.com/better-auth/better-auth/commit/cbbfab2ad3d331fbdc0ce82bf3ef57b691820f6d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - IPv6 addresses with a dotted IPv4 tail, such as `::ffff:808:127.0.0.1`, are no longer misread as IPv4-mapped. The host classifier now rejects them as reserved, and IP normalization and CIDR matching expand the tail into two hex groups.
+
+- [#12734](https://github.com/better-auth/better-auth/pull/12734) [`ae6584c`](https://github.com/better-auth/better-auth/commit/ae6584c7da944b1bd2f103b322d82784a1f7117c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Social providers accept a `getAccountFields` option that stores your own values on the provider account. Return values for the fields you declare in `account.additionalFields`, and Better Auth saves them when the account is created, linked, or updated at sign-in. The option does nothing when you leave it unset, and it cannot replace the provider ID, account ID, or tokens.
+
+- [#12316](https://github.com/better-auth/better-auth/pull/12316) [`de4ccfd`](https://github.com/better-auth/better-auth/commit/de4ccfd082c9cd419fd8434444c7e3500d49c503) Thanks [@honuuk](https://github.com/honuuk)! - Kakao now supports ID token sign-in, so ID tokens from Kakao's native SDKs can be passed to `signIn.social`. `clientId` also accepts an array to include the native app key.
+
+## 1.7.25
+
+### Patch Changes
+
+- [#12572](https://github.com/better-auth/better-auth/pull/12572) [`69e14d8`](https://github.com/better-auth/better-auth/commit/69e14d89b856c95ea0998869c9cb8742d483a808) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Authorization URLs now keep the authorization endpoint's existing query text unchanged. Before, building the URL re-encoded parameters already on the endpoint, for example `%20` became `+`, which broke providers that expect the exact query they published. A parameter that Better Auth sets still replaces an endpoint parameter with the same name.
+
+- [#12586](https://github.com/better-auth/better-auth/pull/12586) [`2a8750b`](https://github.com/better-auth/better-auth/commit/2a8750b285725a45ff58b0f43487afb796c854e9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The default in-memory DPoP replay store used by `verifyAccessTokenRequest` no longer slows down as traffic grows. Before, each DPoP request scanned every proof recorded in the replay window, so CPU time per request grew with the request rate.
+
+- [#12587](https://github.com/better-auth/better-auth/pull/12587) [`75c0821`](https://github.com/better-auth/better-auth/commit/75c0821fa61c8ed0ea20f1027d5ad42d16e0daae) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - DPoP now works on deployments that keep verification values only in secondary storage. Before, every request with a DPoP proof to the OAuth provider, UserInfo, or `requireMcpAuth` failed with a 500 error unless `verification.storeInDatabase: true` was set. Used proofs are now recorded in secondary storage, so a replayed proof is still rejected across instances. `createDpopReplayStore` now also accepts the auth context, as `createDpopReplayStore(await auth.$context)`, and picks the same storage.
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+## 1.7.23
+
+### Patch Changes
+
+- [#12501](https://github.com/better-auth/better-auth/pull/12501) [`cfa73e9`](https://github.com/better-auth/better-auth/commit/cfa73e90fae636f22179b933c29171bada503515) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `requireMcpAuth` now reads the signing keys from the auth instance instead of requesting its own `/jwks` endpoint, so MCP routes served from the same app as the auth server no longer fail with a 500 on runtimes that block requests to their own hostname, such as a single Cloudflare Worker.
+
+  Set `jwksUrl` to keep fetching the keys over HTTP.
+
+- [#12480](https://github.com/better-auth/better-auth/pull/12480) [`c10b35d`](https://github.com/better-auth/better-auth/commit/c10b35da7383ddefe1710190a100dabb7283803e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `advanced.database.validateSchema` JSDoc now says validation runs when the auth instance is first used, and that adapters other than Kysely, Drizzle, and Prisma skip it with a log message.
+
+## 1.7.22
+
+### Patch Changes
+
+- [#12333](https://github.com/better-auth/better-auth/pull/12333) [`6536174`](https://github.com/better-auth/better-auth/commit/6536174213f63a8d544cd0d018659515bab5f8ad) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `getSession` failing with "Failed to get session" when a `user.additionalFields` entry references a table outside the Better Auth schema, including with database joins enabled on Drizzle and Prisma. Join resolution now matches `references.model` against schema keys only.
+
+- [#12432](https://github.com/better-auth/better-auth/pull/12432) [`262adc0`](https://github.com/better-auth/better-auth/commit/262adc0e76969fe04ef9355d1c77972bd5f0a1a8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Reject introspected access tokens that fail claim validation with a 401 `UNAUTHORIZED` error. When `remoteVerify` introspection reported an active token whose `aud`, `iss`, `exp`, or `nbf` claim did not pass the configured checks, `verifyBearerToken` and `verifyAccessTokenRequest` threw a plain `Error`, so resource servers answered with a 500 instead of a `WWW-Authenticate` challenge. Expired tokens now report `token expired` and other claim failures report `invalid access token`, matching local JWKS verification.
+
+- [#12445](https://github.com/better-auth/better-auth/pull/12445) [`e9d8e59`](https://github.com/better-auth/better-auth/commit/e9d8e5977cb37ab1aa3824f1bb67b5c99a444e9b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource-server challenges no longer turn a rejected request into a 500, and they now tell clients when the token they sent is invalid.
+
+  `createResourceServerChallenge` used to throw when an `error_description` contained a character that RFC 6750 does not allow in that parameter. Better Auth's own DPoP message `DPoP proof typ must be "dpop+jwt"` was one of them. The description is now fitted into the allowed characters: `"` becomes `'`, other disallowed characters become spaces, and an empty result is left out. Invalid scope tokens in `challengeScopes` still throw.
+
+  When the request presented a token that failed verification, the 401 Bearer challenge now carries `error="invalid_token"` and an `error_description`, following RFC 6750 §3 and §3.1. A request without a token still gets no error code. `verifyBearerToken` and `verifyAccessTokenRequest` now set `error: "invalid_token"` and `error_description` on their expired, invalid, inactive, and unreadable token errors, and the challenge's response body includes both fields alongside `message`.
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12126](https://github.com/better-auth/better-auth/pull/12126) [`4739122`](https://github.com/better-auth/better-auth/commit/4739122fa67c77cde71c4d1b60d84483fc1bf11b) Thanks [@hardikguptaofficialgit](https://github.com/hardikguptaofficialgit)! - On Prisma with MongoDB, when your id columns use `@db.ObjectId`, magic link and email OTP sign-in for users with an unverified email no longer fail with a 500 (`Malformed ObjectID`). SAML sign-in, DPoP-bound OAuth requests, and `private_key_jwt` client authentication are fixed the same way, and Sign-In with Ethereum now keeps the email the user supplied instead of a placeholder. Setups with plain `String` id columns and other databases are unaffected.
+
+- [#12401](https://github.com/better-auth/better-auth/pull/12401) [`c3a94c5`](https://github.com/better-auth/better-auth/commit/c3a94c546af3c3bf4573f254b666facb4a94fc2d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Generic OAuth providers configured with `authorizationHeaders` now send those headers when refreshing an access token, not only when exchanging the authorization code. Before, a provider whose token endpoint requires one of those headers accepted the sign-in but rejected every refresh. Providers without `authorizationHeaders` are unaffected.
+
+  `refreshAccessToken` and `refreshAccessTokenRequest` from `@better-auth/core/oauth2` accept an optional `headers` input for providers that need extra headers on refresh. Client authentication headers still take precedence over it.
+
+  Extra headers whose names differ only in case from a client authentication header, such as `Authorization` with `authentication: "basic"`, no longer produce a combined, invalid header on the code exchange or refresh. Client authentication replaces them, including headers a custom `tokenEndpointAuth` hook sets in any casing.
+
+- [#11716](https://github.com/better-auth/better-auth/pull/11716) [`1a79da5`](https://github.com/better-auth/better-auth/commit/1a79da50672c8a7ccea89c93b11b25aea86262be) Thanks [@bytaesu](https://github.com/bytaesu)! - Authentication requests no longer hang on Cloudflare Workers when the request that started schema validation ends before validation finishes. On Workers, each request now runs its own schema lookup until one completes.
+
+- [#12402](https://github.com/better-auth/better-auth/pull/12402) [`2d10ae7`](https://github.com/better-auth/better-auth/commit/2d10ae733eacab919ce13413ac9e840f2ea7f1c6) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - With `advanced.database.generateId: "serial"`, filtering an `id` or reference field with `null` now compares it with `null`. Before, the `null` became `0`, so `eq null` matched no row and, on the memory adapter, `ne null` also matched rows where the field was unset.
+
+- [#12425](https://github.com/better-auth/better-auth/pull/12425) [`ef4d4f7`](https://github.com/better-auth/better-auth/commit/ef4d4f7dc457fc78b0414e9c6a60827a7a3eab0e) Thanks [@bytaesu](https://github.com/bytaesu)! - Telemetry now reports Cloudflare Workers as `workerd` instead of `node` when `nodejs_compat` is enabled. `@better-auth/core/env` exports the runtime detection it uses.
+
+## 1.7.20
+
+### Patch Changes
+
+- [#11904](https://github.com/better-auth/better-auth/pull/11904) [`a3f50d0`](https://github.com/better-auth/better-auth/commit/a3f50d064dd3bd1ee8a83a687ea54428aaec8997) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth provider deployments served over plain HTTP on a private network, such as a LAN address, a VPN, or a private DNS name, can now accept `http` redirect URIs through the new `allowInsecureRedirectUri` option. Return `true` from it for origins you control. The same option lets web clients use `localhost` callbacks during development. Without the option, redirect URI validation is unchanged.
+
+  If your issuer (`baseURL`, or `jwt.issuer` when set) uses `http` on a non-loopback host, discovery and the `iss` authorization response parameter now report it as configured instead of rewriting it to `https`. They now match the issuer in issued tokens, so OpenID Connect sign-ins no longer fail on the mismatch. If a proxy terminates TLS in front of Better Auth, set `baseURL` to the public `https` URL.
+
+  When an authorization request uses a registered `http` redirect URI that the HTTPS policy rejects, the error now appears on the server error page instead of being redirected to that URI.
+
+  Client registration and updates now reject post-logout redirect URIs that contain credentials, such as `https://user:pass@example.com/logged-out`, matching the existing rule for redirect URIs.
+
+## 1.7.19
+
+### Patch Changes
+
+- [#12317](https://github.com/better-auth/better-auth/pull/12317) [`8412a5f`](https://github.com/better-auth/better-auth/commit/8412a5f43b724648b3faaa452bec0a6ba8e01765) Thanks [@bytaesu](https://github.com/bytaesu)! - Failed fallback join queries are now reported only through the configured logger, instead of also printing the raw database error (including SQL and bound values) with `console.error`.
+
+- [#12369](https://github.com/better-auth/better-auth/pull/12369) [`34ee100`](https://github.com/better-auth/better-auth/commit/34ee1008d8269d32b875e2743b9805090863f2f4) Thanks [@bytaesu](https://github.com/bytaesu)! - `getAccessToken` and `refreshToken` now fail when a provider refuses a token refresh with a 200 status, as GitHub does, instead of returning the expired access token.
+
+## 1.7.18
+
+### Patch Changes
+
+- [#12249](https://github.com/better-auth/better-auth/pull/12249) [`9342a73`](https://github.com/better-auth/better-auth/commit/9342a73e3635719011828c798e276c0f908792de) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource servers that set `verifyOptions.typ`, such as `"at+jwt"`, together with `remoteVerify` now accept tokens that introspection reports as active. Previously every token was rejected, because the `typ` check ran against the introspection response, which has no JWT header. The local JWT check still enforces `typ`. That check runs only when `jwksUrl` is set and `remoteVerify.force` is not `true`. Otherwise `typ` is not enforced, and the introspection result alone decides. This also fixes MCP servers that set `jwtVerifyOptions.typ` with `remoteVerify`.
+
+## 1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Generic OAuth providers whose discovery document has a `jwks_uri` now reject a user profile whose `sub` differs from the ID token's `sub`. Direct ID-token sign-in and linking with a generic OAuth provider now resolve the profile from the verified ID token only and ignore a submitted access or refresh token.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Account linking and new OAuth users now count an email as verified only when the provider claim is `true` or the string `"true"`, which covers generic OAuth, Cognito, and Microsoft Entra ID claims sent as strings. Any other `emailVerified` value, including a non-boolean value returned from `mapProfileToUser` such as `1`, now reads as unverified.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The Zoom social provider now applies its configured provider options, so `disableSignUp`, `requireEmailVerification`, and `overrideUserInfoOnSignIn` take effect for Zoom sign-ins.
+
+## 1.7.15
+
+### Patch Changes
+
+- [#12106](https://github.com/better-auth/better-auth/pull/12106) [`9ef0c5b`](https://github.com/better-auth/better-auth/commit/9ef0c5bda9c5ebc46d2c5d93fc0874893d1c6256) Thanks [@bytaesu](https://github.com/bytaesu)! - Built-in social providers no longer follow HTTP redirects on token exchange, refresh, verification, and signing key (JWKS) requests, matching the other server-side OAuth requests.
+
+## 1.7.14
+
+### Patch Changes
+
+- [#12045](https://github.com/better-auth/better-auth/pull/12045) [`2947ab7`](https://github.com/better-auth/better-auth/commit/2947ab76c3a141f205813de9201661ee21e327c2) Thanks [@honuuk](https://github.com/honuuk)! - Kakao sign-in now passes `loginHint` to Kakao, so the Kakao Account login page opens with the ID field prefilled.
+
+## 1.7.13
+
+### Patch Changes
+
+- [#11997](https://github.com/better-auth/better-auth/pull/11997) [`2712441`](https://github.com/better-auth/better-auth/commit/2712441e355204389c88a7eb546974cce1936b5f) Thanks [@bytaesu](https://github.com/bytaesu)! - The Cloudflare provider now accepts `tokenEndpointAuth: { method }`. The existing `tokenEndpointAuthMethod` option is marked as deprecated and remains supported for backward compatibility.
+
+- [#11948](https://github.com/better-auth/better-auth/pull/11948) [`1cf4b2c`](https://github.com/better-auth/better-auth/commit/1cf4b2c8f5bffdbdb101f11a6fefedbab6cf2994) Thanks [@allenzhou101](https://github.com/allenzhou101)! - Allow the Vercel social provider to configure token endpoint authentication, including dynamic OIDC tokens and private key JWT client assertions, without replacing the built-in sign-in flow.
+
+## 1.7.12
+
+### Patch Changes
+
+- [#11924](https://github.com/better-auth/better-auth/pull/11924) [`681aa5c`](https://github.com/better-auth/better-auth/commit/681aa5c4439a5845e027d41eda01b84acc9c58b6) Thanks [@bytaesu](https://github.com/bytaesu)! - `APIError.from()` accepts `{ cause }` as a third argument to keep the underlying error for server-side callers without exposing it in the response.
+
+- [#11931](https://github.com/better-auth/better-auth/pull/11931) [`4bc78ba`](https://github.com/better-auth/better-auth/commit/4bc78baa83aecea47ff30062d68820a578efeed3) Thanks [@bytaesu](https://github.com/bytaesu)! - ID token sign-in now rejects tokens when the provider has no client ID, because their audience cannot be checked and a token issued to another app would otherwise be accepted. Set `clientId` on the provider to every client ID your apps sign in with.
+
+- [#11919](https://github.com/better-auth/better-auth/pull/11919) [`876608d`](https://github.com/better-auth/better-auth/commit/876608da86036d9ca4b5c2a37ed0b01e29264e52) Thanks [@bytaesu](https://github.com/bytaesu)! - A custom Facebook `getUserInfo` no longer receives client-submitted access tokens issued to another Facebook app, and ID tokens missing `exp` or `iat` are now rejected.
+
+- [#11918](https://github.com/better-auth/better-auth/pull/11918) [`083a743`](https://github.com/better-auth/better-auth/commit/083a74329be51ed35c1981524f9c543984f08bd3) Thanks [@alpcanaydin](https://github.com/alpcanaydin)! - Fix `mapProfileToUser` failing to typecheck under `exactOptionalPropertyTypes` when it returns `undefined` for `name`, `email` or `image`, for example to drop the provider's profile picture.
+
+- [#11920](https://github.com/better-auth/better-auth/pull/11920) [`492134a`](https://github.com/better-auth/better-auth/commit/492134aeba6707bdfb371cf8ef817c945d6fb44f) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore the Twitch and Paybin ID token handling from before 1.7.11, which made account info fail once the ID token stored at sign-in expired.
+
+## 1.7.11
+
+### Patch Changes
+
+- [#11623](https://github.com/better-auth/better-auth/pull/11623) [`ce96569`](https://github.com/better-auth/better-auth/commit/ce965696d1f8695e96e6b88490fc8ea2f8ab78ae) Thanks [@cpojer](https://github.com/cpojer)! - Reduce installation size by removing the semantic conventions production dependency while preserving all instrumentation attribute keys.
+
+- [#11907](https://github.com/better-auth/better-auth/pull/11907) [`2f6ca3f`](https://github.com/better-auth/better-auth/commit/2f6ca3f370e80081d911a5e95a39393920b6d22e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix plugins whose `init` returns `options: undefined`, such as `testUtils()`, failing to typecheck when `exactOptionalPropertyTypes` is enabled.
+
+- [#11884](https://github.com/better-auth/better-auth/pull/11884) [`dfd8dd2`](https://github.com/better-auth/better-auth/commit/dfd8dd287a4cfeb1d3541bb4e004e8f33edce15f) Thanks [@bytaesu](https://github.com/bytaesu)! - Twitch and Paybin sign-in now verify ID token signatures and identity claims before mapping profiles, with 30 seconds of clock tolerance. Custom Paybin issuers must expose RS256 signing keys at `<issuer>/.well-known/jwks.json`.
+
+## 1.7.10
+
+### Patch Changes
+
+- [#11612](https://github.com/better-auth/better-auth/pull/11612) [`fedd055`](https://github.com/better-auth/better-auth/commit/fedd05586c5a7ee2eb6b8d16b88b08dfb7e16a89) Thanks [@vhinayindia](https://github.com/vhinayindia)! - If your resource server verifies access tokens with `verifyAccessTokenRequest` or `verifyBearerToken` and a `jwksUrl`, including through the MCP plugin, a key set that cannot be reached at all, for example a refused connection, now throws an error. Before, the token was rejected as invalid with 401 "no token payload", which hid the outage. A key set that answers with an HTTP error already threw.
+
+  With `remoteVerify` configured, such a failure no longer falls back to remote introspection.
+
+  The OAuth provider's `/oauth2/introspect`, `/oauth2/userinfo` and `/oauth2/revoke` behave the same way with the JWT plugin's `jwks.remoteUrl`: they return 500 instead of reporting the token as invalid.
+
+- [#11805](https://github.com/better-auth/better-auth/pull/11805) [`bbd0a19`](https://github.com/better-auth/better-auth/commit/bbd0a19c30fc384213d1e98b9a8a54a903a0b574) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Servers that verify JWTs against a key set now refetch that key set at most once every 30 seconds per server process when a token names a key ID (`kid`) the cached set does not contain. This covers the OAuth provider plugin's introspection, revocation, UserInfo, and logout endpoints, and resource servers that call `verifyAccessTokenRequest` or `verifyBearerToken` with `jwksUrl`. Previously every such token caused a new fetch: a remote request with `jwksUrl` or `jwks.remoteUrl`, or otherwise a read of the `jwks` table. Anyone could send tokens with made-up `kid` values to force one fetch per request, and the UserInfo endpoint needs no client credentials.
+
+  Concurrent verifications now share one fetch, and a key set fetch that takes longer than 5 seconds fails with a `JWKSTimeout` error instead of waiting indefinitely.
+
+  A token signed with a newly published key still verifies without waiting for the 5-minute cache to expire. It can be rejected for up to 30 seconds if the key set was already refetched for another unknown `kid` in that time. No configuration change is needed.
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11592](https://github.com/better-auth/better-auth/pull/11592) [`435645e`](https://github.com/better-auth/better-auth/commit/435645e5eb6fcd0a3a9a2bbd1fd486f47ff4c4cc) Thanks [@drewsephski](https://github.com/drewsephski)! - Fix Atlassian user info errors being logged as coming from Figma.
+
+- [#11625](https://github.com/better-auth/better-auth/pull/11625) [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed single-use checks for apps that set `advanced.database.generateId: "uuid"`. Default id generation is unaffected, and no migration is needed.
+  - On SQLite and MySQL, SAML sign-in, DPoP-bound requests checked against the database replay store, `private_key_jwt` client authentication, and magic link or email OTP sign-ins that adopt an unverified account failed with a `NOT NULL` error on the `id` column. They now work. SIWE sign-in ignored the `email` field and used the wallet-derived address; it now uses the supplied email when no other account has it.
+  - On Postgres and MongoDB, a reused SAML assertion, DPoP proof, or client assertion was accepted. Each one is now accepted only once.
+
+  With `generateId: "serial"`, behavior is unchanged: these checks need string ids, and Better Auth now logs a warning the first time one of these flows runs.
+
+- [#11749](https://github.com/better-auth/better-auth/pull/11749) [`e78f15a`](https://github.com/better-auth/better-auth/commit/e78f15aa316bedeaf53a654bb07d4a222ca5e578) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - ID token verification now allows 30 seconds of clock difference between your server and the identity provider when checking `exp`, `nbf`, and `iat`. Previously, a provider whose clock ran even slightly ahead (for example, an `nbf` set a fraction of a second in the future) made sign-in fail. This affected generic OAuth providers configured with `discoveryUrl` since 1.7.0, ID token sign-in with the built-in social providers, and Google One Tap. Tokens up to 30 seconds past `exp` are now also accepted. No configuration change is needed. A custom `verifyIdToken` replaces this check and must set its own tolerance, and the SSO plugin's OIDC sign-in is unchanged.
+
+- [#11663](https://github.com/better-auth/better-auth/pull/11663) [`60525e0`](https://github.com/better-auth/better-auth/commit/60525e08fd8f4c10385bcd9f215224a2144ef94a) Thanks [@kaiizer777](https://github.com/kaiizer777)! - Fixed Microsoft Entra ID sign-in with an ID token (`signIn.social` with `idToken`, and linking an account with an ID token) rejecting every token. Microsoft publishes its signing keys without an `alg` field, which made verification fail. Those keys are now treated as RS256, and Microsoft ID tokens signed with any other algorithm are rejected. The redirect sign-in flow was not affected.
+
+- [#11515](https://github.com/better-auth/better-auth/pull/11515) [`916ef5c`](https://github.com/better-auth/better-auth/commit/916ef5c5307103d9bea44446a40da5d31de2b3fe) Thanks [@BilalAtique](https://github.com/BilalAtique)! - If you pass `client` to `mongodbAdapter` on a replica set, concurrent requests that write the same documents no longer fail with a 500. Before, MongoDB aborted all but one of them with a write conflict, so a SCIM directory that provisions several users at once returned 500 for most of them. The adapter now retries such a transaction, as MongoDB requires, for up to 120 seconds or until your `MongoClient`'s `timeoutMS`. Under contention a request can take longer instead of failing.
+
+  A retry runs the work again. `databaseHooks` `before` hooks can run more than once for one request, and `after` hooks still run once, after the commit. Work that the request does outside the database before it commits can also repeat on a retried request. For example, an email sign-up can send its verification email twice. Requests that succeed on the first attempt are unaffected, and so are other adapters.
+
+- [#11718](https://github.com/better-auth/better-auth/pull/11718) [`1d95ebf`](https://github.com/better-auth/better-auth/commit/1d95ebf3fe9a788d9b6566495e0016e60d1fd7fd) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix missing device sessions and failed automatic session switching after cache eviction when `storeSessionInDatabase` is enabled and `preserveSessionInDatabase` is disabled. Automatic switching now follows the order of held sessions, and large lists or sessions whose users no longer exist no longer cause valid sessions to disappear.
+
+- [#10956](https://github.com/better-auth/better-auth/pull/10956) [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78) Thanks [@disbell](https://github.com/disbell)! - Native OAuth clients and Client ID Metadata Documents can now use custom-scheme redirect URIs with a host and a path, such as Cursor's `cursor://anysphere.cursor-mcp/oauth/callback`. Previously, only the authority-free reverse-domain form, such as `com.example.app:/callback`, was accepted, and these registrations failed with `invalid_redirect_uri`.
+
+  Cursor also omits `application_type` when it registers, so the `web` default still rejects it. To accept Cursor, set the new `clientRegistrationDefaultApplicationType` option to `"infer"`. A dynamic registration that omits `application_type` then becomes `native` when any of its redirect URIs uses a custom scheme, and every redirect URI must pass the native rules. Setting `"native"` treats every registration that omits the field as `native`. The default remains `"web"`, and an `application_type` the client sends is never overridden.
+
+  Pairwise clients (`subject_type: "pairwise"`) cannot use these host-bearing custom-scheme redirect URIs. Web clients are unaffected: they still accept only `https` redirect URIs on non-loopback hosts.
+
+- [#11626](https://github.com/better-auth/better-auth/pull/11626) [`67743ed`](https://github.com/better-auth/better-auth/commit/67743ed6e8d873114b723fc5c196aea17a870509) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Password resets and password changes no longer keep the new password when revoking the user's sessions fails. With `revokeSessionsOnPasswordReset` or `revokeOtherSessions`, database sessions are revoked and the password is saved in one transaction when transactions are enabled for the adapter, so a failure leaves the old password and sessions in place. Sessions in secondary storage are still removed after commit, on a best-effort basis. This covers `/reset-password`, the email OTP and phone number reset endpoints, and `/change-password`. `onPasswordReset` now runs after sessions are revoked, so a throwing callback no longer leaves them active, and a callback that lists the user's sessions no longer sees the revoked ones.
+
+- [#11712](https://github.com/better-auth/better-auth/pull/11712) [`c46d2a6`](https://github.com/better-auth/better-auth/commit/c46d2a6ac4442b2b9d2f301619a9f1b9ef400f55) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix misleading errors for invalid runtime-provided AsyncLocalStorage values in the edge and browser fallback, and recognize AsyncLocalStorage initialized after importing Better Auth but before first use.
+
+- [#11643](https://github.com/better-auth/better-auth/pull/11643) [`92dfcea`](https://github.com/better-auth/better-auth/commit/92dfceaa14c287543f7cf62239641f4f7406cfb2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A sign-up that fails after its session is created no longer leaves that session in secondary storage. With `storeSessionInDatabase` enabled and `preserveSessionInDatabase` off, the secondary-storage copy is written only after the sign-up commits, and listing a user's sessions now reads the database, so a session whose cached copy failed to write is still listed and revoked. With other secondary-storage settings, sign-up, passkey registration and SSO sign-in with `resolveUser` keep the session write inside their transaction, so a storage failure rolls back the new user, passkey or account instead of keeping them without a session. A session revoked by a `session.create.after` database hook also stays revoked.
+
+- [#11645](https://github.com/better-auth/better-auth/pull/11645) [`a9f455d`](https://github.com/better-auth/better-auth/commit/a9f455d586f4124bf8c544345f47130a93580103) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - On database adapters without transactions enabled, a request that fails after writing data now still runs the after hooks for those writes, such as `databaseHooks` `after` callbacks and secondary-storage session cleanup. Previously they were skipped even though the writes were kept.
+
+- [#11711](https://github.com/better-auth/better-auth/pull/11711) [`9725f1b`](https://github.com/better-auth/better-auth/commit/9725f1b361a0b5db8a1b519e3c5aacae3ed2fb98) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix subsequent authentication requests hanging after async context initialization is interrupted.
+
+## 1.7.7
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11333](https://github.com/better-auth/better-auth/pull/11333) [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve logical model identity when a custom model name matches another schema key.
+
 ## 1.7.5
 
 ### Patch Changes

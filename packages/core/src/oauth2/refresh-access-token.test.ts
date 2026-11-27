@@ -5,7 +5,10 @@ vi.mock("@better-fetch/fetch", () => ({
 }));
 
 import { betterFetch } from "@better-fetch/fetch";
-import { refreshAccessToken } from "./refresh-access-token";
+import {
+	refreshAccessToken,
+	refreshAccessTokenRequest,
+} from "./refresh-access-token";
 import { mergeScopes, parseScopeField } from "./utils";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -112,6 +115,46 @@ describe("refreshAccessToken", () => {
 		expect(tokens.scopes).toEqual(["openid", "email"]);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12361
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#appendix-A.12
+	 */
+	it.each([
+		{
+			name: "an OAuth error body",
+			body: {
+				error: "bad_refresh_token",
+				error_description: "The refresh token passed is incorrect or expired.",
+			},
+		},
+		{
+			name: "an empty access token",
+			body: {
+				access_token: "",
+			},
+		},
+		{
+			name: "a non-string access token",
+			body: {
+				access_token: 123,
+			},
+		},
+	])("rejects a successful status with $name", async ({ body }) => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: body,
+			error: null,
+		});
+
+		await expect(
+			refreshAccessToken({
+				refreshToken: "spent-refresh-token",
+				options: { clientId: "test-client", clientSecret: "test-secret" },
+				tokenEndpoint: "https://example.com/token",
+			}),
+		).rejects.toEqual(body);
+	});
+
 	it("passes resource indicators through refresh token requests", async () => {
 		mockedBetterFetch.mockResolvedValueOnce({
 			data: {
@@ -171,6 +214,40 @@ describe("refreshAccessToken", () => {
 		expect(body.get("constructor")).toBeNull();
 		expect(body.get("prototype")).toBeNull();
 		expect(body.get("audience")).toBe("https://api.example.com");
+	});
+});
+
+describe("refreshAccessTokenRequest", () => {
+	it("sends caller headers and keeps client authentication on top", async () => {
+		const { headers } = await refreshAccessTokenRequest({
+			refreshToken: "old-refresh-token",
+			options: { clientId: "test-client", clientSecret: "test-secret" },
+			authentication: "basic",
+			headers: { "X-Custom-Header": "test-value", Authorization: "spoofed" },
+		});
+
+		expect(headers["x-custom-header"]).toBe("test-value");
+		expect(headers.authorization).toMatch(/^Basic /);
+		expect(new Headers(headers).get("authorization")).toBe(
+			headers.authorization,
+		);
+	});
+
+	it("lets a custom auth hook replace a caller header in any casing", async () => {
+		const { headers } = await refreshAccessTokenRequest({
+			refreshToken: "old-refresh-token",
+			options: { clientId: "test-client" },
+			headers: { Authorization: "Bearer caller" },
+			tokenEndpointAuth: {
+				method: "custom",
+				customizeRequest: ({ headers }) => {
+					headers.Authorization = "first";
+					headers.authorization = "Custom hook";
+				},
+			},
+		});
+
+		expect(new Headers(headers).get("authorization")).toBe("Custom hook");
 	});
 });
 

@@ -110,6 +110,8 @@ export const auth = betterAuth({
 
 Then when you call `signIn` or `signUp` with another method, the `onLinkAccount` callback will be called. And the `anonymousUser` will be deleted by default.
 
+With the [two-factor plugin](/docs/plugins/2fa), a sign-in that still waits for a second factor does not link: `onLinkAccount` is not called and the anonymous user is kept.
+
 ```ts
 import { authClient } from "@/lib/auth-client";
 

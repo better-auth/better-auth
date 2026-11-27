@@ -19,6 +19,12 @@ export interface DocsVersionConfig {
 
 export const docsVersions = [
 	{
+		label: "v1.8 (Beta)",
+		releaseLine: "1.8",
+		id: "beta",
+		badge: null,
+	},
+	{
 		label: "v1.7 (Latest)",
 		releaseLine: "1.7",
 		id: "latest",
@@ -44,7 +50,7 @@ const docsRootPathPattern = /^\/docs\/?([?#].*)?$/;
 /**
  * The default (latest) version entry.
  */
-export const latestVersion = docsVersions[0];
+export const latestVersion = docsVersions[1];
 
 /**
  * Find a version config by its URL slug.

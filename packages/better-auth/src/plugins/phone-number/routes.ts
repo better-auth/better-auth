@@ -2,13 +2,23 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api";
+import { getAuthoritativeSessionFromCtx } from "../../api";
+import { isSessionOutsideStore } from "../../api/state/session-source";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
+import {
+	createOrFindVerification,
+	restoreVerification,
+} from "../../db/verification";
 import { HIDE_METADATA } from "../../utils";
 import { getDate } from "../../utils/date";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+	resetCredentialPassword,
+} from "../../utils/password";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
@@ -102,6 +112,8 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				}
 			}
 
+			assertPasswordNotTooLong(ctx, password);
+
 			const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
 				model: "user",
 				where: [
@@ -119,12 +131,17 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			}
 			if (opts.requireVerification) {
 				if (!user.phoneNumberVerified) {
-					const otp = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: otp,
-						identifier: phoneNumber,
-						expiresAt: getDate(opts.expiresIn, "sec"),
-					});
+					const otp = await issuePhoneNumberOTP(
+						ctx,
+						opts,
+						phoneNumberOTPIdentifier(phoneNumber),
+					);
+					if (!otp) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+						);
+					}
 					if (opts.sendOTP) {
 						await ctx.context.runInBackgroundOrAwait(
 							opts.sendOTP(
@@ -278,12 +295,17 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				}
 			}
 
-			const code = generateOTP(opts.otpLength);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${code}:0`,
-				identifier: ctx.body.phoneNumber,
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
+			const code = await issuePhoneNumberOTP(
+				ctx,
+				opts,
+				phoneNumberOTPIdentifier(ctx.body.phoneNumber),
+			);
+			if (!code) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 			const sendOTPResult = opts.sendOTP(
 				{
 					phoneNumber: ctx.body.phoneNumber,
@@ -320,19 +342,34 @@ async function verifyAndConsumePhoneNumberOTP(
 	},
 ) {
 	const { phoneNumber, code } = body;
+	const identifier = phoneNumberOTPIdentifier(phoneNumber);
 	if (opts.verifyOTP) {
-		const isValid = await opts.verifyOTP({ phoneNumber, code }, ctx);
-		if (!isValid) {
-			throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
-		}
-
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+		await verifyWithCustomVerifier(
+			ctx,
+			opts.verifyOTP,
 			phoneNumber,
+			code,
+			identifier,
 		);
 		return;
 	}
 
-	await verifyPhoneNumberOTP(ctx, opts, phoneNumber, code);
+	await verifyPhoneNumberOTP(ctx, opts, identifier, code);
+}
+
+/** Checks the code with `verifyOTP`, then drops the code stored under `identifier`. */
+async function verifyWithCustomVerifier(
+	ctx: GenericEndpointContext,
+	verifyOTP: NonNullable<RequiredPhoneNumberOptions["verifyOTP"]>,
+	phoneNumber: string,
+	code: string,
+	identifier: string,
+) {
+	const isValid = await verifyOTP({ phoneNumber, code }, ctx);
+	if (!isValid) {
+		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
+	}
+	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
 }
 
 /**
@@ -517,7 +554,16 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			await verifyAndConsumePhoneNumberOTP(ctx, opts, ctx.body);
 
 			if (ctx.body.updatePhoneNumber) {
-				const session = await getSessionFromCtx(ctx);
+				// Replacing the number changes a sign-in method, so a session revoked
+				// in the store must not pass on its cookie cache alone. A session
+				// built from an API key has no store row; the key is verified on
+				// every request instead.
+				const requestSession = ctx.context.session;
+				const session =
+					requestSession &&
+					(await isSessionOutsideStore(requestSession.session.token))
+						? requestSession
+						: await getAuthoritativeSessionFromCtx(ctx);
 				if (!session) {
 					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.USER_NOT_FOUND);
 				}
@@ -574,6 +620,12 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					},
 				],
 			});
+			if (!user && !opts.signUpOnVerification) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_EXIST,
+				);
+			}
 			if (!user) {
 				if (opts?.signUpOnVerification) {
 					const {
@@ -712,14 +764,20 @@ export const requestPasswordResetPhoneNumber = (
 					},
 				],
 			});
-			const code = generateOTP(opts.otpLength);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${code}:0`,
-				identifier: `${ctx.body.phoneNumber}-request-password-reset`,
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
-			// to avoid leaking the existence of the phone number
-			if (!user) {
+			const code = await issuePhoneNumberOTP(
+				ctx,
+				opts,
+				phoneNumberResetIdentifier(ctx.body.phoneNumber),
+			);
+			// Answer the same for a missing number and, with requireVerification, an
+			// unverified one, so the response does not reveal either.
+			if (!user || (opts.requireVerification && !user.phoneNumberVerified)) {
+				return ctx.json({
+					status: true,
+				});
+			}
+			// A vetoed code is not sent, and the reply does not reveal the account.
+			if (!code) {
 				return ctx.json({
 					status: true,
 				});
@@ -788,8 +846,31 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			},
 		},
 		async (ctx) => {
-			const phoneResetIdentifier = `${ctx.body.phoneNumber}-request-password-reset`;
-			await verifyPhoneNumberOTP(ctx, opts, phoneResetIdentifier, ctx.body.otp);
+			const phoneResetIdentifier = phoneNumberResetIdentifier(
+				ctx.body.phoneNumber,
+			);
+			assertPasswordNotTooShort(ctx, ctx.body.newPassword);
+			assertPasswordNotTooLong(ctx, ctx.body.newPassword);
+			// A custom verifier spends the code. The built-in check goes through the
+			// consume gate so every guess counts, and restores a correct code for the
+			// reset transaction to spend.
+			if (opts.verifyOTP) {
+				await verifyWithCustomVerifier(
+					ctx,
+					opts.verifyOTP,
+					ctx.body.phoneNumber,
+					ctx.body.otp,
+					phoneResetIdentifier,
+				);
+			} else {
+				await verifyPhoneNumberOTP(
+					ctx,
+					opts,
+					phoneResetIdentifier,
+					ctx.body.otp,
+					"restore",
+				);
+			}
 			const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
 				model: "user",
 				where: [
@@ -805,43 +886,36 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 				);
 			}
-			const minLength = ctx.context.password.config.minPasswordLength;
-			const maxLength = ctx.context.password.config.maxPasswordLength;
-			if (ctx.body.newPassword.length < minLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			if (ctx.body.newPassword.length > maxLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+			// An unverified number does not prove the account is the caller's.
+			if (opts.requireVerification && !user.phoneNumberVerified) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_PENDING_VERIFICATION,
+				);
 			}
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);
-			const account = await ctx.context.internalAdapter.findCredentialAccount(
+			await resetCredentialPassword(
+				ctx,
 				user.id,
+				hashedPassword,
+				opts.verifyOTP
+					? undefined
+					: () =>
+							verifyPhoneNumberOTP(
+								ctx,
+								opts,
+								phoneResetIdentifier,
+								ctx.body.otp,
+							),
 			);
-			if (!account) {
-				await ctx.context.internalAdapter.createAccount({
-					userId: user.id,
-					providerId: "credential",
-					accountId: user.id,
-					password: hashedPassword,
-				});
-			} else {
-				await ctx.context.internalAdapter.updatePassword(
-					user.id,
-					hashedPassword,
-				);
-			}
 
 			if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 				await ctx.context.options.emailAndPassword.onPasswordReset(
 					{ user },
 					ctx.request,
 				);
-			}
-
-			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
-				await ctx.context.internalAdapter.deleteUserSessions(user.id);
 			}
 
 			return ctx.json({
@@ -856,42 +930,29 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
  * Consuming the row is the race gate: the first concurrent caller wins the
  * row, every racer behind it gets `null` and is rejected, so the same code can
  * never satisfy two simultaneous verifications. On a wrong code that is still
- * within the attempt budget, the row is recreated with the same value and
- * expiry and an incremented attempt counter. Once the budget is exhausted the
- * row is not recreated.
+ * within the attempt budget, the row is recreated with the same value, expiry
+ * and creation time and an incremented attempt counter. Once the budget is
+ * exhausted the row is not recreated. With `"restore"`, a correct code is
+ * written back unchanged so a follow-up call can spend it.
  */
 async function verifyPhoneNumberOTP(
 	ctx: GenericEndpointContext,
 	opts: RequiredPhoneNumberOptions,
 	identifier: string,
 	providedCode: string,
+	successDisposition: "consume" | "restore" = "consume",
 ): Promise<void> {
 	const existing =
 		await ctx.context.internalAdapter.findVerificationValue(identifier);
 	if (!existing) {
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND);
 	}
+	// Do not delete here: a code issued after this read would go with it.
 	if (existing.expiresAt < new Date()) {
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-			identifier,
-		);
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.OTP_EXPIRED);
 	}
 
 	const allowedAttempts = opts?.allowedAttempts ?? 3;
-	const peekedAttempts = parseVerificationAttempts(
-		existing.value.split(":")[1],
-	);
-	if (peekedAttempts >= allowedAttempts) {
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-			identifier,
-		);
-		throw APIError.from(
-			"FORBIDDEN",
-			PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
-		);
-	}
-
 	const consumed =
 		await ctx.context.internalAdapter.consumeVerificationValue(identifier);
 	if (!consumed) {
@@ -906,19 +967,80 @@ async function verifyPhoneNumberOTP(
 			PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 		);
 	}
-	if (otpValue !== providedCode) {
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: `${otpValue}:${attempts + 1}`,
+	// A code issued while this one was being checked replaces it, so the
+	// write-back yields to it instead of reviving the old code.
+	const writeBack = (value: string) =>
+		restoreVerification(ctx, {
+			value,
 			identifier,
 			expiresAt: consumed.expiresAt,
+			createdAt: consumed.createdAt,
 		});
+	if (otpValue !== providedCode) {
+		await writeBack(`${otpValue}:${attempts + 1}`);
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
+	if (successDisposition === "consume") return;
+
+	const restored = await writeBack(consumed.value);
+	// A verification.create.before hook can veto the restore by returning false.
+	if (!restored) {
+		throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
+			message: "Unable to complete OTP verification",
+		});
+	}
+	if (restored.value !== consumed.value) {
+		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
+	}
+}
+
+async function issuePhoneNumberOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredPhoneNumberOptions,
+	identifier: string,
+) {
+	const code = generateOTP(opts.otpLength);
+	const verification = {
+		value: `${code}:0`,
+		identifier,
+		expiresAt: getDate(opts.expiresIn, "sec"),
+	};
+	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
+	const stored = await createOrFindVerification(ctx, verification);
+	// A verification.create.before hook can veto the create by returning false.
+	if (!stored) return null;
+	if (stored.value === verification.value) return code;
+
+	const [storedCode, attempts] = stored.value.split(":");
+	const reusable =
+		stored.expiresAt >= new Date() &&
+		parseVerificationAttempts(attempts) < (opts.allowedAttempts ?? 3);
+	if (reusable && storedCode) return storedCode;
+	const replaced =
+		await ctx.context.internalAdapter.updateVerificationByIdentifier(
+			identifier,
+			{
+				value: verification.value,
+				expiresAt: verification.expiresAt,
+				createdAt: new Date(),
+			},
+		);
+	// A verification.update.before hook can veto the replacement by returning false.
+	return replaced ? code : null;
 }
 
 function parseVerificationAttempts(value: string | undefined) {
 	const attempts = Number(value ?? 0);
 	return Number.isSafeInteger(attempts) && attempts > 0 ? attempts : 0;
+}
+
+// The prefix keeps a phone number from addressing another flow's verification record.
+function phoneNumberOTPIdentifier(phoneNumber: string) {
+	return `phone-number-otp-${phoneNumber}`;
+}
+
+function phoneNumberResetIdentifier(phoneNumber: string) {
+	return `phone-number-reset-${phoneNumber}`;
 }
 
 function generateOTP(size: number) {

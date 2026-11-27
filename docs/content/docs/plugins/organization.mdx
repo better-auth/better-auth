@@ -778,6 +778,8 @@ By default, if you don't pass any properties, it will use the active organizatio
   ```
 </APIMethod>
 
+The `invitations` array follows the same rule as [listing invitations](#list-invitations) and is empty for members who cannot list them.
+
 ### Update Organization
 
 To update organization info, you can use `organization.update`
@@ -804,7 +806,7 @@ To update organization info, you can use `organization.update`
           /**
            * The metadata of the organization. 
            */
-          metadata?: Record<string, any> | null = { customerId: "test" }
+          metadata?: Record<string, any> = { customerId: "test" }
       }
       /**
        * The organization ID. to update.
@@ -1040,6 +1042,8 @@ To list all invitations for a given organization you can use the `listInvitation
   ```
 </APIMethod>
 
+Only members whose role has the `invitation` `create` permission can list invitations. Other members get a `403`. Invitations for the creator role are only listed for members who hold it.
+
 The response includes invitation IDs. Treat those IDs as action-capable invitation links. If users who can list organization invitations should not be able to use those IDs with unverified recipient sessions, enable `requireEmailVerificationOnInvitation` or add app-level permission checks around this endpoint.
 
 ### List user invitations
@@ -1186,9 +1190,9 @@ If you want to add a member directly to an organization without sending an invit
   ```ts
   type addMember = {
       /**
-       * The user ID which represents the user to be added as a member. If `null` is provided, then it's expected to provide session headers. 
+       * The ID of the user to add as a member.
        */
-      userId?: string | null = "user-id"
+      userId: string = "user-id"
       /**
        * The role(s) to assign to the new member. 
        */

@@ -1,7 +1,7 @@
+import { generateId } from "@better-auth/core/utils/id";
 import { base64Url } from "@better-auth/utils/base64";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { utf8ToBytes } from "@noble/hashes/utils.js";
-import { generateId } from "better-auth";
 
 /** Create a fixed-size key that preserves tuple and connection boundaries. */
 export function createScopedKey(parts: readonly string[]): string {

@@ -1,3 +1,4 @@
+export { encodeDeterministicId } from "./adapter/get-id-field";
 export {
 	type BoundedDatabaseIndexDialect,
 	type DBTableIndexSource,
@@ -9,12 +10,14 @@ export {
 	resolveDatabaseSchemaIndexes,
 	resolveDatabaseTableIndexes,
 } from "./database-index";
+export { isUniqueViolation } from "./errors";
 export { getAuthTablesWithResolvedIndexes } from "./get-tables";
 export {
 	checksSchema,
 	createSchemaCheck,
 	invalidateSchemaChecks,
 	registerSchemaCheck,
+	runtimeSchemaCheckFor,
 	type SchemaCheck,
 	schemaCheckFor,
 } from "./schema-check";
@@ -29,3 +32,4 @@ export {
 	SchemaMismatchError,
 	type SchemaSource,
 } from "./schema-diff";
+export { redactSecondaryStorageErrors } from "./secondary-storage-errors";

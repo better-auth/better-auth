@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
+import { getAuthStateVerificationIdentifier } from "@better-auth/core/utils/state";
 import * as z from "zod";
 import { expireCookie } from "./cookies";
 import {
@@ -7,6 +8,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "./crypto";
+import { derivePurposeKey } from "./crypto/purpose";
 
 const stateDataSchema = z.looseObject({
 	callbackURL: z.string(),
@@ -23,6 +25,7 @@ const stateDataSchema = z.looseObject({
 		.object({
 			email: z.string(),
 			userId: z.coerce.string(),
+			encryptedSessionToken: z.string().optional(),
 		})
 		.optional(),
 	requestSignUp: z.boolean().optional(),
@@ -40,6 +43,9 @@ const stateDataSchema = z.looseObject({
 });
 
 export type StateData = z.infer<typeof stateDataSchema>;
+
+// Re-exported for backward compatibility: `better-auth` has exported this from its root.
+export { getAuthStateVerificationIdentifier };
 
 export const INTERNAL_STATE_KEYS: ReadonlySet<string> = new Set(
 	Object.keys(stateDataSchema.shape),
@@ -94,7 +100,7 @@ export async function generateGenericState(
 	if (storeStateStrategy === "cookie") {
 		const payload: StateData = { ...stateData, oauthState: state };
 		const encryptedData = await symmetricEncrypt({
-			key: c.context.secretConfig,
+			key: derivePurposeKey(c.context.secretConfig, "oauth-state-cookie"),
 			data: JSON.stringify(payload),
 		});
 
@@ -131,15 +137,14 @@ export async function generateGenericState(
 		stateCookie.attributes,
 	);
 
-	const expiresAt = new Date();
-	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+	const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
 	const verification = await c.context.internalAdapter.createVerificationValue({
 		value: JSON.stringify({
 			...stateData,
 			oauthState: state,
 		} satisfies StateData),
-		identifier: state,
+		identifier: getAuthStateVerificationIdentifier(state),
 		expiresAt,
 	});
 
@@ -191,7 +196,7 @@ export async function parseGenericState(
 
 		try {
 			const decryptedData = await symmetricDecrypt({
-				key: c.context.secretConfig,
+				key: derivePurposeKey(c.context.secretConfig, "oauth-state-cookie"),
 				data: encryptedData,
 			});
 
@@ -222,7 +227,9 @@ export async function parseGenericState(
 		expireCookie(c, stateCookie);
 	} else {
 		// Default: database strategy
-		const data = await c.context.internalAdapter.findVerificationValue(state);
+		const data = await c.context.internalAdapter.findVerificationValue(
+			getAuthStateVerificationIdentifier(state),
+		);
 		if (!data) {
 			throw new StateError("State mismatch: verification not found", {
 				code: "state_mismatch",
@@ -281,7 +288,9 @@ export async function parseGenericState(
 		expireCookie(c, stateCookie);
 
 		// Delete verification value after retrieval
-		await c.context.internalAdapter.deleteVerificationByIdentifier(state);
+		await c.context.internalAdapter.deleteVerificationByIdentifier(
+			getAuthStateVerificationIdentifier(state),
+		);
 	}
 
 	// Check expiration

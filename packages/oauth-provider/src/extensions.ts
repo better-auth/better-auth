@@ -173,6 +173,53 @@ export function validateOAuthProviderExtensions(
 	);
 }
 
+/**
+ * Validates the shape of `advertisedMetadata.token_endpoint_auth_methods_supported`:
+ * a non-empty list without duplicates. Runs at setup.
+ */
+export function validateAdvertisedAuthMethodsShape(
+	methods: readonly TokenEndpointAuthMethod[] | undefined,
+) {
+	if (!methods) return;
+	const name = "advertisedMetadata.token_endpoint_auth_methods_supported";
+	if (methods.length === 0) {
+		throw new BetterAuthError(
+			`${name} cannot be empty. Omit it to use the derived list.`,
+		);
+	}
+	const seen = new Set<string>();
+	for (const method of methods) {
+		if (seen.has(method)) {
+			throw new BetterAuthError(`${name} lists ${method} more than once`);
+		}
+		seen.add(method);
+	}
+}
+
+/**
+ * Checks that every advertised auth method is one the server supports. This
+ * needs the full extension set, which is only known once companion plugins have
+ * called {@link extendOAuthProvider}, so it runs when discovery metadata is
+ * built rather than at setup.
+ */
+export function assertAdvertisedAuthMethodsSupported(
+	opts: OAuthOptions<Scope[]>,
+) {
+	const methods =
+		opts.advertisedMetadata?.token_endpoint_auth_methods_supported;
+	if (!methods) return;
+	const supported = new Set(
+		getSupportedAuthMethods(opts, { includeNone: true }),
+	);
+	for (const method of methods) {
+		if (!supported.has(method)) {
+			throw new BetterAuthError(
+				`advertisedMetadata.token_endpoint_auth_methods_supported ${method} is not a supported token endpoint auth method`,
+			);
+		}
+	}
+}
+
 function getOAuthProviderExtensions(
 	opts: OAuthOptions<Scope[]>,
 ): OAuthProviderExtension[] {
@@ -325,7 +372,8 @@ export function getExtensionClientAuthenticationStrategy(
 /**
  * Merges each registered extension's `metadata()` contribution into `document`,
  * first-wins: the provider owns every key it already wrote, so an extension can
- * add fields but never override core. Each contributor sees the base `document`,
+ * add fields but never override core. A key two extensions contribute keeps the
+ * first-registered value and logs a warning. Each contributor sees the base `document`,
  * not the running accumulation, so contributions stay order-independent.
  */
 export function applyOAuthProviderMetadataExtensions<
@@ -342,6 +390,10 @@ export function applyOAuthProviderMetadataExtensions<
 		for (const [key, value] of Object.entries(contribution ?? {})) {
 			if (!(key in next)) {
 				next[key] = value;
+			} else if (!(key in document)) {
+				ctx.context.logger.warn(
+					`oauth-provider: two extensions contributed the discovery metadata key "${key}" to ${type}; keeping the first-registered value.`,
+				);
 			}
 		}
 	}

@@ -76,84 +76,87 @@ describe("SCIM provisioning domain immutability", () => {
 	it.each([
 		["Group", "User"],
 		["User", "Group"],
-	] as const)("rejects domain drift after provisioning only a %s before creating a %s", async (originalResource, driftedResource) => {
-		const data = {
-			user: [] as User[],
-			session: [] as { id: string }[],
-			verification: [] as { id: string }[],
-			account: [] as { id: string }[],
-			scimConnectionBinding: [] as SCIMConnectionBinding[],
-			scimIdentityTombstone: [] as { id: string }[],
-			scimSubject: [] as { id: string; userId: string }[],
-			scimUser: [] as SCIMUser[],
-			scimGroup: [] as SCIMGroup[],
-			scimGroupMember: [] as { id: string }[],
-			scimProjectionGrant: [] as { id: string }[],
-		};
-		const createAuth = (provisioningDomainId: string) =>
-			betterAuth({
-				baseURL: "http://localhost:3000",
-				database: memoryAdapter(data),
-				plugins: [
-					scim({
-						connections: [
-							{
-								id: "workforce",
-								provisioningDomainId,
-								credentials: [
-									{
-										type: "bearer",
-										id: "test-scim-token",
-										token: "test-scim-token",
-									},
-								],
+	] as const)(
+		"rejects domain drift after provisioning only a %s before creating a %s",
+		async (originalResource, driftedResource) => {
+			const data = {
+				user: [] as User[],
+				session: [] as { id: string }[],
+				verification: [] as { id: string }[],
+				account: [] as { id: string }[],
+				scimConnectionBinding: [] as SCIMConnectionBinding[],
+				scimIdentityTombstone: [] as { id: string }[],
+				scimSubject: [] as { id: string; userId: string }[],
+				scimUser: [] as SCIMUser[],
+				scimGroup: [] as SCIMGroup[],
+				scimGroupMember: [] as { id: string }[],
+				scimProjectionGrant: [] as { id: string }[],
+			};
+			const createAuth = (provisioningDomainId: string) =>
+				betterAuth({
+					baseURL: "http://localhost:3000",
+					database: memoryAdapter(data),
+					plugins: [
+						scim({
+							connections: [
+								{
+									id: "workforce",
+									provisioningDomainId,
+									credentials: [
+										{
+											type: "bearer",
+											id: "test-scim-token",
+											token: "test-scim-token",
+										},
+									],
+								},
+							],
+						}),
+					],
+				});
+			const headers = { authorization: "Bearer test-scim-token" };
+			const original = createAuth("workspace-original");
+			if (originalResource === "Group") {
+				await original.api.createSCIMGroup({
+					body: { schemas: [GROUP_SCHEMA], displayName: "Engineering" },
+					headers,
+				});
+			} else {
+				await original.api.createSCIMUser({
+					body: { schemas: [USER_SCHEMA], userName: "ada@example.com" },
+					headers,
+				});
+			}
+
+			const drifted = createAuth("workspace-drifted");
+			const driftedCreation =
+				driftedResource === "User"
+					? drifted.api.createSCIMUser({
+							body: {
+								schemas: [USER_SCHEMA],
+								userName: "grace@example.com",
 							},
-						],
-					}),
-				],
-			});
-		const headers = { authorization: "Bearer test-scim-token" };
-		const original = createAuth("workspace-original");
-		if (originalResource === "Group") {
-			await original.api.createSCIMGroup({
-				body: { schemas: [GROUP_SCHEMA], displayName: "Engineering" },
-				headers,
-			});
-		} else {
-			await original.api.createSCIMUser({
-				body: { schemas: [USER_SCHEMA], userName: "ada@example.com" },
-				headers,
-			});
-		}
+							headers,
+						})
+					: drifted.api.createSCIMGroup({
+							body: {
+								schemas: [GROUP_SCHEMA],
+								displayName: "Finance",
+							},
+							headers,
+						});
 
-		const drifted = createAuth("workspace-drifted");
-		const driftedCreation =
-			driftedResource === "User"
-				? drifted.api.createSCIMUser({
-						body: {
-							schemas: [USER_SCHEMA],
-							userName: "grace@example.com",
-						},
-						headers,
-					})
-				: drifted.api.createSCIMGroup({
-						body: {
-							schemas: [GROUP_SCHEMA],
-							displayName: "Finance",
-						},
-						headers,
-					});
-
-		await expect(driftedCreation).rejects.toThrowError(
-			expect.objectContaining({ statusCode: 409 }),
-		);
-		expect(data.scimConnectionBinding).toEqual([
-			expect.objectContaining({
-				connectionId: "workforce",
-				provisioningDomainId: "workspace-original",
-			}),
-		]);
-		expect(data.scimUser).toHaveLength(originalResource === "User" ? 1 : 0);
-		expect(data.scimGroup).toHaveLength(originalResource === "Group" ? 1 : 0);
-	});
+			await expect(driftedCreation).rejects.toThrowError(
+				expect.objectContaining({ statusCode: 409 }),
+			);
+			expect(data.scimConnectionBinding).toEqual([
+				expect.objectContaining({
+					connectionId: "workforce",
+					provisioningDomainId: "workspace-original",
+				}),
+			]);
+			expect(data.scimUser).toHaveLength(originalResource === "User" ? 1 : 0);
+			expect(data.scimGroup).toHaveLength(originalResource === "Group" ? 1 : 0);
+		},
+	);
 });

@@ -380,24 +380,23 @@ describe("isPasswordCompromised", () => {
 		});
 	});
 
-	it.each([
-		"",
-		"   ",
-		"invalid",
-	])("should reject an invalid compromise count %#", async (compromiseCount) => {
-		const password = "password";
-		const hash = (
-			await createHash("SHA-1", "hex").digest(password)
-		).toUpperCase();
-		vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			new Response(`${hash.slice(5)}:${compromiseCount}\n`, { status: 200 }),
-		);
+	it.each(["", "   ", "invalid"])(
+		"should reject an invalid compromise count %#",
+		async (compromiseCount) => {
+			const password = "password";
+			const hash = (
+				await createHash("SHA-1", "hex").digest(password)
+			).toUpperCase();
+			vi.spyOn(globalThis, "fetch").mockResolvedValue(
+				new Response(`${hash.slice(5)}:${compromiseCount}\n`, { status: 200 }),
+			);
 
-		await expect(isPasswordCompromised(password)).rejects.toMatchObject({
-			status: "INTERNAL_SERVER_ERROR",
-			body: {
-				message: "Failed to check password. Please try again later.",
-			},
-		});
-	});
+			await expect(isPasswordCompromised(password)).rejects.toMatchObject({
+				status: "INTERNAL_SERVER_ERROR",
+				body: {
+					message: "Failed to check password. Please try again later.",
+				},
+			});
+		},
+	);
 });

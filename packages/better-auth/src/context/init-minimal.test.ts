@@ -56,5 +56,21 @@ describe("init-minimal (without Kysely)", () => {
 			database,
 		});
 		expect(res.checkSchema).toBe(check);
+		expect(res.explicitSchemaCheck).toBe(check);
+	});
+
+	it("exposes an explicit check without enabling runtime validation", async () => {
+		const check = () => undefined;
+		const database = (options: BetterAuthOptions) => {
+			const adapter = memoryAdapter({})(options);
+			registerSchemaCheck(adapter, check, { runtimeEnabled: false });
+			return adapter;
+		};
+		const res = await initMinimal({
+			baseURL: "http://localhost:3000",
+			database,
+		});
+		expect(res.checkSchema).toBeUndefined();
+		expect(res.explicitSchemaCheck).toBe(check);
 	});
 });

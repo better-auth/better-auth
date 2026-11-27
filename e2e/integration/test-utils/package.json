@@ -4,8 +4,5 @@
   "exports": {
     "./playwright": "./src/playwright.ts"
   },
-  "private": true,
-  "devDependencies": {
-    "terminate": "^2.8.0"
-  }
+  "private": true
 }

@@ -108,6 +108,98 @@ describe("useAuthQuery - error handling", () => {
 		expect(session().data).toBeNull();
 	});
 
+	it.each([
+		{
+			earlier: "unauthorized",
+			initialOutcome: () =>
+				Response.json({ message: "Unauthorized" }, { status: 401 }),
+			refreshedResponse: () => Response.json({ id: "current" }),
+			expectedData: { id: "current" },
+		},
+		{
+			earlier: "successful",
+			initialOutcome: () => Response.json({ id: "previous" }),
+			refreshedResponse: () =>
+				Response.json({ message: "Unauthorized" }, { status: 401 }),
+			expectedData: null,
+		},
+		{
+			earlier: "network failure",
+			initialOutcome: () => new TypeError("Failed to fetch"),
+			refreshedResponse: () => Response.json({ id: "current" }),
+			expectedData: { id: "current" },
+		},
+	])(
+		"keeps the latest result when an earlier $earlier request finishes last",
+		async ({ initialOutcome, refreshedResponse, expectedData }) => {
+			const initialRequest = Promise.withResolvers<Response>();
+			const fetchImpl = vi
+				.fn(async () => refreshedResponse())
+				.mockImplementationOnce(() => initialRequest.promise);
+			const $fetch = createFetch({
+				baseURL: "http://localhost:3000",
+				customFetchImpl: fetchImpl,
+			});
+
+			const $signal = atom(false);
+			const query = useAuthQuery<{ id: string }>($signal, "/test", $fetch, {
+				method: "GET",
+			});
+			const unsubscribe = query.listen(() => {});
+			await vi.advanceTimersByTimeAsync(0);
+			expect(fetchImpl).toHaveBeenCalledOnce();
+
+			$signal.set(true);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(fetchImpl).toHaveBeenCalledTimes(2);
+			expect(query.get().data).toEqual(expectedData);
+			const latestState = query.get();
+
+			const outcome = initialOutcome();
+			if (outcome instanceof Error) {
+				initialRequest.reject(outcome);
+			} else {
+				initialRequest.resolve(outcome);
+			}
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(query.get()).toEqual(latestState);
+			unsubscribe();
+		},
+	);
+
+	it("runs fetch callbacks for superseded requests", async () => {
+		const initialRequest = Promise.withResolvers<Response>();
+		const fetchImpl = vi
+			.fn(async () => Response.json({ id: "current" }))
+			.mockImplementationOnce(() => initialRequest.promise);
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: fetchImpl,
+		});
+		const onSuccess = vi.fn();
+		const onError = vi.fn();
+		const query = useAuthQuery(atom(false), "/test", $fetch, {
+			method: "GET",
+			onSuccess,
+			onError,
+		});
+
+		const unsubscribe = query.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchImpl).toHaveBeenCalledOnce();
+
+		await query.get().refetch();
+		initialRequest.resolve(
+			Response.json({ message: "Unauthorized" }, { status: 401 }),
+		);
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(onSuccess).toHaveBeenCalledOnce();
+		expect(onError).toHaveBeenCalledOnce();
+		unsubscribe();
+	});
+
 	it("should normalize null session responses to null data", async () => {
 		const client = createAuthClient({
 			plugins: [testClientPlugin()],
@@ -724,6 +816,42 @@ describe("useAuthQuery - error handling", () => {
 
 		expect(methods).toEqual(["GET", "POST", "GET"]);
 		unsubscribeSecond();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10588
+	 */
+	it("should send the session refresh POST as JSON", async () => {
+		const requests: Request[] = [];
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (url, init) => {
+				const request = new Request(url, init);
+				requests.push(request);
+				if (request.method === "POST") {
+					return new Response(JSON.stringify({ session: null, user: null }));
+				}
+				return new Response(
+					JSON.stringify({
+						needsRefresh: true,
+						session: {
+							id: "session-1",
+							expiresAt: new Date(Date.now() + 60_000),
+						},
+						user: { id: "user-1" },
+					}),
+				);
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const unsubscribe = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		unsubscribe();
+
+		const refresh = requests.find((request) => request.method === "POST");
+		expect(refresh?.headers.get("content-type")).toBe("application/json");
+		await expect(refresh?.text()).resolves.toBe("{}");
 	});
 
 	it("should revalidate after the session signal changes", async () => {

@@ -229,54 +229,55 @@ describe("siwe", async () => {
 		{ name: "short", nonce: "abc1234" },
 		{ name: "non-alphanumeric", nonce: "some-other-nonce" },
 		{ name: "oversized", nonce: "A".repeat(251) },
-	])("should reject a signed SIWE message with a $name nonce before lookup", async ({
-		nonce,
-	}) => {
-		const { client, auth } = await getTestInstance(
-			{
-				plugins: [
-					siwe({
-						domain,
-						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
-						},
-						async verifyMessage({ signature }) {
-							// Mirrors the documented viem pattern: signature recovery only.
-							return signature === "valid_signature";
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [siweClient()],
+	])(
+		"should reject a signed SIWE message with a $name nonce before lookup",
+		async ({ nonce }) => {
+			const { client, auth } = await getTestInstance(
+				{
+					plugins: [
+						siwe({
+							domain,
+							async getNonce() {
+								return "A1b2C3d4E5f6G7h8J";
+							},
+							async verifyMessage({ signature }) {
+								// Mirrors the documented viem pattern: signature recovery only.
+								return signature === "valid_signature";
+							},
+						}),
+					],
 				},
-			},
-		);
-		const context = await auth.$context;
-		const consumeVerificationValue =
-			context.internalAdapter.consumeVerificationValue;
-		let consumedVerificationValue = false;
-		context.internalAdapter.consumeVerificationValue = async (identifier) => {
-			consumedVerificationValue = true;
-			return consumeVerificationValue(identifier);
-		};
+				{
+					clientOptions: {
+						plugins: [siweClient()],
+					},
+				},
+			);
+			const context = await auth.$context;
+			const consumeVerificationValue =
+				context.internalAdapter.consumeVerificationValue;
+			let consumedVerificationValue = false;
+			context.internalAdapter.consumeVerificationValue = async (identifier) => {
+				consumedVerificationValue = true;
+				return consumeVerificationValue(identifier);
+			};
 
-		try {
-			const { error } = await client.siwe.verify({
-				message: siweMessage({ nonce }),
-				signature: "valid_signature",
-			});
+			try {
+				const { error } = await client.siwe.verify({
+					message: siweMessage({ nonce }),
+					signature: "valid_signature",
+				});
 
-			expect(error).toBeDefined();
-			expect(error?.status).toBe(401);
-			expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
-			expect(consumedVerificationValue).toBe(false);
-		} finally {
-			context.internalAdapter.consumeVerificationValue =
-				consumeVerificationValue;
-		}
-	});
+				expect(error).toBeDefined();
+				expect(error?.status).toBe(401);
+				expect(error?.code).toBe("UNAUTHORIZED_SIWE_MESSAGE_MISMATCH");
+				expect(consumedVerificationValue).toBe(false);
+			} finally {
+				context.internalAdapter.consumeVerificationValue =
+					consumeVerificationValue;
+			}
+		},
+	);
 
 	it("should reject a signed SIWE message without a valid address", async () => {
 		const { client } = await getTestInstance(
@@ -527,13 +528,77 @@ describe("siwe", async () => {
 			"reserveVerificationValue requires database-backed verification storage. Set verification.storeInDatabase to true for flows that reserve verification values.",
 		),
 		new Error("reservation adapter unavailable"),
-	])("should keep wallet email fallback when email reservation fails with %s", async (reservationError) => {
-		const { client, auth, sessionSetter } = await getTestInstance(
+	])(
+		"should keep wallet email fallback when email reservation fails with %s",
+		async (reservationError) => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					plugins: [
+						siwe({
+							domain,
+							anonymous: false,
+							async getNonce() {
+								return "A1b2C3d4E5f6G7h8J";
+							},
+							async verifyMessage({ signature }) {
+								return signature === "valid_signature";
+							},
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [siweClient()],
+					},
+				},
+			);
+			const context = await auth.$context;
+			const reserveVerificationValue =
+				context.internalAdapter.reserveVerificationValue;
+			context.internalAdapter.reserveVerificationValue = async () => {
+				throw reservationError;
+			};
+			const headers = new Headers();
+
+			try {
+				await client.siwe.nonce();
+				const { data, error } = await client.siwe.verify({
+					message: siweMessage(),
+					signature: "valid_signature",
+					email: "user@example.com",
+					fetchOptions: { onSuccess: sessionSetter(headers) },
+				});
+
+				expect(error).toBeNull();
+				expect(data?.success).toBe(true);
+
+				const session = await client.getSession({ fetchOptions: { headers } });
+				expect(session.data?.user.email).not.toBe("user@example.com");
+				expect(session.data?.user.email).toBe(
+					`${walletAddress.toLowerCase()}@siwe.placeholder.invalid`,
+				);
+			} finally {
+				context.internalAdapter.reserveVerificationValue =
+					reserveVerificationValue;
+			}
+		},
+	);
+
+	it("should not leave a user behind when creating the SIWE account fails", async () => {
+		const { client, db } = await getTestInstance(
 			{
+				databaseHooks: {
+					account: {
+						create: {
+							async before() {
+								throw new Error("rejected by account hook");
+							},
+						},
+					},
+				},
 				plugins: [
 					siwe({
 						domain,
-						anonymous: false,
 						async getNonce() {
 							return "A1b2C3d4E5f6G7h8J";
 						},
@@ -547,37 +612,61 @@ describe("siwe", async () => {
 				clientOptions: {
 					plugins: [siweClient()],
 				},
+				disableTestUser: true,
 			},
 		);
-		const context = await auth.$context;
-		const reserveVerificationValue =
-			context.internalAdapter.reserveVerificationValue;
-		context.internalAdapter.reserveVerificationValue = async () => {
-			throw reservationError;
-		};
-		const headers = new Headers();
 
-		try {
-			await client.siwe.nonce();
-			const { data, error } = await client.siwe.verify({
-				message: siweMessage(),
-				signature: "valid_signature",
-				email: "user@example.com",
-				fetchOptions: { onSuccess: sessionSetter(headers) },
-			});
+		await client.siwe.nonce();
+		const { error } = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+		});
 
-			expect(error).toBeNull();
-			expect(data?.success).toBe(true);
+		expect(error?.status).toBe(401);
+		expect(await db.findMany({ model: "user" })).toEqual([]);
+		expect(await db.findMany({ model: "walletAddress" })).toEqual([]);
+	});
 
-			const session = await client.getSession({ fetchOptions: { headers } });
-			expect(session.data?.user.email).not.toBe("user@example.com");
-			expect(session.data?.user.email).toBe(
-				`${walletAddress.toLowerCase()}@siwe.placeholder.invalid`,
-			);
-		} finally {
-			context.internalAdapter.reserveVerificationValue =
-				reserveVerificationValue;
-		}
+	it("should not expose internal error messages when verification fails unexpectedly", async () => {
+		const { client } = await getTestInstance(
+			{
+				databaseHooks: {
+					session: {
+						create: {
+							async before() {
+								throw new Error('relation "session" does not exist');
+							},
+						},
+					},
+				},
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return NONCE;
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.siwe.nonce();
+		const { error } = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+		});
+
+		expect(error?.status).toBe(401);
+		expect(JSON.stringify(error)).not.toContain("does not exist");
 	});
 
 	it("should reject new SIWE user when validateUserInfo returns error", async () => {
@@ -671,6 +760,114 @@ describe("siwe", async () => {
 			where: [{ field: "email", value: testUser.email }],
 		});
 		expect(usersWithEmail).toHaveLength(1);
+	});
+
+	it("should fall back to the wallet email when another sign-up takes the claimed email mid-request", async () => {
+		const claimedEmail = "siwe@example.com";
+		const { client, auth, db } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+						// Runs between the email check and the insert, so another
+						// sign-up can take the email in this window.
+						async ensLookup() {
+							const { adapter } = await auth.$context;
+							const racer = await adapter.findOne({
+								model: "user",
+								where: [{ field: "email", value: claimedEmail }],
+							});
+							if (!racer) {
+								await adapter.create({
+									model: "user",
+									data: {
+										email: claimedEmail,
+										name: "racer",
+										emailVerified: false,
+										createdAt: new Date(),
+										updatedAt: new Date(),
+									},
+								});
+							}
+							return { name: "", avatar: "" };
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.siwe.nonce();
+		const { data, error } = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			email: claimedEmail,
+		});
+
+		expect(error).toBeNull();
+		expect(data?.success).toBe(true);
+		expect(await db.findMany({ model: "user" })).toHaveLength(2);
+		const usersWithEmail = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: claimedEmail }],
+		});
+		expect(usersWithEmail).toHaveLength(1);
+	});
+
+	it("should not retry with the wallet email after the SIWE user was created", async () => {
+		const { client, db } = await getTestInstance(
+			{
+				databaseHooks: {
+					account: {
+						create: {
+							async after() {
+								throw new Error("rejected by account hook");
+							},
+						},
+					},
+				},
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.siwe.nonce();
+		const { error } = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			email: "siwe@example.com",
+		});
+
+		expect(error?.status).toBe(401);
+		expect(await db.findMany({ model: "user" })).toHaveLength(1);
 	});
 
 	it("should treat a case-variant of an existing email as the same email", async () => {

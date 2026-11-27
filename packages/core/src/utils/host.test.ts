@@ -494,6 +494,80 @@ describe("Host Classification", () => {
 			expect(isPublicRoutableHost("::ffff:a9fe:a9fe")).toBe(false);
 		});
 
+		it("should prevent IPv4-translated bypass", () => {
+			// ::ffff:0:7f00:1 is the RFC 2765 form of 127.0.0.1, distinct from the
+			// IPv4-mapped ::ffff:7f00:1.
+			expect(isPublicRoutableHost("::ffff:0:7f00:1")).toBe(false);
+			expect(isPublicRoutableHost("::ffff:0:a9fe:a9fe")).toBe(false);
+			expect(isPublicRoutableHost("::ffff:0:a00:5")).toBe(false);
+		});
+
+		/**
+		 * @see https://www.rfc-editor.org/rfc/rfc6052#section-3.1
+		 */
+		it("should classify the well-known NAT64 prefix by its embedded IPv4", () => {
+			// A DNS64 resolver synthesizes 64:ff9b::/96 answers for names with only
+			// an A record, and the prefix only represents global IPv4 addresses.
+			expect(classifyHost("64:ff9b::808:808").kind).toBe("public"); // 8.8.8.8
+			expect(isPublicRoutableHost("64:ff9b::5db8:d822")).toBe(true); // 93.184.216.34
+			expect(classifyHost("64:ff9b::7f00:1").kind).toBe("reserved"); // 127.0.0.1
+			expect(classifyHost("64:ff9b::a9fe:a9fe").kind).toBe("reserved"); // IMDS
+			expect(classifyHost("64:ff9b::").kind).toBe("reserved"); // 0.0.0.0
+			expect(isLoopbackIP("64:ff9b::808:808")).toBe(false);
+		});
+
+		it("should reject every address in 0000::/8 that is not mapped IPv4", () => {
+			// 0000::/8 is IETF-reserved and has no publicly routable allocation.
+			// Sibling encodings of an embedded IPv4 must not slip through as public.
+			for (const host of [
+				"::200:5efe:7f00:1",
+				"::5efe:7f00:1",
+				"0:1::1",
+				"0:0:0:1::7f00:1",
+				"1::1",
+				"::ffff:0:7f00:1",
+				"::ffff:808:127.0.0.1",
+				"::ffff:0:127.0.0.1",
+				"64:ff9b:1::1",
+				"ff::1",
+			]) {
+				expect(classifyHost(host).kind).toBe("reserved");
+				expect(isPublicRoutableHost(host)).toBe(false);
+			}
+		});
+
+		it("should reject every address outside global unicast 2000::/3 unless it has a more specific kind", () => {
+			// Only 2000::/3 is allocated for global unicast. Everything else is
+			// IETF-reserved, even when no special-purpose entry names it.
+			for (const host of [
+				"100:0:0:1::1",
+				"200::1",
+				"400::1",
+				"800::1",
+				"1000::1",
+				"4000::1",
+				"6000::1",
+				"8000::1",
+				"a000::1",
+				"c000::1",
+				"e000::1",
+				"f000::1",
+				"f800::1",
+				"fe00::1",
+				"0:1::1",
+			]) {
+				expect(classifyHost(host).kind).toBe("reserved");
+				expect(isPublicRoutableHost(host)).toBe(false);
+			}
+		});
+
+		it("should keep the edges of global unicast 2000::/3 public", () => {
+			expect(classifyHost("2000::1").kind).toBe("public");
+			expect(classifyHost("3ffe::1").kind).toBe("public");
+			expect(classifyHost("3fff:1000::1").kind).toBe("public");
+			expect(isPublicRoutableHost("2a00:1450:4001:828::200e")).toBe(true);
+		});
+
 		it("should prevent zone-id smuggling", () => {
 			// Naive parsers might treat fe80::1%evil.com as FQDN "evil.com"
 			expect(classifyHost("fe80::1%evil.com").kind).toBe("linkLocal");

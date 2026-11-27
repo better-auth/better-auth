@@ -76,7 +76,7 @@ Use the `sendVerificationOtp()` method to send an OTP to the user's email addres
 
 ### Check an OTP (optional)
 
-Use the `checkVerificationOtp()` method to check if an OTP is valid.
+Use the `checkVerificationOtp()` method to check if an OTP is valid. A wrong OTP counts toward `allowedAttempts`, and a correct one stays usable for the matching sign-in, email verification, or password reset call.
 
 <APIMethod path="/email-otp/check-verification-otp" method="POST">
   ```ts
@@ -245,6 +245,8 @@ Then, use the `resetPassword()` method to reset the user's password.
   }
   ```
 </APIMethod>
+
+If the new password is rejected, for example by the [Have I Been Pwned](/docs/plugins/have-i-been-pwned) plugin, the OTP isn't consumed and can be used again. If a later step of the reset fails, such as revoking sessions or saving the password, the OTP stays usable only when transactions are enabled for your database adapter and verification values are stored in the database. That is the default without secondary storage; with [secondary storage](/docs/concepts/database#secondary-storage), set [`verification.storeInDatabase: true`](/docs/reference/options#verification). A wrong OTP still counts toward [`allowedAttempts`](#options).
 
 ### Change Email with OTP
 

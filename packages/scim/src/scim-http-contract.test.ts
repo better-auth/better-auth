@@ -613,25 +613,28 @@ describe("SCIM HTTP contract", () => {
 	it.each([
 		["missing", undefined],
 		["expired", "Bearer expired-scim-token"],
-	] as const)("returns a challenged SCIM error for %s authentication", async (_kind, authorization) => {
-		const auth = createSCIMAuth([
-			{ type: "bearer", id: "active-scim-token", token: "active-scim-token" },
-			{
-				type: "bearer",
-				id: "expired-scim-token",
-				token: "expired-scim-token",
-				expiresAt: new Date(Date.now() - 60_000),
-			},
-		]);
-		const headers = new Headers({ accept: SCIM_MEDIA_TYPE });
-		if (authorization) headers.set("authorization", authorization);
-		const response = await auth.handler(
-			new Request(SCIM_USERS_URL, { headers }),
-		);
+	] as const)(
+		"returns a challenged SCIM error for %s authentication",
+		async (_kind, authorization) => {
+			const auth = createSCIMAuth([
+				{ type: "bearer", id: "active-scim-token", token: "active-scim-token" },
+				{
+					type: "bearer",
+					id: "expired-scim-token",
+					token: "expired-scim-token",
+					expiresAt: new Date(Date.now() - 60_000),
+				},
+			]);
+			const headers = new Headers({ accept: SCIM_MEDIA_TYPE });
+			if (authorization) headers.set("authorization", authorization);
+			const response = await auth.handler(
+				new Request(SCIM_USERS_URL, { headers }),
+			);
 
-		await expectSCIMError(response, 401);
-		expect(response.headers.get("www-authenticate")).toBe(
-			'Bearer realm="SCIM"',
-		);
-	});
+			await expectSCIMError(response, 401);
+			expect(response.headers.get("www-authenticate")).toBe(
+				'Bearer realm="SCIM"',
+			);
+		},
+	);
 });

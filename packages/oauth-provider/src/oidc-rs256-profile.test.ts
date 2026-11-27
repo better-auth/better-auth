@@ -109,113 +109,116 @@ describe("OpenID Connect RS256 provider profile", async () => {
 				}),
 			},
 		],
-	])("issues an RS256 ID token with the current ACR for unsupported %s", async (_, additionalParams) => {
-		if (!oauthClient?.client_id || !oauthClient.client_secret) {
-			throw new Error("beforeAll not run properly");
-		}
+	])(
+		"issues an RS256 ID token with the current ACR for unsupported %s",
+		async (_, additionalParams) => {
+			if (!oauthClient?.client_id || !oauthClient.client_secret) {
+				throw new Error("beforeAll not run properly");
+			}
 
-		const codeVerifier = generateRandomString(32);
-		const authUrl = await createAuthorizationURL({
-			id: providerId,
-			options: {
-				clientId: oauthClient.client_id,
-				clientSecret: oauthClient.client_secret,
-				redirectURI: redirectUri,
-			},
-			redirectURI: "",
-			authorizationEndpoint: `${issuer}/oauth2/authorize`,
-			state,
-			scopes,
-			codeVerifier,
-			nonce,
-			additionalParams,
-		});
-
-		let callbackRedirectUrl = "";
-		await client.$fetch(authUrl.toString(), {
-			onError(context) {
-				callbackRedirectUrl = context.response.headers.get("Location") ?? "";
-			},
-		});
-
-		expect(callbackRedirectUrl).toContain(redirectUri);
-		expect(callbackRedirectUrl).toContain("code=");
-		const callbackUrl = new URL(callbackRedirectUrl);
-		const code = callbackUrl.searchParams.get("code");
-		expect(callbackUrl.origin + callbackUrl.pathname).toBe(redirectUri);
-		expect(callbackUrl.searchParams.get("state")).toBe(state);
-		expect(code).toBeTruthy();
-
-		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
-			code: code!,
-			codeVerifier,
-			redirectURI: redirectUri,
-			options: {
-				clientId: oauthClient.client_id,
-				clientSecret: oauthClient.client_secret,
-				redirectURI: redirectUri,
-			},
-		});
-
-		let tokenResponse: Response | undefined;
-		const tokens = await client.$fetch<{
-			access_token?: string;
-			id_token?: string;
-			scope?: string;
-			token_type?: string;
-		}>("/oauth2/token", {
-			method: "POST",
-			body,
-			headers: tokenHeaders,
-			onResponse(context) {
-				tokenResponse = context.response;
-			},
-		});
-
-		expect(tokens.data?.access_token).toBeDefined();
-		expect(tokens.data?.id_token).toBeDefined();
-		expect(tokens.data?.scope).toBe(scopes.join(" "));
-		expect(tokens.data?.token_type).toBe("Bearer");
-		expect(tokenResponse?.headers.get("Cache-Control")).toBe("no-store");
-		expect(tokenResponse?.headers.get("Pragma")).toBe("no-cache");
-
-		const jwks = await client.$fetch<JSONWebKeySet>("/jwks", {
-			method: "GET",
-		});
-		if (!jwks.data) throw new Error("Unable to fetch JWKS");
-		const localJwks = createLocalJWKSet(jwks.data);
-		const idToken = await jwtVerify(tokens.data!.id_token!, localJwks, {
-			issuer,
-			audience: oauthClient.client_id,
-		});
-
-		expect(idToken.protectedHeader.alg).toBe("RS256");
-		expect(idToken.payload).toMatchObject({
-			iss: issuer,
-			aud: oauthClient.client_id,
-			nonce,
-			sub: expect.any(String),
-			auth_time: expect.any(Number),
-			acr: "0",
-		});
-		expect(idToken.payload.at_hash).toEqual(expect.any(String));
-		expect(idToken.payload.name).toBeUndefined();
-		expect(idToken.payload.email).toBeUndefined();
-		expect(idToken.payload.email_verified).toBeUndefined();
-
-		const userinfo = await client.$fetch<Record<string, unknown>>(
-			"/oauth2/userinfo",
-			{
-				headers: {
-					authorization: `Bearer ${tokens.data!.access_token!}`,
+			const codeVerifier = generateRandomString(32);
+			const authUrl = await createAuthorizationURL({
+				id: providerId,
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
 				},
-			},
-		);
-		expect(userinfo.data).toMatchObject({
-			sub: idToken.payload.sub,
-			name: testUser.name,
-			email: testUser.email,
-			email_verified: expect.any(Boolean),
-		});
-	});
+				redirectURI: "",
+				authorizationEndpoint: `${issuer}/oauth2/authorize`,
+				state,
+				scopes,
+				codeVerifier,
+				nonce,
+				additionalParams,
+			});
+
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") ?? "";
+				},
+			});
+
+			expect(callbackRedirectUrl).toContain(redirectUri);
+			expect(callbackRedirectUrl).toContain("code=");
+			const callbackUrl = new URL(callbackRedirectUrl);
+			const code = callbackUrl.searchParams.get("code");
+			expect(callbackUrl.origin + callbackUrl.pathname).toBe(redirectUri);
+			expect(callbackUrl.searchParams.get("state")).toBe(state);
+			expect(code).toBeTruthy();
+
+			const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+				code: code!,
+				codeVerifier,
+				redirectURI: redirectUri,
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+
+			let tokenResponse: Response | undefined;
+			const tokens = await client.$fetch<{
+				access_token?: string;
+				id_token?: string;
+				scope?: string;
+				token_type?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: tokenHeaders,
+				onResponse(context) {
+					tokenResponse = context.response;
+				},
+			});
+
+			expect(tokens.data?.access_token).toBeDefined();
+			expect(tokens.data?.id_token).toBeDefined();
+			expect(tokens.data?.scope).toBe(scopes.join(" "));
+			expect(tokens.data?.token_type).toBe("Bearer");
+			expect(tokenResponse?.headers.get("Cache-Control")).toBe("no-store");
+			expect(tokenResponse?.headers.get("Pragma")).toBe("no-cache");
+
+			const jwks = await client.$fetch<JSONWebKeySet>("/jwks", {
+				method: "GET",
+			});
+			if (!jwks.data) throw new Error("Unable to fetch JWKS");
+			const localJwks = createLocalJWKSet(jwks.data);
+			const idToken = await jwtVerify(tokens.data!.id_token!, localJwks, {
+				issuer,
+				audience: oauthClient.client_id,
+			});
+
+			expect(idToken.protectedHeader.alg).toBe("RS256");
+			expect(idToken.payload).toMatchObject({
+				iss: issuer,
+				aud: oauthClient.client_id,
+				nonce,
+				sub: expect.any(String),
+				auth_time: expect.any(Number),
+				acr: "0",
+			});
+			expect(idToken.payload.at_hash).toEqual(expect.any(String));
+			expect(idToken.payload.name).toBeUndefined();
+			expect(idToken.payload.email).toBeUndefined();
+			expect(idToken.payload.email_verified).toBeUndefined();
+
+			const userinfo = await client.$fetch<Record<string, unknown>>(
+				"/oauth2/userinfo",
+				{
+					headers: {
+						authorization: `Bearer ${tokens.data!.access_token!}`,
+					},
+				},
+			);
+			expect(userinfo.data).toMatchObject({
+				sub: idToken.payload.sub,
+				name: testUser.name,
+				email: testUser.email,
+				email_verified: expect.any(Boolean),
+			});
+		},
+	);
 });

@@ -251,6 +251,31 @@ describe("mcp plugin", async () => {
 			});
 		});
 
+		/**
+		 * Released behavior: the document is served at the path with the trailing
+		 * slash removed, and its `resource` stays the configured identifier.
+		 * @see https://www.rfc-editor.org/rfc/rfc9728#section-3.3
+		 */
+		it("returns the configured identifier as resource when it ends in a slash", async () => {
+			const resourceServerBaseUrl = "http://localhost:3012";
+			const resource = `${resourceServerBaseUrl}/api/`;
+			const { customFetchImpl: slashFetch } = await getTestInstance({
+				baseURL: resourceServerBaseUrl,
+				plugins: [
+					jwt(),
+					mcp({ loginPage: "/login", consentPage: "/consent", resource }),
+				],
+			});
+
+			const response = await slashFetch(
+				`${resourceServerBaseUrl}/.well-known/oauth-protected-resource/api`,
+				{ method: "GET" },
+			);
+			expect(response.status).toBe(200);
+			const metadata = (await response.json()) as { resource: string };
+			expect(metadata.resource).toBe(resource);
+		});
+
 		it("answers HEAD with metadata headers and an empty body", async () => {
 			const response = await customFetchImpl(
 				`${authServerBaseUrl}/.well-known/oauth-protected-resource`,
@@ -291,9 +316,13 @@ describe("mcp plugin", async () => {
 			).toThrow("MCP resource");
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11337
+		 */
 		it.each([
 			"https://api.example.com/mcp",
 			"http://localhost:3000/mcp",
+			"http://my-branch.api.localhost/mcp",
 			"http://127.0.0.1:3000/mcp",
 			"http://127.42.0.1/mcp",
 			"http://[::1]:3000/mcp",
@@ -332,7 +361,7 @@ describe("mcp plugin", async () => {
 
 			expect(response.status).toBe(401);
 			expect(response.headers.get("WWW-Authenticate")).toBe(
-				`Bearer resource_metadata="${authServerBaseUrl}/.well-known/oauth-protected-resource/api/auth"`,
+				`Bearer error="invalid_token", error_description="no token payload", resource_metadata="${authServerBaseUrl}/.well-known/oauth-protected-resource/api/auth"`,
 			);
 		});
 
@@ -788,7 +817,9 @@ describe("mcp refresh_token grant client authentication", async () => {
 
 		// Failed HTTP Basic authentication returns its registered challenge.
 		expect(response.status).toBe(401);
-		expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
+		expect(response.headers.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 		expect(body?.error).toBe("invalid_client");
 		expect(body?.access_token).toBeUndefined();
 	});

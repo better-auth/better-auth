@@ -1,3 +1,4 @@
+import { getBreadcrumbItems } from "fumadocs-core/breadcrumb";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { File, Files, Folder } from "fumadocs-ui/components/files";
 import { Step, Steps } from "fumadocs-ui/components/steps";
@@ -227,10 +228,13 @@ export async function generateMetadata({
 			? `${version.label} - ${page.data.title}`
 			: page.data.title;
 
+	const [section] = getBreadcrumbItems(page.url, src.getPageTree());
 	const ogSearchParams = new URLSearchParams();
-	ogSearchParams.set("heading", title);
-	ogSearchParams.set("type", "documentation");
-	ogSearchParams.set("mode", "dark");
+	ogSearchParams.set("heading", page.data.title);
+	if (typeof section?.name === "string") {
+		ogSearchParams.set("section", section.name);
+	}
+	if (version.id !== "latest") ogSearchParams.set("version", version.label);
 
 	const ogUrl = `/api/og?${ogSearchParams.toString()}`;
 

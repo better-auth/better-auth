@@ -4,7 +4,12 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import { getDate } from "../../utils/date";
-import { validatePassword } from "../../utils/password";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+	resetCredentialPassword,
+	validatePassword,
+} from "../../utils/password";
 import { originCheck } from "../middlewares";
 import { sensitiveSessionMiddleware } from "./session";
 
@@ -124,11 +129,24 @@ export const requestPasswordReset = createAuthEndpoint(
 			"sec",
 		);
 		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: user.user.id,
-			identifier: `reset-password:${verificationToken}`,
-			expiresAt,
-		});
+		const verification =
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: user.user.id,
+				identifier: `reset-password:${verificationToken}`,
+				expiresAt,
+			});
+		// A vetoed token is not sent, and the response matches the one for an
+		// unknown email so it does not reveal that the account exists.
+		if (!verification) {
+			ctx.context.logger.warn(
+				"Reset Password: a verification hook vetoed the reset token",
+			);
+			return ctx.json({
+				status: true,
+				message:
+					"If this email exists in our system, check your email for the reset link",
+			});
+		}
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
 		await ctx.context.runInBackgroundOrAwait(
@@ -279,23 +297,17 @@ export const resetPassword = createAuthEndpoint(
 
 		const { newPassword } = ctx.body;
 
-		const minLength = ctx.context.password?.config.minPasswordLength;
-		const maxLength = ctx.context.password?.config.maxPasswordLength;
-		if (newPassword.length < minLength) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-		}
-		if (newPassword.length > maxLength) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-		}
+		assertPasswordNotTooShort(ctx, newPassword);
+		assertPasswordNotTooLong(ctx, newPassword);
 
 		const id = `reset-password:${token}`;
 
-		// Consume the single-use reset token before any password change so two
-		// concurrent requests with the same token cannot both proceed: the first
-		// caller wins, every racer (and any expired token) gets null.
+		// Look the token up without spending it, so a rejected password (including
+		// a haveIBeenPwned rejection inside `password.hash`) leaves the link usable.
+		// It is consumed inside the reset transaction below.
 		const verification =
-			await ctx.context.internalAdapter.consumeVerificationValue(id);
-		if (!verification) {
+			await ctx.context.internalAdapter.findVerificationValue(id);
+		if (!verification || verification.expiresAt < new Date()) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const userId = verification.value;
@@ -304,18 +316,15 @@ export const resetPassword = createAuthEndpoint(
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 		}
 		const hashedPassword = await ctx.context.password.hash(newPassword);
-		const account =
-			await ctx.context.internalAdapter.findCredentialAccount(userId);
-		if (!account) {
-			await ctx.context.internalAdapter.createAccount({
-				userId,
-				providerId: "credential",
-				accountId: user.id,
-				password: hashedPassword,
-			});
-		} else {
-			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
-		}
+		await resetCredentialPassword(ctx, userId, hashedPassword, async () => {
+			// Consuming is the single-winner gate: of two concurrent requests with
+			// the same token, only the first gets the row back.
+			const consumed =
+				await ctx.context.internalAdapter.consumeVerificationValue(id);
+			if (!consumed) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
+			}
+		});
 
 		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 			await ctx.context.options.emailAndPassword.onPasswordReset(
@@ -324,9 +333,6 @@ export const resetPassword = createAuthEndpoint(
 				},
 				ctx.request,
 			);
-		}
-		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
-			await ctx.context.internalAdapter.deleteUserSessions(userId);
 		}
 		return ctx.json({
 			status: true,

@@ -1,6 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
-import { getAuthTables } from "@better-auth/core/db";
 import {
 	initGetFieldName,
 	initGetModelName,
@@ -26,6 +25,7 @@ import {
 	createKyselyAdapter,
 	getMssqlSchema,
 	getPostgresSchema,
+	introspectPostgresTables,
 	toIntrospectedTables,
 	toPhysicalSchema,
 } from "@better-auth/kysely-adapter";
@@ -37,14 +37,16 @@ import type {
 	CreateTableBuilder,
 	Kysely,
 	RawBuilder,
+	TableMetadata,
 } from "kysely";
 import { sql } from "kysely";
-import { getSchema } from "./get-schema";
+import { buildSchema } from "./get-schema";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],
 	number: [
 		"int4",
+		"int8",
 		"integer",
 		"bigint",
 		"smallint",
@@ -551,10 +553,10 @@ export function matchType(
 	if (fieldType === "string[]" || fieldType === "number[]") {
 		return columnDataType.toLowerCase().includes("json");
 	}
-	const types = map[dbType]!;
+	const types = map[dbType];
 	const expected = Array.isArray(fieldType)
 		? types["string"].map((t) => t.toLowerCase())
-		: types[fieldType]!.map((t) => t.toLowerCase());
+		: types[fieldType].map((t) => t.toLowerCase());
 	return expected.includes(normalize(columnDataType));
 }
 
@@ -576,8 +578,11 @@ export async function getMigrations(
 	config: BetterAuthOptions,
 	{ throwOnUnsafe = true }: { throwOnUnsafe?: boolean } = {},
 ) {
-	const betterAuthSchema = getSchema(config);
-	const authTables = getAuthTables(config);
+	const {
+		schema: betterAuthSchema,
+		tables: authTables,
+		referenceKeys,
+	} = buildSchema(config);
 	const logger = createLogger(config.logger);
 	const unsafeChanges: string[] = [];
 	const reportUnsafeChange = (message: string) => {
@@ -606,9 +611,8 @@ export async function getMigrations(
 		process.exit(1);
 	}
 
-	const allTableMetadata = await db.introspection.getTables();
 	let target: MigrationTarget;
-	let tableMetadata = allTableMetadata;
+	let tableMetadata: TableMetadata[];
 	switch (dbType) {
 		case "postgres": {
 			const schema = schemaName ?? (await getPostgresSchema(db));
@@ -636,15 +640,8 @@ export async function getMigrations(
 				);
 			}
 
-			/**
-			 * Kysely 0.28 does not expose `isForeign`, while 0.29 adds foreign table metadata.
-			 * @see https://github.com/kysely-org/kysely/pull/1494
-			 */
-			tableMetadata = allTableMetadata.filter(
-				(table) =>
-					table.schema === schema &&
-					!table.isView &&
-					!("isForeign" in table && table.isForeign),
+			tableMetadata = (await introspectPostgresTables(db, [schema])).filter(
+				(table) => !table.isView && !table.isForeign,
 			);
 			logger.debug(
 				`Found ${tableMetadata.length} table(s) in schema '${schema}': ${tableMetadata.map((table) => table.name).join(", ") || "(none)"}`,
@@ -657,23 +654,25 @@ export async function getMigrations(
 			logger.debug(
 				`SQL Server migration: Using schema '${schema}' (from the current user's default schema)`,
 			);
-			tableMetadata = allTableMetadata.filter(
+			tableMetadata = (await db.introspection.getTables()).filter(
 				(table) => table.schema === schema,
 			);
 			break;
 		}
 		case "mysql":
 			target = { type: "mysql" };
+			tableMetadata = await db.introspection.getTables();
 			break;
 		case "sqlite":
 			target = { type: "sqlite" };
+			tableMetadata = await db.introspection.getTables();
 			break;
 	}
 
 	const databaseIndexMap = await getDatabaseIndexMap(
 		db,
 		target,
-		allTableMetadata.map((table) => table.name),
+		tableMetadata.map((table) => table.name),
 		introspectIndexes,
 	);
 	const databaseColumnBounds = await getDatabaseColumnBounds(db, target);
@@ -968,14 +967,27 @@ export async function getMigrations(
 
 	// Helper function to safely resolve model and field names, falling back to
 	// user-supplied strings for external tables not in the BetterAuth schema
-	function getReferencePath(model: string, field: string): string {
+	function getReferencePath(field: DBFieldAttribute): string {
+		const reference = field.references;
+		if (!reference) {
+			throw new BetterAuthError("Cannot resolve a field without references.");
+		}
+		const keys = referenceKeys.get(field);
+		if (!keys) {
+			throw new BetterAuthError(
+				`Missing migration reference metadata for "${reference.model}.${reference.field}".`,
+			);
+		}
 		try {
-			const modelName = getModelName(model);
-			const fieldName = getFieldName({ model, field });
+			const modelName = getModelName(keys.modelKey);
+			const fieldName = getFieldName({
+				model: keys.modelKey,
+				field: keys.fieldKey,
+			});
 			return `${modelName}.${fieldName}`;
 		} catch {
 			// If resolution fails (external table), fall back to user-supplied references
-			return `${model}.${field}`;
+			return `${reference.model}.${reference.field}`;
 		}
 	}
 
@@ -1061,12 +1073,7 @@ export async function getMigrations(
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
-							.references(
-								getReferencePath(
-									field.references.model,
-									field.references.field,
-								),
-							)
+							.references(getReferencePath(field))
 							.onDelete(field.references.onDelete || "cascade");
 					}
 					if (timestampDefault) {
@@ -1132,12 +1139,7 @@ export async function getMigrations(
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
-							.references(
-								getReferencePath(
-									field.references.model,
-									field.references.field,
-								),
-							)
+							.references(getReferencePath(field))
 							.onDelete(field.references.onDelete || "cascade");
 					}
 

@@ -270,9 +270,10 @@ describe("oauthClient", async () => {
 		});
 	});
 
-	it("should get public-only information about a client prelogin", async () => {
+	async function signedOAuthQuery(clientId: string) {
 		// Creates mock valid search params
 		const signedParams = new URLSearchParams({
+			client_id: clientId,
 			exp: `${Math.floor(Date.now() / 1000) + 60}`,
 		});
 		const sig = await makeSignature(
@@ -280,15 +281,30 @@ describe("oauthClient", async () => {
 			(auth.options as unknown as { secret: string }).secret,
 		);
 		signedParams.set("sig", sig);
+		return signedParams.toString();
+	}
 
+	it("should get public-only information about a client prelogin", async () => {
 		const client = await authClient.oauth2.publicClientPrelogin({
 			client_id: oauthUiClient.client_id,
-			oauth_query: signedParams.toString(),
+			oauth_query: await signedOAuthQuery(oauthUiClient.client_id),
 		});
 		expect(client.data).toMatchObject({
 			client_id: oauthUiClient.client_id,
 			...testUiClientInput,
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/8214
+	 */
+	it("should reject a prelogin lookup for a client other than the signed query's", async () => {
+		const client = await authClient.oauth2.publicClientPrelogin({
+			client_id: oauthClient.client_id,
+			oauth_query: await signedOAuthQuery(oauthUiClient.client_id),
+		});
+		expect(client.data).toBeNull();
+		expect(client.error?.status).toBe(401);
 	});
 
 	it("should get user's clients", async () => {
@@ -539,5 +555,53 @@ describe("oauthClient private_key_jwt clients", async () => {
 
 		expect(result.error?.status).toBeGreaterThanOrEqual(400);
 		expect(result.error?.status).toBeLessThan(500);
+	});
+});
+
+describe("oauthClient - trusted clients", async () => {
+	const baseURL = "http://localhost:3000";
+	const trustedClients = new Set<string>();
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				cachedTrustedClients: trustedClients,
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	it("refuses to change a trusted client as a client error, not a server failure", async () => {
+		const created = await auth.api.createOAuthClient({
+			headers,
+			body: { redirect_uris: ["https://rp.example.com/callback"] },
+		});
+		const clientId = created.client_id;
+		trustedClients.add(clientId);
+
+		for (const [path, body] of [
+			[
+				"/oauth2/update-client",
+				{ client_id: clientId, update: { client_name: "x" } },
+			],
+			["/oauth2/client/rotate-secret", { client_id: clientId }],
+			["/oauth2/delete-client", { client_id: clientId }],
+		] as const) {
+			const response = await customFetchImpl(`${baseURL}/api/auth${path}`, {
+				method: "POST",
+				headers: {
+					...Object.fromEntries(headers),
+					"content-type": "application/json",
+				},
+				body: JSON.stringify(body),
+			});
+			expect(response.status, path).toBe(400);
+			expect(await response.json(), path).toMatchObject({
+				error: "invalid_client",
+			});
+		}
 	});
 });

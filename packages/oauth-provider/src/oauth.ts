@@ -20,7 +20,10 @@ import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
 import { claimsRequestParameterSchema } from "./claims-request";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
-import { validateOAuthProviderExtensions } from "./extensions";
+import {
+	validateAdvertisedAuthMethodsShape,
+	validateOAuthProviderExtensions,
+} from "./extensions";
 import { introspectEndpoint } from "./introspect";
 import type { BackchannelLogoutPlan } from "./logout";
 import {
@@ -42,7 +45,8 @@ import { registerEndpoint } from "./register";
 import {
 	extractRepeatedResourceFromForm,
 	logEnforcePerClientResourcesResolution,
-	seedResources,
+	logStartupSeedFailure,
+	seedResourcesOnce,
 } from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
@@ -51,8 +55,8 @@ import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
 	clientRegistrationRequestSchema,
+	RedirectUriSyntaxSchema,
 	ResourceUriSchema,
-	SafeUrlSchema,
 } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
@@ -83,7 +87,7 @@ export const DEFAULT_OAUTH_SCOPES = [
 const rpInitiatedLogoutRequestSchema = z.object({
 	id_token_hint: z.string().optional(),
 	client_id: z.string().optional(),
-	post_logout_redirect_uri: SafeUrlSchema.optional(),
+	post_logout_redirect_uri: RedirectUriSyntaxSchema.optional(),
 	state: z.string().optional(),
 });
 
@@ -170,6 +174,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			);
 		}
 	}
+	if (options.requireOpenId && !scopes.has("openid")) {
+		throw new BetterAuthError("requireOpenId requires openid in scopes");
+	}
 
 	const configuredResourceIdentifiers = new Set(
 		(options.resources ?? []).map((resource) =>
@@ -231,6 +238,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		clientRegistrationAllowedScopes,
 	};
 	validateOAuthProviderExtensions(opts.extensions);
+
+	validateAdvertisedAuthMethodsShape(
+		opts.advertisedMetadata?.token_endpoint_auth_methods_supported,
+	);
 
 	// Validate pairwiseSecret minimum length
 	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
@@ -519,11 +530,33 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
-			// Seed `oauthResource` rows from plugin config. Idempotent and
-			// race-safe (UNIQUE constraint on identifier). No-op when `resources`
-			// is empty. Tolerates
-			// "table not yet created" errors and defers to lazy-seed.
-			await seedResources(ctx, opts);
+			// A replayed rotation assertion would hand over a client's keys, so
+			// rotation needs the jti tombstone to be single-use. The memory adapter
+			// does not enforce primary keys, and "serial" ids replace the derived id.
+			// shortcut: lists the known built-in gaps only; replace with a core check
+			// when the FIXME(serial-derived-ids) in get-id-field.ts is resolved.
+			if (opts.allowClientKeyRotation) {
+				const gap =
+					ctx.adapter.id === "memory"
+						? "the memory adapter"
+						: ctx.options.advanced?.database?.generateId === "serial"
+							? '`advanced.database.generateId: "serial"`'
+							: undefined;
+				if (gap) {
+					throw new BetterAuthError(
+						`\`allowClientKeyRotation\` requires single-use client assertions, which ${gap} does not enforce`,
+					);
+				}
+			}
+
+			// Seed `oauthResource` rows from plugin config. A failure must not
+			// reject init (a failed init is cached and breaks every route);
+			// `getResource` retries the seed on first resource access.
+			// TODO(#11725): remove database I/O from init. Resolve configured
+			// resources at lookup time and create a row only when a link needs one.
+			await seedResourcesOnce(ctx, opts).catch((error: unknown) =>
+				logStartupSeedFailure(ctx, error),
+			);
 
 			// Record which default applied to `enforcePerClientResources` so
 			// admins can see it in startup logs. Pure resolution lives in
@@ -638,11 +671,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							postLoginClearedForSession,
 						});
 
-						// On the social sign-in path the authorize query has to survive the
-						// provider redirect to be resumed after login. Carry it in the
-						// server-only OAuth state so a client cannot inject its own `query`
-						// through the request body.
-						if (ctx.path === "/sign-in/social") {
+						// On the social and SSO sign-in paths the authorize query has to
+						// survive the provider redirect to be resumed after login. Carry it
+						// in the server-only OAuth state so a client cannot inject its own
+						// `query` through the request body.
+						if (ctx.path === "/sign-in/social" || ctx.path === "/sign-in/sso") {
 							await addOAuthServerContext({
 								query: queryParams.toString(),
 								...(signedQueryIssuedAt
@@ -801,14 +834,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											schema: {
 												type: "object",
 												properties: {
-													redirect_uri: {
-														type: "string",
-														format: "uri",
+													redirect: {
+														type: "boolean",
 														description:
-															"The URI to redirect to, either with an authorization code or an error",
+															"Always true. Indicates the caller should redirect to `url`.",
+														enum: [true],
+													},
+													url: {
+														type: "string",
+														format: "uri-reference",
+														description:
+															"The absolute or relative URI to redirect to next.",
 													},
 												},
-												required: ["redirect_uri"],
+												required: ["redirect", "url"],
 											},
 										},
 									},
@@ -834,7 +873,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "Confirms an account was registered",
 						}),
 						postLogin: z.boolean().optional().meta({
-							description: "Confirms organization and/or team selection.",
+							description:
+								"Resumes after the post login page. postLogin.shouldRedirect runs again with isContinuation: true.",
 						}),
 						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",
@@ -846,20 +886,26 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "Continues OAuth2 authorization flow",
 							responses: {
 								"200": {
-									description: "Consent processed successfully",
+									description: "Authorization flow continued successfully",
 									content: {
 										"application/json": {
 											schema: {
 												type: "object",
 												properties: {
-													redirect_uri: {
-														type: "string",
-														format: "uri",
+													redirect: {
+														type: "boolean",
 														description:
-															"The URI to redirect to, either with an authorization code or an error",
+															"Always true. Indicates the caller should redirect to `url`.",
+														enum: [true],
+													},
+													url: {
+														type: "string",
+														format: "uri-reference",
+														description:
+															"The absolute or relative URI to redirect to next.",
 													},
 												},
-												required: ["redirect_uri"],
+												required: ["redirect", "url"],
 											},
 										},
 									},
@@ -893,7 +939,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							client_assertion_type: z.string().optional(),
 							code: z.string().optional(),
 							code_verifier: z.string().optional(),
-							redirect_uri: SafeUrlSchema.optional(),
+							redirect_uri: RedirectUriSyntaxSchema.optional(),
 							refresh_token: z.string().optional(),
 							resource: z
 								.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
@@ -1690,6 +1736,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			adminUpdateOAuthClient: oauthClientEndpoints.adminUpdateOAuthClient(opts),
 			updateOAuthClient: oauthClientEndpoints.updateOAuthClient(opts),
 			rotateClientSecret: oauthClientEndpoints.rotateClientSecret(opts),
+			rotateClientKeys: oauthClientEndpoints.rotateClientKeys(opts),
 			deleteOAuthClient: oauthClientEndpoints.deleteOAuthClient(opts),
 			getOAuthConsent: oauthConsentEndpoints.getOAuthConsent(opts),
 			getOAuthConsents: oauthConsentEndpoints.getOAuthConsents(opts),
@@ -1761,6 +1808,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							pathMatcher: (path: string) => path === "/oauth2/register",
 							window: opts.rateLimit?.register?.window ?? 60,
 							max: opts.rateLimit?.register?.max ?? 5,
+						},
+					]
+				: []),
+			// Client key rotation - replaces credentials, so keep it tight
+			...(opts.rateLimit?.rotateClientKeys !== false
+				? [
+						{
+							pathMatcher: (path: string) =>
+								path === "/oauth2/client/rotate-keys",
+							window: opts.rateLimit?.rotateClientKeys?.window ?? 60,
+							max: opts.rateLimit?.rotateClientKeys?.max ?? 5,
 						},
 					]
 				: []),

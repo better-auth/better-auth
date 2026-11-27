@@ -119,6 +119,53 @@ async function listUsers(baseURL: string, token: string): Promise<Response> {
 	});
 }
 
+async function createPaginatedManagedConnectionEventsFixture(
+	registerCleanup: (cleanup: () => void | Promise<void>) => void,
+) {
+	const instance = await createManagedInstance(registerCleanup);
+	const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000);
+	const created = await instance.auth.api.createSCIMManagedConnection({
+		body: {
+			creationRequestId: createCreationRequestId(),
+			provisioningDomainId: "organization-acme",
+			actorId: "admin-acme",
+			scopes: ALL_SCOPES,
+			expiresAt,
+		},
+	});
+	const connection = await instance.db.findOne<{ id: string }>({
+		model: "scimManagedConnection",
+		where: [
+			{
+				field: "connectionId",
+				value: created.connection.connectionId,
+			},
+		],
+	});
+	if (!connection) throw new Error("Expected managed connection row");
+	const createdAt = new Date("2026-01-01T00:00:00.000Z");
+	for (let sequence = 3; sequence <= 102; sequence++) {
+		await instance.db.create({
+			model: "scimManagedConnectionEvent",
+			data: {
+				connectionRecordId: connection.id,
+				eventKey: `${connection.id}:${sequence}`,
+				sequence,
+				type: "credential.rotated",
+				actorId: "admin-acme",
+				credentialId: created.credential.credentialId,
+				createdAt: new Date(createdAt.getTime() + sequence * 1_000),
+			},
+		});
+	}
+	return {
+		instance,
+		connectionId: created.connection.connectionId,
+		provisioningDomainId: "organization-acme",
+		totalEvents: 102,
+	};
+}
+
 describe("SCIM managed connections", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10475
@@ -208,6 +255,96 @@ describe("SCIM managed connections", () => {
 				`${endpointName} must not carry a routable path`,
 			).toBeFalsy();
 		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12066
+	 */
+	it("lists more than 100 connections of a provisioning domain", async ({
+		onTestFinished,
+	}) => {
+		const instance = await createManagedInstance(onTestFinished);
+		const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000);
+		for (let index = 0; index < 101; index++) {
+			await instance.auth.api.createSCIMManagedConnection({
+				body: {
+					creationRequestId: createCreationRequestId(),
+					provisioningDomainId: "organization-acme",
+					actorId: "admin-acme",
+					scopes: ALL_SCOPES,
+					expiresAt,
+				},
+			});
+		}
+
+		const listed = await instance.auth.api.listSCIMManagedConnections({
+			body: { provisioningDomainId: "organization-acme" },
+		});
+
+		expect(listed.connections).toHaveLength(101);
+	});
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10475
+	 */
+	it("paginates managed connection events by sequence", async ({
+		onTestFinished,
+	}) => {
+		const { instance, connectionId, provisioningDomainId, totalEvents } =
+			await createPaginatedManagedConnectionEventsFixture(onTestFinished);
+		const firstPage = await instance.auth.api.listSCIMManagedConnectionEvents({
+			body: {
+				connectionId,
+				provisioningDomainId,
+			},
+		});
+		const secondPage = await instance.auth.api.listSCIMManagedConnectionEvents({
+			body: {
+				connectionId,
+				provisioningDomainId,
+				offset: 100,
+			},
+		});
+		const newestPage = await instance.auth.api.listSCIMManagedConnectionEvents({
+			body: {
+				connectionId,
+				provisioningDomainId,
+				limit: 10,
+				sortDirection: "desc",
+			},
+		});
+		const oldestPage = await instance.auth.api.listSCIMManagedConnectionEvents({
+			body: {
+				connectionId,
+				provisioningDomainId,
+				limit: 10,
+				sortDirection: "asc",
+			},
+		});
+		const beyondLastPage =
+			await instance.auth.api.listSCIMManagedConnectionEvents({
+				body: {
+					connectionId,
+					provisioningDomainId,
+					offset: 980,
+				},
+			});
+
+		expect(firstPage).toMatchObject({
+			limit: 100,
+			offset: 0,
+			total: totalEvents,
+		});
+		expect(firstPage.events.map((event) => event.sequence)).toEqual(
+			Array.from({ length: 100 }, (_, index) => index + 3),
+		);
+		expect(secondPage.events.map((event) => event.sequence)).toEqual([1, 2]);
+		expect(newestPage.events.map((event) => event.sequence)).toEqual([
+			102, 101, 100, 99, 98, 97, 96, 95, 94, 93,
+		]);
+		expect(oldestPage.events.map((event) => event.sequence)).toEqual([
+			1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+		]);
+		expect(beyondLastPage.events).toEqual([]);
 	});
 
 	/**

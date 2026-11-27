@@ -130,7 +130,7 @@ export const atlassian = (options: AtlassianOptions) => {
 					data: profile,
 				};
 			} catch (error) {
-				logger.error("Failed to fetch user info from Figma:", error);
+				logger.error("Failed to fetch user info from Atlassian:", error);
 				return null;
 			}
 		},

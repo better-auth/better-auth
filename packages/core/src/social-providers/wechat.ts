@@ -1,6 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens, OAuthProvider, ProviderOptions } from "../oauth2";
 import { RESERVED_AUTHORIZATION_PARAMS_SET } from "../oauth2";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 import { createPlaceholderEmail } from "../utils/email";
 
 /**
@@ -91,14 +92,7 @@ export const wechat = (options: WeChatOptions) => {
 		// client_id/client_secret, GET instead of POST), so shared helpers
 		// like validateAuthorizationCode/getOAuth2Tokens cannot be used directly.
 		validateAuthorizationCode: async ({ code }) => {
-			const params = new URLSearchParams({
-				appid: options.clientId,
-				secret: options.clientSecret,
-				code: code,
-				grant_type: "authorization_code",
-			});
-
-			const { data: tokenData, error } = await betterFetch<{
+			const { data: tokenData, error } = await fetchRefusingRedirects<{
 				access_token: string;
 				expires_in: number;
 				refresh_token: string;
@@ -107,13 +101,15 @@ export const wechat = (options: WeChatOptions) => {
 				unionid?: string;
 				errcode?: number;
 				errmsg?: string;
-			}>(
-				"https://api.weixin.qq.com/sns/oauth2/access_token?" +
-					params.toString(),
-				{
-					method: "GET",
+			}>("https://api.weixin.qq.com/sns/oauth2/access_token", {
+				method: "GET",
+				query: {
+					appid: options.clientId,
+					secret: options.clientSecret,
+					code: code,
+					grant_type: "authorization_code",
 				},
-			);
+			});
 
 			if (error || !tokenData || tokenData.errcode) {
 				throw new Error(
@@ -139,13 +135,7 @@ export const wechat = (options: WeChatOptions) => {
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
 			: async (refreshToken) => {
-					const params = new URLSearchParams({
-						appid: options.clientId,
-						grant_type: "refresh_token",
-						refresh_token: refreshToken,
-					});
-
-					const { data: tokenData, error } = await betterFetch<{
+					const { data: tokenData, error } = await fetchRefusingRedirects<{
 						access_token: string;
 						expires_in: number;
 						refresh_token: string;
@@ -153,13 +143,14 @@ export const wechat = (options: WeChatOptions) => {
 						scope: string;
 						errcode?: number;
 						errmsg?: string;
-					}>(
-						"https://api.weixin.qq.com/sns/oauth2/refresh_token?" +
-							params.toString(),
-						{
-							method: "GET",
+					}>("https://api.weixin.qq.com/sns/oauth2/refresh_token", {
+						method: "GET",
+						query: {
+							appid: options.clientId,
+							grant_type: "refresh_token",
+							refresh_token: refreshToken,
 						},
-					);
+					});
 
 					if (error || !tokenData || tokenData.errcode) {
 						throw new Error(

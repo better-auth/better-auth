@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -63,6 +63,46 @@ describe("Custom Session Plugin Tests", async () => {
 		const s = await client.getSession({ fetchOptions: { headers } });
 		expect(s.data?.newData).toEqual({ message: "Hello, World!" });
 		expect(session?.newData).toEqual({ message: "Hello, World!" });
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10567
+	 */
+	it("preserves no-store when a custom session callback sets cache headers", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				customSession(async (session, ctx) => {
+					ctx.setHeader("cache-control", "public, max-age=3600");
+					return session;
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const response = await auth.api.getSession({ headers, asResponse: true });
+		expect(response.headers.get("cache-control")).toBe("no-store");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10566
+	 */
+	it("propagates session lookup failures to server and HTTP clients", async () => {
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			plugins: [customSession(async (session) => session)],
+		});
+		const { headers } = await signInWithTestUser();
+		const context = await auth.$context;
+		const lookup = vi
+			.spyOn(context.internalAdapter, "findSession")
+			.mockRejectedValue(new Error("database unavailable"));
+		try {
+			await expect(auth.api.getSession({ headers })).rejects.toMatchObject({
+				status: "INTERNAL_SERVER_ERROR",
+			});
+			const result = await client.getSession({ fetchOptions: { headers } });
+			expect(result.error?.status).toBe(500);
+		} finally {
+			lookup.mockRestore();
+		}
 	});
 
 	it("should return set cookie headers as separate entries", async () => {
@@ -310,6 +350,63 @@ describe("Custom Session Plugin Tests", async () => {
 				},
 			},
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10567
+	 */
+	it("should expire the session cookies when the session is no longer valid", async () => {
+		const staleOptions = {
+			plugins: [
+				customSession(async ({ user, session }) => {
+					return { user, session };
+				}),
+			],
+		} satisfies BetterAuthOptions;
+
+		const {
+			auth: staleAuth,
+			client: staleClient,
+			signInWithTestUser: signInWithStaleUser,
+			db,
+		} = await getTestInstance(staleOptions, {
+			clientOptions: {
+				plugins: [customSessionClient<{ options: typeof staleOptions }>()],
+			},
+		});
+
+		const { headers } = await signInWithStaleUser();
+		const activeSession = await staleAuth.api.getSession({ headers });
+		const sessionToken = activeSession?.session.token;
+		if (!sessionToken) throw new Error("expected an active session");
+
+		// Revoke the backing session row while the client keeps its cookies.
+		await db.delete({
+			model: "session",
+			where: [{ field: "token", value: sessionToken }],
+		});
+
+		let setCookies: string[] = [];
+		const session = await staleClient.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					setCookies = context.response.headers.getSetCookie();
+				},
+			},
+		});
+
+		expect(session.data).toBeNull();
+
+		const parsedCookies = new Map(
+			setCookies.flatMap((cookieString) =>
+				Array.from(parseSetCookieHeader(cookieString).entries()),
+			),
+		);
+		const expiredSessionToken = parsedCookies.get("better-auth.session_token");
+		expect(expiredSessionToken).toBeDefined();
+		expect(expiredSessionToken?.value).toBe("");
+		expect(expiredSessionToken?.["max-age"]).toBe(0);
 	});
 
 	it.skipIf(globalThis.gc == null)(

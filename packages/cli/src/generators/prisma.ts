@@ -15,6 +15,7 @@ import {
 } from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
+import type { KeyValue, Model } from "@mrleebo/prisma-ast";
 import {
 	getSchema as parsePrismaSchema,
 	produceSchema,
@@ -27,6 +28,32 @@ import type { SchemaGenerator } from "./types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
+}
+
+/**
+ * Each field of a Prisma model with its `@relation` name and, on the side that
+ * stores the foreign key, its `fields`. Prisma pairs the two sides by name.
+ */
+function readRelations(model: Model | null | undefined) {
+	return (model?.properties ?? []).flatMap((property) => {
+		if (property.type !== "field") return [];
+		const args =
+			property.attributes
+				?.find((attribute) => attribute.name === "relation")
+				?.args?.map((arg) => arg.value) ?? [];
+		const keyed = (key: string) =>
+			args.find((arg): arg is KeyValue => isRecord(arg) && arg.key === key)
+				?.value;
+		const fields = keyed("fields");
+		return {
+			type: property.fieldType,
+			name: args.find((arg) => typeof arg === "string") ?? keyed("name"),
+			fields:
+				typeof fields === "object" && fields !== null && "args" in fields
+					? fields.args
+					: [],
+		};
+	});
 }
 
 function parsePrismaStringLiteral(value: unknown) {
@@ -250,8 +277,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			continue;
 		}
 		const fields = tables[table]?.fields;
-		for (const field in fields) {
-			const attr = fields[field]!;
+		for (const attr of Object.values(fields ?? {})) {
 			if (attr.references) {
 				const referencedOriginalModel = attr.references.model;
 				if (isMigrationDisabled(referencedOriginalModel)) {
@@ -286,8 +312,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		const modelName = capitalizeFirstLetter(getModelName(customModelName));
 		indexedFields.set(modelName, []);
 
-		for (const field in fields) {
-			const attr = fields[field]!;
+		for (const [field, attr] of Object.entries(fields ?? {})) {
 			if (attr.index && !attr.unique) {
 				const fieldName = attr.fieldName || field;
 				indexedFields.get(modelName)!.push(fieldName);
@@ -401,8 +426,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 			}
 
-			for (const field in fields) {
-				const attr = fields[field]!;
+			for (const [field, attr] of Object.entries(fields ?? {})) {
 				const fieldName = attr.fieldName || field;
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				const useNumberId = options.advanced?.database?.generateId === "serial";
@@ -684,8 +708,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					// Find the FK field on the related model that points to this model
 					const relatedTableName = Object.keys(tables).find(
 						(key) =>
-							capitalizeFirstLetter(tables[key]?.modelName || key) ===
-							relatedModel,
+							capitalizeFirstLetter(
+								getModelName(tables[key]?.modelName || key),
+							) === relatedModel,
 					);
 					const relatedFields = relatedTableName
 						? tables[relatedTableName]?.fields
@@ -696,7 +721,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							getModelName(fieldAttr.references.model) ===
 								getModelName(originalTableName),
 					);
-					const [_fieldKey, fkFieldAttr] = fkField || [];
+					const [fkFieldKey, fkFieldAttr] = fkField || [];
 					const isUnique = fkFieldAttr?.unique === true;
 
 					const fieldName =
@@ -707,10 +732,53 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						name: fieldName,
 						within: prismaModel?.properties,
 					});
-					if (!existingField) {
-						builder
+					// Users may name the back-relation anything, so pair it by relation
+					// name with the field that stores this foreign key. A missing one
+					// takes that relation name, or Prisma cannot pair the two sides.
+					const foreignKey = fkFieldAttr?.fieldName || fkFieldKey;
+					const relationsToThisModel = readRelations(
+						builder.findByType("model", { name: relatedModel }),
+					).filter(
+						(relation) =>
+							relation.type === modelName &&
+							relation.fields.some((field) => field === foreignKey),
+					);
+					const singleColumnRelations = relationsToThisModel.filter(
+						(relation) => relation.fields.length === 1,
+					);
+					const candidateNames = (
+						singleColumnRelations.length
+							? singleColumnRelations
+							: relationsToThisModel
+					).map((relation) => relation.name);
+					const backRelationNames = readRelations(prismaModel)
+						.filter(
+							(relation) =>
+								relation.type === relatedModel && relation.fields.length === 0,
+						)
+						.map((relation) => relation.name);
+					const unpairedNames = (
+						candidateNames.length ? candidateNames : [undefined]
+					).filter((name) => !backRelationNames.includes(name));
+					if (unpairedNames.length > 1) {
+						throw new BetterAuthError(
+							`Model "${relatedModel}" has several relations to "${modelName}" through "${foreignKey}" without a back-relation: ${unpairedNames.map((name) => name ?? "an unnamed relation").join(", ")}. Add the back-relations to "${modelName}", then generate the schema again.`,
+						);
+					}
+					const relationName = unpairedNames[0];
+					if (existingField && unpairedNames.length === 1) {
+						throw new BetterAuthError(
+							`Model "${modelName}" needs a back-relation for ${relationName ?? "the unnamed relation"} from "${relatedModel}", but its field "${fieldName}" is already taken. Add the back-relation to "${modelName}" under another field name, then generate the schema again.`,
+						);
+					}
+					if (unpairedNames.length === 1) {
+						const backRelation = builder
 							.model(modelName)
 							.field(fieldName, `${relatedModel}${isUnique ? "?" : "[]"}`);
+						if (relationName !== undefined) {
+							// The parsed name is the quoted literal from the schema.
+							backRelation.attribute(`relation(${relationName})`);
+						}
 					}
 				}
 			}

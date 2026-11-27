@@ -1,3 +1,4 @@
+import type { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import {
@@ -80,6 +81,41 @@ describe("session", async () => {
 	it("should return null when not authenticated", async () => {
 		const response = await client.getSession();
 		expect(response.data).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11327
+	 */
+	it("should keep the store failure as a server-only cause", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			logger: { disabled: true },
+		});
+		const { headers } = await signInWithTestUser();
+		const { adapter } = await auth.$context;
+		const findOne = adapter.findOne.bind(adapter);
+		const cause = {
+			code: "STORE_UNAVAILABLE",
+			detail: "Private store details",
+		};
+		vi.spyOn(adapter, "findOne").mockImplementation(async (input) => {
+			if (input.model === "session") throw cause;
+			return findOne(input);
+		});
+
+		await expect(auth.api.getSession({ headers })).rejects.toMatchObject({
+			status: "INTERNAL_SERVER_ERROR",
+			body: { code: "FAILED_TO_GET_SESSION", message: "Failed to get session" },
+			cause,
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", { headers }),
+		);
+		expect(response.status).toBe(500);
+		await expect(response.json()).resolves.toEqual({
+			code: "FAILED_TO_GET_SESSION",
+			message: "Failed to get session",
+		});
 	});
 
 	it("should require a fresh session based on session creation time", async () => {
@@ -185,68 +221,270 @@ describe("session", async () => {
 		});
 	});
 
-	it("should update session when update age is reached", async () => {
-		const { client, testUser } = await getTestInstance({
-			session: {
-				updateAge: 60,
-				expiresIn: 60 * 2,
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10716
+	 */
+	it("gets the session when a user field references an app table", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				account: [],
+				session: [],
+				verification: [],
+			}),
+			user: {
+				additionalFields: {
+					roleId: {
+						type: "string",
+						required: false,
+						references: {
+							model: "roles",
+							field: "id",
+						},
+					},
+				},
 			},
 		});
-		const headers = new Headers();
+		const { headers } = await signInWithTestUser();
 
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onSuccess: cookieSetter(headers),
-			},
-		);
+		await expect(auth.api.getSession({ headers })).resolves.toMatchObject({
+			session: { id: expect.any(String) },
+		});
+	});
 
-		const data = await client.getSession({
-			fetchOptions: {
-				headers,
-				throw: true,
-			},
+	describe("session refresh and expiration", () => {
+		const startedAt = new Date("2026-01-01T00:00:00Z").getTime();
+
+		beforeEach(() => {
+			vi.setSystemTime(startedAt);
 		});
 
-		if (!data) {
-			throw new Error("No session found");
-		}
-		expect(new Date(data?.session.expiresAt).getTime()).toBeGreaterThan(
-			new Date(Date.now() + 1000 * 2 * 59).getTime(),
+		it.each([
+			{ elapsedSeconds: 0, expiresAfterSeconds: 120, cookieMaxAge: undefined },
+			{ elapsedSeconds: 59, expiresAfterSeconds: 120, cookieMaxAge: undefined },
+			{ elapsedSeconds: 60, expiresAfterSeconds: 180, cookieMaxAge: 120 },
+			{ elapsedSeconds: 61, expiresAfterSeconds: 181, cookieMaxAge: 120 },
+		])(
+			"returns the expected session expiration after $elapsedSeconds seconds",
+			async ({ elapsedSeconds, expiresAfterSeconds, cookieMaxAge }) => {
+				const { client, signInWithTestUser } = await getTestInstance({
+					session: {
+						updateAge: 60,
+						expiresIn: 120,
+					},
+				});
+				const { headers } = await signInWithTestUser();
+
+				vi.setSystemTime(startedAt + elapsedSeconds * 1000);
+				const response = await client.getSession({
+					fetchOptions: {
+						headers,
+						onSuccess(context) {
+							const cookies = parseSetCookieHeader(
+								context.response.headers.get("set-cookie") || "",
+							);
+							expect(
+								cookies.get("better-auth.session_token")?.["max-age"],
+							).toBe(cookieMaxAge);
+						},
+					},
+				});
+
+				expect(response.error).toBeNull();
+				expect(response.data).not.toBeNull();
+				expect(new Date(response.data!.session.expiresAt).getTime()).toBe(
+					startedAt + expiresAfterSeconds * 1000,
+				);
+			},
 		);
 
-		expect(new Date(data?.session.expiresAt).getTime()).toBeLessThan(
-			new Date(Date.now() + 1000 * 2 * 60).getTime(),
-		);
-		for (const t of [60, 80, 100, 121]) {
-			const span = new Date();
-			span.setSeconds(span.getSeconds() + t);
-			vi.setSystemTime(span);
+		it("persists successive session refreshes beyond the original expiration", async () => {
+			const { client, signInWithTestUser } = await getTestInstance({
+				session: {
+					updateAge: 60,
+					expiresIn: 120,
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			const initial = await client.getSession({ fetchOptions: { headers } });
+			expect(initial.data).not.toBeNull();
+			expect(new Date(initial.data!.session.expiresAt).getTime()).toBe(
+				startedAt + 120_000,
+			);
+
+			for (const elapsedSeconds of [60, 140, 240]) {
+				vi.setSystemTime(startedAt + elapsedSeconds * 1000);
+				const response = await client.getSession({
+					fetchOptions: {
+						headers,
+						onSuccess(context) {
+							const cookies = parseSetCookieHeader(
+								context.response.headers.get("set-cookie") || "",
+							);
+							expect(
+								cookies.get("better-auth.session_token")?.["max-age"],
+							).toBe(120);
+						},
+					},
+				});
+
+				expect(response.error).toBeNull();
+				expect(response.data?.session.id).toBe(initial.data!.session.id);
+				expect(new Date(response.data!.session.expiresAt).getTime()).toBe(
+					startedAt + (elapsedSeconds + 120) * 1000,
+				);
+			}
+
+			vi.setSystemTime(startedAt + 361_000);
 			const response = await client.getSession({
 				fetchOptions: {
 					headers,
 					onSuccess(context) {
-						const parsed = parseSetCookieHeader(
+						const cookies = parseSetCookieHeader(
 							context.response.headers.get("set-cookie") || "",
 						);
-						const maxAge = parsed.get("better-auth.session_token")?.["max-age"];
-						expect(maxAge).toBe(t === 121 ? 0 : 60 * 2);
+						expect(cookies.get("better-auth.session_token")?.["max-age"]).toBe(
+							0,
+						);
 					},
 				},
 			});
-			if (t === 121) {
-				//expired
-				expect(response.data).toBeNull();
-			} else {
-				expect(
-					new Date(response.data?.session.expiresAt!).getTime(),
-				).toBeGreaterThan(new Date(Date.now() + 1000 * 2 * 59).getTime());
-			}
+
+			expect(response.error).toBeNull();
+			expect(response.data).toBeNull();
+		});
+
+		it("clears an expired session without refreshing it", async () => {
+			const { client, signInWithTestUser } = await getTestInstance({
+				session: {
+					updateAge: 60,
+					expiresIn: 120,
+				},
+			});
+			const { headers } = await signInWithTestUser();
+
+			vi.setSystemTime(startedAt + 121_000);
+			const response = await client.getSession({
+				fetchOptions: {
+					headers,
+					onSuccess(context) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						expect(cookies.get("better-auth.session_token")?.["max-age"]).toBe(
+							0,
+						);
+					},
+				},
+			});
+
+			expect(response.error).toBeNull();
+			expect(response.data).toBeNull();
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11466
+	 */
+	describe("don't remember me marker on a later session cookie", () => {
+		const startedAt = new Date("2026-01-01T00:00:00Z").getTime();
+
+		beforeEach(() => {
+			vi.setSystemTime(startedAt);
+		});
+
+		async function signInWithoutRememberMe() {
+			const instance = await getTestInstance({
+				session: {
+					updateAge: 60,
+					expiresIn: 120,
+				},
+			});
+			const headers = new Headers();
+			await instance.client.signIn.email(
+				{
+					email: instance.testUser.email,
+					password: instance.testUser.password,
+					rememberMe: false,
+				},
+				{
+					onSuccess: instance.cookieSetter(headers),
+				},
+			);
+			expect(
+				parseCookies(headers.get("cookie") || "").get(
+					"better-auth.dont_remember",
+				),
+			).toBeTruthy();
+			return { ...instance, headers };
 		}
-		vi.useRealTimers();
+
+		it("clears the marker when a later sign-in is remembered", async () => {
+			const { client, testUser, cookieSetter, headers } =
+				await signInWithoutRememberMe();
+
+			let signInCookies: ReturnType<typeof parseSetCookieHeader> = new Map();
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: {
+					headers,
+					onSuccess(context) {
+						signInCookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						cookieSetter(headers)(context);
+					},
+				},
+			});
+
+			vi.setSystemTime(startedAt + 61_000);
+			const response = await client.getSession({ fetchOptions: { headers } });
+
+			expect(response.error).toBeNull();
+			expect(new Date(response.data!.session.expiresAt).getTime()).toBe(
+				startedAt + 181_000,
+			);
+			expect(signInCookies.get("better-auth.session_token")?.["max-age"]).toBe(
+				120,
+			);
+			expect(signInCookies.get("better-auth.dont_remember")?.["max-age"]).toBe(
+				0,
+			);
+		});
+
+		it("keeps the marker when the session cookie is reissued without a new choice", async () => {
+			const { client, headers } = await signInWithoutRememberMe();
+			const initial = await client.getSession({ fetchOptions: { headers } });
+
+			await client.updateUser({
+				name: "Updated Name",
+				fetchOptions: {
+					headers,
+					onSuccess(context) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						expect(
+							cookies.get("better-auth.session_token")?.["max-age"],
+						).toBeUndefined();
+						expect(cookies.get("better-auth.dont_remember")?.value).toBe(
+							parseCookies(headers.get("cookie") || "").get(
+								"better-auth.dont_remember",
+							),
+						);
+					},
+				},
+			});
+
+			vi.setSystemTime(startedAt + 61_000);
+			const response = await client.getSession({ fetchOptions: { headers } });
+
+			expect(response.error).toBeNull();
+			expect(response.data!.session.expiresAt).toEqual(
+				initial.data!.session.expiresAt,
+			);
+		});
 	});
 
 	it("should update the session every time when set to 0", async () => {
@@ -544,6 +782,95 @@ describe("session", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12301
+ */
+describe("revoke-session when the session is not deleted", () => {
+	// restoreAllMocks would also undo spies other describes create at collection time.
+	const spies: { mockRestore: () => void }[] = [];
+	afterEach(() => {
+		for (const spy of spies.splice(0)) spy.mockRestore();
+	});
+
+	async function revokeFromAnotherDevice(
+		options: Parameters<typeof getTestInstance>[0] = {},
+		beforeRevoke?: (
+			auth: Awaited<ReturnType<typeof getTestInstance>>["auth"],
+		) => void | Promise<void>,
+	) {
+		const { auth, client, signInWithTestUser } = await getTestInstance(options);
+		const actingDevice = await signInWithTestUser();
+		const targetDevice = await signInWithTestUser();
+		const target = await auth.api.getSession({
+			headers: targetDevice.headers,
+		});
+		expect(target?.session.token).toEqual(expect.any(String));
+
+		await beforeRevoke?.(auth);
+		const response = await client.revokeSession({
+			token: target!.session.token,
+			fetchOptions: { headers: actingDevice.headers },
+		});
+		const remaining = await auth.api.getSession({
+			headers: targetDevice.headers,
+		});
+		return { response, remaining };
+	}
+
+	it("does not report success when a delete.before hook vetoes the deletion", async () => {
+		const { response, remaining } = await revokeFromAnotherDevice({
+			databaseHooks: {
+				session: {
+					delete: {
+						before: async () => false,
+					},
+				},
+			},
+		});
+
+		expect(remaining).not.toBeNull();
+		expect(response.data?.status).not.toBe(true);
+	});
+
+	it("does not report success when the session lookup before the delete fails", async () => {
+		let failed = false;
+		const { response, remaining } = await revokeFromAnotherDevice(
+			{},
+			async (auth) => {
+				// Fail at the driver so the fault reaches the lookup wherever it runs.
+				const { options } = await auth.$context;
+				const sqlite = options.database as DatabaseSync;
+				const prepare = sqlite.prepare.bind(sqlite);
+				const spy = vi
+					.spyOn(sqlite, "prepare")
+					.mockImplementation((sql: string) => {
+						if (
+							!failed &&
+							sql ===
+								'select "primary".* from (select * from "session" where "session"."token" = ? limit ?) as "primary"'
+						) {
+							failed = true;
+							throw new Error("database read timed out");
+						}
+						return prepare(sql);
+					});
+				spies.push(spy);
+			},
+		);
+
+		expect(failed).toBe(true);
+		expect(remaining).not.toBeNull();
+		expect(response.data?.status).not.toBe(true);
+	});
+
+	it("reports success and ends the session when the deletion succeeds", async () => {
+		const { response, remaining } = await revokeFromAnotherDevice();
+
+		expect(response.data).toMatchObject({ status: true });
+		expect(remaining).toBeNull();
+	});
+});
+
 describe("session storage", async () => {
 	const store = new Map<string, string>();
 	const { client, signInWithTestUser } = await getTestInstance({
@@ -740,6 +1067,29 @@ describe("cookie cache", () => {
 		expect(cached.data).toEqual(refreshed.data);
 		expect(findOne).toHaveBeenCalledOnce();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11690
+	 */
+	it.for(["/revoke-session", "/revoke-sessions"])(
+		"stops serving the caller's cached session after %s",
+		async (path) => {
+			const { client, headers, cookieSetter } = await createCachedSession();
+			const cached = await client.getSession({ fetchOptions: { headers } });
+
+			await client.$fetch(path, {
+				method: "POST",
+				body: {
+					token: cached.data?.session.token,
+				},
+				headers,
+				onSuccess: cookieSetter(headers),
+			});
+
+			const session = await client.getSession({ fetchOptions: { headers } });
+			expect(session.data).toBeNull();
+		},
+	);
 });
 
 describe("cookie cache with JWT strategy", async () => {
@@ -2252,6 +2602,42 @@ describe("deferSessionRefresh", async () => {
 		).rejects.toThrow("POST method requires deferSessionRefresh to be enabled");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10588
+	 */
+	it("should accept a refresh POST whose empty body arrives as a stream", async () => {
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				deferSessionRefresh: true,
+			},
+		});
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+
+		// Next.js and Nuxt hand a bodyless POST to the handler as an empty stream.
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				method: "POST",
+				headers: {
+					cookie: signInRes.headers.getSetCookie()[0]!,
+				},
+				body: new ReadableStream({
+					start(controller) {
+						controller.close();
+					},
+				}),
+				duplex: "half",
+			} as RequestInit),
+		);
+
+		expect(res.status).toBe(200);
+	});
+
 	it("should not delete expired session on GET when deferSessionRefresh is enabled", async () => {
 		const { auth, testUser } = await getTestInstance({
 			session: {
@@ -2540,19 +2926,18 @@ describe("updateSession plugin authority fields", async () => {
 		plugins: [organization({ teams: { enabled: true } }), admin()],
 	});
 
-	it.each([
-		"activeOrganizationId",
-		"activeTeamId",
-		"impersonatedBy",
-	])("should reject forging the %s session field", async (field) => {
-		const { runWithUser } = await signInWithTestUser();
-		await runWithUser(async () => {
-			const res = await client.updateSession({
-				[field]: "forged-value",
-			} as any);
-			expect(res.error?.status).toBe(400);
-		});
-	});
+	it.each(["activeOrganizationId", "activeTeamId", "impersonatedBy"])(
+		"should reject forging the %s session field",
+		async (field) => {
+			const { runWithUser } = await signInWithTestUser();
+			await runWithUser(async () => {
+				const res = await client.updateSession({
+					[field]: "forged-value",
+				} as any);
+				expect(res.error?.status).toBe(400);
+			});
+		},
+	);
 });
 
 describe("update-session cookie cache revocation", async () => {

@@ -24,10 +24,21 @@ const releaseVersionsPath = join(
 	"docs",
 	"release-versions.json",
 );
+const localReleaseVersion = await readPackageVersion(
+	join(repositoryRoot, packagePath),
+);
+const localVersion = docsVersions.find((version) =>
+	localReleaseVersion.startsWith(`${version.releaseLine}.`),
+);
+if (!localVersion) {
+	throw new Error(
+		`No documentation version configured for ${localReleaseVersion}`,
+	);
+}
 const versionsToSync = docsVersions.flatMap((version) => {
 	const source = docsVersionSources[version.id];
-	if (source.commitSha === null) return [];
-	return [{ ...version, ...source, commitSha: source.commitSha }];
+	if (version.id === localVersion.id) return [];
+	return [{ ...version, ...source }];
 });
 
 function git(args: string[], cwd?: string) {
@@ -57,7 +68,7 @@ async function readPackageVersion(path: string) {
 }
 
 async function prepareWorktree(version: (typeof versionsToSync)[number]) {
-	const { commitSha } = version;
+	const revision = `refs/docs-versions/${version.id.replaceAll(".", "-")}`;
 	const checkoutDirectory = resolve(
 		tempRoot,
 		"worktrees",
@@ -71,7 +82,7 @@ async function prepareWorktree(version: (typeof versionsToSync)[number]) {
 		"--detach",
 		"--no-checkout",
 		checkoutDirectory,
-		commitSha,
+		revision,
 	]);
 	await git(["-C", checkoutDirectory, "sparse-checkout", "init", "--cone"]);
 	await git([
@@ -88,19 +99,22 @@ async function prepareWorktree(version: (typeof versionsToSync)[number]) {
 		"checkout",
 		"--quiet",
 		"--detach",
-		commitSha,
+		revision,
 	]);
-	return { checkoutDirectory, commitSha, version };
+	return { checkoutDirectory, version };
 }
 
 async function syncVersion({
 	checkoutDirectory,
-	commitSha,
 	version,
 }: Awaited<ReturnType<typeof prepareWorktree>>) {
 	const destination = join(docsRoot, "content", version.contentDirectory);
+	const sourceRevision =
+		checkoutDirectory === repositoryRoot
+			? "local"
+			: (version.commitSha?.slice(0, 9) ?? "HEAD");
 	console.log(
-		`[sync-versions] ${version.editBranch}@${commitSha.slice(0, 9)}:${remotePath} → ${destination}`,
+		`[sync-versions] ${version.editBranch}@${sourceRevision}:${remotePath} → ${destination}`,
 	);
 	const sourcePath = join(checkoutDirectory, remotePath);
 	try {
@@ -112,12 +126,17 @@ async function syncVersion({
 		);
 	}
 
-	await rm(destination, { recursive: true, force: true });
-	await cp(sourcePath, destination, { recursive: true });
-	await writeFile(join(destination, ".gitkeep"), "");
 	const releaseVersion = await readPackageVersion(
 		join(checkoutDirectory, packagePath),
 	);
+	if (!releaseVersion.startsWith(`${version.releaseLine}.`)) {
+		throw new Error(
+			`Invalid release version for ${version.id}: expected ${version.releaseLine}.x, received ${releaseVersion}`,
+		);
+	}
+	await rm(destination, { recursive: true, force: true });
+	await cp(sourcePath, destination, { recursive: true });
+	await writeFile(join(destination, ".gitkeep"), "");
 	return [version.id, releaseVersion] as const;
 }
 
@@ -137,11 +156,16 @@ try {
 		"origin",
 		...versionsToSync.map(
 			(version) =>
-				`+${version.commitSha}:refs/docs-versions/${version.id.replaceAll(".", "-")}`,
+				`+${version.commitSha ?? version.editBranch}:refs/docs-versions/${version.id.replaceAll(".", "-")}`,
 		),
 	]);
 
-	const worktrees = [];
+	const worktrees = [
+		{
+			checkoutDirectory: repositoryRoot,
+			version: { ...localVersion, ...docsVersionSources[localVersion.id] },
+		},
+	];
 	for (const version of versionsToSync) {
 		worktrees.push(await prepareWorktree(version));
 	}
@@ -155,17 +179,11 @@ try {
 			"One or more documentation versions failed to sync",
 		);
 	}
-	const latestVersion = docsVersions.find((version) => version.id === "latest");
-	if (!latestVersion) throw new Error("Missing latest documentation version");
-	const releaseVersions = Object.fromEntries([
-		[
-			latestVersion.id,
-			await readPackageVersion(join(repositoryRoot, packagePath)),
-		],
-		...results.flatMap((result) =>
+	const releaseVersions = Object.fromEntries(
+		results.flatMap((result) =>
 			result.status === "fulfilled" ? [result.value] : [],
 		),
-	]);
+	);
 	await writeFile(
 		releaseVersionsPath,
 		`${JSON.stringify(releaseVersions, null, 2)}\n`,

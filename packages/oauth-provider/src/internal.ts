@@ -16,3 +16,10 @@ export {
 	type RegisterClientMetadataDocumentInput,
 	registerClientMetadataDocument,
 } from "./register";
+export { getLocalJwksSource } from "./utils";
+export {
+	isLocalCapacityRefusal,
+	isTransientAbort,
+	isTransientHttpStatus,
+	isTransientNetworkError,
+} from "./utils/transient-fetch-failure";

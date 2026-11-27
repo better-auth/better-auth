@@ -42,6 +42,8 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 		"Email verification required to view or list invitations for the session email",
 	YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION:
 		"You are not allowed to cancel this invitation",
+	YOU_ARE_NOT_ALLOWED_TO_LIST_INVITATIONS:
+		"You are not allowed to list invitations for this organization",
 	INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION:
 		"Inviter is no longer a member of the organization",
 	YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE:
@@ -89,6 +91,7 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	TOO_MANY_ROLES: "This organization has too many roles",
 	INVALID_RESOURCE: "The provided permission includes an invalid resource",
 	ROLE_NAME_IS_ALREADY_TAKEN: "That role name is already taken",
+	INVALID_ROLE_NAME: "Role name is invalid",
 	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
 	ROLE_IS_ASSIGNED_TO_MEMBERS:
 		"Cannot delete a role that is assigned to members. Please reassign the members to a different role first",

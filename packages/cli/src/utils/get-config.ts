@@ -4,7 +4,7 @@ import path from "node:path";
 import babelPresetReact from "@babel/preset-react";
 // @ts-expect-error
 import babelPresetTypeScript from "@babel/preset-typescript";
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { loadConfig } from "c12";
 import type { TsConfigResult } from "get-tsconfig";
@@ -308,6 +308,25 @@ const isServerOnlyError = (e: unknown): boolean =>
 		"This module cannot be imported from a Client Component module",
 	);
 
+/**
+ * The first stack frame in the project outside node_modules, so a config that
+ * throws can point at the user's own line.
+ */
+function findProjectFrame(error: unknown, cwd: string) {
+	if (!(error instanceof Error)) return;
+	const prefix = `${cwd}${path.sep}`;
+	return error.stack
+		?.split("\n")
+		.map((line) => line.trim())
+		.find(
+			(line) =>
+				line.startsWith("at ") &&
+				line.includes(prefix) &&
+				!line.split(prefix)[1]?.includes("node_modules"),
+		)
+		?.replace(prefix, "");
+}
+
 const SERVER_ONLY_HINT = `Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`;
 
 /** Strips a source extension so paths can be compared across TS and JS inputs. */
@@ -358,33 +377,51 @@ function resolvesMissingOutputModule(
 	);
 }
 
-export async function getConfig({
-	cwd,
-	configPath,
-	outputPath,
-	shouldThrowOnError = false,
-}: {
+type ConfigInput = {
 	cwd: string;
 	configPath?: string;
 	/** Schema output used to recover an exact first-run self-import. */
 	outputPath?: string;
 	shouldThrowOnError?: boolean;
-}) {
+};
+
+type LoadedAuth = {
+	options?: BetterAuthOptions;
+	$context?: Promise<AuthContext>;
+};
+
+async function getLoadedConfig({
+	cwd,
+	configPath,
+	outputPath,
+	shouldThrowOnError = false,
+}: ConfigInput): Promise<LoadedAuth | null> {
 	const fail = (message: string, error?: unknown): never => {
 		if (shouldThrowOnError)
 			throw error instanceof Error ? error : new Error(message);
-		const log = `[#better-auth]: ${message}`;
-		if (error) console.error(log, error);
-		else console.error(log);
+		const frame = findProjectFrame(error, cwd);
+		console.error(
+			[
+				message,
+				error instanceof Error ? error.message : error,
+				frame && `  ${frame}`,
+			]
+				.filter(Boolean)
+				.join("\n"),
+		);
 		process.exit(1);
 	};
+	const failToLoad = (file: string, error: unknown) =>
+		isServerOnlyError(error)
+			? fail(SERVER_ONLY_HINT)
+			: fail(`Couldn't load your auth config in ${file}.`, error);
 
 	const resolvedOutputPath = outputPath
 		? path.resolve(cwd, outputPath)
 		: undefined;
 	const load = async (configFile: string) => {
 		const loadOnce = () =>
-			loadConfig<{ options?: BetterAuthOptions }>({
+			loadConfig<LoadedAuth>({
 				configFile,
 				dotenv: { fileName: [".env", ".env.local"] },
 				jitiOptions: jitiOptions(cwd),
@@ -429,24 +466,29 @@ export async function getConfig({
 			// If the configPath is a file, use it as is, as it means the path wasn't relative.
 			const resolvedPath = existsSync(configPath)
 				? configPath
-				: path.join(cwd, configPath);
-			const { config } = await load(resolvedPath);
+				: path.resolve(cwd, configPath);
+			// c12 resolves a path without an extension, so only it knows whether the file exists.
+			const { config, _configFile } = await load(resolvedPath).catch((error) =>
+				failToLoad(resolvedPath, error),
+			);
+			if (!_configFile) {
+				return fail(`Couldn't find the config file ${resolvedPath}.`);
+			}
 			const options = config?.options;
 			if (!options) {
 				return fail(
 					`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
 				);
 			}
-			return options;
+			return config;
 		}
 
 		for (const possiblePath of possiblePaths) {
-			let config: { options?: BetterAuthOptions };
+			let config: LoadedAuth;
 			try {
 				({ config } = await load(possiblePath));
 			} catch (e) {
-				if (isServerOnlyError(e)) return fail(SERVER_ONLY_HINT);
-				return fail("Couldn't read your auth config.", e);
+				return failToLoad(possiblePath, e);
 			}
 			// c12 returns `{}` when no file was found at this path; keep searching.
 			if (Object.keys(config).length === 0) continue;
@@ -455,11 +497,24 @@ export async function getConfig({
 					"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
 				);
 			}
-			return config.options;
+			return config;
 		}
 		return null;
 	} catch (e) {
 		if (isServerOnlyError(e)) return fail(SERVER_ONLY_HINT);
 		return fail("Couldn't read your auth config.", e);
 	}
+}
+
+export async function getConfig(input: ConfigInput) {
+	return (await getLoadedConfig(input))?.options ?? null;
+}
+
+export async function getAuth(input: ConfigInput) {
+	const auth = await getLoadedConfig(input);
+	if (!auth) return null;
+	if (!auth.$context) {
+		throw new Error("The auth config must export a Better Auth instance.");
+	}
+	return { options: auth.options, $context: auth.$context };
 }

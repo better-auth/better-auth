@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "@better-auth-test/test-utils": "workspace:*",
-    "@playwright/test": "~1.58.2",
+    "@playwright/test": "~1.64.1",
     "jose": "^6.2.3"
   }
 }

@@ -5,7 +5,12 @@ import { getTestInstance } from "better-auth/test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "../client";
 import { oauthProvider } from "../oauth";
+import type { OAuthOptions } from "../types";
 import type { OAuthClient } from "../types/oauth";
+
+type ClientPrivilegeContext = Parameters<
+	NonNullable<OAuthOptions["clientPrivileges"]>
+>[0];
 
 type TestOAuthClientUiMetadata = Pick<
 	OAuthClient,
@@ -32,7 +37,7 @@ describe("oauthClient", async () => {
 		password: "test123456",
 		name: "forbidden user",
 	};
-	const clientPrivileges = vi.fn(({ user }) => {
+	const clientPrivileges = vi.fn(({ user }: ClientPrivilegeContext) => {
 		if (user?.email === allowedUser.email) {
 			return true;
 		}
@@ -144,6 +149,7 @@ describe("oauthClient", async () => {
 		expect(client?.data?.client_id_issued_at).toBeDefined();
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges.mock.calls[0]?.[0]?.clientId).toBeUndefined();
 	});
 
 	it("should not create client with forbidden user via admin api", async () => {
@@ -219,6 +225,30 @@ describe("oauthClient", async () => {
 			}),
 		);
 		expect(clientPrivileges).toHaveBeenCalledTimes(2);
+		expect(clientPrivileges.mock.calls[1]?.[0]?.clientId).toBeUndefined();
+
+		clientPrivileges.mockClear();
+		await auth.api.adminUpdateOAuthClient({
+			headers: allowedUserHeaders,
+			body: {
+				client_id: adminClient.client_id,
+				update: { client_credentials_scopes: ["m2m:read"] },
+			},
+		});
+		expect(clientPrivileges).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				action: "update",
+				clientId: adminClient.client_id,
+			}),
+		);
+		expect(clientPrivileges).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				action: "configure-client-credentials-scopes",
+				clientId: adminClient.client_id,
+			}),
+		);
 		await allowedAuthClient.oauth2.deleteClient({
 			client_id: adminClient.client_id,
 		});
@@ -309,6 +339,12 @@ describe("oauthClient", async () => {
 		expect(check).toMatchObject(expected);
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "read",
+				clientId: oauthClient.client_id,
+			}),
+		);
 	});
 
 	it("should get public-only information about a client with any user", async () => {
@@ -356,6 +392,7 @@ describe("oauthClient", async () => {
 		expect(check).toMatchObject(expected);
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges.mock.calls[0]?.[0]?.clientId).toBeUndefined();
 	});
 
 	it("should not update the client with forbidden user", async () => {
@@ -393,6 +430,12 @@ describe("oauthClient", async () => {
 		oauthClient = client.data!;
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "update",
+				clientId: oauthClient.client_id,
+			}),
+		);
 	});
 
 	it("should not rotate the client secret with forbidden user", async () => {
@@ -420,6 +463,12 @@ describe("oauthClient", async () => {
 		oauthClient = client.data!;
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "rotate",
+				clientId: oauthClient.client_id,
+			}),
+		);
 	});
 
 	it("should not delete the client with forbidden user", async () => {
@@ -442,6 +491,12 @@ describe("oauthClient", async () => {
 		expect(client.data).toBeNull();
 
 		expect(clientPrivileges).toHaveBeenCalledTimes(1);
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "delete",
+				clientId: oauthClient.client_id,
+			}),
+		);
 	});
 
 	it("should not create client via admin api without a session", async () => {
@@ -581,5 +636,194 @@ describe("oauthClient dynamic registration privileges", async () => {
 		expect(client.data?.token_endpoint_auth_method).toBe("client_secret_basic");
 		expect(client.data).not.toHaveProperty("public");
 		expect(clientPrivileges).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11589
+ */
+describe("clientPrivileges client ID", async () => {
+	const redirectUri = "https://rp.example.com/callback";
+	const owner = {
+		email: "owner@test.com",
+		password: "test123456",
+		name: "owner",
+	};
+	const collaborator = {
+		email: "collaborator@test.com",
+		password: "test123456",
+		name: "collaborator",
+	};
+	let restrictedClientId = "";
+	const clientPrivileges = vi.fn(
+		({ user, action, clientId }: ClientPrivilegeContext) =>
+			user?.email !== collaborator.email ||
+			action === "read" ||
+			clientId !== restrictedClientId,
+	);
+	const { auth, signInWithUser } = await getTestInstance({
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				clientReference: () => "shared-organization",
+				clientPrivileges,
+			}),
+			jwt(),
+		],
+	});
+	await auth.api.signUpEmail({ body: owner });
+	await auth.api.signUpEmail({ body: collaborator });
+	const { headers: ownerHeaders } = await signInWithUser(
+		owner.email,
+		owner.password,
+	);
+	const { headers: collaboratorHeaders } = await signInWithUser(
+		collaborator.email,
+		collaborator.password,
+	);
+	const restrictedClient = await auth.api.adminCreateOAuthClient({
+		headers: ownerHeaders,
+		body: { redirect_uris: [redirectUri] },
+	});
+	restrictedClientId = restrictedClient.client_id;
+
+	beforeEach(() => {
+		clientPrivileges.mockClear();
+	});
+
+	it("should let a collaborator read but not change a restricted shared client", async () => {
+		const client = await auth.api.getOAuthClient({
+			headers: collaboratorHeaders,
+			query: { client_id: restrictedClientId },
+		});
+		expect(client.client_id).toBe(restrictedClientId);
+
+		await expect(
+			auth.api.updateOAuthClient({
+				headers: collaboratorHeaders,
+				body: {
+					client_id: restrictedClientId,
+					update: { client_name: "renamed" },
+				},
+			}),
+		).rejects.toMatchObject({ statusCode: 401 });
+		await expect(
+			auth.api.rotateClientSecret({
+				headers: collaboratorHeaders,
+				body: { client_id: restrictedClientId },
+			}),
+		).rejects.toMatchObject({ statusCode: 401 });
+		await expect(
+			auth.api.deleteOAuthClient({
+				headers: collaboratorHeaders,
+				body: { client_id: restrictedClientId },
+			}),
+		).rejects.toMatchObject({ statusCode: 401 });
+
+		for (const action of ["read", "update", "rotate", "delete"]) {
+			expect(clientPrivileges).toHaveBeenCalledWith(
+				expect.objectContaining({ action, clientId: restrictedClientId }),
+			);
+		}
+		const stored = await auth.api.getOAuthClient({
+			headers: ownerHeaders,
+			query: { client_id: restrictedClientId },
+		});
+		expect(stored.client_name).toBeUndefined();
+	});
+
+	it("should let a collaborator change another shared client", async () => {
+		const otherClient = await auth.api.adminCreateOAuthClient({
+			headers: ownerHeaders,
+			body: { redirect_uris: [redirectUri] },
+		});
+
+		const updated = await auth.api.updateOAuthClient({
+			headers: collaboratorHeaders,
+			body: {
+				client_id: otherClient.client_id,
+				update: { client_name: "renamed" },
+			},
+		});
+
+		expect(updated.client_name).toBe("renamed");
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "update",
+				clientId: otherClient.client_id,
+			}),
+		);
+	});
+
+	it("should pass an unknown client ID to the callback before the lookup", async () => {
+		await expect(
+			auth.api.getOAuthClient({
+				headers: ownerHeaders,
+				query: { client_id: "unknown-client" },
+			}),
+		).rejects.toMatchObject({ statusCode: 404 });
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({ action: "read", clientId: "unknown-client" }),
+		);
+	});
+});
+
+describe("clientPrivileges client ID across owners", async () => {
+	const clientPrivileges = vi.fn((_context: ClientPrivilegeContext) => true);
+	const { auth, signInWithUser } = await getTestInstance({
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["m2m:read"],
+				clientPrivileges,
+			}),
+			jwt(),
+		],
+	});
+	const owner = {
+		email: "client-owner@test.com",
+		password: "test123456",
+		name: "client owner",
+	};
+	const administrator = {
+		email: "administrator@test.com",
+		password: "test123456",
+		name: "administrator",
+	};
+	await auth.api.signUpEmail({ body: owner });
+	await auth.api.signUpEmail({ body: administrator });
+	const { headers: ownerHeaders } = await signInWithUser(
+		owner.email,
+		owner.password,
+	);
+	const { headers: administratorHeaders } = await signInWithUser(
+		administrator.email,
+		administrator.password,
+	);
+
+	it("should pass the client ID when configuring scopes on another owner's client", async () => {
+		const client = await auth.api.adminCreateOAuthClient({
+			headers: ownerHeaders,
+			body: { grant_types: ["client_credentials"] },
+		});
+		clientPrivileges.mockClear();
+
+		const updated = await auth.api.adminUpdateOAuthClient({
+			headers: administratorHeaders,
+			body: {
+				client_id: client.client_id,
+				update: { client_credentials_scopes: ["m2m:read"] },
+			},
+		});
+
+		expect(updated.client_credentials_scopes).toEqual(["m2m:read"]);
+		expect(clientPrivileges).toHaveBeenCalledWith(
+			expect.objectContaining({
+				action: "configure-client-credentials-scopes",
+				clientId: client.client_id,
+			}),
+		);
 	});
 });

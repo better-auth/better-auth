@@ -13,3 +13,21 @@ export const encodeToURLParams = (obj: Record<string, any>): string => {
 
 	return params.toString();
 };
+
+/**
+ * Rejects after `timeoutMs` without cancelling the underlying promise.
+ */
+export const withTimeout = <T>(
+	promise: Promise<T>,
+	timeoutMs: number,
+): Promise<T> => {
+	let timer: ReturnType<typeof setTimeout>;
+	const timeout = new Promise<never>((_resolve, reject) => {
+		timer = setTimeout(
+			() => reject(new Error("Operation timed out")),
+			timeoutMs,
+		);
+	});
+
+	return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+};

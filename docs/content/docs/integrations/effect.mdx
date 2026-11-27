@@ -1,0 +1,109 @@
+---
+icon: integrationsEffect
+sidebarTitle: "Effect"
+title: Effect Integration
+description: Integrate Better Auth with an Effect HTTP server.
+---
+
+Better Auth uses Web Standard `Request` and `Response` objects. Effect 4 can mount `auth.handler` with `HttpEffect.fromWebHandler`.
+
+Before you begin, [configure a Better Auth instance](/docs/installation).
+
+## Install Effect
+
+```package-install
+effect
+```
+
+If you're starting a new Effect project, follow the [Effect installation guide](https://effect.website/docs/v4/getting-started/installation#javascript-runtimes).
+
+## Mount the auth handler
+
+The example below runs on Node.js. See the [Effect Platform guide](https://effect.website/docs/v4/platform/introduction) to use another runtime.
+
+```package-install
+@effect/platform-node
+```
+
+```ts title="src/index.ts"
+import { createServer } from "node:http";
+import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
+import { Layer } from "effect";
+import { HttpEffect, HttpRouter, HttpServerResponse } from "effect/http";
+import { auth } from "./auth.ts";
+
+const homeRoute = HttpRouter.add(
+  "GET",
+  "/",
+  HttpServerResponse.text("Hello Better Auth"),
+);
+
+const authRoutes = HttpRouter.add( // [!code highlight]
+  "*", // [!code highlight]
+  "/api/auth/*", // Match your Better Auth basePath. // [!code highlight]
+  HttpEffect.fromWebHandler(auth.handler), // [!code highlight]
+); // [!code highlight]
+
+const routes = Layer.mergeAll(homeRoute, authRoutes);
+
+const server = HttpRouter.serve(routes).pipe(
+  Layer.provide(NodeHttpServer.layer(createServer, { port: 3000 })),
+);
+
+Layer.launch(server).pipe(NodeRuntime.runMain);
+```
+
+## Cross-origin requests
+
+If your frontend runs on a different origin, allow it in both the Effect server's CORS middleware and Better Auth's `trustedOrigins`. The middleware applies to every route, so list only the origins that need cookie access.
+
+```ts title="src/auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  trustedOrigins: ["http://localhost:5173"], // [!code highlight]
+});
+```
+
+```ts title="src/index.ts"
+import { HttpMiddleware } from "effect/http";
+
+const server = HttpRouter.serve(routes, {
+  middleware: HttpMiddleware.cors({
+    allowedOrigins: ["http://localhost:5173"], // [!code highlight]
+    credentials: true,
+  }),
+}).pipe(
+  Layer.provide(NodeHttpServer.layer(createServer, { port: 3000 })),
+);
+```
+
+For cross-site cookies, see [Cookies](/docs/concepts/cookies).
+
+## Protect application routes
+
+You can protect application resources by checking the session with Better Auth:
+
+```ts title="src/index.ts"
+import { Effect } from "effect";
+import { HttpServerRequest, HttpServerResponse } from "effect/http";
+
+const profileRoute = HttpRouter.add(
+  "GET",
+  "/profile",
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const session = yield* Effect.tryPromise(() =>
+      auth.api.getSession({ headers: request.headers }),
+    );
+
+    if (!session) {
+      return HttpServerResponse.empty({ status: 401 });
+    }
+
+    return yield* HttpServerResponse.json(session.user);
+  }),
+);
+
+const routes = Layer.mergeAll(homeRoute, authRoutes, profileRoute);
+```

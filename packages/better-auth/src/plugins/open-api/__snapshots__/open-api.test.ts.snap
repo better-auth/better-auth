@@ -389,6 +389,55 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
         "operationId": undefined,
         "parameters": [
           {
+            "in": "query",
+            "name": "code",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "device_id",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "error_description",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "user",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "iss",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
             "in": "path",
             "name": "id",
             "required": true,
@@ -508,6 +557,55 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
         "description": undefined,
         "operationId": undefined,
         "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "device_id",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "error_description",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "user",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "iss",
+            "schema": {
+              "type": "string",
+            },
+          },
           {
             "in": "path",
             "name": "id",
@@ -1650,7 +1748,24 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "get": {
         "description": "Get the current session",
         "operationId": "getSession",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "disableCookieCache",
+            "schema": {
+              "description": "Disable cookie cache and fetch session from database",
+              "type": "boolean",
+            },
+          },
+          {
+            "in": "query",
+            "name": "disableRefresh",
+            "schema": {
+              "description": "Disable session refresh. Useful for checking session status, without updating the session",
+              "type": "boolean",
+            },
+          },
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1786,7 +1901,24 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Get the current session",
         "operationId": "getSessionPost",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "disableCookieCache",
+            "schema": {
+              "description": "Disable cookie cache and fetch session from database",
+              "type": "boolean",
+            },
+          },
+          {
+            "in": "query",
+            "name": "disableRefresh",
+            "schema": {
+              "description": "Disable session refresh. Useful for checking session status, without updating the session",
+              "type": "boolean",
+            },
+          },
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2949,7 +3081,15 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
       "post": {
         "description": "Reset the password for a user",
         "operationId": "resetPassword",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
         "requestBody": {
           "content": {
             "application/json": {

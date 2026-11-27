@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { JWK } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { beforeEach, describe, expect, it, test, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -10,10 +12,15 @@ import type {
 	OAuthProvider,
 	ProviderOptions,
 } from "../oauth2";
-import { CLIENT_ASSERTION_TYPE } from "../oauth2";
+import {
+	CLIENT_ASSERTION_TYPE,
+	generateCodeChallenge,
+	verifyProviderIdToken,
+} from "../oauth2";
 import { cognito } from "./cognito";
 import { discord } from "./discord";
 import { socialProviders } from "./index";
+import { kakao } from "./kakao";
 import { microsoft } from "./microsoft-entra-id";
 import { roblox } from "./roblox";
 import { slack } from "./slack";
@@ -51,6 +58,7 @@ describe("OAuth account identity contract", () => {
 	const providers: OAuthProvider[] = [
 		socialProviders.apple(providerOptions),
 		socialProviders.atlassian(providerOptions),
+		socialProviders.cloudflare(providerOptions),
 		socialProviders.cognito(providerOptions),
 		socialProviders.discord(providerOptions),
 		socialProviders.dropbox(providerOptions),
@@ -89,8 +97,22 @@ describe("OAuth account identity contract", () => {
 		socialProviders.zoom(providerOptions),
 	];
 
+	it("covers every built-in provider", () => {
+		expect(providers.map((provider) => provider.id).sort()).toEqual(
+			Object.keys(socialProviders).sort(),
+		);
+	});
+
 	it.each(providers)("$id declares a stable account subject", (provider) => {
 		expect(provider.accountSubject).toBeDefined();
+	});
+
+	it.for(providers)("$id exposes its configured options", (provider) => {
+		expect(provider.options).toMatchObject(
+			provider.id === "tiktok"
+				? { clientKey: providerOptions.clientKey }
+				: { clientId: providerOptions.clientId },
+		);
 	});
 
 	it("keeps mapped local-user fields separate from provider identity", () => {
@@ -276,6 +298,184 @@ describe("discord provider", () => {
 	});
 });
 
+async function createSignedKakaoToken({
+	audience,
+	issuer = "https://kauth.kakao.com",
+}: {
+	audience: string;
+	issuer?: string;
+}) {
+	const { publicKey, privateKey } = await generateKeyPair("RS256", {
+		extractable: true,
+	});
+	const publicJWK = await exportJWK(publicKey);
+	publicJWK.kid = "test-kakao-key";
+	publicJWK.alg = "RS256";
+
+	const token = await new SignJWT({
+		nickname: "Kakao User",
+		picture: "https://example.com/thumbnail.jpg",
+		email: "user@example.com",
+	})
+		.setProtectedHeader({ alg: "RS256", kid: "test-kakao-key" })
+		.setIssuer(issuer)
+		.setAudience(audience)
+		.setSubject("123456789")
+		.setIssuedAt()
+		.setExpirationTime("1h")
+		.sign(privateKey);
+
+	return { publicJWK, token };
+}
+
+function mockKakaoJwks(publicJWK: JWK) {
+	return vi
+		.spyOn(globalThis, "fetch")
+		.mockResolvedValue(Response.json({ keys: [publicJWK] }));
+}
+
+describe("kakao provider", () => {
+	/**
+	 * @see https://developers.kakao.com/docs/en/kakaologin/rest-api#request-code-login-hint
+	 */
+	it("forwards loginHint as login_hint", async () => {
+		const provider = kakao({ ...credentials });
+		const url = await provider.createAuthorizationURL({
+			...baseInput,
+			loginHint: "user@example.com",
+		});
+		expect(url.searchParams.get("login_hint")).toBe("user@example.com");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12294
+	 */
+	describe("PKCE", () => {
+		it("adds the S256 code challenge to the authorization URL", async () => {
+			const provider = kakao({ ...credentials });
+			const url = await provider.createAuthorizationURL(baseInput);
+			expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+			expect(url.searchParams.get("code_challenge")).toBe(
+				await generateCodeChallenge(baseVerifier),
+			);
+		});
+
+		it("sends the code verifier in the token request", async () => {
+			mockedBetterFetch.mockResolvedValueOnce({
+				data: {
+					access_token: "access-token",
+					refresh_token: "refresh-token",
+					token_type: "bearer",
+					expires_in: 21599,
+				},
+				error: null,
+			});
+
+			const provider = kakao({ ...credentials });
+			await provider.validateAuthorizationCode({
+				code: "auth-code",
+				codeVerifier: baseVerifier,
+				redirectURI: baseCallback,
+			});
+
+			const [, init] = mockedBetterFetch.mock.calls[0] ?? [];
+			const body = init?.body as URLSearchParams;
+			expect(body.get("code_verifier")).toBe(baseVerifier);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12293
+	 */
+	describe("ID token", () => {
+		const restApiKey = "rest-api-key";
+		const nativeAppKey = "native-app-key";
+
+		it("accepts an ID token issued for any configured app key", async () => {
+			const provider = kakao({
+				clientId: [restApiKey, nativeAppKey],
+				clientSecret: credentials.clientSecret,
+			});
+			const { publicJWK, token } = await createSignedKakaoToken({
+				audience: nativeAppKey,
+			});
+			mockKakaoJwks(publicJWK);
+
+			await expect(verifyProviderIdToken(provider, token)).resolves.toBe(true);
+		});
+
+		it("rejects an ID token issued for another app", async () => {
+			const provider = kakao({
+				clientId: [restApiKey, nativeAppKey],
+				clientSecret: credentials.clientSecret,
+			});
+			const { publicJWK, token } = await createSignedKakaoToken({
+				audience: "other-app-key",
+			});
+			mockKakaoJwks(publicJWK);
+
+			await expect(verifyProviderIdToken(provider, token)).resolves.toBe(false);
+		});
+
+		it("rejects an ID token from another issuer", async () => {
+			const provider = kakao({ ...credentials, clientId: restApiKey });
+			const { publicJWK, token } = await createSignedKakaoToken({
+				audience: restApiKey,
+				issuer: "https://attacker.example",
+			});
+			mockKakaoJwks(publicJWK);
+
+			await expect(verifyProviderIdToken(provider, token)).resolves.toBe(false);
+		});
+
+		it("reuses the fetched JWKS across verifications", async () => {
+			const provider = kakao({ ...credentials, clientId: restApiKey });
+			const { publicJWK, token } = await createSignedKakaoToken({
+				audience: restApiKey,
+			});
+			const fetchSpy = mockKakaoJwks(publicJWK);
+
+			await expect(verifyProviderIdToken(provider, token)).resolves.toBe(true);
+			await expect(verifyProviderIdToken(provider, token)).resolves.toBe(true);
+			expect(fetchSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it("builds the user from the ID token claims without calling the user info API", async () => {
+			const provider = kakao({ ...credentials, clientId: restApiKey });
+			const { token } = await createSignedKakaoToken({ audience: restApiKey });
+
+			const userInfo = await provider.getUserInfoFromIdToken(token);
+
+			expect(mockedBetterFetch).not.toHaveBeenCalled();
+			expect(userInfo?.user).toEqual({
+				name: "Kakao User",
+				email: "user@example.com",
+				image: "https://example.com/thumbnail.jpg",
+				emailVerified: false,
+			});
+			const subject = await provider.accountSubject({
+				tokens: { idToken: token },
+				profile: userInfo!.data,
+			});
+			expect(String(subject)).toBe("123456789");
+		});
+
+		it("passes only the ID token to a custom getUserInfo", async () => {
+			const getUserInfo = vi.fn(async () => null);
+			const provider = kakao({
+				...credentials,
+				clientId: restApiKey,
+				getUserInfo,
+			});
+			const { token } = await createSignedKakaoToken({ audience: restApiKey });
+
+			await provider.getUserInfoFromIdToken(token);
+
+			expect(getUserInfo).toHaveBeenCalledWith({ idToken: token });
+		});
+	});
+});
+
 describe("roblox provider", () => {
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
 		const provider = roblox({ ...credentials });
@@ -454,4 +654,31 @@ describe("cognito provider", () => {
 		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("identity_provider")).toBeNull();
 	});
+
+	test.for([
+		[true, true],
+		["true", true],
+		["false", false],
+		["TRUE", false],
+		[["true"], false],
+	] as const)(
+		"reads a UserInfo email_verified %j as verified=%s",
+		async ([claim, verified]) => {
+			mockedBetterFetch.mockResolvedValueOnce({
+				data: {
+					sub: "cognito-user",
+					email: "user@example.com",
+					email_verified: claim,
+				},
+				error: null,
+			} as Awaited<ReturnType<typeof betterFetch>>);
+			const provider = cognito(cognitoConfig);
+
+			const result = await provider.getUserInfo({
+				accessToken: "cognito-access-token",
+			});
+
+			expect(result?.user.emailVerified).toBe(verified);
+		},
+	);
 });

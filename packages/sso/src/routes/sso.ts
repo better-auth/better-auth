@@ -1,22 +1,22 @@
+import { HIDE_METADATA } from "@better-auth/core/api";
 import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import {
+	authorizationCodeRequest,
+	createAuthorizationURL,
+	createPrivateKeyJwtClientAssertionGetter,
+	getOAuth2Tokens,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
+	parseStringBoolean,
+} from "@better-auth/core/oauth2";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
 	TokenEndpointAuth,
-} from "better-auth";
-import {
-	authorizationCodeRequest,
-	createAuthorizationURL,
-	createPrivateKeyJwtClientAssertionGetter,
-	generateState,
-	getOAuth2Tokens,
-	HIDE_METADATA,
-	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
-	parseState,
 } from "better-auth";
 import {
 	APIError,
@@ -33,7 +33,9 @@ import {
 import { generateRandomString } from "better-auth/crypto";
 import {
 	additionalAuthorizationParamsSchema,
+	generateState,
 	handleOAuthUserInfo,
+	parseState,
 } from "better-auth/oauth2";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { RequestInfo } from "samlify/types/src/types";
@@ -79,12 +81,7 @@ import {
 	requireSuccessfulSSOAuthentication,
 	resolveSSOUser,
 } from "../user-resolution";
-import {
-	domainMatches,
-	parseProviderEmailVerified,
-	safeJsonParse,
-	validateEmailDomain,
-} from "../utils";
+import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
 	assertSAMLIdentityProviderAuthority,
@@ -355,7 +352,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 																description: "Additional field mappings",
 															},
 														},
-														required: ["email", "name"],
 													},
 												},
 												required: [
@@ -421,12 +417,12 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
-			const providers = await ctx.context.adapter.findMany({
+			const providerCount = await ctx.context.adapter.count({
 				model: "ssoProvider",
 				where: [{ field: "userId", value: user.id }],
 			});
 
-			if (providers.length >= limit) {
+			if (providerCount >= limit) {
 				throw new APIError("FORBIDDEN", {
 					message: "You have reached the maximum number of SSO providers",
 				});
@@ -654,89 +650,135 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
-			const provider = await ctx.context.adapter.create<
-				Record<string, any>,
-				SSOProvider<O>
-			>({
-				model: "ssoProvider",
-				data: {
-					issuer: body.issuer,
-					domain: body.domain,
-					domainVerified: false,
-					...additionalFields,
-					oidcConfig: (() => {
-						const config = buildOIDCConfig();
-						if (config) {
-							const parsed = JSON.parse(config) as {
-								tokenEndpointAuthentication?: string;
-								clientSecret?: string;
-							};
-							if (
-								parsed.tokenEndpointAuthentication !== "private_key_jwt" &&
-								!parsed.clientSecret
-							) {
-								throw new APIError("BAD_REQUEST", {
-									message:
-										"clientSecret is required when using client_secret_basic or client_secret_post authentication",
-								});
-							}
-							if (
-								parsed.tokenEndpointAuthentication === "private_key_jwt" &&
-								!options?.resolvePrivateKey &&
-								!options?.defaultSSO?.some(
-									(p: Record<string, unknown>) =>
-										p.providerId === body.providerId &&
-										"privateKey" in p &&
-										p.privateKey,
-								)
-							) {
-								throw new APIError("BAD_REQUEST", {
-									message:
-										"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
-								});
-							}
-						}
-						return config;
-					})(),
-					samlConfig: body.samlConfig
-						? JSON.stringify({
-								issuer: body.issuer,
-								entryPoint: body.samlConfig.entryPoint,
-								cert: body.samlConfig.cert,
-								audience: body.samlConfig.audience,
-								callbackUrl: body.samlConfig.callbackUrl,
-								idpInitiatedCallbackUrl:
-									body.samlConfig.idpInitiatedCallbackUrl,
-								idpMetadata: body.samlConfig.idpMetadata,
-								spMetadata: body.samlConfig.spMetadata,
-								wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
-								authnRequestsSigned: body.samlConfig.authnRequestsSigned,
-								signatureAlgorithm: body.samlConfig.signatureAlgorithm,
-								digestAlgorithm: body.samlConfig.digestAlgorithm,
-								identifierFormat: body.samlConfig.identifierFormat,
-								privateKey: body.samlConfig.privateKey,
-								mapping: body.samlConfig.mapping,
-							})
-						: null,
-					organizationId: body.organizationId,
-					userId: ctx.context.session.user.id,
-					providerId: body.providerId,
-				},
-			});
-
 			let domainVerificationToken: string | undefined;
 			let domainVerified: boolean | undefined;
 
-			if (options?.domainVerification?.enabled) {
-				domainVerified = false;
-				domainVerificationToken = generateRandomString(24);
+			// A failed registration must not leave the provider behind, or a retry
+			// fails as a duplicate. Adapters without transactions do not roll back,
+			// so the row this request inserted is removed by its id. A known veto
+			// removes it directly. After any other failure, the provider stays only
+			// when this request's token is stored, because an after hook can throw
+			// once both records exist (inside the write, without AsyncLocalStorage).
+			// When that check fails, only the provider is removed: the token row may
+			// not be this request's, and a retry writes a fresh one.
+			let createdId: string | undefined;
+			let tokenVetoed = false;
+			const tokenIdentifier = () =>
+				getVerificationIdentifier(options, body.providerId);
+			const keepProvider = async () => {
+				if (tokenVetoed || !domainVerificationToken) return false;
+				try {
+					const stored =
+						await ctx.context.internalAdapter.findVerificationValue(
+							tokenIdentifier(),
+						);
+					return stored?.value === domainVerificationToken;
+				} catch {
+					return false;
+				}
+			};
+			const provider = await runWithTransaction(
+				ctx.context.adapter,
+				async () => {
+					const created = await (
+						await getCurrentAdapter(ctx.context.adapter)
+					).create<Record<string, any>, SSOProvider<O> & { id: string }>({
+						model: "ssoProvider",
+						data: {
+							issuer: body.issuer,
+							domain: body.domain,
+							domainVerified: false,
+							...additionalFields,
+							oidcConfig: (() => {
+								const config = buildOIDCConfig();
+								if (config) {
+									const parsed = JSON.parse(config) as {
+										tokenEndpointAuthentication?: string;
+										clientSecret?: string;
+									};
+									if (
+										parsed.tokenEndpointAuthentication !== "private_key_jwt" &&
+										!parsed.clientSecret
+									) {
+										throw new APIError("BAD_REQUEST", {
+											message:
+												"clientSecret is required when using client_secret_basic or client_secret_post authentication",
+										});
+									}
+									if (
+										parsed.tokenEndpointAuthentication === "private_key_jwt" &&
+										!options?.resolvePrivateKey &&
+										!options?.defaultSSO?.some(
+											(p: Record<string, unknown>) =>
+												p.providerId === body.providerId &&
+												"privateKey" in p &&
+												p.privateKey,
+										)
+									) {
+										throw new APIError("BAD_REQUEST", {
+											message:
+												"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
+										});
+									}
+								}
+								return config;
+							})(),
+							samlConfig: body.samlConfig
+								? JSON.stringify({
+										issuer: body.issuer,
+										entryPoint: body.samlConfig.entryPoint,
+										cert: body.samlConfig.cert,
+										audience: body.samlConfig.audience,
+										callbackUrl: body.samlConfig.callbackUrl,
+										idpInitiatedCallbackUrl:
+											body.samlConfig.idpInitiatedCallbackUrl,
+										idpMetadata: body.samlConfig.idpMetadata,
+										spMetadata: body.samlConfig.spMetadata,
+										wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
+										authnRequestsSigned: body.samlConfig.authnRequestsSigned,
+										signatureAlgorithm: body.samlConfig.signatureAlgorithm,
+										digestAlgorithm: body.samlConfig.digestAlgorithm,
+										identifierFormat: body.samlConfig.identifierFormat,
+										privateKey: body.samlConfig.privateKey,
+										mapping: body.samlConfig.mapping,
+									})
+								: null,
+							organizationId: body.organizationId,
+							userId: ctx.context.session.user.id,
+							providerId: body.providerId,
+						},
+					});
+					createdId = created.id;
 
-				await ctx.context.internalAdapter.createVerificationValue({
-					identifier: getVerificationIdentifier(options, provider.providerId),
-					value: domainVerificationToken as string,
-					expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
-				});
-			}
+					if (options?.domainVerification?.enabled) {
+						domainVerified = false;
+						domainVerificationToken = generateRandomString(24);
+
+						const verification =
+							await ctx.context.internalAdapter.createVerificationValue({
+								identifier: tokenIdentifier(),
+								value: domainVerificationToken,
+								expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
+							});
+						if (!verification) {
+							tokenVetoed = true;
+							throw APIError.from(
+								"INTERNAL_SERVER_ERROR",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+							);
+						}
+					}
+					return created;
+				},
+			).catch(async (error: unknown) => {
+				if (createdId && !(await keepProvider())) {
+					await ctx.context.adapter.deleteMany({
+						model: "ssoProvider",
+						where: [{ field: "id", value: createdId }],
+					});
+				}
+				throw error;
+			});
 
 			type SSOProviderResponse = {
 				redirectURI: string;
@@ -1062,7 +1104,7 @@ export const signInSSO = (options?: SSOOptions) => {
 							where: [
 								{
 									field: providerId ? "providerId" : "organizationId",
-									value: providerId || orgId!,
+									value: providerId || orgId,
 								},
 							],
 						}),
@@ -1238,11 +1280,18 @@ export const signInSSO = (options?: SSOOptions) => {
 						createdAt: Date.now(),
 						expiresAt: Date.now() + ttl,
 					};
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: `${constants.AUTHN_REQUEST_KEY_PREFIX}${record.id}`,
-						value: JSON.stringify(record),
-						expiresAt: new Date(record.expiresAt),
-					});
+					const verification =
+						await ctx.context.internalAdapter.createVerificationValue({
+							identifier: `${constants.AUTHN_REQUEST_KEY_PREFIX}${record.id}`,
+							value: JSON.stringify(record),
+							expiresAt: new Date(record.expiresAt),
+						});
+					if (!verification) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+						);
+					}
 				}
 
 				return ctx.json({
@@ -1524,6 +1573,14 @@ async function handleOIDCCallback(
 		const value = claims[claim];
 		return typeof value === "string" && value.length > 0 ? value : undefined;
 	};
+	// Some IdPs send a list of addresses, such as Azure AD B2C's `emails`.
+	const readEmailClaim = (claims: Record<string, unknown>) =>
+		[claims[mapping.email || "email"]]
+			.flat()
+			.find(
+				(value): value is string =>
+					typeof value === "string" && value.length > 0,
+			);
 	// The raw, unmapped provider claims, forwarded to the validateUserInfo gate
 	// as `source.sso.profile` so a policy can inspect provider-specific fields.
 	let rawProfile: Record<string, unknown> | undefined;
@@ -1537,7 +1594,7 @@ async function handleOIDCCallback(
 		}
 		const verified = await validateOIDCIdToken(
 			tokenResponse.idToken,
-			jwksEndpoint!,
+			jwksEndpoint,
 			{ audience: config.clientId, issuer: provider.issuer },
 			(url) => ctx.context.isTrustedOrigin(url),
 		).catch((error) => {
@@ -1550,10 +1607,10 @@ async function handleOIDCCallback(
 		if (!verified) {
 			return redirectOIDCError("invalid_provider", "token_not_verified");
 		}
-		if (!readStringClaim(verified!.payload, "sub")) {
+		if (!readStringClaim(verified.payload, "sub")) {
 			return redirectOIDCError("invalid_provider", "id_token_subject_missing");
 		}
-		verifiedIdToken = verified!;
+		verifiedIdToken = verified;
 	}
 	if (options?.resolveUser && !verifiedIdToken) {
 		return redirectOIDCError(
@@ -1604,11 +1661,11 @@ async function handleOIDCCallback(
 				]),
 			),
 			id: readStringClaim(rawUserInfo, "sub"),
-			email: readStringClaim(rawUserInfo, mapping.email || "email"),
+			email: readEmailClaim(rawUserInfo),
 			emailVerified: options?.trustEmailVerified
-				? parseProviderEmailVerified(
+				? (parseStringBoolean(
 						rawUserInfo[mapping.emailVerified || "email_verified"],
-					)
+					) ?? false)
 				: false,
 			name: readStringClaim(rawUserInfo, mapping.name || "name"),
 			image: readStringClaim(rawUserInfo, mapping.image || "picture"),
@@ -1624,11 +1681,11 @@ async function handleOIDCCallback(
 				]),
 			),
 			id: idToken.sub,
-			email: readStringClaim(idToken, mapping.email || "email"),
+			email: readEmailClaim(idToken),
 			emailVerified: options?.trustEmailVerified
-				? parseProviderEmailVerified(
+				? (parseStringBoolean(
 						idToken[mapping.emailVerified || "email_verified"],
-					)
+					) ?? false)
 				: false,
 			name: readStringClaim(idToken, mapping.name || "name"),
 			image: readStringClaim(idToken, mapping.image || "picture"),
@@ -2127,7 +2184,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				) {
 					throw error;
 				}
-				if (error instanceof APIError && error.statusCode === 400) {
+				if (isAPIError(error) && error.statusCode === 400) {
 					const errorCode = (error.body?.code || "saml_error").toLowerCase();
 					let redirectUrl = resolvedErrorRedirectUrl;
 					if (!redirectUrl) {
@@ -2499,7 +2556,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 					sessionLookupKey,
 				);
 
-			let nameID = session.user.email;
+			let nameID: string | undefined;
 			let sessionIndex: string | undefined;
 			let samlSessionKey: string | undefined;
 
@@ -2512,10 +2569,23 @@ export const initiateSLO = (options?: SSOOptions) => {
 				if (stored) {
 					const data = safeJsonParse<SAMLSessionRecord>(stored.value);
 					if (data) {
-						nameID = data.nameID || nameID;
+						nameID = data.nameID;
 						sessionIndex = data.sessionIndex;
 					}
 				}
+			}
+			if (!nameID) {
+				// The SAML account's accountId is the NameID from the assertion.
+				// With several, the most recently updated is the newest link.
+				const [account] = (
+					await ctx.context.internalAdapter.findAccounts(session.user.id)
+				)
+					.filter((account) => account.providerId === providerId)
+					.sort(
+						(a, b) =>
+							new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+					);
+				nameID = account?.accountId ?? session.user.email;
 			}
 
 			const logoutRequest = sp.createLogoutRequest(idp, "redirect", {

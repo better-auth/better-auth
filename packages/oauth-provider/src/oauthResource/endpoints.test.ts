@@ -97,6 +97,27 @@ describe("resource admin CRUD", () => {
 		});
 	});
 
+	it.each([
+		"https://api.example.com/x#",
+		"javascript:alert(1)",
+		"data:text/plain,hello",
+		"vbscript:msgbox(1)",
+	])(
+		"rejects a resource identifier disallowed by the shared URI schema: %s",
+		async (identifier) => {
+			const instance = await boot();
+			const headers = await signedInHeaders(instance);
+			await expect(
+				instance.auth.api.adminCreateOAuthResource({
+					body: { identifier },
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: expect.objectContaining({ error: "invalid_target" }),
+			});
+		},
+	);
+
 	it("rejects duplicate identifiers", async () => {
 		const instance = await boot();
 		const headers = await signedInHeaders(instance);
@@ -425,6 +446,121 @@ describe("client/resource linking", () => {
 		});
 		expect(links?.length).toBe(1);
 		expect(links?.[0]?.resourceId).toBe("https://api.example.com/remapped");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12357
+ * @see https://github.com/better-auth/better-auth/issues/12314
+ */
+describe("ORM-wrapped database errors", () => {
+	// Drizzle wraps the driver error and puts the query params in its own
+	// message, so the driver's error code lives on `cause`.
+	const wrappedError = (params: string, cause: Error) =>
+		new Error(
+			`Failed query: insert into "oauth_resource" ("identifier") values ($1)\nparams: ${params}`,
+			{ cause },
+		);
+	const uniqueViolation = () =>
+		Object.assign(
+			new Error('duplicate key value violates unique constraint "pk"'),
+			{ code: "23505" },
+		);
+
+	const seedLinkTargets = async (
+		instance: Awaited<ReturnType<typeof boot>>,
+		headers: Headers,
+		identifier: string,
+		clientId: string,
+	) => {
+		await instance.ctx.adapter.create({
+			model: "oauthClient",
+			data: {
+				clientId,
+				redirectUris: ["https://example.com/callback"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			} as never,
+		});
+		await instance.auth.api.adminCreateOAuthResource({
+			body: { identifier },
+			headers,
+		});
+	};
+
+	it("create maps a unique violation on the error cause to already exists", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/wrapped-dup";
+		vi.spyOn(instance.ctx.adapter, "create").mockRejectedValueOnce(
+			wrappedError(identifier, uniqueViolation()),
+		);
+
+		await expect(
+			instance.auth.api.adminCreateOAuthResource({
+				body: { identifier },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: expect.objectContaining({
+				error: "invalid_request",
+				error_description: `resource ${identifier} already exists`,
+			}),
+		});
+	});
+
+	it("create rethrows a non-unique failure whose query params contain collision words", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/duplicate-key";
+		const failure = wrappedError(
+			identifier,
+			new Error("Connection terminated unexpectedly"),
+		);
+		vi.spyOn(instance.ctx.adapter, "create").mockRejectedValueOnce(failure);
+
+		await expect(
+			instance.auth.api.adminCreateOAuthResource({
+				body: { identifier },
+				headers,
+			}),
+		).rejects.toBe(failure);
+	});
+
+	it("link maps a unique violation on the error cause to alreadyLinked", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/wrapped-link";
+		await seedLinkTargets(instance, headers, identifier, "wrapped-client");
+		vi.spyOn(instance.ctx.adapter, "create").mockRejectedValueOnce(
+			wrappedError(`wrapped-client,${identifier}`, uniqueViolation()),
+		);
+
+		const result = await instance.auth.api.adminLinkClientResource({
+			params: { identifier, client_id: "wrapped-client" },
+			headers,
+		});
+		expect(result).toEqual({ linked: true, alreadyLinked: true });
+	});
+
+	it("link rethrows a non-unique failure whose query params contain collision words", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/unique-link";
+		await seedLinkTargets(instance, headers, identifier, "duplicate-client");
+		const failure = wrappedError(
+			`duplicate-client,${identifier}`,
+			new Error("Connection terminated unexpectedly"),
+		);
+		vi.spyOn(instance.ctx.adapter, "create").mockRejectedValueOnce(failure);
+
+		await expect(
+			instance.auth.api.adminLinkClientResource({
+				params: { identifier, client_id: "duplicate-client" },
+				headers,
+			}),
+		).rejects.toBe(failure);
 	});
 });
 

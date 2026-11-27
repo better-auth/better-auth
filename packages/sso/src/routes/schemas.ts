@@ -67,9 +67,10 @@ export function parseSSOProviderAdditionalFields(
 
 const oidcMappingSchema = z
 	.strictObject({
-		email: z.string().meta({
-			description: "Field mapping for email (defaults to 'email')",
-		}),
+		email: z
+			.string()
+			.meta({ description: "Field mapping for email (defaults to 'email')" })
+			.optional(),
 		emailVerified: z
 			.string()
 			.meta({
@@ -77,9 +78,10 @@ const oidcMappingSchema = z
 					"Field mapping for email verification (defaults to 'email_verified')",
 			})
 			.optional(),
-		name: z.string().meta({
-			description: "Field mapping for name (defaults to 'name')",
-		}),
+		name: z
+			.string()
+			.meta({ description: "Field mapping for name (defaults to 'name')" })
+			.optional(),
 		image: z
 			.string()
 			.meta({
@@ -92,16 +94,20 @@ const oidcMappingSchema = z
 
 const samlMappingSchema = z
 	.strictObject({
-		email: z.string().meta({
-			description: "Field mapping for email (defaults to 'email')",
-		}),
+		email: z
+			.string()
+			.meta({ description: "Field mapping for email (defaults to 'email')" })
+			.optional(),
 		emailVerified: z
 			.string()
 			.meta({ description: "Field mapping for email verification" })
 			.optional(),
-		name: z.string().meta({
-			description: "Field mapping for name (defaults to 'displayName')",
-		}),
+		name: z
+			.string()
+			.meta({
+				description: "Field mapping for name (defaults to 'displayName')",
+			})
+			.optional(),
 		firstName: z
 			.string()
 			.meta({

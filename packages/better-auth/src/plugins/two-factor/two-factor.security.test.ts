@@ -2,7 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { createOTP } from "@better-auth/utils/otp";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -163,57 +163,55 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 		},
 	];
 
-	it.each(
-		cases,
-	)("$path: response carries no valid signed session_token or session_data", async ({
-		call,
-	}) => {
-		const res = await call();
-		expect(res.status).toBe(200);
-		expect(res.headers.get("x-new-session-visible")).toBeNull();
+	it.each(cases)(
+		"$path: response carries no valid signed session_token or session_data",
+		async ({ call }) => {
+			const res = await call();
+			expect(res.status).toBe(200);
+			expect(res.headers.get("x-new-session-visible")).toBeNull();
 
-		const setCookies = extractSetCookies(res);
-		expect(setCookies.length).toBeGreaterThan(0);
+			const setCookies = extractSetCookies(res);
+			expect(setCookies.length).toBeGreaterThan(0);
 
-		const sessionEntries = setCookies.filter(
-			(entry) =>
-				entry.startsWith("better-auth.session_token=") ||
-				entry.startsWith("better-auth.session_data=") ||
-				entry.startsWith("better-auth.session_data."),
-		);
+			const sessionEntries = setCookies.filter(
+				(entry) =>
+					entry.startsWith("better-auth.session_token=") ||
+					entry.startsWith("better-auth.session_data=") ||
+					entry.startsWith("better-auth.session_data."),
+			);
 
-		for (const entry of sessionEntries) {
-			expect(getCookieValue(entry)).toBe("");
-		}
+			for (const entry of sessionEntries) {
+				expect(getCookieValue(entry)).toBe("");
+			}
 
-		const twoFactorEntry = setCookies.find((entry) =>
-			entry.startsWith("better-auth.two_factor="),
-		);
-		expect(twoFactorEntry).toBeDefined();
-	});
+			const twoFactorEntry = setCookies.find((entry) =>
+				entry.startsWith("better-auth.two_factor="),
+			);
+			expect(twoFactorEntry).toBeDefined();
+		},
+	);
 
-	it.each(
-		cases,
-	)("$path: replaying captured cookies cannot authenticate or disable 2FA", async ({
-		call,
-	}) => {
-		const res = await call();
-		const setCookies = extractSetCookies(res);
-		const replay = buildCookieHeader(setCookies, [
-			"better-auth.session_token",
-			"better-auth.session_data",
-		]);
+	it.each(cases)(
+		"$path: replaying captured cookies cannot authenticate or disable 2FA",
+		async ({ call }) => {
+			const res = await call();
+			const setCookies = extractSetCookies(res);
+			const replay = buildCookieHeader(setCookies, [
+				"better-auth.session_token",
+				"better-auth.session_data",
+			]);
 
-		const session = await auth.api.getSession({ headers: replay });
-		expect(session).toBeNull();
+			const session = await auth.api.getSession({ headers: replay });
+			expect(session).toBeNull();
 
-		const disableRes = await auth.api.disableTwoFactor({
-			body: { password: testUser.password },
-			headers: replay,
-			asResponse: true,
-		});
-		expect(disableRes.status).toBe(401);
-	});
+			const disableRes = await auth.api.disableTwoFactor({
+				body: { password: testUser.password },
+				headers: replay,
+				asResponse: true,
+			});
+			expect(disableRes.status).toBe(401);
+		},
+	);
 });
 
 describe("two-factor security: sign-in does not leak session cookies (cookieCache disabled)", async () => {
@@ -419,9 +417,18 @@ describe("two-factor security: chunked session_data is fully scrubbed on 2FA-req
  * because only the first caller wins the delete-and-return.
  */
 describe("two-factor security: 2FA challenge is single-use and expiry-bounded", async () => {
+	const sentOTPs: string[] = [];
 	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 		secret: DEFAULT_SECRET,
-		plugins: [twoFactor()],
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendOTP: ({ otp }) => {
+						sentOTPs.push(otp);
+					},
+				},
+			}),
+		],
 	});
 
 	const { headers } = await signInWithTestUser();
@@ -465,6 +472,21 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 		return convertSetCookieToCookie(res.headers);
 	}
 
+	/** The verification row behind the challenge cookie in `challengeHeaders`. */
+	async function findChallengeRow(challengeHeaders: Headers) {
+		const cookie = challengeHeaders.get("cookie") ?? "";
+		const signed = decodeURIComponent(
+			/(?:^|;\s*)better-auth\.two_factor=([^;]+)/.exec(cookie)?.[1] ?? "",
+		);
+		const identifier = signed.slice(0, signed.lastIndexOf("."));
+		const row = await db.findOne<Verification>({
+			model: "verification",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(row?.value).toBe(userId);
+		return row!;
+	}
+
 	function countSessions(): Promise<Session[]> {
 		return db.findMany<Session>({
 			model: "session",
@@ -474,18 +496,14 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 
 	it("rejects an expired two-factor sign-in challenge even with a valid TOTP", async () => {
 		const challengeHeaders = await startChallenge();
-		const challengeRow = await db.findOne<Verification>({
-			model: "verification",
-			where: [{ field: "value", value: userId }],
-		});
-		expect(challengeRow).not.toBeNull();
+		const challengeRow = await findChallengeRow(challengeHeaders);
 
 		// Force the challenge past its expiry while leaving the row present, so
 		// the only thing standing between a stale cookie and a session is the
 		// server-side expiry gate.
 		await db.update({
 			model: "verification",
-			where: [{ field: "id", value: challengeRow!.id }],
+			where: [{ field: "id", value: challengeRow.id }],
 			update: { expiresAt: new Date(Date.now() - 60 * 1000) },
 		});
 
@@ -515,6 +533,63 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 
 		const sessionsAfter = await countSessions();
 		expect(sessionsAfter.length).toBe(sessionsBefore.length);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10000
+	 */
+	it("sends no OTP for an expired challenge", async () => {
+		const challengeHeaders = await startChallenge();
+		const challengeRow = await findChallengeRow(challengeHeaders);
+		await db.update({
+			model: "verification",
+			where: [{ field: "id", value: challengeRow.id }],
+			update: { expiresAt: new Date(Date.now() - 60 * 1000) },
+		});
+		sentOTPs.length = 0;
+
+		for (let i = 0; i < 2; i++) {
+			const sent = await auth.api.sendTwoFactorOTP({
+				body: {},
+				headers: challengeHeaders,
+				asResponse: true,
+			});
+			expect(sent.status).toBe(401);
+			const verified = await auth.api.verifyTwoFactorOTP({
+				body: { code: "000000" },
+				headers: challengeHeaders,
+				asResponse: true,
+			});
+			expect(verified.status).toBe(401);
+		}
+		expect(sentOTPs).toEqual([]);
+	});
+
+	it("sends no OTP for a challenge with an invalid expiry", async () => {
+		const challengeHeaders = await startChallenge();
+		const challengeRow = await findChallengeRow(challengeHeaders);
+		// The database rejects an invalid date, but a corrupt secondary-storage
+		// entry can still carry one.
+		const { internalAdapter } = await auth.$context;
+		const lookup = vi
+			.spyOn(internalAdapter, "findVerificationValue")
+			.mockResolvedValueOnce({
+				...challengeRow,
+				expiresAt: new Date(Number.NaN),
+			});
+		sentOTPs.length = 0;
+
+		try {
+			const sent = await auth.api.sendTwoFactorOTP({
+				body: {},
+				headers: challengeHeaders,
+				asResponse: true,
+			});
+			expect(sent.status).toBe(401);
+		} finally {
+			lookup.mockRestore();
+		}
+		expect(sentOTPs).toEqual([]);
 	});
 
 	it("two concurrent verifications of the same challenge yield exactly one session", async () => {

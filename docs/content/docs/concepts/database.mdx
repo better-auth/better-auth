@@ -125,13 +125,11 @@ await runMigrations();
 
 ## Schema Validation
 
-During initialization, Better Auth compares the schema with the tables it writes and reports missing tables, missing columns, and required columns it never fills, together with their fixes. Errors appear through your configured logger without waiting for an authentication request. Requests await the same check and fail if the schema does not match; validation does not automatically stop your server or build.
+When the auth instance is first used, Better Auth checks that your database has the tables and columns it needs. If they don't match, requests fail with an error that explains how to fix it. To check ahead of time, run [`npx auth@latest check schema`](/docs/concepts/cli#schema).
 
-Validation is enabled by default, including in production, and caches a clean result or mismatch per adapter instance. Programmatic migrations invalidate cached checks for the same database instance. Requests waiting on an invalidated check await the new result. Restart after applying schema changes with other tools. Kysely reads live database metadata and needs database access during initialization. Drizzle checks the configured schema object and Prisma checks the generated client's data model, without querying the database. These local checks cannot detect migrations that were not applied to the database. The compact `prisma-client` model omits nullability, so required unwritten columns are reported by `auth generate` instead. Custom adapters without a registered check are not validated.
+Drizzle and Prisma are checked against your schema definitions, so the check cannot tell whether migrations were applied.
 
-For adapters without schema validation, initialization logs a warning if you explicitly set `validateSchema: true`, or a debug message if you omit the option. Database operations proceed normally.
-
-Set `advanced.database.validateSchema` to `false` to disable runtime validation and its skip message. `auth migrate` and `auth generate` retain their own schema diagnostics.
+To disable runtime validation, set `advanced.database.validateSchema` to `false`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -871,7 +869,7 @@ This configuration allows you to:
 
 ### Database Hooks
 
-Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in Better Auth. You can create hooks for the following models: **user**, **session**, and **account**.
+Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in Better Auth. You can create hooks for the following models: **user**, **session**, **account**, and **verification**.
 
 <Callout type="warn">
   Additional fields are supported, however full type inference for these fields isn't yet supported.
@@ -882,13 +880,16 @@ There are two types of hooks you can define:
 
 #### 1. Before Hook
 
-* **Purpose**: This hook is called before the respective entity (user, session, or account) is created, updated, or deleted.
-* **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload.
+* **Purpose**: This hook is called before the respective entity (user, session, account, or verification) is created, updated, or deleted.
+* **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload. On MongoDB with transactions, a before hook can run more than once for one operation: when MongoDB aborts the transaction because of a concurrent write, the adapter runs it again. Send emails and call other services from an after hook instead. When a `verification` write that stores a code, link, or token is aborted, such as the create on a first send or the update that replaces a code on a repeated send, endpoints that would hand it out fail with `FAILED_TO_CREATE_VERIFICATION` instead. A few endpoints handle it differently:
+  * Endpoints whose reply hides whether an account exists, such as password reset and the email OTP and phone number reset requests, send nothing and return their usual reply.
+  * The OAuth authorization endpoint redirects to the client with `error=server_error`.
+  * Optional records, such as a trusted device or the `set-ott` header on sign-in, are skipped, and sign-in still succeeds.
 
 #### 2. After Hook
 
 * **Purpose**: This hook is called after the respective entity is created or updated.
-* **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
+* **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated. When the operation is part of a transaction, the hook runs after it commits and is skipped if it rolls back. If transactions aren't enabled for your database adapter, the hook also runs when a later step of the same request fails, because the database change was already applied.
 
 **Example Usage**
 

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testWithTmpDir } from "../../../../test/test-utils";
+import { possibleAuthConfigPaths } from "../../../utils/config-paths";
 import { FRAMEWORKS } from "../configs/frameworks.config";
 import { detectFramework } from "./framework";
 
@@ -331,7 +332,40 @@ describe("Init CLI - framework utility", () => {
 				});
 
 				expect(result?.routeHandler).not.toBeNull();
-				expect(result?.routeHandler?.path).toBe("app/lib/auth.server.ts");
+				expect(result?.routeHandler?.path).toBe("app/routes/api.auth.$.ts");
+			},
+		);
+
+		it.each([
+			{
+				id: "remix",
+				typeImport: `import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node"`,
+				loaderArgs: "LoaderFunctionArgs",
+				actionArgs: "ActionFunctionArgs",
+			},
+			{
+				id: "react-router-v7",
+				typeImport: `import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router"`,
+				loaderArgs: "LoaderFunctionArgs",
+				actionArgs: "ActionFunctionArgs",
+			},
+		])(
+			"should mount auth.handler in a $id resource route",
+			({ id, typeImport, loaderArgs, actionArgs }) => {
+				const framework = FRAMEWORKS.find((f) => f.id === id);
+				const routeHandler = framework?.routeHandler;
+
+				expect(routeHandler?.path).toBe("app/routes/api.auth.$.ts");
+				expect(possibleAuthConfigPaths).not.toContain(routeHandler?.path);
+				expect(routeHandler?.code).toContain(`from "~/lib/auth.server"`);
+				expect(routeHandler?.code).toContain(typeImport);
+				expect(routeHandler?.code).toContain(
+					`export async function loader({ request }: ${loaderArgs}) {\n\treturn auth.handler(request);\n}`,
+				);
+				expect(routeHandler?.code).toContain(
+					`export async function action({ request }: ${actionArgs}) {\n\treturn auth.handler(request);\n}`,
+				);
+				expect(routeHandler?.code).not.toContain("betterAuth(");
 			},
 		);
 

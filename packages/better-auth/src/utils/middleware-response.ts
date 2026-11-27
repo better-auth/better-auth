@@ -12,6 +12,9 @@ export const middlewareResponse = ({ message, status, code }: Params) => ({
 		}),
 		{
 			status,
+			headers: {
+				"Content-Type": "application/json",
+			},
 		},
 	),
 });

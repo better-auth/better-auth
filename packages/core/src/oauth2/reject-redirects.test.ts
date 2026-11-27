@@ -1,39 +1,66 @@
-import { describe, expect, it } from "vitest";
-import { BetterAuthError } from "../error";
-import { assertResponseNotRedirect } from "./reject-redirects";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fetchRefusingRedirects } from "./reject-redirects";
 
-const fakeResponse = (init: { type?: string; status: number }): Response =>
-	({ type: "basic", ...init }) as unknown as Response;
+/**
+ * @see https://fetch.spec.whatwg.org/#concept-filtered-response-opaque-redirect
+ */
+describe("fetchRefusingRedirects", () => {
+	const endpoint = "https://idp.example/token";
+	const mockedFetch = vi.fn<typeof fetch>();
+	beforeEach(() => {
+		mockedFetch.mockReset();
+		vi.stubGlobal("fetch", mockedFetch);
+	});
+	afterEach(() => vi.unstubAllGlobals());
 
-describe("assertResponseNotRedirect", () => {
-	it("throws on a 3xx status (undici-style manual redirect)", () => {
-		for (const status of [301, 302, 303, 307, 308]) {
-			expect(() =>
-				assertResponseNotRedirect(
-					"https://idp.example/token",
-					fakeResponse({ status }),
-				),
-			).toThrow(BetterAuthError);
-		}
+	it.each([301, 302, 303, 307, 308])(
+		"refuses HTTP %s without following it",
+		async (status) => {
+			mockedFetch.mockResolvedValueOnce(
+				new Response("", {
+					status,
+					headers: { location: "http://internal.example" },
+				}),
+			);
+
+			await expect(fetchRefusingRedirects(endpoint)).rejects.toThrow(
+				/refuse redirects/,
+			);
+			expect(mockedFetch.mock.calls[0]?.[1]?.redirect).toBe("manual");
+		},
+	);
+
+	it("refuses an opaque redirect response", async () => {
+		const response = new Response("", { status: 302 });
+		Object.defineProperties(response, {
+			type: { value: "opaqueredirect" },
+			status: { value: 0 },
+		});
+		mockedFetch.mockResolvedValueOnce(response);
+
+		await expect(fetchRefusingRedirects(endpoint)).rejects.toThrow(
+			/refuse redirects/,
+		);
 	});
 
-	it("throws on an opaque redirect (spec-runtime manual redirect)", () => {
-		expect(() =>
-			assertResponseNotRedirect(
-				"https://idp.example/token",
-				fakeResponse({ type: "opaqueredirect", status: 0 }),
-			),
-		).toThrow(BetterAuthError);
-	});
+	it.each([200, 304, 400, 401])(
+		"preserves HTTP %s responses",
+		async (status) => {
+			mockedFetch.mockResolvedValueOnce(new Response(null, { status }));
 
-	it("does not throw on a non-redirect response", () => {
-		for (const status of [200, 304, 400, 401]) {
-			expect(() =>
-				assertResponseNotRedirect(
-					"https://idp.example/token",
-					fakeResponse({ status }),
-				),
-			).not.toThrow();
-		}
+			await expect(fetchRefusingRedirects(endpoint)).resolves.toBeDefined();
+		},
+	);
+
+	it("preserves redirect refusal when an error callback throws", async () => {
+		mockedFetch.mockResolvedValueOnce(new Response("", { status: 302 }));
+
+		await expect(
+			fetchRefusingRedirects(endpoint, {
+				onError: () => {
+					throw new Error("custom callback");
+				},
+			}),
+		).rejects.toThrow(/refuse redirects/);
 	});
 });

@@ -3,14 +3,24 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { isLoopbackIP } from "@better-auth/core/utils/host";
-import { isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
-import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
+import { isUniqueViolation } from "@better-auth/core/db/internal";
+import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
+import {
+	INSECURE_REDIRECT_URI_MESSAGE,
+	isNativePrivateUseRedirectUri,
+} from "@better-auth/core/utils/redirect-uri";
+import {
+	APIError,
+	getSessionFromCtx,
+	isAPIError,
+	NO_STORE_HEADERS,
+} from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
-import { validatePublicClientJwks } from "./client-jwks";
+import { assertValidClientJwks } from "./client-jwks";
 import { stripReservedOAuthClientMetadataExtensions } from "./client-metadata";
 import {
+	getClientDiscoveries,
 	getSupportedAuthMethods,
 	getSupportedGrantTypes,
 	isExtensionTokenEndpointAuthMethod,
@@ -20,7 +30,9 @@ import {
 	validateClientCredentialsScopes,
 } from "./oauthClient/client-credentials";
 import { assertClientPrivileges } from "./oauthClient/privileges";
+import { assertResourcePrivileges } from "./oauthResource/privileges";
 import { getResource } from "./resources";
+import { schema as oauthProviderSchema } from "./schema";
 import type {
 	ClientRegistrationRequest,
 	OAuthClientAdministrativeResponse,
@@ -31,8 +43,17 @@ import type {
 	Scope,
 } from "./types";
 import type { GrantType, OAuthClient } from "./types/oauth";
-import { parseClientMetadata, storeClientSecret } from "./utils";
-import { isPrivateHostname } from "./utils/client-assertion";
+import {
+	challengeHeaders,
+	isInsecureRedirectUriAllowed,
+	isRedirectUriTransportAllowed,
+	parseClientMetadata,
+	storeClientSecret,
+} from "./utils";
+import {
+	isCrossOriginJwksUriAllowedByDiscovery,
+	isPrivateHostname,
+} from "./utils/client-assertion";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
 const DEFAULT_REGISTRATION_GRANT_TYPES = [
@@ -80,9 +101,32 @@ function resolveRegistrationResponseTypes(
 	return grantTypes.includes("authorization_code") ? ["code"] : undefined;
 }
 
+/**
+ * The requested grants this server supports. Clients such as MCP connectors
+ * send one grant union to every server, so a metadata document or a dynamic
+ * registration may list grants this server does not issue. Throws when the
+ * request shares no grant with the server.
+ */
+function resolveMutuallySupportedGrantTypes(
+	opts: OAuthOptions<Scope[]>,
+	grantTypes: GrantType[],
+): GrantType[] {
+	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
+	const mutualGrantTypes = grantTypes.filter((grantType) =>
+		supportedGrantTypes.has(grantType),
+	);
+	if (mutualGrantTypes.length === 0) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
+		});
+	}
+	return mutualGrantTypes;
+}
+
 function applyOAuthClientRegistrationDefaults(
 	client: OAuthClientRegistrationMetadata,
-	defaultApplicationType: "web" | null = "web",
+	defaultApplicationType: "web" | "native" | null = "web",
 ): OAuthClientRegistrationMetadata {
 	const grantTypes = resolveRegistrationGrantTypes(client);
 	return {
@@ -97,14 +141,78 @@ function applyOAuthClientRegistrationDefaults(
 	};
 }
 
-const FORBIDDEN_NATIVE_REDIRECT_SCHEMES = new Set([
-	"file:",
-	"ftp:",
-	"mailto:",
-	"javascript:",
-	"data:",
-	"vbscript:",
-]);
+/**
+ * Client fields that a metadata document sets and a refresh clears when it
+ * omits them. `subjectType` is not listed: changing it changes every user's
+ * `sub` for the client (OIDC Core §8), so an omitted value keeps the stored
+ * one. A document that states another value still changes it.
+ */
+const METADATA_DOCUMENT_CLIENT_FIELDS = [
+	"name",
+	"uri",
+	"icon",
+	"tos",
+	"policy",
+	"contacts",
+	"jwks",
+	"jwksUri",
+	"softwareId",
+	"softwareVersion",
+	"softwareStatement",
+	"postLogoutRedirectUris",
+	"responseTypes",
+	"dpopBoundAccessTokens",
+] as const satisfies readonly (keyof SchemaClient<Scope[]>)[];
+
+/**
+ * The value a refresh stores for a document field the document omits. Some
+ * adapters store a list field in a non-nullable array column, so a list is
+ * cleared to an empty list instead of `null`.
+ */
+function clearedDocumentFieldValue(
+	field: (typeof METADATA_DOCUMENT_CLIENT_FIELDS)[number],
+): [] | null {
+	return oauthProviderSchema.oauthClient.fields[field].type === "string[]"
+		? []
+		: null;
+}
+
+function isCustomSchemeWithHost(redirectUri: string): boolean {
+	const url = new URL(redirectUri);
+	return (
+		url.protocol !== "http:" && url.protocol !== "https:" && url.host !== ""
+	);
+}
+
+function isNonHttpRedirectUri(redirectUri: string): boolean {
+	try {
+		const protocol = new URL(redirectUri).protocol;
+		return protocol !== "http:" && protocol !== "https:";
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Server-owned default for dynamic registrations that omit `application_type`.
+ * `"infer"` classifies as native when any redirect URI uses a non-http(s)
+ * scheme or http on an exact loopback host, because a web client can never
+ * register either. Every URI is then validated against the native rules. A
+ * sent `application_type` is never overridden because
+ * `applyOAuthClientRegistrationDefaults` only fills the absent field.
+ */
+function resolveDynamicRegistrationDefaultApplicationType(
+	opts: OAuthOptions<Scope[]>,
+	client: OAuthClientRegistrationMetadata,
+): "web" | "native" {
+	const configured = opts.clientRegistrationDefaultApplicationType ?? "web";
+	if (configured !== "infer") return configured;
+	return (client.redirect_uris ?? []).some(
+		(uri) => isNonHttpRedirectUri(uri) || isExactLoopbackHttpRedirectUri(uri),
+	)
+		? "native"
+		: "web";
+}
 
 function invalidRedirectUri(description: string): never {
 	throw new APIError("BAD_REQUEST", {
@@ -126,14 +234,19 @@ function getRawHttpHostname(redirectUri: string): string | null {
 	return (hostAndPort.split(":")[0] ?? "").toLowerCase();
 }
 
-async function resolveClientRegistrationResources(
-	ctx: GenericEndpointContext,
+function isExactLoopbackHttpRedirectUri(redirectUri: string): boolean {
+	const hostname = getRawHttpHostname(redirectUri);
+	return (
+		hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
+	);
+}
+
+function assertDynamicRegistrationResourcesAllowed(
 	opts: OAuthOptions<Scope[]>,
 	requestedResources: readonly string[],
-): Promise<string[]> {
-	const defaultResources = opts.clientRegistrationDefaultResources ?? [];
+) {
 	const allowedResources = new Set([
-		...defaultResources,
+		...(opts.clientRegistrationDefaultResources ?? []),
 		...(opts.clientRegistrationAllowedResources ?? []),
 	]);
 	for (const identifier of requestedResources) {
@@ -144,7 +257,14 @@ async function resolveClientRegistrationResources(
 			});
 		}
 	}
+}
 
+async function resolveClientRegistrationResources(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	requestedResources: readonly string[],
+): Promise<string[]> {
+	const defaultResources = opts.clientRegistrationDefaultResources ?? [];
 	const resources = [...new Set([...defaultResources, ...requestedResources])];
 	for (const identifier of resources) {
 		const row = await getResource(ctx, opts, identifier);
@@ -167,6 +287,7 @@ async function resolveClientRegistrationResources(
 function validateClientRedirectUri(
 	redirectUri: string,
 	applicationType: "web" | "native",
+	opts: OAuthOptions<Scope[]>,
 ) {
 	let url: URL;
 	try {
@@ -193,13 +314,9 @@ function validateClientRedirectUri(
 	}
 	const isRedirectLoopback =
 		isLoopbackIP(url.hostname) || url.hostname === "localhost";
-	const rawHttpHostname = getRawHttpHostname(redirectUri);
-	const isAllowedNativeHttpLoopback =
-		rawHttpHostname === "localhost" ||
-		rawHttpHostname === "127.0.0.1" ||
-		rawHttpHostname === "[::1]";
 
 	if (applicationType === "web") {
+		if (isHttp && isInsecureRedirectUriAllowed(opts, url)) return;
 		if (!isHttps || isRedirectLoopback) {
 			invalidRedirectUri(
 				`web clients require https redirect URIs on non-loopback hosts: ${redirectUri}`,
@@ -217,31 +334,20 @@ function validateClientRedirectUri(
 		return;
 	}
 	if (isHttp) {
-		if (!isAllowedNativeHttpLoopback) {
-			invalidRedirectUri(
-				`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
-			);
+		if (isExactLoopbackHttpRedirectUri(redirectUri)) return;
+		// Loopback hosts keep the exact-host rule; the callback covers other hosts.
+		if (!isLoopbackHost(url.host) && isInsecureRedirectUriAllowed(opts, url)) {
+			return;
 		}
-		return;
-	}
-
-	if (
-		FORBIDDEN_NATIVE_REDIRECT_SCHEMES.has(url.protocol) ||
-		!isReverseDomainPrivateUseRedirectUri(url)
-	) {
 		invalidRedirectUri(
-			`native private-use redirect URI schemes must be well-formed reverse-domain names, omit the naming authority, and must not use a reserved scheme: ${redirectUri}`,
+			`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
 		);
 	}
-}
 
-function assertValidRegistrationJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
-	const result = validatePublicClientJwks(jwks);
-	if (!result.valid) {
-		throw new APIError("BAD_REQUEST", {
-			error: "invalid_client_metadata",
-			error_description: result.error,
-		});
+	if (!isNativePrivateUseRedirectUri(url)) {
+		invalidRedirectUri(
+			`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with a host and a path: ${redirectUri}`,
+		);
 	}
 }
 
@@ -288,14 +394,30 @@ export async function registerEndpoint(
 				error_description: "Authentication required for client registration",
 			},
 			{
-				"WWW-Authenticate": "Bearer",
+				...challengeHeaders("Bearer"),
 				...NO_STORE_HEADERS,
 			},
 		);
 	}
 
+	// RFC 7591 §3.2.1 lets the server replace requested metadata: register the
+	// supported grants and return them, instead of rejecting the whole request.
+	const grantTypes = body.grant_types?.length
+		? resolveMutuallySupportedGrantTypes(opts, body.grant_types)
+		: body.grant_types;
+	const droppedAuthorizationCode =
+		body.grant_types?.includes("authorization_code") &&
+		!grantTypes?.includes("authorization_code");
+	const metadata = {
+		...body,
+		grant_types: grantTypes,
+		// `code`, the only response type, goes with `authorization_code`; the
+		// defaults derive response_types from the registered grants instead.
+		response_types: droppedAuthorizationCode ? undefined : body.response_types,
+	};
+
 	if (!session && !isTokenAuthorized) {
-		if (body.grant_types?.includes("client_credentials")) {
+		if (metadata.grant_types?.includes("client_credentials")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
@@ -323,7 +445,7 @@ export async function registerEndpoint(
 				})
 			: undefined);
 	const response = await createOAuthClientRegistration(ctx, opts, {
-		metadata: body,
+		metadata,
 		registrationSource: "dynamic",
 		userId: referenceId ? undefined : session?.session.userId,
 		referenceId,
@@ -338,6 +460,8 @@ export async function checkOAuthClient(
 	opts: OAuthOptions<Scope[]>,
 	settings?: {
 		registrationSource?: "dynamic" | "managed" | "clientMetadataDocument";
+		/** Discovery that owns a `clientMetadataDocument` registration. */
+		clientDiscoveryId?: string;
 		ctx?: GenericEndpointContext;
 	},
 ) {
@@ -345,7 +469,11 @@ export async function checkOAuthClient(
 		settings?.registrationSource === "clientMetadataDocument";
 	const clientWithDefaults = applyOAuthClientRegistrationDefaults(
 		client,
-		isClientMetadataDocument ? null : "web",
+		isClientMetadataDocument
+			? null
+			: settings?.registrationSource === "dynamic"
+				? resolveDynamicRegistrationDefaultApplicationType(opts, client)
+				: "web",
 	);
 	const tokenEndpointAuthMethod =
 		clientWithDefaults.token_endpoint_auth_method ?? "client_secret_basic";
@@ -399,27 +527,41 @@ export async function checkOAuthClient(
 		// A CIMD document may omit application_type. Preserve that absence in
 		// storage while validating against the safe union of web and native
 		// redirect forms. The native validator is that union: non-loopback HTTPS,
-		// exact loopback HTTP, or an authority-free private-use scheme.
+		// exact loopback HTTP, an authority-free reverse-domain private-use
+		// scheme, or a host-bearing non-reserved custom scheme.
 		validateClientRedirectUri(
 			uri,
 			(applicationType as "web" | "native" | undefined) ??
 				(isClientMetadataDocument ? "native" : "web"),
+			opts,
 		);
+	}
+	for (const uri of clientWithDefaults.post_logout_redirect_uris ?? []) {
+		let url: URL | undefined;
+		try {
+			url = new URL(uri);
+		} catch {}
+		if (!url || url.username || url.password) {
+			invalidRedirectUri(
+				`post-logout redirect URI must be an absolute URI without credentials: ${uri}`,
+			);
+		}
+		if (!isRedirectUriTransportAllowed(opts, uri)) {
+			invalidRedirectUri(`${INSECURE_REDIRECT_URI_MESSAGE}: ${uri}`);
+		}
 	}
 
 	// Validate correlation between grant_types and response_types
-	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 	if (isClientMetadataDocument) {
 		// One metadata document serves every authorization server the client talks
 		// to, so it declares a grant union; require one mutual grant and let the
 		// token endpoint refuse the rest.
-		if (!grantTypes.some((grantType) => supportedGrantTypes.has(grantType))) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
-			});
-		}
+		resolveMutuallySupportedGrantTypes(opts, grantTypes);
 	} else {
+		// Dynamic registration drops unsupported requested grants before this
+		// check, so this rejects managed clients, client updates, and a defaulted
+		// grant the server does not support.
+		const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 		for (const grantType of grantTypes) {
 			if (!supportedGrantTypes.has(grantType)) {
 				throw new APIError("BAD_REQUEST", {
@@ -469,6 +611,19 @@ export async function checkOAuthClient(
 				error: "invalid_client_metadata",
 				error_description:
 					"pairwise subject_type requires server pairwiseSecret configuration",
+			});
+		}
+		// The pairwise sector is the redirect URI host. Any app can register a
+		// custom scheme, so the host in `app://rp.example.com/callback` does not
+		// identify the client and would share an HTTPS client's sector.
+		if (
+			clientWithDefaults.subject_type === "pairwise" &&
+			clientWithDefaults.redirect_uris?.some(isCustomSchemeWithHost)
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"pairwise clients cannot use custom-scheme redirect URIs that include a host",
 			});
 		}
 		// Per OIDC Core §8.1, when multiple redirect_uris have different hosts,
@@ -576,7 +731,21 @@ export async function checkOAuthClient(
 						clientId !== undefined &&
 						URL.canParse(clientId) &&
 						new URL(clientId).origin === uri.origin;
-					if (!isSameOriginClientMetadataDocumentKey) {
+					const isAllowedCrossOriginClientMetadataDocumentKey =
+						!isSameOriginClientMetadataDocumentKey &&
+						isClientMetadataDocument &&
+						clientId !== undefined &&
+						(await isCrossOriginJwksUriAllowedByDiscovery(
+							settings.ctx,
+							getClientDiscoveries(opts).find(
+								(discovery) => discovery.id === settings.clientDiscoveryId,
+							),
+							{ clientId, jwksUri: clientWithDefaults.jwks_uri },
+						));
+					if (
+						!isSameOriginClientMetadataDocumentKey &&
+						!isAllowedCrossOriginClientMetadataDocumentKey
+					) {
 						throw new APIError("BAD_REQUEST", {
 							error: "invalid_client_metadata",
 							error_description:
@@ -585,7 +754,7 @@ export async function checkOAuthClient(
 					}
 				}
 			} catch (e) {
-				if (e instanceof APIError) throw e;
+				if (isAPIError(e)) throw e;
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_client_metadata",
 					error_description: "jwks_uri must be a valid URL",
@@ -593,7 +762,7 @@ export async function checkOAuthClient(
 			}
 		}
 		if (clientWithDefaults.jwks) {
-			assertValidRegistrationJwks(clientWithDefaults.jwks);
+			assertValidClientJwks(clientWithDefaults.jwks);
 		}
 	}
 	// private_key_jwt requires key material; other methods may still register
@@ -679,7 +848,11 @@ export type CreateOAuthClientRegistrationInput =
 	  })
 	| (CreateOAuthClientRegistrationBaseInput & {
 			registrationSource: "managed";
-			requestedResources?: never;
+			/**
+			 * Resources to link to the new client. The caller must authorize the
+			 * `link` resource privilege for each one before persisting.
+			 */
+			requestedResources?: string[];
 			/** Server-owned scope ceiling configured by an administrator. */
 			clientCredentialsScopes?: Scope[];
 	  });
@@ -760,7 +933,14 @@ async function persistOAuthClientRegistration(
 			: input.metadata;
 	const body = applyOAuthClientRegistrationDefaults(
 		registrationMetadata,
-		input.registrationSource === "clientMetadataDocument" ? null : "web",
+		input.registrationSource === "clientMetadataDocument"
+			? null
+			: input.registrationSource === "dynamic"
+				? resolveDynamicRegistrationDefaultApplicationType(
+						opts,
+						registrationMetadata,
+					)
+				: "web",
 	);
 
 	// Determine whether registration request for public client
@@ -775,6 +955,10 @@ async function persistOAuthClientRegistration(
 	// Check if client parameters are valid combination
 	await checkOAuthClient(body, opts, {
 		registrationSource: input.registrationSource,
+		clientDiscoveryId:
+			input.registrationSource === "clientMetadataDocument"
+				? input.clientDiscoveryId
+				: undefined,
 		ctx,
 	});
 
@@ -836,12 +1020,11 @@ async function persistOAuthClientRegistration(
 		user_id: owner?.referenceId ? undefined : owner?.userId,
 		reference_id: owner?.referenceId,
 	});
+	// A discovery refresh leaves the stored ceiling alone (see the update below).
 	schema.clientCredentialsScopes =
-		input.registrationSource === "clientMetadataDocument"
-			? (input.existingClient?.clientCredentialsScopes ?? [])
-			: input.registrationSource === "managed"
-				? (input.clientCredentialsScopes ?? [])
-				: [];
+		input.registrationSource === "managed"
+			? (input.clientCredentialsScopes ?? [])
+			: [];
 	schema.clientDiscoveryId =
 		input.registrationSource === "clientMetadataDocument"
 			? input.clientDiscoveryId
@@ -852,12 +1035,17 @@ async function persistOAuthClientRegistration(
 	) {
 		schema.applicationType = null;
 	}
+	const requestedResources =
+		input.registrationSource === "clientMetadataDocument"
+			? []
+			: (input.requestedResources ?? []);
+	if (input.registrationSource === "dynamic") {
+		assertDynamicRegistrationResourcesAllowed(opts, requestedResources);
+	}
 	const resources = await resolveClientRegistrationResources(
 		ctx,
 		opts,
-		input.registrationSource === "dynamic"
-			? (input.requestedResources ?? [])
-			: [],
+		requestedResources,
 	);
 	const clientModel = opts.schema?.oauthClient?.modelName ?? "oauthClient";
 	const clientResourceModel =
@@ -877,6 +1065,24 @@ async function persistOAuthClientRegistration(
 			let storedClient: SchemaClient<Scope[]>;
 			let created = false;
 			if (existingClient) {
+				// Server-owned fields (disabled, consent and logout settings, the
+				// ceiling) can change while this refresh fetches metadata, so the
+				// refresh never writes them.
+				const {
+					clientCredentialsScopes: _ceiling,
+					disabled: _disabled,
+					skipConsent: _skipConsent,
+					enableEndSession: _enableEndSession,
+					...refreshed
+				} = schema;
+				// An update skips undefined values, so a field the document no longer
+				// lists is cleared explicitly.
+				const omittedDocumentFields = Object.fromEntries(
+					METADATA_DOCUMENT_CLIENT_FIELDS.map((field) => [
+						field,
+						refreshed[field] ?? clearedDocumentFieldValue(field),
+					]),
+				);
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
 					model: clientModel,
 					where: [
@@ -887,10 +1093,8 @@ async function persistOAuthClientRegistration(
 						},
 					],
 					update: {
-						...schema,
-						disabled: existingClient.disabled,
-						skipConsent: existingClient.skipConsent,
-						enableEndSession: existingClient.enableEndSession,
+						...refreshed,
+						...omittedDocumentFields,
 						createdAt: existingClient.createdAt,
 						updatedAt: new Date(iat * 1000),
 					},
@@ -915,7 +1119,7 @@ async function persistOAuthClientRegistration(
 				} catch (error) {
 					if (
 						input.registrationSource === "clientMetadataDocument" &&
-						isUniqueConstraintError(error)
+						isUniqueViolation(error)
 					) {
 						throw {
 							[CLIENT_REGISTRATION_COLLISION]: true,
@@ -954,7 +1158,7 @@ async function persistOAuthClientRegistration(
 				} catch (error) {
 					if (
 						input.registrationSource === "clientMetadataDocument" &&
-						isUniqueConstraintError(error)
+						isUniqueViolation(error)
 					) {
 						throw {
 							[CLIENT_REGISTRATION_COLLISION]: true,
@@ -1129,36 +1333,6 @@ export async function registerClientMetadataDocument(
 	}
 }
 
-function isUniqueConstraintError(error: unknown): boolean {
-	if (!error || typeof error !== "object") return false;
-	const candidate = error as {
-		code?: unknown;
-		errno?: unknown;
-		name?: unknown;
-		message?: unknown;
-	};
-	const code = String(candidate.code ?? candidate.errno ?? "");
-	if (
-		[
-			"1062",
-			"11000",
-			"23505",
-			"ER_DUP_ENTRY",
-			"P2002",
-			"SQLITE_CONSTRAINT_UNIQUE",
-		].includes(code)
-	) {
-		return true;
-	}
-	if (candidate.name === "MongoServerError" && candidate.code === 11000) {
-		return true;
-	}
-	return (
-		typeof candidate.message === "string" &&
-		/(?:duplicate|unique constraint|unique key)/i.test(candidate.message)
-	);
-}
-
 export function createOAuthClientEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -1207,12 +1381,17 @@ export async function createOAuthClientEndpoint(
 			"configure-client-credentials-scopes",
 		);
 	}
+	const requestedResources = settings?.admin ? metadata.resources : undefined;
+	for (const identifier of new Set(requestedResources ?? [])) {
+		await assertResourcePrivileges(ctx, session, opts, "link", identifier);
+	}
 	const registrationInput: CreateOAuthClientRegistrationInput = {
 		metadata,
 		registrationSource: "managed",
 		userId: referenceId ? undefined : session.session.userId,
 		referenceId,
 		clientCredentialsScopes,
+		...(requestedResources ? { requestedResources } : {}),
 	};
 	const responseBody = settings?.admin
 		? await createOAuthClientAdministrativeRegistration(
@@ -1296,9 +1475,7 @@ export function oauthToSchema(
 		inputMetadata ?? {},
 	);
 	const metadata =
-		metadataObj && Object.keys(metadataObj).length
-			? JSON.stringify(metadataObj)
-			: undefined;
+		metadataObj && Object.keys(metadataObj).length ? metadataObj : undefined;
 
 	return {
 		// Important Fields

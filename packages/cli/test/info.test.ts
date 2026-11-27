@@ -127,6 +127,41 @@ describe("info command", () => {
 		});
 	});
 
+	it("keeps --json output parseable when --copy fails", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({ name: "test-project" }),
+		);
+
+		// No clipboard tool is on an empty PATH, so the copy fails and says so.
+		const { stdout, stderr } = await execFileAsync(
+			process.execPath,
+			[cliPath, "info", "--json", "--copy"],
+			{
+				cwd: tmpDir,
+				env: {
+					...process.env,
+					PATH: "",
+				},
+			},
+		);
+
+		expect(JSON.parse(stdout)).toHaveProperty("system");
+		expect(stderr).toContain("Could not copy to clipboard");
+	});
+
+	it("prints no tips in a non-interactive run", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({ name: "test-project" }),
+		);
+
+		const { stdout, stderr } = await runInfoTextCommand();
+
+		expect(stdout).toContain("Better Auth System Information");
+		expect(stdout + stderr).not.toContain("Tip:");
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/11126#discussion_r3920527164
 	 */
@@ -448,6 +483,91 @@ describe("info command", () => {
 				// Check that sensitive keys are redacted
 				const configStr = JSON.stringify(plugin.config);
 				expect(configStr).toContain("[REDACTED]");
+			}
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11738
+	 */
+	describe("secret key shapes", () => {
+		const secrets = {
+			api_key: "fake-snake-api-key",
+			API_KEY: "fake-upper-api-key",
+			"api-key": "fake-kebab-api-key",
+			secret_key: "fake-snake-secret-key",
+			private_key: "fake-snake-private-key",
+			client_secret: "fake-snake-client-secret",
+			authTokens: "fake-plural-auth-tokens",
+			encPrivateKeyPass: "fake-private-key-passphrase",
+		};
+		const publicSettings = {
+			issuer: "https://idp.example.com",
+			tokenUrl: "https://idp.example.com/token",
+			apiKeyHeaders: "x-api-key",
+			lookupKey: "pro_monthly",
+			siteKey: "public-captcha-site-key",
+		};
+
+		const runWithPluginOptions = async () => {
+			await fs.writeFile(
+				path.join(tmpDir, "package.json"),
+				JSON.stringify({ dependencies: { "better-auth": "^1.0.0" } }),
+			);
+			await fs.writeFile(
+				path.join(tmpDir, "auth.ts"),
+				`import { betterAuth } from "better-auth";
+
+				export const auth = betterAuth({
+					emailAndPassword: {
+						enabled: true,
+						minPasswordLength: 12,
+					},
+					plugins: [
+						{
+							id: "custom-provider",
+							options: ${JSON.stringify({
+								...secrets,
+								...publicSettings,
+								privateKey: {
+									privateKeyPem: "fake-nested-private-key-pem",
+									privateKeyJwk: { d: "fake-nested-jwk-d" },
+								},
+							})},
+						},
+					],
+				})`,
+			);
+			const json = await runInfoCommand();
+			const text = await runInfoTextCommand();
+			return { json: json.stdout, text: text.stdout };
+		};
+
+		it("redacts separator, casing, plural and nested variants in --json output", async () => {
+			const { json } = await runWithPluginOptions();
+			const { config } = JSON.parse(json).betterAuth;
+			const options = config.plugins[0].config.options;
+
+			for (const key of Object.keys(secrets)) {
+				expect.soft(options[key], key).toBe("[REDACTED]");
+			}
+			expect(options.privateKey).toEqual({
+				privateKeyPem: "[REDACTED]",
+				privateKeyJwk: { d: "[REDACTED]" },
+			});
+			expect(options).toMatchObject(publicSettings);
+			expect(config.emailAndPassword).toEqual({
+				enabled: true,
+				minPasswordLength: 12,
+			});
+		});
+
+		it("redacts separator, casing, plural and nested variants in text output", async () => {
+			const { text } = await runWithPluginOptions();
+
+			expect(text).not.toContain("fake-");
+			for (const value of Object.values(publicSettings)) {
+				expect.soft(text).toContain(value);
 			}
 		});
 	});

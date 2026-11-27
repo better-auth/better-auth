@@ -1,6 +1,12 @@
 {
   "root": true,
+  "plugins": ["./biome-plugins/no-instanceof-api-error.grit"],
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "formatter": {
     "enabled": true,
     "indentStyle": "tab"
@@ -64,16 +70,6 @@
   },
   "overrides": [
     {
-      "includes": ["**/examples/svelte-kit-example/**"],
-      "linter": {
-        "rules": {
-          "correctness": {
-            "noUnusedImports": "off"
-          }
-        }
-      }
-    },
-    {
       "includes": ["**/*.json"],
       "formatter": {
         "indentStyle": "space",
@@ -129,25 +125,14 @@
   "files": {
     "includes": [
       "**",
-      "!**/dist",
-      "!**/coverage",
-      "!**/build",
-      "!**/demo/electron/out",
-      "!**/.next",
-      "!**/.svelte-kit",
+      "!!**/build",
+      "!!**/.tsc",
+      "!!**/.output",
       "!**/.contentlayer",
-      "!**/.turbo",
-      "!**/.nuxt",
-      "!**/.source",
-      "!**/.expo",
-      "!**/.cache",
-      "!**/.tsc",
-      "!**/dev/cloudflare/drizzle",
-      "!**/playwright-report",
-      "!**/.output",
       "!**/.tmp",
+      "!**/pages.gen.ts",
       "!**/tmp-docs-fetch",
-      "!**/.claude/worktrees/**"
+      "!**/dev/cloudflare/drizzle"
     ]
   }
 }

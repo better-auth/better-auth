@@ -41,17 +41,18 @@ describe("server-only endpoints", async () => {
 	});
 	const api = auth.api as unknown as Record<string, RegisteredEndpoint>;
 
-	it.each(
-		SERVER_ONLY_ENDPOINTS,
-	)("registers %s on auth.api with no HTTP route", (name) => {
-		expect(api[name], `${name} should be registered on auth.api`).toBeTypeOf(
-			"function",
-		);
-		expect(
-			api[name]?.path,
-			`${name} must not carry a routable path`,
-		).toBeFalsy();
-	});
+	it.each(SERVER_ONLY_ENDPOINTS)(
+		"registers %s on auth.api with no HTTP route",
+		(name) => {
+			expect(api[name], `${name} should be registered on auth.api`).toBeTypeOf(
+				"function",
+			);
+			expect(
+				api[name]?.path,
+				`${name} must not carry a routable path`,
+			).toBeFalsy();
+		},
+	);
 
 	it("keeps an endpoint off the router when it is marked SERVER_ONLY despite a path", async () => {
 		const probe = {

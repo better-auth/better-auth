@@ -1,9 +1,18 @@
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import type { BetterAuthOptions } from "../types";
 import {
 	createSchemaCheck,
 	invalidateSchemaChecks,
 	registerSchemaCheck,
+	runtimeSchemaCheckFor,
 	schemaCheckFor,
 } from "./schema-check";
 import type { SchemaFinding } from "./schema-diff";
@@ -19,6 +28,103 @@ const issuerDrift: SchemaFinding = {
  * @see https://www.better-auth.com/docs/concepts/database#programmatic-migrations
  */
 describe("createSchemaCheck", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11651
+	 */
+	describe("pending lookups on Cloudflare Workers", () => {
+		beforeEach(() => {
+			vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+		});
+
+		afterEach(() => {
+			vi.unstubAllGlobals();
+		});
+
+		it("runs independent lookups between concurrent first calls", async () => {
+			const find = vi.fn(async () => []);
+			const check = createSchemaCheck(find, "database");
+			await Promise.all([check(), check(), check()]);
+			expect(find).toHaveBeenCalledTimes(3);
+		});
+
+		it("lets a later check complete while an earlier lookup is still pending", async ({
+			onTestFinished,
+		}) => {
+			let finish = (_findings: SchemaFinding[]) => {};
+			const pending = new Promise<SchemaFinding[]>((resolve) => {
+				finish = resolve;
+			});
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockReturnValueOnce(pending)
+				.mockResolvedValueOnce([]);
+			const check = createSchemaCheck(find, "database");
+			onTestFinished(() => finish([]));
+			const earlier = check();
+			await expect(check()).resolves.toBeUndefined();
+			expect(check()).toBeUndefined();
+			expect(find).toHaveBeenCalledTimes(2);
+			finish([]);
+			await earlier;
+		}, 1_000);
+
+		it("does not let an older clean lookup overwrite a newer mismatch", async () => {
+			let finish = (_findings: SchemaFinding[]) => {};
+			const pending = new Promise<SchemaFinding[]>((resolve) => {
+				finish = resolve;
+			});
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockReturnValueOnce(pending)
+				.mockResolvedValueOnce([issuerDrift]);
+			const check = createSchemaCheck(find, "database");
+			const earlier = check();
+			await expect(check()).rejects.toThrow(SchemaMismatchError);
+			finish([]);
+			await expect(earlier).rejects.toThrow(SchemaMismatchError);
+			await expect(check()).rejects.toThrow(SchemaMismatchError);
+			expect(find).toHaveBeenCalledTimes(2);
+		});
+
+		it("keeps a completed clean result after an earlier lookup fails", async () => {
+			const failure = new Error("connection unavailable");
+			let fail = (_error: Error) => {};
+			const pending = new Promise<SchemaFinding[]>((_resolve, reject) => {
+				fail = reject;
+			});
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockReturnValueOnce(pending)
+				.mockResolvedValueOnce([]);
+			const check = createSchemaCheck(find, "database");
+			const earlier = check();
+			await check();
+			fail(failure);
+			await expect(earlier).rejects.toBe(failure);
+			expect(check()).toBeUndefined();
+			expect(find).toHaveBeenCalledTimes(2);
+		});
+
+		it("does not hide a newer mismatch when an older lookup completes cleanly first", async () => {
+			let finish = (_findings: SchemaFinding[]) => {};
+			const pending = new Promise<SchemaFinding[]>((resolve) => {
+				finish = resolve;
+			});
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockResolvedValueOnce([])
+				.mockReturnValueOnce(pending);
+			const check = createSchemaCheck(find, "database");
+			const earlier = check();
+			const later = check();
+			await earlier;
+			finish([issuerDrift]);
+			await expect(later).rejects.toThrow(SchemaMismatchError);
+			await expect(check()).rejects.toThrow(SchemaMismatchError);
+			expect(find).toHaveBeenCalledTimes(2);
+		});
+	});
+
 	it("invalidates only checks for the migrated database", async () => {
 		const database = {};
 		const find = vi.fn(async () => []);
@@ -52,30 +158,28 @@ describe("createSchemaCheck", () => {
 		await expect(check()).rejects.toThrow(SchemaMismatchError);
 		expect(find).toHaveBeenCalledTimes(2);
 	});
-	it.each([
-		{ findings: [] },
-		{ findings: [issuerDrift] },
-	])("rechecks a pending result after invalidation (%j)", async ({
-		findings,
-	}) => {
-		const database = {};
-		let finish = (_findings: SchemaFinding[]) => {};
-		const pending = new Promise<SchemaFinding[]>((resolve) => {
-			finish = resolve;
-		});
-		const find = vi
-			.fn<() => Promise<SchemaFinding[]>>()
-			.mockReturnValueOnce(pending)
-			.mockResolvedValueOnce([]);
-		const check = createSchemaCheck(find, "database", database);
-		const older = check();
-		await Promise.resolve();
-		invalidateSchemaChecks(database);
-		finish(findings);
-		await expect(older).resolves.toBeUndefined();
-		expect(find).toHaveBeenCalledTimes(2);
-		expect(check()).toBeUndefined();
-	});
+	it.each([{ findings: [] }, { findings: [issuerDrift] }])(
+		"rechecks a pending result after invalidation (%j)",
+		async ({ findings }) => {
+			const database = {};
+			let finish = (_findings: SchemaFinding[]) => {};
+			const pending = new Promise<SchemaFinding[]>((resolve) => {
+				finish = resolve;
+			});
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockReturnValueOnce(pending)
+				.mockResolvedValueOnce([]);
+			const check = createSchemaCheck(find, "database", database);
+			const older = check();
+			await Promise.resolve();
+			invalidateSchemaChecks(database);
+			finish(findings);
+			await expect(older).resolves.toBeUndefined();
+			expect(find).toHaveBeenCalledTimes(2);
+			expect(check()).toBeUndefined();
+		},
+	);
 
 	it("turns a synchronous lookup failure into a retryable rejection", async () => {
 		const failure = new Error("connection unavailable");
@@ -139,28 +243,25 @@ describe("checksSchema", () => {
 		>();
 	});
 
-	it.for([
-		"development",
-		"production",
-		"test",
-	])("checks in %s unless disabled", async (environment, {
-		onTestFinished,
-	}) => {
-		onTestFinished(() => {
-			vi.unstubAllEnvs();
+	it.for(["development", "production", "test"])(
+		"checks in %s unless disabled",
+		async (environment, { onTestFinished }) => {
+			onTestFinished(() => {
+				vi.unstubAllEnvs();
+				vi.resetModules();
+			});
+			vi.stubEnv("NODE_ENV", environment);
 			vi.resetModules();
-		});
-		vi.stubEnv("NODE_ENV", environment);
-		vi.resetModules();
-		const { checksSchema } = await import("./schema-check");
-		expect(checksSchema({})).toBe(true);
-		expect(
-			checksSchema({ advanced: { database: { validateSchema: true } } }),
-		).toBe(true);
-		expect(
-			checksSchema({ advanced: { database: { validateSchema: false } } }),
-		).toBe(false);
-	});
+			const { checksSchema } = await import("./schema-check");
+			expect(checksSchema({})).toBe(true);
+			expect(
+				checksSchema({ advanced: { database: { validateSchema: true } } }),
+			).toBe(true);
+			expect(
+				checksSchema({ advanced: { database: { validateSchema: false } } }),
+			).toBe(false);
+		},
+	);
 });
 
 describe("schema check registry", () => {
@@ -170,5 +271,67 @@ describe("schema check registry", () => {
 		registerSchemaCheck(adapter, check);
 		expect(schemaCheckFor(adapter)).toBe(check);
 		expect(schemaCheckFor({})).toBeUndefined();
+	});
+
+	it("keeps an explicit check available when runtime validation is disabled", async () => {
+		const adapter = {};
+		const find = vi.fn(async () => []);
+		const check = createSchemaCheck(find, "database");
+		registerSchemaCheck(adapter, check, { runtimeEnabled: false });
+
+		expect(runtimeSchemaCheckFor(adapter)).toBeUndefined();
+		await schemaCheckFor(adapter)?.();
+		expect(find).toHaveBeenCalledOnce();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12869
+ */
+describe("schema check registry across module copies", () => {
+	afterEach(() => {
+		vi.resetModules();
+	});
+
+	async function loadCopies() {
+		vi.resetModules();
+		const first = await import("./schema-check");
+		vi.resetModules();
+		const second = await import("./schema-check");
+		expect(second.registerSchemaCheck).not.toBe(first.registerSchemaCheck);
+		return { first, second };
+	}
+
+	it("finds a check registered by another copy of the module", async () => {
+		const { first, second } = await loadCopies();
+		const adapter = {};
+		const check = first.createSchemaCheck(async () => [], "drizzle");
+		first.registerSchemaCheck(adapter, check);
+
+		expect(second.schemaCheckFor(adapter)).toBe(check);
+		expect(second.runtimeSchemaCheckFor(adapter)).toBe(check);
+	});
+
+	it("keeps runtime validation disabled across copies", async () => {
+		const { first, second } = await loadCopies();
+		const adapter = {};
+		const check = first.createSchemaCheck(async () => [], "drizzle");
+		first.registerSchemaCheck(adapter, check, { runtimeEnabled: false });
+
+		expect(second.schemaCheckFor(adapter)).toBe(check);
+		expect(second.runtimeSchemaCheckFor(adapter)).toBeUndefined();
+	});
+
+	it("invalidates a check from another copy of the module", async () => {
+		const { first, second } = await loadCopies();
+		const database = {};
+		const find = vi.fn(async () => []);
+		const check = first.createSchemaCheck(find, "drizzle", database);
+		await check();
+		expect(find).toHaveBeenCalledTimes(1);
+
+		second.invalidateSchemaChecks(database);
+		await check();
+		expect(find).toHaveBeenCalledTimes(2);
 	});
 });

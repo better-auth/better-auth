@@ -333,6 +333,222 @@ describe("stripe subscription", () => {
 		expect(listAfterRes.data?.length).toBeGreaterThan(0);
 	});
 
+	test("should list only active and trialing subscriptions from the adapter where", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{
+				...testUser,
+				email: "list-where-filter@email.com",
+			},
+			{ throw: true },
+		);
+		const userId = userRes.user.id;
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "list-where-filter@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userId,
+				status: "canceled",
+				stripeCustomerId: "cus_list_where",
+				stripeSubscriptionId: "sub_list_canceled",
+			},
+		});
+		await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userId,
+				status: "incomplete",
+				stripeCustomerId: "cus_list_where",
+				stripeSubscriptionId: "sub_list_incomplete",
+			},
+		});
+		await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userId,
+				status: "active",
+				stripeCustomerId: "cus_list_where",
+				stripeSubscriptionId: "sub_list_active",
+			},
+		});
+		await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				plan: "premium",
+				referenceId: userId,
+				status: "trialing",
+				stripeCustomerId: "cus_list_where",
+				stripeSubscriptionId: "sub_list_trialing",
+			},
+		});
+
+		const findMany = vi.spyOn(ctx.adapter, "findMany");
+		const listRes = await client.subscription.list({
+			fetchOptions: { headers },
+		});
+
+		const subscriptionQuery = findMany.mock.calls
+			.map(([query]) => query)
+			.find((query) => query.model === "subscription");
+		expect(subscriptionQuery?.where).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					field: "referenceId",
+					value: userId,
+				}),
+				expect.objectContaining({
+					field: "status",
+					operator: "in",
+					value: ["active", "trialing"],
+				}),
+			]),
+		);
+		expect(listRes.data?.map((sub) => sub.status).sort()).toEqual([
+			"active",
+			"trialing",
+		]);
+	});
+
+	test("should find an active subscription beyond the default findMany limit", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				advanced: { database: { defaultFindManyLimit: 2 } },
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{
+				...testUser,
+				email: "findmany-limit@email.com",
+			},
+			{ throw: true },
+		);
+		const userId = userRes.user.id;
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "findmany-limit@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await ctx.adapter.update({
+			model: "user",
+			update: { stripeCustomerId: "cus_findmany_limit" },
+			where: [{ field: "id", value: userId }],
+		});
+
+		for (const index of [0, 1]) {
+			await ctx.adapter.create<Subscription>({
+				model: "subscription",
+				data: {
+					plan: "starter",
+					referenceId: userId,
+					status: "canceled",
+					stripeCustomerId: "cus_findmany_limit",
+					stripeSubscriptionId: `sub_canceled_${index}`,
+				},
+			});
+		}
+		await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userId,
+				status: "active",
+				stripeCustomerId: "cus_findmany_limit",
+				stripeSubscriptionId: "sub_active_beyond_limit",
+				periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+			},
+		});
+
+		const listRes = await client.subscription.list({
+			fetchOptions: { headers },
+		});
+		expect(listRes.data).toHaveLength(1);
+		expect(listRes.data?.[0]?.status).toBe("active");
+		expect(listRes.data?.[0]?.stripeSubscriptionId).toBe(
+			"sub_active_beyond_limit",
+		);
+
+		stripeMock.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_active_beyond_limit",
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_beyond_limit",
+								price: { id: TEST_PRICES.starter },
+								quantity: 1,
+							},
+						],
+					},
+				},
+			],
+		});
+		stripeMock.checkout.sessions.create.mockClear();
+		stripeMock.billingPortal.sessions.create.mockClear();
+
+		await client.subscription.upgrade({
+			plan: "premium",
+			fetchOptions: { headers },
+		});
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalled();
+		expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/7721
 	 */
@@ -810,102 +1026,106 @@ describe("stripe subscription", () => {
 			periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
 			shouldAllow: false,
 		},
-	])("should handle re-subscribing when periodEnd is in the $name", async ({
-		periodEnd,
-		shouldAllow,
-	}, { stripeMock, memory, stripeOptions }) => {
-		const starterPriceId = "price_starter_periodend_test";
-		const subscriptionId = "sub_periodend_test_123";
+	])(
+		"should handle re-subscribing when periodEnd is in the $name",
+		async ({ periodEnd, shouldAllow }, {
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const starterPriceId = "price_starter_periodend_test";
+			const subscriptionId = "sub_periodend_test_123";
 
-		const stripeOptionsWithPrice = {
-			...stripeOptions,
-			subscription: {
-				enabled: true,
-				plans: [
+			const stripeOptionsWithPrice = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							name: "starter",
+							priceId: starterPriceId,
+						},
+					],
+				},
+			} satisfies StripeOptions;
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptionsWithPrice)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await client.subscription.upgrade({
+				plan: "starter",
+				seats: 1,
+				fetchOptions: { headers },
+			});
+
+			await ctx.adapter.update({
+				model: "subscription",
+				update: {
+					status: "active",
+					seats: 1,
+					periodEnd,
+					stripeSubscriptionId: subscriptionId,
+				},
+				where: [{ field: "referenceId", value: userRes.user.id }],
+			});
+
+			// Mock Stripe to return the existing subscription with the same price ID
+			stripeMock.subscriptions.list.mockResolvedValue({
+				data: [
 					{
-						name: "starter",
-						priceId: starterPriceId,
+						id: subscriptionId,
+						status: "active",
+						items: {
+							data: [
+								{
+									id: "si_periodend_item",
+									price: {
+										id: starterPriceId,
+									},
+									quantity: 1,
+								},
+							],
+						},
 					},
 				],
-			},
-		} satisfies StripeOptions;
+			});
 
-		const { client, auth, sessionSetter } = await getTestInstance(
-			{
-				database: memory,
-				plugins: [stripe(stripeOptionsWithPrice)],
-			},
-			{
-				disableTestUser: true,
-				clientOptions: {
-					plugins: [stripeClient({ subscription: true })],
-				},
-			},
-		);
-		const ctx = await auth.$context;
-
-		const userRes = await client.signUp.email(
-			{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
-			{ throw: true },
-		);
-
-		const headers = new Headers();
-		await client.signIn.email(
-			{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
-			{ throw: true, onSuccess: sessionSetter(headers) },
-		);
-
-		await client.subscription.upgrade({
-			plan: "starter",
-			seats: 1,
-			fetchOptions: { headers },
-		});
-
-		await ctx.adapter.update({
-			model: "subscription",
-			update: {
-				status: "active",
+			const upgradeRes = await client.subscription.upgrade({
+				plan: "starter",
 				seats: 1,
-				periodEnd,
-				stripeSubscriptionId: subscriptionId,
-			},
-			where: [{ field: "referenceId", value: userRes.user.id }],
-		});
+				fetchOptions: { headers },
+			});
 
-		// Mock Stripe to return the existing subscription with the same price ID
-		stripeMock.subscriptions.list.mockResolvedValue({
-			data: [
-				{
-					id: subscriptionId,
-					status: "active",
-					items: {
-						data: [
-							{
-								id: "si_periodend_item",
-								price: {
-									id: starterPriceId,
-								},
-								quantity: 1,
-							},
-						],
-					},
-				},
-			],
-		});
-
-		const upgradeRes = await client.subscription.upgrade({
-			plan: "starter",
-			seats: 1,
-			fetchOptions: { headers },
-		});
-
-		if (shouldAllow) {
-			expect(upgradeRes.error).toBeNull();
-			expect(upgradeRes.data?.url).toBeDefined();
-		} else {
-			expect(upgradeRes.error?.message).toContain("already subscribed");
-		}
-	});
+			if (shouldAllow) {
+				expect(upgradeRes.error).toBeNull();
+				expect(upgradeRes.data?.url).toBeDefined();
+			} else {
+				expect(upgradeRes.error?.message).toContain("already subscribed");
+			}
+		},
+	);
 
 	test("should create billing portal session", async ({
 		stripeMock,
@@ -2037,6 +2257,82 @@ describe("stripe subscription", () => {
 			expect(upgradeRes.data?.url).toBeDefined();
 
 			// Verify no trial was granted (trial_period_days should be absent)
+			const callArgs = stripeMock.checkout.sessions.create.mock.lastCall?.[0];
+			expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
+		});
+
+		test("should detect past trials beyond the default findMany limit", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					advanced: { database: { defaultFindManyLimit: 2 } },
+					plugins: [
+						stripe({
+							...stripeOptions,
+							subscription: {
+								...stripeOptions.subscription,
+								plans: stripeOptions.subscription.plans.map((plan) => ({
+									...plan,
+									freeTrial: { days: 7 },
+								})),
+							},
+						}),
+					],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{ ...testUser, email: "trial-beyond-limit@email.com" },
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email: "trial-beyond-limit@email.com" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			for (const index of [0, 1]) {
+				await ctx.adapter.create<Subscription>({
+					model: "subscription",
+					data: {
+						plan: "starter",
+						referenceId: userRes.user.id,
+						status: "canceled",
+						stripeCustomerId: "cus_trial_beyond_limit",
+						stripeSubscriptionId: `sub_canceled_no_trial_${index}`,
+					},
+				});
+			}
+			await ctx.adapter.create<Subscription>({
+				model: "subscription",
+				data: {
+					plan: "starter",
+					referenceId: userRes.user.id,
+					status: "canceled",
+					stripeCustomerId: "cus_trial_beyond_limit",
+					stripeSubscriptionId: "sub_canceled_with_trial",
+					trialStart: new Date(Date.now() - 1000000),
+					trialEnd: new Date(Date.now() - 500000),
+				},
+			});
+
+			stripeMock.checkout.sessions.create.mockClear();
+			const upgradeRes = await client.subscription.upgrade({
+				plan: "premium",
+				fetchOptions: { headers },
+			});
+			expect(upgradeRes.data?.url).toBeDefined();
 			const callArgs = stripeMock.checkout.sessions.create.mock.lastCall?.[0];
 			expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
 		});

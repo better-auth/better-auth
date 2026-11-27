@@ -103,6 +103,27 @@ export interface CimdOptions {
 	 */
 	metadataRevalidationInterval?: number | string;
 	/**
+	 * Keep serving a stored client for up to this long after it was last
+	 * validated (its `updatedAt`) when refreshing its metadata document fails
+	 * transiently: the fetch times out after its host name resolved, the
+	 * connection fails with a known error code, or the server answers with
+	 * HTTP 500, 502, 503, or 504. If a fetch policy limit or the Node DNS
+	 * lookup limit prevents a retry, the stored client can still be served
+	 * within this age limit for five minutes after its last transient failure.
+	 * Terminal metadata failures still reject the request.
+	 *
+	 * For cached `jwks_uri` keys, this option can extend the ten-minute
+	 * fallback after the last successful key fetch. Shorter values leave
+	 * that fallback in place.
+	 *
+	 * Accepts a number of seconds or a duration string (e.g. `"6h"`), at most
+	 * 24 hours.
+	 *
+	 * @see https://www.better-auth.com/docs/plugins/cimd#transient-refresh-failures
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-03#section-6.1
+	 */
+	metadataStaleIfError?: number | string;
+	/**
 	 * Bounded request-amplification policy for metadata document fetches.
 	 *
 	 * A permitted fetch consumes its concurrency and rolling-window budget when
@@ -126,12 +147,20 @@ export interface CimdOptions {
 	 * Pass an empty array to disable origin binding (not recommended for
 	 * production).
 	 *
-	 * Redirect URIs are deliberately excluded by default: exact redirect URI
-	 * matching remains mandatory at authorization time, while native and
-	 * distributed clients commonly use a redirect origin different from their
-	 * metadata-document origin.
+	 * Only `post_logout_redirect_uris` is origin-bound by default. HTTP(S)
+	 * loopback redirect URLs are exempt from this origin check in both
+	 * redirect fields. In `redirect_uris`, any private-use redirect is exempt.
+	 * In `post_logout_redirect_uris`, only the authority-free private-use
+	 * form, such as `com.example.app:/logout`, is exempt.
+	 * `redirect_uris` is excluded because exact redirect URI matching remains
+	 * mandatory at authorization time. The informative URIs `client_uri`,
+	 * `logo_uri`, `tos_uri`, and `policy_uri` are never origin-bound by
+	 * default; they must still be credential-free HTTP(S) URLs on a public
+	 * host. CIMD draft-03 §4.4 forbids requiring `client_uri` to share an
+	 * origin with `client_id` or `redirect_uris`, so listing `client_uri` here
+	 * is the operator's own policy and contradicts the draft.
 	 *
-	 * @default ["post_logout_redirect_uris", "client_uri"]
+	 * @default ["post_logout_redirect_uris"]
 	 */
 	originBoundFields?: readonly string[];
 	/**
@@ -147,6 +176,28 @@ export interface CimdOptions {
 	 */
 	isMetadataDocumentUrlAllowed?: (
 		clientIdUrl: string,
+		context: GenericEndpointContext,
+	) => boolean | Promise<boolean>;
+	/**
+	 * Allows a client's `jwks_uri` on an origin that is neither a trusted
+	 * origin nor the `client_id` URL's origin. Return `true` to allow it.
+	 *
+	 * By default such a `jwks_uri` is rejected. This is consulted only for
+	 * that case, when the document is registered or refreshed and before each
+	 * client assertion is verified. `false`, a throw, or a rejection keeps the
+	 * rejection. HTTPS, public-host, credential, and fragment checks still
+	 * apply first, and the keys are fetched through
+	 * `fetchClientMetadataResource`.
+	 *
+	 * `jwks_uri` fetches are not gated by `isMetadataDocumentUrlAllowed` or
+	 * `metadataFetchPolicy`, so the origin rule is what bounds where a
+	 * document can make the server send requests. Match the client and key
+	 * origins together rather than allowing a key origin for every client.
+	 *
+	 * @default always reject
+	 */
+	isCrossOriginJwksUriAllowed?: (
+		input: { clientId: string; jwksUri: string },
 		context: GenericEndpointContext,
 	) => boolean | Promise<boolean>;
 	/**

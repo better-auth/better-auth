@@ -8,7 +8,7 @@ interface ReleaseModels {
 }
 
 export const models: ReleaseModels = {
-	changeset: gateway("openai/gpt-5.6-luna"),
-	releaseNotes: gateway("openai/gpt-5.6-terra"),
-	releaseNotesReviewer: gateway("anthropic/claude-sonnet-5"),
+	changeset: gateway("anthropic/claude-haiku-5.5"),
+	releaseNotes: gateway("anthropic/claude-sonnet-5.5"),
+	releaseNotesReviewer: gateway("openai/gpt-6.1-sol"),
 };

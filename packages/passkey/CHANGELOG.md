@@ -1,5 +1,79 @@
 # @better-auth/passkey
 
+## 1.7.28
+
+## 1.7.27
+
+## 1.7.26
+
+## 1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+- [#12503](https://github.com/better-auth/better-auth/pull/12503) [`87ede79`](https://github.com/better-auth/better-auth/commit/87ede7984d4df152ae3c0f5a58a2d08299b24281) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed errors from hooks and endpoints turning into generic 500 responses or skipping their error handling in the OAuth provider, Client ID Metadata Document, passkey, SSO, SCIM, and Stripe plugins when the app installs more than one copy of `better-call`.
+
+## 1.7.23
+
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12388](https://github.com/better-auth/better-auth/pull/12388) [`070d101`](https://github.com/better-auth/better-auth/commit/070d10139692e1af858e4eba003d465621d56411) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If a wildcard in `baseURL.allowedHosts` covers your passkey `rpID`, such as `rpID: "example.com"` with `allowedHosts: ["*.example.com"]`, your server now starts without a passkey `origin`. Since 1.7.16 it threw at startup unless `origin` was set, and passkeys then worked only on the origins listed there, so tenants added at runtime needed a redeploy.
+
+  In that setup, without `origin`, a passkey is accepted only from an exact `allowedHosts` entry, the `fallback` origin, or an origin listed exactly in `trustedOrigins`. The host the request names and wildcard entries do not count. To allow tenants added at runtime, return their origins from a `trustedOrigins` function that checks your tenant records. If you set `origin`, or no wildcard covers your `rpID`, nothing changes.
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+### Patch Changes
+
+- [#12225](https://github.com/better-auth/better-auth/pull/12225) [`3ab3dbf`](https://github.com/better-auth/better-auth/commit/3ab3dbf6d4c50f6421f4129f860d1ce1b6894f65) Thanks [@bytaesu](https://github.com/bytaesu)! - Passkey registration and sign-in now work when one `passkey()` plugin is shared between auth instances where some set `baseURL` and others do not. Previously one of the instances could fail with `ORIGIN_NOT_CONFIGURED` or verify against the other instance's origin settings.
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Passkey registration, device authorization, two-factor enrollment and verification, social account linking, and phone number changes now reject a session revoked in the database or secondary storage, even when cookie caching is enabled. Sessions created from API keys are refused on these routes, except two-factor enrollment and phone number changes.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The expected WebAuthn origin now comes from server configuration instead of the request: the `origin` option, or the `baseURL` origin plus a frontend origin listed exactly in `trustedOrigins`. Set `origin` when `rpID` is set and a wildcard in `baseURL.allowedHosts` covers it.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - `authenticatorSelection.userVerification` now applies to authentication as well as registration: it is requested in authentication options, and with `required` passkey registration and sign-in reject responses without user verification.
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+## 1.7.11
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+## 1.7.7
+
+## 1.7.6
+
 ## 1.7.5
 
 ## 1.7.4

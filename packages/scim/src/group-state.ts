@@ -2,8 +2,8 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { DBAdapter, DBTransactionAdapter } from "better-auth";
-import { BetterAuthError } from "better-auth";
 import type { SCIMConnection } from "./configuration";
 import { isSCIMIdentityMutationConflict } from "./identity";
 import type { SCIMGroup } from "./persistence";

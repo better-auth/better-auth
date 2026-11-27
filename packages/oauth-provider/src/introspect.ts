@@ -1,20 +1,21 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
+import { isAPIError } from "better-auth/api";
 import {
 	getJwks,
 	stripAccessTokenAuthorizationScheme,
 } from "better-auth/oauth2";
-import type { Session, User } from "better-auth/types";
+import type { User } from "better-auth/types";
 import { APIError } from "better-call";
-import type { JSONWebKeySet, JWTPayload } from "jose";
-import { createLocalJWKSet, jwtVerify } from "jose";
+import type { JWTPayload } from "jose";
+import { createLocalJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
 import {
 	getResourceCustomClaims,
 	isAudienceClaimAllowed,
 	isClientLinkedToAnyResource,
 } from "./resources";
-import { confirmationTokenType, decodeRefreshToken } from "./token";
+import { confirmationTokenType, decodeRefreshTokenForLookup } from "./token";
 import type {
 	ActiveAccessTokenPayload,
 	Confirmation,
@@ -25,12 +26,19 @@ import type {
 	Scope,
 } from "./types";
 import {
+	BASIC_CHALLENGE,
+	challengeHeaders,
 	destructureCredentials,
 	extractClientCredentials,
+	findActiveSessionId,
+	getAuthEndpointUrl,
 	getClient,
+	getJwksSource,
 	getJwtPlugin,
 	getStoredToken,
+	isInvalidJwtError,
 	parseClientMetadata,
+	resolveRefreshTokenSession,
 	resolveSubjectIdentifier,
 	toAudienceClaim,
 	validateClientCredentials,
@@ -120,10 +128,14 @@ async function validateJwtAccessToken(
 	token: string,
 	clientId?: string,
 ) {
-	const jwtPlugin = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin?.options;
+	// Without the JWT plugin, this server issues only opaque access tokens.
+	if (opts.disableJwtPlugin) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "JWT access tokens are disabled",
+			error: "invalid_request",
+		});
+	}
+	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 	const baseURL = ctx.context.baseURL ?? "";
 	const userInfoAud = `${baseURL}/oauth2/userinfo`;
 	const expectedIssuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
@@ -135,14 +147,7 @@ async function validateJwtAccessToken(
 	try {
 		// Do NOT pass `audience` to jose's verifier. Verify signature + issuer
 		// here, then validate `aud` manually against the resource model below.
-		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
-			? jwtPluginOptions.jwks.remoteUrl
-			: async (): Promise<JSONWebKeySet | undefined> => {
-					const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
-					// @ts-expect-error response is a JSONWebKeySet but within the response field
-					return jwksRes?.response as JSONWebKeySet | undefined;
-				};
-		const jwks = await getJwks(token, { jwksFetch, jwksCacheKey: jwtPlugin });
+		const jwks = await getJwks(token, getJwksSource(ctx));
 		const verified = await jwtVerify<JWTPayload & { azp?: string }>(
 			token,
 			createLocalJWKSet(jwks),
@@ -152,26 +157,27 @@ async function validateJwtAccessToken(
 		);
 		jwtPayload = verified.payload;
 	} catch (error) {
-		if (error instanceof Error) {
-			if (error.name === "TypeError" || error.name === "JWSInvalid") {
-				// likely an opaque token
-				throw new APIError("BAD_REQUEST", {
-					error_description: "invalid JWT signature",
-					error: "invalid_request",
-				});
-			} else if (error.name === "JWTExpired") {
-				return {
-					active: false,
-				};
-			} else if (error.name === "JWTInvalid") {
-				// issuer or other JWT claim validation failure
-				return {
-					active: false,
-				};
-			}
-			throw error;
+		// jose raises these only after the signature verifies: an expired token,
+		// or a malformed claims set. Check them before `isInvalidJwtError`, which
+		// also matches them.
+		if (
+			error instanceof joseErrors.JWTExpired ||
+			error instanceof joseErrors.JWTInvalid
+		) {
+			return {
+				active: false,
+			};
 		}
-		throw new Error(error as unknown as string);
+		// likely an opaque token, or a JWT this server cannot verify (bad
+		// signature, unknown key, failed claim checks such as `iss`), which
+		// may still be a stored opaque token (`generateOpaqueAccessToken`)
+		if (error instanceof TypeError || isInvalidJwtError(error)) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "invalid JWT signature",
+				error: "invalid_request",
+			});
+		}
+		throw error;
 	}
 
 	// Manual `aud` validation (RFC 7662 §2.2 + RFC 8707 §3). EVERY value in
@@ -228,14 +234,8 @@ async function validateJwtAccessToken(
 	// token is revoked per OIDC Back-Channel Logout §2.7 even though the JWT
 	// itself is still within its TTL.
 	const sessionId = jwtPayload.sid;
-	if (sessionId) {
-		const session = await ctx.context.adapter.findOne<Session>({
-			model: "session",
-			where: [{ field: "id", value: sessionId }],
-		});
-		if (!session || session.expiresAt < new Date()) {
-			return { active: false };
-		}
+	if (sessionId && !(await findActiveSessionId(ctx, sessionId))) {
+		return { active: false };
 	}
 
 	// Return the JWT payload in introspection format
@@ -323,23 +323,13 @@ async function validateOpaqueAccessToken(
 	}
 
 	// An opaque access token bound to a session (every authorization-code token;
-	// client-credentials tokens have no sessionId) dies with that session. This
-	// mirrors the JWT path so revocation is a function of session state and does
-	// not depend solely on the `revoked` flag written by the session-delete hook.
+	// client-credentials tokens have no sessionId) dies with that session. A
+	// database that enforces the foreign key clears `sessionId` when the session
+	// row is deleted, so such a token relies on the `revoked` flag written by the
+	// session-delete hook instead.
 	const sessionId = accessToken.sessionId ?? undefined;
-	if (sessionId) {
-		const session = await ctx.context.adapter.findOne<Session>({
-			model: "session",
-			where: [
-				{
-					field: "id",
-					value: sessionId,
-				},
-			],
-		});
-		if (!session || session.expiresAt < new Date()) {
-			return inactiveAccessToken();
-		}
+	if (sessionId && !(await findActiveSessionId(ctx, sessionId))) {
+		return inactiveAccessToken();
 	}
 
 	let user: User | null | undefined;
@@ -467,20 +457,14 @@ async function validateRefreshToken(
 		};
 	}
 
-	let sessionId = refreshToken.sessionId ?? undefined;
-	if (sessionId) {
-		const session = await ctx.context.adapter.findOne<Session>({
-			model: "session",
-			where: [
-				{
-					field: "id",
-					value: sessionId,
-				},
-			],
-		});
-		if (!session || session.expiresAt < new Date()) {
-			sessionId = undefined;
-		}
+	const { sessionId, ended } = await resolveRefreshTokenSession(
+		ctx,
+		refreshToken,
+	);
+	if (ended) {
+		return {
+			active: false,
+		};
 	}
 
 	let user: User | undefined = undefined;
@@ -518,9 +502,7 @@ function createInvalidAccessTokenError() {
 			error_description: INVALID_ACCESS_TOKEN_ERROR_DESCRIPTION,
 			error: "invalid_token",
 		},
-		{
-			"WWW-Authenticate": INVALID_ACCESS_TOKEN_WWW_AUTHENTICATE,
-		},
+		challengeHeaders(INVALID_ACCESS_TOKEN_WWW_AUTHENTICATE),
 	);
 }
 
@@ -546,7 +528,7 @@ async function resolveAccessTokenValidation(
 		const payload = await validateJwtAccessToken(ctx, opts, token, clientId);
 		return { payload, requestedUserInfoClaims: [] };
 	} catch (err) {
-		if (err instanceof APIError) {
+		if (isAPIError(err)) {
 			// continue
 		} else if (err instanceof Error) {
 			throw err;
@@ -557,7 +539,7 @@ async function resolveAccessTokenValidation(
 	try {
 		return await validateOpaqueAccessToken(ctx, opts, token, clientId);
 	} catch (err) {
-		if (err instanceof APIError) {
+		if (isAPIError(err)) {
 			// nothing
 		} else if (err instanceof Error) {
 			throw err;
@@ -642,7 +624,10 @@ async function resolveIntrospectionSub(
 	const issuerClientId = (payload.client_id ?? payload.azp) as
 		| string
 		| undefined;
-	if (!issuerClientId) return payload;
+	// A `client_credentials` token names its client as the subject. A client
+	// has no pairwise identifier, so only a user subject is re-derived. This
+	// relies on client IDs and user IDs being distinct server-generated values.
+	if (!issuerClientId || payload.sub === issuerClientId) return payload;
 	const issuingClient =
 		issuerClientId === introspectingClient.clientId
 			? introspectingClient
@@ -677,7 +662,7 @@ export async function introspectEndpoint(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/introspect`,
+		getAuthEndpointUrl(ctx, "/oauth2/introspect"),
 	);
 	const {
 		clientId: client_id,
@@ -687,10 +672,14 @@ export async function introspectEndpoint(
 	} = destructureCredentials(credentials);
 
 	if (!client_id || (!client_secret && !preVerified)) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "missing required credentials",
-			error: "invalid_client",
-		});
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				error_description: "missing required credentials",
+				error: "invalid_client",
+			},
+			challengeHeaders(BASIC_CHALLENGE),
+		);
 	}
 
 	// Check token
@@ -727,7 +716,7 @@ export async function introspectEndpoint(
 				);
 				return resolveIntrospectionSub(ctx, opts, payload, client);
 			} catch (error) {
-				if (error instanceof APIError) {
+				if (isAPIError(error)) {
 					if (token_type_hint === "access_token") {
 						throw error;
 					} // else continue
@@ -741,7 +730,7 @@ export async function introspectEndpoint(
 
 		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
 			try {
-				const refreshToken = await decodeRefreshToken(opts, token);
+				const refreshToken = await decodeRefreshTokenForLookup(opts, token);
 				const payload = await validateRefreshToken(
 					ctx,
 					opts,
@@ -750,7 +739,7 @@ export async function introspectEndpoint(
 				);
 				return resolveIntrospectionSub(ctx, opts, payload, client);
 			} catch (error) {
-				if (error instanceof APIError) {
+				if (isAPIError(error)) {
 					if (token_type_hint === "refresh_token") {
 						throw error;
 					} // else continue
@@ -767,7 +756,7 @@ export async function introspectEndpoint(
 			error: "invalid_request",
 		});
 	} catch (error) {
-		if (error instanceof APIError) {
+		if (isAPIError(error)) {
 			if (isInactiveTokenError(error)) {
 				return {
 					active: false,

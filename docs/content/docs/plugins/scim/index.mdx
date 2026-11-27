@@ -63,7 +63,15 @@ Each SCIM User links to a Better Auth User. Provisioning does not create a sign-
     </Tabs>
 
     <Callout type="warn">
-      Cloudflare D1 does not support the interactive transactions required by the SCIM plugin.
+      Cloudflare D1 does not support interactive transactions. SCIM cannot provision users or groups on D1.
+
+      When the adapter has no native transactions, Better Auth still starts and logs an error. SCIM then refuses every request that needs a transaction:
+
+      * Every `/scim/v2` request returns 501 Not Implemented, reads included. A directory's connection test fails at setup instead of passing and then failing on the first change.
+      * Server calls that create, rotate, revoke, reconcile, or decommission a SCIM connection return 501 with code `SCIM_REQUIRES_NATIVE_TRANSACTIONS`.
+      * Server calls that list or read SCIM connections keep working.
+
+      Do not set `transaction: true` on a D1 database. D1 then rejects the transaction on every SCIM request with a server error.
     </Callout>
   </Step>
 
@@ -297,7 +305,12 @@ When the final active source is deactivated or deleted, Better Auth deletes the 
   Deleting sessions does not prevent a user from signing in again. Persist the disabled state in `identity.reconcileUser`, then enforce it in your authentication or authorization policy when deactivation must block future sign-in.
 </Callout>
 
-Deleting a SCIM resource preserves its Better Auth User. If the resource has an `externalId`, recreating the same `externalId` through the same connection links the new SCIM resource to that User. Without an `externalId`, the next create follows your resolver or creates another Better Auth User.
+A directory can create a user again after deactivating or deleting them. Okta, for example, creates the user again when its `userName` lookup finds no match. When the create carries the same `externalId` through the same connection, Better Auth keeps the existing Better Auth User:
+
+* If the earlier SCIM User is inactive, the create reprovisions it. The resource keeps its SCIM ID, takes the submitted profile and `active` value, and the response is `201`.
+* If the earlier SCIM User was deleted, the create links a new SCIM resource to the same Better Auth User.
+
+Neither case calls `identity.resolveUser`, because the `externalId` already identifies the user. A create that reuses an active SCIM User's `externalId`, or another SCIM User's `userName`, still returns `409`. Better Auth never reprovisions a user by `userName` or email. Without an `externalId`, the next create follows your resolver or creates another Better Auth User.
 
 ## Next steps
 

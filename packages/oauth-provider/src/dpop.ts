@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { getAuthEndpointUrl } from "./utils";
 
 export function getDpopProofJwt(
 	ctx: Pick<GenericEndpointContext, "headers">,
@@ -6,9 +7,44 @@ export function getDpopProofJwt(
 	return ctx.headers?.get("dpop") ?? undefined;
 }
 
+/**
+ * The endpoint's public URL, which clients use as the DPoP `htu`: the origin
+ * and base path of `baseURL` (not `request.url`, whose host proxies and dev
+ * servers can rewrite) plus the request's own path below the base path, so
+ * route params and a trailing slash match what the client called. `path` is
+ * used when there is no HTTP request, such as an `auth.api` call.
+ */
 export function getEndpointUrl(
-	ctx: Pick<GenericEndpointContext, "context"> & { request?: Request },
+	ctx: Pick<GenericEndpointContext, "context" | "request">,
 	path: string,
 ): string {
-	return ctx.request?.url ?? `${ctx.context.baseURL}${path}`;
+	const base = getAuthEndpointUrl(ctx, "");
+	// `baseURL` stays empty when nothing configures it and no request set it.
+	if (!ctx.request || !base) return `${base}${path}`;
+	const basePath = new URL(base).pathname.replace(/\/$/, "");
+	const requestPath = new URL(ctx.request.url).pathname;
+	const endpointPath = requestPath.startsWith(`${basePath}/`)
+		? requestPath.slice(basePath.length)
+		: path;
+	return `${base}${endpointPath}`;
+}
+
+/**
+ * Adds `headers` to a comma-separated `Access-Control-Expose-Headers` value,
+ * keeping the names already listed.
+ */
+export function withExposedHeaders(
+	exposed: string | null | undefined,
+	...headers: string[]
+): string {
+	const names = (exposed ?? "")
+		.split(",")
+		.map((name) => name.trim())
+		.filter(Boolean);
+	for (const header of headers) {
+		if (!names.some((name) => name.toLowerCase() === header.toLowerCase())) {
+			names.push(header);
+		}
+	}
+	return names.join(", ");
 }

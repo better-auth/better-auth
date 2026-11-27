@@ -6,6 +6,7 @@ import {
 	getOAuth2Tokens,
 	refreshAccessToken,
 } from "../oauth2";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 import { authorizationCodeRequest } from "../oauth2/validate-authorization-code";
 
 export interface GithubProfile {
@@ -98,7 +99,7 @@ export const github = (options: GithubOptions) => {
 				options,
 			});
 
-			const { data, error } = await betterFetch<
+			const { data, error } = await fetchRefusingRedirects<
 				| { access_token: string; token_type: string; scope: string }
 				| { error: string; error_description?: string; error_uri?: string }
 			>(tokenEndpoint, {

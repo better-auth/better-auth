@@ -5,10 +5,10 @@ import type {
 	HookEndpointContext,
 } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import type { BetterAuthPlugin } from "better-auth";
-import { safeJSONParse } from "better-auth";
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
 import { ELECTRON_ERROR_CODES } from "./error-codes";
@@ -16,6 +16,7 @@ import {
 	electronInitOAuthProxy,
 	electronToken,
 	electronTransferUser,
+	hashSessionToken,
 } from "./routes";
 import type { ElectronOptions } from "./types";
 import { PACKAGE_VERSION } from "./version";
@@ -60,9 +61,8 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		},
 	) => {
 		const { client_id, state, code_challenge } = payload;
-		const userId =
-			ctx.context.session?.user.id || ctx.context.newSession?.user.id;
-		if (!userId || client_id !== opts.clientID) {
+		const source = ctx.context.session || ctx.context.newSession;
+		if (!source || client_id !== opts.clientID) {
 			return null;
 		}
 		if (!state) {
@@ -77,15 +77,24 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		const identifier = generateRandomString(32, "a-z", "A-Z", "0-9");
 		const codeExpiresInMs = opts.codeExpiresIn * 1000;
 		const expiresAt = new Date(Date.now() + codeExpiresInMs);
-		await ctx.context.internalAdapter.createVerificationValue({
-			identifier: `electron:${identifier}`,
-			value: JSON.stringify({
-				userId,
-				codeChallenge: code_challenge,
-				state,
-			}),
-			expiresAt,
-		});
+		const verification =
+			await ctx.context.internalAdapter.createVerificationValue({
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: source.user.id,
+					// A later hook can still revoke this session (e.g. a pending second factor).
+					sourceSessionTokenHash: await hashSessionToken(source.session.token),
+					codeChallenge: code_challenge,
+					state,
+				}),
+				expiresAt,
+			});
+		if (!verification) {
+			throw APIError.from(
+				"INTERNAL_SERVER_ERROR",
+				BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+			);
+		}
 
 		const redirectToken = base64Url.encode(
 			new TextEncoder().encode(JSON.stringify({ identifier, state })),
@@ -171,7 +180,12 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						});
 						let transferPayload: z.infer<typeof querySchema> | null = null;
 						if (!!transferCookie) {
-							transferPayload = safeJSONParse(transferCookie);
+							const stored = querySchema.safeParse(
+								safeJSONParse(transferCookie),
+							);
+							if (stored.success) {
+								transferPayload = stored.data;
+							}
 						} else {
 							const query = querySchema.safeParse(ctx.query);
 							if (query.success && query.data.client_id === opts.clientID) {
@@ -184,7 +198,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 
 						const identifier = await handleTransfer(ctx, transferPayload);
 						if (identifier === null) {
-							return ctx;
+							return;
 						}
 
 						return ctx.json({

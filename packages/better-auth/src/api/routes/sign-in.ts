@@ -12,6 +12,7 @@ import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
+import { resolveOAuthAccountFields } from "../../oauth2/account-fields";
 import {
 	resolveOAuthAccountKeyForAPI,
 	toOAuthProfileRecord,
@@ -23,6 +24,7 @@ import {
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { generateIdTokenNonce, generateState } from "../../utils";
+import { assertPasswordNotTooLong } from "../../utils/password";
 import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
@@ -298,7 +300,9 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					refreshToken: c.body.idToken.refreshToken,
 					user: c.body.idToken.user,
 				};
-				const userInfo = await provider.getUserInfo(oauthTokens);
+				const userInfo = provider.getUserInfoFromIdToken
+					? await provider.getUserInfoFromIdToken(token)
+					: await provider.getUserInfo(oauthTokens);
 				if (!userInfo || !userInfo?.user) {
 					c.context.logger.error("Failed to get user info", {
 						provider: c.body.provider,
@@ -324,6 +328,12 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					userInfo.data,
 				);
 				const providerProfile = toOAuthProfileRecord(userInfo.data);
+				const accountFields = await resolveOAuthAccountFields(
+					c,
+					provider,
+					oauthTokens,
+					userInfo.user,
+				);
 				const data = await handleOAuthUserInfo(c, {
 					userInfo: {
 						...userInfo.user,
@@ -338,9 +348,11 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						accessToken: c.body.idToken.accessToken,
 						idToken: token,
 					},
+					accountFields,
 					callbackURL: c.body.callbackURL,
 					disableSignUp:
 						(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
+						provider.options?.disableSignUp ||
 						provider.disableSignUp,
 					source: {
 						method: "oauth",
@@ -523,6 +535,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
+			assertPasswordNotTooLong(ctx, password);
 			const userRecord = await ctx.context.internalAdapter.findUserByEmail(
 				email.toLowerCase(),
 				{ includeAccounts: true },
@@ -580,6 +593,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 						user.email,
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
+						{ userId: user.id },
 					);
 					const callbackURL = ctx.body.callbackURL
 						? encodeURIComponent(ctx.body.callbackURL)

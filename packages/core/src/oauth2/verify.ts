@@ -3,7 +3,6 @@ import type {
 	JSONWebKeySet,
 	JWTPayload,
 	JWTVerifyOptions,
-	JWTVerifyResult,
 	ProtectedHeaderParameters,
 } from "jose";
 import {
@@ -14,6 +13,7 @@ import {
 	UnsecuredJWT,
 } from "jose";
 import { logger } from "../env";
+import { isAPIError } from "../utils/is-api-error";
 import type { DpopReplayStore } from "./dpop";
 import {
 	createInMemoryDpopReplayStore,
@@ -34,10 +34,28 @@ function isJoseInfrastructureError(error: joseErrors.JOSEError) {
 	return joseInfrastructureErrorCodes.has(error.code);
 }
 
+/**
+ * A presented access token that failed validation. RFC 6750 §3.1 reserves the
+ * `invalid_token` code for this case, and resource-server challenges read it
+ * to tell a failed token apart from a request that sent none.
+ */
+function invalidTokenError(message: string) {
+	return new APIError("UNAUTHORIZED", {
+		message,
+		error: "invalid_token",
+		error_description: message,
+	});
+}
+
 interface JwksCacheEntry {
-	jwks: JSONWebKeySet;
+	/** Last fetched key set; absent until a fetch succeeds. */
+	jwks?: JSONWebKeySet | undefined;
+	/** Start time of the fetch that produced `jwks`. */
 	fetchedAt: number;
-	noKidRefetchedAt?: number | undefined;
+	/** Start time of the last key-miss refetch, regardless of outcome. */
+	refetchedAt: number;
+	failedRefresh?: { startedAt: number; failedAt: number } | undefined;
+	pending?: { promise: Promise<JSONWebKeySet>; startedAt: number } | undefined;
 }
 
 type JwksFetchOptions = {
@@ -53,9 +71,15 @@ type JwksFetchOptions = {
 
 type ResolvedJwks = {
 	jwks: JSONWebKeySet;
-	fromCache: boolean;
 	kid: string | undefined;
-	noKidRefetchedAt?: number | undefined;
+	/**
+	 * Refetches after `failed`, a set from this resolution that turned out to
+	 * lack the token's key, or resolves `undefined` inside the refetch cooldown.
+	 * Absent when `jwks` was just fetched.
+	 */
+	refresh?:
+		| ((failed: JSONWebKeySet) => Promise<JSONWebKeySet | undefined>)
+		| undefined;
 };
 
 /**
@@ -75,60 +99,173 @@ const functionJwksCache = new WeakMap<object, JwksCacheEntry>();
  * @internal
  */
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
-const JWKS_NO_KID_REFETCH_COOLDOWN_MS = 30 * 1000;
+// Minimum spacing between refetches of a fresh key set that lacks a token's
+// key. Bounds how often tokens naming made-up `kid` values make a source fetch.
+const JWKS_REFETCH_COOLDOWN_MS = 30 * 1000;
+const JWKS_FETCH_TIMEOUT_MS = 5_000;
+/**
+ * Maximum age an expired cached JWKS is trusted for verification when a refetch
+ * fails or times out, measured from the fetch that produced it. It is two cache
+ * lifetimes, the bound the client `jwks_uri` fallback in the OAuth provider
+ * uses. The window is a local choice and ignores the key set's `Cache-Control`.
+ * A key the issuer has already rotated out is accepted until the window ends.
+ */
+const JWKS_MAX_STALE_MS = 2 * JWKS_CACHE_TTL_MS;
+
+function getJwksCacheEntry<K>(
+	cache: {
+		get(key: K): JwksCacheEntry | undefined;
+		set(key: K, entry: JwksCacheEntry): unknown;
+	},
+	key: K,
+): JwksCacheEntry {
+	let entry = cache.get(key);
+	if (!entry) {
+		entry = { fetchedAt: 0, refetchedAt: 0 };
+		cache.set(key, entry);
+	}
+	return entry;
+}
+
+// A fetch older than its own timeout is dead: Cloudflare Workers cancels a
+// request's I/O when that request ends, so its promise may never settle.
+function isFetching(entry: JwksCacheEntry, now: number): boolean {
+	return (
+		entry.pending !== undefined &&
+		now - entry.pending.startedAt < JWKS_FETCH_TIMEOUT_MS
+	);
+}
 
 /**
- * Returns the cached key set when it is within the TTL. When the token carries
- * `kid`, the cached set must contain that key id; without `kid`, key selection
- * is deferred to JOSE because RFC 7515 makes the header parameter optional.
+ * Fetches the key set into `entry`, joining a fetch already in flight so
+ * concurrent verifications share one call. Each caller bounds its own wait,
+ * since the request that started the fetch may end before it settles.
  */
-function getFreshJwksWithKid(
-	cached: JwksCacheEntry | undefined,
-	kid: string | undefined,
-): JSONWebKeySet | undefined {
-	if (!cached) return undefined;
-	if (Date.now() - cached.fetchedAt >= JWKS_CACHE_TTL_MS) return undefined;
-	if (kid && !cached.jwks.keys.some((jwk) => jwk.kid === kid)) {
-		return undefined;
+async function loadJwks(
+	entry: JwksCacheEntry,
+	jwksFetch: JwksFetchOptions["jwksFetch"],
+	recordExpiredRefreshFailure = false,
+): Promise<JSONWebKeySet> {
+	const now = Date.now();
+	if (!entry.pending || !isFetching(entry, now)) {
+		const pending: NonNullable<JwksCacheEntry["pending"]> = {
+			startedAt: now,
+			promise: fetchJwks(jwksFetch)
+				.then((jwks) => {
+					if (now >= entry.fetchedAt) {
+						entry.jwks = jwks;
+						entry.fetchedAt = now;
+						if (entry.failedRefresh && now >= entry.failedRefresh.startedAt) {
+							entry.failedRefresh = undefined;
+						}
+					}
+					return jwks;
+				})
+				.finally(() => {
+					if (entry.pending === pending) entry.pending = undefined;
+				}),
+		};
+		entry.pending = pending;
 	}
-	return cached.jwks;
+	const { promise, startedAt } = entry.pending;
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			promise,
+			new Promise<never>((_, reject) => {
+				timeout = setTimeout(
+					() => reject(new joseErrors.JWKSTimeout()),
+					startedAt + JWKS_FETCH_TIMEOUT_MS - now,
+				);
+			}),
+		]);
+	} catch (error) {
+		if (
+			recordExpiredRefreshFailure &&
+			entry.fetchedAt < startedAt &&
+			startedAt >= (entry.failedRefresh?.startedAt ?? 0)
+		) {
+			entry.failedRefresh = { startedAt, failedAt: Date.now() };
+		}
+		throw error;
+	} finally {
+		clearTimeout(timeout);
+	}
+}
+
+function isInJwksRefetchCooldown(entry: JwksCacheEntry, now: number): boolean {
+	const lastRefetch = Math.max(
+		entry.refetchedAt,
+		entry.failedRefresh?.failedAt ?? 0,
+	);
+	return now - lastRefetch < JWKS_REFETCH_COOLDOWN_MS;
+}
+
+/**
+ * Refetches a fresh cached set, `current`, that lacks a token's key, such as a
+ * newly rotated-in `kid`. Uses a set another request fetched after `current`
+ * was read, or joins a fetch in flight. Otherwise refetches unless another
+ * refetch started within the cooldown, and resolves `undefined` then. A refetch
+ * consumes the cooldown whether or not it succeeds.
+ */
+async function refreshJwks(
+	entry: JwksCacheEntry,
+	current: JSONWebKeySet,
+	jwksFetch: JwksFetchOptions["jwksFetch"],
+): Promise<JSONWebKeySet | undefined> {
+	if (entry.jwks !== current) return entry.jwks;
+	const now = Date.now();
+	if (!isFetching(entry, now)) {
+		if (isInJwksRefetchCooldown(entry, now)) return undefined;
+		entry.refetchedAt = now;
+	}
+	return loadJwks(entry, jwksFetch);
 }
 
 function shouldRefetchCachedJwksWithoutKid(
 	error: unknown,
 	resolved: ResolvedJwks,
 ) {
-	const isRetryableNoKidFailure =
-		resolved.fromCache &&
+	return (
 		!resolved.kid &&
 		(error instanceof joseErrors.JWKSNoMatchingKey ||
-			error instanceof joseErrors.JWSSignatureVerificationFailed);
-	if (!isRetryableNoKidFailure) return false;
-	if (!resolved.noKidRefetchedAt) return true;
-	return (
-		Date.now() - resolved.noKidRefetchedAt >= JWKS_NO_KID_REFETCH_COOLDOWN_MS
+			error instanceof joseErrors.JWSSignatureVerificationFailed)
 	);
 }
 
 async function fetchJwks(
 	jwksFetch: JwksFetchOptions["jwksFetch"],
 ): Promise<JSONWebKeySet> {
-	const jwks =
-		typeof jwksFetch === "string"
-			? await fetchRefusingRedirects<JSONWebKeySet>(jwksFetch, {
-					headers: {
-						Accept: "application/json",
-					},
-				}).then(async (res) => {
-					if (res.error)
-						throw new Error(
-							`Jwks failed: ${res.error.message ?? res.error.statusText}`,
-						);
-					return res.data;
-				})
-			: await jwksFetch();
-	if (!jwks) throw new Error("No jwks found");
-	return jwks;
+	try {
+		const jwks =
+			typeof jwksFetch === "string"
+				? await fetchRefusingRedirects<JSONWebKeySet>(jwksFetch, {
+						headers: {
+							Accept: "application/json",
+						},
+					}).then(async (res) => {
+						if (res.error)
+							throw new Error(
+								`Jwks failed: ${res.error.message ?? res.error.statusText}`,
+							);
+						return res.data;
+					})
+				: await jwksFetch();
+		if (!jwks) throw new Error("No jwks found");
+		return jwks;
+	} catch (error) {
+		if (error instanceof TypeError) {
+			// A TypeError from a JWKS source is an infrastructure failure, not an
+			// opaque token. Do not expose runtime-specific details to callers.
+			try {
+				logger.error("JWKS fetch failed:", error);
+			} catch {
+				// A throwing custom logger must not turn this back into a TypeError.
+			}
+			throw new Error("JWKS fetch failed");
+		}
+		throw error;
+	}
 }
 
 export interface VerifyAccessTokenRemote {
@@ -141,7 +278,8 @@ export interface VerifyAccessTokenRemote {
 	/**
 	 * Forces remote verification of a token.
 	 * This ensures attached session (if applicable)
-	 * is also still active.
+	 * is also still active. The local JWT check is skipped, so
+	 * `verifyOptions.typ` is not enforced.
 	 */
 	force?: boolean;
 	/**
@@ -161,7 +299,10 @@ export interface VerifyAccessTokenRemote {
 }
 
 export interface VerifyAccessTokenOptions {
-	/** Verify options */
+	/**
+	 * Verify options. Introspection results are checked against these too,
+	 * except `typ`, which only the local JWT check can enforce.
+	 */
 	verifyOptions: JWTVerifyOptions &
 		Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
 	/** Scopes the token must satisfy. */
@@ -174,8 +315,21 @@ export interface VerifyAccessTokenOptions {
 		requiredScope: string,
 		grantedScopes: ReadonlySet<string>,
 	) => boolean;
-	/** Required to verify access token locally */
+	/** Verifies the access token locally against this JWKS, unless `jwksFetch` is set */
 	jwksUrl?: string;
+	/**
+	 * In-process key source used instead of `jwksUrl`, for a verifier running
+	 * in the same process as the authorization server.
+	 *
+	 * @internal
+	 */
+	jwksFetch?: () => Promise<JSONWebKeySet | undefined>;
+	/**
+	 * Stable object to cache the `jwksFetch` result under.
+	 *
+	 * @internal
+	 */
+	jwksCacheKey?: object;
 	/** If provided, can verify a token remotely */
 	remoteVerify?: VerifyAccessTokenRemote;
 }
@@ -228,6 +382,49 @@ export function requestToResourceInput(request: Request): ResourceRequestInput {
 const defaultDpopReplayStore = createInMemoryDpopReplayStore();
 
 /**
+ * @internal
+ */
+export async function verifyJwsToken<PayloadType = JWTPayload>(
+	token: string,
+	opts: JwksFetchOptions & {
+		verifyOptions: JWTVerifyOptions;
+		/**
+		 * Verify against an expired cached key set when its refetch fails. Only
+		 * access-token verification sets it.
+		 */
+		allowStaleJwks?: boolean;
+	},
+) {
+	if (token.split(".").length !== 3) {
+		throw new joseErrors.JWSInvalid("Invalid Compact JWS");
+	}
+	const resolved = await getJwksForVerification(
+		token,
+		opts,
+		opts.allowStaleJwks,
+	);
+	let jwks = resolved.jwks;
+	// Retry with a newer cached key set, then await a fetch already in progress.
+	// Allow at most two retries.
+	for (let refreshes = 0; ; refreshes++) {
+		try {
+			return await jwtVerify<PayloadType>(
+				token,
+				createLocalJWKSet(jwks),
+				opts.verifyOptions,
+			);
+		} catch (error) {
+			const refreshed =
+				refreshes < 2 && shouldRefetchCachedJwksWithoutKid(error, resolved)
+					? await resolved.refresh?.(jwks)
+					: undefined;
+			if (!refreshed) throw error;
+			jwks = refreshed;
+		}
+	}
+}
+
+/**
  * Performs local verification of an access token for your APIs.
  *
  * Can also be configured for remote verification.
@@ -241,29 +438,7 @@ export async function verifyJwsAccessToken(
 	},
 ) {
 	try {
-		const resolved = await getJwksForVerification(token, opts);
-		let jwt: JWTVerifyResult<JWTPayload>;
-		try {
-			jwt = await jwtVerify<JWTPayload>(
-				token,
-				createLocalJWKSet(resolved.jwks),
-				opts.verifyOptions,
-			);
-		} catch (error) {
-			if (shouldRefetchCachedJwksWithoutKid(error, resolved)) {
-				const refreshed = await getJwksForVerification(token, {
-					...opts,
-					forceRefresh: true,
-				});
-				jwt = await jwtVerify<JWTPayload>(
-					token,
-					createLocalJWKSet(refreshed.jwks),
-					opts.verifyOptions,
-				);
-			} else {
-				throw error;
-			}
-		}
+		const jwt = await verifyJwsToken(token, { ...opts, allowStaleJwks: true });
 		// Return the JWT payload in introspection format
 		// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 		if (jwt.payload.azp) {
@@ -282,8 +457,9 @@ export async function getJwks(token: string, opts: JwksFetchOptions) {
 
 async function getJwksForVerification(
 	token: string,
-	opts: JwksFetchOptions & { forceRefresh?: boolean },
-) {
+	opts: JwksFetchOptions,
+	allowStale = false,
+): Promise<ResolvedJwks> {
 	// Attempt to decode the token and find a matching kid in jwks
 	let jwtHeaders: ProtectedHeaderParameters | undefined;
 	try {
@@ -295,63 +471,98 @@ async function getJwksForVerification(
 
 	const kid = jwtHeaders.kid;
 
-	// Function sources have no usable identity of their own (callers pass
-	// fresh closures per request), so they are cached only under a stable
-	// caller-provided key object.
-	if (typeof opts.jwksFetch !== "string") {
-		const cacheKey = opts.jwksCacheKey;
-		if (!cacheKey) {
-			const jwks = await opts.jwksFetch();
-			if (!jwks) throw new Error("No jwks found");
-			return { jwks, fromCache: false, kid };
-		}
-		const cached = functionJwksCache.get(cacheKey);
-		const cachedJwks = opts.forceRefresh
-			? undefined
-			: getFreshJwksWithKid(cached, kid);
-		if (cachedJwks) {
-			return {
-				jwks: cachedJwks,
-				fromCache: true,
-				kid,
-				noKidRefetchedAt: cached?.noKidRefetchedAt,
-			};
-		}
-		const jwks = await opts.jwksFetch();
-		if (!jwks) throw new Error("No jwks found");
-		const fetchedAt = Date.now();
-		functionJwksCache.set(cacheKey, {
-			jwks,
-			fetchedAt,
-			...(opts.forceRefresh && !kid ? { noKidRefetchedAt: fetchedAt } : {}),
-		});
-		return { jwks, fromCache: false, kid };
-	}
+	// The cache is scoped to the source, so a token is only ever matched against
+	// the key set published by its own source. Function sources have no usable
+	// identity of their own (callers pass fresh closures per request), so they
+	// are cached only under a stable caller-provided key object; without one,
+	// a throwaway entry still bounds the fetch.
+	const entry =
+		typeof opts.jwksFetch === "string"
+			? getJwksCacheEntry(jwksCache, opts.jwksFetch)
+			: opts.jwksCacheKey
+				? getJwksCacheEntry(functionJwksCache, opts.jwksCacheKey)
+				: { fetchedAt: 0, refetchedAt: 0 };
 
-	// The cache is scoped to `cacheKey`, so a token is only ever matched
-	// against the key set published by its own source.
-	const cacheKey = opts.jwksFetch;
-	const cached = jwksCache.get(cacheKey);
-	const cachedJwks = opts.forceRefresh
-		? undefined
-		: getFreshJwksWithKid(cached, kid);
-	if (!cachedJwks) {
-		const jwks = await fetchJwks(opts.jwksFetch);
-		const fetchedAt = Date.now();
-		jwksCache.set(cacheKey, {
-			jwks,
-			fetchedAt,
-			...(opts.forceRefresh && !kid ? { noKidRefetchedAt: fetchedAt } : {}),
-		});
-		return { jwks, fromCache: false, kid };
-	}
-
-	return {
-		jwks: cachedJwks,
-		fromCache: true,
-		kid,
-		noKidRefetchedAt: cached?.noKidRefetchedAt,
+	const refresh = (failed: JSONWebKeySet) =>
+		refreshJwks(entry, failed, opts.jwksFetch);
+	const resolveCached = async (
+		cached: JSONWebKeySet,
+	): Promise<ResolvedJwks> => {
+		// Without `kid`, key selection is deferred to JOSE because RFC 7515 makes
+		// the header parameter optional.
+		if (!kid || cached.keys.some((jwk) => jwk.kid === kid)) {
+			return { jwks: cached, kid, refresh };
+		}
+		return { jwks: (await refresh(cached)) ?? cached, kid };
 	};
+
+	const now = Date.now();
+	const cached =
+		now - entry.fetchedAt < JWKS_CACHE_TTL_MS ? entry.jwks : undefined;
+	if (cached) return resolveCached(cached);
+	if (!allowStale) {
+		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
+	}
+
+	// The expired set in the entry while it is within the stale window at `at`,
+	// and whether it can verify this token. A set is cached without validation,
+	// so its entries are checked before `kid` is read from them.
+	const getStaleJwks = (at: number) => {
+		const stale = entry.jwks;
+		if (
+			!stale ||
+			!Array.isArray(stale.keys) ||
+			at - entry.fetchedAt >= JWKS_MAX_STALE_MS
+		) {
+			return undefined;
+		}
+		const canUse =
+			!kid ||
+			stale.keys.some(
+				(jwk) => jwk && typeof jwk === "object" && jwk.kid === kid,
+			);
+		return { stale, canUse };
+	};
+
+	// Only while serving a stale set does a failed refresh leave a token
+	// without `kid` with its own verification error. With a fresh set, the
+	// failure stays an outage error.
+	const refreshStale = async (failed: JSONWebKeySet) => {
+		try {
+			return await refreshJwks(entry, failed, opts.jwksFetch);
+		} catch {
+			return undefined;
+		}
+	};
+
+	const expired = getStaleJwks(now);
+	if (expired && isInJwksRefetchCooldown(entry, now)) {
+		if (expired.canUse) {
+			return { jwks: expired.stale, kid, refresh: refreshStale };
+		}
+		// The set is not known to lack the key, because the refetch that
+		// could tell failed, so this is an outage rather than an invalid
+		// token. A refetch still in flight settles it, and this joins it.
+		if (!isFetching(entry, now)) throw new Error("JWKS fetch failed");
+	}
+
+	try {
+		return { jwks: await loadJwks(entry, opts.jwksFetch, true), kid };
+	} catch (error) {
+		const failedAt = Date.now();
+		// An earlier fetch that outlived its wait can land while this one fails.
+		// Its set replaces the one read above, which may still hold a key the
+		// issuer has since dropped, so the entry is read again and each set is
+		// judged by the time of its own fetch.
+		if (entry.jwks && failedAt - entry.fetchedAt < JWKS_CACHE_TTL_MS) {
+			return resolveCached(entry.jwks);
+		}
+		const latest = getStaleJwks(failedAt);
+		if (latest?.canUse) {
+			return { jwks: latest.stale, kid, refresh: refreshStale };
+		}
+		throw error;
+	}
 }
 
 async function verifyAccessTokenPayload(
@@ -360,10 +571,12 @@ async function verifyAccessTokenPayload(
 ) {
 	let payload: JWTPayload | undefined;
 	// Locally verify
-	if (opts.jwksUrl && !opts?.remoteVerify?.force) {
+	const jwksFetch = opts.jwksFetch ?? opts.jwksUrl;
+	if (jwksFetch && !opts?.remoteVerify?.force) {
 		try {
 			payload = await verifyJwsAccessToken(token, {
-				jwksFetch: opts.jwksUrl,
+				jwksFetch,
+				jwksCacheKey: opts.jwksCacheKey,
 				verifyOptions: opts.verifyOptions,
 			});
 		} catch (error) {
@@ -371,16 +584,12 @@ async function verifyAccessTokenPayload(
 				if (error.name === "TypeError" || error.name === "JWSInvalid") {
 					// likely an opaque token (continue)
 				} else if (error instanceof joseErrors.JWTExpired) {
-					throw new APIError("UNAUTHORIZED", {
-						message: "token expired",
-					});
+					throw invalidTokenError("token expired");
 				} else if (error instanceof joseErrors.JOSEError) {
 					if (isJoseInfrastructureError(error)) {
 						throw error;
 					}
-					throw new APIError("UNAUTHORIZED", {
-						message: "invalid access token",
-					});
+					throw invalidTokenError("invalid access token");
 				} else {
 					throw error;
 				}
@@ -418,10 +627,7 @@ async function verifyAccessTokenPayload(
 			throw new APIError("INTERNAL_SERVER_ERROR", {
 				message: "introspection failed",
 			});
-		if (!introspect.active)
-			throw new APIError("UNAUTHORIZED", {
-				message: "token inactive",
-			});
+		if (!introspect.active) throw invalidTokenError("token inactive");
 		// Verifies payload using verify options (token valid through introspect).
 		// Audience is enforced by default: when `verifyOptions.audience` is set
 		// but the introspection response omits `aud` (or it mismatches),
@@ -429,26 +635,33 @@ async function verifyAccessTokenPayload(
 		// token issued for a different resource/client on the same issuer would
 		// also pass. Only drop the audience check when the caller has explicitly
 		// opted in via `remoteVerify.allowMissingAudience`.
+		// `typ` checks the JWT header (RFC 9068 §4). An introspection response is
+		// a claim set with no header, so only the local check can enforce it.
 		try {
 			const unsecuredJwt = new UnsecuredJWT(introspect).encode();
-			const { audience: _audience, ...verifyOptionsNoAudience } =
-				opts.verifyOptions;
+			const { typ: _typ, audience, ...claimOptions } = opts.verifyOptions;
 			const skipAudience =
 				!introspect.aud && opts.remoteVerify.allowMissingAudience === true;
 			const verify = UnsecuredJWT.decode(
 				unsecuredJwt,
-				skipAudience ? verifyOptionsNoAudience : opts.verifyOptions,
+				skipAudience ? claimOptions : { ...claimOptions, audience },
 			);
 			payload = verify.payload;
 		} catch (error) {
+			if (error instanceof joseErrors.JWTExpired) {
+				throw invalidTokenError("token expired");
+			}
+			if (
+				error instanceof joseErrors.JOSEError &&
+				!isJoseInfrastructureError(error)
+			) {
+				throw invalidTokenError("invalid access token");
+			}
 			throw new Error(error as unknown as string);
 		}
 	}
 
-	if (!payload)
-		throw new APIError("UNAUTHORIZED", {
-			message: `no token payload`,
-		});
+	if (!payload) throw invalidTokenError("no token payload");
 
 	const grantedScopes = parseGrantedScopes(payload.scope);
 
@@ -515,11 +728,7 @@ function parseGrantedScopes(scope: unknown): ReadonlySet<string> {
 		scope.length === 0 ||
 		scope.split(" ").some((token) => !isOAuthScopeToken(token))
 	) {
-		throw new APIError("UNAUTHORIZED", {
-			message: "access token scope claim is invalid",
-			error: "invalid_token",
-			error_description: "access token scope claim is invalid",
-		});
+		throw invalidTokenError("access token scope claim is invalid");
 	}
 	return new Set(scope.split(" "));
 }
@@ -553,7 +762,7 @@ export function createInsufficientScopeError(
  */
 export function isInsufficientScopeError(error: unknown): error is APIError {
 	if (
-		!(error instanceof APIError) ||
+		!isAPIError(error) ||
 		!insufficientScopeErrors.has(error) ||
 		error.status !== "FORBIDDEN"
 	)

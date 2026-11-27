@@ -1,5 +1,93 @@
 # @better-auth/stripe
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12930](https://github.com/better-auth/better-auth/pull/12930) [`34ae0ce`](https://github.com/better-auth/better-auth/commit/34ae0cedfdd3fcf276715a0e27daaf2cd5308e4a) Thanks [@jonathansamines](https://github.com/jonathansamines)! - Stripe subscription lookups now filter `active` and `trialing` status in the database instead of loading every row for a reference and filtering in memory. List, checkout, cancel, restore, billing-portal, and trial-eligibility paths no longer miss the current or past-trial subscription once canceled history exceeds the adapter `findMany` cap.
+
+## 1.7.27
+
+## 1.7.26
+
+## 1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+- [#12503](https://github.com/better-auth/better-auth/pull/12503) [`87ede79`](https://github.com/better-auth/better-auth/commit/87ede7984d4df152ae3c0f5a58a2d08299b24281) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed errors from hooks and endpoints turning into generic 500 responses or skipping their error handling in the OAuth provider, Client ID Metadata Document, passkey, SSO, SCIM, and Stripe plugins when the app installs more than one copy of `better-call`.
+
+## 1.7.23
+
+## 1.7.22
+
+### Patch Changes
+
+- [#12473](https://github.com/better-auth/better-auth/pull/12473) [`f6487ed`](https://github.com/better-auth/better-auth/commit/f6487eddd799de2758420621ddf5d248f30aa3f3) Thanks [@bytaesu](https://github.com/bytaesu)! - A `customer.subscription.updated` webhook for a customer with no local subscription now logs a clear warning instead of failing with a `TypeError`.
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Stripe customer ids and the subscription fields the plugin manages can no longer be set from sign-up or update-user requests and are removed from their input types. This includes server calls such as `auth.api.updateUser`; write them through your database adapter instead.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - When several records share a Stripe customer id, subscriptions created outside checkout now go to the owner recorded on the Stripe customer, and are skipped with a warning when no recorded owner holds the id.
+
+## 1.7.15
+
+### Patch Changes
+
+- [#12102](https://github.com/better-auth/better-auth/pull/12102) [`3b3a595`](https://github.com/better-auth/better-auth/commit/3b3a5957a0ce1bde906954c5490735706a5202f9) Thanks [@bytaesu](https://github.com/bytaesu)! - `/subscription/success` now checks the `callbackURL` against trusted origins after replacing `{CHECKOUT_SESSION_ID}`, so a `checkoutSessionId` value can no longer redirect to an untrusted origin.
+
+- [#12105](https://github.com/better-auth/better-auth/pull/12105) [`4af793f`](https://github.com/better-auth/better-auth/commit/4af793f1c8db057d2822b59c2d9099d76a0fb279) Thanks [@bytaesu](https://github.com/bytaesu)! - `/subscription/success` now rejects non-string `callbackURL` and `checkoutSessionId` query values, such as duplicated parameters, with a 400 instead of failing with a 500.
+
+## 1.7.14
+
+## 1.7.13
+
+### Patch Changes
+
+- [#11954](https://github.com/better-auth/better-auth/pull/11954) [`da53fae`](https://github.com/better-auth/better-auth/commit/da53faea2530df6fda47f83f72da3eb5557ae60d) Thanks [@godwit-bo](https://github.com/godwit-bo)! - Support Stripe SDK v23.
+
+## 1.7.12
+
+## 1.7.11
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#9684](https://github.com/better-auth/better-auth/pull/9684) [`72a6394`](https://github.com/better-auth/better-auth/commit/72a6394e30ced6654ebffe3c5b74dc1b570f6880) Thanks [@nikhilgupta58](https://github.com/nikhilgupta58)! - Stop logging a "Stripe webhook failed" error when a one-time `payment` mode checkout session completes.
+
+## 1.7.7
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11347](https://github.com/better-auth/better-auth/pull/11347) [`f95d5f1`](https://github.com/better-auth/better-auth/commit/f95d5f1c2ccb7f96b189fdb7bc6cfe8d0044d607) Thanks [@rwieruch](https://github.com/rwieruch)! - Fix automatic seat synchronization after an organization cancels and resubscribes, so member changes update the active or trialing subscription even when canceled subscriptions remain in its history.
+
 ## 1.7.5
 
 ## 1.7.4

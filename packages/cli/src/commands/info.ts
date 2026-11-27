@@ -9,6 +9,7 @@ import {
 	getInstalledPackageVersion,
 	getPackageInfo,
 } from "../utils/get-package-info";
+import { isInteractive } from "../utils/interactive";
 
 type ReportedDependency = {
 	name: string;
@@ -169,123 +170,85 @@ function getDatabaseInfo(projectRoot: string) {
 	}
 }
 
+// camelCase, snake_case and kebab-case name the same key
+const normalizeKey = (key: string) =>
+	key.replaceAll("-", "").replaceAll("_", "").toLowerCase();
+
+// List of sensitive keys to redact
+const sensitiveKeys = [
+	"secret",
+	"secrets",
+	"secretKey",
+	"clientSecret",
+	"clientId",
+	"authToken",
+	"apiKey",
+	"apiSecret",
+	"privateKey",
+	"privateKeyPass",
+	"passphrase",
+	"publicKey",
+	"password",
+	"token",
+	"webhook",
+	"connectionString",
+	"databaseUrl",
+	"databaseURL",
+	"TURSO_AUTH_TOKEN",
+	"TURSO_DATABASE_URL",
+	"MYSQL_DATABASE_URL",
+	"DATABASE_URL",
+	"POSTGRES_URL",
+	"MONGODB_URI",
+	"stripeKey",
+	"stripeWebhookSecret",
+].map(normalizeKey);
+
+// Keys that should NOT be redacted even if they contain sensitive keywords
+const allowedKeys = [
+	"baseURL",
+	"callbackURL",
+	"redirectURL",
+	"trustedOrigins",
+	"appName",
+].map(normalizeKey);
+
+const isSensitiveKey = (key: string) => {
+	const normalized = normalizeKey(key);
+	// Exact match or the key ends with the sensitive key or its plural
+	return (
+		!allowedKeys.includes(normalized) &&
+		sensitiveKeys.some(
+			(sensitiveKey) =>
+				normalized.endsWith(sensitiveKey) ||
+				normalized.endsWith(`${sensitiveKey}s`),
+		)
+	);
+};
+
+// Sensitivity flows down, so nested fields of a secret (e.g. a JWK) are
+// redacted too. Secrets are strings, so numbers and flags stay for debugging.
+const redactSensitive = (value: unknown, sensitive = false): unknown => {
+	if (Array.isArray(value)) {
+		return sensitive
+			? "[REDACTED]"
+			: value.map((item) => redactSensitive(item));
+	}
+	if (typeof value === "object" && value !== null) {
+		return Object.fromEntries(
+			Object.entries(value).map(([key, child]) => [
+				key,
+				redactSensitive(child, sensitive || isSensitiveKey(key)),
+			]),
+		);
+	}
+	return sensitive && typeof value === "string" ? "[REDACTED]" : value;
+};
+
 function sanitizeBetterAuthConfig(config: any): any {
 	if (!config) return null;
 
 	const sanitized = JSON.parse(JSON.stringify(config));
-
-	// List of sensitive keys to redact
-	const sensitiveKeys = [
-		"secret",
-		"secrets",
-		"secretKey",
-		"clientSecret",
-		"clientId",
-		"authToken",
-		"apiKey",
-		"apiSecret",
-		"privateKey",
-		"publicKey",
-		"password",
-		"token",
-		"webhook",
-		"connectionString",
-		"databaseUrl",
-		"databaseURL",
-		"TURSO_AUTH_TOKEN",
-		"TURSO_DATABASE_URL",
-		"MYSQL_DATABASE_URL",
-		"DATABASE_URL",
-		"POSTGRES_URL",
-		"MONGODB_URI",
-		"stripeKey",
-		"stripeWebhookSecret",
-	];
-
-	// Keys that should NOT be redacted even if they contain sensitive keywords
-	const allowedKeys = [
-		"baseURL",
-		"callbackURL",
-		"redirectURL",
-		"trustedOrigins",
-		"appName",
-	];
-
-	function redactSensitive(obj: any, parentKey?: string): any {
-		if (typeof obj !== "object" || obj === null) {
-			// Check if the parent key is sensitive
-			if (parentKey && typeof obj === "string" && obj.length > 0) {
-				// First check if it's in the allowed list
-				if (
-					allowedKeys.some(
-						(allowed) => parentKey.toLowerCase() === allowed.toLowerCase(),
-					)
-				) {
-					return obj;
-				}
-
-				const lowerKey = parentKey.toLowerCase();
-				if (
-					sensitiveKeys.some((key) => {
-						const lowerSensitiveKey = key.toLowerCase();
-						// Exact match or the key ends with the sensitive key
-						return (
-							lowerKey === lowerSensitiveKey ||
-							lowerKey.endsWith(lowerSensitiveKey)
-						);
-					})
-				) {
-					return "[REDACTED]";
-				}
-			}
-			return obj;
-		}
-
-		if (Array.isArray(obj)) {
-			return obj.map((item) => redactSensitive(item, parentKey));
-		}
-
-		const result: any = {};
-		for (const [key, value] of Object.entries(obj)) {
-			// First check if this key is in the allowed list
-			if (
-				allowedKeys.some(
-					(allowed) => key.toLowerCase() === allowed.toLowerCase(),
-				)
-			) {
-				result[key] = value;
-				continue;
-			}
-
-			const lowerKey = key.toLowerCase();
-
-			// Check if this key should be redacted
-			if (
-				sensitiveKeys.some((sensitiveKey) => {
-					const lowerSensitiveKey = sensitiveKey.toLowerCase();
-					// Exact match or the key ends with the sensitive key
-					return (
-						lowerKey === lowerSensitiveKey ||
-						lowerKey.endsWith(lowerSensitiveKey)
-					);
-				})
-			) {
-				if (typeof value === "string" && value.length > 0) {
-					result[key] = "[REDACTED]";
-				} else if (Array.isArray(value)) {
-					result[key] = "[REDACTED]";
-				} else if (typeof value === "object" && value !== null) {
-					// Still recurse into objects but mark them as potentially sensitive
-					result[key] = redactSensitive(value, key);
-				} else {
-					result[key] = value;
-				}
-			} else {
-				result[key] = redactSensitive(value, key);
-			}
-		}
-		return result;
-	}
 
 	// Special handling for specific config sections
 	if (sanitized.database) {
@@ -297,18 +260,6 @@ function sanitizeBetterAuthConfig(config: any): any {
 		}
 		if (sanitized.database.authToken) {
 			sanitized.database.authToken = "[REDACTED]";
-		}
-	}
-
-	if (sanitized.socialProviders) {
-		// Redact all social provider secrets
-		for (const provider in sanitized.socialProviders) {
-			if (sanitized.socialProviders[provider]) {
-				sanitized.socialProviders[provider] = redactSensitive(
-					sanitized.socialProviders[provider],
-					provider,
-				);
-			}
 		}
 	}
 
@@ -403,6 +354,24 @@ async function getBetterAuthInfo(
 	}
 }
 
+const clipboardCommands: Partial<Record<NodeJS.Platform, string>> = {
+	darwin: "pbcopy",
+	linux: "xclip -selection clipboard",
+	win32: "clip",
+};
+
+// The notice goes to stderr so stdout keeps only the info itself.
+function copyToClipboard(text: string) {
+	const command = clipboardCommands[os.platform()];
+	if (!command) return;
+	try {
+		execSync(command, { input: text });
+		console.error(chalk.green("✓ Copied to clipboard"));
+	} catch {
+		console.error(chalk.yellow("⚠ Could not copy to clipboard"));
+	}
+}
+
 function formatOutput(data: any, indent = 0): string {
 	const spaces = " ".repeat(indent);
 
@@ -483,21 +452,7 @@ export const info = new Command("info")
 			console.log(jsonOutput);
 
 			if (options.copy) {
-				try {
-					const platform = os.platform();
-					if (platform === "darwin") {
-						execSync("pbcopy", { input: jsonOutput });
-						console.log(chalk.green("\n✓ Copied to clipboard"));
-					} else if (platform === "linux") {
-						execSync("xclip -selection clipboard", { input: jsonOutput });
-						console.log(chalk.green("\n✓ Copied to clipboard"));
-					} else if (platform === "win32") {
-						execSync("clip", { input: jsonOutput });
-						console.log(chalk.green("\n✓ Copied to clipboard"));
-					}
-				} catch {
-					console.log(chalk.yellow("\n⚠ Could not copy to clipboard"));
-				}
+				copyToClipboard(jsonOutput);
 			}
 			return;
 		}
@@ -535,11 +490,16 @@ export const info = new Command("info")
 		}
 
 		console.log(chalk.gray("\n" + "=".repeat(50)));
-		console.log(chalk.gray("\n💡 Tip: Use --json flag for JSON output"));
-		console.log(chalk.gray("💡 Use --copy flag to copy output to clipboard"));
-		console.log(
-			chalk.gray("💡 When reporting issues, include this information\n"),
-		);
+		// Tips are for a person at a terminal, never for CI or a script.
+		if (isInteractive()) {
+			console.error(chalk.gray("\n💡 Tip: Use --json flag for JSON output"));
+			console.error(
+				chalk.gray("💡 Use --copy flag to copy output to clipboard"),
+			);
+			console.error(
+				chalk.gray("💡 When reporting issues, include this information\n"),
+			);
+		}
 
 		if (options.copy) {
 			const textOutput = `
@@ -565,20 +525,6 @@ Better Auth:
 ${JSON.stringify(betterAuthInfo, null, 2)}
 `;
 
-			try {
-				const platform = os.platform();
-				if (platform === "darwin") {
-					execSync("pbcopy", { input: textOutput });
-					console.log(chalk.green("✓ Copied to clipboard"));
-				} else if (platform === "linux") {
-					execSync("xclip -selection clipboard", { input: textOutput });
-					console.log(chalk.green("✓ Copied to clipboard"));
-				} else if (platform === "win32") {
-					execSync("clip", { input: textOutput });
-					console.log(chalk.green("✓ Copied to clipboard"));
-				}
-			} catch {
-				console.log(chalk.yellow("⚠ Could not copy to clipboard"));
-			}
+			copyToClipboard(textOutput);
 		}
 	});

@@ -1,10 +1,14 @@
 import { readFileSync } from "node:fs";
+import prompts from "prompts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Spinner } from "yocto-spinner";
 import { upgradeAction } from "../src/commands/upgrade";
 import { detectPackageManager } from "../src/utils/check-package-managers";
 import { getPackageInfo } from "../src/utils/get-package-info";
 import { installDependencies } from "../src/utils/install-dependencies";
+
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
 
 vi.mock(import("../src/version"), () => ({
 	cliVersion: "1.7.0-rc.4",
@@ -122,6 +126,18 @@ describe("upgradeAction", () => {
 		});
 	});
 
+	it("exits 130 without installing when the upgrade is declined", async () => {
+		const exit = vi.spyOn(process, "exit").mockImplementation(() => {
+			throw new Error("exit");
+		});
+		prompts.inject([false]);
+
+		await expect(upgradeAction({ cwd: process.cwd() })).rejects.toThrow("exit");
+
+		expect(exit).toHaveBeenCalledWith(130);
+		expect(mockInstallDependencies).not.toHaveBeenCalled();
+	});
+
 	it("does not downgrade packages newer than the running CLI", async () => {
 		mockGetPackageInfo.mockReturnValue({
 			dependencies: {
@@ -139,25 +155,25 @@ describe("upgradeAction", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11072
 	 */
-	it.each([
-		"catalog:",
-		"file:../better-auth",
-	])("skips unsupported dependency specifier %s", async (specifier) => {
-		const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
-		mockGetPackageInfo.mockReturnValue({
-			dependencies: {
-				"better-auth": specifier,
-			},
-		});
+	it.each(["catalog:", "file:../better-auth"])(
+		"skips unsupported dependency specifier %s",
+		async (specifier) => {
+			const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+			mockGetPackageInfo.mockReturnValue({
+				dependencies: {
+					"better-auth": specifier,
+				},
+			});
 
-		await upgradeAction({ cwd: process.cwd(), yes: true });
+			await upgradeAction({ cwd: process.cwd(), yes: true });
 
-		expect(warning).toHaveBeenCalledWith(
-			expect.stringContaining("Automatic upgrades require a semver range"),
-		);
-		expect(mockDetectPackageManager).not.toHaveBeenCalled();
-		expect(mockInstallDependencies).not.toHaveBeenCalled();
-	});
+			expect(warning).toHaveBeenCalledWith(
+				expect.stringContaining("Automatic upgrades require a semver range"),
+			);
+			expect(mockDetectPackageManager).not.toHaveBeenCalled();
+			expect(mockInstallDependencies).not.toHaveBeenCalled();
+		},
+	);
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10760

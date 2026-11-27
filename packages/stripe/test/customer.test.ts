@@ -1001,42 +1001,44 @@ describe("stripe customer", () => {
 				createCalls: 0,
 				expectedId: "cus_existing",
 			},
-		])("signup: $when", async ({
-			metadata,
-			verified,
-			createCalls,
-			expectedId,
-		}, { stripeMock, memory, stripeOptions }) => {
-			const email = "owner@example.com";
-			stripeMock.customers.search.mockResolvedValueOnce({
-				data: [{ id: "cus_existing", email, ...(metadata && { metadata }) }],
-			});
-			stripeMock.customers.create.mockResolvedValueOnce({ id: "cus_fresh" });
+		])(
+			"signup: $when",
+			async ({ metadata, verified, createCalls, expectedId }, {
+				stripeMock,
+				memory,
+				stripeOptions,
+			}) => {
+				const email = "owner@example.com";
+				stripeMock.customers.search.mockResolvedValueOnce({
+					data: [{ id: "cus_existing", email, ...(metadata && { metadata }) }],
+				});
+				stripeMock.customers.create.mockResolvedValueOnce({ id: "cus_fresh" });
 
-			const { client, auth } = await getTestInstance(
-				{
-					database: memory,
-					plugins: [stripe(stripeOptions)],
-					...(verified && { databaseHooks: autoVerifyUserHooks }),
-				},
-				{
-					disableTestUser: true,
-					clientOptions: { plugins: [stripeClient({ subscription: true })] },
-				},
-			);
-			const ctx = await auth.$context;
+				const { client, auth } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(stripeOptions)],
+						...(verified && { databaseHooks: autoVerifyUserHooks }),
+					},
+					{
+						disableTestUser: true,
+						clientOptions: { plugins: [stripeClient({ subscription: true })] },
+					},
+				);
+				const ctx = await auth.$context;
 
-			const userRes = await client.signUp.email(
-				{ email, password: "password", name: "Me" },
-				{ throw: true },
-			);
+				const userRes = await client.signUp.email(
+					{ email, password: "password", name: "Me" },
+					{ throw: true },
+				);
 
-			expect(stripeMock.customers.create).toHaveBeenCalledTimes(createCalls);
-			const user = await ctx.adapter.findOne<
-				User & { stripeCustomerId?: string }
-			>({ model: "user", where: [{ field: "id", value: userRes.user.id }] });
-			expect(user?.stripeCustomerId).toBe(expectedId);
-		});
+				expect(stripeMock.customers.create).toHaveBeenCalledTimes(createCalls);
+				const user = await ctx.adapter.findOne<
+					User & { stripeCustomerId?: string }
+				>({ model: "user", where: [{ field: "id", value: userRes.user.id }] });
+				expect(user?.stripeCustomerId).toBe(expectedId);
+			},
+		);
 
 		test("creates a new customer on upgrade when the matched customer belongs to another user", async ({
 			stripeMock,

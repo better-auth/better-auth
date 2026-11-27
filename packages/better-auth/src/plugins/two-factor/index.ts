@@ -1,4 +1,7 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -7,12 +10,13 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
-import { sensitiveSessionMiddleware, sessionMiddleware } from "../../api";
 import {
-	deleteSessionCookie,
-	expireCookie,
-	setSessionCookie,
-} from "../../cookies";
+	getAuthoritativeSessionFromCtx,
+	sensitiveSessionMiddleware,
+	sessionMiddleware,
+} from "../../api";
+import { isSessionOutsideStore } from "../../api/state/session-source";
+import { deleteSessionCookie, expireCookie } from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
@@ -28,6 +32,7 @@ import {
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
 import { schema } from "./schema";
+import { replaceSession } from "./session";
 import { totp2fa } from "./totp";
 import type {
 	TwoFactorOptions,
@@ -44,6 +49,71 @@ declare module "@better-auth/core" {
 		};
 	}
 }
+const signInPaths = new Set([
+	"/sign-in/email",
+	"/sign-in/username",
+	"/sign-in/phone-number",
+]);
+
+const signInTwoFactorStates = new WeakMap<
+	GenericEndpointContext["context"],
+	ReturnType<typeof readSignInTwoFactorState>
+>();
+
+async function readSignInTwoFactorState(
+	ctx: GenericEndpointContext,
+	trustDeviceMaxAge: number,
+) {
+	const data = ctx.context.newSession;
+	if (!data?.user.twoFactorEnabled) {
+		return {
+			requiresTwoFactor: false,
+			trustDeviceCookie: null,
+		};
+	}
+	const cookie = ctx.context.createAuthCookie(TRUST_DEVICE_COOKIE_NAME, {
+		maxAge: trustDeviceMaxAge,
+	});
+	// Check for trust device cookie
+	const trustDeviceCookie = await ctx.getSignedCookie(
+		cookie.name,
+		ctx.context.secret,
+	);
+	if (!trustDeviceCookie) {
+		return {
+			requiresTwoFactor: true,
+			trustDeviceCookie,
+		};
+	}
+	const [token, trustIdentifier] = trustDeviceCookie.split("!");
+	if (!token || !trustIdentifier) {
+		return {
+			requiresTwoFactor: true,
+			trustDeviceCookie,
+		};
+	}
+	const expectedToken = await createHMAC("SHA-256", "base64urlnopad").sign(
+		ctx.context.secret,
+		`${data.user.id}!${trustIdentifier}`,
+	);
+	if (token !== expectedToken) {
+		return {
+			requiresTwoFactor: true,
+			trustDeviceCookie,
+		};
+	}
+	// HMAC is valid; verify the server-side record
+	const verificationRecord =
+		await ctx.context.internalAdapter.findVerificationValue(trustIdentifier);
+	return {
+		requiresTwoFactor:
+			!verificationRecord ||
+			verificationRecord.value !== data.user.id ||
+			!(verificationRecord.expiresAt > new Date()),
+		trustDeviceCookie,
+	};
+}
+
 export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
@@ -98,9 +168,43 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				password: passwordSchema,
 			});
 
+	function getSignInTwoFactorState(ctx: GenericEndpointContext) {
+		const remembered = signInTwoFactorStates.get(ctx.context);
+		if (remembered) {
+			return remembered;
+		}
+		const state = readSignInTwoFactorState(ctx, trustDeviceMaxAge);
+		signInTwoFactorStates.set(ctx.context, state);
+		return state;
+	}
+
+	function matchesChallengePath(path: string | undefined) {
+		if (!path) {
+			return false;
+		}
+		return (
+			signInPaths.has(path) ||
+			(options?.challengePaths?.includes(path) ?? false)
+		);
+	}
+
+	async function shouldRequireTwoFactor(ctx: GenericEndpointContext) {
+		// Only the built-in sign-in paths (and configured challengePaths) are gated by the after hook
+		if (!matchesChallengePath(ctx.path)) {
+			return false;
+		}
+		return (await getSignInTwoFactorState(ctx)).requiresTwoFactor;
+	}
+
 	return {
 		id: "two-factor",
 		version: PACKAGE_VERSION,
+		/**
+		 * Whether this sign-in still requires a second factor.
+		 *
+		 * @internal
+		 */
+		shouldRequireTwoFactor,
 		endpoints: {
 			...totp.endpoints,
 			...otp.endpoints,
@@ -168,7 +272,20 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					},
 				},
 				async (ctx) => {
-					const user = ctx.context.session.user as UserWithTwoFactor;
+					// Enabling replaces the session, so a cached cookie must not outlive a
+					// revocation. Sessions built outside the store have no row to re-read.
+					const session = (await isSessionOutsideStore(
+						ctx.context.session.session.token,
+					))
+						? ctx.context.session
+						: await getAuthoritativeSessionFromCtx(ctx);
+					if (!session) {
+						throw APIError.from("UNAUTHORIZED", {
+							message: "Unauthorized",
+							code: "UNAUTHORIZED",
+						});
+					}
+					const user = session.user as UserWithTwoFactor;
 					const { password, issuer, method } = ctx.body;
 					const requirePassword = await shouldRequirePassword(
 						ctx,
@@ -214,18 +331,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								twoFactorEnabled: true,
 							},
 						);
-						const newSession = await ctx.context.internalAdapter.createSession(
-							updatedUser.id,
-							false,
-							ctx.context.session.session,
-						);
-						await setSessionCookie(ctx, {
-							session: newSession,
-							user: updatedUser,
-						});
-						await ctx.context.internalAdapter.deleteSession(
-							ctx.context.session.session.token,
-						);
+						await replaceSession(ctx, ctx.context.session.session, updatedUser);
 						return ctx.json({ method: "otp" as const });
 					}
 
@@ -256,18 +362,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								twoFactorEnabled: true,
 							},
 						);
-						const newSession = await ctx.context.internalAdapter.createSession(
-							updatedUser.id,
-							false,
-							ctx.context.session.session,
-						);
-						await setSessionCookie(ctx, {
-							session: newSession,
-							user: updatedUser,
-						});
-						await ctx.context.internalAdapter.deleteSession(
-							ctx.context.session.session.token,
-						);
+						await replaceSession(ctx, ctx.context.session.session, updatedUser);
 					}
 					const totpData = {
 						secret: encryptedSecret,
@@ -388,22 +483,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							},
 						],
 					});
-					const newSession = await ctx.context.internalAdapter.createSession(
-						updatedUser.id,
-						false,
-						ctx.context.session.session,
-					);
-					/**
-					 * Update the session cookie with the new user data
-					 */
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
-					//remove current session
-					await ctx.context.internalAdapter.deleteSession(
-						ctx.context.session.session.token,
-					);
+					await replaceSession(ctx, ctx.context.session.session, updatedUser);
 					const disableTrustCookie = ctx.context.createAuthCookie(
 						TRUST_DEVICE_COOKIE_NAME,
 						{
@@ -432,94 +512,62 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 			after: [
 				{
 					matcher(context) {
-						const defaultPaths = [
-							"/sign-in/email",
-							"/sign-in/username",
-							"/sign-in/phone-number",
-						];
-						const paths = options?.challengePaths
-							? [...defaultPaths, ...options.challengePaths]
-							: defaultPaths;
-						return paths.includes(context.path);
+						return (
+							!context.context.session && matchesChallengePath(context.path)
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const data = ctx.context.newSession;
-						if (!data) {
-							return;
-						}
-
 						if (!data?.user.twoFactorEnabled) {
 							return;
 						}
-
+						const { requiresTwoFactor, trustDeviceCookie } =
+							await getSignInTwoFactorState(ctx);
 						const trustDeviceCookieAttrs = ctx.context.createAuthCookie(
 							TRUST_DEVICE_COOKIE_NAME,
 							{
 								maxAge: trustDeviceMaxAge,
 							},
 						);
-						// Check for trust device cookie
-						const trustDeviceCookie = await ctx.getSignedCookie(
-							trustDeviceCookieAttrs.name,
-							ctx.context.secret,
-						);
-
-						if (trustDeviceCookie) {
-							const [token, trustIdentifier] = trustDeviceCookie.split("!");
-							if (token && trustIdentifier) {
-								const expectedToken = await createHMAC(
-									"SHA-256",
-									"base64urlnopad",
-								).sign(
-									ctx.context.secret,
-									`${data.user.id}!${trustIdentifier}`,
-								);
-
-								if (token === expectedToken) {
-									// HMAC is valid; verify the server-side record
-									const verificationRecord =
-										await ctx.context.internalAdapter.findVerificationValue(
-											trustIdentifier,
-										);
-									if (
-										verificationRecord &&
-										verificationRecord.value === data.user.id &&
-										verificationRecord.expiresAt > new Date()
-									) {
-										await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-											trustIdentifier,
-										);
-										const newTrustIdentifier = `trust-device-${generateRandomString(32)}`;
-										const newToken = await createHMAC(
-											"SHA-256",
-											"base64urlnopad",
-										).sign(
-											ctx.context.secret,
-											`${data.user.id}!${newTrustIdentifier}`,
-										);
-										await ctx.context.internalAdapter.createVerificationValue({
-											value: data.user.id,
-											identifier: newTrustIdentifier,
-											expiresAt: new Date(
-												Date.now() + trustDeviceMaxAge * 1000,
-											),
-										});
-										const newTrustDeviceCookie = ctx.context.createAuthCookie(
-											TRUST_DEVICE_COOKIE_NAME,
-											{
-												maxAge: trustDeviceMaxAge,
-											},
-										);
-										await ctx.setSignedCookie(
-											newTrustDeviceCookie.name,
-											`${newToken}!${newTrustIdentifier}`,
-											ctx.context.secret,
-											trustDeviceCookieAttrs.attributes,
-										);
-										return;
-									}
-								}
+						if (!requiresTwoFactor && trustDeviceCookie) {
+							const trustIdentifier = trustDeviceCookie.split("!")[1]!;
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								trustIdentifier,
+							);
+							const newTrustIdentifier = `trust-device-${generateRandomString(32)}`;
+							const newToken = await createHMAC(
+								"SHA-256",
+								"base64urlnopad",
+							).sign(
+								ctx.context.secret,
+								`${data.user.id}!${newTrustIdentifier}`,
+							);
+							const trustRecord =
+								await ctx.context.internalAdapter.createVerificationValue({
+									value: data.user.id,
+									identifier: newTrustIdentifier,
+									expiresAt: new Date(Date.now() + trustDeviceMaxAge * 1000),
+								});
+							// A vetoed record leaves the device untrusted from now on.
+							if (!trustRecord) {
+								expireCookie(ctx, trustDeviceCookieAttrs);
+								return;
 							}
+							const newTrustDeviceCookie = ctx.context.createAuthCookie(
+								TRUST_DEVICE_COOKIE_NAME,
+								{
+									maxAge: trustDeviceMaxAge,
+								},
+							);
+							await ctx.setSignedCookie(
+								newTrustDeviceCookie.name,
+								`${newToken}!${newTrustIdentifier}`,
+								ctx.context.secret,
+								trustDeviceCookieAttrs.attributes,
+							);
+							return;
+						}
+						if (trustDeviceCookie) {
 							expireCookie(ctx, trustDeviceCookieAttrs);
 						}
 
@@ -546,19 +594,48 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						);
 						const identifier = `2fa-${generateRandomString(20)}`;
 						const expiresAt = new Date(Date.now() + maxAge * 1000);
-						await ctx.context.internalAdapter.createVerificationValue({
-							value: data.user.id,
-							identifier,
-							expiresAt,
-						});
+						const challenge =
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: data.user.id,
+								identifier,
+								expiresAt,
+							});
+						if (!challenge) {
+							throw APIError.from(
+								"INTERNAL_SERVER_ERROR",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+							);
+						}
+						const userTwoFactor =
+							await ctx.context.adapter.findOne<TwoFactorTable>({
+								model: opts.twoFactorTable,
+								where: [
+									{
+										field: "userId",
+										value: data.user.id,
+									},
+								],
+							});
 						// Per-challenge attempt counter, consumed atomically by
 						// verify-totp and verify-backup-code as the race gate so a
 						// concurrent burst cannot exceed the budget.
-						await ctx.context.internalAdapter.createVerificationValue({
-							value: "0",
-							identifier: `2fa-attempts-${identifier}`,
-							expiresAt,
-						});
+						const attemptCounter =
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: "0",
+								identifier: `2fa-attempts-${identifier}`,
+								expiresAt,
+							});
+						// Only TOTP and backup codes, which need a twoFactor row, use the
+						// counter. OTP tracks attempts in its own record.
+						if (!attemptCounter && userTwoFactor) {
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								identifier,
+							);
+							throw APIError.from(
+								"INTERNAL_SERVER_ERROR",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+							);
+						}
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
 							identifier,
@@ -571,20 +648,12 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						 * totp requires per-user setup, so we check
 						 * that the user actually has a secret stored.
 						 */
-						if (!options?.totpOptions?.disable) {
-							const userTotpSecret =
-								await ctx.context.adapter.findOne<TwoFactorTable>({
-									model: opts.twoFactorTable,
-									where: [
-										{
-											field: "userId",
-											value: data.user.id,
-										},
-									],
-								});
-							if (userTotpSecret && userTotpSecret.verified !== false) {
-								twoFactorMethods.push("totp");
-							}
+						if (
+							!options?.totpOptions?.disable &&
+							userTwoFactor &&
+							userTwoFactor.verified !== false
+						) {
+							twoFactorMethods.push("totp");
 						}
 
 						/**
@@ -622,7 +691,9 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 			},
 		],
 		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
-	} satisfies BetterAuthPlugin;
+	} satisfies BetterAuthPlugin & {
+		shouldRequireTwoFactor: typeof shouldRequireTwoFactor;
+	};
 };
 
 export * from "./client";

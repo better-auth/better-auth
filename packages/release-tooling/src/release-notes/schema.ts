@@ -11,7 +11,8 @@ export const prereleaseStateSchema = z.object({
 	changesets: z.array(z.string()),
 });
 
-const releaseTitleSchema = z.string().min(1).max(500);
+export const releaseTitleMaxLength = 500;
+const releaseTitleSchema = z.string().min(1).max(releaseTitleMaxLength);
 const changesetDescriptionSchema = z.string().max(20_000).nullable();
 const prototypeKeys = new Set(["__proto__", "constructor", "prototype"]);
 export const releaseRewriteKeySchema = z
@@ -28,6 +29,7 @@ export const releaseEntrySchema = z.strictObject({
 	changesetDescription: changesetDescriptionSchema,
 	prNumber: z.int().positive().nullable(),
 	author: z.string().min(1),
+	commitAuthors: z.array(z.string().min(1)),
 	domain: z.string().min(1),
 	packageName: z.string().min(1),
 	changeType: z.enum(["breaking", "feat", "fix"]),
@@ -54,31 +56,35 @@ export const releaseManifestSchema = z.strictObject({
 	packageMetadata: z.record(z.string().min(1), packageReleaseMetadataSchema),
 });
 
-const releaseRewriteSchema = z.strictObject({
-	id: releaseRewriteKeySchema.describe("The unchanged input change ID"),
+export const generatedTitleMaxLength = 300;
+export const generatedMigrationMaxLength = 500;
+
+// Providers enforce only the shape while decoding. Length and line limits are
+// checked per entry in render.ts, so one overlong entry cannot fail its batch.
+const releaseRewriteFields = {
 	title: z
 		.string()
-		.trim()
-		.min(1)
-		.max(300)
-		.regex(/^[^\r\n]+$/)
-		.describe("A single-line, user-focused release-note title"),
+		.describe(
+			`A single-line, user-focused release-note title of at most ${generatedTitleMaxLength} characters`,
+		),
 	migration: z
 		.string()
-		.trim()
-		.min(1)
-		.max(500)
-		.regex(/^[^\r\n]+$/)
 		.nullable()
-		.describe("A migration action for breaking changes, otherwise null"),
+		.describe(
+			`A single-line action users must take, of at most ${generatedMigrationMaxLength} characters, otherwise null`,
+		),
+};
+
+const releaseRewriteSchema = z.strictObject({
+	id: releaseRewriteKeySchema.describe("The unchanged input change ID"),
+	...releaseRewriteFields,
 });
 
 export const releaseRewritesSchema = z.strictObject({
 	rewrites: z.array(releaseRewriteSchema).max(250),
 });
 
-const releaseReviewSchema = z.strictObject({
-	id: releaseRewriteKeySchema.describe("The unchanged input change ID"),
+const releaseReviewFields = {
 	approved: z.boolean().describe("Whether the rewrite is ready to publish"),
 	feedback: z
 		.string()
@@ -87,11 +93,29 @@ const releaseReviewSchema = z.strictObject({
 		.max(500)
 		.nullable()
 		.describe("A specific correction for rejected copy, otherwise null"),
-});
+};
 
-export const releaseReviewsSchema = z.strictObject({
-	reviews: z.array(releaseReviewSchema).max(250),
-});
+// Generation output is keyed by change ID with every key required, so a
+// constrained decoder cannot return an empty or partial batch.
+function keyedByChangeId<T extends z.core.$ZodShape>(
+	ids: readonly string[],
+	fields: T,
+) {
+	const entry = z.strictObject(fields);
+	return z.strictObject(Object.fromEntries(ids.map((id) => [id, entry])));
+}
+
+export function generatedRewritesSchema(ids: readonly string[]) {
+	return z.strictObject({
+		rewrites: keyedByChangeId(ids, releaseRewriteFields),
+	});
+}
+
+export function generatedReviewsSchema(ids: readonly string[]) {
+	return z.strictObject({
+		reviews: keyedByChangeId(ids, releaseReviewFields),
+	});
+}
 
 export const releaseRewriteFallbacksSchema = z
 	.array(
@@ -129,9 +153,9 @@ export type ReleaseManifest = z.infer<typeof releaseManifestSchema>;
 export type GeneratedReleaseRewrites = z.infer<
 	typeof releaseRewritesSchema
 >["rewrites"];
-export type GeneratedReleaseReviews = z.infer<
-	typeof releaseReviewsSchema
->["reviews"];
+export type GeneratedReleaseReviews = Array<
+	{ id: string } & z.infer<z.ZodObject<typeof releaseReviewFields>>
+>;
 export type ReleaseRewriteFallback = z.infer<
 	typeof releaseRewriteFallbacksSchema
 >[number];

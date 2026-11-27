@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { docsVersions } from "./docs-versions";
 import { scopeMarkdownLinks } from "./markdown-links";
 
-const version16 = docsVersions[1];
+const version16 = docsVersions[2];
 
 describe("versioned Markdown links", () => {
 	it("scopes unversioned links without duplicating version prefixes", () => {

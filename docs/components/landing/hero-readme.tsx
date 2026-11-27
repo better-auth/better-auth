@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
+import { useTheme } from "next-themes";
 import {
 	useCallback,
 	useEffect,
@@ -696,6 +697,51 @@ type CommunityHeroStats = {
 	contributors: number;
 };
 
+/**
+ * Below-the-fold media (contributor avatars, the demo video) never competes
+ * with the initial load. Once the page has loaded, a fast connection fetches
+ * it right away so it's ready before anyone scrolls to it; slow or
+ * data-saver connections wait until it's close to the viewport.
+ */
+function useBelowFoldMedia() {
+	const [state, setState] = useState({ loaded: false, prefetch: false });
+
+	useEffect(() => {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const onLoad = () => {
+			const prefetch = !isSlowConnection();
+			// Give the browser a beat after `load` before starting any fetches.
+			timer = setTimeout(() => setState({ loaded: true, prefetch }), 300);
+		};
+		if (document.readyState === "complete") onLoad();
+		else window.addEventListener("load", onLoad, { once: true });
+		return () => {
+			window.removeEventListener("load", onLoad);
+			clearTimeout(timer);
+		};
+	}, []);
+
+	return state;
+}
+
+function isSlowConnection() {
+	// Chromium only; Safari and Firefox don't expose the Network Information API.
+	const connection = (
+		navigator as Navigator & {
+			connection?: { saveData?: boolean; effectiveType?: string };
+		}
+	).connection;
+	if (connection?.saveData) return true;
+	if (connection?.effectiveType) {
+		return /^(slow-2g|2g|3g)$/.test(connection.effectiveType);
+	}
+	// Everywhere else, judge by how long this page took to load.
+	const [navigation] = performance.getEntriesByType(
+		"navigation",
+	) as PerformanceNavigationTiming[];
+	return (navigation?.loadEventStart || performance.now()) > 4000;
+}
+
 function ContributorsSection({
 	contributors = EMPTY_CONTRIBUTORS,
 	contributorCount,
@@ -703,6 +749,32 @@ function ContributorsSection({
 	contributors: ContributorInfo[];
 	contributorCount: number;
 }) {
+	const wallRef = useRef<HTMLDivElement>(null);
+	const [wallNearViewport, setWallNearViewport] = useState(false);
+	const { loaded, prefetch } = useBelowFoldMedia();
+	const showAvatars = prefetch || (loaded && wallNearViewport);
+
+	// Hundreds of avatars scroll through the wall; the links always render,
+	// but the avatar images are only mounted after the page has loaded: right
+	// away on fast connections, or once the wall is about a screen away on
+	// slow ones.
+	useEffect(() => {
+		const wall = wallRef.current;
+		if (!wall) return;
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				if (entry.isIntersecting) {
+					setWallNearViewport(true);
+					observer.disconnect();
+				}
+			},
+			// About a screen ahead; the images themselves stay `loading="lazy"`.
+			{ rootMargin: "100% 0px" },
+		);
+		observer.observe(wall);
+		return () => observer.disconnect();
+	}, []);
+
 	if (contributors.length === 0) return null;
 
 	const colCount = 18;
@@ -734,6 +806,7 @@ function ContributorsSection({
 
 			{contributors.length > 0 && (
 				<div
+					ref={wallRef}
 					className="relative overflow-hidden h-[220px] rounded-md"
 					style={{
 						perspective: "600px",
@@ -775,16 +848,27 @@ function ContributorsSection({
 											target="_blank"
 											rel="noopener noreferrer"
 											title={c.login}
+											aria-label={c.login}
 											className="relative group shrink-0"
 										>
-											<img
-												src={`${c.avatar_url}&s=64`}
-												alt={c.login}
-												width={32}
-												height={32}
-												loading="lazy"
-												className="rounded-sm grayscale opacity-50 hover:grayscale-0 hover:opacity-100 transition-all duration-200 hover:scale-125 hover:z-10 relative"
-											/>
+											{showAvatars ? (
+												// Eager once prefetching: Safari's native lazy-loading
+												// only starts right at the viewport, so avatars would
+												// still pop in one by one as the marquee scrolls. Low
+												// priority keeps them behind the demo video, and the
+												// tile background covers any that land a beat late.
+												<img
+													src={`${c.avatar_url}&s=64`}
+													alt={c.login}
+													width={32}
+													height={32}
+													loading={prefetch ? "eager" : "lazy"}
+													fetchPriority="low"
+													className="rounded-sm bg-foreground/10 grayscale opacity-50 hover:grayscale-0 hover:opacity-100 transition-all duration-200 hover:scale-125 hover:z-10 relative"
+												/>
+											) : (
+												<span className="block size-8 rounded-sm bg-foreground/5" />
+											)}
 											<div className="absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 bg-foreground text-background text-[8px] font-mono rounded-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
 												{c.login}
 											</div>
@@ -980,6 +1064,78 @@ function ReadmeFooter({ stats }: { stats: CommunityHeroStats }) {
 					</Link>
 				</div>
 			</div>
+		</div>
+	);
+}
+
+/**
+ * Both theme variants are rendered so CSS picks the right one without a
+ * hydration flash, but neither autoplays or preloads up front. Only the
+ * visible variant is fetched, after the page has loaded: right away on fast
+ * connections, or once it's about to scroll into view on slow ones.
+ */
+function DemoVideo() {
+	const containerRef = useRef<HTMLDivElement>(null);
+	const { resolvedTheme } = useTheme();
+	const { loaded, prefetch } = useBelowFoldMedia();
+
+	// On fast connections, buffer the visible variant once the page has
+	// loaded so it's already playing by the time it scrolls into view.
+	useEffect(() => {
+		if (!prefetch || !containerRef.current) return;
+		for (const video of containerRef.current.querySelectorAll("video")) {
+			if (video.offsetParent === null || !video.paused) continue;
+			video.preload = "auto";
+			// Safari won't resume a `preload="none"` video on its own.
+			if (video.readyState === 0) video.load();
+		}
+	}, [prefetch, resolvedTheme]);
+
+	useEffect(() => {
+		const container = containerRef.current;
+		if (!loaded || !container) return;
+		const videos = Array.from(container.querySelectorAll("video"));
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				for (const video of videos) {
+					const visible = video.offsetParent !== null;
+					if (entry.isIntersecting && visible) {
+						video.play().catch(() => {});
+					} else {
+						video.pause();
+					}
+				}
+			},
+			// Only start playing when it's close: on slow connections that's
+			// also when the (multi-MB) video starts downloading.
+			{ rootMargin: "200px" },
+		);
+		observer.observe(container);
+		return () => observer.disconnect();
+	}, [loaded, resolvedTheme]);
+
+	return (
+		<div ref={containerRef}>
+			{/* The poster is a CSS background rather than the `poster` attribute:
+			    hidden <video>s still fetch their poster, but browsers skip
+			    backgrounds on display:none elements, so only the active theme's
+			    poster loads and it's there on first paint. */}
+			<video
+				src="/demo-dark.mp4"
+				preload="none"
+				loop
+				muted
+				playsInline
+				className="w-full h-auto aspect-[2528/1440] -mt-[2px] bg-[url(/demo-dark-poster.webp)] bg-cover dark:block hidden"
+			/>
+			<video
+				src="/demo-light.mp4"
+				preload="none"
+				loop
+				muted
+				playsInline
+				className="w-full h-auto aspect-[2544/1440] -mt-[2px] bg-[url(/demo-light-poster.webp)] bg-cover dark:hidden"
+			/>
 		</div>
 	);
 }
@@ -1866,24 +2022,7 @@ export function HeroReadMe({
 									</div>
 								</div>
 								<div className="overflow-hidden" suppressHydrationWarning>
-									<video
-										src={"/demo-dark.mp4"}
-										autoPlay
-										loop
-										muted
-										playsInline
-										className="w-full h-auto -mt-[2px] dark:block hidden"
-										suppressHydrationWarning
-									/>
-									<video
-										src={"/demo-light.mp4"}
-										autoPlay
-										loop
-										muted
-										playsInline
-										className="w-full h-auto -mt-[2px] dark:hidden"
-										suppressHydrationWarning
-									/>
+									<DemoVideo />
 								</div>
 							</div>
 

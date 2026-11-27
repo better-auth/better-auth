@@ -1,7 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
-import { getSessionFromCtx } from "../../api";
+import { getAuthoritativeSessionFromCtx } from "../../api";
+import { isSessionOutsideStore } from "../../api/state/session-source";
 import { expireCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserOutput } from "../../db/schema";
@@ -24,7 +25,14 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
 	};
 
-	const session = await getSessionFromCtx(ctx);
+	// Sessions built outside the store have no row to re-read. The API key is
+	// verified on every request instead.
+	const requestSession = ctx.context.session;
+	const session =
+		requestSession &&
+		(await isSessionOutsideStore(requestSession.session.token))
+			? requestSession
+			: await getAuthoritativeSessionFromCtx(ctx);
 	if (!session) {
 		const twoFactorCookie = ctx.context.createAuthCookie(
 			TWO_FACTOR_COOKIE_NAME,
@@ -43,7 +51,10 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			await ctx.context.internalAdapter.findVerificationValue(
 				signedTwoFactorCookie,
 			);
-		if (!verificationToken) {
+		if (
+			!verificationToken ||
+			!(new Date(verificationToken.expiresAt).getTime() > Date.now())
+		) {
 			throw APIError.from(
 				"UNAUTHORIZED",
 				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
@@ -116,19 +127,23 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 						ctx.context.secret,
 						`${user.id}!${trustIdentifier}`,
 					);
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: user.id,
-						identifier: trustIdentifier,
-						expiresAt: new Date(Date.now() + maxAge * 1000),
-					});
-					await ctx.setSignedCookie(
-						trustDeviceCookie.name,
-						`${token}!${trustIdentifier}`,
-						ctx.context.secret,
-						trustDeviceCookie.attributes,
-					);
-					// delete the dont remember me cookie
-					expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
+					const trustRecord =
+						await ctx.context.internalAdapter.createVerificationValue({
+							value: user.id,
+							identifier: trustIdentifier,
+							expiresAt: new Date(Date.now() + maxAge * 1000),
+						});
+					// A vetoed record leaves the device untrusted.
+					if (trustRecord) {
+						await ctx.setSignedCookie(
+							trustDeviceCookie.name,
+							`${token}!${trustIdentifier}`,
+							ctx.context.secret,
+							trustDeviceCookie.attributes,
+						);
+						// delete the dont remember me cookie
+						expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
+					}
 				}
 				return ctx.json({
 					token: session.token,

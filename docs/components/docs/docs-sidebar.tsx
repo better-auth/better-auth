@@ -1,14 +1,15 @@
 "use client";
 
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
-import type { Folder, Node, Root } from "fumadocs-core/page-tree";
+import type { Folder, Item, Node, Root } from "fumadocs-core/page-tree";
 import { useSearchContext } from "fumadocs-ui/contexts/search";
-import { ChevronDownIcon, FolderIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, FolderIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import {
 	createElement,
+	useCallback,
 	useEffect,
 	useId,
 	useMemo,
@@ -87,32 +88,6 @@ function getDefaultOpen(sections: NavigationSection[], pathname: string) {
 	return index === -1 ? 0 : index;
 }
 
-function useActiveItemScroll(active: boolean) {
-	const ref = useRef<HTMLAnchorElement>(null);
-
-	useEffect(() => {
-		if (!active) return;
-		const element = ref.current;
-		const viewport = element?.closest<HTMLElement>(
-			"[data-docs-sidebar-viewport]",
-		);
-		if (!element || !viewport || viewport.getClientRects().length === 0) return;
-
-		const elementRect = element.getBoundingClientRect();
-		const viewportRect = viewport.getBoundingClientRect();
-		if (
-			elementRect.top >= viewportRect.top &&
-			elementRect.bottom <= viewportRect.bottom
-		) {
-			return;
-		}
-
-		element.scrollIntoView({ block: "nearest", inline: "nearest" });
-	}, [active]);
-
-	return ref;
-}
-
 function useMobileDialog(active: boolean) {
 	const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -189,11 +164,7 @@ export function DocsSidebar() {
 			>
 				<SidebarVersionSwitcher />
 				<SearchButton onClick={() => setOpenSearch(true)} />
-				<SidebarNavigation
-					key={pathname}
-					sections={sections}
-					pathname={pathname}
-				/>
+				<SidebarNavigation sections={sections} pathname={pathname} />
 				<SidebarFooter />
 			</motion.aside>
 
@@ -234,7 +205,6 @@ export function DocsSidebar() {
 								className="flex-1 min-h-0 overflow-y-auto"
 							>
 								<SidebarNavigation
-									key={pathname}
 									sections={sections}
 									pathname={pathname}
 									mobile
@@ -287,14 +257,78 @@ function SidebarNavigation({
 	mobile?: boolean;
 	onNavigate?: () => void;
 }) {
-	const [currentOpen, setCurrentOpen] = useState(() =>
-		getDefaultOpen(sections, pathname),
-	);
+	const [expandedSection, setExpandedSection] = useState<{
+		pathname: string;
+		sections: NavigationSection[];
+		index: number;
+	}>(() => ({ pathname, sections, index: getDefaultOpen(sections, pathname) }));
+	if (
+		expandedSection.pathname !== pathname ||
+		expandedSection.sections !== sections
+	) {
+		setExpandedSection({
+			pathname,
+			sections,
+			index: getDefaultOpen(sections, pathname),
+		});
+	}
+	const currentOpen = expandedSection.index;
 	const navigationId = useId();
+	const navigationRef = useRef<HTMLDivElement>(null);
+	const scrollActiveItem = useCallback(() => {
+		const navigation = navigationRef.current;
+		const viewport = navigation?.closest<HTMLElement>(
+			"[data-docs-sidebar-viewport]",
+		);
+		const activeLinks =
+			navigation?.querySelectorAll<HTMLAnchorElement>("a[data-active]");
+		const element = Array.from(activeLinks ?? []).findLast((link) =>
+			isPathWithinFolderIndex(
+				link.getAttribute("href") ?? undefined,
+				navigation?.dataset.pathname ?? "",
+			),
+		);
+		if (!element || !viewport || viewport.getClientRects().length === 0) return;
+
+		const elementRect = element.getBoundingClientRect();
+		const viewportRect = viewport.getBoundingClientRect();
+		if (viewportRect.height === 0) return;
+		for (
+			let parent = element.parentElement;
+			parent && parent !== viewport;
+			parent = parent.parentElement
+		) {
+			const parentRect = parent.getBoundingClientRect();
+			if (
+				elementRect.top < parentRect.top - 1 ||
+				elementRect.bottom > parentRect.bottom + 1
+			) {
+				return;
+			}
+		}
+
+		const top = viewportRect.top + 16;
+		const bottom = viewportRect.bottom - (mobile ? 16 : 32);
+		const offset =
+			elementRect.top < top
+				? elementRect.top - top
+				: elementRect.bottom > bottom
+					? elementRect.bottom - bottom
+					: 0;
+		if (offset !== 0) viewport.scrollBy({ top: offset, behavior: "instant" });
+	}, [mobile]);
+
+	useEffect(() => {
+		scrollActiveItem();
+	}, [pathname, currentOpen, scrollActiveItem]);
 
 	const content = (
 		<MotionConfig transition={{ duration: 0.35, type: "spring", bounce: 0 }}>
-			<div className="flex flex-col">
+			<div
+				ref={navigationRef}
+				data-pathname={pathname}
+				className="flex flex-col"
+			>
 				{sections.map((section, index) => {
 					const panelId = `${navigationId}-section-${index}`;
 					return (
@@ -302,7 +336,7 @@ function SidebarNavigation({
 							<button
 								type="button"
 								aria-expanded={currentOpen === index}
-								aria-controls={panelId}
+								aria-controls={currentOpen === index ? panelId : undefined}
 								className={cn(
 									"border-b border-foreground/6 w-full text-left flex gap-2 items-center transition-colors font-medium text-sm tracking-wider",
 									mobile ? "px-5 py-3" : "px-4 py-2.5",
@@ -311,9 +345,11 @@ function SidebarNavigation({
 										: "text-foreground/70 hover:text-foreground hover:bg-foreground/3",
 								)}
 								onClick={() =>
-									setCurrentOpen((previous) =>
-										previous === index ? -1 : index,
-									)
+									setExpandedSection({
+										pathname,
+										sections,
+										index: currentOpen === index ? -1 : index,
+									})
 								}
 							>
 								<span className="flex size-4.5 items-center justify-center [&>svg]:size-4.5">
@@ -334,12 +370,14 @@ function SidebarNavigation({
 										initial={{ opacity: 0, height: 0 }}
 										animate={{ opacity: 1, height: "auto" }}
 										exit={{ opacity: 0, height: 0 }}
+										onAnimationComplete={scrollActiveItem}
 										className="relative overflow-hidden"
 									>
 										<NavigationNodes
 											nodes={section.children}
 											pathname={pathname}
 											onNavigate={onNavigate}
+											onAnimationComplete={scrollActiveItem}
 										/>
 									</motion.div>
 								) : null}
@@ -370,11 +408,13 @@ function NavigationNodes({
 	nodes,
 	pathname,
 	onNavigate,
+	onAnimationComplete,
 	nested = false,
 }: {
 	nodes: Node[];
 	pathname: string;
 	onNavigate?: () => void;
+	onAnimationComplete: () => void;
 	nested?: boolean;
 }) {
 	return (
@@ -382,7 +422,7 @@ function NavigationNodes({
 			className={cn(
 				"text-sm pt-0 pb-1",
 				nested &&
-					"relative before:absolute before:left-10 before:top-0 before:bottom-0 before:w-px before:bg-foreground/20",
+					"relative before:absolute before:left-6.5 before:top-0 before:bottom-0 before:w-px before:bg-foreground/20",
 			)}
 		>
 			{nodes.map((node, index) => (
@@ -391,6 +431,7 @@ function NavigationNodes({
 					node={node}
 					pathname={pathname}
 					onNavigate={onNavigate}
+					onAnimationComplete={onAnimationComplete}
 					nested={nested}
 				/>
 			))}
@@ -408,11 +449,13 @@ function NavigationNode({
 	node,
 	pathname,
 	onNavigate,
+	onAnimationComplete,
 	nested,
 }: {
 	node: Node;
 	pathname: string;
 	onNavigate?: () => void;
+	onAnimationComplete: () => void;
 	nested: boolean;
 }) {
 	if (node.type === "separator") {
@@ -430,11 +473,28 @@ function NavigationNode({
 		);
 	}
 
+	if (!node.index) {
+		return (
+			<>
+				<NavigationSeparator>{node.name}</NavigationSeparator>
+				<NavigationNodes
+					nodes={node.children}
+					pathname={pathname}
+					onNavigate={onNavigate}
+					onAnimationComplete={onAnimationComplete}
+					nested={nested}
+				/>
+			</>
+		);
+	}
+
 	return (
 		<NavigationFolder
 			folder={node}
+			index={node.index}
 			pathname={pathname}
 			onNavigate={onNavigate}
+			onAnimationComplete={onAnimationComplete}
 			nested={nested}
 		/>
 	);
@@ -442,57 +502,94 @@ function NavigationNode({
 
 function NavigationFolder({
 	folder,
+	index,
 	pathname,
 	onNavigate,
+	onAnimationComplete,
 	nested,
 }: {
 	folder: Folder;
+	index: Item;
 	pathname: string;
 	onNavigate?: () => void;
+	onAnimationComplete: () => void;
 	nested: boolean;
 }) {
 	const active = nodeContainsPath(folder, pathname);
-	const index = folder.index;
-
-	if (!index) {
-		return (
-			<>
-				<NavigationSeparator>{folder.name}</NavigationSeparator>
-				<NavigationNodes
-					nodes={folder.children}
-					pathname={pathname}
-					onNavigate={onNavigate}
-					nested={nested}
-				/>
-			</>
-		);
+	const folderId = useId();
+	// Follow the route on navigation, but let the user toggle in between.
+	const [expanded, setExpanded] = useState({ pathname, open: active });
+	if (expanded.pathname !== pathname) {
+		setExpanded({ pathname, open: active });
 	}
 	const children = folder.children.filter((node) => node !== index);
+	const current = index.url === pathname;
+	const expandable = children.length > 0;
+	const open = expandable && expanded.open;
 
 	return (
 		<div>
-			<NavigationLink
-				node={{
-					...index,
-					name: folder.name,
-					icon: folder.icon ?? index.icon,
-				}}
-				active={active}
-				onNavigate={onNavigate}
-				nested={nested}
-			/>
+			<div className="group/folder relative">
+				<NavigationLink
+					id={`${folderId}-label`}
+					node={{
+						...index,
+						name: folder.name,
+						icon: folder.icon ?? index.icon,
+					}}
+					active={current}
+					ancestor={active && !current}
+					onNavigate={onNavigate}
+					nested={nested}
+					// Keep the row hover while the pointer is on the toggle.
+					className={cn(
+						expandable && "pr-10",
+						!current && "group-hover/folder:bg-foreground/3",
+						!active && "group-hover/folder:text-foreground/90",
+					)}
+				/>
+				{expandable ? (
+					<button
+						type="button"
+						aria-expanded={open}
+						aria-controls={open ? `${folderId}-panel` : undefined}
+						aria-labelledby={`${folderId}-label`}
+						onClick={() =>
+							setExpanded({
+								pathname,
+								open: !open,
+							})
+						}
+						// Fill the row's right gutter so the hit area is larger than the icon.
+						className="group/toggle absolute inset-y-0 right-0 flex w-10 items-center justify-center text-foreground/40 transition-colors hover:text-foreground"
+					>
+						<span className="flex size-6 items-center justify-center transition-colors group-hover/toggle:bg-foreground/5">
+							<ChevronRightIcon
+								className={cn(
+									"size-3.5 transition-transform duration-200",
+									open && "rotate-90",
+								)}
+							/>
+						</span>
+					</button>
+				) : null}
+			</div>
 			<AnimatePresence initial={false}>
-				{active && children.length > 0 ? (
+				{open ? (
 					<motion.div
+						id={`${folderId}-panel`}
 						initial={{ opacity: 0, height: 0 }}
 						animate={{ opacity: 1, height: "auto" }}
 						exit={{ opacity: 0, height: 0 }}
+						// Only re-scroll for the route's folder so manual browsing keeps its position.
+						onAnimationComplete={active ? onAnimationComplete : undefined}
 						className="overflow-hidden"
 					>
 						<NavigationNodes
 							nodes={children}
 							pathname={pathname}
 							onNavigate={onNavigate}
+							onAnimationComplete={onAnimationComplete}
 							nested
 						/>
 					</motion.div>
@@ -514,36 +611,46 @@ function NavigationSeparator({ children }: { children?: ReactNode }) {
 }
 
 function NavigationLink({
+	id,
 	node,
 	active,
+	ancestor = false,
 	onNavigate,
 	nested,
+	className,
 }: {
+	id?: string;
 	node: SidebarPageNode;
 	active: boolean;
+	ancestor?: boolean;
 	onNavigate?: () => void;
 	nested: boolean;
+	className?: string;
 }) {
 	const opensNewTab = node.external && node.url.startsWith("http");
-	const linkRef = useActiveItemScroll(active);
 
 	return (
 		<Link
-			ref={linkRef}
+			id={id}
 			href={node.url}
 			target={opensNewTab ? "_blank" : undefined}
 			rel={opensNewTab ? "noreferrer noopener" : undefined}
 			onClick={onNavigate}
-			data-active={active || undefined}
+			aria-current={active ? "page" : undefined}
+			// Ancestors stay marked so active-item scrolling still finds pages the tree hides.
+			data-active={active || ancestor || undefined}
 			className={cn(
 				"relative flex w-full items-center gap-2.5 py-1 text-[14px] transition-all duration-150",
-				nested ? "pl-12 pr-4 text-[13px]" : "px-4",
+				nested ? "pl-11.5 pr-4 text-[13px]" : "px-4",
 				active
 					? "text-foreground bg-foreground/6"
-					: "text-foreground/65 hover:text-foreground/90 hover:bg-foreground/3",
+					: ancestor
+						? "text-foreground hover:bg-foreground/3"
+						: "text-foreground/65 hover:text-foreground/90 hover:bg-foreground/3",
+				className,
 			)}
 		>
-			<SidebarIcon icon={node.icon} />
+			{nested ? null : <SidebarIcon icon={node.icon} />}
 			<span className="min-w-0 grow truncate">
 				{node.sidebarTitle ?? node.name}
 			</span>

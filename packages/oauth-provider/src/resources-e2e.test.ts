@@ -852,6 +852,51 @@ describe("resource policy downscopes token responses", () => {
 		};
 		expect(decoded.scope).toBe("email");
 	});
+
+	/**
+	 * Released behavior: a resource without `allowedScopes` does not restrict,
+	 * so another resource's allowlist alone decides the scope of a
+	 * multi-resource token.
+	 * @see https://www.rfc-editor.org/rfc/rfc9068#section-3
+	 */
+	it("keeps the intersection when one requested resource is unrestricted", async () => {
+		const restricted = "https://api.example.com/multi-restricted";
+		const unrestricted = "https://api.example.com/multi-unrestricted";
+		const harness = await bootCodeFlowHarness({
+			resources: [
+				{ identifier: restricted, allowedScopes: ["email"] },
+				unrestricted,
+			],
+		});
+		const result = await harness.runCodeFlow({
+			authorizeResource: [restricted, unrestricted],
+			tokenResource: [restricted, unrestricted],
+			scopes: ["profile", "email"],
+		});
+
+		expect(result.tokens?.data?.scope).toBe("email");
+		const decoded = decodeJwt(result.tokens!.data!.access_token!);
+		expect(decoded.aud).toEqual(
+			expect.arrayContaining([restricted, unrestricted]),
+		);
+		expect((decoded as { scope?: string }).scope).toBe("email");
+	});
+
+	it("grants every requested scope when no requested resource has an allowlist", async () => {
+		const first = "https://api.example.com/multi-open-a";
+		const second = "https://api.example.com/multi-open-b";
+		const harness = await bootCodeFlowHarness({ resources: [first, second] });
+		const result = await harness.runCodeFlow({
+			authorizeResource: [first, second],
+			tokenResource: [first, second],
+			scopes: ["profile", "email"],
+		});
+
+		expect(result.tokens?.data?.scope).toBe("profile email");
+		const decoded = decodeJwt(result.tokens!.data!.access_token!);
+		expect(decoded.aud).toEqual(expect.arrayContaining([first, second]));
+		expect((decoded as { scope?: string }).scope).toBe("profile email");
+	});
 });
 
 // ────────────────────────────────────────────────────────────────────────────

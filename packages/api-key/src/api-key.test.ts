@@ -1,3 +1,4 @@
+import { inspect } from "node:util";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import type { APIError } from "@better-auth/core/error";
 import { getTestInstance } from "better-auth/test";
@@ -2292,6 +2293,29 @@ describe("api-key", async () => {
 		}
 	});
 
+	it("should verify an API key whose metadata has a constructor key", async () => {
+		const metadata = {
+			constructor: "acme",
+		};
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				metadata,
+			},
+			headers,
+		});
+
+		const result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+			headers,
+		});
+
+		expect(result.valid).toBe(true);
+		expect(result.key?.metadata).toEqual(metadata);
+	});
+
 	it("should verify an API key with matching permissions", async () => {
 		const permissions = {
 			files: ["read", "write"],
@@ -3244,14 +3268,11 @@ describe("api-key", async () => {
 			const originalSet = fallbackStorage.set;
 			vi.spyOn(fallbackStorage, "set").mockImplementation(
 				async (key, value) => {
-					if (!key.startsWith("api-key:by-id:")) {
-						originalSet(key, value);
-						return;
-					}
+					if (!key.startsWith("api-key:by-id:")) return originalSet(key, value);
 					concurrentSets++;
 					maxConcurrentSets = Math.max(maxConcurrentSets, concurrentSets);
 					await new Promise((r) => setTimeout(r, 20));
-					originalSet(key, value);
+					await originalSet(key, value);
 					concurrentSets--;
 				},
 			);
@@ -5288,6 +5309,119 @@ describe("concurrent verification enforces atomic counters", async () => {
 	});
 });
 
+describe.each(["string", "parsed"] as const)(
+	"secondary storage that returns %s values",
+	async (mode) => {
+		const store = new Map<string, string>();
+
+		// "parsed" mirrors storage clients that parse JSON values on read.
+		const read = (key: string) => {
+			const value = store.get(key);
+			if (value === undefined) return null;
+			if (mode === "string") return value;
+			try {
+				return JSON.parse(value);
+			} catch {
+				return value;
+			}
+		};
+
+		const secondaryStorage: SecondaryStorage = {
+			set(key, value) {
+				store.set(key, value as string);
+			},
+			get(key) {
+				return read(key);
+			},
+			getAndDelete(key) {
+				const value = read(key);
+				store.delete(key);
+				return value;
+			},
+			increment(key) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		};
+
+		const { auth, client, signInWithTestUser } = await getTestInstance(
+			{
+				secondaryStorage,
+				plugins: [
+					apiKey({
+						storage: "secondary-storage",
+						enableMetadata: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		it("verifies, gets, and lists keys", async () => {
+			const { headers } = await signInWithTestUser();
+			const { data: created } = await client.apiKey.create({}, { headers });
+			expect(created).not.toBeNull();
+
+			const verified = await auth.api.verifyApiKey({
+				body: { key: created!.key },
+			});
+			expect(verified.valid).toBe(true);
+
+			const { data: got } = await client.apiKey.get(
+				{ query: { id: created!.id } },
+				{ headers },
+			);
+			expect(got?.id).toBe(created!.id);
+			expect(got?.createdAt).toBeInstanceOf(Date);
+
+			const listed = await auth.api.listApiKeys({ headers });
+			expect(listed.apiKeys.map((k) => k.id)).toContain(created!.id);
+		});
+
+		it("keeps date-like strings in name and metadata as stored", async () => {
+			const { headers } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: {
+					name: "2024-01-01T00:00:00Z",
+					metadata: { since: "2025-06-01T00:00:00Z" },
+				},
+				headers,
+			});
+
+			const got = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(got.name).toBe("2024-01-01T00:00:00Z");
+			expect(got.metadata).toEqual({ since: "2025-06-01T00:00:00Z" });
+		});
+
+		it("reads keys whose metadata has a constructor field", async () => {
+			const { headers } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: {
+					metadata: { constructor: "acme" },
+				},
+				headers,
+			});
+
+			const verified = await auth.api.verifyApiKey({
+				body: { key: created.key },
+			});
+			expect(verified.valid).toBe(true);
+			expect(verified.key?.metadata).toEqual({ constructor: "acme" });
+		});
+	},
+);
+
 describe("listApiKeys with integer user.id (postgres + serial)", async () => {
 	const testUserEmail = `api-key-serial-${crypto.randomUUID()}@test.com`;
 	const { auth, signInWithTestUser } = await getTestInstance(
@@ -5379,5 +5513,83 @@ describe("api key creation uses a fresh session", async () => {
 		const second = await client.apiKey.create({}, { headers });
 		expect(second.data).toBeNull();
 		expect(second.error?.status).toBe(401);
+	});
+});
+
+describe("api key custom storage errors", async () => {
+	const store = new Map<string, string>();
+	const logs: string[] = [];
+	let failReads = false;
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			logger: {
+				level: "debug",
+				log(level, message, ...args) {
+					logs.push(
+						[
+							level,
+							message,
+							...args.map((arg) => inspect(arg, { depth: 10 })),
+						].join(" "),
+					);
+				},
+			},
+			plugins: [
+				apiKey({
+					storage: "secondary-storage",
+					disableKeyHashing: true,
+					customStorage: {
+						set(key, value) {
+							store.set(key, value);
+						},
+						get(key) {
+							if (failReads) {
+								// ioredis attaches the failed command and its key to reply errors.
+								throw Object.assign(new Error("LOADING Redis is loading"), {
+									name: "ReplyError",
+									command: { name: "get", args: [key] },
+								});
+							}
+							return store.get(key) ?? null;
+						},
+						getAndDelete(key) {
+							const value = store.get(key) ?? null;
+							store.delete(key);
+							return value;
+						},
+						increment(key) {
+							const count = Number(store.get(key) ?? 0) + 1;
+							store.set(key, String(count));
+							return count;
+						},
+						delete(key) {
+							store.delete(key);
+						},
+					},
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [apiKeyClient()] } },
+	);
+
+	/**
+	 * @see https://github.com/redis/ioredis/blob/v5.11.1/lib/DataHandler.ts
+	 */
+	it("keeps the API key out of the validation failure log", async () => {
+		const { headers } = await signInWithTestUser();
+		const { data: created } = await client.apiKey.create({}, { headers });
+		expect(created?.key).toBeTruthy();
+
+		failReads = true;
+		logs.length = 0;
+		const result = await auth.api.verifyApiKey({ body: { key: created!.key } });
+		failReads = false;
+
+		expect(result.valid).toBe(false);
+		const output = logs.join("\n");
+		expect(output).toContain("Failed to validate API key:");
+		expect(output).toContain("LOADING Redis is loading");
+		expect(output).toContain("name: 'get'");
+		expect(output).not.toContain(created!.key);
 	});
 });

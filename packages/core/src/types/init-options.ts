@@ -299,14 +299,17 @@ export type BetterAuthAdvancedOptions = {
 	ipAddress?:
 		| {
 				/**
-				 * List of headers to use for ip address
+				 * Headers to read the client IP address from, in order. Any client can
+				 * send these headers, so list only ones your proxy or server code sets,
+				 * replacing any client value. A header with more than one address is
+				 * skipped unless `trustedProxies` lists the proxies that appended them.
 				 *
 				 * Ip address is used for rate limiting and session tracking
 				 *
-				 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
+				 * @example ["cf-connecting-ip"]
 				 *
-				 * @default
-				 * @link https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/ip.ts
+				 * @default ["x-forwarded-for"]
+				 * @link https://www.better-auth.com/docs/concepts/rate-limit#connecting-ip-address
 				 */
 				ipAddressHeaders?: string[];
 				/**
@@ -473,12 +476,13 @@ export type BetterAuthAdvancedOptions = {
 				 */
 				joins?: boolean;
 				/**
-				 * Validate the schema during initialization and report problems
-				 * through the configured logger. Authentication requests await
-				 * the same check and fail when the schema does not match.
-				 * Kysely introspects the database; Drizzle and Prisma inspect
-				 * local schema metadata without opening a connection.
-				 * Set `false` to disable runtime schema validation.
+				 * Validate the schema when the auth instance is first used.
+				 * Requests and server API calls await the check and fail when the
+				 * schema does not match. Kysely introspects the database; Drizzle
+				 * and Prisma inspect local schema metadata without opening a
+				 * connection. Other adapters are not validated; unless this is
+				 * `false`, they log a skip message instead. Set `false` to disable
+				 * runtime schema validation and its skip message.
 				 *
 				 * @default true
 				 */
@@ -506,7 +510,7 @@ export type BetterAuthAdvancedOptions = {
 	 * or timing-attack mitigation) to run after the response is sent.
 	 *
 	 * Use `waitUntil` from `@vercel/functions` on Vercel,
-	 * or `ctx.waitUntil` on Cloudflare Workers.
+	 * or `waitUntil` from `cloudflare:workers` on Cloudflare Workers.
 	 *
 	 * @example
 	 * // Vercel
@@ -514,12 +518,9 @@ export type BetterAuthAdvancedOptions = {
 	 * advanced: { backgroundTasks: { handler: waitUntil } }
 	 *
 	 * @example
-	 * // Cloudflare Workers (with AsyncLocalStorage)
-	 * advanced: {
-	 *   backgroundTasks: {
-	 *     handler: (p) => execCtxStorage.getStore()?.waitUntil(p)
-	 *   }
-	 * }
+	 * // Cloudflare Workers
+	 * import { waitUntil } from "cloudflare:workers";
+	 * advanced: { backgroundTasks: { handler: waitUntil } }
 	 */
 	backgroundTasks?: {
 		handler: (promise: Promise<unknown>) => void;
@@ -846,8 +847,11 @@ export type BetterAuthOptions = {
 				 */
 				resetPasswordTokenExpiresIn?: number;
 				/**
-				 * A callback function that is triggered
-				 * when a user's password is changed successfully.
+				 * A callback function that is triggered after a user's password
+				 * is reset. It runs after the new password is saved and, when
+				 * `revokeSessionsOnPasswordReset` is enabled, after the user's
+				 * database sessions are revoked and removal from secondary
+				 * storage has been attempted.
 				 */
 				onPasswordReset?: (
 					data: { user: User },
@@ -875,7 +879,11 @@ export type BetterAuthOptions = {
 				 */
 				autoSignIn?: boolean;
 				/**
-				 * Whether to revoke all other sessions when resetting password
+				 * Whether to revoke all of the user's sessions when resetting the
+				 * password. For sessions stored in the database, revocation and
+				 * the password change run in one transaction when transactions are
+				 * enabled for the adapter. Sessions in secondary storage are
+				 * removed after commit, on a best-effort basis.
 				 * @default false
 				 */
 				revokeSessionsOnPasswordReset?: boolean;
@@ -1084,7 +1092,9 @@ export type BetterAuthOptions = {
 				 * Set this to true to store the session in the database
 				 * as well.
 				 *
-				 * Reads are always done from the secondary storage.
+				 * When enabled, session token lookups fall back to the database
+				 * for missing secondary-storage entries, unless
+				 * `preserveSessionInDatabase` is enabled.
 				 *
 				 * @default false
 				 */
@@ -1307,7 +1317,7 @@ export type BetterAuthOptions = {
 				 * This poses a security risk if your database is compromised, as attackers could gain access to user accounts
 				 * on external services.
 				 *
-				 * When enabled, tokens are encrypted using AES-256-GCM before storage, providing protection against:
+				 * When enabled, tokens are encrypted using XChaCha20-Poly1305 before storage, providing protection against:
 				 * - Database breaches and unauthorized access to raw token data
 				 * - Internal threats from database administrators or compromised credentials
 				 * - Token exposure in database backups and logs

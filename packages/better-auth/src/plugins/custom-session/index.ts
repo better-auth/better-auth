@@ -98,32 +98,29 @@ export const customSession = <
 					requireHeaders: true,
 				},
 				async (ctx): Promise<Returns | null> => {
-					const session = await getSession()({
+					const { headers, response } = await getSession<O>()({
 						...ctx,
 						method: "GET",
 						asResponse: false,
 						headers: ctx.headers,
 						returnHeaders: true,
-					}).catch((e) => {
-						return null;
 					});
-					if (!session?.response) {
-						return ctx.json(null);
-					}
-					const fnResult = await fn(session.response as any, ctx);
 
-					for (const cookieStr of session.headers.getSetCookie()) {
-						const parsed = parseSetCookieHeader(cookieStr);
-						parsed.forEach((attrs, name) => {
-							ctx.setCookie(name, attrs.value, toCookieOptions(attrs));
-						});
-					}
-					session.headers.delete("set-cookie");
+					const sessionPayload = response ? await fn(response, ctx) : null;
 
-					session.headers.forEach((value, key) => {
-						ctx.setHeader(key, value);
-					});
-					return ctx.json(fnResult);
+					for (const cookie of headers.getSetCookie()) {
+						for (const [name, attributes] of parseSetCookieHeader(cookie)) {
+							ctx.setCookie(
+								name,
+								attributes.value,
+								toCookieOptions(attributes),
+							);
+						}
+					}
+					headers.delete("set-cookie");
+					headers.forEach((value, name) => ctx.setHeader(name, value));
+
+					return ctx.json(sessionPayload);
 				},
 			),
 		},

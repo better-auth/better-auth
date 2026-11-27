@@ -1,11 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { generateRandomString } from "../../crypto";
-import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { PACKAGE_VERSION } from "../../version";
 import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
-import { storeOTP } from "./otp-token";
+import { defaultOTPGenerator, issueOTP } from "./otp-token";
 import {
 	changeEmailEmailOTP,
 	checkVerificationOTP,
@@ -31,9 +29,6 @@ declare module "@better-auth/core" {
 }
 
 export type { EmailOTPOptions } from "./types";
-
-const defaultOTPGenerator = (options: EmailOTPOptions) =>
-	generateRandomString(options.otpLength ?? 6, "0-9");
 
 export const emailOTP = (options: EmailOTPOptions) => {
 	const opts = {
@@ -102,15 +97,24 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						}>(ctx);
 						const email = response?.user.email;
 						if (email) {
-							const otp =
-								opts.generateOTP({ email, type: "email-verification" }, ctx) ||
-								defaultOTPGenerator(opts);
-							const storedOTP = await storeOTP(ctx, opts, otp);
-							await ctx.context.internalAdapter.createVerificationValue({
-								value: `${storedOTP}:0`,
-								identifier: toOTPIdentifier("email-verification", email),
-								expiresAt: getDate(opts.expiresIn, "sec"),
-							});
+							const otp = await issueOTP(
+								ctx,
+								opts,
+								toOTPIdentifier("email-verification", email),
+								{
+									email,
+									type: "email-verification",
+								},
+							);
+							// Like a failed verification email in core sign-up, a vetoed code
+							// is logged and sign-up still succeeds, so the user can request
+							// a new code.
+							if (otp === null) {
+								ctx.context.logger.error(
+									"Email OTP: a verification hook vetoed the sign-up verification code",
+								);
+								return;
+							}
 							await ctx.context.runInBackgroundOrAwait(
 								options.sendVerificationOTP(
 									{

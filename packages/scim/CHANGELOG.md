@@ -1,5 +1,83 @@
 # @better-auth/scim
 
+## 1.7.28
+
+## 1.7.27
+
+## 1.7.26
+
+### Patch Changes
+
+- [#10793](https://github.com/better-auth/better-auth/pull/10793) [`b835e55`](https://github.com/better-auth/better-auth/commit/b835e5554dab6e059d0680f8522ca4bcb9ba34c7) Thanks [@jonathansamines](https://github.com/jonathansamines)! - Add pagination to `listSCIMManagedConnectionEvents`. The endpoint now accepts optional `limit`, `offset`, and `sortDirection` body fields and returns `total` with the page. Calls that omit those fields still return the latest 100 events in ascending sequence order.
+
+## 1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+- [#12503](https://github.com/better-auth/better-auth/pull/12503) [`87ede79`](https://github.com/better-auth/better-auth/commit/87ede7984d4df152ae3c0f5a58a2d08299b24281) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed errors from hooks and endpoints turning into generic 500 responses or skipping their error handling in the OAuth provider, Client ID Metadata Document, passkey, SSO, SCIM, and Stripe plugins when the app installs more than one copy of `better-call`.
+
+## 1.7.23
+
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+- [#12413](https://github.com/better-auth/better-auth/pull/12413) [`f539be6`](https://github.com/better-auth/better-auth/commit/f539be6c8911643957cb5d9103817515d817ea11) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Apps that enable the SCIM plugin with a database adapter that has no native transactions, such as Cloudflare D1, now start. Before, `betterAuth()` threw at startup, so sign-in, sessions, and every other auth route failed.
+
+  SCIM itself still needs native transactions. On these adapters, Better Auth logs an error at startup and returns 501 Not Implemented for every `/scim/v2` request, over HTTP or through `auth.api`, and for server calls that change a SCIM connection. Server calls that read SCIM connections keep working. To provision users and groups with SCIM, use an adapter with native transactions. Apps whose adapter has native transactions are unaffected.
+
+- [#12070](https://github.com/better-auth/better-auth/pull/12070) [`fcf0db6`](https://github.com/better-auth/better-auth/commit/fcf0db623350bc542457d9234cb2067f2d552e43) Thanks [@mallachari](https://github.com/mallachari)! - SCIM Groups with more than 100 members now sync in full (affected v1.7.0 to v1.7.20). Before, a Group `POST` with more than 100 members returned `400`, and `PUT`, `PATCH` and `DELETE` could leave members or mapped roles behind. Role mapping no longer skips Users who are in several Groups, and the managed connection endpoints return every connection and credential instead of the first 100. No action is needed.
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+## 1.7.11
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11644](https://github.com/better-auth/better-auth/pull/11644) [`f556970`](https://github.com/better-auth/better-auth/commit/f556970135281ea6d2827b0b09154c5011c5d0e3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If your SCIM provider sends attribute names with different letter case than the SCIM schema, such as `Active` or `Emails`, Better Auth now applies them. Previously these keys were ignored while the request still succeeded, so a `PUT` with `Active: false` left the User active. A request that sends the same attribute twice with different letter case now returns `400 Bad Request`. Providers that send the standard attribute names are unaffected.
+
+- [#11638](https://github.com/better-auth/better-auth/pull/11638) [`39f0980`](https://github.com/better-auth/better-auth/commit/39f09800b7cf62d1e01b0461a35bb79fcd90f3e0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM User and Group requests now accept JSON `null` attribute values, such as the unpopulated attributes Microsoft Entra ID sends, instead of returning `400 Bad Request`. In `POST` and `PUT` bodies a `null` attribute is treated as omitted, and in PATCH a `null` value removes the attribute. `active: null` is still rejected, and `null` on a read-only attribute is ignored.
+
+- [#11167](https://github.com/better-auth/better-auth/pull/11167) [`666e1de`](https://github.com/better-auth/better-auth/commit/666e1def9796bcdd2f0646f4b7223798a947fd2d) Thanks [@jonathansamines](https://github.com/jonathansamines)! - Fix `POST /scim/v2/Users` rejecting a reprovisioned user with a uniqueness conflict when an inactive SCIM User already has the same `externalId`, such as when Okta reassigns a deactivated user. The inactive SCIM User is now reprovisioned in place and keeps its ID and linked Better Auth User.
+
+- [#11669](https://github.com/better-auth/better-auth/pull/11669) [`8409fb2`](https://github.com/better-auth/better-auth/commit/8409fb250d30fdd54585a3593ef86fb5e59f065b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM directories that send concurrent updates now get a `409` uniqueness error when a User `PATCH`, Group `PUT`, or Group `PATCH` claims a `userName`, `displayName`, `externalId`, or managed email that another request saved first. Previously the losing request failed with a `500` server error. Requests that don't race are unaffected.
+
+## 1.7.7
+
+## 1.7.6
+
 ## 1.7.5
 
 ## 1.7.4

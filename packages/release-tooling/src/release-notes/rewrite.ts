@@ -10,33 +10,42 @@ import type {
 	ReleaseRewriteFallback,
 } from "./schema.ts";
 import {
+	generatedReviewsSchema,
+	generatedRewritesSchema,
 	parseSchema,
-	releaseReviewsSchema,
 	releaseRewriteContextSchema,
 	releaseRewriteKeySchema,
-	releaseRewritesSchema,
 } from "./schema.ts";
 
-const maxBatchEntries = 30;
+// Each entry adds a nullable field to the keyed output schema, and Anthropic
+// structured output accepts at most 16 nullable or union-typed fields.
+const maxBatchEntries = 16;
 const maxBatchCharacters = 60_000;
 const maxContextCharacters = 500_000;
 const maxOutputTokensPerBatch = 32_000;
-const maxReviewOutputTokensPerBatch = 8_000;
+const maxReviewOutputTokensPerBatch = 32_000;
 const defaultFallbackReason = "The rewrite was not approved by review.";
 const invalidCopyFallbackReason =
 	"The rewrite did not pass deterministic copy validation.";
 
-const rewriteInstructions = readFileSync(
+// Every step reads the same entry rules, so the writer and reviewer cannot drift.
+const entryRules = readFileSync(
+	new URL("./entry.prompt.md", import.meta.url),
+	"utf-8",
+);
+
+function readInstructions(url: URL): string {
+	return `${readFileSync(url, "utf-8")}\n${entryRules}`;
+}
+
+const rewriteInstructions = readInstructions(
 	new URL("./rewrite.prompt.md", import.meta.url),
-	"utf-8",
 );
-const reviewInstructions = readFileSync(
+const reviewInstructions = readInstructions(
 	new URL("./review.prompt.md", import.meta.url),
-	"utf-8",
 );
-const repairInstructions = readFileSync(
+const repairInstructions = readInstructions(
 	new URL("./repair.prompt.md", import.meta.url),
-	"utf-8",
 );
 
 function buildBatches(context: ReleaseRewriteContext): ReleaseRewriteContext[] {
@@ -77,23 +86,14 @@ function buildBatches(context: ReleaseRewriteContext): ReleaseRewriteContext[] {
 	return batches;
 }
 
-function orderBatchResults<T extends { id: string }>(
+function inBatchOrder<T>(
 	batch: ReleaseRewriteContext,
-	generated: T[],
-	label: string,
-): T[] {
-	const expectedIds = Object.keys(batch).sort();
-	const actualIds = generated.map((result) => result.id).sort();
-	if (JSON.stringify(expectedIds) !== JSON.stringify(actualIds)) {
-		throw new Error(
-			`${label} IDs did not match: expected ${expectedIds.join(", ")}, received ${actualIds.join(", ")}`,
-		);
-	}
-	const generatedById = new Map(generated.map((result) => [result.id, result]));
+	generated: Record<string, T>,
+): Array<{ id: string } & T> {
 	return Object.keys(batch).map((id) => {
-		const result = generatedById.get(id);
-		if (!result) throw new Error(`${label} ${id} is missing`);
-		return result;
+		const result = generated[id];
+		if (!result) throw new Error(`AI result for ${id} is missing`);
+		return { id, ...result };
 	});
 }
 
@@ -122,10 +122,10 @@ async function reviewBatch(
 		description: "Factual and actionable release-note review",
 		instructions: reviewInstructions,
 		prompt: JSON.stringify({ context: batch, rewrites }, null, 2),
-		schema: releaseReviewsSchema,
+		schema: generatedReviewsSchema(Object.keys(batch)),
 		maxOutputTokens: maxReviewOutputTokensPerBatch,
 	});
-	return orderBatchResults(batch, generated.reviews, "AI review batch");
+	return inBatchOrder(batch, generated.reviews);
 }
 
 function validationFeedback(
@@ -136,11 +136,25 @@ function validationFeedback(
 	if (!entry)
 		throw new Error(`Release rewrite context ${rewrite.id} is missing`);
 	try {
-		validateGeneratedReleaseRewrite(rewrite, entry.changeType === "breaking");
+		validateGeneratedReleaseRewrite(rewrite, entry);
 		return null;
 	} catch (error) {
-		return error instanceof Error ? error.message : String(error);
+		const message = error instanceof Error ? error.message : String(error);
+		// Messages name only the entry ID and the broken rule, never the copy.
+		console.warn(message);
+		return message;
 	}
+}
+
+function normalizedRewrite(
+	context: ReleaseRewriteContext,
+	rewrite: GeneratedReleaseRewrites[number],
+): GeneratedReleaseRewrites[number] {
+	const entry = context[rewrite.id];
+	if (!entry)
+		throw new Error(`Release rewrite context ${rewrite.id} is missing`);
+	const { title, migration } = validateGeneratedReleaseRewrite(rewrite, entry);
+	return { id: rewrite.id, title, migration: migration ?? null };
 }
 
 function fallbackReason(
@@ -183,14 +197,10 @@ export async function rewriteReleaseNotes(
 				"User-focused release-note titles and migration instructions",
 			instructions: rewriteInstructions,
 			prompt: JSON.stringify(batch, null, 2),
-			schema: releaseRewritesSchema,
+			schema: generatedRewritesSchema(Object.keys(batch)),
 			maxOutputTokens: maxOutputTokensPerBatch,
 		});
-		const initialRewrites = orderBatchResults(
-			batch,
-			generated.rewrites,
-			"AI rewrite batch",
-		);
+		const initialRewrites = inBatchOrder(batch, generated.rewrites);
 		const reviews = await reviewBatch(
 			batch,
 			initialRewrites,
@@ -207,7 +217,7 @@ export async function rewriteReleaseNotes(
 			if (!rewrite) throw new Error(`AI rewrite ${review.id} is missing`);
 			const copyFeedback = validationFeedback(batch, rewrite);
 			if (review.approved && !review.feedback && !copyFeedback) {
-				acceptedRewrites.set(review.id, rewrite);
+				acceptedRewrites.set(review.id, normalizedRewrite(batch, rewrite));
 				fallbackReasons.delete(review.id);
 			} else {
 				const feedback = review.feedback ?? copyFeedback;
@@ -245,14 +255,10 @@ export async function rewriteReleaseNotes(
 					null,
 					2,
 				),
-				schema: releaseRewritesSchema,
+				schema: generatedRewritesSchema(repairIds),
 				maxOutputTokens: maxOutputTokensPerBatch,
 			});
-			const repairedRewrites = orderBatchResults(
-				repairContext,
-				repaired.rewrites,
-				"AI repair batch",
-			);
+			const repairedRewrites = inBatchOrder(repairContext, repaired.rewrites);
 			const repairReviews = await reviewBatch(
 				repairContext,
 				repairedRewrites,
@@ -267,7 +273,10 @@ export async function rewriteReleaseNotes(
 				if (!rewrite) throw new Error(`AI repair ${review.id} is missing`);
 				const copyFeedback = validationFeedback(repairContext, rewrite);
 				if (review.approved && !review.feedback && !copyFeedback) {
-					acceptedRewrites.set(review.id, rewrite);
+					acceptedRewrites.set(
+						review.id,
+						normalizedRewrite(repairContext, rewrite),
+					);
 					fallbackReasons.delete(review.id);
 				} else {
 					fallbackReasons.set(

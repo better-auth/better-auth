@@ -5,7 +5,9 @@
  * adapter authors once the registration and lifecycle contracts are stabilized.
  */
 
-import type { BetterAuthOptions } from "../types";
+import { __getBetterAuthGlobal } from "../context/global";
+import { isWorkerd } from "../env";
+import type { Awaitable, BetterAuthOptions } from "../types";
 import type { SchemaFinding, SchemaSource } from "./schema-diff";
 import { SchemaMismatchError } from "./schema-diff";
 
@@ -21,14 +23,39 @@ export function checksSchema(options: BetterAuthOptions): boolean {
  * Resolves when the schema can hold what Better Auth writes. Returns nothing
  * once that is known and the database schema revision is unchanged.
  */
-export type SchemaCheck = () => Promise<void> | undefined;
+export type SchemaCheck = (() => Promise<void> | undefined) & {
+	source?: SchemaSource;
+};
 
-const schemaChecks = new WeakMap<object, SchemaCheck>();
-const schemaRevisions = new WeakMap<object, { value: number }>();
+type SchemaCheckRegistration = { check: SchemaCheck; runtimeEnabled: boolean };
+
+/**
+ * Package managers can resolve several copies of `@better-auth/core`, such as
+ * one per `better-call` peer. The adapter registers in one copy and the
+ * runtime reads another, so the registry lives on the shared global.
+ */
+function schemaRegistry() {
+	const shared = __getBetterAuthGlobal();
+	shared.schemaRegistry ??= {
+		checks: new WeakMap(),
+		revisions: new WeakMap(),
+	};
+	return {
+		checks: shared.schemaRegistry.checks as WeakMap<
+			object,
+			SchemaCheckRegistration
+		>,
+		revisions: shared.schemaRegistry.revisions,
+	};
+}
+
+type SchemaCheckRegistrationOptions = {
+	runtimeEnabled?: boolean;
+};
 
 /** Invalidates cached checks after Better Auth changes this database's schema. */
 export function invalidateSchemaChecks(database: object): void {
-	const revision = schemaRevisions.get(database);
+	const revision = schemaRegistry().revisions.get(database);
 	if (revision) revision.value++;
 }
 
@@ -36,21 +63,38 @@ export function invalidateSchemaChecks(database: object): void {
  * Attaches a check to the adapter it verifies. The adapter object itself is
  * left untouched, so this works for adapters Better Auth does not own.
  */
-export function registerSchemaCheck(adapter: object, check: SchemaCheck): void {
-	schemaChecks.set(adapter, check);
+export function registerSchemaCheck(
+	adapter: object,
+	check: SchemaCheck,
+	options: SchemaCheckRegistrationOptions = {},
+): void {
+	const runtimeEnabled = options.runtimeEnabled ?? true;
+	schemaRegistry().checks.set(adapter, { check, runtimeEnabled });
 }
 
 /**
- * The check registered for an adapter, if its store is checked at all.
+ * The registered check, regardless of whether runtime validation is enabled.
  */
 export function schemaCheckFor(adapter: object): SchemaCheck | undefined {
-	return schemaChecks.get(adapter);
+	return schemaRegistry().checks.get(adapter)?.check;
+}
+
+/**
+ * The check used by runtime paths, when runtime validation is enabled.
+ */
+export function runtimeSchemaCheckFor(
+	adapter: object,
+): SchemaCheck | undefined {
+	const registration = schemaRegistry().checks.get(adapter);
+	return registration?.runtimeEnabled ? registration.check : undefined;
 }
 
 /**
  * Turns a schema comparison into a check shared by one adapter instance.
  *
- * The first call runs `find` and every concurrent call shares that promise. A
+ * Concurrent calls share one `find` until a completed result is available. On
+ * Cloudflare Workers each call runs its own, and a newer lookup's result
+ * replaces an older one's. A
  * clean result is cached until invalidation. A mismatch is kept as one
  * {@link SchemaMismatchError} and rethrown on every later call without asking
  * the store again, until a migration invalidates it. When a database identity is supplied,
@@ -69,39 +113,85 @@ export function schemaCheckFor(adapter: object): SchemaCheck | undefined {
  * ```
  */
 export function createSchemaCheck(
-	find: () => Promise<SchemaFinding[]>,
+	find: () => Awaitable<SchemaFinding[]>,
 	source: SchemaSource,
 	database?: object,
 ): SchemaCheck {
-	let revision = database ? schemaRevisions.get(database) : undefined;
-	if (database && !revision) {
-		revision = { value: 0 };
-		schemaRevisions.set(database, revision);
-	}
-	let checkedRevision = revision?.value;
-	let clean = false;
-	let verdict: Promise<void> | undefined;
-	return function checkSchema(): Promise<void> | undefined {
-		const currentRevision = revision?.value;
-		if (checkedRevision !== currentRevision) {
-			checkedRevision = currentRevision;
-			clean = false;
-			verdict = undefined;
-		}
-		if (clean) return;
-		return (verdict ??= Promise.resolve()
+	const revisions = schemaRegistry().revisions;
+	const revision = database
+		? (revisions.get(database) ?? { value: 0 })
+		: undefined;
+	if (database && revision) revisions.set(database, revision);
+
+	// Workers tie I/O to the request that started it, so a lookup begun by
+	// another request may never settle there.
+	// @see https://developers.cloudflare.com/workers/runtime-apis/request/#the-request-context
+	const sharesLookups = !isWorkerd();
+
+	let verdict:
+		| {
+				revision: number | undefined;
+				sequence: number;
+				error: SchemaMismatchError | undefined;
+		  }
+		| undefined;
+	let pending:
+		| {
+				revision: number | undefined;
+				lookup: Promise<void>;
+		  }
+		| undefined;
+	let lookupSequence = 0;
+
+	const runLookup = (currentRevision: number | undefined): Promise<void> => {
+		const sequence = ++lookupSequence;
+
+		return Promise.resolve()
 			.then(find)
 			.then(
 				(findings) => {
-					if (revision?.value !== currentRevision) return checkSchema();
-					if (findings.length) throw new SchemaMismatchError(findings, source);
-					if (checkedRevision === currentRevision) clean = true;
+					if (
+						revision?.value !== currentRevision ||
+						(verdict && sequence < verdict.sequence)
+					) {
+						return checkSchema();
+					}
+
+					const error = findings.length
+						? new SchemaMismatchError(findings, source)
+						: undefined;
+					verdict = { revision: currentRevision, sequence, error };
+					if (error) throw error;
 				},
 				(error: unknown) => {
 					if (revision?.value !== currentRevision) return checkSchema();
-					if (checkedRevision === currentRevision) verdict = undefined;
 					throw error;
 				},
-			));
+			);
 	};
+
+	const checkSchema: SchemaCheck = () => {
+		const currentRevision = revision?.value;
+
+		if (verdict && verdict.revision === currentRevision) {
+			return verdict.error ? Promise.reject(verdict.error) : undefined;
+		}
+
+		if (!sharesLookups) return runLookup(currentRevision);
+		if (pending && pending.revision === currentRevision) {
+			return pending.lookup;
+		}
+
+		const lookup = runLookup(currentRevision).finally(() => {
+			if (pending?.lookup === lookup) pending = undefined;
+		});
+		pending = {
+			revision: currentRevision,
+			lookup,
+		};
+		return lookup;
+	};
+
+	checkSchema.source = source;
+	return checkSchema;
 }

@@ -108,7 +108,7 @@ You can provide a function that returns origins dynamically:
 ```ts
 export const auth = betterAuth({
 	trustedOrigins: async (request) => {
-		// request is undefined during initialization and auth.api calls
+		// request is undefined at initialization and on some auth.api calls
 		if (!request) {
 			return ["https://my-frontend.com"];
 		}
@@ -119,7 +119,17 @@ export const auth = betterAuth({
 ```
 
 <Callout type="info">
-  The `request` parameter is `undefined` during initialization and when calling `auth.api` directly. Make sure to handle this case by returning default trusted origins.
+  Return your default trusted origins when `request` is `undefined`. Better Auth calls the function without a request in these cases:
+
+  * **At initialization.** Better Auth calls the function once when it starts.
+  * **On a direct `auth.api` call with a static `baseURL`** (a string, or not set). These calls use the origins resolved at initialization.
+  * **On a direct `auth.api` call with a [dynamic `baseURL`](#dynamic-base-url)** that passes neither `request` nor `headers` with `Host` or `X-Forwarded-Host`. The call then uses your `fallback` URL. Without `fallback`, the call throws an error.
+
+  In the other cases, the function receives a `Request`:
+
+  * **A request to the auth handler.** The function receives the incoming `Request`.
+  * **A direct `auth.api` call with a dynamic `baseURL`.** The function receives the `request` you pass. If you pass `headers` instead, Better Auth builds a `Request` from them. The headers must include `Host`, or `X-Forwarded-Host` when `advanced.trustedProxyHeaders` is enabled.
+  * **A direct `auth.api` call with a static `baseURL` to an endpoint with its own CSRF check**, such as email sign-in and sign-up. That check can call the function again with the `request` you pass.
 </Callout>
 
 ### Wildcard Support
@@ -157,8 +167,9 @@ export const auth = betterAuth({
   **Notes**
 
   * For `http://` and `https://` URLs, patterns match the full origin. Paths and query strings are ignored.
-  * For custom schemes (like `exp://` or `myapp://`), wildcard patterns match against the full URL including paths. A non-wildcard pattern matches by scheme and authority: a host-less entry such as `myapp://` or `exp://` trusts every host of that scheme, while a host-bearing entry such as `myapp://callback` must match that host exactly (so it is not satisfied by `myapp://callback.attacker.tld`).
+  * For custom schemes (like `exp://` or `myapp://`), a wildcard pattern matches the host and path separately, and a URL with user info never matches. `myapp://*` trusts every host and path of `myapp://`. A scheme wildcard such as `*://example.com` does not match custom schemes. A non-wildcard pattern matches by scheme and authority: a host-less entry such as `myapp://` or `exp://` trusts every host of that scheme, while a host-bearing entry such as `myapp://callback` must match that host exactly (so it is not satisfied by `myapp://callback.attacker.tld`).
   * The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
+  * A wildcard host made only of digits, dots, and wildcards, such as `192.168.*.*`, matches only IPv4 addresses in that range.
 </Callout>
 
 ## `secret`
@@ -187,7 +198,7 @@ openssl rand -base64 32
 
 ## `secrets`
 
-Versioned secrets for non-destructive secret rotation. When set, encrypted data uses an envelope format that embeds the key version, allowing you to rotate secrets without invalidating existing data.
+Versioned secrets for non-destructive secret rotation within the same encryption format and purpose. When set, encrypted data uses an envelope format that embeds the key version, allowing you to rotate secrets without invalidating data encrypted for that purpose while its key remains configured.
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -209,7 +220,7 @@ You can also set this via the `BETTER_AUTH_SECRETS` environment variable:
 BETTER_AUTH_SECRETS=2:new-secret-base64,1:old-secret-base64
 ```
 
-When `secrets` is set, `secret` (singular) is only used as a fallback for decrypting legacy data that predates the envelope format. Both can coexist during migration.
+When `secrets` is set, `secret` (singular) is only used as a fallback for decrypting legacy data that predates the envelope format within the same encryption purpose. Both can coexist during migration. Retaining it does not preserve pending OAuth or SAML state cookies or OAuth Proxy payloads when upgrading from shared keys to purpose-specific keys. See the [security reference](/docs/reference/security#secret-rotation) for the cutover requirements.
 
 ## `database`
 
@@ -310,8 +321,8 @@ export const auth = betterAuth({
 * `maxPasswordLength`: Maximum password length (default: `128`)
 * `autoSignIn`: Automatically sign in the user after sign up
 * `sendResetPassword`: Function to send reset password email
-* `onPasswordReset`: Callback triggered when a user's password is changed successfully
-* `revokeSessionsOnPasswordReset`: Revoke all other sessions when resetting password (default: `false`)
+* `onPasswordReset`: Callback triggered after a user's password is reset. It runs after the new password is saved and, when `revokeSessionsOnPasswordReset` is enabled, after sessions are revoked
+* `revokeSessionsOnPasswordReset`: Revoke all of the user's sessions when resetting the password. For database sessions, revocation and the password change run in one transaction when transactions are enabled for the adapter. Secondary-storage sessions are removed after commit, on a best-effort basis (default: `false`)
 * `resetPasswordTokenExpiresIn`: Number of seconds the reset password token is valid for (default: `3600` seconds)
 * `onExistingUserSignUp`: Callback triggered when someone signs up with an already-registered email. Only called when `requireEmailVerification` is `true` or `autoSignIn` is `false` (default: `undefined`).
 * `customSyntheticUser`: Function to build a custom synthetic user for email enumeration protection. Use when plugins add fields to the user table. See [email enumeration protection](/docs/authentication/email-password#plugins-that-add-user-fields).
@@ -345,6 +356,7 @@ export const auth = betterAuth({
 * `redirectURI`: Custom redirect URI for the OAuth callback (optional)
 * `scope`: Additional OAuth scopes to request (optional)
 * `mapProfileToUser`: Custom function to map the provider profile to a user (optional)
+* `getAccountFields`: Custom function that returns values for the fields you declare in `account.additionalFields`. Better Auth stores them on the provider account when it creates or links it, and updates them on sign-in while `account.updateAccountOnSignIn` is not `false` (optional)
 * `disableSignUp`: Disable sign up for new users (optional)
 * `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
 * `overrideUserInfoOnSignIn`: Override user info with provider user info on sign in (optional)
@@ -509,6 +521,8 @@ Controls where OAuth state data is stored during the authentication flow.
 
 Defaults to `"database"` when a database or `secondaryStorage` is configured, and to `"cookie"` only when neither is set (a fully stateless setup). With `secondaryStorage`, OAuth state is stored there automatically; you no longer need to set this manually.
 
+The encrypted cookie is an in-flight credential, not a durable storage format. When upgrading from a release that encrypted this cookie directly with `BETTER_AUTH_SECRET` to one that derives a purpose-specific key, upgrade every node that serves the same auth base together. OAuth sign-in, account-linking, and cookie-backed SAML sign-in flows started before the cutover must be restarted. Mixed versions can return [`state_invalid`](/docs/reference/errors/state_invalid), and Better Auth does not fall back to the previous shared key.
+
 ### `storeAccountCookie`
 
 Store provider account data after an OAuth flow in an encrypted cookie. This is useful for database-less flows where OAuth token material, such as access tokens, refresh tokens, ID tokens, scopes, and token expiry, must be available without an account table.
@@ -564,9 +578,15 @@ export const auth = betterAuth({
 
 * `modelName`: The model name for the verification table
 * `fields`: Map fields to different column names
-* `disableCleanup`: Disable cleaning up expired values when a verification value is fetched
+* `disableCleanup`: Disable deleting expired verification rows in the database. Without it, a verification lookup that finds an expired row deletes that row. Once a minute per server instance, a lookup also deletes every expired row.
 * `storeIdentifier`: How to store verification identifiers such as tokens and OTP keys. Supports `"plain"`, `"hashed"`, or a custom hasher. You can also use `{ default, overrides }` to apply different strategies per identifier prefix.
 * `storeInDatabase`: Store verification records in the database even when `secondaryStorage` is configured. Default is `false`.
+
+When using `storeIdentifier.overrides`, Magic Link identifiers start with `magic-link:`, and database-backed OAuth and SAML relay state identifiers start with `auth-state:`. Overrides match these prefixes before the identifier is stored or hashed. These prefixes are used for verification storage; the token sent in a Magic Link and the state sent to an OAuth provider or SAML identity provider remain unchanged.
+
+Custom `storeIdentifier` hashers should hash the complete identifier, including its purpose prefix. Removing the prefix can cause unrelated verification values to share a storage key and interrupt pending sign-ins.
+
+Before upgrading, update overrides that target these flows to match the new prefixes. If your storage integration inspects verification identifiers directly, account for the same change. Upgrade servers sharing verification storage together. Previously issued Magic Links cannot be redeemed, and OAuth or SAML sign-ins using Better Auth-generated state must be restarted if they began before the upgrade, whether their state is database- or cookie-backed. No verification table schema or existing user/account migration is required.
 
 If `secondaryStorage` is configured, verification records are stored there by default. That behavior applies to flows that use Better Auth's shared verification layer, including OTP and magic-link style flows.
 
@@ -609,7 +629,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	advanced: {
 		ipAddress: {
-			ipAddressHeaders: ["x-client-ip", "x-real-ip"],
+			ipAddressHeaders: ["cf-connecting-ip"],
 			disableIpTracking: false
 		},
 		useSecureCookies: true,
@@ -659,9 +679,9 @@ export const auth = betterAuth({
 ```
 
 * `ipAddress`: IP address configuration for rate limiting and session tracking
-  * `disableIpTracking`: Disable IP address tracking.
-  * `ipAddressHeaders`: Trusted header names to read client IP addresses from.
-  * `trustedProxies`: Reverse-proxy IPs or CIDR ranges. The forwarded chain is walked right to left, trusted hops are skipped, and the first untrusted address is used as the client IP.
+  * `disableIpTracking`: Disable IP address tracking. This also turns off the built-in rate limiter for HTTP requests.
+  * `ipAddressHeaders`: Header names to read the client IP address from. The first header with a valid address is used. Defaults to `["x-forwarded-for"]`. List only headers that your proxy or server code sets on every request. It must replace any value the client sent. If your proxies append to the header instead, list them in `trustedProxies`. See [Connecting IP Address](/docs/concepts/rate-limit#connecting-ip-address).
+  * `trustedProxies`: IP addresses or CIDR ranges of your reverse proxies. Better Auth reads forwarded addresses from right to left. It skips these proxies and uses the first other address as the client IP.
 * `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
 * `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
 * `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)

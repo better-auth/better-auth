@@ -100,6 +100,7 @@ function rateLimitResponse(retryAfter: number) {
 			status: 429,
 			statusText: "Too Many Requests",
 			headers: {
+				"Content-Type": "application/json",
 				"X-Retry-After": retryAfter.toString(),
 			},
 		},
@@ -124,7 +125,7 @@ function createDatabaseStorageWrapper(
 			where: [{ field: "key", value: key }],
 		});
 		const data = res[0];
-		if (typeof data?.lastRequest === "bigint") {
+		if (data) {
 			data.lastRequest = Number(data.lastRequest);
 		}
 		return data;

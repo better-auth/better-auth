@@ -1,5 +1,71 @@
 # @better-auth/api-key
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12909](https://github.com/better-auth/better-auth/pull/12909) [`6aebc1d`](https://github.com/better-auth/better-auth/commit/6aebc1d672ab1b3599c61126debf3a97753b2271) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - On Cloudflare Workers, a write to an API key reference list in secondary storage no longer hangs when an earlier request for the same reference ID ended without releasing its lock. A writer now stops waiting five seconds after it reaches the front of the queue and proceeds. If the earlier writer was only slow, the two writes can overlap and one update to the list can be lost.
+
+## 1.7.27
+
+## 1.7.26
+
+## 1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+## 1.7.23
+
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+## 1.7.15
+
+### Patch Changes
+
+- [#12107](https://github.com/better-auth/better-auth/pull/12107) [`9ce8b2c`](https://github.com/better-auth/better-auth/commit/9ce8b2c725ef7e088e83a675fe427d92b0c1010d) Thanks [@bytaesu](https://github.com/bytaesu)! - API keys stored in secondary storage now verify, load, and list correctly when the storage client returns already-parsed JSON objects, such as `@upstash/redis`.
+
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+## 1.7.11
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+## 1.7.7
+
+## 1.7.6
+
 ## 1.7.5
 
 ## 1.7.4

@@ -97,7 +97,7 @@ export const auth = betterAuth({
 
 ### Token authentication method
 
-Use `client_secret_basic` for regular server-side Better Auth applications. This is the default used by the Cloudflare provider when `clientSecret` is configured.
+Use `tokenEndpointAuth` to configure the authentication method, which defaults to `client_secret_basic` when `clientSecret` is set.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -107,13 +107,13 @@ export const auth = betterAuth({
         cloudflare: {
             clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
             clientSecret: process.env.CLOUDFLARE_CLIENT_SECRET as string,
-            // tokenEndpointAuthMethod: "client_secret_basic", // default // [!code highlight]
+            // tokenEndpointAuth: { method: "client_secret_basic" }, // default // [!code highlight]
         },
     },
 })
 ```
 
-If your Cloudflare OAuth client is configured with `client_secret_post`, set `tokenEndpointAuthMethod` to `client_secret_post`:
+If your Cloudflare OAuth client is configured with `client_secret_post`, set `tokenEndpointAuth` to `{ method: "client_secret_post" }`:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -123,7 +123,7 @@ export const auth = betterAuth({
         cloudflare: {
             clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
             clientSecret: process.env.CLOUDFLARE_CLIENT_SECRET as string,
-            tokenEndpointAuthMethod: "client_secret_post", // [!code highlight]
+            tokenEndpointAuth: { method: "client_secret_post" }, // [!code highlight]
         },
     },
 })
@@ -131,7 +131,7 @@ export const auth = betterAuth({
 
 ### Clients without a secret
 
-Cloudflare's [OAuth flow guidance](https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/#choose-a-flow) requires clients that cannot securely store a secret, such as browser-based, mobile, desktop, or CLI applications, to use the Authorization Code flow with PKCE (`S256`) and `token_endpoint_auth_method` set to `none`. For one of these clients, omit `clientSecret` and set `tokenEndpointAuthMethod` to `none`. Better Auth supplies the PKCE challenge and verifier during the authorization flow.
+Cloudflare's [OAuth flow guidance](https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/#choose-a-flow) requires clients that cannot securely store a secret, such as browser-based, mobile, desktop, or CLI applications, to use the Authorization Code flow with PKCE (`S256`) and `token_endpoint_auth_method` set to `none`. For one of these clients, omit `clientSecret` and set `tokenEndpointAuth` to `{ method: "none" }`. Better Auth supplies the PKCE challenge and verifier during the authorization flow.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -140,11 +140,15 @@ export const auth = betterAuth({
     socialProviders: {
         cloudflare: {
             clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
-            tokenEndpointAuthMethod: "none", // [!code highlight]
+            tokenEndpointAuth: { method: "none" }, // [!code highlight]
         },
     },
 })
 ```
+
+<Callout type="info">
+  If you use `tokenEndpointAuthMethod: "..."`, replace it with `tokenEndpointAuth: { method: "..." }`.
+</Callout>
 
 ### Client visibility
 

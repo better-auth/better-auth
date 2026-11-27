@@ -163,16 +163,14 @@ function createCimdClientProvider() {
 }
 
 describe("official SDK AuthInfo mapping", () => {
-	it.each([
-		{},
-		{ client_id: "" },
-		{ client_id: "   " },
-		{ client_id: 42 },
-	])("rejects a missing or malformed client_id claim: %j", (claims) => {
-		expect(() => requireAccessTokenClientId(claims)).toThrow(
-			new TypeError("MCP access token client_id must be a non-empty string"),
-		);
-	});
+	it.each([{}, { client_id: "" }, { client_id: "   " }, { client_id: 42 }])(
+		"rejects a missing or malformed client_id claim: %j",
+		(claims) => {
+			expect(() => requireAccessTokenClientId(claims)).toThrow(
+				new TypeError("MCP access token client_id must be a non-empty string"),
+			);
+		},
+	);
 
 	it.each([
 		undefined,
@@ -196,18 +194,18 @@ describe("official SDK AuthInfo mapping", () => {
 		);
 	});
 
-	it.each([
-		"Bearer",
-		"DPoP",
-	])("extracts the actual %s access token", (scheme) => {
-		expect(
-			extractPresentedAccessToken(
-				new Request(MCP_RESOURCE, {
-					headers: { authorization: `${scheme} presented-token` },
-				}),
-			),
-		).toBe("presented-token");
-	});
+	it.each(["Bearer", "DPoP"])(
+		"extracts the actual %s access token",
+		(scheme) => {
+			expect(
+				extractPresentedAccessToken(
+					new Request(MCP_RESOURCE, {
+						headers: { authorization: `${scheme} presented-token` },
+					}),
+				),
+			).toBe("presented-token");
+		},
+	);
 
 	it("deduplicates string scopes and treats other claim types as empty", () => {
 		expect(parseGrantedScopes("mcp:base greeting mcp:base")).toEqual([

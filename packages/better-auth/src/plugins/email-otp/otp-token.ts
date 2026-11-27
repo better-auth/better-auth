@@ -1,14 +1,16 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import {
 	constantTimeEqual,
+	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
+import { createOrFindVerification } from "../../db/verification";
 import { getDate } from "../../utils/date";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
 
-export async function storeOTP(
+async function storeOTP(
 	ctx: GenericEndpointContext,
 	opts: EmailOTPOptions,
 	otp: string,
@@ -106,9 +108,47 @@ export async function tryReuseOTP(
 	const plainOtp = await retrieveOTP(ctx, opts, storedOtpValue);
 	if (!plainOtp) return null;
 
-	await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, {
-		expiresAt: getDate(opts.expiresIn, "sec"),
-	});
+	const extended =
+		await ctx.context.internalAdapter.updateVerificationByIdentifier(
+			identifier,
+			{ expiresAt: getDate(opts.expiresIn, "sec") },
+		);
+	// The code may have been consumed since the read, or the extension vetoed.
+	return extended ? plainOtp : null;
+}
 
-	return plainOtp;
+export const defaultOTPGenerator = (options: EmailOTPOptions) =>
+	generateRandomString(options.otpLength ?? 6, "0-9");
+
+export async function issueOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredEmailOTPOptions,
+	identifier: string,
+	data: Parameters<RequiredEmailOTPOptions["generateOTP"]>[0],
+): Promise<string | null> {
+	const otp = opts.generateOTP(data, ctx) || defaultOTPGenerator(opts);
+	const verification = {
+		value: `${await storeOTP(ctx, opts, otp)}:0`,
+		identifier,
+		expiresAt: getDate(opts.expiresIn, "sec"),
+	};
+	await ctx.context.internalAdapter.deleteVerificationByIdentifier(identifier);
+	const stored = await createOrFindVerification(ctx, verification);
+	// A verification.create.before hook can veto the create by returning false.
+	if (!stored) return null;
+	if (stored.value === verification.value) return otp;
+
+	const reused = await tryReuseOTP(ctx, opts, identifier);
+	if (reused) return reused;
+	const replaced =
+		await ctx.context.internalAdapter.updateVerificationByIdentifier(
+			identifier,
+			{
+				value: verification.value,
+				expiresAt: verification.expiresAt,
+				createdAt: new Date(),
+			},
+		);
+	// A verification.update.before hook can veto the replacement by returning false.
+	return replaced ? otp : null;
 }

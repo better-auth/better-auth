@@ -25,7 +25,10 @@ export type OAuthIdTokenConfig =
 			issuer?: (string | string[]) | undefined;
 			/** Expected `aud`, usually the client ID. */
 			audience: string | string[];
-			/** Permitted JWS algorithms. Defaults to the token's `alg` header. */
+			/**
+			 * Permitted JWS algorithms. Set this to the algorithms the provider signs with.
+			 * When omitted, jose accepts any algorithm the resolved key supports.
+			 */
 			algorithms?: string[] | undefined;
 			/** Maximum token age passed to jose (e.g. `"1h"`). */
 			maxTokenAge?: string | undefined;
@@ -116,9 +119,9 @@ export type OAuthAccountSubject<Profile extends object = object> =
 export type OAuthMappedUser = {
 	/** Provider identity is defined by `accountSubject`, not local user mapping. */
 	id?: never;
-	name?: string;
-	email?: string | null;
-	image?: string;
+	name?: string | undefined;
+	email?: string | null | undefined;
+	image?: string | undefined;
 	emailVerified?: boolean;
 	[key: string]: unknown;
 };
@@ -211,6 +214,15 @@ export interface OAuthProvider<
 				| undefined;
 		},
 	) => Promise<{
+		user: OAuth2UserInfo;
+		data: T;
+	} | null>;
+	/**
+	 * Resolve a profile from a client-submitted ID token the route already verified.
+	 *
+	 * @internal
+	 */
+	getUserInfoFromIdToken?: (idToken: string) => Promise<{
 		user: OAuth2UserInfo;
 		data: T;
 	} | null>;
@@ -371,6 +383,27 @@ export type ProviderOptions<Profile extends object = object> = {
 	 * user.
 	 */
 	mapProfileToUser?: OAuthProfileMapper<Profile> | undefined;
+	/**
+	 * Return values for columns declared in `account.additionalFields` to store
+	 * on the provider account when it is created or updated.
+	 *
+	 * Called only when set, after the provider tokens and profile are verified.
+	 * Better Auth treats the returned values as provider input, like
+	 * `mapProfileToUser`. It ignores keys that are not declared account fields,
+	 * fields marked `input: false`, values that are `undefined`, and its own
+	 * account columns (`id`, `userId`, `providerId`, `accountId`, token and
+	 * scope columns, `password`, and the timestamps). Return `null` for the whole
+	 * result to store nothing. A `null` value for a key is stored as `null`.
+	 *
+	 * On sign-in the values are written only while `account.updateAccountOnSignIn`
+	 * is not `false`. ID token sign-in passes the tokens the client sent.
+	 */
+	getAccountFields?:
+		| ((
+				tokens: OAuth2Tokens,
+				userInfo: OAuth2UserInfo,
+		  ) => Awaitable<Record<string, unknown> | null | undefined>)
+		| undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.

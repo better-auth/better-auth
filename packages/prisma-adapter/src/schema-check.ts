@@ -17,6 +17,8 @@ export interface PrismaRuntimeDataModel {
 			fields: readonly {
 				name: string;
 				kind: "scalar" | "object" | "enum" | "unsupported";
+				isId?: boolean | undefined;
+				nativeType?: readonly [string, ...unknown[]] | null | undefined;
 				isRequired?: boolean | undefined;
 				hasDefaultValue?: boolean | undefined;
 				isUpdatedAt?: boolean | undefined;
@@ -46,6 +48,23 @@ export function readPrismaDataModel(
  */
 function clientProperty(model: string): string {
 	return model.charAt(0).toLowerCase() + model.slice(1);
+}
+
+/**
+ * The client properties of models whose id column is `@db.ObjectId`.
+ */
+export function findObjectIdModels(
+	dataModel: PrismaRuntimeDataModel | undefined,
+): Set<string> {
+	return new Set(
+		Object.entries(dataModel?.models ?? {})
+			.filter(([, { fields }]) =>
+				fields.some(
+					(field) => field.isId && field.nativeType?.[0] === "ObjectId",
+				),
+			)
+			.map(([model]) => clientProperty(model)),
+	);
 }
 
 /**
@@ -79,8 +98,10 @@ export function findPrismaSchemaProblems(
 	options: BetterAuthOptions,
 	usePlural?: boolean | undefined,
 ): SchemaFinding[] {
-	return diffSchema(
-		getExpectedSchema(options, { usePlural }),
-		introspectPrismaDataModel(dataModel),
+	const expected = Object.fromEntries(
+		Object.entries(getExpectedSchema(options, { usePlural })).map(
+			([model, table]) => [clientProperty(model), table],
+		),
 	);
+	return diffSchema(expected, introspectPrismaDataModel(dataModel));
 }

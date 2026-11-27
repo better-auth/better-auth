@@ -16,7 +16,16 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { OAuth2Server } from "oauth2-mock-server";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	onTestFinished,
+	vi,
+} from "vitest";
 import { createAuthMiddleware } from "./api";
 import { getOAuthState } from "./api/state/oauth";
 import { parseSetCookieHeader } from "./cookies";
@@ -696,6 +705,133 @@ describe("Disable implicit signup", async () => {
 });
 
 describe("Disable signup", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11480
+	 */
+	describe("ID-token sign-in", () => {
+		const googleIdTokenOptions = (email: string) => {
+			const profile: GoogleProfile = {
+				aud: "test",
+				azp: "test",
+				email,
+				email_verified: true,
+				exp: 2_000_000_000,
+				family_name: "User",
+				given_name: "Google",
+				iat: 1_900_000_000,
+				iss: "https://accounts.google.com",
+				name: "Google User",
+				picture: "https://example.com/avatar.png",
+				sub: "google-id-token-user",
+			};
+			return {
+				clientId: "test",
+				clientSecret: "test",
+				verifyIdToken: async () => true,
+				getUserInfo: async () => ({
+					user: { email, name: profile.name, emailVerified: true },
+					data: profile,
+				}),
+			};
+		};
+
+		it.each([
+			{ requestSignUp: undefined, scenario: "without requestSignUp" },
+			{ requestSignUp: true, scenario: "with requestSignUp" },
+		])(
+			"rejects ID-token sign-in for a new user $scenario",
+			async ({ requestSignUp }) => {
+				const email = "new-id-token-user@example.com";
+				const { client, auth } = await getTestInstance(
+					{
+						socialProviders: {
+							google: {
+								...googleIdTokenOptions(email),
+								disableSignUp: true,
+							},
+						},
+					},
+					{ disableTestUser: true },
+				);
+
+				const response = await client.signIn.social({
+					provider: "google",
+					idToken: { token: "a.b.c" },
+					requestSignUp,
+				});
+
+				const user = await (await auth.$context).adapter.findOne({
+					model: "user",
+					where: [{ field: "email", value: email }],
+				});
+				expect(user).toBeNull();
+				expect(response.error).toMatchObject({
+					status: 401,
+					code: "OAUTH_LINK_ERROR",
+					message: "signup disabled",
+				});
+			},
+		);
+
+		it("allows an existing ID-token user to sign in when provider sign-up is disabled", async () => {
+			const email = "existing-id-token-user@example.com";
+			const { client, auth } = await getTestInstance(
+				{ socialProviders: { google: googleIdTokenOptions(email) } },
+				{ disableTestUser: true },
+			);
+			const signIn = () =>
+				client.signIn.social({
+					provider: "google",
+					idToken: { token: "a.b.c" },
+				});
+
+			const firstResponse = await signIn();
+			expect(firstResponse.error).toBeNull();
+
+			const provider = (await auth.$context).socialProviders.find(
+				(provider) => provider.id === "google",
+			);
+			expect(provider).toBeDefined();
+			provider!.options!.disableSignUp = true;
+
+			const response = await signIn();
+			expect(response.error).toBeNull();
+			expect(response.data).toMatchObject({
+				redirect: false,
+				user: { email },
+			});
+		});
+
+		it("keeps the top-level provider sign-up restriction for ID-token sign-in", async () => {
+			const { client, auth } = await getTestInstance(
+				{
+					socialProviders: {
+						google: {
+							...googleIdTokenOptions("top-level-id-token-user@example.com"),
+							disableSignUp: false,
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const provider = (await auth.$context).socialProviders.find(
+				(provider) => provider.id === "google",
+			);
+			expect(provider).toBeDefined();
+			provider!.disableSignUp = true;
+
+			const response = await client.signIn.social({
+				provider: "google",
+				idToken: { token: "a.b.c" },
+			});
+			expect(response.error).toMatchObject({
+				status: 401,
+				code: "OAUTH_LINK_ERROR",
+				message: "signup disabled",
+			});
+		});
+	});
+
 	it("Should not create user when sign up is disabled", async () => {
 		const headers = new Headers();
 		const { client, cookieSetter } = await getTestInstance({
@@ -751,6 +887,45 @@ describe("signin", async () => {
 		});
 		await migrations.runMigrations();
 	});
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12046
+	 */
+	it("does not create OAuth state already expired during a DST fall-back hour", async () => {
+		onTestFinished(() => {
+			vi.useRealTimers();
+			vi.unstubAllEnvs();
+		});
+		vi.stubEnv("TZ", "Europe/Helsinki");
+		vi.useFakeTimers({ toFake: ["Date"] });
+		// 03:30 local time occurs twice in Helsinki on this night
+		vi.setSystemTime(new Date("2026-10-25T01:30:00Z"));
+		const expiries: Date[] = [];
+		const { client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+			databaseHooks: {
+				verification: {
+					create: {
+						after: async (verification) => {
+							expiries.push(verification.expiresAt);
+						},
+					},
+				},
+			},
+		});
+		await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+
+		expect(expiries).toHaveLength(1);
+		expect(expiries[0]!.getTime()).toBeGreaterThan(Date.now());
+	});
+
 	it("should allow user info override during sign in", async () => {
 		let state = "";
 		const headers = new Headers();
@@ -1419,36 +1594,176 @@ describe("Multi-client ID support — other widened providers", () => {
 		["apple", appleConfig, "apple-web"],
 		["facebook", facebookConfig, "fb-web"],
 		["cognito", cognitoConfig, "cog-web"],
-	] as const)("%s uses the first entry of the clientId array for the auth URL", async (provider, config, firstId) => {
-		const { client } = await getTestInstance(
-			{ socialProviders: { [provider]: config } },
-			{ disableTestUser: true },
-		);
+	] as const)(
+		"%s uses the first entry of the clientId array for the auth URL",
+		async (provider, config, firstId) => {
+			const { client } = await getTestInstance(
+				{ socialProviders: { [provider]: config } },
+				{ disableTestUser: true },
+			);
 
-		const res = await client.signIn.social({
-			provider,
-			callbackURL: "/callback",
-		});
+			const res = await client.signIn.social({
+				provider,
+				callbackURL: "/callback",
+			});
 
-		expect(res.data?.url).toContain(firstId);
-	});
+			expect(res.data?.url).toContain(firstId);
+		},
+	);
 
 	it.each([
 		["apple", { ...appleConfig, clientId: [] as string[] }],
 		["facebook", { ...facebookConfig, clientId: [] as string[] }],
 		["cognito", { ...cognitoConfig, clientId: [] as string[] }],
-	] as const)("%s rejects an empty clientId array", async (provider, config) => {
+	] as const)(
+		"%s rejects an empty clientId array",
+		async (provider, config) => {
+			const { client } = await getTestInstance(
+				{ socialProviders: { [provider]: config } },
+				{ disableTestUser: true },
+			);
+
+			const res = await client.signIn.social({
+				provider,
+				callbackURL: "/callback",
+			});
+
+			expect(res.error?.status).toBe(500);
+		},
+	);
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12293
+ */
+describe("Kakao Provider — id_token sign-in", async () => {
+	const kakaoKeyPair = await generateKeyPair("RS256");
+	const kakaoJwk = await exportJWK(kakaoKeyPair.publicKey);
+	const kakaoKid = "test-kakao-kid";
+	kakaoJwk.kid = kakaoKid;
+	kakaoJwk.alg = "RS256";
+	kakaoJwk.use = "sig";
+
+	const restApiKey = "kakao-rest-api-key";
+	const nativeAppKey = "kakao-native-app-key";
+	const kakaoUserId = "4012345678";
+	const email = "kakao-user@example.com";
+	const kakaoConfig = {
+		clientId: [restApiKey, nativeAppKey],
+		clientSecret: "kakao-secret",
+	};
+
+	// Tokens from Kakao's native SDKs carry the native app key as `aud`.
+	const signIdToken = () =>
+		new SignJWT({
+			nickname: "Kakao User",
+			picture: "https://example.com/kakao-thumbnail.jpg",
+			email,
+		})
+			.setProtectedHeader({ alg: "RS256", kid: kakaoKid })
+			.setIssuedAt()
+			.setIssuer("https://kauth.kakao.com")
+			.setAudience(nativeAppKey)
+			.setSubject(kakaoUserId)
+			.setExpirationTime("1h")
+			.sign(kakaoKeyPair.privateKey);
+
+	beforeAll(() => {
+		mswServer.use(
+			http.get("https://kauth.kakao.com/.well-known/jwks.json", async () =>
+				HttpResponse.json({ keys: [kakaoJwk] }),
+			),
+		);
+	});
+
+	it("creates an unverified user whose account ID is the Kakao user ID", async () => {
+		const { client, auth } = await getTestInstance(
+			{ socialProviders: { kakao: kakaoConfig } },
+			{ disableTestUser: true },
+		);
+		const idToken = await signIdToken();
+
+		const res = await client.signIn.social({
+			provider: "kakao",
+			idToken: { token: idToken },
+		});
+
+		expect(res.data?.redirect).toBe(false);
+		const data = res.data as {
+			user: { id: string; email: string; emailVerified: boolean };
+		};
+		expect(data.user.email).toBe(email);
+		// The ID token carries no email verification status.
+		expect(data.user.emailVerified).toBe(false);
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(data.user.id);
+		expect(accounts).toEqual([
+			expect.objectContaining({ providerId: "kakao", accountId: kakaoUserId }),
+		]);
+	});
+
+	it("does not link to an existing user with the same email", async () => {
+		const { client, auth } = await getTestInstance(
+			{
+				socialProviders: { kakao: kakaoConfig },
+				emailAndPassword: { enabled: true },
+			},
+			{ disableTestUser: true },
+		);
+		await auth.api.signUpEmail({
+			body: { email, password: "kakao-password-1", name: "Local User" },
+		});
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.updateUserByEmail(email, { emailVerified: true });
+		const idToken = await signIdToken();
+
+		const res = await client.signIn.social({
+			provider: "kakao",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error?.status).toBe(401);
+		expect(res.error?.code).toBe("OAUTH_LINK_ERROR");
+	});
+
+	it("links to an existing user with the same email when Kakao is trusted", async () => {
+		const { client, auth } = await getTestInstance(
+			{
+				socialProviders: { kakao: kakaoConfig },
+				emailAndPassword: { enabled: true },
+				account: { accountLinking: { trustedProviders: ["kakao"] } },
+			},
+			{ disableTestUser: true },
+		);
+		const { user } = await auth.api.signUpEmail({
+			body: { email, password: "kakao-password-1", name: "Local User" },
+		});
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.updateUserByEmail(email, { emailVerified: true });
+		const idToken = await signIdToken();
+
+		const res = await client.signIn.social({
+			provider: "kakao",
+			idToken: { token: idToken },
+		});
+
+		const data = res.data as { user: { id: string } };
+		expect(data.user.id).toBe(user.id);
+	});
+
+	it("uses the REST API key for the redirect flow", async () => {
 		const { client } = await getTestInstance(
-			{ socialProviders: { [provider]: config } },
+			{ socialProviders: { kakao: kakaoConfig } },
 			{ disableTestUser: true },
 		);
 
 		const res = await client.signIn.social({
-			provider,
+			provider: "kakao",
 			callbackURL: "/callback",
 		});
 
-		expect(res.error?.status).toBe(500);
+		expect(res.data?.url).toContain(`client_id=${restApiKey}`);
+		expect(res.data?.url).not.toContain(nativeAppKey);
 	});
 });
 
@@ -1900,6 +2215,106 @@ describe("Vercel Provider", async () => {
 			}),
 		);
 	});
+
+	it(
+		"creates a session through the built-in Vercel callback using workload OIDC",
+		mswServer.boundary(async () => {
+			const oidcAssertionType =
+				"urn:vercel:params:oauth:client-assertion-type:oidc-bearer";
+			const tokenRequest = vi.fn(async ({ request }: { request: Request }) => {
+				const body = new URLSearchParams(await request.text());
+				expect(body.get("grant_type")).toBe("authorization_code");
+				expect(body.get("client_id")).toBe("vercel-client");
+				expect(body.get("client_assertion")).toBe("workload-oidc-token");
+				expect(body.get("client_assertion_type")).toBe(oidcAssertionType);
+				expect(body.get("code_verifier")).toBeTruthy();
+				expect(body.get("redirect_uri")).toBe(
+					"http://localhost:3000/api/auth/callback/vercel",
+				);
+				expect(body.has("client_secret")).toBe(false);
+				expect(request.headers.has("authorization")).toBe(false);
+				return HttpResponse.json({
+					access_token: "user-access-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			});
+			mswServer.use(
+				http.post("https://api.vercel.com/login/oauth/token", tokenRequest),
+				http.get(
+					"https://api.vercel.com/login/oauth/userinfo",
+					({ request }) => {
+						expect(request.headers.get("authorization")).toBe(
+							"Bearer user-access-token",
+						);
+						return HttpResponse.json({
+							sub: "vercel-user",
+							email: "user@example.com",
+							email_verified: true,
+							name: "Vercel User",
+						});
+					},
+				),
+			);
+
+			const getOidcToken = vi.fn(async () => "workload-oidc-token");
+			const { client, auth, cookieSetter } = await getTestInstance(
+				{
+					socialProviders: {
+						vercel: {
+							clientId: "vercel-client",
+							tokenEndpointAuth: {
+								method: "custom",
+								async customizeRequest({ body }) {
+									body.set("client_id", "vercel-client");
+									body.set("client_assertion", await getOidcToken());
+									body.set("client_assertion_type", oidcAssertionType);
+								},
+							},
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const headers = new Headers();
+			const signIn = await client.signIn.social({
+				provider: "vercel",
+				callbackURL: "/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			expect(signIn.error).toBeNull();
+			expect(getOidcToken).not.toHaveBeenCalled();
+			const authorizationUrl = new URL(signIn.data!.url!);
+			const callbackUrl = new URL(
+				authorizationUrl.searchParams.get("redirect_uri")!,
+			);
+			callbackUrl.searchParams.set(
+				"state",
+				authorizationUrl.searchParams.get("state")!,
+			);
+			callbackUrl.searchParams.set("code", "authorization-code");
+
+			const response = await auth.handler(
+				new Request(callbackUrl, { headers }),
+			);
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toBe("/dashboard");
+			expect(tokenRequest).toHaveBeenCalledOnce();
+			expect(getOidcToken).toHaveBeenCalledOnce();
+			cookieSetter(headers)({ response });
+
+			const session = await client.getSession({ fetchOptions: { headers } });
+			expect(session.data?.user.email).toBe("user@example.com");
+			expect(session.data?.user.emailVerified).toBe(true);
+			const ctx = await auth.$context;
+			const accounts = await ctx.internalAdapter.findAccounts(
+				session.data!.user.id,
+			);
+			expect(accounts).toHaveLength(1);
+			expect(accounts[0]?.providerId).toBe("vercel");
+			expect(accounts[0]?.accountId).toBe("vercel-user");
+		}),
+	);
 
 	it("should configure Vercel provider correctly", async () => {
 		const { auth } = await getTestInstance({
@@ -2713,6 +3128,9 @@ describe("Microsoft Provider", async () => {
 	});
 });
 
+/**
+ * @see https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/#choose-a-flow
+ */
 describe("Cloudflare Provider", () => {
 	let userInfoRequestCount = 0;
 
@@ -2935,7 +3353,23 @@ describe("Cloudflare Provider", () => {
 		expect(accounts[0]?.accountId).toBe("cloudflare_user_123");
 	});
 
-	it("should support client_secret_post token authentication", async () => {
+	it.each([
+		{
+			name: "deprecated option",
+			authentication: { tokenEndpointAuthMethod: "client_secret_post" },
+		},
+		{
+			name: "new option",
+			authentication: { tokenEndpointAuth: { method: "client_secret_post" } },
+		},
+		{
+			name: "new option precedence",
+			authentication: {
+				tokenEndpointAuthMethod: "client_secret_basic",
+				tokenEndpointAuth: { method: "client_secret_post" },
+			},
+		},
+	] as const)("uses $name authentication", async ({ authentication }) => {
 		mswServer.use(
 			http.post(
 				"https://dash.cloudflare.com/oauth2/token",
@@ -2965,7 +3399,7 @@ describe("Cloudflare Provider", () => {
 					cloudflare: {
 						clientId: "cloudflare-post-client-id",
 						clientSecret: "cloudflare-post-client-secret",
-						tokenEndpointAuthMethod: "client_secret_post",
+						...authentication,
 					},
 				},
 			},

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import type { ExpectedSchema } from "@better-auth/core/db/internal";
 import { diffSchema } from "@better-auth/core/db/internal";
 import type { KyselyPlugin } from "kysely";
@@ -13,7 +14,8 @@ import {
 	sql,
 } from "kysely";
 import { Pool } from "pg";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { NodeSqliteDialect } from "./node-sqlite-dialect";
 import {
 	findSchemaProblems,
 	getPostgresSchema,
@@ -109,6 +111,79 @@ describe("toPhysicalSchema", () => {
 			),
 		).toHaveProperty("TWO_FACTOR.fields.USER_ID");
 	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11346
+ */
+it("validates SQLite without dialect introspection", async ({
+	onTestFinished,
+}) => {
+	const sqlite = new DatabaseSync(":memory:");
+	sqlite.exec(
+		"CREATE TABLE widget (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL)",
+	);
+	const sqliteDialect = new NodeSqliteDialect({ database: sqlite });
+	const rejectIntrospection = async (): Promise<never> => {
+		throw new Error("D1_ERROR: not authorized: SQLITE_AUTH");
+	};
+	const getTables = vi.fn(rejectIntrospection);
+	vi.spyOn(sqliteDialect, "createIntrospector").mockReturnValue({
+		getMetadata: rejectIntrospection,
+		getSchemas: async () => [],
+		getTables,
+	});
+	const db = new Kysely<unknown>({ dialect: sqliteDialect });
+	onTestFinished(() => db.destroy());
+
+	await expect(
+		findSchemaProblems(db, "sqlite", {
+			widget: { fields: { name: { type: "string" } } },
+		}),
+	).resolves.toEqual([]);
+	await expect(
+		findSchemaProblems(db, "sqlite", {
+			missingWidget: { fields: { name: { type: "string" } } },
+		}),
+	).resolves.toEqual([{ kind: "missing-table", table: "missingWidget" }]);
+	expect(getTables).toHaveBeenCalledTimes(2);
+});
+
+/**
+ * @see https://www.sqlite.org/lang_createtable.html#rowids_and_the_integer_primary_key
+ */
+it("distinguishes generated and required SQLite primary keys", async ({
+	onTestFinished,
+}) => {
+	const sqlite = new DatabaseSync(":memory:");
+	sqlite.exec(
+		"CREATE TABLE generated (seq INTEGER PRIMARY KEY NOT NULL, id TEXT NOT NULL UNIQUE)",
+	);
+	sqlite.exec(
+		"CREATE TABLE descending (seq INTEGER PRIMARY KEY DESC NOT NULL, id TEXT NOT NULL UNIQUE)",
+	);
+	sqlite.exec(
+		"CREATE TABLE without_rowid (seq INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE) WITHOUT ROWID",
+	);
+	const db = new Kysely<unknown>({
+		dialect: new NodeSqliteDialect({ database: sqlite }),
+	});
+	onTestFinished(() => db.destroy());
+
+	const findings = await findSchemaProblems(db, "sqlite", {
+		generated: { fields: {} },
+		descending: { fields: {} },
+		without_rowid: { fields: {} },
+	});
+
+	expect(findings).toEqual([
+		{ kind: "unexpected-required-column", table: "descending", column: "seq" },
+		{
+			kind: "unexpected-required-column",
+			table: "without_rowid",
+			column: "seq",
+		},
+	]);
 });
 
 /**
@@ -208,6 +283,58 @@ describe("PostgreSQL schema validation", () => {
 			findSchemaProblems(db, "postgres", {
 				account: { fields: { providerId: { type: "string" } } },
 				session: { fields: { token: { type: "string" } } },
+			}),
+		).resolves.toEqual([]);
+	});
+
+	it("ignores schemas outside the search path that are dropped during the check", async ({
+		onTestFinished,
+	}) => {
+		const pool = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
+		const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
+		const other = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
+		const dropped = `ba_dropped_${randomUUID().replaceAll("-", "")}`;
+		const table = `ba_missing_${randomUUID().replaceAll("-", "")}`;
+		onTestFinished(async () => {
+			await db.destroy();
+			await other.query(`DROP SCHEMA IF EXISTS "${dropped}" CASCADE`);
+			await other.end();
+		});
+		await other.query(`CREATE SCHEMA "${dropped}"`);
+		await other.query(`CREATE TABLE "${dropped}".session (id serial)`);
+
+		// The snapshot predates the drop, so the catalog still lists the dropped
+		// table while lookups by name no longer find it.
+		await pool.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+		try {
+			await pool.query("SELECT 1");
+			await other.query(`DROP SCHEMA "${dropped}" CASCADE`);
+			await expect(
+				findSchemaProblems(db, "postgres", { [table]: { fields: {} } }),
+			).resolves.toEqual([{ kind: "missing-table", table }]);
+		} finally {
+			await pool.query("ROLLBACK");
+		}
+	});
+
+	it("finds tables stored as foreign tables", async ({ onTestFinished }) => {
+		const pool = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
+		const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
+		const name = `ba_foreign_${randomUUID().replaceAll("-", "")}`;
+		onTestFinished(async () => {
+			await pool.query(`DROP FOREIGN DATA WRAPPER IF EXISTS "${name}" CASCADE`);
+			await db.destroy();
+		});
+		// A wrapper without a handler is enough to declare a foreign table.
+		await pool.query(`CREATE FOREIGN DATA WRAPPER "${name}"`);
+		await pool.query(`CREATE SERVER "${name}" FOREIGN DATA WRAPPER "${name}"`);
+		await pool.query(
+			`CREATE FOREIGN TABLE "${name}" (id text NOT NULL, token text NOT NULL) SERVER "${name}"`,
+		);
+
+		await expect(
+			findSchemaProblems(db, "postgres", {
+				[name]: { fields: { token: { type: "string" } } },
 			}),
 		).resolves.toEqual([]);
 	});

@@ -4,14 +4,19 @@ import * as os from "node:os";
 import * as path from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
-import prompts from "prompts";
+import type { PromptObject } from "prompts";
 import yoctoSpinner from "yocto-spinner";
+import * as z from "zod";
+import { requireInteractive } from "../utils/interactive";
+import { prompt } from "../utils/prompt";
 
 const PROTOCOL_URL = "https://agent-auth-protocol.com";
 const AGENT_CLI_PKG = "@auth/agent-cli";
 const AGENT_PLUGIN_PKG = "@better-auth/agent-auth";
 const DEFAULT_REGISTRY = "https://agent-auth.directory";
 const SKILLS_REPO = "better-auth/agent-auth";
+
+const jsonObjectSchema = z.record(z.string(), z.unknown());
 
 interface McpEntry {
 	command: string;
@@ -20,17 +25,27 @@ interface McpEntry {
 
 function cancelled(): never {
 	console.log(chalk.yellow("\n✋ Setup cancelled."));
-	process.exit(0);
+	process.exit(130);
 }
 
-function check<T>(value: T | undefined): T {
-	if (value === undefined || value === null) cancelled();
-	return value;
+// The setup has no flags for its answers, so it only runs in a terminal.
+const aiPrompt = {
+	action: "run auth ai",
+	input: "a terminal",
+};
+
+// Ctrl+C or Escape on any prompt ends the setup instead of answering it.
+function ask(question: PromptObject) {
+	return prompt(question, {
+		...aiPrompt,
+		onCancel: cancelled,
+	});
 }
 
 // ── Main ──────────────────────────────────────────
 
 async function aiAction() {
+	requireInteractive(aiPrompt);
 	console.log(
 		"\n" +
 			[
@@ -41,7 +56,7 @@ async function aiAction() {
 	);
 	console.log();
 
-	const { setup } = await prompts({
+	const { setup } = await ask({
 		type: "select",
 		name: "setup",
 		message: "What would you like to do?",
@@ -59,8 +74,6 @@ async function aiAction() {
 		],
 	});
 
-	check(setup);
-
 	if (setup === "client") {
 		await setupClient();
 	} else {
@@ -71,7 +84,7 @@ async function aiAction() {
 // ── Client Integration ────────────────────────────
 
 async function setupClient() {
-	const { method } = await prompts({
+	const { method } = await ask({
 		type: "select",
 		name: "method",
 		message: "How do you want to integrate?",
@@ -89,8 +102,6 @@ async function setupClient() {
 		],
 	});
 
-	check(method);
-
 	if (method === "mcp") {
 		await setupMcp();
 	} else {
@@ -101,7 +112,7 @@ async function setupClient() {
 // ── Server Selection ──────────────────────────────
 
 async function setupServerSelection() {
-	const { implementation } = await prompts({
+	await ask({
 		type: "select",
 		name: "implementation",
 		message: "Choose an implementation",
@@ -114,15 +125,13 @@ async function setupServerSelection() {
 		],
 	});
 
-	check(implementation);
-
 	await setupServer();
 }
 
 // ── MCP Server Setup ──────────────────────────────
 
 async function setupMcp() {
-	const { tool } = await prompts({
+	const { tool } = await ask({
 		type: "select",
 		name: "tool",
 		message: "Which AI tool?",
@@ -136,7 +145,6 @@ async function setupMcp() {
 			{ title: "Other", value: "other" },
 		],
 	});
-	check(tool);
 
 	let scope: "project" | "global" = "global";
 
@@ -145,7 +153,7 @@ async function setupMcp() {
 			tool === "cursor" ? ".cursor/mcp.json" : ".vscode/mcp.json";
 		const hintGlobal =
 			tool === "cursor" ? "~/.cursor/mcp.json" : "user settings";
-		const { s } = await prompts({
+		const { s } = await ask({
 			type: "select",
 			name: "s",
 			message: "Where should it be configured?",
@@ -162,11 +170,10 @@ async function setupMcp() {
 				},
 			],
 		});
-		check(s);
 		scope = s;
 	}
 
-	const { registryUrl } = await prompts({
+	const { registryUrl } = await ask({
 		type: "text",
 		name: "registryUrl",
 		message: "Registry URL",
@@ -194,15 +201,11 @@ async function setupMcp() {
 		`${chalk.cyan("GitHub")}  https://github.com/better-auth/agent-auth`,
 	]);
 
-	console.log(
-		chalk.green("\n✔ ") +
-			chalk.bold("Done! ") +
-			"Restart your AI tool to connect.\n",
-	);
+	finish(`${chalk.bold("Done! ")}Restart your AI tool to connect.`);
 }
 
 async function setupClaudeCode(args: string[]) {
-	const { scope } = await prompts({
+	const { scope } = await ask({
 		type: "select",
 		name: "scope",
 		message: "Where should it be configured?",
@@ -219,7 +222,6 @@ async function setupClaudeCode(args: string[]) {
 			},
 		],
 	});
-	check(scope);
 
 	const cmdParts = [
 		"claude",
@@ -237,7 +239,7 @@ async function setupClaudeCode(args: string[]) {
 	console.log(chalk.bold.white("\nRun this command:"));
 	console.log(chalk.cyan(`  ${cmd}\n`));
 
-	const { run } = await prompts({
+	const { run } = await ask({
 		type: "confirm",
 		name: "run",
 		message: "Run it now?",
@@ -255,6 +257,7 @@ async function setupClaudeCode(args: string[]) {
 			s.success("Added to Claude Code.");
 		} catch {
 			s.stop();
+			process.exitCode = 1;
 			console.log(chalk.yellow("⚠ Could not run the command automatically."));
 			console.log(chalk.gray("  Run the command above manually."));
 		}
@@ -272,7 +275,7 @@ async function setupOpenCode(args: string[]) {
 		enabled: true,
 	};
 
-	const { write } = await prompts({
+	const { write } = await ask({
 		type: "confirm",
 		name: "write",
 		message: `Write config to ${chalk.cyan(display)}?`,
@@ -280,39 +283,43 @@ async function setupOpenCode(args: string[]) {
 	});
 
 	if (write) {
-		writeOpenCodeConfig(configPath, openCodeEntry);
-		console.log(chalk.green(`\n✓ Written to ${display}`));
-	} else {
-		const json = JSON.stringify(
-			{
-				$schema: "https://opencode.ai/config.json",
-				mcp: { "agent-auth": openCodeEntry },
-			},
-			null,
-			2,
-		);
-		console.log(chalk.bold.white("\nAdd to your opencode.json:\n"));
+		if (writeOpenCodeConfig(configPath, openCodeEntry)) {
+			console.log(chalk.green(`\n✓ Written to ${display}`));
+			return;
+		}
+		process.exitCode = 1;
 		console.log(
-			json
-				.split("\n")
-				.map((line) => chalk.cyan(`  ${line}`))
-				.join("\n"),
+			chalk.yellow(
+				`\n⚠ Could not read ${display} as a JSON object, so it was left unchanged.`,
+			),
 		);
-		console.log();
 	}
+
+	const json = JSON.stringify(
+		{
+			$schema: "https://opencode.ai/config.json",
+			mcp: { "agent-auth": openCodeEntry },
+		},
+		null,
+		2,
+	);
+	console.log(chalk.bold.white("\nAdd to your opencode.json:\n"));
+	console.log(
+		json
+			.split("\n")
+			.map((line) => chalk.cyan(`  ${line}`))
+			.join("\n"),
+	);
+	console.log();
 }
 
 function writeOpenCodeConfig(
 	configPath: string,
 	entry: { type: string; command: string; args: string[]; enabled: boolean },
 ) {
-	let config: { mcp?: Record<string, unknown>; [key: string]: unknown } = {};
-	if (fs.existsSync(configPath)) {
-		try {
-			config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-		} catch {
-			/* start fresh */
-		}
+	const config = readJsonConfig(configPath);
+	if (!config) {
+		return false;
 	}
 	const mcp = (config.mcp as Record<string, unknown> | undefined) ?? {};
 	mcp["agent-auth"] = entry;
@@ -320,6 +327,7 @@ function writeOpenCodeConfig(
 	config.mcp = mcp;
 
 	fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+	return true;
 }
 
 async function writeMcpConfigInteractive(
@@ -336,7 +344,7 @@ async function writeMcpConfigInteractive(
 	}
 
 	const display = displayPath(configPath, scope);
-	const { write } = await prompts({
+	const { write } = await ask({
 		type: "confirm",
 		name: "write",
 		message: `Write config to ${chalk.cyan(display)}?`,
@@ -344,17 +352,24 @@ async function writeMcpConfigInteractive(
 	});
 
 	if (write) {
-		writeMcpConfig(configPath, entry);
-		console.log(chalk.green(`\n✓ Written to ${display}`));
-	} else {
-		showJsonConfig(entry);
+		if (writeMcpConfig(configPath, entry)) {
+			console.log(chalk.green(`\n✓ Written to ${display}`));
+			return;
+		}
+		process.exitCode = 1;
+		console.log(
+			chalk.yellow(
+				`\n⚠ Could not read ${display} as a JSON object, so it was left unchanged.`,
+			),
+		);
 	}
+	showJsonConfig(entry);
 }
 
 // ── CLI Setup ─────────────────────────────────────
 
 async function setupCli() {
-	const { installCli } = await prompts({
+	const { installCli } = await ask({
 		type: "confirm",
 		name: "installCli",
 		message: `Install ${chalk.cyan(AGENT_CLI_PKG)} globally?`,
@@ -372,6 +387,7 @@ async function setupCli() {
 			s.success(`${AGENT_CLI_PKG} installed globally.`);
 		} catch {
 			s.stop();
+			process.exitCode = 1;
 			console.log(
 				chalk.yellow("⚠ Could not install automatically. Run manually:"),
 			);
@@ -410,17 +426,13 @@ async function setupCli() {
 		`${chalk.cyan("GitHub")}  https://github.com/better-auth/agent-auth`,
 	]);
 
-	console.log(
-		chalk.green("\n✔ ") +
-			chalk.bold("Ready. ") +
-			"Run auth-agent --help to see all commands.\n",
-	);
+	finish(`${chalk.bold("Ready. ")}Run auth-agent --help to see all commands.`);
 }
 
 // ── Server Setup ──────────────────────────────────
 
 async function setupServer() {
-	const { source } = await prompts({
+	const { source } = await ask({
 		type: "select",
 		name: "source",
 		message: "How do you want to define capabilities?",
@@ -442,17 +454,15 @@ async function setupServer() {
 			},
 		],
 	});
-	check(source);
 
-	const { name } = await prompts({
+	const { name } = await ask({
 		type: "text",
 		name: "name",
 		message: "What's your service called?",
 		validate: (v: string) => (v?.trim() ? true : "Name is required."),
 	});
-	check(name);
 
-	const { description } = await prompts({
+	const { description } = await ask({
 		type: "text",
 		name: "description",
 		message: `Short description ${chalk.dim("(press Enter to skip)")}`,
@@ -462,28 +472,26 @@ async function setupServer() {
 
 	let sourceUrl: string | undefined;
 	if (source === "openapi") {
-		const { url } = await prompts({
+		const { url } = await ask({
 			type: "text",
 			name: "url",
 			message: `OpenAPI spec URL ${chalk.dim("(e.g. https://api.example.com/openapi.json)")}`,
 			validate: (v: string) => (v?.trim() ? true : "URL is required."),
 		});
-		check(url);
 		sourceUrl = url.trim();
 	} else if (source === "mcp") {
-		const { url } = await prompts({
+		const { url } = await ask({
 			type: "text",
 			name: "url",
 			message: `MCP server URL ${chalk.dim("(e.g. https://api.example.com/mcp)")}`,
 			validate: (v: string) => (v?.trim() ? true : "URL is required."),
 		});
-		check(url);
 		sourceUrl = url.trim();
 	}
 
 	const code = generateServerCode(name.trim(), desc, source, sourceUrl);
 
-	const { write } = await prompts({
+	const { write } = await ask({
 		type: "confirm",
 		name: "write",
 		message: "Generate an auth config file?",
@@ -491,7 +499,7 @@ async function setupServer() {
 	});
 
 	if (write) {
-		const { filePath } = await prompts({
+		const { filePath } = await ask({
 			type: "text",
 			name: "filePath",
 			message: "File path",
@@ -501,7 +509,7 @@ async function setupServer() {
 		const target = filePath?.trim() || "lib/auth.ts";
 
 		if (fs.existsSync(target)) {
-			const { overwrite } = await prompts({
+			const { overwrite } = await ask({
 				type: "confirm",
 				name: "overwrite",
 				message: `${chalk.yellow(target)} already exists. Overwrite?`,
@@ -635,17 +643,26 @@ function showServerOutro() {
 		`  ${chalk.cyan("GitHub")}  https://github.com/better-auth/agent-auth`,
 	);
 
-	console.log(
-		chalk.green("\n✔ ") +
-			chalk.bold("Server scaffolded. ") +
-			"Follow the steps above to finish setup.\n",
+	finish(
+		`${chalk.bold("Server scaffolded. ")}Follow the steps above to finish setup.`,
 	);
 }
 
 // ── Helpers ───────────────────────────────────────
 
+// A failed step already set the exit code, so the outro must not claim success.
+function finish(summary: string) {
+	if (process.exitCode) {
+		console.log(
+			`${chalk.yellow("\n⚠ ")}${chalk.bold("Setup incomplete. ")}Finish the failed steps above manually.\n`,
+		);
+		return;
+	}
+	console.log(`${chalk.green("\n✔ ")}${summary}\n`);
+}
+
 async function offerSkillInstall(skillName: string) {
-	const { installSkill } = await prompts({
+	const { installSkill } = await ask({
 		type: "confirm",
 		name: "installSkill",
 		message: `Install the ${chalk.cyan(skillName)} skill for your coding agents?`,
@@ -665,6 +682,7 @@ async function offerSkillInstall(skillName: string) {
 		s.success(`${skillName} skill installed.`);
 	} catch {
 		s.stop();
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow("⚠ Could not install automatically. Run manually:"),
 		);
@@ -717,14 +735,26 @@ function getMcpConfigPath(
 	}
 }
 
+/**
+ * Returns `null` when the file exists but is not a JSON object, such as JSONC,
+ * because overwriting it would drop entries we could not read.
+ */
+function readJsonConfig(configPath: string) {
+	if (!fs.existsSync(configPath)) {
+		return {};
+	}
+	try {
+		const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+		return jsonObjectSchema.safeParse(raw).data ?? null;
+	} catch {
+		return null;
+	}
+}
+
 function writeMcpConfig(configPath: string, entry: McpEntry) {
-	let config: Record<string, unknown> = {};
-	if (fs.existsSync(configPath)) {
-		try {
-			config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-		} catch {
-			/* start fresh */
-		}
+	const config = readJsonConfig(configPath);
+	if (!config) {
+		return false;
 	}
 	const servers =
 		(config.mcpServers as Record<string, unknown> | undefined) ?? {};
@@ -736,6 +766,7 @@ function writeMcpConfig(configPath: string, entry: McpEntry) {
 		fs.mkdirSync(dir, { recursive: true });
 	}
 	fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+	return true;
 }
 
 function displayPath(filePath: string, scope: "project" | "global"): string {

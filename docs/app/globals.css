@@ -6,7 +6,6 @@
 @source "../components/**/*.{ts,tsx}";
 @source "../node_modules/fumadocs-ui/dist/**/*.js";
 
-/* biome-ignore lint/correctness/noInvalidPositionAtImportRule: <explanation> */
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -946,7 +945,8 @@ figure.shiki > div:first-child,
 }
 
 /* Hide TOC scroll indicator dot */
-.docs-layout #nd-toc
+.docs-layout
+	#nd-toc
 	div.absolute.size-1.bg-fd-primary.rounded-full.transition-transform,
 .docs-layout
 	[data-toc-popover]

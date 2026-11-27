@@ -21,6 +21,7 @@ export interface GitHubRepository {
 
 export interface GitHubReader {
 	getPullRequest(number: number): Promise<GitHubPullRequest | null>;
+	getCommitAuthors(sha: string): Promise<string[]>;
 	getReleaseBody(tag: string): Promise<string | null>;
 }
 
@@ -31,6 +32,25 @@ interface GitHubReaderOptions {
 	fetch?: typeof fetch;
 	requestTimeoutMs?: number;
 }
+
+// GitHub resolves co-author trailers to accounts, including private emails.
+const commitAuthorsQuery = `
+	query ($owner: String!, $repo: String!, $oid: GitObjectID!) {
+		repository(owner: $owner, name: $repo) {
+			object(oid: $oid) {
+				... on Commit {
+					authors(first: 100) {
+						nodes {
+							user {
+								login
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+`;
 
 export function parseGitHubRepository(value: string): GitHubRepository {
 	const [owner, repo, ...extra] = value.split("/");
@@ -104,6 +124,25 @@ export function createGitHubReader(options: GitHubReaderOptions): GitHubReader {
 				changedFiles: files.map((file) => file.filename),
 				diff,
 			};
+		},
+
+		async getCommitAuthors(sha) {
+			const response = await octokit.graphql<{
+				repository: {
+					object: {
+						authors: { nodes: { user: { login: string } | null }[] };
+					} | null;
+				};
+			}>(commitAuthorsQuery, {
+				owner,
+				repo,
+				oid: sha,
+			});
+			const nodes = response.repository.object?.authors.nodes ?? [];
+			// Bot accounts are not contributors.
+			return nodes.flatMap(({ user }) =>
+				user && !user.login.endsWith("[bot]") ? [user.login] : [],
+			);
 		},
 
 		async getReleaseBody(tag) {

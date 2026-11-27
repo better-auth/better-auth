@@ -2,6 +2,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { runWithTransaction } from "@better-auth/core/context";
 import type { Session } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
@@ -15,6 +16,10 @@ import {
 } from "../../cookies";
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+} from "../../utils/password";
 import type { AccessControl, ArrayElement } from "../access";
 import type { defaultStatements } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
@@ -426,6 +431,10 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 
+			if (ctx.body.password) {
+				assertPasswordNotTooLong(ctx, ctx.body.password);
+			}
+
 			const existUser =
 				await ctx.context.internalAdapter.findUserByEmail(email);
 			if (existUser) {
@@ -434,37 +443,41 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
-			const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
-				{
-					...userData,
-					email: email,
-					name: ctx.body.name,
-					role:
-						requestedRole !== undefined
-							? parseRoles(requestedRole as string | string[])
-							: (opts?.defaultRole ?? "user"),
-				},
-				{ method: "admin" },
-			);
+			// Hash before creating the user so a hasher rejection leaves no orphan user.
+			const hashedPassword = ctx.body.password
+				? await ctx.context.password.hash(ctx.body.password)
+				: undefined;
+			const user = await runWithTransaction(ctx.context.adapter, async () => {
+				const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
+					{
+						...userData,
+						email: email,
+						name: ctx.body.name,
+						role:
+							requestedRole !== undefined
+								? parseRoles(requestedRole as string | string[])
+								: (opts?.defaultRole ?? "user"),
+					},
+					{ method: "admin" },
+				);
 
-			if (!user) {
-				throw APIError.from(
-					"INTERNAL_SERVER_ERROR",
-					ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
-				);
-			}
-			// Only create credential account if password is provided
-			if (ctx.body.password) {
-				const hashedPassword = await ctx.context.password.hash(
-					ctx.body.password,
-				);
-				await ctx.context.internalAdapter.linkAccount({
-					providerId: "credential",
-					accountId: user.id,
-					password: hashedPassword,
-					userId: user.id,
-				});
-			}
+				if (!user) {
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
+					);
+				}
+				// Only create credential account if password is provided
+				if (hashedPassword !== undefined) {
+					await ctx.context.internalAdapter.linkAccount({
+						providerId: "credential",
+						accountId: user.id,
+						password: hashedPassword,
+						userId: user.id,
+					});
+				}
+				return user;
+			});
 			return ctx.json({
 				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
 			});
@@ -557,6 +570,14 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 				throw APIError.from(
 					"BAD_REQUEST",
 					ADMIN_ERROR_CODES.PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER,
+				);
+			}
+
+			// The id is the row's primary key and the identity `adminUserIds` checks against.
+			if (hasDataKey("id")) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ADMIN_ERROR_CODES.USER_ID_CANNOT_BE_UPDATED,
 				);
 			}
 
@@ -656,6 +677,24 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 						);
 					}
 					updateData.email = email;
+				}
+			}
+
+			// A phone number is a sign-in method, so changing it needs `user:set-phone`.
+			if (hasDataKey("phoneNumber") || hasDataKey("phoneNumberVerified")) {
+				const canSetPhone = hasPermission({
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["set-phone"],
+					},
+				});
+				if (!canSetPhone) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PHONE_NUMBER,
+					);
 				}
 			}
 
@@ -1465,8 +1504,11 @@ export const revokeUserSession = (opts: AdminOptions) =>
 			}
 
 			await ctx.context.internalAdapter.deleteSession(ctx.body.sessionToken);
+			const remaining = await ctx.context.internalAdapter.findSession(
+				ctx.body.sessionToken,
+			);
 			return ctx.json({
-				success: true,
+				success: !remaining,
 			});
 		},
 	);
@@ -1633,8 +1675,17 @@ export const removeUser = (opts: AdminOptions) =>
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
-			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
 			await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
+			const remaining = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (remaining) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.FAILED_TO_DELETE_USER,
+				);
+			}
+			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
 			return ctx.json({
 				success: true,
 			});
@@ -1714,16 +1765,8 @@ export const setUserPassword = (opts: AdminOptions) =>
 			}
 
 			const { newPassword, userId } = ctx.body;
-			const minPasswordLength = ctx.context.password.config.minPasswordLength;
-			if (newPassword.length < minPasswordLength) {
-				ctx.context.logger.warn("Password is too short");
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-			if (newPassword.length > maxPasswordLength) {
-				ctx.context.logger.warn("Password is too long");
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-			}
+			assertPasswordNotTooShort(ctx, newPassword);
+			assertPasswordNotTooLong(ctx, newPassword);
 			const user = await ctx.context.internalAdapter.findUserById(userId);
 			if (!user) {
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);

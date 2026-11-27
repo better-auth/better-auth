@@ -1,8 +1,12 @@
+import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterAuthPlugin, Status } from "better-auth";
-import { BetterAuthError } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import { createAuthMiddleware, isAPIError } from "better-auth/api";
 import { statusCodes } from "better-call";
 import { normalizeSCIMUserEntraCompatibilityRequestBody } from "./active-normalization";
+import {
+	canonicalizeSCIMPatchRequestBody,
+	canonicalizeSCIMResourceAttributeNames,
+} from "./attribute-names";
 import type { SCIMOptions } from "./configuration";
 import {
 	areValidSCIMScopes,
@@ -19,6 +23,7 @@ import {
 	getSCIMServiceProviderConfig,
 } from "./discovery";
 import {
+	canonicalizeSCIMGroupPatchValue,
 	createSCIMGroup,
 	deleteSCIMGroup,
 	getSCIMGroup,
@@ -37,13 +42,18 @@ import {
 	resolveManagedConnectionOptions,
 	SCIM_MANAGED_CONNECTION_ID_PREFIX,
 } from "./managed-connections";
+import { stripSCIMResourceNullAttributes } from "./null-attributes";
 import {
 	createReconcileSCIMProjectionEndpoint,
 	createSCIMProjectionCoordinator,
 } from "./projection";
 import { createSCIMError } from "./scim-error";
 import { SCIM_MEDIA_TYPE } from "./scim-metadata";
-import { assertNativeSCIMTransactions } from "./transaction";
+import {
+	SCIM_NATIVE_TRANSACTION_MESSAGE,
+	supportsNativeSCIMTransactions,
+} from "./transaction";
+import { canonicalizeSCIMUserPatchValue } from "./user-patch";
 import {
 	createSCIMUser,
 	deleteSCIMUser,
@@ -90,7 +100,7 @@ function isAPIErrorLike(value: unknown): value is APIErrorLike {
 	);
 }
 function createSCIMErrorResponse(
-	status: "BAD_REQUEST" | "UNSUPPORTED_MEDIA_TYPE",
+	status: "BAD_REQUEST" | "UNSUPPORTED_MEDIA_TYPE" | "NOT_IMPLEMENTED",
 	detail: string,
 	scimType?: "invalidSyntax" | "invalidValue",
 ) {
@@ -257,11 +267,22 @@ function createSCIMPlugin(options: SCIMOptions) {
 		id: "scim",
 		version: PACKAGE_VERSION,
 		init(ctx) {
-			assertNativeSCIMTransactions(ctx.adapter);
+			if (supportsNativeSCIMTransactions(ctx.adapter)) return;
+			ctx.logger.error(
+				`${SCIM_NATIVE_TRANSACTION_MESSAGE} SCIM routes and SCIM connection changes will return 501.`,
+			);
 		},
-		async onRequest(request) {
+		async onRequest(request, ctx) {
 			const path = new URL(request.url).pathname;
 			if (!path.includes("/scim/v2/")) return;
+			if (!supportsNativeSCIMTransactions(ctx.adapter)) {
+				return {
+					response: createSCIMErrorResponse(
+						"NOT_IMPLEMENTED",
+						SCIM_NATIVE_TRANSACTION_MESSAGE,
+					),
+				};
+			}
 			if (request.method === "DELETE") {
 				return {
 					request: new Request(request.url, {
@@ -311,6 +332,33 @@ function createSCIMPlugin(options: SCIMOptions) {
 					(["PUT", "PATCH"].includes(request.method) &&
 						!path.endsWith("/Groups")));
 			let normalizedBody = body;
+			if (isUserMutation || isGroupMutation) {
+				try {
+					normalizedBody =
+						request.method === "PATCH"
+							? canonicalizeSCIMPatchRequestBody(
+									body,
+									isUserMutation
+										? canonicalizeSCIMUserPatchValue
+										: canonicalizeSCIMGroupPatchValue,
+								)
+							: stripSCIMResourceNullAttributes(
+									canonicalizeSCIMResourceAttributeNames(
+										isUserMutation ? "User" : "Group",
+										body,
+									),
+								);
+				} catch (error) {
+					if (!isAPIError(error)) throw error;
+					return {
+						response: createSCIMErrorResponse(
+							"BAD_REQUEST",
+							error.message,
+							"invalidSyntax",
+						),
+					};
+				}
+			}
 			if (isGroupMutation) {
 				const groupNormalization = normalizeMicrosoftEntraGroupSchema(
 					normalizedBody,
@@ -401,6 +449,17 @@ function createSCIMPlugin(options: SCIMOptions) {
 			};
 		},
 		hooks: {
+			before: [
+				{
+					matcher: (context) => context.path?.startsWith("/scim/v2") === true,
+					handler: createAuthMiddleware(async (ctx) => {
+						if (supportsNativeSCIMTransactions(ctx.context.adapter)) return;
+						throw createSCIMError("NOT_IMPLEMENTED", {
+							detail: SCIM_NATIVE_TRANSACTION_MESSAGE,
+						});
+					}),
+				},
+			],
 			after: [
 				{
 					matcher: (context) => context.path?.startsWith("/scim/v2") === true,
@@ -911,4 +970,5 @@ export type {
 	SCIMManagedCredentialStatus,
 } from "./managed-connections";
 export { SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT } from "./managed-connections";
+export { SCIM_REQUIRES_NATIVE_TRANSACTIONS } from "./transaction";
 export { acquireActiveSCIMUserLink };

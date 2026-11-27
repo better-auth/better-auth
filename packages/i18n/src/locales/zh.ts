@@ -8,6 +8,7 @@ export const zh: TranslationDictionary = {
 	FAILED_TO_CREATE_USER: "创建用户失败",
 	FAILED_TO_CREATE_SESSION: "创建会话失败",
 	FAILED_TO_UPDATE_USER: "更新用户失败",
+	FAILED_TO_DELETE_USER: "删除用户失败",
 	FAILED_TO_GET_SESSION: "获取会话失败",
 	INVALID_PASSWORD: "密码无效",
 	INVALID_EMAIL: "邮箱无效",

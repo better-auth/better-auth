@@ -1,5 +1,85 @@
 # @better-auth/kysely-adapter
 
+## 1.7.28
+
+## 1.7.27
+
+## 1.7.26
+
+## 1.7.25
+
+## 1.7.24
+
+## 1.7.23
+
+### Patch Changes
+
+- [#12530](https://github.com/better-auth/better-auth/pull/12530) [`9dc64fb`](https://github.com/better-auth/better-auth/commit/9dc64fbba9c39c10bc809e54a46a9ae21e4e15d4) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The Kysely adapter on PostgreSQL now saves `json` fields whose value is an array. Before, writing an array such as `[{ type: "payment" }]` to a plugin's `json` field failed with `invalid input syntax for type json`. JSON objects were not affected.
+
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#11912](https://github.com/better-auth/better-auth/pull/11912) [`5c12074`](https://github.com/better-auth/better-auth/commit/5c120747e4d5ab37f1fa71fee11653ade82739bc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you use PostgreSQL and other schemas in the same database are dropped while Better Auth reads the database, for example one schema per tenant or parallel test runs, the startup schema check and `npx auth@latest migrate` no longer fail intermittently with `schema "…" does not exist` or `relation "…" does not exist`. The startup schema check now reads only the schemas on the connection's `search_path`, plus any schema set with `schemaName` or a schema plugin, and `migrate` reads only the schema it migrates. Before, both read every schema in the database. If no other schemas change while Better Auth reads the database, nothing changes for you.
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+### Patch Changes
+
+- [#12220](https://github.com/better-auth/better-auth/pull/12220) [`fc2e00b`](https://github.com/better-auth/better-auth/commit/fc2e00bb4fd65e80246fdefcd5d8d5b1ea9d1512) Thanks [@bytaesu](https://github.com/bytaesu)! - On MySQL with `generateId: "serial"`, a `create` that fails because the table reports no auto-increment id no longer leaves the inserted row behind, so retrying does not fail with a duplicate key error.
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - On MySQL with `generateId: "serial"`, resolve the created row from the id reported by the INSERT itself instead of re-reading `LAST_INSERT_ID()` on a separate connection, and fail instead of guessing when no auto-increment id is reported.
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+## 1.7.11
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11490](https://github.com/better-auth/better-auth/pull/11490) [`9904b29`](https://github.com/better-auth/better-auth/commit/9904b29ece82ecf10f0bf5aa4b194d77aea2e898) Thanks [@aryan1306](https://github.com/aryan1306)! - Allow concurrent D1 queries on a shared auth instance with Kysely 0.29, avoiding cross-request I/O errors.
+
+## 1.7.7
+
+### Patch Changes
+
+- [#11495](https://github.com/better-auth/better-auth/pull/11495) [`07bdf7e`](https://github.com/better-auth/better-auth/commit/07bdf7ecafb75222f7a24e0733cc3b056f84e9e8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Kysely `consumeOne` now rejects a row if a concurrent write makes the original condition false. Previously, it could delete that row after waiting for the concurrent write. Consumption remains limited to one row.
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11366](https://github.com/better-auth/better-auth/pull/11366) [`d41e2ca`](https://github.com/better-auth/better-auth/commit/d41e2caf1a5bf09afc916087b739e0a5d00ab5c5) Thanks [@bytaesu](https://github.com/bytaesu)! - Use targeted PRAGMA queries when a Kysely dialect cannot introspect Cloudflare D1.
+
+- [#11333](https://github.com/better-auth/better-auth/pull/11333) [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve logical model identity when a custom model name matches another schema key.
+
+- [#11374](https://github.com/better-auth/better-auth/pull/11374) [`2b13e01`](https://github.com/better-auth/better-auth/commit/2b13e011b4a4f8be4e4c39573b9e962cbabb2094) Thanks [@bytaesu](https://github.com/bytaesu)! - Correctly detect database-generated SQLite primary keys during schema validation, including `INTEGER PRIMARY KEY` columns without `AUTOINCREMENT`.
+
 ## 1.7.5
 
 ### Patch Changes

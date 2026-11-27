@@ -1,5 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { SecondaryStorage } from "@better-auth/core/db";
+import { redactSecondaryStorageErrors } from "@better-auth/core/db/internal";
+import { isWorkerd } from "@better-auth/core/env";
 import { mapConcurrent } from "@better-auth/core/utils/async";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { PredefinedApiKeyOptions } from "./routes";
@@ -159,12 +161,14 @@ function serializeApiKey(apiKey: ApiKey): string {
  * Deserialize API key from storage
  */
 function deserializeApiKey(data: unknown): ApiKey | null {
-	if (!data || typeof data !== "string") {
+	if (!data) {
 		return null;
 	}
 
 	try {
-		const parsed = JSON.parse(data);
+		const parsed = (
+			typeof data === "string" ? JSON.parse(data) : data
+		) as ApiKey;
 		return {
 			...parsed,
 			createdAt: new Date(parsed.createdAt),
@@ -172,7 +176,7 @@ function deserializeApiKey(data: unknown): ApiKey | null {
 			expiresAt: parsed.expiresAt ? new Date(parsed.expiresAt) : null,
 			lastRefillAt: parsed.lastRefillAt ? new Date(parsed.lastRefillAt) : null,
 			lastRequest: parsed.lastRequest ? new Date(parsed.lastRequest) : null,
-		} as ApiKey;
+		};
 	} catch {
 		return null;
 	}
@@ -186,7 +190,7 @@ function getStorageInstance(
 	opts: PredefinedApiKeyOptions,
 ): SecondaryStorage | null {
 	if (opts.customStorage) {
-		return opts.customStorage as SecondaryStorage;
+		return redactSecondaryStorageErrors(opts.customStorage as SecondaryStorage);
 	}
 	return ctx.context.secondaryStorage || null;
 }
@@ -236,37 +240,108 @@ async function getApiKeyByIdFromStorage(
 
 /**
  * Serializes reference-list mutations per `refKey` within a single process.
- * Each new mutation chains onto the previous one for the same key, so the
- * read/modify/write below never interleaves with another mutation of the same
- * list. This closes the lost-update race in secondary-storage-only mode, where
- * the serialized list is the source of truth for listing.
+ * Healthy mutations of the same key run in arrival order. This closes the
+ * lost-update race in secondary-storage-only mode, where the serialized list
+ * is the source of truth for listing.
  *
  * Limitation: the lock is in-process only. Across multiple server instances
  * sharing one secondary storage, concurrent writers can still lose updates.
  * Secondary storage with `fallbackToDatabase` avoids this by treating the list
  * as an invalidate-only cache with the database as the source of truth.
+ *
+ * On Cloudflare Workers, I/O from a request that has ended never settles, so an
+ * unbounded wait on a prior holder would hang later writers for the same key.
+ * There, a waiter proceeds once the holder's `holdUntil` deadline passes,
+ * accepting the same lost-update risk as multi-instance writers.
+ *
  * FIXME(api-key-reflist-durable): on `next`, drop the source-of-truth reference
  * list entirely and make the database authoritative for listing, removing this
  * in-process lock.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/12397
  */
-const refListLocks = new Map<string, Promise<unknown>>();
+const refListLocks = new Map<string, RefListLockQueue>();
 
-function withRefListLock<T>(
+const REF_LIST_LOCK_HOLD_MS = 5_000;
+
+type RefListLock = {
+	wake?: () => void;
+};
+
+type RefListLockQueue = {
+	writers: Set<RefListLock>;
+	holdUntil: number;
+};
+
+/**
+ * On Workers each waiter owns its timer and can advance the queue if the
+ * current writer stalls. A queued request can end before it even starts,
+ * so it gets a deadline as soon as it reaches the front.
+ */
+async function waitForRefListLock(
+	queue: RefListLockQueue,
+	writer: RefListLock,
+) {
+	const bounded = isWorkerd();
+	for (;;) {
+		const holder = queue.writers.values().next().value;
+		if (holder === writer) return true;
+		if (!holder || !queue.writers.has(writer)) return false;
+
+		const remaining = queue.holdUntil - Date.now();
+		if (bounded && remaining <= 0) {
+			queue.writers.delete(holder);
+			queue.holdUntil = Date.now() + REF_LIST_LOCK_HOLD_MS;
+			continue;
+		}
+
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		await new Promise<void>((resolve) => {
+			writer.wake = resolve;
+			if (bounded) {
+				timer = setTimeout(resolve, remaining);
+			}
+		});
+		clearTimeout(timer);
+		writer.wake = undefined;
+	}
+}
+
+/** @internal Exported for unit tests. */
+export async function withRefListLock<T>(
 	refKey: string,
 	task: () => Promise<T>,
 ): Promise<T> {
-	const previous = refListLocks.get(refKey) ?? Promise.resolve();
-	const run = previous.then(task, task);
-	// The map holds the `.finally()` chain, so the cleanup must compare against
-	// that same promise (not `run`) or the entry is never removed and the map
-	// grows without bound.
-	const tracked = run.finally(() => {
-		if (refListLocks.get(refKey) === tracked) {
-			refListLocks.delete(refKey);
+	let queue = refListLocks.get(refKey);
+	if (!queue) {
+		queue = {
+			writers: new Set(),
+			holdUntil: Date.now() + REF_LIST_LOCK_HOLD_MS,
+		};
+		refListLocks.set(refKey, queue);
+	}
+
+	const writer: RefListLock = {};
+	queue.writers.add(writer);
+	if (!(await waitForRefListLock(queue, writer))) {
+		// A request that resumes after losing its turn must queue again.
+		return withRefListLock(refKey, task);
+	}
+
+	queue.holdUntil = Date.now() + REF_LIST_LOCK_HOLD_MS;
+	try {
+		return await task();
+	} finally {
+		if (queue.writers.delete(writer)) {
+			const next = queue.writers.values().next().value;
+			if (next) {
+				queue.holdUntil = Date.now() + REF_LIST_LOCK_HOLD_MS;
+				next.wake?.();
+			} else {
+				refListLocks.delete(refKey);
+			}
 		}
-	});
-	refListLocks.set(refKey, tracked);
-	return tracked;
+	}
 }
 
 /**

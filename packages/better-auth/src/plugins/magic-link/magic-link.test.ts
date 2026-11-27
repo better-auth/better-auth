@@ -1,3 +1,6 @@
+import type { DBTransactionAdapter } from "@better-auth/core/db/adapter";
+import { memoryAdapter } from "@better-auth/memory-adapter";
+import { hex } from "@better-auth/utils/hex";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -631,9 +634,10 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		const hashedToken = await defaultKeyHasher(verificationEmail.token);
-		const storedToken =
-			await internalAdapter.findVerificationValue(hashedToken);
-		expect(storedToken).toBeDefined();
+		const storedToken = await internalAdapter.findVerificationValue(
+			`magic-link:${hashedToken}`,
+		);
+		expect(storedToken).not.toBeNull();
 		const response2 = await auth.api.signInMagicLink({
 			body: {
 				email: testUser.email,
@@ -674,9 +678,10 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		const hashedToken = `${verificationEmail.token}hashed`;
-		const storedToken =
-			await internalAdapter.findVerificationValue(hashedToken);
-		expect(storedToken).toBeDefined();
+		const storedToken = await internalAdapter.findVerificationValue(
+			`magic-link:${hashedToken}`,
+		);
+		expect(storedToken).not.toBeNull();
 		const response2 = await auth.api.signInMagicLink({
 			body: {
 				email: testUser.email,
@@ -923,5 +928,146 @@ describe("magic link send origin/CSRF protection", async () => {
 		const response = await auth.handler(legitimateRequest);
 		expect(response.status).toBe(200);
 		expect(sendMagicLink).toHaveBeenCalledTimes(1);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10916
+ */
+describe("magic link callback URL encoding", async () => {
+	let sent: VerificationEmail = { email: "", token: "", url: "" };
+	const { auth, testUser } = await getTestInstance({
+		plugins: [
+			magicLink({
+				async sendMagicLink(data) {
+					sent = data;
+				},
+			}),
+		],
+	});
+	const signIn = async (body: Record<string, string>) => {
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/magic-link", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			}),
+		);
+		expect(response.status).toBe(200);
+	};
+	const verifyAndGetLocation = async (url: string) => {
+		const res = await auth.handler(new Request(url));
+		expect(res.status).toBe(302);
+		return new URL(res.headers.get("location")!);
+	};
+
+	it("should preserve the callback URL when signing in an existing user", async () => {
+		const callbackURL =
+			"http://localhost:3000/cb?sig=a%2Bb&returnTo=https%3A%2F%2Fexample.com%2Fresume%3Fstate%3Dabc%26step%3D2";
+		await signIn({
+			email: testUser.email,
+			callbackURL,
+		});
+		const location = await verifyAndGetLocation(sent.url);
+		expect(location.href).toBe(callbackURL);
+	});
+
+	it("should preserve the welcome URL when signing up a new user", async () => {
+		const newUserCallbackURL =
+			"http://localhost:3000/welcome?sig=a%2Bb&returnTo=https%3A%2F%2Fexample.com%2Fresume%3Fstate%3Dabc%26step%3D2";
+		await signIn({
+			email: "new-user-10916@email.com",
+			callbackURL: "http://localhost:3000/cb",
+			newUserCallbackURL,
+		});
+		const location = await verifyAndGetLocation(sent.url);
+		expect(location.href).toBe(newUserCallbackURL);
+	});
+
+	it("should preserve error callback query values when verification fails", async () => {
+		await signIn({
+			email: testUser.email,
+			callbackURL: "http://localhost:3000/cb",
+			errorCallbackURL:
+				"http://localhost:3000/error?sig=a%2Bb&returnTo=https%3A%2F%2Fexample.com%2Fresume%3Fstate%3Dabc%26step%3D2",
+		});
+		const url = new URL(sent.url);
+		url.searchParams.set("token", "invalid-token");
+		const location = await verifyAndGetLocation(url.toString());
+		expect(location.origin).toBe("http://localhost:3000");
+		expect(location.pathname).toBe("/error");
+		expect(Object.fromEntries(location.searchParams)).toEqual({
+			sig: "a+b",
+			returnTo: "https://example.com/resume?state=abc&step=2",
+			error: "INVALID_TOKEN",
+		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12071
+ */
+describe("magic link with ObjectId primary keys", () => {
+	const objectId = () => hex.encode(crypto.getRandomValues(new Uint8Array(12)));
+	// Stands in for Prisma on MongoDB with `@default(auto()) @db.ObjectId`:
+	// the database assigns missing ids and rejects any id that is not 24 hex.
+	const rejectNonObjectIds = <T extends DBTransactionAdapter>(
+		adapter: T,
+	): T => ({
+		...adapter,
+		create: (args) => {
+			const id = args.data.id ?? objectId();
+			if (!/^[0-9a-f]{24}$/.test(String(id))) {
+				throw new Error(`Malformed ObjectID: ${id}`);
+			}
+			return adapter.create({
+				...args,
+				data: { ...args.data, id },
+				forceAllowId: true,
+			});
+		},
+	});
+
+	it.each([
+		["database-generated ids", false],
+		["a custom ObjectId generator", () => objectId()],
+	] as const)("signs in an unverified user with %s", async (_, generateId) => {
+		let token = "";
+		const { auth } = await getTestInstance({
+			database: (options) => {
+				const adapter = memoryAdapter({
+					user: [],
+					session: [],
+					account: [],
+					verification: [],
+				})(options);
+				return {
+					...rejectNonObjectIds(adapter),
+					options: { ...adapter.options!, usesObjectIdKey: () => true },
+					transaction: (callback) =>
+						adapter.transaction((trx) => callback(rejectNonObjectIds(trx))),
+				};
+			},
+			advanced: { database: { generateId } },
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						token = data.token;
+					},
+				}),
+			],
+		});
+		const email = "objectid-unverified@test.com";
+		await auth.api.signUpEmail({
+			body: { email, name: "Unverified", password: "password123" },
+		});
+		await auth.api.signInMagicLink({ body: { email }, headers: new Headers() });
+
+		const result = await auth.api.magicLinkVerify({
+			query: { token },
+			headers: new Headers(),
+		});
+
+		expect(result.user.emailVerified).toBe(true);
 	});
 });

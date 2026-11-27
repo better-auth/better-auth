@@ -1,6 +1,16 @@
-import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import type { SecondaryStorage } from "@better-auth/core/db";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
+import { emailOTP } from "../email-otp";
 import { phoneNumber } from ".";
 import { phoneNumberClient } from "./client";
 
@@ -149,9 +159,26 @@ describe("consume phone-number OTP", async () => {
 		).toHaveLength(0);
 		expect(
 			await (await auth.$context).internalAdapter.findVerificationValue(
-				phoneNumber,
+				`phone-number-otp-${phoneNumber}`,
 			),
 		).toBeNull();
+	});
+
+	it("keeps a reset request from replacing another number's code", async () => {
+		const phoneNumber = "+251911121302";
+		const lookalike = `${phoneNumber}-request-password-reset`;
+		await client.phoneNumber.sendOtp({ phoneNumber: lookalike });
+
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+
+		await expect(
+			auth.api.consumePhoneNumberOTP({
+				body: {
+					phoneNumber: lookalike,
+					code: otp,
+				},
+			}),
+		).resolves.toEqual({ status: true });
 	});
 
 	it("is exposed through the server API only", async () => {
@@ -662,7 +689,7 @@ describe("verify phone-number race condition protection", async () => {
 			const result = await (
 				originalFind as (...args: unknown[]) => Promise<unknown>
 			)(identifier, ...rest);
-			if (identifier === phoneNumber) {
+			if (identifier === `phone-number-otp-${phoneNumber}`) {
 				entered++;
 				if (entered >= 2) releaseBarrier();
 				await barrier;
@@ -689,7 +716,9 @@ describe("verify phone-number race condition protection", async () => {
 		}
 
 		const verificationValue =
-			await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			await authCtx.internalAdapter.findVerificationValue(
+				`phone-number-otp-${phoneNumber}`,
+			);
 		expect(verificationValue).toBeNull();
 	});
 
@@ -706,8 +735,9 @@ describe("verify phone-number race condition protection", async () => {
 			expect(res.error?.status).toBe(400);
 			expect(res.error?.message).toBe("Invalid OTP");
 
-			const stored =
-				await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			const stored = await authCtx.internalAdapter.findVerificationValue(
+				`phone-number-otp-${phoneNumber}`,
+			);
 			expect(stored).not.toBeNull();
 			const [storedValue, attempts] = stored!.value.split(":");
 			// The original code survives each wrong attempt so the user can
@@ -723,8 +753,9 @@ describe("verify phone-number race condition protection", async () => {
 		expect(res.error).toBe(null);
 		expect(res.data?.status).toBe(true);
 
-		const consumed =
-			await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+		const consumed = await authCtx.internalAdapter.findVerificationValue(
+			`phone-number-otp-${phoneNumber}`,
+		);
 		expect(consumed).toBeNull();
 	});
 });
@@ -859,11 +890,213 @@ describe("reset password flow attempts", async () => {
 	});
 });
 
+describe("reset password guess accounting", async () => {
+	let otp = "";
+	let resetOtp = "";
+	const { auth, client } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					sendPasswordResetOTP({ code }) {
+						resetOtp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			disableTestUser: true,
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	it("does not check guesses while another request holds the code", async () => {
+		const phoneNumber = "+251911121320";
+		const identifier = `phone-number-reset-${phoneNumber}`;
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await client.phoneNumber.verify({ phoneNumber, code: otp });
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		const wrong = resetOtp === "000000" ? "111111" : "000000";
+		const guesses = [wrong, wrong, wrong, wrong, resetOtp];
+
+		// Another request holds the code, as a consume in flight on another server
+		// would, until every wrong guess is answered. A guess that reaches the
+		// password hash was checked without the code, so it waits for that.
+		const context = await auth.$context;
+		const { internalAdapter } = context;
+		const consumeVerificationValue = internalAdapter.consumeVerificationValue;
+		let held = true;
+		let answered = 0;
+		let releaseWrongGuesses: () => void = () => {};
+		const wrongGuessesAnswered = new Promise<void>((resolve) => {
+			releaseWrongGuesses = resolve;
+		});
+		const passwordHash = context.password.hash;
+		const hash = vi
+			.spyOn(context.password, "hash")
+			.mockImplementation(async (password) => {
+				await wrongGuessesAnswered;
+				held = false;
+				return passwordHash(password);
+			});
+		const consume = vi
+			.spyOn(internalAdapter, "consumeVerificationValue")
+			.mockImplementation(async (value) =>
+				value === identifier && held ? null : consumeVerificationValue(value),
+			);
+		const burst = await Promise.all(
+			guesses.map(async (otp) => {
+				const res = await client.phoneNumber.resetPassword({
+					phoneNumber,
+					otp,
+					newPassword: "new-password",
+				});
+				if (++answered === guesses.length - 1) releaseWrongGuesses();
+				return res;
+			}),
+		);
+		consume.mockRestore();
+		hash.mockRestore();
+
+		expect(burst.map((res) => res.error?.message)).toEqual(
+			guesses.map(() => "Invalid OTP"),
+		);
+		const stored = await internalAdapter.findVerificationValue(identifier);
+		expect(stored?.value).toBe(`${resetOtp}:0`);
+	});
+});
+
+describe("reset password with requireVerification", async () => {
+	let otp = "";
+	const sendPasswordResetOTP = vi.fn();
+	const { auth, client, db } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					sendPasswordResetOTP,
+					requireVerification: true,
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			disableTestUser: true,
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	beforeEach(() => {
+		sendPasswordResetOTP.mockClear();
+	});
+
+	it("does not reset the password through an unverified number", async () => {
+		const phoneNumber = "+251911121340";
+		const email = "unverified-phone@test.com";
+		const signUp = await client.signUp.email({
+			email,
+			password: "old-password",
+			name: "unverified",
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "id", value: signUp.data!.user.id }],
+			update: { phoneNumber },
+		});
+
+		const requested = await client.phoneNumber.requestPasswordReset({
+			phoneNumber,
+		});
+		expect(requested.data?.status).toBe(true);
+		expect(sendPasswordResetOTP).not.toHaveBeenCalled();
+
+		const stored = await (
+			await auth.$context
+		).internalAdapter.findVerificationValue(
+			`phone-number-reset-${phoneNumber}`,
+		);
+		const reset = await client.phoneNumber.resetPassword({
+			phoneNumber,
+			otp: stored!.value.split(":")[0]!,
+			newPassword: "new-password",
+		});
+		expect(reset.error?.code).toBe("PHONE_NUMBER_PENDING_VERIFICATION");
+		const signIn = await client.signIn.email({
+			email,
+			password: "old-password",
+		});
+		expect(signIn.error).toBeNull();
+	});
+
+	it("does not add a password to a passwordless account through an unverified number", async () => {
+		const phoneNumber = "+251911121342";
+		const user = await db.create<{ id: string }>({
+			model: "user",
+			data: {
+				name: "passwordless",
+				email: "passwordless-phone@test.com",
+				phoneNumber,
+			},
+		});
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		const stored = await (
+			await auth.$context
+		).internalAdapter.findVerificationValue(
+			`phone-number-reset-${phoneNumber}`,
+		);
+
+		const reset = await client.phoneNumber.resetPassword({
+			phoneNumber,
+			otp: stored!.value.split(":")[0]!,
+			newPassword: "new-password",
+		});
+
+		expect(reset.error?.code).toBe("PHONE_NUMBER_PENDING_VERIFICATION");
+		expect(
+			await (await auth.$context).internalAdapter.findCredentialAccount(
+				user.id,
+			),
+		).toBeNull();
+	});
+
+	it("resets the password through a verified number", async () => {
+		const phoneNumber = "+251911121341";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await client.phoneNumber.verify({ phoneNumber, code: otp });
+
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		expect(sendPasswordResetOTP).toHaveBeenCalledOnce();
+		const reset = await client.phoneNumber.resetPassword({
+			phoneNumber,
+			otp: sendPasswordResetOTP.mock.calls[0]![0].code,
+			newPassword: "new-password",
+		});
+		expect(reset.error).toBeNull();
+	});
+});
+
 describe("reset password session revocation", async () => {
 	let otp = "";
 	let resetOtp = "";
 
-	const { client, sessionSetter } = await getTestInstance(
+	const { auth, client, sessionSetter } = await getTestInstance(
 		{
 			emailAndPassword: {
 				enabled: true,
@@ -939,6 +1172,69 @@ describe("reset password session revocation", async () => {
 			},
 		});
 		expect(sessionAfter.data).toBe(null);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11597
+	 */
+	it("keeps the old password and sessions when session revocation fails", async () => {
+		const phoneNumber = "+251911000001";
+		const headers = new Headers();
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await client.phoneNumber.verify(
+			{ phoneNumber, code: otp },
+			{ onSuccess: sessionSetter(headers) },
+		);
+		const ctx = await auth.$context;
+		const revoke = vi
+			.spyOn(ctx.internalAdapter, "deleteUserSessions")
+			.mockRejectedValue(new Error("session store unavailable"));
+
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		const resetRes = await client.phoneNumber.resetPassword({
+			phoneNumber,
+			otp: resetOtp,
+			newPassword: "new-secure-password",
+		});
+		revoke.mockRestore();
+
+		expect(resetRes.error?.status).toBe(500);
+		const signInRes = await client.signIn.phoneNumber({
+			phoneNumber,
+			password: "new-secure-password",
+		});
+		expect(signInRes.error).not.toBeNull();
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user).toBeTruthy();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10632
+	 */
+	it("leaves the OTP usable when the new password is rejected", async () => {
+		const phoneNumber = "+251911000002";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await client.phoneNumber.verify({ phoneNumber, code: otp });
+		const ctx = await auth.$context;
+		const hash = vi
+			.spyOn(ctx.password, "hash")
+			.mockRejectedValueOnce(new Error("password rejected"));
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		const resetWith = (newPassword: string) =>
+			client.phoneNumber.resetPassword({
+				phoneNumber,
+				otp: resetOtp,
+				newPassword,
+			});
+
+		expect((await resetWith("pwned-password")).error).not.toBeNull();
+		hash.mockRestore();
+		expect((await resetWith("safe-password")).data?.status).toBe(true);
+		const signInRes = await client.signIn.phoneNumber({
+			phoneNumber,
+			password: "safe-password",
+		});
+		expect(signInRes.data).not.toBeNull();
 	});
 });
 
@@ -1020,7 +1316,7 @@ describe("reset password onPasswordReset callback", async () => {
 
 describe("phone number verification requirement", async () => {
 	let otp = "";
-	const { client } = await getTestInstance(
+	const { client, db } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
@@ -1053,11 +1349,15 @@ describe("phone number verification requirement", async () => {
 	const testEmail = "test2@test.com";
 
 	it("should not allow sign in with unverified phone number and trigger OTP send", async () => {
-		await client.signUp.email({
+		const signUp = await client.signUp.email({
 			email: testEmail,
 			password: testPassword,
 			name: "test",
-			phoneNumber: testPhoneNumber,
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "id", value: signUp.data!.user.id }],
+			update: { phoneNumber: testPhoneNumber },
 		});
 		const signInRes = await client.signIn.phoneNumber({
 			phoneNumber: testPhoneNumber,
@@ -1066,6 +1366,325 @@ describe("phone number verification requirement", async () => {
 		expect(signInRes.error?.status).toBe(401);
 		expect(signInRes.error?.code).toMatch("PHONE_NUMBER_NOT_VERIFIED");
 		expect(otp).toHaveLength(6);
+	});
+});
+
+describe("phone number at user creation", () => {
+	const phoneNumberValue = "+251911121330";
+
+	it("rejects a phone number sent with email sign-up", async () => {
+		const { client, db } = await getTestInstance(
+			{
+				plugins: [phoneNumber()],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		const res = await client.signUp.email({
+			email: "claimant@test.com",
+			password: "password123",
+			name: "claimant",
+			phoneNumber: phoneNumberValue,
+		});
+
+		expect(res.error?.code).toBe("PHONE_NUMBER_CANNOT_BE_SET");
+		expect(
+			await db.findMany({
+				model: "user",
+				where: [{ field: "phoneNumber", value: phoneNumberValue }],
+			}),
+		).toHaveLength(0);
+	});
+
+	it("treats an empty phone number on email sign-up as no number", async () => {
+		const { client, db } = await getTestInstance(
+			{
+				plugins: [phoneNumber()],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		for (const email of ["empty-1@test.com", "empty-2@test.com"]) {
+			const res = await client.signUp.email({
+				email,
+				password: "password123",
+				name: "empty",
+				phoneNumber: "",
+			});
+			expect(res.error).toBeNull();
+		}
+		expect(
+			await db.findMany({
+				model: "user",
+				where: [{ field: "phoneNumber", value: "" }],
+			}),
+		).toHaveLength(0);
+	});
+
+	it("rejects a phone number sent with email OTP sign-in", async () => {
+		let otp = "";
+		const { auth, db } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber(),
+					emailOTP({
+						async sendVerificationOTP(data) {
+							otp = data.otp;
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const email = "otp-claimant@test.com";
+		await auth.api.sendVerificationOTP({
+			body: {
+				email,
+				type: "sign-in",
+			},
+		});
+
+		await expect(
+			auth.api.signInEmailOTP({
+				body: {
+					email,
+					otp,
+					phoneNumber: phoneNumberValue,
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				code: "PHONE_NUMBER_CANNOT_BE_SET",
+			},
+		});
+		expect(
+			await db.findMany({
+				model: "user",
+				where: [{ field: "phoneNumber", value: phoneNumberValue }],
+			}),
+		).toHaveLength(0);
+	});
+
+	it("drops a phone number mapped from a social provider profile", async () => {
+		const email = "social-claimant@test.com";
+		const { auth, db } = await getTestInstance(
+			{
+				plugins: [phoneNumber()],
+				socialProviders: {
+					google: {
+						clientId: "test-client",
+						clientSecret: "test-secret",
+						verifyIdToken: async () => true,
+						mapProfileToUser: () => ({
+							phoneNumber: phoneNumberValue,
+						}),
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const claims = {
+			sub: "google-social-claimant",
+			email,
+			email_verified: true,
+			name: "Social Claimant",
+		};
+		const encode = (value: object) =>
+			Buffer.from(JSON.stringify(value)).toString("base64url");
+		const idToken = `${encode({ alg: "none" })}.${encode(claims)}.signature`;
+
+		const res = await auth.api.signInSocial({
+			body: {
+				provider: "google",
+				idToken: {
+					token: idToken,
+				},
+			},
+		});
+
+		expect(res).toMatchObject({
+			user: {
+				email,
+			},
+		});
+		const user = await db.findOne<{ phoneNumber: string | null }>({
+			model: "user",
+			where: [{ field: "email", value: email }],
+		});
+		expect(user?.phoneNumber ?? null).toBeNull();
+	});
+
+	it("still stores a number verified through the plugin", async () => {
+		let otp = "";
+		const { client, db } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							otp = code;
+						},
+						signUpOnVerification: {
+							getTempEmail(phoneNumber) {
+								return `temp-${phoneNumber}`;
+							},
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+		await client.phoneNumber.sendOtp({ phoneNumber: phoneNumberValue });
+
+		const res = await client.phoneNumber.verify({
+			phoneNumber: phoneNumberValue,
+			code: otp,
+		});
+
+		expect(res.error).toBeNull();
+		expect(
+			await db.findOne({
+				model: "user",
+				where: [{ field: "phoneNumber", value: phoneNumberValue }],
+			}),
+		).toMatchObject({
+			phoneNumberVerified: true,
+		});
+	});
+});
+
+/**
+ * @see https://owasp.org/www-community/attacks/Account_Takeover
+ */
+describe("phone number on account linking", () => {
+	const phoneNumberValue = "+251911121331";
+	const email = "linked@test.com";
+	const encode = (value: object) =>
+		Buffer.from(JSON.stringify(value)).toString("base64url");
+	const idToken = `${encode({ alg: "none" })}.${encode({
+		sub: "google-linked",
+		email,
+		email_verified: true,
+		name: "Linked",
+	})}.signature`;
+
+	const setup = async (mappedPhoneNumber = phoneNumberValue) => {
+		const { auth, db } = await getTestInstance(
+			{
+				plugins: [phoneNumber()],
+				account: {
+					accountLinking: {
+						updateUserInfoOnLink: true,
+					},
+				},
+				socialProviders: {
+					google: {
+						clientId: "test-client",
+						clientSecret: "test-secret",
+						verifyIdToken: async () => true,
+						mapProfileToUser: () => ({
+							phoneNumber: mappedPhoneNumber,
+						}),
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const ctx = await auth.$context;
+		const user = await ctx.internalAdapter.createUser(
+			{
+				email,
+				name: "Linked",
+				emailVerified: true,
+			},
+			{ method: "test" },
+		);
+		const link = () =>
+			auth.api.signInSocial({
+				body: {
+					provider: "google",
+					idToken: {
+						token: idToken,
+					},
+				},
+			});
+		const stored = () =>
+			db.findOne<{
+				phoneNumber: string | null;
+				phoneNumberVerified: boolean | null;
+			}>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+			});
+		return { ctx, user, link, stored };
+	};
+
+	it("does not store a number mapped from the linked provider profile", async () => {
+		const { link, stored } = await setup();
+
+		await link();
+
+		expect((await stored())?.phoneNumber ?? null).toBeNull();
+	});
+
+	it("keeps a verified number when the provider maps the same number", async () => {
+		const { ctx, user, link, stored } = await setup();
+		await ctx.internalAdapter.updateUser(user.id, {
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: true,
+		});
+
+		await link();
+
+		expect(await stored()).toMatchObject({
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: true,
+		});
+	});
+
+	it("keeps a verified number when the provider maps an empty number", async () => {
+		const { ctx, user, link, stored } = await setup("");
+		await ctx.internalAdapter.updateUser(user.id, {
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: true,
+		});
+
+		await link();
+
+		expect(await stored()).toMatchObject({
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: true,
+		});
+	});
+
+	it("control: stores a number written by server code outside a request", async () => {
+		const { ctx, user, stored } = await setup();
+
+		await ctx.internalAdapter.updateUser(user.id, {
+			phoneNumber: phoneNumberValue,
+		});
+
+		expect((await stored())?.phoneNumber).toBe(phoneNumberValue);
 	});
 });
 
@@ -1292,12 +1911,16 @@ describe("signUpOnVerification with additionalFields", async () => {
 
 describe("custom verifyOTP", async () => {
 	const mockVerifyOTP = vi.fn();
+	let resetOtp = "";
 
 	const { auth, client, sessionSetter } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
 					async sendOTP() {},
+					async sendPasswordResetOTP({ code }) {
+						resetOtp = code;
+					},
 					verifyOTP: mockVerifyOTP,
 					signUpOnVerification: {
 						getTempEmail(phoneNumber) {
@@ -1427,6 +2050,78 @@ describe("custom verifyOTP", async () => {
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
 	});
 
+	/** Signs up `phoneNumber` through the custom verifier and requests a reset. */
+	async function signUpAndRequestReset(phoneNumber: string) {
+		mockVerifyOTP.mockResolvedValueOnce(true);
+		await client.phoneNumber.verify({ phoneNumber, code: "123456" });
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		mockVerifyOTP.mockClear();
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10697
+	 */
+	describe("password reset", () => {
+		it("should use custom verifyOTP when resetting the password", async () => {
+			const phoneNumber = "+1222333444";
+			const newPassword = "new-password-123";
+			await signUpAndRequestReset(phoneNumber);
+			// The provider accepts a code that is not the stored one.
+			mockVerifyOTP.mockResolvedValueOnce(true);
+
+			const res = await client.phoneNumber.resetPassword({
+				phoneNumber,
+				otp: "999999",
+				newPassword,
+			});
+
+			expect(res.error).toBe(null);
+			expect(mockVerifyOTP).toHaveBeenCalledWith(
+				{ phoneNumber, code: "999999" },
+				expect.anything(),
+			);
+			const signIn = await client.signIn.phoneNumber({
+				phoneNumber,
+				password: newPassword,
+			});
+			expect(signIn.error).toBe(null);
+		});
+
+		it("should not spend the provider code when the new password is rejected", async () => {
+			const phoneNumber = "+1222333555";
+			await signUpAndRequestReset(phoneNumber);
+
+			const res = await client.phoneNumber.resetPassword({
+				phoneNumber,
+				otp: "999999",
+				newPassword: "short",
+			});
+
+			expect(res.error?.code).toBe("PASSWORD_TOO_SHORT");
+			expect(mockVerifyOTP).not.toHaveBeenCalled();
+		});
+
+		it("should reject a reset code that custom verifyOTP refuses", async () => {
+			const phoneNumber = "+1222333666";
+			await signUpAndRequestReset(phoneNumber);
+			// The stored code would pass the built-in check, so only the custom
+			// verifier can reject it.
+			mockVerifyOTP.mockResolvedValueOnce(false);
+
+			const res = await client.phoneNumber.resetPassword({
+				phoneNumber,
+				otp: resetOtp,
+				newPassword: "new-password-123",
+			});
+
+			expect(res.error?.code).toBe("INVALID_OTP");
+			expect(mockVerifyOTP).toHaveBeenCalledWith(
+				{ phoneNumber, code: resetOtp },
+				expect.anything(),
+			);
+		});
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9754
 	 */
@@ -1500,5 +2195,514 @@ describe("phone-number validateUserInfo provisioning gate", async () => {
 		});
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("phone_blocked");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
+describe("phone-number sign-in password length", async () => {
+	const hash = vi.fn(async (password: string) => `hashed:${password}`);
+	const verify = vi.fn(
+		async ({ hash, password }: { hash: string; password: string }) =>
+			hash === `hashed:${password}`,
+	);
+	const { auth } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: { hash, verify },
+		},
+		plugins: [phoneNumber()],
+	});
+
+	it("should reject a password longer than maxPasswordLength before hashing", async () => {
+		const { user } = await auth.api.signUpEmail({
+			body: {
+				email: "long-password@test.com",
+				password: "password",
+				name: "Long Password",
+			},
+		});
+		await (await auth.$context).internalAdapter.updateUser(user.id, {
+			phoneNumber: "+251911121314",
+		});
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.signInPhoneNumber({
+				body: {
+					phoneNumber: "+251911121314",
+					password: "x".repeat(129),
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+describe("updateUser with a request that has no body", async () => {
+	const { auth } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP() {},
+				}),
+			],
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it.each([undefined, "null", '"phoneNumber"'])(
+		"should answer with 400 when the body is %s",
+		async (body) => {
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/update-user", {
+					method: "POST",
+					headers: body
+						? {
+								"content-type": "application/json",
+							}
+						: undefined,
+					body,
+				}),
+			);
+
+			expect(response.status).toBe(400);
+		},
+	);
+});
+
+describe("phone-number verification rows", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10449
+	 */
+	it.for([
+		["send-otp", "phone-number-otp-"],
+		["request-password-reset", "phone-number-reset-"],
+		["sign-in", "phone-number-otp-"],
+	] as const)(
+		"keeps one row per identifier when %s is requested again",
+		async ([route, prefix]) => {
+			const { client, db } = await getTestInstance(
+				{
+					plugins: [
+						phoneNumber({
+							async sendOTP() {},
+							async sendPasswordResetOTP() {},
+							requireVerification: route === "sign-in",
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [phoneNumberClient()] } },
+			);
+			const number = "+15550000001";
+			const password = "password123";
+			const signUp = await client.signUp.email({
+				email: "rows@example.com",
+				password,
+				name: "rows",
+			});
+			await db.update({
+				model: "user",
+				where: [{ field: "id", value: signUp.data!.user.id }],
+				update: { phoneNumber: number },
+			});
+			const request = () => {
+				if (route === "send-otp") {
+					return client.phoneNumber.sendOtp({ phoneNumber: number });
+				}
+				if (route === "request-password-reset") {
+					return client.phoneNumber.requestPasswordReset({
+						phoneNumber: number,
+					});
+				}
+				return client.signIn.phoneNumber({ phoneNumber: number, password });
+			};
+			await request();
+			await request();
+
+			const rows = await db.findMany({
+				model: "verification",
+				where: [{ field: "identifier", value: `${prefix}${number}` }],
+			});
+			expect(rows).toHaveLength(1);
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10449
+	 */
+	it("reports an unregistered number when sign-up on verification is off", async () => {
+		let code = "";
+		const { client } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code: sent }) {
+							code = sent;
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [phoneNumberClient()] } },
+		);
+		const number = "+15550000002";
+		await client.phoneNumber.sendOtp({ phoneNumber: number });
+
+		const res = await client.phoneNumber.verify({ phoneNumber: number, code });
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PHONE_NUMBER_NOT_EXIST");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
+	it("accepts the newest code sent while a wrong guess is checked", async () => {
+		const number = "+15550000003";
+		const codes: string[] = [];
+		let sendDuringCheck = false;
+		const { client, auth } = await getTestInstance(
+			{
+				databaseHooks: {
+					verification: {
+						delete: {
+							// Runs once the wrong guess has consumed the stored code.
+							async after() {
+								if (!sendDuringCheck) return;
+								sendDuringCheck = false;
+								vi.setSystemTime(new Date("2026-01-01T00:00:02.000Z"));
+								await auth.api.sendPhoneNumberOTP({
+									body: { phoneNumber: number },
+								});
+								vi.setSystemTime(new Date("2026-01-01T00:00:03.000Z"));
+							},
+						},
+					},
+				},
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							codes.push(code);
+						},
+						signUpOnVerification: {
+							getTempEmail: (phoneNumber) => `${phoneNumber}@example.com`,
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [phoneNumberClient()] } },
+		);
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
+
+		sendDuringCheck = true;
+		vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
+		const guess = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[0] === "000000" ? "111111" : "000000",
+		});
+
+		expect(codes).toHaveLength(2);
+		expect(guess.error?.code).toBe("INVALID_OTP");
+		const latest = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[1]!,
+		});
+		expect(latest.data?.status).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
+	it("accepts the newest code sent while a wrong guess is checked in secondary storage", async () => {
+		const number = "+15550000006";
+		const codes: string[] = [];
+		const values = new Map<string, string>();
+		let onConsume: (() => Promise<void>) | undefined;
+		const secondaryStorage: SecondaryStorage = {
+			get: (key) => values.get(key) ?? null,
+			async getAndDelete(key) {
+				const value = values.get(key) ?? null;
+				values.delete(key);
+				const consumed = onConsume;
+				onConsume = undefined;
+				// Runs once the wrong guess has consumed the stored code.
+				await consumed?.();
+				return value;
+			},
+			increment: (key) => {
+				const value = Number(values.get(key) ?? 0) + 1;
+				values.set(key, String(value));
+				return value;
+			},
+			set: (key, value) => {
+				values.set(key, value);
+			},
+			delete: (key) => {
+				values.delete(key);
+			},
+		};
+		const { client, auth } = await getTestInstance(
+			{
+				secondaryStorage,
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							codes.push(code);
+						},
+						signUpOnVerification: {
+							getTempEmail: (phoneNumber) => `${phoneNumber}@example.com`,
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [phoneNumberClient()] } },
+		);
+		await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
+
+		onConsume = async () => {
+			await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
+		};
+		const guess = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[0] === "000000" ? "111111" : "000000",
+		});
+
+		expect(codes).toHaveLength(2);
+		expect(guess.error?.code).toBe("INVALID_OTP");
+		const stored = await (
+			await auth.$context
+		).internalAdapter.findVerificationValue(`phone-number-otp-${number}`);
+		expect(stored?.value).toBe(`${codes[1]}:0`);
+		const latest = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[1]!,
+		});
+		expect(latest.data?.status).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
+	it("keeps a code sent while an exhausted code is checked", async () => {
+		const number = "+15550000004";
+		const codes: string[] = [];
+		let sendDuringCheck = false;
+		const { client, auth } = await getTestInstance(
+			{
+				databaseHooks: {
+					verification: {
+						delete: {
+							async before() {
+								if (!sendDuringCheck) return;
+								sendDuringCheck = false;
+								await auth.api.sendPhoneNumberOTP({
+									body: { phoneNumber: number },
+								});
+							},
+						},
+					},
+				},
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							codes.push(code);
+						},
+						signUpOnVerification: {
+							getTempEmail: (phoneNumber) => `${phoneNumber}@example.com`,
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [phoneNumberClient()] } },
+		);
+		await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } });
+		const wrong = codes[0] === "000000" ? "111111" : "000000";
+		for (let i = 0; i < 3; i++) {
+			const res = await client.phoneNumber.verify({
+				phoneNumber: number,
+				code: wrong,
+			});
+			expect(res.error?.code).toBe("INVALID_OTP");
+		}
+
+		sendDuringCheck = true;
+		const exhausted = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: wrong,
+		});
+
+		expect(codes).toHaveLength(2);
+		expect(exhausted.error?.code).toBe("INVALID_OTP");
+		const latest = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[1]!,
+		});
+		expect(latest.data?.status).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11105
+	 */
+	it("keeps every delivered code valid when concurrent sends collide", async () => {
+		const number = "+15550000005";
+		let arrivals = 0;
+		let openBarrier: () => void = () => {};
+		const barrier = new Promise<void>((resolve) => {
+			openBarrier = resolve;
+		});
+		const codes: string[] = [];
+		const { client, auth } = await getTestInstance(
+			{
+				databaseHooks: {
+					verification: {
+						create: {
+							// Hold the first two inserts until both requests reach them.
+							async before() {
+								arrivals++;
+								if (arrivals === 2) openBarrier();
+								if (arrivals <= 2) await barrier;
+							},
+						},
+					},
+				},
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							codes.push(code);
+						},
+						signUpOnVerification: {
+							getTempEmail: (phoneNumber) => `${phoneNumber}@example.com`,
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [phoneNumberClient()] } },
+		);
+
+		await Promise.all([
+			auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } }),
+			auth.api.sendPhoneNumberOTP({ body: { phoneNumber: number } }),
+		]);
+
+		expect(codes).toHaveLength(2);
+		expect(codes[1]).toBe(codes[0]);
+		const res = await client.phoneNumber.verify({
+			phoneNumber: number,
+			code: codes[0]!,
+		});
+		expect(res.data?.status).toBe(true);
+	});
+});
+
+/**
+ * @see https://better-auth.com/docs/concepts/database#database-hooks
+ */
+describe("phone number OTP issuance vetoed by a verification hook", () => {
+	const phoneNumberValue = "+251911121314";
+
+	async function setup() {
+		const sendOTP = vi.fn();
+		const sendPasswordResetOTP = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+			plugins: [phoneNumber({ sendOTP, sendPasswordResetOTP })],
+		});
+		const ctx = await auth.$context;
+		const user = await ctx.internalAdapter.findUserByEmail(testUser.email);
+		await ctx.internalAdapter.updateUser(user!.user.id, {
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: true,
+		});
+		return { auth, sendOTP, sendPasswordResetOTP };
+	}
+
+	it("refuses to send a verification code that was not stored", async () => {
+		const { auth, sendOTP } = await setup();
+
+		const res = await auth.api.sendPhoneNumberOTP({
+			body: { phoneNumber: phoneNumberValue },
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(sendOTP).not.toHaveBeenCalled();
+	});
+
+	it("refuses to send a replacement code that was not stored after a colliding send", async () => {
+		const sendOTP = vi.fn();
+		let collide = true;
+		const { auth } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						// Store a used-up code under the same id before this send's create.
+						async before(verification) {
+							if (!collide) return;
+							collide = false;
+							const ctx = await auth.$context;
+							await ctx.internalAdapter.createVerificationValue({
+								...verification,
+								value: "000000:3",
+							});
+						},
+					},
+					update: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+			plugins: [phoneNumber({ sendOTP })],
+		});
+
+		const res = await auth.api.sendPhoneNumberOTP({
+			body: { phoneNumber: phoneNumberValue },
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(sendOTP).not.toHaveBeenCalled();
+	});
+
+	it("does not send a password reset code that was not stored, and does not reveal the account", async () => {
+		const { auth, sendPasswordResetOTP } = await setup();
+		const request = (phoneNumber: string) =>
+			auth.api.requestPasswordResetPhoneNumber({
+				body: { phoneNumber },
+				asResponse: true,
+			});
+
+		const known = await request(phoneNumberValue);
+		const unknown = await request("+251900000000");
+
+		expect(known.status).toBe(200);
+		expect(unknown.status).toBe(200);
+		expect(await known.json()).toEqual(await unknown.json());
+		expect(sendPasswordResetOTP).not.toHaveBeenCalled();
 	});
 });

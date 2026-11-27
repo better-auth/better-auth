@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import type { JSONValue, LanguageModel } from "ai";
+import type { FlexibleSchema, JSONValue, LanguageModel } from "ai";
 import { asSchema } from "ai";
 import { test as baseTest, describe, expect } from "vitest";
 import type { StructuredGenerator } from "../src/ai/generate-structured.ts";
@@ -18,6 +18,30 @@ function modelId(model: LanguageModel): string {
 	return typeof model === "string" ? model : model.modelId;
 }
 
+/** Models return results keyed by change ID; fixtures list them with an `id`. */
+function keyedById(value: unknown): unknown {
+	if (typeof value !== "object" || value === null) return value;
+	return Object.fromEntries(
+		Object.entries(value).map(([key, list]) => [
+			key,
+			Array.isArray(list)
+				? Object.fromEntries(list.map(({ id, ...rest }) => [id, rest]))
+				: list,
+		]),
+	);
+}
+
+async function validateGenerated<T>(
+	request: { schema: FlexibleSchema<T> },
+	value: unknown,
+): Promise<T> {
+	const validate = asSchema(request.schema).validate;
+	if (!validate) throw new Error("Schema does not provide validation");
+	const result = await validate(keyedById(value));
+	if (!result.success) throw result.error;
+	return result.value;
+}
+
 function generatorFor(
 	value:
 		| JSONValue
@@ -26,13 +50,10 @@ function generatorFor(
 ): StructuredGenerator {
 	return async (request) => {
 		onRequest?.(request);
-		const validate = asSchema(request.schema).validate;
-		if (!validate) throw new Error("Schema does not provide validation");
-		const result = await validate(
+		return validateGenerated(
+			request,
 			typeof value === "function" ? value(request) : value,
 		);
-		if (!result.success) throw result.error;
-		return result.value;
 	};
 }
 
@@ -201,7 +222,7 @@ describe("release-note rewriting", () => {
 		releaseFiles,
 	}) => {
 		const context = Object.fromEntries(
-			Array.from({ length: 31 }, (_, index) => {
+			Array.from({ length: 17 }, (_, index) => {
 				const number = index + 1;
 				return [
 					"pr-" + number,
@@ -243,11 +264,7 @@ describe("release-note rewriting", () => {
 								feedback: null,
 							})),
 						};
-			const validate = asSchema(request.schema).validate;
-			if (!validate) throw new Error("Schema does not provide validation");
-			const result = await validate(value);
-			if (!result.success) throw result.error;
-			return result.value;
+			return validateGenerated(request, value);
 		};
 
 		await rewriteReleaseNotes(
@@ -262,7 +279,7 @@ describe("release-note rewriting", () => {
 			JSON.parse(readFileSync(releaseFiles.outputPath, "utf-8")),
 			"Invalid rewrite output",
 		);
-		expect(output.rewrites).toHaveLength(31);
+		expect(output.rewrites).toHaveLength(17);
 	});
 
 	test("repairs copy when review feedback contradicts approval", async ({
@@ -282,51 +299,67 @@ describe("release-note rewriting", () => {
 			}),
 		);
 
+		const instructionsByRequest = new Map<string, string>();
 		await rewriteReleaseNotes(
 			releaseFiles.contextPath,
 			releaseFiles.outputPath,
-			generatorFor((request) => {
-				switch (request.name) {
-					case "release_note_rewrites":
-						return {
-							rewrites: [
-								{
-									id: "pr-42",
-									title: "Fixed clients with plugins being assignable",
-									migration: null,
-								},
-							],
-						};
-					case "release_note_reviews":
-						return {
-							reviews: [
-								{
-									id: "pr-42",
-									approved: true,
-									feedback:
-										"State that assignability was restored for clients using additional plugins.",
-								},
-							],
-						};
-					case "release_note_repairs":
-						return {
-							rewrites: [
-								{
-									id: "pr-42",
-									title:
-										"Restored client assignability when using additional plugins",
-									migration: null,
-								},
-							],
-						};
-					case "release_note_repair_reviews":
-						return {
-							reviews: [{ id: "pr-42", approved: true, feedback: null }],
-						};
-				}
-				throw new Error(`Unexpected request ${request.name}`);
-			}),
+			generatorFor(
+				(request) => {
+					switch (request.name) {
+						case "release_note_rewrites":
+							return {
+								rewrites: [
+									{
+										id: "pr-42",
+										title: "Fixed clients with plugins being assignable",
+										migration: null,
+									},
+								],
+							};
+						case "release_note_reviews":
+							return {
+								reviews: [
+									{
+										id: "pr-42",
+										approved: true,
+										feedback:
+											"State that assignability was restored for clients using additional plugins.",
+									},
+								],
+							};
+						case "release_note_repairs":
+							return {
+								rewrites: [
+									{
+										id: "pr-42",
+										title:
+											"Restored client assignability when using additional plugins",
+										migration: null,
+									},
+								],
+							};
+						case "release_note_repair_reviews":
+							return {
+								reviews: [{ id: "pr-42", approved: true, feedback: null }],
+							};
+					}
+					throw new Error(`Unexpected request ${request.name}`);
+				},
+				(request) =>
+					instructionsByRequest.set(request.name, request.instructions),
+			),
 		);
+
+		// The writer, reviewer, and repairer must judge copy by the same rules.
+		expect([...instructionsByRequest.keys()].sort()).toEqual([
+			"release_note_repair_reviews",
+			"release_note_repairs",
+			"release_note_reviews",
+			"release_note_rewrites",
+		]);
+		for (const instructions of instructionsByRequest.values()) {
+			expect(instructions).toContain("## Entry rules");
+		}
 
 		expect(JSON.parse(readFileSync(releaseFiles.outputPath, "utf-8"))).toEqual({
 			rewrites: [
@@ -483,8 +516,8 @@ describe("release-note rewriting", () => {
 							rewrites: [
 								{
 									id,
-									title: "Preserved safe output",
-									migration: "Change an unrelated setting.",
+									title: "Preserved [safe output](https://example.com)",
+									migration: null,
 								},
 							],
 						}

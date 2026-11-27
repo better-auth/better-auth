@@ -353,6 +353,22 @@ describe("secret rotation", () => {
 			it("rejects empty value", () => {
 				expect(() => parseSecretsEnv("1:")).toThrow("Empty secret value");
 			});
+
+			it("does not include the entry in the error message", () => {
+				const secret = "bare-secret-0123456789abcdefghijklmnop";
+				expect(() => parseSecretsEnv(`1:valid-secret,${secret}`)).not.toThrow(
+					secret,
+				);
+				expect(() => parseSecretsEnv(`1:valid-secret,${secret}`)).toThrow(
+					"position 2",
+				);
+			});
+
+			it("does not include part of the entry in the version error message", () => {
+				const prefix = "Zm9vYmFyYmF6cXV4cXV1eA";
+				expect(() => parseSecretsEnv(`${prefix}:tail`)).not.toThrow(prefix);
+				expect(() => parseSecretsEnv(`${prefix}:tail`)).toThrow("position 1");
+			});
 		});
 
 		describe("validateSecretsArray", () => {

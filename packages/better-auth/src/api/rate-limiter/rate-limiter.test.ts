@@ -51,6 +51,31 @@ describe("rate-limiter", async () => {
 		},
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11463
+	 */
+	it("should send JSON content type for rate limit responses", async () => {
+		const { auth } = await getTestInstance(
+			{ rateLimit: { enabled: true, window: 10, max: 1 } },
+			{ disableTestUser: true },
+		);
+		const request = () =>
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { "x-forwarded-for": "203.0.113.114" },
+			});
+
+		const first = await auth.handler(request());
+		expect(first.status).toBe(200);
+
+		const limited = await auth.handler(request());
+		expect(limited.status).toBe(429);
+		expect(limited.headers.get("content-type")).toBe("application/json");
+		expect(limited.headers.get("x-retry-after")).toBeTruthy();
+		expect(await limited.json()).toEqual({
+			message: "Too many requests. Please try again later.",
+		});
+	});
+
 	it("should return 429 after 3 request for sign-in", async () => {
 		for (let i = 0; i < 5; i++) {
 			const response = await client.signIn.email({
@@ -411,6 +436,63 @@ describe("database rate-limit cleanup scheduling", async () => {
 
 		await request;
 		expect(settledBeforeCleanup).toBe(false);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11519
+ */
+describe("database rate-limit with a string lastRequest", async () => {
+	const { auth, client, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			customRules: {
+				"/sign-in/email": { window: 60, max: 1 },
+			},
+		},
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("should respond with the remaining seconds in the retry-after header", async () => {
+		const now = Date.now();
+		const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+		// node-postgres returns `int8` columns as strings by default.
+		const { adapter } = await auth.$context;
+		const findMany = adapter.findMany.bind(adapter);
+		vi.spyOn(adapter, "findMany").mockImplementation(async (args) => {
+			const rows = await findMany(args);
+			if (args.model !== "rateLimit") return rows;
+			return rows.map((row) => ({
+				...(row as RateLimit),
+				lastRequest: String((row as RateLimit).lastRequest),
+			})) as typeof rows;
+		});
+
+		const first = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(first.error).toBeNull();
+
+		clock.mockReturnValue(now + 1_001);
+		let retryAfter = "";
+		const blocked = await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onError(context) {
+					retryAfter = context.response.headers.get("X-Retry-After") ?? "";
+				},
+			},
+		);
+		expect(blocked.error?.status).toBe(429);
+		expect(retryAfter).toBe("59");
 	});
 });
 

@@ -86,6 +86,26 @@ export const myPlugin = () => {
   You don't have to make the plugin a function, but it's recommended to do so. This way, you can pass options to the plugin and it's consistent with the built-in plugins.
 </Callout>
 
+### Register a plugin type
+
+Reusable plugins can augment `BetterAuthPluginRegistry` so `getPlugin()` returns their exact type. The registry key must match the plugin's `id`:
+
+```ts title="plugin.ts"
+declare module "@better-auth/core" {
+  interface BetterAuthPluginRegistry<AuthOptions, Options> {
+    "my-plugin": {
+      creator: typeof myPlugin;
+    };
+  }
+}
+```
+
+This only affects TypeScript. Users must still add the plugin to their `plugins` array at runtime.
+
+<Callout type="info">
+  If you publish the plugin as a separate package, declare `@better-auth/core` as a peer dependency with the same supported version range as `better-auth`.
+</Callout>
+
 ### Endpoints
 
 To add endpoints to the server, you can pass `endpoints` which requires an object with the key being any `string` and the value being an `AuthEndpoint`.

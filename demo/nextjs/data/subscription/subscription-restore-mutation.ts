@@ -18,8 +18,8 @@ export const useSubscriptionRestoreMutation = () => {
 
 	return useMutation({
 		mutationFn: restoreSubscription,
-		onSuccess: () => {
-			queryClient.invalidateQueries({
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({
 				queryKey: subscriptionKeys.all(),
 			});
 		},

@@ -6,7 +6,11 @@ import type {
 import { getBetterAuthVersion } from "@better-auth/core/context";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import { schemaCheckFor } from "@better-auth/core/db/internal";
+import {
+	redactSecondaryStorageErrors,
+	runtimeSchemaCheckFor,
+	schemaCheckFor,
+} from "@better-auth/core/db/internal";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
@@ -196,6 +200,9 @@ Most of the features of Better Auth will not work correctly.`,
 				: "",
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
+		secondaryStorage:
+			options.secondaryStorage &&
+			redactSecondaryStorageErrors(options.secondaryStorage),
 	};
 
 	checkEndpointConflicts(options, logger);
@@ -434,6 +441,7 @@ Most of the features of Better Auth will not work correctly.`,
 		await initOrPromise;
 	}
 
-	ctx.checkSchema = schemaCheckFor(ctx.adapter);
+	ctx.checkSchema = runtimeSchemaCheckFor(ctx.adapter);
+	ctx.explicitSchemaCheck = schemaCheckFor(ctx.adapter);
 	return ctx as unknown as AuthContext<Options>;
 }

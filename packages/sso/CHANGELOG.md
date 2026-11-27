@@ -1,5 +1,101 @@
 # @better-auth/sso
 
+## 1.7.28
+
+### Patch Changes
+
+- [#12929](https://github.com/better-auth/better-auth/pull/12929) [`be3a757`](https://github.com/better-auth/better-auth/commit/be3a757479b2495bfda97f3682a6b655c07e47ce) Thanks [@jonathansamines](https://github.com/jonathansamines)! - SSO provider registration now enforces `providersLimit` even when the account already has more providers than `findMany` would return.
+
+## 1.7.27
+
+## 1.7.26
+
+## 1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+- [#12503](https://github.com/better-auth/better-auth/pull/12503) [`87ede79`](https://github.com/better-auth/better-auth/commit/87ede7984d4df152ae3c0f5a58a2d08299b24281) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed errors from hooks and endpoints turning into generic 500 responses or skipping their error handling in the OAuth provider, Client ID Metadata Document, passkey, SSO, SCIM, and Stripe plugins when the app installs more than one copy of `better-call`.
+
+## 1.7.23
+
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+- [#12417](https://github.com/better-auth/better-auth/pull/12417) [`671f54c`](https://github.com/better-auth/better-auth/commit/671f54ca8dc73df9a41353f5b81483215fa71dd3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixes SAML Single Logout (`saml.enableSingleLogout`) for users who stay signed in past their session's first expiry, which with default settings is any user active for more than 7 days.
+  - IdP-initiated logout now ends the Better Auth session. Before, after that point, a LogoutRequest that arrived without the session cookie, such as one sent with the HTTP-POST binding or from an iframe, left the user signed in.
+  - SP-initiated logout now sends the NameID and SessionIndex from sign-in. Before, after that point, it sent the user's email as the NameID, which the IdP can't match when it issued a persistent or transient NameID.
+
+  Sessions whose logout data was already gone before upgrading send the NameID saved on the user's SAML account, without a SessionIndex. Apps without Single Logout enabled are unaffected, and no action is needed.
+
+- [#12424](https://github.com/better-auth/better-auth/pull/12424) [`0df3618`](https://github.com/better-auth/better-auth/commit/0df3618378fbabe910a01d85b7af8ddef2f53b28) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixes SAML Single Logout (`saml.enableSingleLogout`) for users who signed in more than once with the same NameID, such as on two devices, when the app uses the Prisma or MongoDB adapter.
+
+  When one of those sessions was refreshed, the logout record of a different session was extended. The refreshed session's own record then expired with its original expiry, so an IdP-initiated LogoutRequest no longer ended that session. Each refresh now extends the refreshed session's own record.
+
+- [#12421](https://github.com/better-auth/better-auth/pull/12421) [`16f55e0`](https://github.com/better-auth/better-auth/commit/16f55e03fd3237d2405f5f6bdb7e55ed3d086458) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SAML providers that allow IdP-initiated sign-in (`allowIdpInitiated: true`) or turn off InResponseTo validation (`enableInResponseToValidation: false`) now reject a signed SAML response submitted again with its assertion ID written using XML character references, such as `&[#95](https://github.com/better-auth/better-auth/issues/95);` in place of `_`. Before, the re-spelled copy passed replay protection and signed the user in again. With the default SAML settings, a replayed response was already rejected.
+
+## 1.7.20
+
+### Patch Changes
+
+- [#12309](https://github.com/better-auth/better-auth/pull/12309) [`8654ff2`](https://github.com/better-auth/better-auth/commit/8654ff2f105bddd80dc04fe6cd28e8bf0c4b7a5d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(sso): apply the default SAML clock skew to samlify's assertion window check
+
+  The documented 5-minute `saml.clockSkew` default was only applied by the plugin's own timestamp step. samlify checked the assertion's `NotBefore` and `NotOnOrAfter` first with no tolerance unless `clockSkew` was set explicitly, so assertions that were up to five minutes past their validity window, or up to five minutes early, were rejected. The default now reaches samlify as well.
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+### Patch Changes
+
+- [#11935](https://github.com/better-auth/better-auth/pull/11935) [`f5ea731`](https://github.com/better-auth/better-auth/commit/f5ea731e6de511e1df793a190274e6bbca37206d) Thanks [@bytaesu](https://github.com/bytaesu)! - OIDC SSO sign-in now rejects ID tokens missing `exp` or `iat` and providers with an empty client ID, matching social sign-in.
+
+## 1.7.11
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11378](https://github.com/better-auth/better-auth/pull/11378) [`6c89bb1`](https://github.com/better-auth/better-auth/commit/6c89bb18f191a9f6cf7ce893b4af1c329cd4104d) Thanks [@bytaesu](https://github.com/bytaesu)! - Updating an SSO provider with a partial `mapping` no longer fails validation. Since v1.7.0, `updateSSOProvider` rejected any OIDC or SAML mapping that left out `email` or `name`, even though both have documented defaults and v1.6 accepted them. `registerSSOProvider` now accepts these mappings too. Omitted fields fall back to the defaults. A mapping that passes `id` is still rejected, as described in the v1.7 upgrade guide.
+
+- [#11438](https://github.com/better-auth/better-auth/pull/11438) [`61f64f4`](https://github.com/better-auth/better-auth/commit/61f64f46adacc1c7c1053aa62e4f6b83619ccb61) Thanks [@Tushar-Khandelwal-2004](https://github.com/Tushar-Khandelwal-2004)! - Reject OIDC SSO provider registration when the configured issuer differs from the discovery document, including trailing slash mismatches, instead of failing later during sign-in. Existing providers with a mismatched issuer are unchanged and must be reconfigured to match the discovery document.
+
+- [#11640](https://github.com/better-auth/better-auth/pull/11640) [`a878f9a`](https://github.com/better-auth/better-auth/commit/a878f9ab47e896a106a449f043f0149b20728851) Thanks [@Sandipxg](https://github.com/Sandipxg)! - OIDC providers that send the email claim as a list of addresses, such as Azure AD B2C's `emails`, can now sign users in. Previously the callback failed with `missing_user_info`, even with `mapping: { email: "emails" }`. Better Auth now uses the first address in the list. Providers that send `emails` instead of `email` need `mapping: { email: "emails" }`.
+
+- [#11743](https://github.com/better-auth/better-auth/pull/11743) [`adbdc06`](https://github.com/better-auth/better-auth/commit/adbdc06e339b8726803f21f9bcb695205d5081c6) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SAML providers that already have linked accounts can change `samlConfig.callbackUrl`, their post-login redirect, again. Since 1.7.0, that update returned 409 `Cannot change SSO provider identity fields while linked accounts exist`, because the redirect was still treated as the 1.6 Assertion Consumer Service URL. `guardProviderMutation` now reports a `callbackUrl`-only change with `isAuthenticationBoundaryChange: false`.
+
+- [#11687](https://github.com/better-auth/better-auth/pull/11687) [`182e92b`](https://github.com/better-auth/better-auth/commit/182e92bd8a6d101fee6430cf968f823e6cd044bd) Thanks [@kaiizer777](https://github.com/kaiizer777)! - SAML providers that already have linked accounts can rotate their IdP signing certificate again. Since 1.7.0, changing `cert` or `idpMetadata.cert` through `updateSSOProvider` returned 409 `Cannot change SSO provider identity fields while linked accounts exist`, so the only way to rotate was to delete the provider, which also removed its account links and domain verification. `guardProviderMutation` still receives certificate changes as authentication-boundary changes, so a guard that rejects those keeps blocking them.
+
+## 1.7.7
+
+## 1.7.6
+
 ## 1.7.5
 
 ## 1.7.4

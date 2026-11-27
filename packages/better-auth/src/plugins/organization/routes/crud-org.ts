@@ -8,7 +8,11 @@ import { toZodSchema } from "../../../db";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
+import {
+	canViewInvitations,
+	hasPermission,
+	withoutCreatorRoleInvitations,
+} from "../has-permission";
 import type {
 	InferInvitation,
 	InferMember,
@@ -593,13 +597,6 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
 				);
 			}
-			if (organizationId === session.session.activeOrganizationId) {
-				/**
-				 * If the organization is deleted, we set the active organization to null
-				 */
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
-
 			const org = await adapter.findOrganizationById(organizationId);
 			if (!org) {
 				throw APIError.fromStatus("BAD_REQUEST");
@@ -614,6 +611,12 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				);
 			}
 			await adapter.deleteOrganization(organizationId);
+			if (organizationId === session.session.activeOrganizationId) {
+				/**
+				 * If the organization is deleted, we set the active organization to null
+				 */
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
+			}
 			if (options?.organizationHooks?.afterDeleteOrganization) {
 				await options.organizationHooks.afterDeleteOrganization(
 					{
@@ -804,6 +807,23 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
+
+			const showInvitations =
+				organization.invitations.length > 0 &&
+				(await canViewInvitations(
+					{
+						role: isMember.role,
+						options: ctx.context.orgOptions,
+						organizationId: organization.id,
+					},
+					ctx,
+				));
+			organization.invitations = showInvitations
+				? withoutCreatorRoleInvitations(organization.invitations, {
+						role: isMember.role,
+						options: ctx.context.orgOptions,
+					})
+				: [];
 
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {

@@ -28,7 +28,7 @@ The **MCP** plugin lets your app act as an OAuth authorization server and protec
   <Step>
     ### Configure authorization
 
-    Add the MCP plugin to your auth configuration alongside the [JWT plugin](/docs/plugins/jwt). The JWT plugin is required: it provides the stable signing key used for ID tokens and access tokens, and exposes the `/jwks` endpoint that resource servers use to verify them.
+    Add the MCP plugin to your auth configuration alongside the [JWT plugin](/docs/plugins/jwt). The JWT plugin is required: it provides the stable signing key used for ID tokens and access tokens, and exposes the `/jwks` endpoint that resource servers use to verify them. Disable the JWT plugin's `/token` route and its `set-auth-jwt` header. Session JWTs share the access tokens' signing key, so a resource server that checks only issuer and audience could accept one; see [OAuth Provider Mode](/docs/plugins/jwt#oauth-provider-mode).
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
@@ -38,8 +38,9 @@ The **MCP** plugin lets your app act as an OAuth authorization server and protec
     import { fetchClientMetadataResource } from "@better-auth/cimd/node"; // [!code highlight]
 
     export const auth = betterAuth({
+        disabledPaths: ["/token"], // [!code highlight]
         plugins: [
-            jwt(), // [!code highlight]
+            jwt({ disableSettingJwtHeader: true }), // [!code highlight]
             mcp({ // [!code highlight]
                 loginPage: "/sign-in", // path to your login page // [!code highlight]
                 consentPage: "/consent", // path to your consent page // [!code highlight]
@@ -79,7 +80,7 @@ The **MCP** plugin lets your app act as an OAuth authorization server and protec
       </Tab>
     </Tabs>
 
-    The MCP plugin uses the same schema as the OAuth Provider plugin (`oauthClient`, `oauthAccessToken`, `oauthRefreshToken`, `oauthConsent`, `oauthClientAssertion`). See the [OAuth Provider Schema](/docs/plugins/oauth-provider#schema) section for details.
+    The MCP plugin uses the same schema as the OAuth Provider plugin (`oauthClient`, `oauthAccessToken`, `oauthRefreshToken`, `oauthConsent`, `oauthClientAssertion`, `oauthResource`, `oauthClientResource`). See the [OAuth Provider schema](/docs/plugins/oauth-provider/reference#schema) for details.
   </Step>
 </Steps>
 
@@ -148,6 +149,8 @@ mcp({
 
 `resource` must be an HTTPS URL with no query, fragment, or credentials; HTTP is accepted only on loopback hosts for local development. A resource whose URL requires a query component cannot use `mcp()`, `requireMcpAuth`, or `createMcpProtectedRequestHandler`. Verify its tokens with `verifyAccessTokenRequest` from `better-auth/oauth2`, and build challenges with `createResourceServerChallenge` from `@better-auth/oauth-provider`.
 
+With Prisma on PostgreSQL, CockroachDB, or MongoDB, also declare this resource in `resources` with explicit `allowedScopes`; see [Resources](/docs/plugins/oauth-provider/tokens#resources).
+
 `mcp()` also registers this identifier as a default client-registration resource. A dynamically registered client is linked to the MCP resource even when its registration request omits the non-standard `resources` field. Any `clientRegistrationDefaultResources` you provide are preserved, and the MCP resource is appended once.
 
 ### Optional DCR fallback
@@ -161,8 +164,15 @@ mcp({
   resource: "https://api.example.com/mcp",
   allowDynamicClientRegistration: true,
   allowUnauthenticatedClientRegistration: true,
+  clientRegistrationDefaultApplicationType: "infer",
 })
 ```
+
+<Callout type="warn">
+  `allowUnauthenticatedClientRegistration: true` lets anyone on the internet register a client, with a name and logo they choose. Each such client is linked to the MCP resource and to every `clientRegistrationDefaultResources` entry. Read [dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration) before you enable it, and set `clientRegistrationDefaultScopes` so anonymous clients get only the scopes they need.
+</Callout>
+
+Some MCP clients omit `application_type` and register custom-scheme callbacks or `http` callbacks on `localhost`, `127.0.0.1`, or `[::1]`, which the `web` default rejects. `clientRegistrationDefaultApplicationType: "infer"` registers those clients as `native`; see [dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).
 
 The registration endpoint is absent from discovery unless DCR is enabled. A DCR request does not need Better Auth's `resources` extension: `mcp()` adds its canonical resource as a server-owned default.
 
@@ -220,11 +230,11 @@ export { POST };
 
 `createMcpHandler` returns JSON or request-scoped Server-Sent Events (SSE) as required by the operation; it does not require a Redis-backed MCP session store. If you implement `subscriptions/listen` across multiple server instances, provide the SDK with a shared event bus for that extension. OAuth clients, consent, authorization codes, refresh tokens, CIMD metadata, and DPoP replay detection still use durable state because they are authorization and security records, not MCP transport sessions.
 
-`requireMcpAuth` reads the `Authorization` header, verifies access tokens against the authorization server's JSON Web Key Set (JWKS), and checks the signature, issuer, audience, and expiry. It also enforces [RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449) Demonstrating Proof of Possession (DPoP) when an access token is DPoP-bound. Unauthenticated requests receive a JSON-RPC `401` with the RFC 9728 `WWW-Authenticate` header, so MCP clients can start the authorization flow. Tokens missing a required scope receive a `403` with an [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1) `insufficient_scope` challenge, which MCP clients use to step up their authorization.
+`requireMcpAuth` reads the `Authorization` header, verifies access tokens against the authorization server's JSON Web Key Set (JWKS), and checks the signature, issuer, audience, and expiry. It also enforces [RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449) Demonstrating Proof of Possession (DPoP) when an access token is DPoP-bound. Unauthenticated requests receive a JSON-RPC `401` with the RFC 9728 `WWW-Authenticate` header, so MCP clients can start the authorization flow. Tokens missing a required scope receive a `403` with an [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1) `insufficient_scope` challenge, which MCP clients use to step up their authorization. A client that sent its token with the `DPoP` scheme gets a `DPoP` challenge instead ([RFC 9449 §7.1](https://datatracker.ietf.org/doc/html/rfc9449#section-7.1)). It names the missing scopes in `scope` and the accepted proof algorithms in `algs`, and it has no `resource_metadata`.
 
-The wrapper passes the verified access-token claims as a second callback argument, not as a database record. The example keeps authentication at the route boundary; if a tool needs token context, convert those claims to the SDK's `AuthInfo` and pass it through `mcpServerHandler.fetch(request, { authInfo })`. `requireMcpAuth` never exposes a refresh token, and it checks the access token locally against the JWKS without a database round trip. DPoP replay protection uses your auth instance's database adapter by default so it works across server instances; pass `dpop.replayStore` only when you need a different shared store.
+The wrapper passes the verified access-token claims as a second callback argument, not as a database record. The example keeps authentication at the route boundary; if a tool needs token context, convert those claims to the SDK's `AuthInfo` and pass it through `mcpServerHandler.fetch(request, { authInfo })`. `requireMcpAuth` never exposes a refresh token, and it checks the access token locally against the JWKS. It reads the signing keys from your auth instance instead of requesting its own `/jwks` endpoint, so it also works on runtimes that cannot send a request to their own hostname. The keys are cached for five minutes and refetched sooner when a token names an unknown key. If a refetch fails or times out, a key set fetched less than ten minutes ago still verifies tokens that name one of its keys or none, unless a custom `jwt.adapter.getJwks` supplies the keys, because those are not cached; see [Verify access tokens](/docs/plugins/oauth-provider/resource-server#verify-access-tokens). DPoP replay protection uses your auth instance's database adapter by default so it works across server instances; pass `dpop.replayStore` only when you need a different shared store.
 
-By default, `requireMcpAuth` reads the server's resolved Better Auth URL from the auth context and uses it as the expected issuer, resource, and JWKS base. If `mcp({ resource })` uses a different identifier, pass that same value to `requireMcpAuth`, as shown above. Override the issuer or JWKS URL when `jwt.issuer` is custom or the authorization server runs separately:
+By default, `requireMcpAuth` reads the server's resolved Better Auth URL from the auth context and uses it as the expected issuer and resource. If `mcp({ resource })` uses a different identifier, pass that same value to `requireMcpAuth`, as shown above. Override the issuer when `jwt.issuer` is custom. Set `jwksUrl` to fetch the keys over HTTP instead, for example when the authorization server runs separately:
 
 ```ts
 requireMcpAuth(auth, handler, {
@@ -234,6 +244,10 @@ requireMcpAuth(auth, handler, {
     challengeScopes: ["openid", "profile"] // advertised in the 401 challenge
 })
 ```
+
+Without the `resource` option, the audience check expects the URL of your Better Auth server, and a token issued for your MCP resource fails with `invalid_token`. The [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#token-handling) says an MCP server must validate that a token was issued for it as the intended audience. It also [requires an MCP client to send the server's own URI as the `resource` parameter](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#resource-parameter-implementation). The default audience is not that URI.
+
+`requireMcpAuth` rejects opaque access tokens, which have no `aud` claim. A token request that omits the `resource` parameter uses the resources bound to the authorization code, and a refresh request uses the resources stored on the refresh token. When no resource is named or bound, the access token is opaque. The specification [requires MCP clients to send the `resource` parameter in authorization and token requests](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#resource-parameter-implementation), so a conforming client is not affected.
 
 To require scopes, pass `requiredScopes`. A token missing any of them is rejected with a `403` and an `insufficient_scope` challenge naming every missing scope, so the client can re-authorize for all of them at once ([step-up authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#step-up-authorization-flow)):
 
@@ -263,9 +277,13 @@ requireMcpAuth(auth, async (request, accessTokenClaims) => {
 
 ## Configuration
 
-`mcp()` extends the [OAuth Provider](/docs/plugins/oauth-provider#configuration) options. All OAuth provider options are passed flat (there is no nested `oidcConfig`). The required MCP-specific option is `resource`.
+`mcp()` extends the [OAuth Provider](/docs/plugins/oauth-provider/reference#plugin-options) options. All OAuth provider options are passed flat (there is no nested `oidcConfig`). The required MCP-specific option is `resource`.
 
 For every client configured through `mcp()`, the plugin defaults `refreshTokenReuseInterval` to 30 seconds. This lets a client retry a refresh with the old token and receive the same rotated token response when another request already consumed that refresh token. OAuth Provider itself remains strict by default; set `refreshTokenReuseInterval: 0` on `mcp()` to disable the overlap window.
+
+<Callout type="warn">
+  Inside the window, reuse of a rotated refresh token is not treated as replay, so the token family is not revoked. An attacker who replays a stolen bearer refresh token within 30 seconds of the legitimate refresh gets the replacement refresh token, as long as the retry asks for the same scopes and resources. A DPoP-bound refresh token also needs a valid DPoP proof from the key it is bound to. Most MCP clients are public clients with no secret, so nothing else stops a bearer token retry. Set `refreshTokenReuseInterval: 0` unless your clients lose refresh responses; see [Refresh tokens](/docs/plugins/oauth-provider/tokens#refresh-tokens).
+</Callout>
 
 export const mcpPluginOptionsType = {
   loginPage: {
@@ -287,7 +305,7 @@ export const mcpPluginOptionsType = {
 
 <TypeTable type={mcpPluginOptionsType} />
 
-The most commonly tuned OAuth provider options are below. See the [OAuth Provider Configuration](/docs/plugins/oauth-provider#configuration) for the full list.
+The most commonly tuned OAuth provider options are below. See the [OAuth Provider Configuration](/docs/plugins/oauth-provider/reference#plugin-options) for the full list.
 
 export const mcpOauthOptionsType = {
   scopes: {
@@ -330,16 +348,17 @@ export const mcpOauthOptionsType = {
 
 ## Remote MCP Server
 
-`requireMcpAuth` verifies tokens against your Better Auth server's JWKS, so the MCP route can run anywhere as long as it can reach that JWKS URL. When the resource server runs separately from the authorization server, or uses a dynamic `baseURL`, use `createMcpProtectedRequestHandler` with explicit verification options instead of `requireMcpAuth`.
+`requireMcpAuth` verifies tokens with the signing keys of the auth instance you pass it. It fetches the keys over HTTP instead when you set `jwksUrl`, or when the JWT plugin publishes them at `jwks.remoteUrl`. When the resource server runs separately from the authorization server, or uses a dynamic `baseURL`, use `createMcpProtectedRequestHandler` with explicit verification options instead of `requireMcpAuth`.
 
 ```ts title="mcp-server.ts"
 import { createMcpProtectedRequestHandler } from "@better-auth/mcp"; // [!code highlight]
 
 const handler = createMcpProtectedRequestHandler( // [!code highlight]
     {
-        issuer: "https://auth.example.com",
+        issuer: "https://auth.example.com/api/auth",
         audience: "https://api.example.com/mcp",
         jwksUrl: "https://auth.example.com/api/auth/jwks",
+        jwtVerifyOptions: { typ: "at+jwt", requiredClaims: ["azp"] }, // [!code highlight]
     },
     async (request, accessTokenClaims) => { // [!code highlight]
         // accessTokenClaims holds the verified access-token claims // [!code highlight]
@@ -353,3 +372,14 @@ const handler = createMcpProtectedRequestHandler( // [!code highlight]
 ```
 
 `createMcpProtectedRequestHandler` returns the same RFC 9728 `WWW-Authenticate` response for unauthenticated requests. Set `requiredScopes` in its options to require scopes; a token missing any of them receives the same `403` `insufficient_scope` challenge as `requireMcpAuth`. Set `challengeScopes` in the same options object to advertise a scope hint on unauthenticated challenges.
+
+Both helpers expose `WWW-Authenticate` to browser clients on other origins. If your CORS layer sets `Access-Control-Expose-Headers`, see [Resource Server](/docs/plugins/oauth-provider/resource-server) for what it must include.
+
+<Callout type="warn">
+  To stop a captured DPoP proof from being used twice, the handler records each proof it accepts for a DPoP-bound token. Unlike `requireMcpAuth`, `createMcpProtectedRequestHandler` keeps that record in memory by default. The default is safe only for a single long-lived instance. Other instances do not see the record, and a restart clears it. An attacker who captures a proof can replay it against another instance until the proof expires.
+
+  If the handler runs on several instances or on serverless, pass a shared store as `dpop.replayStore`:
+
+  * If the handler runs in the same app as your Better Auth server, use `createDpopReplayStore(await auth.$context)`, as shown in [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens). It records proofs in secondary storage or the database, wherever your auth instance keeps verification values.
+  * Otherwise, implement `DpopReplayStore` on storage that every instance shares. Its `reserve` method must record the proof's `key` until at least `expiresAt` in one atomic step, and return `false` if the key is already recorded. If `reserve` throws, the request fails.
+</Callout>

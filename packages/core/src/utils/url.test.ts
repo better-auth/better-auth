@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+	isNativePrivateUseRedirectUri,
 	isReverseDomainPrivateUseRedirectUri,
+	RedirectUriSyntaxSchema,
 	SafeUrlSchema,
 } from "./redirect-uri";
 import { appendQueryParams, isSafeUrlScheme, normalizePathname } from "./url";
@@ -174,6 +176,23 @@ describe("SafeUrlSchema", () => {
 	});
 });
 
+describe("RedirectUriSyntaxSchema", () => {
+	it("leaves the https policy to the caller", () => {
+		expect(
+			RedirectUriSyntaxSchema.safeParse("http://192.168.1.50/cb").success,
+		).toBe(true);
+	});
+
+	it("rejects dangerous schemes and fragments", () => {
+		expect(
+			RedirectUriSyntaxSchema.safeParse("javascript:alert(1)").success,
+		).toBe(false);
+		expect(
+			RedirectUriSyntaxSchema.safeParse("http://192.168.1.50/cb#x").success,
+		).toBe(false);
+	});
+});
+
 describe("isReverseDomainPrivateUseRedirectUri", () => {
 	it("accepts only the RFC 8252 single-slash private-use form", () => {
 		expect(
@@ -189,5 +208,46 @@ describe("isReverseDomainPrivateUseRedirectUri", () => {
 				new URL("com.example.app:///callback"),
 			),
 		).toBe(false);
+		expect(
+			isReverseDomainPrivateUseRedirectUri(
+				new URL("cursor://anysphere.cursor-mcp/oauth/callback"),
+			),
+		).toBe(false);
+	});
+});
+
+describe("isNativePrivateUseRedirectUri", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10946
+	 */
+	it.each([
+		"cursor://anysphere.cursor-mcp/oauth/callback",
+		"com.example.app://host/callback",
+		"com.example.app:/callback",
+	])("accepts %s", (uri) => {
+		expect(isNativePrivateUseRedirectUri(new URL(uri))).toBe(true);
+	});
+
+	it.each([
+		"cursor://anysphere.cursor-mcp",
+		"cursor://anysphere.cursor-mcp?x=1",
+		"myapp:/callback",
+	])(
+		"rejects %s, which has neither a host and path nor a reverse-domain scheme",
+		(uri) => {
+			expect(isNativePrivateUseRedirectUri(new URL(uri))).toBe(false);
+		},
+	);
+
+	it.each([
+		"https://example.com/cb",
+		"file://host/callback",
+		"ws://host/callback",
+		"wss://host/callback",
+		"blob://host/callback",
+		"about://host/callback",
+		"view-source://host/callback",
+	])("rejects reserved scheme %s", (uri) => {
+		expect(isNativePrivateUseRedirectUri(new URL(uri))).toBe(false);
 	});
 });

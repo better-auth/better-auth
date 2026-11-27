@@ -4,8 +4,10 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { base64 } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import type {
 	AuthenticationExtensionsClientInputs,
 	AuthenticationResponseJSON,
@@ -19,8 +21,11 @@ import {
 } from "@simplewebauthn/server";
 import {
 	freshSessionMiddleware,
+	getAuthoritativeSessionFromCtx,
 	getSessionFromCtx,
+	isStateful,
 	requireResourceOwnership,
+	sensitiveSessionMiddleware,
 	sessionMiddleware,
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
@@ -35,7 +40,7 @@ import type {
 	PasskeyRegistrationUser,
 	WebAuthnChallengeValue,
 } from "./types";
-import { getRpID } from "./utils";
+import { getExpectedOrigins, getRpID } from "./utils";
 
 type PasskeyCeremony = "registration" | "authentication";
 
@@ -46,12 +51,56 @@ type PasskeyCeremony = "registration" | "authentication";
  */
 type StoredChallengeValue = WebAuthnChallengeValue & {
 	type?: PasskeyCeremony;
+	registrationSource?:
+		| { type: "session"; tokenHash: string }
+		| { type: "resolver" };
 };
+
+/**
+ * Challenge rows are readable by hooks and exports, so they hold a digest of
+ * the session token rather than the token itself.
+ */
+const hashSessionToken = (token: string) =>
+	createHash("SHA-256", "base64urlnopad").digest(token);
+
+async function registrationSourceMatches(
+	source: StoredChallengeValue["registrationSource"],
+	sessionToken: string | undefined,
+) {
+	if (source?.type === "resolver") return true;
+	if (source?.type !== "session" || !sessionToken) return false;
+	return source.tokenHash === (await hashSessionToken(sessionToken));
+}
+
+/**
+ * How a registration that does not require a session started: from a
+ * session, bound by its digest, or through `resolveUser`. Nothing is recorded
+ * when a session is required or sessions are not stored.
+ */
+async function registrationSourceFor(
+	recordSource: boolean,
+	sessionToken: string | undefined,
+): Promise<StoredChallengeValue["registrationSource"]> {
+	if (!recordSource) return undefined;
+	if (!sessionToken) return { type: "resolver" };
+	return {
+		type: "session",
+		tokenHash: await hashSessionToken(sessionToken),
+	};
+}
 
 type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
 
 type RequiredPassKeyOptions = WithRequired<PasskeyOptions, "advanced"> & {
 	advanced: Required<PasskeyOptions["advanced"]>;
+};
+
+const expectedOriginUnavailable = (ctx: GenericEndpointContext) => {
+	ctx.context.logger.error(PASSKEY_ERROR_CODES.ORIGIN_NOT_CONFIGURED.message);
+	return APIError.from(
+		"INTERNAL_SERVER_ERROR",
+		PASSKEY_ERROR_CODES.ORIGIN_NOT_CONFIGURED,
+	);
 };
 
 const resolveExtensions = async (
@@ -85,7 +134,7 @@ const resolveRegistrationUser = async (
 		};
 	}
 
-	const session = await getSessionFromCtx(ctx);
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (session?.user?.id) {
 		const sessionName = session.user.email || session.user.id;
 		return {
@@ -169,7 +218,9 @@ export const generatePasskeyRegistrationOptions = (
 		"/passkey/generate-register-options",
 		{
 			method: "GET",
-			use: requireSession ? [freshSessionMiddleware] : [],
+			use: requireSession
+				? [sensitiveSessionMiddleware, freshSessionMiddleware]
+				: [],
 			query: generatePasskeyQuerySchema,
 			metadata: {
 				openapi: {
@@ -281,6 +332,7 @@ export const generatePasskeyRegistrationOptions = (
 		},
 		async (ctx) => {
 			const user = await resolveRegistrationUser(opts, ctx);
+			const sessionToken = ctx.context.session?.session?.token;
 			const userPasskeys = await ctx.context.adapter.findMany<Passkey>({
 				model: "passkey",
 				where: [
@@ -330,6 +382,32 @@ export const generatePasskeyRegistrationOptions = (
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				opts.advanced.webAuthnChallengeCookie,
 			);
+			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
+			const verification =
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: verificationToken,
+					value: JSON.stringify({
+						type: "registration",
+						registrationSource: await registrationSourceFor(
+							!requireSession && isStateful(ctx),
+							sessionToken,
+						),
+						expectedChallenge: options.challenge,
+						userData: {
+							id: user.id,
+							name: user.name,
+							displayName: user.displayName,
+						},
+						context: ctx.query?.context ?? null,
+					} satisfies StoredChallengeValue),
+					expiresAt: expirationTime,
+				});
+			if (!verification) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 			await ctx.setSignedCookie(
 				webAuthnCookie.name,
 				verificationToken,
@@ -339,21 +417,6 @@ export const generatePasskeyRegistrationOptions = (
 					maxAge: maxAgeInSeconds,
 				},
 			);
-			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
-			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: verificationToken,
-				value: JSON.stringify({
-					type: "registration",
-					expectedChallenge: options.challenge,
-					userData: {
-						id: user.id,
-						name: user.name,
-						displayName: user.displayName,
-					},
-					context: ctx.query?.context ?? null,
-				} satisfies StoredChallengeValue),
-				expiresAt: expirationTime,
-			});
 			return ctx.json(options, {
 				status: 200,
 			});
@@ -485,7 +548,8 @@ export const generatePasskeyAuthenticationOptions = (
 			);
 			const options = await generateAuthenticationOptions({
 				rpID: getRpID(opts, baseURLString),
-				userVerification: "preferred",
+				userVerification:
+					opts.authenticatorSelection?.userVerification ?? "preferred",
 				extensions: authenticationExtensions,
 				...(userPasskeys.length
 					? {
@@ -509,6 +573,19 @@ export const generatePasskeyAuthenticationOptions = (
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				opts.advanced.webAuthnChallengeCookie,
 			);
+			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
+			const verification =
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: verificationToken,
+					value: JSON.stringify(data),
+					expiresAt: expirationTime,
+				});
+			if (!verification) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+				);
+			}
 			await ctx.setSignedCookie(
 				webAuthnCookie.name,
 				verificationToken,
@@ -518,12 +595,6 @@ export const generatePasskeyAuthenticationOptions = (
 					maxAge: maxAgeInSeconds,
 				},
 			);
-			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
-			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: verificationToken,
-				value: JSON.stringify(data),
-				expiresAt: expirationTime,
-			});
 			return ctx.json(options, {
 				status: 200,
 			});
@@ -568,7 +639,9 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 		{
 			method: "POST",
 			body: verifyPasskeyRegistrationBodySchema,
-			use: requireSession ? [freshSessionMiddleware] : [],
+			use: requireSession
+				? [sensitiveSessionMiddleware, freshSessionMiddleware]
+				: [],
 			metadata: {
 				openapi: {
 					operationId: "passkeyVerifyRegistration",
@@ -590,14 +663,21 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 			},
 		},
 		async (ctx) => {
-			const origin = options?.origin || ctx.headers?.get("origin") || "";
-			if (!origin) {
+			const resp = ctx.body.response;
+			const expectedOrigin = getExpectedOrigins(
+				options,
+				ctx,
+				resp?.response?.clientDataJSON,
+			);
+			if (!expectedOrigin) {
+				throw expectedOriginUnavailable(ctx);
+			}
+			if (expectedOrigin.length === 0) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
 				);
 			}
-			const resp = ctx.body.response;
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
 			);
@@ -624,6 +704,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 			}
 			const {
 				type: ceremony,
+				registrationSource,
 				expectedChallenge,
 				userData,
 				context,
@@ -637,7 +718,20 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 
 			const session = requireSession
 				? ctx.context.session
-				: await getSessionFromCtx(ctx);
+				: await getAuthoritativeSessionFromCtx(ctx);
+			if (
+				!requireSession &&
+				isStateful(ctx) &&
+				!(await registrationSourceMatches(
+					registrationSource,
+					session?.session.token,
+				))
+			) {
+				throw APIError.from(
+					"UNAUTHORIZED",
+					PASSKEY_ERROR_CODES.SESSION_REQUIRED,
+				);
+			}
 			if (session?.user?.id && userData.id !== session.user.id) {
 				throw APIError.from(
 					"UNAUTHORIZED",
@@ -650,15 +744,21 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					typeof ctx.context.options.baseURL === "string"
 						? ctx.context.options.baseURL
 						: undefined;
+				// The verifier throws on a rejected response (origin, user verification),
+				// which is a client error, not a server failure.
 				const verification = await verifyRegistrationResponse({
 					response: resp,
 					expectedChallenge,
-					expectedOrigin: origin,
+					expectedOrigin,
 					expectedRPID: getRpID(options, verifyBaseURL),
-					requireUserVerification: false,
+					requireUserVerification:
+						options.authenticatorSelection?.userVerification === "required",
+				}).catch((e) => {
+					ctx.context.logger.error("Failed to verify registration", e);
+					return null;
 				});
-				const { verified, registrationInfo } = verification;
-				if (!verified || !registrationInfo) {
+				const registrationInfo = verification?.registrationInfo;
+				if (!verification?.verified || !registrationInfo) {
 					throw APIError.from(
 						"BAD_REQUEST",
 						PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
@@ -779,7 +879,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					status: 200,
 				});
 			} catch (e) {
-				if (e instanceof APIError) throw e;
+				if (isAPIError(e)) throw e;
 				ctx.context.logger.error("Failed to verify registration", e);
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
@@ -833,13 +933,21 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			},
 		},
 		async (ctx) => {
-			const origin = options?.origin || ctx.headers?.get("origin") || "";
-			if (!origin) {
-				throw new APIError("BAD_REQUEST", {
-					message: "origin missing",
-				});
-			}
 			const resp = ctx.body.response;
+			const expectedOrigin = getExpectedOrigins(
+				options,
+				ctx,
+				resp?.response?.clientDataJSON,
+			);
+			if (!expectedOrigin) {
+				throw expectedOriginUnavailable(ctx);
+			}
+			if (expectedOrigin.length === 0) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
+				);
+			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
 			);
@@ -896,7 +1004,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				const verification = await verifyAuthenticationResponse({
 					response: resp as AuthenticationResponseJSON,
 					expectedChallenge,
-					expectedOrigin: origin,
+					expectedOrigin,
 					expectedRPID: getRpID(options, authBaseURL),
 					credential: {
 						id: passkey.credentialID,
@@ -906,7 +1014,8 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 							",",
 						) as AuthenticatorTransportFuture[],
 					},
-					requireUserVerification: false,
+					requireUserVerification:
+						options.authenticatorSelection?.userVerification === "required",
 				});
 				const { verified } = verification;
 				if (!verified)
@@ -967,7 +1076,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					},
 				);
 			} catch (e) {
-				if (e instanceof APIError) throw e;
+				if (isAPIError(e)) throw e;
 				ctx.context.logger.error("Failed to verify authentication", e);
 				throw APIError.from(
 					"BAD_REQUEST",

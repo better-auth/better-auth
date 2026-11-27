@@ -5,6 +5,10 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "better-auth/crypto";
+import type {
+	DpopReplayReservation,
+	DpopReplayStore,
+} from "better-auth/oauth2";
 import {
 	createDpopReplayStore,
 	generateCodeChallenge,
@@ -55,18 +59,23 @@ import {
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
+	getAuthEndpointUrl,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
+	isInvalidJwtError,
 	isPKCERequired,
+	isSessionBoundRefreshToken,
 	normalizeTimestampValue,
 	parseClientMetadata,
+	resolveRefreshTokenSession,
 	resolveSessionAuthTime,
 	resolveSubjectIdentifier,
 	storeToken,
 	toAudienceClaim,
 	toResourceList,
 	validateClientCredentials,
+	validateClientScopes,
 } from "./utils";
 
 // Seed the ID token with the standard UserInfo claim names set to `undefined`,
@@ -158,7 +167,7 @@ export function getOAuthProviderApi(
 				// or a plugin's own endpoint out-of-grant. A fixed token-endpoint
 				// audience would let an assertion be replayed across endpoints, or
 				// reject a valid assertion minted for the real endpoint.
-				`${ctx.context.baseURL}${ctx.path ?? "/oauth2/token"}`,
+				getAuthEndpointUrl(ctx, ctx.path ?? "/oauth2/token"),
 			);
 			const { clientId, clientSecret, preVerified, authMethod, confirmation } =
 				destructureCredentials(credentials);
@@ -444,7 +453,7 @@ async function encodeRefreshToken(
 	return (
 		(opts.prefix?.refreshToken ?? "") +
 		(opts.formatRefreshToken?.encrypt
-			? opts.formatRefreshToken.encrypt(token, sessionId)
+			? await opts.formatRefreshToken.encrypt(token, sessionId)
 			: token)
 	);
 }
@@ -454,10 +463,7 @@ async function encodeRefreshToken(
  *
  * @internal
  */
-export async function decodeRefreshToken(
-	opts: OAuthOptions<Scope[]>,
-	token: string,
-) {
+async function decodeRefreshToken(opts: OAuthOptions<Scope[]>, token: string) {
 	if (opts.prefix?.refreshToken) {
 		if (token.startsWith(opts.prefix.refreshToken)) {
 			token = token.replace(opts.prefix.refreshToken, "");
@@ -472,6 +478,33 @@ export async function decodeRefreshToken(
 	return opts.formatRefreshToken?.decrypt
 		? opts.formatRefreshToken?.decrypt(token)
 		: { token };
+}
+
+/**
+ * Decodes a value that may be another token type, as introspection and
+ * revocation search across types. A value `formatRefreshToken.decrypt` rejects
+ * with a JOSE error, such as `compactDecrypt` throws, is not a refresh token of
+ * this server, so it fails like an unknown token: a 400 `invalid_token`. Any
+ * other failure of the decoder, including a key set failure, is a server error
+ * and is not hidden.
+ *
+ * @internal
+ */
+export async function decodeRefreshTokenForLookup(
+	opts: OAuthOptions<Scope[]>,
+	token: string,
+) {
+	try {
+		return await decodeRefreshToken(opts, token);
+	} catch (error) {
+		if (isInvalidJwtError(error)) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "refresh token not found",
+				error: "invalid_token",
+			});
+		}
+		throw error;
+	}
 }
 
 async function createOpaqueAccessToken(
@@ -493,27 +526,71 @@ async function createOpaqueAccessToken(
 	const token = opts.generateOpaqueAccessToken
 		? await opts.generateOpaqueAccessToken()
 		: generateRandomString(32, "A-Z", "a-z");
-	await ctx.context.adapter.create({
-		model: "oauthAccessToken",
-		data: {
-			token: await storeToken(opts.storeTokens, token, "access_token"),
-			clientId: client.clientId,
-			sessionId: payload?.sid,
-			userId: user?.id,
-			referenceId,
-			authorizationCodeId,
-			resources,
-			refreshId,
-			confirmation,
-			requestedUserInfoClaims: requestedUserInfoClaims?.length
-				? requestedUserInfoClaims
-				: undefined,
-			scopes,
-			createdAt: new Date(iat * 1000),
-			expiresAt: new Date(exp * 1000),
-		},
-	});
+	const storedToken = await storeToken(opts.storeTokens, token, "access_token");
+	let accessTokenId: string;
+	try {
+		const created = await ctx.context.adapter.create<{ id: string }>({
+			model: "oauthAccessToken",
+			data: {
+				token: storedToken,
+				clientId: client.clientId,
+				sessionId: payload?.sid,
+				userId: user?.id,
+				referenceId,
+				authorizationCodeId,
+				resources,
+				refreshId,
+				confirmation,
+				requestedUserInfoClaims: requestedUserInfoClaims?.length
+					? requestedUserInfoClaims
+					: undefined,
+				scopes,
+				createdAt: new Date(iat * 1000),
+				expiresAt: new Date(exp * 1000),
+			},
+		});
+		accessTokenId = created.id;
+	} catch (error) {
+		// A concurrent reuse detection or code replay can delete the refresh
+		// token issued with this one before this insert runs.
+		if (refreshId && !(await refreshTokenExists(ctx, refreshId))) {
+			ctx.context.logger.warn(
+				"access token not stored: its refresh token was revoked during issuance",
+				error,
+			);
+			throw grantRevokedDuringIssuance();
+		}
+		throw error;
+	}
+	// Adapters that do not enforce the `refreshId` foreign key, such as the
+	// memory and MongoDB adapters, accept the insert after that revocation.
+	// Revocation deletes linked access tokens again after the refresh rows, so
+	// an insert it misses always sees the refresh token gone here.
+	if (refreshId && !(await refreshTokenExists(ctx, refreshId))) {
+		await ctx.context.adapter.delete({
+			model: "oauthAccessToken",
+			where: [{ field: "id", value: accessTokenId }],
+		});
+		throw grantRevokedDuringIssuance();
+	}
 	return (opts.prefix?.opaqueAccessToken ?? "") + token;
+}
+
+async function refreshTokenExists(
+	ctx: GenericEndpointContext,
+	refreshId: string,
+) {
+	return !!(await ctx.context.adapter.findOne({
+		model: "oauthRefreshToken",
+		where: [{ field: "id", value: refreshId }],
+	}));
+}
+
+function grantRevokedDuringIssuance() {
+	return new APIError("BAD_REQUEST", {
+		error_description: "grant revoked during token issuance",
+		error: "invalid_grant",
+	});
 }
 
 /**
@@ -538,25 +615,19 @@ export async function invalidateRefreshFamily(
 	clientId: string,
 	userId: string,
 ) {
-	const refreshTokens = await ctx.context.adapter.findMany<{ id: string }>({
-		model: "oauthRefreshToken",
-		where: [
-			{ field: "clientId", value: clientId },
-			{ field: "userId", value: userId },
-		],
-	});
-	if (refreshTokens.length) {
-		await ctx.context.adapter.deleteMany({
+	// Every access token linked to this family's refresh rows carries the same
+	// client and user, so the delete needs no list of refresh IDs, which
+	// `findMany` would cap at `defaultFindManyLimit`.
+	const deleteLinkedAccessTokens = () =>
+		ctx.context.adapter.deleteMany({
 			model: "oauthAccessToken",
 			where: [
-				{
-					field: "refreshId",
-					operator: "in",
-					value: refreshTokens.map((r) => r.id),
-				},
+				{ field: "clientId", value: clientId },
+				{ field: "userId", value: userId },
+				{ field: "refreshId", operator: "ne", value: null },
 			],
 		});
-	}
+	await deleteLinkedAccessTokens();
 	await ctx.context.adapter.deleteMany({
 		model: "oauthRefreshToken",
 		where: [
@@ -564,6 +635,9 @@ export async function invalidateRefreshFamily(
 			{ field: "userId", value: userId },
 		],
 	});
+	// Without a foreign key, an in-flight issuance can store an access token
+	// between the two deletes above. See `createOpaqueAccessToken`.
+	await deleteLinkedAccessTokens();
 }
 
 async function revokeTokensIssuedForAuthorizationCode(
@@ -588,6 +662,9 @@ async function revokeTokensIssuedForAuthorizationCode(
 
 	await deleteIssuedTokens("oauthAccessToken");
 	await deleteIssuedTokens("oauthRefreshToken");
+	// Without a foreign key, an in-flight redemption can store an access token
+	// between the two deletes above. See `createOpaqueAccessToken`.
+	await deleteIssuedTokens("oauthAccessToken");
 }
 
 async function createRefreshToken(
@@ -610,7 +687,10 @@ async function createRefreshToken(
 	const token = opts.generateRefreshToken
 		? await opts.generateRefreshToken()
 		: generateRandomString(32, "A-Z", "a-z");
-	const sessionId = payload?.sid as string | undefined;
+	// A rotated token stays bound to its parent's session after that session
+	// ends, so deleting the session still revokes it. Only the `sid` claim drops.
+	const sessionId =
+		originalRefresh?.sessionId ?? (payload?.sid as string | undefined);
 	const storedToken = await storeToken(
 		opts.storeTokens,
 		token,
@@ -791,9 +871,10 @@ async function resolveDpopTokenBinding(
 	opts: OAuthOptions<Scope[]>,
 	params: {
 		client: SchemaClient<Scope[]>;
-		grantIssuance: ResourceGrantIssuance;
+		grantIssuance: Pick<ResourceGrantIssuance, "dpopBoundAccessTokensRequired">;
 		verificationValue?: VerificationValue;
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
+		replayStore?: DpopReplayStore;
 	},
 ): Promise<Confirmation | undefined> {
 	const authCodeDpopJkt = params.verificationValue?.query.dpop_jkt;
@@ -817,11 +898,13 @@ async function resolveDpopTokenBinding(
 		const proof = await verifyDpopProof({
 			proofJwt: dpopProofJwt,
 			method: "POST",
-			url: getEndpointUrl(ctx, "/oauth2/token"),
+			// The endpoint serving this request: the token endpoint, or a plugin's
+			// own endpoint that issues tokens out-of-grant.
+			url: getEndpointUrl(ctx, ctx.path ?? "/oauth2/token"),
 			expectedJkt,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
+			replayStore: params.replayStore ?? createDpopReplayStore(ctx.context),
 		});
 		return { jkt: proof.jkt };
 	} catch (error) {
@@ -830,6 +913,65 @@ async function resolveDpopTokenBinding(
 		}
 		throw error;
 	}
+}
+
+/**
+ * Checks the token request's DPoP proof before a one-time code is consumed,
+ * under the resource policy issuance applies, so a rejected proof leaves the
+ * code for a retry.
+ *
+ * The proof's `jti` is not recorded yet: call `recordReplay` once the code is
+ * consumed, then pass `confirmation` to issuance. Recording it earlier would
+ * report the loser of a concurrent redemption as a replayed proof instead of a
+ * spent code.
+ */
+export async function checkDpopProofBeforeConsume(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		client: SchemaClient<Scope[]>;
+		scopes: string[];
+		resources?: string[];
+		verificationValue?: VerificationValue;
+		/** The policy already resolved for this client, scopes, and resources. */
+		policy?: ResolvedResourcePolicy;
+	},
+): Promise<{
+	confirmation?: Confirmation;
+	recordReplay: () => Promise<void>;
+}> {
+	const policy =
+		params.policy ??
+		(await resolveResourcePolicy(ctx, opts, {
+			resource: params.resources,
+			clientId: params.client.clientId,
+			requestedScopes: params.scopes,
+		}));
+	let reservation: DpopReplayReservation | undefined;
+	const confirmation = await resolveDpopTokenBinding(ctx, opts, {
+		client: params.client,
+		grantIssuance: policy,
+		verificationValue: params.verificationValue,
+		replayStore: {
+			reserve: (pending) => {
+				reservation = pending;
+				return true;
+			},
+		},
+	});
+	return {
+		confirmation,
+		recordReplay: async () => {
+			if (!reservation) return;
+			const reserved = await createDpopReplayStore(ctx.context).reserve({
+				...reservation,
+				now: new Date(),
+			});
+			if (!reserved) {
+				throwInvalidDpopProof("DPoP proof jti has already been used");
+			}
+		},
+	};
 }
 
 type RefreshTokenRotationReplayRequest = {
@@ -1147,6 +1289,21 @@ async function createUserTokens(
 		clientAllowsGrant(client, "refresh_token") &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
+	// A refresh that drops `offline_access`, whether the client narrowed the
+	// scope or a resource policy filtered it, asks for a session-bound grant,
+	// which cannot start once the session has ended. Refuse before rotation so
+	// the presented `offline_access` token stays usable.
+	if (
+		isRefreshToken &&
+		existingRefreshToken &&
+		!sessionId &&
+		isSessionBoundRefreshToken(existingRefreshToken, effectiveScopes)
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
 	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
 	const isIdToken = user && effectiveScopes.includes("openid");
 	const metadata = parseClientMetadata(client.metadata);
@@ -1357,7 +1514,28 @@ async function createUserTokens(
 	return ctx.json(responseBody);
 }
 
-/** Checks verification value */
+/**
+ * Rejects an unknown, expired, or already-redeemed authorization code. A code
+ * presented after redemption revokes the tokens it issued (RFC 6749 §4.1.2).
+ */
+async function rejectAuthorizationCode(
+	ctx: GenericEndpointContext,
+	authorizationCodeId: string,
+): Promise<never> {
+	await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
+	throw new APIError("BAD_REQUEST", {
+		error_description: "invalid code",
+		error: "invalid_grant",
+	});
+}
+
+/**
+ * Reads and checks the verification value without consuming it. The caller
+ * consumes the code only after every request-level check passes, so a rejected
+ * verifier, binding, or DPoP proof leaves the code for a retry. A DPoP proof
+ * whose `jti` was already used is the exception: it is detected after the
+ * claim, so it spends the code.
+ */
 async function checkVerificationValue(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -1371,20 +1549,16 @@ async function checkVerificationValue(
 		code,
 		"authorization_code",
 	);
-	// Atomic single-use redemption per RFC 6749 §4.1.2. The first caller
-	// receives the row and mints tokens; concurrent racers receive `null`
-	// and fall through to the `invalid_grant` error path (RFC 6749 §5.2).
 	const verification =
-		await ctx.context.internalAdapter.consumeVerificationValue(
+		await ctx.context.internalAdapter.findVerificationValue(
 			authorizationCodeId,
 		);
-
-	if (!verification) {
-		await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
-		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid code",
-			error: "invalid_grant",
-		});
+	// Secondary storage returns `expiresAt` as a JSON string, so coerce it.
+	if (
+		!verification ||
+		new Date(verification.expiresAt).getTime() < Date.now()
+	) {
+		return rejectAuthorizationCode(ctx, authorizationCodeId);
 	}
 
 	let rawValue: unknown;
@@ -1460,6 +1634,7 @@ async function checkVerificationValue(
 
 	return {
 		verificationValue,
+		verificationId: verification.id,
 		effectiveResources,
 		authorizedResources: storedResources,
 		authorizationCodeId,
@@ -1476,7 +1651,7 @@ async function handleAuthorizationCodeGrant(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/token`,
+		getAuthEndpointUrl(ctx, "/oauth2/token"),
 	);
 	const {
 		clientId: client_id,
@@ -1524,9 +1699,24 @@ async function handleAuthorizationCodeGrant(
 		});
 	}
 
+	/** Verify Client (RFC 6749 §5.2: an unknown or unauthenticated client is
+	 * `invalid_client`, so resolve it before the code lookup can report
+	 * `invalid_grant` and before a one-time code is consumed). */
+	const client = await validateClientCredentials(
+		ctx,
+		opts,
+		client_id,
+		client_secret,
+		undefined,
+		preVerified,
+		"authorization_code",
+		authMethod,
+	);
+
 	/** Get and check Verification Value */
 	const {
 		verificationValue,
+		verificationId,
 		effectiveResources,
 		authorizedResources,
 		authorizationCodeId,
@@ -1545,18 +1735,7 @@ async function handleAuthorizationCodeGrant(
 			error: "invalid_scope",
 		});
 	}
-
-	/** Verify Client */
-	const client = await validateClientCredentials(
-		ctx,
-		opts,
-		client_id,
-		client_secret,
-		scopes,
-		preVerified,
-		"authorization_code",
-		authMethod,
-	);
+	validateClientScopes(client, scopes);
 
 	// Parse scopes from the authorization request
 	const requestedScopes =
@@ -1597,7 +1776,7 @@ async function handleAuthorizationCodeGrant(
 
 		if (pkceUsedInAuth && !pkceUsedInToken) {
 			// PKCE was used in authorization but not in token exchange
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"code_verifier required because PKCE was used in authorization",
 				error: "invalid_request",
@@ -1606,7 +1785,7 @@ async function handleAuthorizationCodeGrant(
 
 		if (!pkceUsedInAuth && pkceUsedInToken) {
 			// PKCE was not used in authorization but verifier provided
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"code_verifier provided but PKCE was not used in authorization",
 				error: "invalid_request",
@@ -1620,9 +1799,9 @@ async function handleAuthorizationCodeGrant(
 				: undefined;
 
 		if (challenge !== verificationValue.query?.code_challenge) {
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description: "code verification failed",
-				error: "invalid_request",
+				error: "invalid_grant",
 			});
 		}
 	}
@@ -1670,6 +1849,27 @@ async function handleAuthorizationCodeGrant(
 		getSupportedClaims(opts),
 	);
 
+	const dpop = await checkDpopProofBeforeConsume(ctx, opts, {
+		client,
+		scopes,
+		resources: effectiveResources,
+		verificationValue,
+	});
+
+	// Atomic single-use redemption per RFC 6749 §4.1.2, claimed only after the
+	// request passed every check above. Concurrent racers receive `null` and
+	// are rejected as a replay with `invalid_grant` (RFC 6749 §5.2). Lookup
+	// and consume each take the newest row for the identifier, so issue only
+	// when they are the same row.
+	const consumed =
+		await ctx.context.internalAdapter.consumeVerificationValue(
+			authorizationCodeId,
+		);
+	if (!consumed || consumed.id !== verificationId) {
+		return rejectAuthorizationCode(ctx, authorizationCodeId);
+	}
+	await dpop.recordReplay();
+
 	return createUserTokens(ctx, opts, {
 		client,
 		scopes: verificationValue.query.scope?.split(" ") ?? [],
@@ -1684,6 +1884,7 @@ async function handleAuthorizationCodeGrant(
 		requestedUserInfoClaims,
 		resources: effectiveResources,
 		originalResources: authorizedResources,
+		confirmation: dpop.confirmation,
 	});
 }
 
@@ -1700,7 +1901,7 @@ async function handleClientCredentialsGrant(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/token`,
+		getAuthEndpointUrl(ctx, "/oauth2/token"),
 	);
 	const {
 		clientId: client_id,
@@ -1786,7 +1987,7 @@ async function handleRefreshTokenGrant(
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
-		`${ctx.context.baseURL}/oauth2/token`,
+		getAuthEndpointUrl(ctx, "/oauth2/token"),
 	);
 	const {
 		clientId: client_id,
@@ -1820,6 +2021,21 @@ async function handleRefreshTokenGrant(
 			error: "invalid_request",
 		});
 	}
+
+	/** Verify Client (RFC 6749 §5.2: an unknown or unauthenticated client is
+	 * `invalid_client`, so resolve it before the refresh token lookup can
+	 * report `invalid_grant`). */
+	const client = await validateClientCredentials(
+		ctx,
+		opts,
+		client_id,
+		client_secret, // Optional for refresh_grant but required on confidential clients
+		undefined,
+		preVerified,
+		"refresh_token",
+		authMethod,
+	);
+
 	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);
 
 	const refreshToken = await ctx.context.adapter.findOne<
@@ -1884,16 +2100,18 @@ async function handleRefreshTokenGrant(
 		}
 	}
 
-	const client = await validateClientCredentials(
-		ctx,
-		opts,
-		client_id,
-		client_secret, // Optional for refresh_grant but required on confidential clients
-		requestedScopes ?? scopes,
-		preVerified,
-		"refresh_token",
-		authMethod,
-	);
+	validateClientScopes(client, requestedScopes ?? scopes);
+
+	// A session-bound refresh token is never rotated, so presenting one that was
+	// revoked at sign-out is not replay and must not tear down the client's
+	// other grants.
+	const session = await resolveRefreshTokenSession(ctx, refreshToken);
+	if (session.ended) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
 
 	if (refreshToken.revoked) {
 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
@@ -1950,7 +2168,7 @@ async function handleRefreshTokenGrant(
 		grantType: "refresh_token",
 		referenceId: refreshToken.referenceId,
 		authorizationCodeId: refreshToken.authorizationCodeId,
-		sessionId: refreshToken.sessionId,
+		sessionId: session.sessionId,
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,

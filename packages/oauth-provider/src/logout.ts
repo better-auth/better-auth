@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
+import { INSECURE_REDIRECT_URI_MESSAGE } from "@better-auth/core/utils/redirect-uri";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getJwks } from "better-auth/oauth2";
@@ -10,12 +11,14 @@ import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { compactVerify, createLocalJWKSet, decodeJwt } from "jose";
 import type { OAuthRedirectResult } from "./authorize";
-import { getIssuer, handleRedirect } from "./authorize";
+import { getAcceptedIssuers, handleRedirect } from "./authorize";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import {
 	decryptStoredClientSecret,
 	getClient,
+	getJwksSource,
 	getJwtPlugin,
+	isRedirectUriTransportAllowed,
 	resolveSubjectIdentifier,
 } from "./utils";
 
@@ -107,14 +110,15 @@ async function signLogoutToken(
  * Token identifiers must be captured here because their `sessionId` foreign key
  * is cleared when the session row disappears.
  *
- * Revocation is the stored backstop, not the primary enforcement: introspection
- * and `/userinfo` already treat a token whose session has ended as inactive
- * (see `validateOpaqueAccessToken` / `validateJwtAccessToken`), so a missed
- * `revoked` write cannot keep a session-bound token alive on its own. Access
- * tokens bound to the session are revoked as OP hardening. Refresh tokens
- * follow OIDC Back-Channel Logout 1.0 §2.7: those without `offline_access` are
- * revoked; `offline_access` refresh tokens survive so long-lived API access can
- * outlive the browser session.
+ * Introspection, `/userinfo`, and the refresh grant also check the session at
+ * use, but only while a token still names it: a database that enforces the
+ * foreign key clears `sessionId` when the session row is deleted, and a JWT
+ * access token keeps its `sid` claim. Opaque access tokens and refresh tokens
+ * therefore still depend on this cleanup. Access tokens bound to the session
+ * are revoked as OP hardening. Refresh tokens follow OIDC Back-Channel Logout
+ * 1.0 §2.7: those without `offline_access` are revoked; `offline_access`
+ * refresh tokens survive so long-lived API access can outlive the browser
+ * session.
  *
  * Token revocation runs regardless of the JWT plugin (refresh-token revocation
  * has no dependency on signing). Only Logout Token delivery needs the JWT
@@ -238,8 +242,8 @@ async function applyBackchannelLogoutPlan(
 				})
 			: Promise.resolve(),
 	]);
-	// Session liveness remains authoritative, but operators still need a signal
-	// if the stored revocation backstop drifts from the committed session state.
+	// The refresh grant and introspection check the session at use, but
+	// operators still need a signal when this revocation fails.
 	for (const result of revocations) {
 		if (result.status === "rejected") {
 			ctx.context.logger.error(
@@ -307,7 +311,8 @@ async function deliverBackchannelLogoutTokens(
 					},
 					body: new URLSearchParams({ logout_token: token }),
 					signal: AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS),
-					redirect: "error",
+					// Not "error": Workers rejects it. The status check refuses 3xx and opaque redirects.
+					redirect: "manual",
 				});
 				// Spec §2.8: RP MUST return 200; many frameworks normalize empty 200
 				// bodies to 204, which is commonly accepted.
@@ -696,11 +701,7 @@ async function verifyLogoutHint(
 				new TextDecoder().decode(verifiedPayload),
 			) as JWTPayload;
 		} else {
-			const jwtPluginOptions = getJwtPlugin(ctx.context).options;
-			const jwksUrl =
-				jwtPluginOptions?.jwks?.remoteUrl ??
-				`${ctx.context.baseURL}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`;
-			const jwks = await getJwks(hint, { jwksFetch: jwksUrl });
+			const jwks = await getJwks(hint, getJwksSource(ctx));
 			const { payload: verifiedPayload } = await compactVerify(
 				hint,
 				createLocalJWKSet(jwks),
@@ -710,7 +711,12 @@ async function verifyLogoutHint(
 			) as JWTPayload;
 		}
 
-		if (payload.iss !== getIssuer(ctx, opts)) return null;
+		if (
+			typeof payload.iss !== "string" ||
+			!getAcceptedIssuers(ctx, opts).includes(payload.iss)
+		) {
+			return null;
+		}
 		if (!normalizeLogoutAudiences(payload.aud).includes(client.clientId)) {
 			return null;
 		}
@@ -773,6 +779,10 @@ async function getConfirmedLogoutRedirect(
 	if (state.redirectInvalid) return { invalid: true };
 	if (!state.clientId || !state.postLogoutRedirectUri) {
 		return { invalid: false };
+	}
+	// The policy may have changed since the confirmation state was issued.
+	if (!isRedirectUriTransportAllowed(opts, state.postLogoutRedirectUri)) {
+		return { invalid: true };
 	}
 	const client = await getLogoutClient(ctx, opts, state.clientId);
 	if (!client || client.disabled || !client.enableEndSession) {
@@ -891,6 +901,17 @@ export async function rpInitiatedLogoutEndpoint(
 	const query = (ctx.query ?? {}) as RPInitiatedLogoutRequest;
 	const body = (ctx.body ?? {}) as RPInitiatedLogoutRequest;
 	const request: RPInitiatedLogoutRequest = { ...query, ...body };
+	if (
+		request.post_logout_redirect_uri &&
+		!isRedirectUriTransportAllowed(opts, request.post_logout_redirect_uri)
+	) {
+		return logoutProtocolError(
+			ctx,
+			"BAD_REQUEST",
+			"invalid_request",
+			INSECURE_REDIRECT_URI_MESSAGE,
+		);
+	}
 
 	const currentSession = await getCurrentBrowserSession(ctx);
 	const hasHint = request.id_token_hint !== undefined;

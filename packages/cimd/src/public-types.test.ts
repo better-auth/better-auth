@@ -6,6 +6,7 @@ import type {
 	CimdOptions,
 } from "@better-auth/cimd";
 import type {
+	ClientDiscovery,
 	OAuthClientMetadata,
 	SchemaClient,
 	Scope,
@@ -36,6 +37,9 @@ describe("public CIMD surface", () => {
 		);
 		expectTypeOf<CimdOptions>().toHaveProperty("metadataRevalidationInterval");
 		expectTypeOf<CimdOptions>().not.toHaveProperty("refreshRate");
+		expectTypeOf<CimdOptions["isCrossOriginJwksUriAllowed"]>().toEqualTypeOf<
+			ClientDiscovery["isCrossOriginJwksUriAllowed"]
+		>();
 		void assertValidationResultNarrowing;
 	});
 

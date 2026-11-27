@@ -1,6 +1,7 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { admin } from "../../plugins/admin/admin";
+import { emailOTP } from "../../plugins/email-otp";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("sign-up with custom fields", async () => {
@@ -197,6 +198,250 @@ describe("sign-up with custom fields", async () => {
 				statusCode: 400,
 			}),
 		);
+	});
+});
+
+describe("sign-up input: false field with a function defaultValue", () => {
+	const approved = {
+		type: "boolean",
+		required: false,
+		input: false,
+		defaultValue: () => false,
+	} as const;
+
+	it("should store the resolved default when the client sends the key", async () => {
+		const seen: unknown[] = [];
+		const { auth, db } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						approved,
+					},
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								seen.push(user.approved);
+							},
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "function-default@test.com",
+					password: "password",
+					name: "Function Default",
+					//@ts-expect-error
+					approved: true,
+				},
+			}),
+		).resolves.toMatchObject({
+			user: {
+				approved: false,
+			},
+		});
+
+		expect(seen).toEqual([false]);
+		const stored = await db.findOne<{ approved: boolean }>({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					value: "function-default@test.com",
+				},
+			],
+		});
+		expect(stored?.approved).toBe(false);
+	});
+
+	it("should answer an existing email normally when the client sends the key", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				user: {
+					additionalFields: {
+						approved,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const body = {
+			email: "function-default-existing@test.com",
+			password: "password",
+			name: "Function Default",
+		};
+		const first = await auth.api.signUpEmail({
+			body,
+		});
+
+		const second = auth.api.signUpEmail({
+			body: {
+				...body,
+				//@ts-expect-error
+				approved: true,
+			},
+		});
+		await expect(second).resolves.toMatchObject({
+			user: {
+				approved: false,
+			},
+		});
+		const { user } = await second;
+		expect(user.id).not.toBe(first.user.id);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11642
+ */
+describe("sign-up session caching", () => {
+	function createStorage(store: Map<string, string>, shouldFail = () => false) {
+		return {
+			set(key: string, value: string) {
+				if (shouldFail()) throw new Error("storage unavailable");
+				store.set(key, value);
+			},
+			get(key: string) {
+				return store.get(key) || null;
+			},
+			getAndDelete(key: string) {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment(key: string) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
+			delete(key: string) {
+				store.delete(key);
+			},
+		};
+	}
+
+	const body = {
+		email: "cache-rollback@test.com",
+		password: "password",
+		name: "Cache Rollback",
+	};
+
+	it("does not cache the session when the sign-up rolls back after creating it", async () => {
+		const store = new Map<string, string>();
+		const { auth, db } = await getTestInstance(
+			{
+				secondaryStorage: createStorage(store),
+				session: { storeSessionInDatabase: true },
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		const transaction = ctx.adapter.transaction;
+		vi.spyOn(ctx.adapter, "transaction").mockImplementation((cb) =>
+			transaction(async (trx) => {
+				await cb(trx);
+				throw new Error("rolled back");
+			}),
+		);
+
+		await expect(auth.api.signUpEmail({ body })).rejects.toThrow("rolled back");
+
+		expect([...store.keys()]).toEqual([]);
+		const users = await db.findMany<{ email: string }>({ model: "user" });
+		expect(users.find((u) => u.email === body.email)).toBeUndefined();
+	});
+
+	it("rolls back the user when secondary storage cannot store the session", async () => {
+		const store = new Map<string, string>();
+		const { auth, db } = await getTestInstance(
+			{ secondaryStorage: createStorage(store, () => true) },
+			{ disableTestUser: true },
+		);
+
+		await expect(auth.api.signUpEmail({ body })).rejects.toThrow();
+
+		const users = await db.findMany<{ email: string }>({ model: "user" });
+		expect(users.find((u) => u.email === body.email)).toBeUndefined();
+	});
+
+	it("rolls back the user when a preserved session cannot be cached", async () => {
+		const store = new Map<string, string>();
+		const { auth, db } = await getTestInstance(
+			{
+				secondaryStorage: createStorage(store, () => true),
+				session: {
+					storeSessionInDatabase: true,
+					preserveSessionInDatabase: true,
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		await expect(auth.api.signUpEmail({ body })).rejects.toThrow();
+
+		const users = await db.findMany<{ email: string }>({ model: "user" });
+		expect(users.find((u) => u.email === body.email)).toBeUndefined();
+	});
+
+	it("keeps a session revoked by its create.after hook revoked", async () => {
+		const store = new Map<string, string>();
+		let revoke: (token: string) => Promise<void> = async () => {};
+		const { auth } = await getTestInstance(
+			{
+				secondaryStorage: createStorage(store),
+				session: { storeSessionInDatabase: true },
+				databaseHooks: {
+					session: {
+						create: {
+							async after(session) {
+								await revoke(session.token);
+							},
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		revoke = (token) => ctx.internalAdapter.deleteSession(token);
+
+		const { token } = await auth.api.signUpEmail({ body });
+
+		expect(token).toBeTruthy();
+		expect(await ctx.internalAdapter.findSession(token!)).toBeNull();
+	});
+
+	it("lists the session when its cached copy failed to write", async () => {
+		const store = new Map<string, string>();
+		let failWrites = true;
+		const { auth } = await getTestInstance(
+			{
+				secondaryStorage: createStorage(store, () => failWrites),
+				session: { storeSessionInDatabase: true },
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+
+		const { token, user } = await auth.api.signUpEmail({ body });
+		failWrites = false;
+
+		const sessions = await ctx.internalAdapter.listSessions(user.id);
+		expect(sessions.map((session) => session.token)).toEqual([token]);
 	});
 });
 
@@ -1034,5 +1279,117 @@ describe("sign-up enumeration protection — customSyntheticUser with admin plug
 		expect(secondUser.banned).toBe(false);
 		expect(secondUser.banReason).toBeNull();
 		expect(secondUser.banExpires).toBeNull();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12051
+ */
+describe("sign-up side effects run after the commit", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const advanced = {
+		backgroundTasks: {
+			handler: (promise: Promise<unknown>) => {
+				backgroundTasks.push(promise);
+			},
+		},
+	};
+	const drainBackgroundTasks = async () => {
+		while (backgroundTasks.length) {
+			await Promise.all(backgroundTasks.splice(0));
+		}
+	};
+
+	it("stores and sends the email OTP after the sign-up commits", async () => {
+		const sendVerificationOTP = vi.fn(async () => {});
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: { sendOnSignUp: true },
+				advanced,
+				plugins: [
+					emailOTP({
+						overrideDefaultEmailVerification: true,
+						sendVerificationOTP,
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		const email = "otp-transaction@test.com";
+
+		await auth.api.signUpEmail({
+			body: { email, password: "password123", name: "OTP Transaction" },
+		});
+		await drainBackgroundTasks();
+
+		const stored = await ctx.internalAdapter.findVerificationValue(
+			`email-verification-otp-${email}`,
+		);
+		expect(stored).not.toBeNull();
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps onExistingUserSignUp writes made in the background", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+					onExistingUserSignUp: async ({ user }) => {
+						const ctx = await auth.$context;
+						await ctx.internalAdapter.createVerificationValue({
+							identifier: `existing-sign-up-${user.id}`,
+							value: "notified",
+							expiresAt: new Date(Date.now() + 60_000),
+						});
+					},
+				},
+				advanced,
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+		const body = {
+			email: "existing@test.com",
+			password: "password123",
+			name: "E",
+		};
+		await auth.api.signUpEmail({ body });
+		await auth.api.signUpEmail({ body });
+		await drainBackgroundTasks();
+
+		const existing = await ctx.internalAdapter.findUserByEmail(body.email);
+		expect(
+			await ctx.internalAdapter.findVerificationValue(
+				`existing-sign-up-${existing!.user.id}`,
+			),
+		).not.toBeNull();
+	});
+
+	it("keeps the committed sign-up when the sender throws", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail: () => {
+						throw new Error("mailer down");
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const email = "sender-throws@test.com";
+
+		await expect(
+			auth.api.signUpEmail({
+				body: { email, password: "password123", name: "Sender Throws" },
+			}),
+		).resolves.toMatchObject({ token: null });
+
+		const ctx = await auth.$context;
+		expect(await ctx.internalAdapter.findUserByEmail(email)).not.toBeNull();
 	});
 });

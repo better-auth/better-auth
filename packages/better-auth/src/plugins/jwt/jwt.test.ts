@@ -1,17 +1,32 @@
 import { DatabaseSync } from "node:sqlite";
-import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type {
+	BetterAuthClientPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import type { JSONWebKeySet } from "jose";
-import { createLocalJWKSet, jwtVerify } from "jose";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import {
+	createLocalJWKSet,
+	decodeJwt,
+	exportJWK,
+	generateKeyPair,
+	jwtVerify,
+	SignJWT,
+} from "jose";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { getSessionFromCtx } from "../../api";
 import { betterAuth } from "../../auth/full";
 import { createAuthClient } from "../../client";
+import { parseCookies } from "../../cookies/cookie-utils";
+import { SESSION_COOKIE_JWT_TYPE } from "../../cookies/jwt";
 import { getMigrations } from "../../db/get-migration";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { inferAdditionalFields } from "../additional-fields/client";
 import { jwt } from ".";
 import { jwtClient } from "./client";
+import { createCookieCacheSigner } from "./cookie-cache";
 import type { JWKOptions, Jwk, JwtOptions } from "./types";
 import { generateExportedKeyPair, toExpJWT } from "./utils";
 
@@ -47,6 +62,110 @@ describe("jwt", async () => {
 		});
 
 		expect(token.length).toBeGreaterThan(10);
+	});
+
+	it("does not issue a token for an expired session", async () => {
+		const { headers: expiredHeaders } = await signInWithTestUser();
+		const session = await auth.api.getSession({
+			headers: expiredHeaders,
+		});
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.updateSession(session!.session.token, {
+			expiresAt: new Date(Date.now() - 1000),
+		});
+
+		let token: string | null = null;
+		const result = await client.getSession({
+			fetchOptions: {
+				headers: expiredHeaders,
+				onSuccess(context) {
+					token = context.response.headers.get("set-auth-jwt");
+				},
+			},
+		});
+
+		expect(result.error).toBeNull();
+		expect(result.data).toBeNull();
+		expect(token).toBeNull();
+	});
+
+	it("does not issue a token for a session a before hook loaded and was then revoked", async () => {
+		const { client, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				jwt(),
+				{
+					id: "revoke-in-before-hook",
+					hooks: {
+						before: [
+							{
+								matcher: (ctx) => ctx.path === "/get-session",
+								handler: createAuthMiddleware(async (ctx) => {
+									const session = await getSessionFromCtx(ctx);
+									await ctx.context.internalAdapter.deleteSession(
+										session!.session.token,
+									);
+								}),
+							},
+						],
+					},
+				},
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		let token: string | null = null;
+		const result = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					token = context.response.headers.get("set-auth-jwt");
+				},
+			},
+		});
+
+		expect(result.error).toBeNull();
+		expect(result.data).toBeNull();
+		expect(token).toBeNull();
+	});
+
+	it("does not issue a token when the session is revoked before its refresh", async () => {
+		let revokedToken: string | null = null;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [jwt()],
+			session: {
+				updateAge: 0,
+			},
+			databaseHooks: {
+				session: {
+					update: {
+						before: async () => {
+							if (!revokedToken) {
+								return;
+							}
+							const ctx = await auth.$context;
+							await ctx.internalAdapter.deleteSession(revokedToken);
+						},
+					},
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const session = await auth.api.getSession({
+			headers,
+			query: {
+				disableRefresh: true,
+			},
+		});
+		revokedToken = session!.session.token;
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers,
+			}),
+		);
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("set-auth-jwt")).toBeNull();
 	});
 
 	it("Client gets a token", async () => {
@@ -922,5 +1041,122 @@ describe("jwtClient types", () => {
 			logo?: string | null | undefined;
 		}>();
 		expectTypeOf(client.jwks).toBeFunction();
+	});
+});
+
+describe("jwt - signing algorithm comes from the key", async () => {
+	const edKey = await generateKeyPair("EdDSA", { extractable: true });
+	const rsaKey = await generateKeyPair("RS256", { extractable: true });
+	const storage: Jwk[] = [
+		{
+			id: "ed-key",
+			publicKey: JSON.stringify(await exportJWK(edKey.publicKey)),
+			privateKey: JSON.stringify(await exportJWK(edKey.privateKey)),
+			createdAt: new Date(),
+			alg: "EdDSA",
+		},
+		{
+			id: "rsa-key-without-alg",
+			publicKey: JSON.stringify(await exportJWK(rsaKey.publicKey)),
+			privateKey: JSON.stringify(await exportJWK(rsaKey.privateKey)),
+			createdAt: new Date(0),
+		},
+	];
+	const jwtOptions = {
+		sessionCookieCache: true,
+		jwks: { disablePrivateKeyEncryption: true },
+		adapter: { getJwks: async () => storage },
+	} satisfies JwtOptions;
+	const { auth, client, testUser, cookieSetter } = await getTestInstance({
+		session: { cookieCache: { enabled: true, strategy: "jwt" } },
+		plugins: [jwt(jwtOptions)],
+	});
+
+	it("verifyJWT rejects a token whose header names another algorithm for the key", async () => {
+		const { token } = await auth.api.signJWT({
+			body: { payload: { sub: "u1" } },
+		});
+		const relabeled = await new SignJWT(decodeJwt(token))
+			.setProtectedHeader({ alg: "Ed25519", kid: "ed-key" })
+			.sign(edKey.privateKey);
+
+		await expect(
+			auth.api.verifyJWT({ body: { token } }),
+		).resolves.toMatchObject({ payload: { sub: "u1" } });
+		await expect(
+			auth.api.verifyJWT({ body: { token: relabeled } }),
+		).resolves.toEqual({ payload: null });
+	});
+
+	it("does not take the cookie-cache algorithm from the token header", async () => {
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const token = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		if (!token) {
+			throw new Error("Cookie-cache JWT not found");
+		}
+		const headerSigned = await new SignJWT(decodeJwt(token))
+			.setProtectedHeader({
+				alg: "RS256",
+				kid: "rsa-key-without-alg",
+				typ: SESSION_COOKIE_JWT_TYPE,
+			})
+			.sign(rsaKey.privateKey);
+		const ctx = { context: await auth.$context } as GenericEndpointContext;
+		const signer = createCookieCacheSigner(jwtOptions);
+
+		await expect(signer.verify(ctx, token)).resolves.not.toBeNull();
+		await expect(signer.verify(ctx, headerSigned)).resolves.toBeNull();
+	});
+});
+
+describe("jwt - unresolved issuer and audience", async () => {
+	const warn = vi.fn();
+	const { auth } = await getTestInstance({
+		baseURL: undefined,
+		logger: {
+			log: (level, message) => {
+				if (level === "warn") warn(message);
+			},
+		},
+		plugins: [jwt()],
+	});
+
+	beforeEach(() => {
+		warn.mockClear();
+	});
+
+	it("warns when it signs a token without an issuer or audience", async () => {
+		const { token } = await auth.api.signJWT({
+			body: { payload: { sub: "u1" } },
+		});
+
+		expect(decodeJwt(token)).toMatchObject({ iss: "", aud: "" });
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("signed a JWT without an issuer or audience"),
+		);
+		await expect(auth.api.verifyJWT({ body: { token } })).resolves.toEqual({
+			payload: null,
+		});
+	});
+
+	it("warns when it accepts a token without checking its issuer or audience", async () => {
+		const { token } = await auth.api.signJWT({
+			body: {
+				payload: { sub: "u1", iss: "https://other.example", aud: "other" },
+			},
+		});
+
+		await expect(
+			auth.api.verifyJWT({ body: { token } }),
+		).resolves.toMatchObject({ payload: { sub: "u1", aud: "other" } });
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("verifying a JWT without checking its issuer"),
+		);
 	});
 });

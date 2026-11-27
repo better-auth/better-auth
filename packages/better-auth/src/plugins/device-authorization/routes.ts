@@ -1,8 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { isUniqueViolation } from "@better-auth/core/db/internal";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api/routes/session";
+import { getAuthoritativeSessionFromCtx } from "../../api/routes/session";
 import { generateRandomString } from "../../crypto";
 import type { User } from "../../types";
 import type { Where } from "../../types/adapter";
@@ -19,42 +20,6 @@ import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH } from "./schema";
 /* cspell:disable-next-line */
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const MAX_DEVICE_CODE_GENERATION_ATTEMPTS = 3;
-const UNIQUE_CONSTRAINT_ERROR_IDENTIFIERS = new Set([
-	"11000",
-	"1062",
-	"2067",
-	"23505",
-	"2601",
-	"2627",
-	"ER_DUP_ENTRY",
-	"P2002",
-	"SQLITE_CONSTRAINT_UNIQUE",
-]);
-
-function isUniqueConstraintError(error: unknown) {
-	if (typeof error !== "object" || error === null) return false;
-
-	const details = error as Record<string, unknown>;
-	const identifiers = [
-		details.code,
-		details.errcode,
-		details.errno,
-		details.number,
-	];
-	if (
-		identifiers.some((identifier) =>
-			UNIQUE_CONSTRAINT_ERROR_IDENTIFIERS.has(String(identifier)),
-		)
-	) {
-		return true;
-	}
-
-	const message = details.message;
-	return (
-		typeof message === "string" &&
-		/unique(?: key)? constraint|duplicate (?:entry|key)|e11000/i.test(message)
-	);
-}
 
 const defaultUserCodePattern = new RegExp(`^[${defaultCharset}]+$`, "i");
 
@@ -422,7 +387,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						},
 					});
 				} catch (error) {
-					if (!isUniqueConstraintError(error)) throw error;
+					if (!isUniqueViolation(error)) throw error;
 					continue;
 				}
 
@@ -473,6 +438,7 @@ const deviceTokenErrorSchema = z.object({
 			"expired_token",
 			"access_denied",
 			"invalid_request",
+			"invalid_client",
 			"invalid_grant",
 		])
 		.meta({
@@ -695,6 +661,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 													"expired_token",
 													"access_denied",
 													"invalid_request",
+													"invalid_client",
 													"invalid_grant",
 												],
 											},
@@ -717,7 +684,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				const isValid = await opts.validateClient(client_id);
 				if (!isValid) {
 					throw new APIError("BAD_REQUEST", {
-						error: "invalid_grant",
+						error: "invalid_client",
 						error_description: "Invalid client ID",
 					});
 				}
@@ -864,7 +831,7 @@ export const deviceVerify = <
 				});
 			}
 
-			const session = await getSessionFromCtx(ctx);
+			const session = await getAuthoritativeSessionFromCtx(ctx);
 			if (
 				session?.user?.id &&
 				!deviceCodeRecord.userId &&
@@ -883,6 +850,22 @@ export const deviceVerify = <
 					});
 				if (claimedDeviceCodeRecord) {
 					deviceCodeRecord.userId = session.user.id;
+				} else {
+					// A concurrent lookup claimed the code first, possibly for this
+					// same user, so the stored owner decides who may review it.
+					const current = await ctx.context.adapter.findOne<DeviceCode>({
+						model: "deviceCode",
+						where: [{ field: "id", value: deviceCodeRecord.id }],
+					});
+					if (!current) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_request",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
+						});
+					}
+					deviceCodeRecord.userId = current.userId;
+					deviceCodeRecord.status = current.status;
 				}
 			}
 
@@ -959,7 +942,7 @@ export const deviceApprove = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const session = await getSessionFromCtx(ctx);
+		const session = await getAuthoritativeSessionFromCtx(ctx);
 		if (!session) {
 			throw new APIError("UNAUTHORIZED", {
 				error: "unauthorized",
@@ -1082,7 +1065,7 @@ export const deviceDeny = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const session = await getSessionFromCtx(ctx);
+		const session = await getAuthoritativeSessionFromCtx(ctx);
 		if (!session) {
 			throw new APIError("UNAUTHORIZED", {
 				error: "unauthorized",

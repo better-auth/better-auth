@@ -1,5 +1,10 @@
-import { assert, describe, expect, it } from "vitest";
+import { UnsecuredJWT } from "jose";
+import { assert, describe, expect, it, vi } from "vitest";
+import { memoryAdapter } from "../../adapters/memory-adapter";
+import { betterAuth } from "../../auth/full";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { bearer } from "../bearer";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
 
@@ -204,6 +209,29 @@ describe("username", async () => {
 			},
 		});
 		expect(res.error?.status).toBe(400);
+	});
+
+	it("should require a session in update-user before checking whether the username is taken", async () => {
+		await client.signUp.email({
+			email: "signed-out-check@gmail.com",
+			username: "signed_out_check",
+			password: "new_password",
+			name: "signed-out-check",
+		});
+
+		const taken = await client.updateUser({
+			username: "signed_out_check",
+		});
+		expect(taken.error?.status).toBe(401);
+
+		// The username format is still checked before the session.
+		const tooShort = await client.updateUser({
+			username: "abc",
+		});
+		expect(tooShort.error?.status).toBe(400);
+		expect(tooShort.error?.code).toBe(
+			USERNAME_ERROR_CODES.USERNAME_TOO_SHORT.code,
+		);
 	});
 
 	it("should succeed on duplicate username in update-user if user is the same", async () => {
@@ -723,6 +751,120 @@ describe("post normalization flow", async () => {
 	});
 });
 
+describe("username validation order", async () => {
+	// Shortens input so length limits differ between raw and normalized values.
+	const usernameNormalization = (username: string) =>
+		username.split(" ").join("").toLowerCase();
+
+	const createAuth = async (
+		validationOrder: "pre-normalization" | "post-normalization",
+	) => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				username({
+					validationOrder: {
+						username: validationOrder,
+					},
+					usernameNormalization,
+				}),
+			],
+		});
+		return auth;
+	};
+
+	const accepted = [
+		{ validationOrder: "post-normalization", username: "Test User" },
+		{ validationOrder: "pre-normalization", username: "TestUser" },
+	] as const;
+
+	const rejected = [
+		{
+			validationOrder: "post-normalization",
+			username: "a b",
+			code: "USERNAME_TOO_SHORT",
+		},
+		{
+			validationOrder: "pre-normalization",
+			username: "Test User",
+			code: "INVALID_USERNAME",
+		},
+	] as const;
+
+	it.for(accepted)(
+		"should sign in with $username under $validationOrder",
+		async ({ validationOrder, username }) => {
+			const auth = await createAuth(validationOrder);
+			await auth.api.signUpEmail({
+				body: {
+					email: "test-user@email.com",
+					username: "TestUser",
+					password: "test-password",
+					name: "test-name",
+				},
+			});
+			await expect(
+				auth.api.signInUsername({
+					body: {
+						username,
+						password: "test-password",
+					},
+				}),
+			).resolves.toMatchObject({
+				user: { username: "testuser" },
+			});
+		},
+	);
+
+	it.for(rejected)(
+		"should reject sign-in with $username under $validationOrder",
+		async ({ validationOrder, username, code }) => {
+			const auth = await createAuth(validationOrder);
+			await expect(
+				auth.api.signInUsername({
+					body: {
+						username,
+						password: "test-password",
+					},
+				}),
+			).rejects.toMatchObject({
+				status: "UNPROCESSABLE_ENTITY",
+				body: { code },
+			});
+		},
+	);
+
+	it.for(accepted)(
+		"should report $username as available under $validationOrder",
+		async ({ validationOrder, username }) => {
+			const auth = await createAuth(validationOrder);
+			await expect(
+				auth.api.isUsernameAvailable({
+					body: {
+						username,
+					},
+				}),
+			).resolves.toEqual({ available: true });
+		},
+	);
+
+	it.for(rejected)(
+		"should reject availability of $username under $validationOrder",
+		async ({ validationOrder, username, code }) => {
+			const auth = await createAuth(validationOrder);
+			await expect(
+				auth.api.isUsernameAvailable({
+					body: {
+						username,
+					},
+				}),
+			).rejects.toMatchObject({
+				status: "UNPROCESSABLE_ENTITY",
+				body: { code },
+			});
+		},
+	);
+});
+
 describe("username email verification flow (no info leak)", async () => {
 	const { client } = await getTestInstance(
 		{
@@ -928,6 +1070,59 @@ describe("immutable username", async () => {
 	});
 });
 
+describe("immutable username with a custom normalization", async () => {
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					immutableUsername: true,
+					usernameNormalization: (username) =>
+						username.replaceAll("_", "").toLowerCase(),
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient()],
+			},
+		},
+	);
+
+	it("should fail when the new username normalizes to an empty string", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "immutable-empty-test@example.com",
+				username: "immutable_empty_user",
+				password: "password123",
+				name: "Immutable Empty Test",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			username: "___",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			USERNAME_ERROR_CODES.USERNAME_IS_IMMUTABLE.code,
+		);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("immutableemptyuser");
+	});
+});
+
 describe("username sign-in verify-email callbackURL", async () => {
 	/**
 	 * The verify-email link sent on username sign-in for an unverified user must
@@ -1090,3 +1285,248 @@ describe("username with displayUsername disabled and a validator", async () => {
 		expect("displayUsername" in (res.data?.user ?? {})).toBe(false);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
+describe("username sign-in password length", async () => {
+	const hash = vi.fn(async (password: string) => `hashed:${password}`);
+	const verify = vi.fn(
+		async ({ hash, password }: { hash: string; password: string }) =>
+			hash === `hashed:${password}`,
+	);
+	const { auth } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: { hash, verify },
+		},
+		plugins: [username()],
+	});
+
+	it("should reject a password longer than maxPasswordLength before hashing", async () => {
+		await auth.api.signUpEmail({
+			body: {
+				email: "long-password@test.com",
+				password: "password",
+				name: "Long Password",
+				username: "long_password",
+			},
+		});
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.signInUsername({
+				body: {
+					username: "long_password",
+					password: "x".repeat(129),
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+describe("username social sign-up", async () => {
+	const { client } = await getTestInstance(
+		{
+			plugins: [username()],
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					verifyIdToken: async () => true,
+					mapProfileToUser: () => ({
+						username: "social_user",
+					}),
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should create a user whose username is mapped from the profile", async () => {
+		const idToken = new UnsecuredJWT({
+			sub: "google-sub",
+			email: "social-user@test.com",
+			email_verified: true,
+			name: "Social User",
+		}).encode();
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.data).toMatchObject({
+			user: {
+				email: "social-user@test.com",
+			},
+		});
+	});
+});
+
+describe("username with a request that has no body", async () => {
+	const { auth } = await getTestInstance(
+		{
+			plugins: [username()],
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it.each([
+		["/sign-up/email", undefined],
+		["/update-user", undefined],
+		["/sign-up/email", "null"],
+		["/update-user", "null"],
+	])("should answer %s with 400 when the body is %s", async (path, body) => {
+		const response = await auth.handler(
+			new Request(`http://localhost:3000/api/auth${path}`, {
+				method: "POST",
+				headers: body
+					? {
+							"content-type": "application/json",
+						}
+					: undefined,
+				body,
+			}),
+		);
+
+		expect(response.status).toBe(400);
+	});
+});
+
+/**
+ * `getTestInstance` always registers its own `bearer()` first, so these
+ * instances are built directly to control the plugin order.
+ */
+describe.each(["bearer listed first", "username listed first"])(
+	"immutable username with a bearer token (%s)",
+	async (order) => {
+		const immutableUsername = username({
+			immutableUsername: true,
+		});
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			}),
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins:
+				order === "bearer listed first"
+					? [bearer(), immutableUsername]
+					: [immutableUsername, bearer()],
+		});
+
+		const signUp = await auth.api.signUpEmail({
+			body: {
+				email: "immutable-bearer@example.com",
+				username: "first_name",
+				password: "password123",
+				name: "Immutable Bearer",
+			},
+			returnHeaders: true,
+		});
+		const token = signUp.headers.get("set-auth-token") ?? "";
+		const sessionCookie = parseSetCookieHeader(
+			signUp.headers.get("set-cookie") ?? "",
+		).get("better-auth.session_token");
+		const cookie = `better-auth.session_token=${sessionCookie?.value}`;
+
+		const updateUsername = async (
+			headers: Record<string, string>,
+			value: string,
+		) => {
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/update-user", {
+					method: "POST",
+					headers: {
+						...headers,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						username: value,
+					}),
+				}),
+			);
+			const body = (await res.json()) as {
+				code?: string;
+			};
+			return res.ok ? "ok" : body.code;
+		};
+
+		const currentUsername = async () => {
+			const session = await auth.api.getSession({
+				headers: new Headers({
+					cookie,
+				}),
+			});
+			return session?.user.username;
+		};
+
+		it("should accept the user's own username sent with a bearer token", async () => {
+			const result = await updateUsername(
+				{
+					authorization: `Bearer ${token}`,
+				},
+				"first_name",
+			);
+			expect(result).toBe("ok");
+		});
+
+		it("should refuse a username change sent with the session cookie", async () => {
+			const result = await updateUsername(
+				{
+					cookie,
+				},
+				"second_name",
+			);
+			expect(result).toBe(USERNAME_ERROR_CODES.USERNAME_IS_IMMUTABLE.code);
+		});
+
+		it("should refuse the same username change sent with a bearer token", async () => {
+			const result = await updateUsername(
+				{
+					authorization: `Bearer ${token}`,
+				},
+				"second_name",
+			);
+			expect(result).toBe(USERNAME_ERROR_CODES.USERNAME_IS_IMMUTABLE.code);
+			expect(await currentUsername()).toBe("first_name");
+		});
+
+		it("should refuse the same username change through auth.api with a bearer token", async () => {
+			await expect(
+				auth.api.updateUser({
+					body: {
+						username: "third_name",
+					},
+					headers: new Headers({
+						authorization: `Bearer ${token}`,
+					}),
+				}),
+			).rejects.toMatchObject({
+				body: {
+					code: USERNAME_ERROR_CODES.USERNAME_IS_IMMUTABLE.code,
+				},
+			});
+			expect(await currentUsername()).toBe("first_name");
+		});
+	},
+);

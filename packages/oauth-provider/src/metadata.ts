@@ -8,6 +8,7 @@ import { LEVEL_0_ACR } from "./authentication-context";
 import { validateIssuerUrl } from "./authorize";
 import {
 	applyOAuthProviderMetadataExtensions,
+	assertAdvertisedAuthMethodsSupported,
 	getClientDiscoveries,
 	getSupportedAuthMethods,
 	getSupportedGrantTypes,
@@ -20,7 +21,11 @@ import type {
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
 } from "./types/oauth";
-import { getJwtPlugin, mergeDiscoveryMetadata } from "./utils";
+import {
+	getAuthEndpointUrl,
+	getJwtPlugin,
+	mergeDiscoveryMetadata,
+} from "./utils";
 
 export function authServerMetadata(
 	ctx: GenericEndpointContext,
@@ -43,17 +48,17 @@ export function authServerMetadata(
 	const metadata: AuthServerMetadata = {
 		scopes_supported: overrides?.scopes_supported,
 		issuer: validateIssuerUrl(opts?.jwt?.issuer ?? baseURL),
-		authorization_endpoint: `${baseURL}/oauth2/authorize`,
-		token_endpoint: `${baseURL}/oauth2/token`,
+		authorization_endpoint: getAuthEndpointUrl(ctx, "/oauth2/authorize"),
+		token_endpoint: getAuthEndpointUrl(ctx, "/oauth2/token"),
 		jwks_uri: overrides?.jwt_disabled
 			? undefined
 			: (opts?.jwks?.remoteUrl ??
-				`${baseURL}${opts?.jwks?.jwksPath ?? "/jwks"}`),
+				getAuthEndpointUrl(ctx, opts?.jwks?.jwksPath ?? "/jwks")),
 		registration_endpoint: overrides?.dynamic_client_registration_supported
-			? `${baseURL}/oauth2/register`
+			? getAuthEndpointUrl(ctx, "/oauth2/register")
 			: undefined,
-		introspection_endpoint: `${baseURL}/oauth2/introspect`,
-		revocation_endpoint: `${baseURL}/oauth2/revoke`,
+		introspection_endpoint: getAuthEndpointUrl(ctx, "/oauth2/introspect"),
+		revocation_endpoint: getAuthEndpointUrl(ctx, "/oauth2/revoke"),
 		response_types_supported:
 			overrides?.grant_types_supported &&
 			!overrides.grant_types_supported.includes("authorization_code")
@@ -122,16 +127,24 @@ function buildAuthServerMetadata(
 	// Any contributed `clientDiscovery` implicitly produces public clients
 	// (CIMD, wallet attestation, etc.), so it flips `public_client_supported`
 	// and the advertised `"none"` auth method alongside unauthenticated DCR.
-	const publicClientSupported =
-		opts.allowUnauthenticatedClientRegistration || clientDiscoveries.length > 0;
+	// `advertisedMetadata.token_endpoint_auth_methods_supported` overrides the
+	// derivation, so a provider with protected DCR can still advertise that its
+	// token endpoint accepts public clients.
+	assertAdvertisedAuthMethodsSupported(opts);
+	const advertisedAuthMethods =
+		opts.advertisedMetadata?.token_endpoint_auth_methods_supported;
+	const publicClientSupported = advertisedAuthMethods
+		? advertisedAuthMethods.includes("none")
+		: opts.allowUnauthenticatedClientRegistration ||
+			clientDiscoveries.length > 0;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
 		public_client_supported: publicClientSupported,
 		grant_types_supported: getSupportedGrantTypes(opts),
-		token_endpoint_auth_methods_supported: getSupportedAuthMethods(opts, {
-			includeNone: publicClientSupported,
-		}),
+		token_endpoint_auth_methods_supported:
+			advertisedAuthMethods ??
+			getSupportedAuthMethods(opts, { includeNone: publicClientSupported }),
 		endpoint_auth_methods_supported: getSupportedAuthMethods(opts),
 		jwt_disabled: opts.disableJwtPlugin,
 		dpop_signing_alg_values_supported: opts.dpop?.signingAlgorithms,
@@ -162,7 +175,6 @@ export function oidcServerMetadata(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]> & { claims?: string[] },
 ) {
-	const baseURL = ctx.context.baseURL;
 	const { jwtPluginOptions, clientDiscoveries, authMetadata } =
 		buildAuthServerMetadata(ctx, opts);
 	const metadata: Omit<
@@ -174,7 +186,7 @@ export function oidcServerMetadata(
 		...authMetadata,
 		claims_supported: getSupportedClaims(opts),
 		claims_parameter_supported: true,
-		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
+		userinfo_endpoint: getAuthEndpointUrl(ctx, "/oauth2/userinfo"),
 		subject_types_supported: opts.pairwiseSecret
 			? ["public", "pairwise"]
 			: ["public"],
@@ -190,7 +202,7 @@ export function oidcServerMetadata(
 				jwtPluginOptions?.jwks?.keyPairConfigs?.map((c) => c.alg) ?? [];
 			return Array.from(new Set<JWSAlgorithms>([primary, ...extras]));
 		})(),
-		end_session_endpoint: `${baseURL}/oauth2/end-session`,
+		end_session_endpoint: getAuthEndpointUrl(ctx, "/oauth2/end-session"),
 		request_parameter_supported: false,
 		request_uri_parameter_supported: false,
 		prompt_values_supported: [

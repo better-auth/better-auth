@@ -1,5 +1,196 @@
 # @better-auth/mcp
 
+## 1.7.28
+
+### Patch Changes
+
+- Updated dependencies [[`f62411e`](https://github.com/better-auth/better-auth/commit/f62411e874cd4ec88ece36b1612381bd696e3e56), [`2ba7622`](https://github.com/better-auth/better-auth/commit/2ba762276c39db0ed5e5de3e8180fd3f85039921), [`ddec4d7`](https://github.com/better-auth/better-auth/commit/ddec4d7c4630681eb18fec2284fd80ea02f50291), [`dd557b6`](https://github.com/better-auth/better-auth/commit/dd557b6a5739181980aa33a0b2858efb258544ac), [`c870302`](https://github.com/better-auth/better-auth/commit/c87030213b959e86c416896f6c7beeeae080e490), [`c870302`](https://github.com/better-auth/better-auth/commit/c87030213b959e86c416896f6c7beeeae080e490)]:
+  - @better-auth/oauth-provider@1.7.28
+
+## 1.7.27
+
+### Patch Changes
+
+- Updated dependencies [[`89e01c8`](https://github.com/better-auth/better-auth/commit/89e01c84249dcb920464b51d4aaff6a8386c8ef1), [`2a11b26`](https://github.com/better-auth/better-auth/commit/2a11b2687640211b38ba999fdf791e24af5775a0), [`0706b66`](https://github.com/better-auth/better-auth/commit/0706b6660308e2313d1b6dd37acdaa75ad5b5ef0), [`9f4dece`](https://github.com/better-auth/better-auth/commit/9f4dece3684f4a4a16cdd7720f705ab5cae2e15c), [`260b869`](https://github.com/better-auth/better-auth/commit/260b86979594b89a983c24daf90e9ff4efb290b6), [`ca5f6b4`](https://github.com/better-auth/better-auth/commit/ca5f6b4376c08272206f64e3cb8c380cfa749964), [`ca5f6b4`](https://github.com/better-auth/better-auth/commit/ca5f6b4376c08272206f64e3cb8c380cfa749964), [`b89c0d2`](https://github.com/better-auth/better-auth/commit/b89c0d26e777470d0b1f9a0baecbec8cf1842768), [`0c6305e`](https://github.com/better-auth/better-auth/commit/0c6305e21225d58e7e42c71469a6c366fa02e69f), [`7db8d0b`](https://github.com/better-auth/better-auth/commit/7db8d0b563f09b0742d26f9b5aa7cb12d4152708), [`7db8d0b`](https://github.com/better-auth/better-auth/commit/7db8d0b563f09b0742d26f9b5aa7cb12d4152708), [`32b8b6e`](https://github.com/better-auth/better-auth/commit/32b8b6e7448a5715a3588e23c3c62fc5eadeade1), [`3a7e13c`](https://github.com/better-auth/better-auth/commit/3a7e13c5ed47e224d29ce2b64495f95e4b1212c9), [`70a7143`](https://github.com/better-auth/better-auth/commit/70a7143729b3852b656fa1c36c9e2c8cb91797da), [`929e29f`](https://github.com/better-auth/better-auth/commit/929e29f8987cd37287136201e8ad4d2a7b4ca174), [`2a11b26`](https://github.com/better-auth/better-auth/commit/2a11b2687640211b38ba999fdf791e24af5775a0), [`dd04a88`](https://github.com/better-auth/better-auth/commit/dd04a88384d8ac8f935c47872318a3dac000f43b), [`297ef88`](https://github.com/better-auth/better-auth/commit/297ef887c91c3d19876019db7e63f51bb81b2a78), [`297ef88`](https://github.com/better-auth/better-auth/commit/297ef887c91c3d19876019db7e63f51bb81b2a78), [`50f7240`](https://github.com/better-auth/better-auth/commit/50f72404050f327715b0089491118d2c62875b7e)]:
+  - @better-auth/oauth-provider@1.7.27
+
+## 1.7.26
+
+### Patch Changes
+
+- [#12624](https://github.com/better-auth/better-auth/pull/12624) [`7604fd4`](https://github.com/better-auth/better-auth/commit/7604fd45d8587699bdba74705a93e66a01ac4c6b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The OAuth provider and `requireMcpAuth` no longer cache keys returned by a custom JWT plugin `adapter.getJwks`, so keys it returns for one tenant or request can no longer verify a token presented in another. They now call it on every verification; cache inside the store if reads are expensive. The built-in database store is still cached.
+
+- [#12624](https://github.com/better-auth/better-auth/pull/12624) [`7604fd4`](https://github.com/better-auth/better-auth/commit/7604fd45d8587699bdba74705a93e66a01ac4c6b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A custom JWT plugin `adapter.getJwks` again receives the request being verified when the OAuth provider reads signing keys for introspection, revocation, or end-session, and when `requireMcpAuth` verifies a token. Since 1.7.25 it received only the auth context, without `request` or `headers`, so a key store that picks keys by the request's host or headers found none.
+
+- Updated dependencies [[`f242834`](https://github.com/better-auth/better-auth/commit/f2428340b9b58609401d3c4a06b0779684687248), [`d04ea26`](https://github.com/better-auth/better-auth/commit/d04ea262d2c39df5ef76d433dca6a44dfa84ed1e), [`7604fd4`](https://github.com/better-auth/better-auth/commit/7604fd45d8587699bdba74705a93e66a01ac4c6b), [`7604fd4`](https://github.com/better-auth/better-auth/commit/7604fd45d8587699bdba74705a93e66a01ac4c6b), [`eca5b9c`](https://github.com/better-auth/better-auth/commit/eca5b9cc02fe97d32de3130e31fec2bc17269335), [`1904081`](https://github.com/better-auth/better-auth/commit/1904081ba517707eeaa6a0a44c483102ca82c884), [`b9369e5`](https://github.com/better-auth/better-auth/commit/b9369e5c4756d3def4d0796d537b56c6975e4f1a), [`b0cda69`](https://github.com/better-auth/better-auth/commit/b0cda692bc85ce5425c2cbdb43fe26aeef307844)]:
+  - @better-auth/oauth-provider@1.7.26
+
+## 1.7.25
+
+### Patch Changes
+
+- [#12587](https://github.com/better-auth/better-auth/pull/12587) [`75c0821`](https://github.com/better-auth/better-auth/commit/75c0821fa61c8ed0ea20f1027d5ad42d16e0daae) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - DPoP now works on deployments that keep verification values only in secondary storage. Before, every request with a DPoP proof to the OAuth provider, UserInfo, or `requireMcpAuth` failed with a 500 error unless `verification.storeInDatabase: true` was set. Used proofs are now recorded in secondary storage, so a replayed proof is still rejected across instances. `createDpopReplayStore` now also accepts the auth context, as `createDpopReplayStore(await auth.$context)`, and picks the same storage.
+
+- Updated dependencies [[`75c0821`](https://github.com/better-auth/better-auth/commit/75c0821fa61c8ed0ea20f1027d5ad42d16e0daae), [`ad07edd`](https://github.com/better-auth/better-auth/commit/ad07edda1bcb4b5e40368989aa70801839a5926b), [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697), [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697), [`7fab39e`](https://github.com/better-auth/better-auth/commit/7fab39e988eb0e57378f6138875c1ddc82e44697)]:
+  - @better-auth/oauth-provider@1.7.25
+
+## 1.7.24
+
+### Patch Changes
+
+- [#12502](https://github.com/better-auth/better-auth/pull/12502) [`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Official packages now accept any `better-call` 1.4 patch release from 1.4.5 as a peer.
+
+- Updated dependencies [[`0597f4c`](https://github.com/better-auth/better-auth/commit/0597f4c2f3e576c90e22866bfcf81384c7af308f), [`d7f831c`](https://github.com/better-auth/better-auth/commit/d7f831cdd4ae3a5ebf591641d34a0b2561316aa8), [`87ede79`](https://github.com/better-auth/better-auth/commit/87ede7984d4df152ae3c0f5a58a2d08299b24281), [`3dcbc10`](https://github.com/better-auth/better-auth/commit/3dcbc1044cf8bf2d51bd73273581a980c5400591)]:
+  - @better-auth/oauth-provider@1.7.24
+
+## 1.7.23
+
+### Patch Changes
+
+- [#12525](https://github.com/better-auth/better-auth/pull/12525) [`06925b3`](https://github.com/better-auth/better-auth/commit/06925b35dd14ca39e2080fb2b8e85c14f5c2931b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Answer a DPoP request whose token lacks a required scope with a `DPoP` challenge. Before, the `insufficient_scope` 403 always carried a `Bearer` challenge, even when the client sent a valid DPoP-bound token and proof. The `DPoP` challenge keeps `error="insufficient_scope"` and the missing scopes in `scope`, so the client can still authorize again for them. Like other `DPoP` challenges, it lists the accepted proof algorithms in `algs` and has no `resource_metadata`. A `Bearer` request still gets the `Bearer` challenge with `resource_metadata`. This applies when `createResourceServerChallenge` receives the failed `request`, which the resource client's `verifyAccessTokenRequest`, `requireMcpAuth`, and `createMcpProtectedRequestHandler` pass automatically, including for an `insufficient_scope` error thrown by an MCP tool handler.
+
+- [#12521](https://github.com/better-auth/better-auth/pull/12521) [`7c61c40`](https://github.com/better-auth/better-auth/commit/7c61c40534b878f6e53d50daf03fba5db6fbdd59) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Browser clients on another origin can now read resource-server and MCP `WWW-Authenticate` challenges. `createResourceServerChallenge`, and the resource client and MCP helpers built on it, now send `Access-Control-Expose-Headers: WWW-Authenticate` with every Bearer, `insufficient_scope`, and `DPoP` challenge. If your CORS layer sets its own `Access-Control-Expose-Headers`, include `WWW-Authenticate` in it.
+
+- [#12504](https://github.com/better-auth/better-auth/pull/12504) [`35135c6`](https://github.com/better-auth/better-auth/commit/35135c64d2f9bb8c4bf7c464cc9f66d0bf1c1a7a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `dpop.replayStore` JSDoc on `createMcpProtectedRequestHandler` now says the default store is in memory and safe only for a single long-lived instance, and that multi-instance or serverless deployments should pass a shared store such as `createDpopReplayStore(internalAdapter)`.
+
+- [#12501](https://github.com/better-auth/better-auth/pull/12501) [`cfa73e9`](https://github.com/better-auth/better-auth/commit/cfa73e90fae636f22179b933c29171bada503515) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `requireMcpAuth` now accepts tokens when the JWT plugin publishes its keys at `jwks.remoteUrl`. It fetches the keys from that URL instead of the auth server's own `/jwks` endpoint, which the JWT plugin disables in that setup.
+
+- [#12501](https://github.com/better-auth/better-auth/pull/12501) [`cfa73e9`](https://github.com/better-auth/better-auth/commit/cfa73e90fae636f22179b933c29171bada503515) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `requireMcpAuth` now reads the signing keys from the auth instance instead of requesting its own `/jwks` endpoint, so MCP routes served from the same app as the auth server no longer fail with a 500 on runtimes that block requests to their own hostname, such as a single Cloudflare Worker.
+
+  Set `jwksUrl` to keep fetching the keys over HTTP.
+
+- Updated dependencies [[`b9c259b`](https://github.com/better-auth/better-auth/commit/b9c259b61d453a2ca604b2f054e05e0d0a653625), [`06925b3`](https://github.com/better-auth/better-auth/commit/06925b35dd14ca39e2080fb2b8e85c14f5c2931b), [`7c61c40`](https://github.com/better-auth/better-auth/commit/7c61c40534b878f6e53d50daf03fba5db6fbdd59), [`be0d01c`](https://github.com/better-auth/better-auth/commit/be0d01c8c254dbde2ec35975cd72ac437245b256), [`2959544`](https://github.com/better-auth/better-auth/commit/295954490665cdef7f25f0ec0f7fa671b368bc45)]:
+  - @better-auth/oauth-provider@1.7.23
+
+## 1.7.22
+
+### Patch Changes
+
+- [#12447](https://github.com/better-auth/better-auth/pull/12447) [`5976842`](https://github.com/better-auth/better-auth/commit/59768427a963413f1a7a4eb7595b00b395713770) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Answer a failed request that used the `DPoP` authorization scheme with a `DPoP` challenge. Before, an expired, revoked, or otherwise invalid DPoP-bound token got a `Bearer` challenge, which a client that supports only DPoP might not act on. `createResourceServerChallenge` accepts a new `request` option, either the failed `Request` or `{ authorizationHeader }`, and reads the scheme from it. The resource client's `verifyAccessTokenRequest`, `requireMcpAuth`, and `createMcpProtectedRequestHandler` pass it automatically.
+
+- Updated dependencies [[`5976842`](https://github.com/better-auth/better-auth/commit/59768427a963413f1a7a4eb7595b00b395713770), [`e9d8e59`](https://github.com/better-auth/better-auth/commit/e9d8e5977cb37ab1aa3824f1bb67b5c99a444e9b), [`1393028`](https://github.com/better-auth/better-auth/commit/139302823057cdf9693bca48735fca99faf3ccfd)]:
+  - @better-auth/oauth-provider@1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- Updated dependencies [[`4739122`](https://github.com/better-auth/better-auth/commit/4739122fa67c77cde71c4d1b60d84483fc1bf11b), [`fd66861`](https://github.com/better-auth/better-auth/commit/fd66861c353574418a7bf48e0b79c0ebe4251c1c), [`db930d9`](https://github.com/better-auth/better-auth/commit/db930d90115a1d6182bac83a3f010205d86baa3b), [`900195d`](https://github.com/better-auth/better-auth/commit/900195df3f1313d84301f7b7dc4997845e568a8e), [`9362c0d`](https://github.com/better-auth/better-auth/commit/9362c0d42e7f65a1dbfd6318360cd97ea9dd9d5b), [`b0ced9d`](https://github.com/better-auth/better-auth/commit/b0ced9d2576db02f5c41b493e07e847d5a260e4d), [`79d61b0`](https://github.com/better-auth/better-auth/commit/79d61b0fb0ff3750ec42aa1ef5cd136f573c996b)]:
+  - @better-auth/oauth-provider@1.7.21
+
+## 1.7.20
+
+### Patch Changes
+
+- Updated dependencies [[`a3f50d0`](https://github.com/better-auth/better-auth/commit/a3f50d064dd3bd1ee8a83a687ea54428aaec8997), [`dc07ae4`](https://github.com/better-auth/better-auth/commit/dc07ae4565205d27589cb285052455ede56ce3f7), [`1a368a1`](https://github.com/better-auth/better-auth/commit/1a368a15350814822126ca5e4db05772784c9ed8)]:
+  - @better-auth/oauth-provider@1.7.20
+
+## 1.7.19
+
+### Patch Changes
+
+- [#12322](https://github.com/better-auth/better-auth/pull/12322) [`76e6a20`](https://github.com/better-auth/better-auth/commit/76e6a207e912a7719067eed81ad71b8ea26af79e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed MCP rejecting plain-HTTP `resource` URLs on `.localhost` subdomains as non-HTTPS.
+
+- Updated dependencies [[`76f9d55`](https://github.com/better-auth/better-auth/commit/76f9d554b371c3c7874ccfa54af97a4d4f3db82b), [`b0f795a`](https://github.com/better-auth/better-auth/commit/b0f795a0bbb934b35a7f2601a8853f5a48fbe7ca), [`6080a5e`](https://github.com/better-auth/better-auth/commit/6080a5e542db35016bf8309bc89b033db823f0b3)]:
+  - @better-auth/oauth-provider@1.7.19
+
+## 1.7.18
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.18
+
+## 1.7.17
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.16
+
+## 1.7.15
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.15
+
+## 1.7.14
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.14
+
+## 1.7.13
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.13
+
+## 1.7.12
+
+### Patch Changes
+
+- [#11934](https://github.com/better-auth/better-auth/pull/11934) [`2a576f3`](https://github.com/better-auth/better-auth/commit/2a576f39dc6a3c278e28b6ee004c40396b4bab7c) Thanks [@bytaesu](https://github.com/bytaesu)! - `requireMcpAuth` now accepts only OAuth access tokens and rejects session JWTs from the JWT plugin, even when they share the issuer and audience.
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.12
+
+## 1.7.11
+
+### Patch Changes
+
+- Updated dependencies [[`a1f6f0b`](https://github.com/better-auth/better-auth/commit/a1f6f0bf19ba1be85e977d891d0f0ca43723c0a3), [`37debaa`](https://github.com/better-auth/better-auth/commit/37debaa8a17d11d05f8eeabdb94877a4b1575a1d)]:
+  - @better-auth/oauth-provider@1.7.11
+
+## 1.7.10
+
+### Patch Changes
+
+- Updated dependencies [[`cdd491b`](https://github.com/better-auth/better-auth/commit/cdd491b9d023f57f511d2905e0dcf55f565666d6), [`44f14bb`](https://github.com/better-auth/better-auth/commit/44f14bbf82be7352bdafbd78ebdcfa90850eaab0), [`fe550a9`](https://github.com/better-auth/better-auth/commit/fe550a9c57fa0454c6234cd9e46af4ed9eef9201), [`99cdfe7`](https://github.com/better-auth/better-auth/commit/99cdfe7c2e6bb3b8556b1ea8c3a336369cba6976), [`906c32f`](https://github.com/better-auth/better-auth/commit/906c32f4b595c01f14917f753a79b77a068f36f0), [`2fa7e2f`](https://github.com/better-auth/better-auth/commit/2fa7e2f8bb603c1013855d43888ec54f6a442ba4), [`8f3da46`](https://github.com/better-auth/better-auth/commit/8f3da46ae5b1fe577b38bd7952af1116af3087ff), [`963b7f9`](https://github.com/better-auth/better-auth/commit/963b7f9417d676725215ce97e9910370f18d5477), [`e34b828`](https://github.com/better-auth/better-auth/commit/e34b8282747b3b0148b011be4c2f8b07364788a7), [`f42c0c2`](https://github.com/better-auth/better-auth/commit/f42c0c220d42fbfcb672c492e5ef1d2b29da3d2f), [`4d7da0b`](https://github.com/better-auth/better-auth/commit/4d7da0bef84d78e39e855efabbe913067225ce8f)]:
+  - @better-auth/oauth-provider@1.7.10
+
+## 1.7.9
+
+### Patch Changes
+
+- Updated dependencies [[`54a0994`](https://github.com/better-auth/better-auth/commit/54a09948e8a98f9166b650f791b083818c3dab27), [`0a1a87e`](https://github.com/better-auth/better-auth/commit/0a1a87e388c0b50c8d18f3c411c6963c205b11f1)]:
+  - @better-auth/oauth-provider@1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11635](https://github.com/better-auth/better-auth/pull/11635) [`a5d582a`](https://github.com/better-auth/better-auth/commit/a5d582aaffce1a7457e3da0835a046ba6738c442) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Projects that enable `exactOptionalPropertyTypes` with `skipLibCheck: false` no longer get a TS2430 error from the `@better-auth/mcp` type declarations.
+
+- [#10266](https://github.com/better-auth/better-auth/pull/10266) [`c68b2cd`](https://github.com/better-auth/better-auth/commit/c68b2cd8a5a03012ea77071ce74a7708210ea5a9) Thanks [@shiminshen](https://github.com/shiminshen)! - Projects that enable `exactOptionalPropertyTypes` can use the `oauthProvider()` and `mcp()` plugins again. Since 1.7.0, adding either plugin to `betterAuth()` failed to type-check with a TS2322 error.
+
+- Updated dependencies [[`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a), [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41), [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78), [`847acd0`](https://github.com/better-auth/better-auth/commit/847acd02bb2d6d17e757ab2b44a837fa0c3ba669), [`c68b2cd`](https://github.com/better-auth/better-auth/commit/c68b2cd8a5a03012ea77071ce74a7708210ea5a9), [`1a9be41`](https://github.com/better-auth/better-auth/commit/1a9be41d184ee2fcbc7f39b1ef1ab5cb492f7147), [`38f3bb3`](https://github.com/better-auth/better-auth/commit/38f3bb34af7de8b17078a5d4e26bf2f430337b58), [`38f3bb3`](https://github.com/better-auth/better-auth/commit/38f3bb34af7de8b17078a5d4e26bf2f430337b58), [`aaf0d7d`](https://github.com/better-auth/better-auth/commit/aaf0d7da3e854ab6e19c184b682308d4f024e4f0)]:
+  - @better-auth/oauth-provider@1.7.8
+
+## 1.7.7
+
+### Patch Changes
+
+- Updated dependencies [[`683ac1d`](https://github.com/better-auth/better-auth/commit/683ac1ddc31f1007171b045230827edb08b99f91), [`b26057e`](https://github.com/better-auth/better-auth/commit/b26057e23a3c4fc8c97c346857751564d57324c6)]:
+  - @better-auth/oauth-provider@1.7.7
+
+## 1.7.6
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.6
+
 ## 1.7.5
 
 ### Patch Changes

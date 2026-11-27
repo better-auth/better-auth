@@ -1,5 +1,6 @@
 import "dotenv/config";
 import * as fs from "node:fs";
+import * as path from "node:path";
 import { Client } from "typesense";
 import type { DocumentRecord } from "typesense-fumadocs-adapter";
 import { sync } from "typesense-fumadocs-adapter";
@@ -49,10 +50,18 @@ async function main() {
 		return;
 	}
 
-	const filePath = ".next/server/app/api/docs/static.json.body";
-	if (!fs.existsSync(filePath)) {
-		throw new Error("Typesense build output was not found.");
+	// Next.js writes prerendered output under a route-scoped cache directory when
+	// a deployment adapter is active, so match the route path instead of a fixed one.
+	const serverDir = ".next/server";
+	const outputs = fs.globSync("**/api/docs/static.json.body", {
+		cwd: serverDir,
+	});
+	if (outputs.length !== 1) {
+		throw new Error(
+			`Typesense build output was not found exactly once: ${outputs.length} matches.`,
+		);
 	}
+	const filePath = path.join(serverDir, outputs[0]);
 
 	const serverUrl = new URL(url);
 	const content = fs.readFileSync(filePath, "utf8");

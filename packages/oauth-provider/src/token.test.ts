@@ -1,4 +1,9 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { getAuthTables } from "@better-auth/core/db";
+import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
+import { memoryAdapter } from "@better-auth/memory-adapter";
+import { createAuthEndpoint } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import type { ProviderOptions } from "better-auth/oauth2";
@@ -11,6 +16,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import type { BetterAuthPlugin } from "better-auth/types";
 import type { JWK } from "jose";
 import {
 	base64url,
@@ -21,10 +27,10 @@ import {
 	jwtVerify,
 	SignJWT,
 } from "jose";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import { confirmationTokenType } from "./token";
+import { confirmationTokenType, getOAuthProviderApi } from "./token";
 import type {
 	Confirmation,
 	OAuthOptions,
@@ -472,6 +478,53 @@ describe("oauth token - authorization_code", async () => {
 	});
 
 	/**
+	 * A replay that arrives while the first redemption is still issuing tokens
+	 * revokes them (RFC 6749 §4.1.2), including the refresh token already
+	 * stored, so the first redemption must fail with `invalid_grant`.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+	 */
+	it("fails an in-flight redemption with invalid_grant when a replay revokes its tokens", async () => {
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid", "offline_access"],
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+
+		const context = await auth.$context;
+		const create = context.adapter.create.bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		const spy = vi.spyOn(context.adapter, "create");
+		spy.mockImplementation(async (...args) => {
+			if (args[0].model === "oauthAccessToken") {
+				spy.mockRestore();
+				reached.resolve();
+				await released.promise;
+			}
+			return create(...args);
+		});
+		try {
+			const redeeming = validateAuthCode({ code, codeVerifier });
+			await reached.promise;
+			const replay = await validateAuthCode({ code, codeVerifier });
+			released.resolve();
+			const redeemed = await redeeming;
+
+			expect(replay.error).toMatchObject({ error: "invalid_grant" });
+			expect(redeemed.error).toMatchObject({ error: "invalid_grant" });
+		} finally {
+			released.resolve();
+			spy.mockRestore();
+		}
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10150
 	 */
 	it("rejects authorization code replay with invalid_grant and revokes issued tokens", async () => {
@@ -540,9 +593,19 @@ describe("oauth token - authorization_code", async () => {
 		expect(tokens.data?.refresh_token).toBeDefined();
 
 		const context = await auth.$context;
+		const originalDeleteMany = context.adapter.deleteMany.bind(context.adapter);
+		let accessTokenCleanupFailed = false;
 		const deleteMany = vi
 			.spyOn(context.adapter, "deleteMany")
-			.mockRejectedValueOnce(new Error("cleanup failed"));
+			.mockImplementation(async (data) => {
+				// The code lookup's expired-row cleanup also calls deleteMany, so
+				// fail the first access-token cleanup rather than the first call.
+				if (data.model === "oauthAccessToken" && !accessTokenCleanupFailed) {
+					accessTokenCleanupFailed = true;
+					throw new Error("cleanup failed");
+				}
+				return originalDeleteMany(data);
+			});
 		const loggerError = vi
 			.spyOn(context.logger, "error")
 			.mockImplementation(() => undefined);
@@ -557,14 +620,17 @@ describe("oauth token - authorization_code", async () => {
 				"authorization code replay cleanup failed",
 				expect.any(Error),
 			);
-			expect(deleteMany).toHaveBeenNthCalledWith(
-				1,
-				expect.objectContaining({ model: "oauthAccessToken" }),
-			);
-			expect(deleteMany).toHaveBeenNthCalledWith(
-				2,
-				expect.objectContaining({ model: "oauthRefreshToken" }),
-			);
+			const cleanupModels = deleteMany.mock.calls
+				.map(([data]) => data.model)
+				.filter(
+					(model) =>
+						model === "oauthAccessToken" || model === "oauthRefreshToken",
+				);
+			expect(cleanupModels).toEqual([
+				"oauthAccessToken",
+				"oauthRefreshToken",
+				"oauthAccessToken",
+			]);
 
 			const { body, headers } = await refreshAccessTokenRequest({
 				refreshToken: tokens.data!.refresh_token!,
@@ -587,6 +653,104 @@ describe("oauth token - authorization_code", async () => {
 			deleteMany.mockRestore();
 			loggerError.mockRestore();
 		}
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-15#section-4.1.3
+	 */
+	it("keeps the authorization code when the PKCE verifier is rejected", async () => {
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const rejected = await validateAuthCode({
+			code: code!,
+			codeVerifier: generateRandomString(32),
+		});
+		expect((rejected.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const replay = await validateAuthCode({ code: code!, codeVerifier });
+		expect((replay.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-15#section-4.1.3
+	 */
+	it("rejects an expired authorization code with invalid_grant", async () => {
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const context = await auth.$context;
+		await context.adapter.update({
+			model: "verification",
+			where: [
+				{
+					field: "identifier",
+					value: await storeToken("hashed", code!, "authorization_code"),
+				},
+			],
+			update: { expiresAt: new Date(Date.now() - 1000) },
+		});
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.data?.access_token).toBeUndefined();
+		expect((tokens.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11035
+	 */
+	it("returns invalid_client for an unknown client_id before checking the code", async () => {
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					client_id: "unknown-client",
+					client_secret: "secret",
+					code: "not-a-real-code",
+					redirect_uri: redirectUri,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_client",
+		);
 	});
 
 	/**
@@ -862,13 +1026,17 @@ describe("oauth token - refresh_token", async () => {
 	}
 
 	/** Initial authorization */
-	async function authorizeForRefreshToken(scopes: string[]) {
+	async function authorizeForRefreshToken(
+		scopes: string[],
+		authorizeHeaders?: Headers,
+	) {
 		const { url: authUrl, codeVerifier } = await createAuthUrl({
 			scopes,
 		});
 
 		let callbackRedirectUrl = "";
 		await client.$fetch(authUrl.toString(), {
+			headers: authorizeHeaders ?? headers,
 			onError(context) {
 				callbackRedirectUrl = context.response.headers.get("Location") || "";
 			},
@@ -944,6 +1112,63 @@ describe("oauth token - refresh_token", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11035
+	 */
+	describe("unknown client_id", () => {
+		it("returns invalid_client to a public client before looking up the refresh token", async () => {
+			const response = await client.$fetch<Record<string, unknown>>(
+				"/oauth2/token",
+				{
+					method: "POST",
+					body: new URLSearchParams({
+						grant_type: "refresh_token",
+						refresh_token: "not-a-real-refresh-token",
+						client_id: "unknown-client",
+					}),
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+
+			expect(response.error?.status).toBe(400);
+			expect(response.error).toMatchObject({
+				error: "invalid_client",
+				error_description: "client not found",
+			});
+		});
+
+		it("returns 401 invalid_client to a Basic-authenticated client before looking up the refresh token", async () => {
+			let responseHeaders: Headers | undefined;
+			const response = await client.$fetch<Record<string, unknown>>(
+				"/oauth2/token",
+				{
+					method: "POST",
+					body: new URLSearchParams({
+						grant_type: "refresh_token",
+						refresh_token: "not-a-real-refresh-token",
+					}),
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+						authorization: `Basic ${Buffer.from("unknown-client:secret").toString("base64")}`,
+					},
+					onError(context) {
+						responseHeaders = context.response.headers;
+					},
+				},
+			);
+
+			expect(response.error?.status).toBe(401);
+			expect((response.error as { error?: string })?.error).toBe(
+				"invalid_client",
+			);
+			expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+				'Basic realm="oauth"',
+			);
+		});
+	});
+
 	it("should refresh token with same scopes, opaque access token", async ({
 		expect,
 	}) => {
@@ -1005,6 +1230,7 @@ describe("oauth token - refresh_token", async () => {
 		const otherClient = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: ["authorization_code", "refresh_token"],
 				redirect_uris: [otherRedirectUri],
 				application_type: "native",
@@ -1414,118 +1640,6 @@ describe("oauth token - refresh_token", async () => {
 	});
 
 	/**
-	 * Concurrent refresh-token rotation against the same parent must mint
-	 * tokens for exactly one caller. Before the atomic CAS on the parent
-	 * row, two concurrent requests both passed the `revoked` check and
-	 * each minted a fresh refresh token (forked family). The loser now
-	 * fails with `invalid_grant`; the parent row's `revoked` flag is set,
-	 * so any subsequent replay of the original token trips the existing
-	 * family-invalidation guard in `handleRefreshTokenGrant`.
-	 *
-	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
-	 */
-	it("rejects concurrent rotation of the same refresh token", async () => {
-		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
-			throw Error("beforeAll not run properly");
-		}
-
-		const scopes = ["openid", "profile", "offline_access"];
-		const tokens = await authorizeForRefreshToken(scopes);
-		expect(tokens?.refresh_token).toBeDefined();
-
-		async function refresh(refreshToken: string) {
-			const { body, headers } = await refreshAccessTokenRequest({
-				refreshToken,
-				options: {
-					clientId: oauthClient!.client_id,
-					clientSecret: oauthClient!.client_secret!,
-					redirectURI: redirectUri,
-				},
-			});
-			return client.$fetch<{
-				access_token?: string;
-				refresh_token?: string;
-				error?: string;
-			}>("/oauth2/token", {
-				method: "POST",
-				body,
-				headers,
-			});
-		}
-
-		const [first, second] = await Promise.all([
-			refresh(tokens!.refresh_token!),
-			refresh(tokens!.refresh_token!),
-		]);
-
-		const successes = [first, second].filter((r) => r.error === null);
-		const failures = [first, second].filter((r) => r.error !== null);
-		expect(successes).toHaveLength(1);
-		expect(failures).toHaveLength(1);
-		expect(successes[0]?.data?.refresh_token).toBeDefined();
-		expect((failures[0]?.error as { error?: string } | undefined)?.error).toBe(
-			"invalid_grant",
-		);
-
-		// Replay of the original (now revoked) parent token must trigger
-		// the existing family-invalidation guard.
-		const replay = await refresh(tokens!.refresh_token!);
-		expect((replay.error as { error?: string } | null | undefined)?.error).toBe(
-			"invalid_grant",
-		);
-	});
-
-	/**
-	 * After a contested rotation, the winner's child refresh token must remain
-	 * usable for a subsequent rotation. The CAS only revokes the parent row; it
-	 * must not poison the rest of the legitimate user's session.
-	 *
-	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
-	 */
-	it("winner's child token is usable for a subsequent rotation", async () => {
-		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
-			throw Error("beforeAll not run properly");
-		}
-
-		const scopes = ["openid", "profile", "offline_access"];
-		const tokens = await authorizeForRefreshToken(scopes);
-		expect(tokens?.refresh_token).toBeDefined();
-
-		async function refresh(refreshToken: string) {
-			const { body, headers } = await refreshAccessTokenRequest({
-				refreshToken,
-				options: {
-					clientId: oauthClient!.client_id,
-					clientSecret: oauthClient!.client_secret!,
-					redirectURI: redirectUri,
-				},
-			});
-			return client.$fetch<{
-				access_token?: string;
-				refresh_token?: string;
-				error?: string;
-			}>("/oauth2/token", {
-				method: "POST",
-				body,
-				headers,
-			});
-		}
-
-		const [first, second] = await Promise.all([
-			refresh(tokens!.refresh_token!),
-			refresh(tokens!.refresh_token!),
-		]);
-
-		const winner = [first, second].find((r) => r.error === null);
-		expect(winner?.data?.refresh_token).toBeDefined();
-
-		const next = await refresh(winner!.data!.refresh_token!);
-		expect(next.error).toBeNull();
-		expect(next.data?.refresh_token).toBeDefined();
-		expect(next.data?.refresh_token).not.toEqual(winner!.data!.refresh_token);
-	});
-
-	/**
 	 * /oauth2/revoke (RFC 7009) on an active refresh token must mark the row
 	 * `revoked` (via the same CAS used in rotation) so that subsequent reuse
 	 * trips the family-invalidation guard.
@@ -1591,26 +1705,18 @@ describe("oauth token - refresh_token", async () => {
 	});
 
 	/**
-	 * V1 from variants.md: revokeRefreshToken racing against
-	 * handleRefreshTokenGrant on the same parent row. Both paths must run
-	 * through the same CAS so exactly one wins; the loser fails closed and
-	 * the parent stays revoked.
+	 * Two requests racing on the same parent refresh token. Rotation and
+	 * `revokeRefreshToken` run through the same CAS, so exactly one wins and the
+	 * loser fails closed. Each ordering is forced by holding one request at an
+	 * adapter call until the other has finished, instead of leaving it to
+	 * scheduling.
 	 *
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
 	 */
-	it("concurrent revoke + rotate against the same refresh token: exactly one wins", async () => {
-		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
-			throw Error("beforeAll not run properly");
-		}
-
-		const scopes = ["openid", "profile", "offline_access"];
-		const tokens = await authorizeForRefreshToken(scopes);
-		expect(tokens?.refresh_token).toBeDefined();
-		const parentToken = tokens!.refresh_token!;
-
-		const refresh = async () => {
+	describe("concurrent use of the same refresh token", () => {
+		async function refresh(refreshToken: string) {
 			const { body, headers } = await refreshAccessTokenRequest({
-				refreshToken: parentToken,
+				refreshToken,
 				options: {
 					clientId: oauthClient!.client_id,
 					clientSecret: oauthClient!.client_secret!,
@@ -1620,19 +1726,18 @@ describe("oauth token - refresh_token", async () => {
 			return client.$fetch<{
 				access_token?: string;
 				refresh_token?: string;
-				error?: string;
 			}>("/oauth2/token", {
 				method: "POST",
 				body,
 				headers,
 			});
-		};
+		}
 
-		const revoke = () =>
-			client.$fetch("/oauth2/revoke", {
+		function revoke(refreshToken: string) {
+			return client.$fetch("/oauth2/revoke", {
 				method: "POST",
 				body: new URLSearchParams({
-					token: parentToken,
+					token: refreshToken,
 					token_type_hint: "refresh_token",
 					client_id: oauthClient!.client_id,
 					client_secret: oauthClient!.client_secret!,
@@ -1641,29 +1746,511 @@ describe("oauth token - refresh_token", async () => {
 					"content-type": "application/x-www-form-urlencoded",
 				},
 			});
-
-		const [refreshResult, revokeResult] = await Promise.all([
-			refresh(),
-			revoke(),
-		]);
-
-		// /oauth2/revoke is RFC 7009 §2.2 always-200, so the racer outcome is
-		// observable through the refresh result alone:
-		//   - refresh won the CAS  → mints a fresh refresh_token; revoke is a no-op
-		//   - revoke won the CAS  → refresh returns invalid_grant
-		expect(revokeResult.error).toBeNull();
-		if (refreshResult.error === null) {
-			expect(refreshResult.data?.refresh_token).toBeDefined();
-		} else {
-			const errPayload = refreshResult.error as { error?: string } | null;
-			expect(errPayload?.error).toBe("invalid_grant");
 		}
 
-		// In both orderings, replaying the parent must now fail closed
-		// (either revoked by the explicit revoke or rotated out by the refresh).
-		const replay = await refresh();
-		const replayErr = replay.error as { error?: string } | null;
-		expect(replayErr?.error).toBe("invalid_grant");
+		/** Pauses the next refresh-token CAS until `release` is called. */
+		async function holdNextRefreshTokenCas() {
+			const context = await authorizationServer.$context;
+			const incrementOne = context.adapter.incrementOne.bind(context.adapter);
+			const reached = Promise.withResolvers<void>();
+			const released = Promise.withResolvers<void>();
+			const spy = vi.spyOn(context.adapter, "incrementOne");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === "oauthRefreshToken") {
+					spy.mockRestore();
+					reached.resolve();
+					await released.promise;
+				}
+				return incrementOne(...args);
+			});
+			return {
+				reached: reached.promise,
+				release: released.resolve,
+				// Also release, so a failed test never leaves the held request paused.
+				restore: () => {
+					spy.mockRestore();
+					released.resolve();
+				},
+			};
+		}
+
+		/** Pauses the next access-token insert until `release` is called. */
+		async function holdNextAccessTokenInsert() {
+			const context = await authorizationServer.$context;
+			const create = context.adapter.create.bind(context.adapter);
+			const reached = Promise.withResolvers<void>();
+			const released = Promise.withResolvers<void>();
+			const spy = vi.spyOn(context.adapter, "create");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === "oauthAccessToken") {
+					spy.mockRestore();
+					reached.resolve();
+					await released.promise;
+				}
+				return create(...args);
+			});
+			return {
+				reached: reached.promise,
+				release: released.resolve,
+				restore: () => {
+					released.resolve();
+					spy.mockRestore();
+				},
+			};
+		}
+
+		async function issueParentRefreshToken() {
+			const tokens = await authorizeForRefreshToken([
+				"openid",
+				"profile",
+				"offline_access",
+			]);
+			expect(tokens?.refresh_token).toBeDefined();
+			return tokens!.refresh_token!;
+		}
+
+		it("rotates once and fails the other rotation with invalid_grant", async () => {
+			const parentToken = await issueParentRefreshToken();
+			const cas = await holdNextRefreshTokenCas();
+			try {
+				// Both requests read the parent before either CAS runs.
+				const losing = refresh(parentToken);
+				await cas.reached;
+				const rotated = await refresh(parentToken);
+				cas.release();
+				const lost = await losing;
+
+				expect(rotated.error).toBeNull();
+				expect(lost.error).toMatchObject({ error: "invalid_grant" });
+				// The loser leaves the winner's new refresh token usable.
+				const next = await refresh(rotated.data!.refresh_token!);
+				expect(next.error).toBeNull();
+				expect(next.data?.refresh_token).toBeDefined();
+				// Reusing the rotated parent still revokes the family.
+				expect((await refresh(parentToken)).error).toMatchObject({
+					error: "invalid_grant",
+				});
+			} finally {
+				cas.restore();
+			}
+		});
+
+		/**
+		 * A request that reads the parent after the other's CAS presents a reused
+		 * token, so it revokes the family (RFC 9700 §4.14.2), including the new
+		 * refresh token the winner is still issuing.
+		 *
+		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+		 */
+		it("fails an in-flight rotation with invalid_grant when reuse revokes its family", async () => {
+			const parentToken = await issueParentRefreshToken();
+			const insert = await holdNextAccessTokenInsert();
+			try {
+				const rotating = refresh(parentToken);
+				await insert.reached;
+				const reused = await refresh(parentToken);
+				insert.release();
+				const rotated = await rotating;
+
+				expect(reused.error).toMatchObject({ error: "invalid_grant" });
+				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
+			} finally {
+				insert.restore();
+			}
+		});
+
+		it("fails the revoke closed when the rotation wins", async () => {
+			const parentToken = await issueParentRefreshToken();
+			const cas = await holdNextRefreshTokenCas();
+			try {
+				const revoking = revoke(parentToken);
+				await cas.reached;
+				const rotated = await refresh(parentToken);
+				cas.release();
+				const revoked = await revoking;
+
+				expect(rotated.error).toBeNull();
+				expect(rotated.data?.refresh_token).toBeDefined();
+				// Known bug: RFC 7009 §2.2 expects 200 for an already-invalid token,
+				// but the endpoint's invalid-token catch never matches. Flip this
+				// to 200 when that is fixed; the family teardown below must stay.
+				expect(revoked.error).toMatchObject({
+					status: 400,
+					error: "invalid_request",
+				});
+				// The losing revoke tears down the family, including the new token.
+				expect(
+					(await refresh(rotated.data!.refresh_token!)).error,
+				).toMatchObject({ error: "invalid_grant" });
+				expect((await refresh(parentToken)).error).toMatchObject({
+					error: "invalid_grant",
+				});
+			} finally {
+				cas.restore();
+			}
+		});
+
+		it("fails the rotation with invalid_grant when the revoke wins", async () => {
+			const parentToken = await issueParentRefreshToken();
+			const cas = await holdNextRefreshTokenCas();
+			try {
+				const rotating = refresh(parentToken);
+				await cas.reached;
+				const revoked = await revoke(parentToken);
+				cas.release();
+				const rotated = await rotating;
+
+				expect(revoked.error).toBeNull();
+				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
+				expect((await refresh(parentToken)).error).toMatchObject({
+					error: "invalid_grant",
+				});
+			} finally {
+				cas.restore();
+			}
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11132
+	 * @see https://github.com/better-auth/better-auth/issues/12222
+	 */
+	describe("refresh after the issuing session ended", () => {
+		async function refresh(
+			refreshToken: string,
+			params?: { scope?: string; opaque?: boolean },
+		) {
+			const { body, headers: tokenHeaders } = await refreshAccessTokenRequest({
+				refreshToken,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+				extraParams: params?.scope ? { scope: params.scope } : undefined,
+				resource: params?.opaque ? undefined : validResource,
+			});
+			return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: tokenHeaders,
+			});
+		}
+
+		async function introspectAccessToken(token: string) {
+			return client.oauth2.introspect(
+				{
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret,
+					token,
+					token_type_hint: "access_token",
+				},
+				{ headers: { "content-type": "application/x-www-form-urlencoded" } },
+			);
+		}
+
+		function fetchUserinfo(accessToken: string) {
+			return client.$fetch<Record<string, unknown>>("/oauth2/userinfo", {
+				headers: { Authorization: `Bearer ${accessToken}` },
+			});
+		}
+
+		/** Each test gets its own session so ending it leaves the others alone. */
+		async function signInAndAuthorize() {
+			const { headers: sessionHeaders } = await signInWithTestUser();
+			const session = await authorizationServer.api.getSession({
+				headers: sessionHeaders,
+			});
+			const tokens = await authorizeForRefreshToken(
+				["openid", "profile", "offline_access"],
+				sessionHeaders,
+			);
+			return {
+				headers: sessionHeaders,
+				sessionId: session!.session.id,
+				tokens: tokens!,
+			};
+		}
+
+		async function expireSession(sessionId: string) {
+			const context = await authorizationServer.$context;
+			await context.adapter.update({
+				model: "session",
+				where: [{ field: "id", value: sessionId }],
+				update: { expiresAt: new Date(Date.now() - 60_000) },
+			});
+		}
+
+		it("keeps the sid while the session is live", async () => {
+			const { sessionId, tokens } = await signInAndAuthorize();
+
+			const refreshed = await refresh(tokens.refresh_token!);
+			expect(refreshed.error).toBeNull();
+			const accessToken = refreshed.data!.access_token!;
+			expect(decodeJwt(accessToken).sid).toBe(sessionId);
+
+			const introspection = await introspectAccessToken(accessToken);
+			expect(introspection.data).toMatchObject({
+				active: true,
+				sid: sessionId,
+			});
+		});
+
+		it("omits the sid when the session expired but still exists", async () => {
+			const { sessionId, tokens } = await signInAndAuthorize();
+			await expireSession(sessionId);
+
+			const refreshed = await refresh(tokens.refresh_token!);
+			expect(refreshed.error).toBeNull();
+			const accessToken = refreshed.data!.access_token!;
+			expect(decodeJwt(accessToken).sid).toBeUndefined();
+
+			const introspection = await introspectAccessToken(accessToken);
+			expect(introspection.data).toMatchObject({ active: true });
+			expect(introspection.data?.sid).toBeUndefined();
+
+			const userinfo = await fetchUserinfo(accessToken);
+			expect(userinfo.error).toBeNull();
+			expect(userinfo.data?.sub).toBeDefined();
+		});
+
+		it("omits the sid when the session was deleted", async () => {
+			const { sessionId, tokens } = await signInAndAuthorize();
+			const context = await authorizationServer.$context;
+			await context.adapter.delete({
+				model: "session",
+				where: [{ field: "id", value: sessionId }],
+			});
+
+			const refreshed = await refresh(tokens.refresh_token!);
+			expect(refreshed.error).toBeNull();
+			const accessToken = refreshed.data!.access_token!;
+			expect(decodeJwt(accessToken).sid).toBeUndefined();
+
+			const introspection = await introspectAccessToken(accessToken);
+			expect(introspection.data).toMatchObject({ active: true });
+			expect(introspection.data?.sid).toBeUndefined();
+		});
+
+		it("omits the sid when deleting the session cleared the refresh token's link", async () => {
+			const { sessionId, tokens } = await signInAndAuthorize();
+			// A database that enforces the foreign key sets sessionId to null when
+			// the session row is deleted.
+			const context = await authorizationServer.$context;
+			await context.adapter.updateMany({
+				model: "oauthRefreshToken",
+				where: [{ field: "sessionId", value: sessionId }],
+				update: { sessionId: null },
+			});
+			await context.adapter.delete({
+				model: "session",
+				where: [{ field: "id", value: sessionId }],
+			});
+
+			const refreshed = await refresh(tokens.refresh_token!);
+			expect(refreshed.error).toBeNull();
+			const accessToken = refreshed.data!.access_token!;
+			expect(decodeJwt(accessToken).sid).toBeUndefined();
+
+			const introspection = await introspectAccessToken(accessToken);
+			expect(introspection.data).toMatchObject({ active: true });
+			expect(introspection.data?.sid).toBeUndefined();
+		});
+
+		/**
+		 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions
+		 */
+		describe("refresh token without offline_access", () => {
+			/**
+			 * Narrowing the scope on a refresh persists the narrowed scope on the
+			 * rotated token, which leaves a session-bound refresh token without
+			 * offline_access.
+			 */
+			async function narrow(refreshToken: string) {
+				const narrowed = await refresh(refreshToken, {
+					scope: "openid profile",
+				});
+				expect(narrowed.error).toBeNull();
+				return narrowed.data!.refresh_token!;
+			}
+
+			function introspectRefreshToken(token: string) {
+				return client.oauth2.introspect(
+					{
+						client_id: oauthClient!.client_id,
+						client_secret: oauthClient!.client_secret,
+						token,
+						token_type_hint: "refresh_token",
+					},
+					{
+						headers: { "content-type": "application/x-www-form-urlencoded" },
+					},
+				);
+			}
+
+			/** Pauses the next session lookup until `release` is called. */
+			async function holdNextSessionLookup() {
+				const context = await authorizationServer.$context;
+				const findOne = context.adapter.findOne.bind(context.adapter);
+				const reached = Promise.withResolvers<void>();
+				const released = Promise.withResolvers<void>();
+				const spy = vi.spyOn(context.adapter, "findOne");
+				spy.mockImplementation(async (...args) => {
+					if (args[0].model === "session") {
+						spy.mockRestore();
+						reached.resolve();
+						await released.promise;
+					}
+					return findOne(...args);
+				});
+				return {
+					reached: reached.promise,
+					release: released.resolve,
+					restore: () => {
+						spy.mockRestore();
+						released.resolve();
+					},
+				};
+			}
+
+			it("rejects the refresh once its session expired", async () => {
+				const { sessionId, tokens } = await signInAndAuthorize();
+				const narrowedRefreshToken = await narrow(tokens.refresh_token!);
+				await expireSession(sessionId);
+
+				const refreshed = await refresh(narrowedRefreshToken, {
+					opaque: true,
+				});
+				expect(refreshed.error).toMatchObject({ error: "invalid_grant" });
+
+				const introspection =
+					await introspectRefreshToken(narrowedRefreshToken);
+				expect(introspection.data).toMatchObject({ active: false });
+			});
+
+			it("rejects the refresh once deleting its session cleared the link", async () => {
+				const { sessionId, tokens } = await signInAndAuthorize();
+				const narrowedRefreshToken = await narrow(tokens.refresh_token!);
+				// A database that enforces the foreign key sets sessionId to null
+				// when the session row is deleted.
+				const context = await authorizationServer.$context;
+				await context.adapter.updateMany({
+					model: "oauthRefreshToken",
+					where: [{ field: "sessionId", value: sessionId }],
+					update: { sessionId: null },
+				});
+				await context.adapter.delete({
+					model: "session",
+					where: [{ field: "id", value: sessionId }],
+				});
+
+				const refreshed = await refresh(narrowedRefreshToken, {
+					opaque: true,
+				});
+				expect(refreshed.error).toMatchObject({ error: "invalid_grant" });
+
+				const introspection =
+					await introspectRefreshToken(narrowedRefreshToken);
+				expect(introspection.data).toMatchObject({ active: false });
+			});
+
+			it("rejects a refresh that read the token before sign-out ended the session", async () => {
+				const { headers, tokens } = await signInAndAuthorize();
+				const narrowedRefreshToken = await narrow(tokens.refresh_token!);
+
+				const lookup = await holdNextSessionLookup();
+				try {
+					const refreshing = refresh(narrowedRefreshToken);
+					// A refresh that fails before the lookup must not hang the test.
+					await Promise.race([lookup.reached, refreshing]);
+					await authorizationServer.api.signOut({ headers });
+					lookup.release();
+
+					const refreshed = await refreshing;
+					expect(refreshed.error).toMatchObject({ error: "invalid_grant" });
+				} finally {
+					lookup.restore();
+				}
+			});
+
+			it("keeps the client's offline grants after it presents the token following sign-out", async () => {
+				const offline = await signInAndAuthorize();
+				const signedOut = await signInAndAuthorize();
+				const narrowedRefreshToken = await narrow(
+					signedOut.tokens.refresh_token!,
+				);
+				await authorizationServer.api.signOut({ headers: signedOut.headers });
+
+				const refreshed = await refresh(narrowedRefreshToken);
+				expect(refreshed.error).toMatchObject({
+					error: "invalid_grant",
+					error_description: "invalid refresh token",
+				});
+
+				const offlineRefresh = await refresh(offline.tokens.refresh_token!);
+				expect(offlineRefresh.error).toBeNull();
+			});
+
+			it("keeps the client's offline grants when a revoked token is presented after its session expired", async () => {
+				const offline = await signInAndAuthorize();
+				const signedOut = await signInAndAuthorize();
+				const narrowedRefreshToken = await narrow(
+					signedOut.tokens.refresh_token!,
+				);
+				// The session expires in place, so the row keeps its sessionId.
+				const context = await authorizationServer.$context;
+				await context.adapter.updateMany({
+					model: "oauthRefreshToken",
+					where: [{ field: "sessionId", value: signedOut.sessionId }],
+					update: { revoked: new Date() },
+				});
+				await expireSession(signedOut.sessionId);
+
+				const refreshed = await refresh(narrowedRefreshToken);
+				expect(refreshed.error).toMatchObject({ error: "invalid_grant" });
+
+				const offlineRefresh = await refresh(offline.tokens.refresh_token!);
+				expect(offlineRefresh.error).toBeNull();
+			});
+
+			it("refuses to narrow away offline_access once the session ended, keeping the presented token", async () => {
+				const { sessionId, tokens } = await signInAndAuthorize();
+				await expireSession(sessionId);
+
+				const narrowed = await refresh(tokens.refresh_token!, {
+					scope: "openid profile",
+				});
+				expect(narrowed.error).toMatchObject({ error: "invalid_grant" });
+
+				const refreshed = await refresh(tokens.refresh_token!);
+				expect(refreshed.error).toBeNull();
+				expect(refreshed.data?.scope).toContain("offline_access");
+			});
+
+			it("refuses a refresh whose resource policy drops offline_access once the session ended, keeping the presented token", async () => {
+				const { sessionId, tokens } = await signInAndAuthorize();
+				await expireSession(sessionId);
+				const context = await authorizationServer.$context;
+				const setAllowedScopes = (allowedScopes: string[] | null) =>
+					context.adapter.update({
+						model: "oauthResource",
+						where: [{ field: "identifier", value: validResource }],
+						update: { allowedScopes },
+					});
+
+				await setAllowedScopes(["openid", "profile"]);
+				try {
+					const filtered = await refresh(tokens.refresh_token!);
+					expect(filtered.error).toMatchObject({ error: "invalid_grant" });
+				} finally {
+					await setAllowedScopes(null);
+				}
+
+				const refreshed = await refresh(tokens.refresh_token!);
+				expect(refreshed.error).toBeNull();
+				expect(refreshed.data?.scope).toContain("offline_access");
+			});
+		});
 	});
 });
 
@@ -2125,6 +2712,89 @@ describe("oauth token - client_credentials", async () => {
 		expect(tokens.data?.expires_at).toBeDefined();
 	});
 
+	it("lets an admin disable and re-enable a client without deleting it", async () => {
+		const registered = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:posts"],
+			},
+		});
+		if (!registered.client_secret) throw new Error("missing client secret");
+		const requestToken = () =>
+			client.$fetch<{ access_token?: string }>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					resource: validResource,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(`${registered.client_id}:${registered.client_secret}`).toString("base64")}`,
+				},
+			});
+
+		const issuedToken = (await requestToken()).data?.access_token;
+		expect(issuedToken).toBeDefined();
+		const resourceServer = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_post",
+			},
+		});
+		if (!resourceServer.client_secret)
+			throw new Error("missing resource server secret");
+		await auth.api.adminLinkClientResource({
+			headers,
+			params: {
+				identifier: encodeURIComponent(validResource),
+				client_id: resourceServer.client_id,
+			},
+		});
+		const introspect = () =>
+			client.oauth2.introspect(
+				{
+					client_id: resourceServer.client_id,
+					client_secret: resourceServer.client_secret,
+					token: issuedToken!,
+				},
+				{ headers: { "content-type": "application/x-www-form-urlencoded" } },
+			);
+		const initialIntrospection = await introspect();
+		expect(initialIntrospection.error).toBeNull();
+		expect(initialIntrospection.data?.active).toBe(true);
+		const disabled = await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: { client_id: registered.client_id, update: { disabled: true } },
+		});
+		expect(disabled.disabled).toBe(true);
+		expect((await introspect()).data).toEqual({ active: false });
+		const blocked = await requestToken();
+		expect(blocked.error?.status).toBe(401);
+		expect((blocked.error as { error?: string } | null)?.error).toBe(
+			"invalid_client",
+		);
+
+		const userUpdate = await client.$fetch<OAuthClient>(
+			"/oauth2/update-client",
+			{
+				method: "POST",
+				body: {
+					client_id: registered.client_id,
+					update: { disabled: false },
+				},
+			},
+		);
+		expect(userUpdate.data?.disabled).toBe(true);
+		const enabled = await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: { client_id: registered.client_id, update: { disabled: false } },
+		});
+		expect(enabled.disabled).toBe(false);
+		expect((await requestToken()).data?.access_token).toBeDefined();
+	});
+
 	it("returns invalid_request when client_credentials omits client_id", async () => {
 		const response = await client.$fetch<Record<string, unknown>>(
 			"/oauth2/token",
@@ -2228,6 +2898,31 @@ describe("oauth token - client_credentials", async () => {
 		).toContain("registered for client_secret_basic");
 	});
 
+	/**
+	 * @see https://github.com/croffasia/itsaplan/issues/564
+	 */
+	it("reports an unknown client_id as a client that was not found", async () => {
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: "no-such-client",
+					client_secret: "no-such-secret",
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(response.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client not found",
+		});
+	});
+
 	it("returns 400 for failed client_secret_post authentication", async () => {
 		const postClient = await auth.api.adminCreateOAuthClient({
 			headers,
@@ -2292,7 +2987,9 @@ describe("oauth token - client_credentials", async () => {
 		expect((response.error as { error?: string })?.error).toBe(
 			"invalid_client",
 		);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("challenges client_secret_basic authentication without a secret", async () => {
@@ -2320,7 +3017,9 @@ describe("oauth token - client_credentials", async () => {
 		expect((response.error as { error?: string })?.error).toBe(
 			"invalid_client",
 		);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("challenges an unknown client_secret_basic client", async () => {
@@ -2344,7 +3043,9 @@ describe("oauth token - client_credentials", async () => {
 		expect((response.error as { error?: string })?.error).toBe(
 			"invalid_client",
 		);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe(
+			'Basic realm="oauth"',
+		);
 	});
 
 	it("should match created client scopes", async ({ expect }) => {
@@ -2717,40 +3418,40 @@ describe("oauth token - config", async () => {
 			testScopes: ["read:profile"],
 			result: 7200, // m2m expiresIn 2hr
 		},
-	])("scopeExpirations - access token expiration $testScopes", async ({
-		testScopes,
-		result,
-	}) => {
-		const { client, oauthClient } = await createTestInstance({
-			oauthProviderConfig: {
-				m2mAccessTokenExpiresIn: 7200,
-				scopeExpirations: {
-					"read:payments": "30m",
-					"write:payments": "5m",
+	])(
+		"scopeExpirations - access token expiration $testScopes",
+		async ({ testScopes, result }) => {
+			const { client, oauthClient } = await createTestInstance({
+				oauthProviderConfig: {
+					m2mAccessTokenExpiresIn: 7200,
+					scopeExpirations: {
+						"read:payments": "30m",
+						"write:payments": "5m",
+					},
 				},
-			},
-		});
-		// Client credentials
-		const tokens = await client.oauth2.token(
-			{
-				resource: validResource,
-				grant_type: "client_credentials",
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				scope: testScopes.join(" "),
-			},
-			{
-				headers: {
-					accept: "application/json",
-					"content-type": "application/x-www-form-urlencoded",
+			});
+			// Client credentials
+			const tokens = await client.oauth2.token(
+				{
+					resource: validResource,
+					grant_type: "client_credentials",
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					scope: testScopes.join(" "),
 				},
-			},
-		);
-		expect(tokens.data?.expires_in).toBe(result); // 5m lowest
-		// NOTE: verification is done in other tests (we only care about the exp fields in this test)
-		const accessToken = decodeJwt(tokens.data?.access_token ?? "");
-		expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
-	});
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			expect(tokens.data?.expires_in).toBe(result); // 5m lowest
+			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
+			const accessToken = decodeJwt(tokens.data?.access_token ?? "");
+			expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
+		},
+	);
 
 	// Authorization Code and Refresh Token grants
 	it.for([
@@ -2766,87 +3467,87 @@ describe("oauth token - config", async () => {
 			testScopes: ["profile", "offline_access"],
 			result: 7200, // accessTokenExpiresIn 2hr
 		},
-	])("scopeExpirations - access token expiration $testScopes", async ({
-		testScopes,
-		result,
-	}) => {
-		const { client, oauthClient } = await createTestInstance({
-			oauthProviderConfig: {
-				accessTokenExpiresIn: 7200,
-				scopeExpirations: {
-					"read:payments": "30m",
-					"write:payments": "5m",
+	])(
+		"scopeExpirations - access token expiration $testScopes",
+		async ({ testScopes, result }) => {
+			const { client, oauthClient } = await createTestInstance({
+				oauthProviderConfig: {
+					accessTokenExpiresIn: 7200,
+					scopeExpirations: {
+						"read:payments": "30m",
+						"write:payments": "5m",
+					},
 				},
-			},
-		});
-		const { url: authUrl, codeVerifier } = await createAuthUrl(
-			{
-				clientId: oauthClient?.client_id!,
-				clientSecret: oauthClient?.client_secret,
-			},
-			{
-				scopes: testScopes,
-			},
-		);
-		let callbackRedirectUrl = "";
-		await client.$fetch(authUrl.toString(), {
-			onError(context) {
-				callbackRedirectUrl = context.response.headers.get("Location") || "";
-			},
-		});
-		expect(callbackRedirectUrl).toContain(redirectUri);
-		expect(callbackRedirectUrl).toContain(`code=`);
-		expect(callbackRedirectUrl).toContain(`state=123`);
-		const url = new URL(callbackRedirectUrl);
+			});
+			const { url: authUrl, codeVerifier } = await createAuthUrl(
+				{
+					clientId: oauthClient?.client_id!,
+					clientSecret: oauthClient?.client_secret,
+				},
+				{
+					scopes: testScopes,
+				},
+			);
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			expect(callbackRedirectUrl).toContain(redirectUri);
+			expect(callbackRedirectUrl).toContain(`code=`);
+			expect(callbackRedirectUrl).toContain(`state=123`);
+			const url = new URL(callbackRedirectUrl);
 
-		// Authorization code
-		const tokens = await client.oauth2.token(
-			{
-				code: url.searchParams.get("code")!,
-				code_verifier: codeVerifier,
-				grant_type: "authorization_code",
-				resource: validResource,
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				redirect_uri: redirectUri,
-			},
-			{
-				headers: {
-					accept: "application/json",
-					"content-type": "application/x-www-form-urlencoded",
+			// Authorization code
+			const tokens = await client.oauth2.token(
+				{
+					code: url.searchParams.get("code")!,
+					code_verifier: codeVerifier,
+					grant_type: "authorization_code",
+					resource: validResource,
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					redirect_uri: redirectUri,
 				},
-			},
-		);
-		expect(tokens.data?.expires_in).toBe(result); // 5m lowest
-		// NOTE: verification is done in other tests (we only care about the exp fields in this test)
-		const accessToken = decodeJwt(tokens.data?.access_token ?? "");
-		expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			expect(tokens.data?.expires_in).toBe(result); // 5m lowest
+			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
+			const accessToken = decodeJwt(tokens.data?.access_token ?? "");
+			expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
 
-		// Refresh token
-		const refreshedTokens = await client.oauth2.token(
-			{
-				resource: validResource,
-				refresh_token: tokens.data?.refresh_token,
-				grant_type: "refresh_token",
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-			},
-			{
-				headers: {
-					accept: "application/json",
-					"content-type": "application/x-www-form-urlencoded",
+			// Refresh token
+			const refreshedTokens = await client.oauth2.token(
+				{
+					resource: validResource,
+					refresh_token: tokens.data?.refresh_token,
+					grant_type: "refresh_token",
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
 				},
-			},
-		);
-		expect(refreshedTokens.data?.expires_in).toBe(result); // 5m lowest
-		// NOTE: verification is done in other tests (we only care about the exp fields in this test)
-		const refreshedAccessToken = decodeJwt(
-			refreshedTokens.data?.access_token ?? "",
-		);
-		expect(
-			(refreshedAccessToken.exp ?? 0) - (refreshedAccessToken.iat ?? 0),
-		).toBe(result); // 5m lowest
-	});
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			expect(refreshedTokens.data?.expires_in).toBe(result); // 5m lowest
+			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
+			const refreshedAccessToken = decodeJwt(
+				refreshedTokens.data?.access_token ?? "",
+			);
+			expect(
+				(refreshedAccessToken.exp ?? 0) - (refreshedAccessToken.iat ?? 0),
+			).toBe(result); // 5m lowest
+		},
+	);
 
 	it("opaqueAccessTokenPrefix - client_credentials", async () => {
 		const prefix = "hello_";
@@ -2961,6 +3662,71 @@ describe("oauth token - config", async () => {
 		}
 	});
 
+	it("formatRefreshToken with an async encrypt - code_authorization, refresh_token", async () => {
+		const refreshTokenPrefix = "hello_rt_";
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				prefix: {
+					refreshToken: refreshTokenPrefix,
+				},
+				formatRefreshToken: {
+					encrypt: async (token) => `enc.${token}`,
+					decrypt: async (value) => ({ token: value.slice("enc.".length) }),
+				},
+			},
+		});
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			clientId: oauthClient?.client_id!,
+			clientSecret: oauthClient?.client_secret,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+
+		const tokens = await client.oauth2.token(
+			{
+				code: url.searchParams.get("code")!,
+				code_verifier: codeVerifier,
+				grant_type: "authorization_code",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		const refreshToken = (tokens.data as { refresh_token?: string })
+			?.refresh_token;
+		expect(refreshToken?.startsWith(`${refreshTokenPrefix}enc.`)).toBe(true);
+
+		const refreshedTokens = await client.oauth2.token(
+			{
+				refresh_token: refreshToken,
+				grant_type: "refresh_token",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(refreshedTokens.error).toBeNull();
+		expect(
+			(refreshedTokens.data as { refresh_token?: string })?.refresh_token,
+		).toMatch(new RegExp(`^${refreshTokenPrefix}enc\\.`));
+	});
+
 	it("clientSecretPrefix - client_credentials", async () => {
 		const prefix = "hello_cs_";
 		const testScopes = ["read:profile"];
@@ -2990,6 +3756,80 @@ describe("oauth token - config", async () => {
 		);
 		expect(tokens.error?.status).toBeUndefined();
 		expect(tokens.data?.access_token).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12227
+	 */
+	it("rejects a client secret without the configured prefix like any wrong secret", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes,
+					clientPrivileges: () => true,
+					prefix: {
+						clientSecret: "hello_cs_",
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const basicClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_basic",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:profile"],
+			},
+		});
+		const postClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:profile"],
+			},
+		});
+		const tokenUrl = `${authServerBaseUrl}/api/auth/oauth2/token`;
+
+		const basic = await auth.handler(
+			new Request(tokenUrl, {
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(`${basicClient.client_id}:wrong-secret`).toString("base64")}`,
+				},
+				body: new URLSearchParams({ grant_type: "client_credentials" }),
+			}),
+		);
+		const post = await auth.handler(
+			new Request(tokenUrl, {
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: postClient.client_id,
+					client_secret: "wrong-secret",
+				}),
+			}),
+		);
+
+		await expect(basic.json()).resolves.toMatchObject({
+			error: "invalid_client",
+		});
+		expect(basic.status).toBe(401);
+		expect(basic.headers.get("WWW-Authenticate")).toBe('Basic realm="oauth"');
+		await expect(post.json()).resolves.toMatchObject({
+			error: "invalid_client",
+		});
+		expect(post.status).toBe(400);
+		expect(post.headers.has("WWW-Authenticate")).toBe(false);
 	});
 });
 
@@ -4561,10 +5401,41 @@ describe("oauth token - DPoP", async () => {
 	const jwtResource = "https://dpop-api.example.com";
 	const dpopRequiredResource = "https://dpop-required.example.com";
 	const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
+	const internalTokenEndpoint =
+		"http://auth-service:3000/api/auth/oauth2/token";
+	const pluginIssueEndpoint = `${authServerBaseUrl}/api/auth/test/dpop-issue`;
+	const pluginTenantIssueEndpoint = `${authServerBaseUrl}/api/auth/test/acme/dpop-issue`;
+	async function issueFromPlugin(ctx: GenericEndpointContext) {
+		const provider = getOAuthProviderApi(
+			ctx,
+			ctx.context.getPlugin("oauth-provider")!.options,
+			"client_credentials",
+		);
+		const { client } = await provider.authenticateClient();
+		return ctx.json(await provider.issueTokens({ client, scopes: [] }));
+	}
+	// Plugin endpoints that issue tokens themselves through the public provider API.
+	const pluginIssuer = {
+		id: "test-dpop-plugin-issuer",
+		endpoints: {
+			testDpopIssue: createAuthEndpoint(
+				"/test/dpop-issue",
+				{ method: "POST" },
+				issueFromPlugin,
+			),
+			testTenantDpopIssue: createAuthEndpoint(
+				"/test/:tenant/dpop-issue",
+				{ method: "POST" },
+				issueFromPlugin,
+			),
+		},
+	} satisfies BetterAuthPlugin;
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		baseURL: authServerBaseUrl,
+		baseURL: `${authServerBaseUrl}/api/auth/`,
+		advanced: { skipTrailingSlashes: true },
 		plugins: [
+			pluginIssuer,
 			jwt({ jwt: { issuer: authServerBaseUrl } }),
 			oauthProvider({
 				loginPage: "/login",
@@ -4731,6 +5602,164 @@ describe("oauth token - DPoP", async () => {
 		expect(payload.cnf).toMatchObject({ jkt: dpopKey.jkt });
 	});
 
+	it("validates DPoP against the plugin endpoint that issues the tokens", async () => {
+		const issuerClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+			},
+		});
+		const dpopKey = await createDpopKey();
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: pluginIssueEndpoint,
+			jti: "plugin-endpoint-proof",
+		});
+		const response = await customFetchImpl(pluginIssueEndpoint, {
+			method: "POST",
+			headers: { "content-type": "application/json", DPoP: proof },
+			body: JSON.stringify({
+				client_id: issuerClient.client_id,
+				client_secret: issuerClient.client_secret,
+			}),
+		});
+		const tokens: OAuthTokenResponse = await response.json();
+
+		expect(tokens).toMatchObject({ token_type: "DPoP" });
+		expect(response.status).toBe(200);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-4.3
+	 */
+	describe("expected htu is the concrete request URL", () => {
+		it("resolves route params of a plugin endpoint that issues tokens", async () => {
+			const issuerClient = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					token_endpoint_auth_method: "client_secret_post",
+					grant_types: ["client_credentials"],
+				},
+			});
+			const dpopKey = await createDpopKey();
+			const proof = await createDpopProof({
+				privateKey: dpopKey.privateKey,
+				publicJwk: dpopKey.publicJwk,
+				method: "POST",
+				url: pluginTenantIssueEndpoint,
+				jti: "plugin-tenant-proof",
+			});
+			const response = await customFetchImpl(pluginTenantIssueEndpoint, {
+				method: "POST",
+				headers: { "content-type": "application/json", DPoP: proof },
+				body: JSON.stringify({
+					client_id: issuerClient.client_id,
+					client_secret: issuerClient.client_secret,
+				}),
+			});
+			const tokens: OAuthTokenResponse = await response.json();
+
+			expect(tokens).toMatchObject({ token_type: "DPoP" });
+			expect(response.status).toBe(200);
+		});
+
+		it("keeps the trailing slash of a token request when skipTrailingSlashes is on", async () => {
+			const dpopKey = await createDpopKey();
+			const { code, codeVerifier } = await authorizeForCode(
+				dpopKey.jkt,
+				jwtResource,
+			);
+			const { body, headers: requestHeaders } = await authorizationCodeRequest({
+				code,
+				codeVerifier,
+				redirectURI: redirectUri,
+				resource: jwtResource,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const trailingSlashTokenEndpoint = `${tokenEndpoint}/`;
+			const tokenHeaders = new Headers(requestHeaders);
+			tokenHeaders.set(
+				"DPoP",
+				await createDpopProof({
+					privateKey: dpopKey.privateKey,
+					publicJwk: dpopKey.publicJwk,
+					method: "POST",
+					url: trailingSlashTokenEndpoint,
+					jti: "trailing-slash-proof",
+				}),
+			);
+			const response = await customFetchImpl(trailingSlashTokenEndpoint, {
+				method: "POST",
+				body,
+				headers: tokenHeaders,
+			});
+			const tokens: OAuthTokenResponse = await response.json();
+
+			expect(tokens).toMatchObject({ token_type: "DPoP" });
+			expect(response.status).toBe(200);
+		});
+	});
+
+	it("validates DPoP against the public token endpoint URL", async () => {
+		const dpopKey = await createDpopKey();
+
+		async function requestTokenWithProofUrl(proofUrl: string, jti: string) {
+			const { code, codeVerifier } = await authorizeForCode(
+				dpopKey.jkt,
+				jwtResource,
+			);
+			const proof = await createDpopProof({
+				privateKey: dpopKey.privateKey,
+				publicJwk: dpopKey.publicJwk,
+				method: "POST",
+				url: proofUrl,
+				jti,
+			});
+			const { body, headers: requestHeaders } = await authorizationCodeRequest({
+				code,
+				codeVerifier,
+				redirectURI: redirectUri,
+				resource: jwtResource,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const headers = new Headers(requestHeaders);
+			headers.set("DPoP", proof);
+
+			const response = await customFetchImpl(internalTokenEndpoint, {
+				method: "POST",
+				body,
+				headers,
+			});
+			const tokens: OAuthTokenResponse = await response.json();
+			return { response, tokens };
+		}
+
+		const publicRequest = await requestTokenWithProofUrl(
+			tokenEndpoint,
+			"public-endpoint-proof",
+		);
+		expect(publicRequest.response.status).toBe(200);
+		expect(publicRequest.tokens.token_type).toBe("DPoP");
+
+		const internalRequest = await requestTokenWithProofUrl(
+			internalTokenEndpoint,
+			"internal-endpoint-proof",
+		);
+		expect(internalRequest.response.status).toBe(400);
+		expect(internalRequest.tokens.error).toBe("invalid_dpop_proof");
+	});
+
 	it("rejects a token request without a proof when the resource requires DPoP", async () => {
 		const { code, codeVerifier } = await authorizeForCode(
 			undefined,
@@ -4741,6 +5770,120 @@ describe("oauth token - DPoP", async () => {
 		expect(tokens.data?.access_token).toBeUndefined();
 		expect((tokens.error as { error?: string } | null)?.error).toBe(
 			"invalid_dpop_proof",
+		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-8
+	 */
+	it("keeps the authorization code when the DPoP proof is rejected", async () => {
+		const dpopKey = await createDpopKey();
+		const otherKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+
+		const wrongKeyProof = await createDpopProof({
+			privateKey: otherKey.privateKey,
+			publicJwk: otherKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "retry-wrong-key-proof",
+		});
+		const rejected = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			wrongKeyProof,
+		);
+		expect((rejected.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "retry-valid-proof",
+		});
+		const tokens = await exchangeCode(code, codeVerifier, jwtResource, proof);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.token_type).toBe("DPoP");
+		expect(decodeJwt(tokens.data!.access_token!).cnf).toMatchObject({
+			jkt: dpopKey.jkt,
+		});
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-8
+	 */
+	it("keeps the authorization code when a required DPoP proof is missing", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			undefined,
+			dpopRequiredResource,
+		);
+
+		const rejected = await exchangeCode(
+			code,
+			codeVerifier,
+			dpopRequiredResource,
+		);
+		expect((rejected.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "retry-required-proof",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			dpopRequiredResource,
+			proof,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.token_type).toBe("DPoP");
+	});
+
+	/**
+	 * The proof's `jti` is recorded only after the code is consumed, so the
+	 * request that loses the race is told the code is gone, not that the proof
+	 * was replayed.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+	 */
+	it("issues once when two exchanges with one DPoP proof arrive together", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "concurrent-shared-proof",
+		});
+
+		const results = await Promise.all([
+			exchangeCode(code, codeVerifier, jwtResource, proof),
+			exchangeCode(code, codeVerifier, jwtResource, proof),
+		]);
+		const successes = results.filter((result) => result.error === null);
+		const failures = results.filter((result) => result.error !== null);
+		expect(successes).toHaveLength(1);
+		expect(successes[0]?.data?.token_type).toBe("DPoP");
+		expect(failures).toHaveLength(1);
+		expect((failures[0]?.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
 		);
 	});
 
@@ -5012,4 +6155,538 @@ describe("confirmationTokenType", () => {
 		expect(confirmationTokenType({ jkt: "thumbprint" })).toBe("DPoP");
 		expect(confirmationTokenType(undefined)).toBe("Bearer");
 	});
+});
+
+/**
+ * The memory and MongoDB adapters do not enforce the `refreshId` foreign key,
+ * so an access token insert that lands after a concurrent revocation succeeds.
+ * Revocation must still leave no access token behind.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+ * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+ */
+describe("oauth token - in-flight issuance without foreign keys", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const redirectUri = "http://localhost:5000/api/auth/callback/test";
+	const database: Record<string, Record<string, unknown>[]> = {
+		account: [],
+		jwks: [],
+		oauthAccessToken: [],
+		oauthClient: [],
+		oauthClientAssertion: [],
+		oauthClientResource: [],
+		oauthConsent: [],
+		oauthRefreshToken: [],
+		oauthResource: [],
+		session: [],
+		user: [],
+		verification: [],
+	};
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			database: memoryAdapter(database),
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: "client_secret_post",
+			grant_types: ["authorization_code", "refresh_token"],
+			redirect_uris: [redirectUri],
+			application_type: "native",
+			skip_consent: true,
+		},
+	});
+	const clientOptions = {
+		clientId: oauthClient.client_id,
+		clientSecret: oauthClient.client_secret!,
+		redirectURI: redirectUri,
+	};
+
+	beforeEach(() => {
+		database.oauthAccessToken = [];
+		database.oauthRefreshToken = [];
+	});
+
+	async function authorize() {
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: "test",
+			options: clientOptions,
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes: ["openid", "offline_access"],
+			codeVerifier,
+		});
+		let location = "";
+		await client.$fetch(url.toString(), {
+			headers,
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(location).searchParams.get("code")!;
+		return { code, codeVerifier };
+	}
+
+	async function redeem(code: string, codeVerifier: string) {
+		const { body, headers } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: clientOptions,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+	}
+
+	async function refresh(refreshToken: string) {
+		const { body, headers } = await refreshAccessTokenRequest({
+			refreshToken,
+			options: clientOptions,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+	}
+
+	/** Pauses the first adapter call that `matches` until `release` runs. */
+	async function holdNext<M extends "create" | "deleteMany">(
+		method: M,
+		matches: (model: string) => boolean,
+	) {
+		const context = await auth.$context;
+		const original = context.adapter[method].bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		const spy = vi.spyOn(context.adapter, method);
+		spy.mockImplementation((async (...args: Parameters<typeof original>) => {
+			if (matches(args[0].model)) {
+				spy.mockRestore();
+				reached.resolve();
+				await released.promise;
+			}
+			return (original as (...a: typeof args) => unknown)(...args);
+		}) as never);
+		return {
+			reached: reached.promise,
+			release: released.resolve,
+			restore: () => {
+				released.resolve();
+				spy.mockRestore();
+			},
+		};
+	}
+
+	it("fails an in-flight redemption and keeps no access token when a replay revokes it", async () => {
+		const { code, codeVerifier } = await authorize();
+		const insert = await holdNext("create", (m) => m === "oauthAccessToken");
+		try {
+			const redeeming = redeem(code, codeVerifier);
+			await insert.reached;
+			const replay = await redeem(code, codeVerifier);
+			insert.release();
+			const redeemed = await redeeming;
+
+			expect(replay.error).toMatchObject({ error: "invalid_grant" });
+			expect(redeemed.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthAccessToken).toHaveLength(0);
+			expect(database.oauthRefreshToken).toHaveLength(0);
+		} finally {
+			insert.restore();
+		}
+	});
+
+	it("fails an in-flight rotation and keeps no access token when reuse revokes its family", async () => {
+		const { code, codeVerifier } = await authorize();
+		const issued = await redeem(code, codeVerifier);
+		const parentToken = issued.data!.refresh_token!;
+		const insert = await holdNext("create", (m) => m === "oauthAccessToken");
+		try {
+			const rotating = refresh(parentToken);
+			await insert.reached;
+			const reused = await refresh(parentToken);
+			insert.release();
+			const rotated = await rotating;
+
+			expect(reused.error).toMatchObject({ error: "invalid_grant" });
+			expect(rotated.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthAccessToken).toHaveLength(0);
+		} finally {
+			insert.restore();
+		}
+	});
+
+	it("revokes every access token in a family larger than the findMany limit", async () => {
+		const { code, codeVerifier } = await authorize();
+		const issued = await redeem(code, codeVerifier);
+		const parentToken = issued.data!.refresh_token!;
+		const context = await auth.$context;
+		const [family] = database.oauthRefreshToken as {
+			clientId: string;
+			userId: string;
+		}[];
+		for (let i = 0; i < 101; i++) {
+			const sibling = await context.adapter.create<{ id: string }>({
+				model: "oauthRefreshToken",
+				data: {
+					token: `sibling-refresh-${i}`,
+					clientId: family!.clientId,
+					userId: family!.userId,
+					scopes: ["openid", "offline_access"],
+					createdAt: new Date(),
+					expiresAt: new Date(Date.now() + 60_000),
+				},
+			});
+			await context.adapter.create({
+				model: "oauthAccessToken",
+				data: {
+					token: `sibling-access-${i}`,
+					clientId: family!.clientId,
+					userId: family!.userId,
+					refreshId: sibling.id,
+					scopes: ["openid"],
+					createdAt: new Date(),
+					expiresAt: new Date(Date.now() + 60_000),
+				},
+			});
+		}
+
+		const rotated = await refresh(parentToken);
+		expect(rotated.error).toBeNull();
+		const reused = await refresh(parentToken);
+
+		expect(reused.error).toMatchObject({ error: "invalid_grant" });
+		expect(database.oauthRefreshToken).toHaveLength(0);
+		expect(database.oauthAccessToken).toHaveLength(0);
+	});
+
+	it("removes an access token stored between the revocation's deletes", async () => {
+		const { code, codeVerifier } = await authorize();
+		const issued = await redeem(code, codeVerifier);
+		const parentToken = issued.data!.refresh_token!;
+		const insert = await holdNext("create", (m) => m === "oauthAccessToken");
+		const familyDelete = await holdNext(
+			"deleteMany",
+			(m) => m === "oauthRefreshToken",
+		);
+		try {
+			const rotating = refresh(parentToken);
+			await insert.reached;
+			// Reuse deletes the family's access tokens, then waits before
+			// deleting its refresh tokens.
+			const reusing = refresh(parentToken);
+			await familyDelete.reached;
+			insert.release();
+			const rotated = await rotating;
+			familyDelete.release();
+			const reused = await reusing;
+
+			expect(rotated.error).toBeNull();
+			expect(reused.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthAccessToken).toHaveLength(0);
+			expect(database.oauthRefreshToken).toHaveLength(0);
+		} finally {
+			insert.restore();
+			familyDelete.restore();
+		}
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/12402
+ */
+describe("oauth token - refresh family revocation with serial ids", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const redirectUri = "http://localhost:5000/api/auth/callback/test";
+	const database: Record<string, Record<string, unknown>[]> = {
+		account: [],
+		jwks: [],
+		oauthAccessToken: [],
+		oauthClient: [],
+		oauthClientAssertion: [],
+		oauthClientResource: [],
+		oauthConsent: [],
+		oauthRefreshToken: [],
+		oauthResource: [],
+		session: [],
+		user: [],
+		verification: [],
+	};
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			database: memoryAdapter(database),
+			advanced: { database: { generateId: "serial" } },
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: "client_secret_post",
+			grant_types: ["authorization_code", "refresh_token"],
+			redirect_uris: [redirectUri],
+			application_type: "native",
+			skip_consent: true,
+		},
+	});
+	const clientOptions = {
+		clientId: oauthClient.client_id,
+		clientSecret: oauthClient.client_secret!,
+		redirectURI: redirectUri,
+	};
+
+	async function issue(scopes: string[]) {
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: "test",
+			options: clientOptions,
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes,
+			codeVerifier,
+		});
+		let location = "";
+		await client.$fetch(url.toString(), {
+			headers,
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code: new URL(location).searchParams.get("code")!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: clientOptions,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+	}
+
+	async function refresh(refreshToken: string) {
+		const { body, headers: tokenHeaders } = await refreshAccessTokenRequest({
+			refreshToken,
+			options: clientOptions,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+	}
+
+	it("keeps access tokens issued without a refresh token when reuse revokes a family", async () => {
+		const accessOnly = await issue(["openid"]);
+		expect(accessOnly.data?.refresh_token).toBeUndefined();
+		const family = await issue(["openid", "offline_access"]);
+		const parentToken = family.data!.refresh_token!;
+
+		expect((await refresh(parentToken)).error).toBeNull();
+		const reused = await refresh(parentToken);
+
+		expect(reused.error).toMatchObject({ error: "invalid_grant" });
+		expect(database.oauthAccessToken).toHaveLength(1);
+		expect(database.oauthAccessToken?.[0]?.refreshId).toBeUndefined();
+	});
+});
+
+describe("DPoP with secondary storage and no database-backed verification", async () => {
+	const store = new Map<string, string>();
+	const baseURL = "http://localhost:3000";
+	const tokenEndpoint = `${baseURL}/api/auth/oauth2/token`;
+	const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		secondaryStorage: {
+			get: (key) => store.get(key) ?? null,
+			set: (key, value) => void store.set(key, value),
+			delete: (key) => void store.delete(key),
+			getAndDelete: (key) => {
+				const value = store.get(key) ?? null;
+				store.delete(key);
+				return value;
+			},
+			increment: (key) => {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
+		},
+		session: { storeSessionInDatabase: true },
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				clientPrivileges: () => true,
+			}),
+		],
+	});
+
+	it("issues a DPoP-bound token and rejects a replayed proof", async () => {
+		const { headers } = await signInWithTestUser();
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read"],
+			},
+		});
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const proof = await new SignJWT({
+			jti: generateRandomString(16),
+			htm: "POST",
+			htu: tokenEndpoint,
+			iat: Math.floor(Date.now() / 1000),
+		})
+			.setProtectedHeader({
+				typ: "dpop+jwt",
+				alg: "ES256",
+				jwk: (await exportJWK(publicKey)) as JWK,
+			})
+			.sign(privateKey);
+		const requestToken = () =>
+			customFetchImpl(tokenEndpoint, {
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					DPoP: proof,
+				},
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret!,
+					scope: "read",
+				}).toString(),
+			});
+
+		const issued = await requestToken();
+		expect(issued.status).toBe(200);
+		expect(await issued.json()).toMatchObject({ token_type: "DPoP" });
+
+		const replayed = await requestToken();
+		expect(replayed.status).toBe(400);
+		expect(await replayed.json()).toMatchObject({
+			error: "invalid_dpop_proof",
+		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12675
+ * @see https://www.postgresql.org/docs/current/datatype-character.html
+ */
+describe("oauth client IDs outside RFC 6749 VSCHAR", async () => {
+	const database: Record<string, Record<string, unknown>[]> = {};
+	const createMemoryAdapter = memoryAdapter(database);
+	const hasNul = (value: unknown): boolean =>
+		Array.isArray(value)
+			? value.some(hasNul)
+			: typeof value === "string" && value.includes("\0");
+	const clientLookups: unknown[] = [];
+	const { client } = await getTestInstance({
+		database: (options) => {
+			for (const model of Object.keys(getAuthTables(options))) {
+				database[model] ??= [];
+			}
+			const adapter = createMemoryAdapter(options);
+			const rejectNul = (where?: Where[]) => {
+				if (where?.some((clause) => hasNul(clause.value))) {
+					throw new Error('invalid byte sequence for encoding "UTF8": 0x00');
+				}
+			};
+			return {
+				...adapter,
+				findOne: (async (args) => {
+					if (args.model === "oauthClient") {
+						clientLookups.push(...args.where.map((clause) => clause.value));
+					}
+					rejectNul(args.where);
+					return adapter.findOne(args);
+				}) as DBAdapter["findOne"],
+				findMany: (async (args) => {
+					rejectNul(args.where);
+					return adapter.findMany(args);
+				}) as DBAdapter["findMany"],
+			};
+		},
+		plugins: [
+			jwt(),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+		],
+	});
+
+	const send = async (
+		path: string,
+		clientId: string,
+		basic: boolean,
+	): Promise<unknown> => {
+		const body = new URLSearchParams({
+			grant_type: "client_credentials",
+			token: "token",
+		});
+		const headers = new Headers({
+			"content-type": "application/x-www-form-urlencoded",
+		});
+		if (basic) {
+			headers.set(
+				"authorization",
+				`Basic ${Buffer.from(`${clientId}:secret`).toString("base64")}`,
+			);
+		} else {
+			body.set("client_id", clientId);
+			body.set("client_secret", "secret");
+		}
+		const response = await client.$fetch(path, {
+			method: "POST",
+			body,
+			headers,
+		});
+		return response.error;
+	};
+
+	it.each([
+		["/oauth2/token", false],
+		["/oauth2/token", true],
+		["/oauth2/revoke", false],
+		["/oauth2/introspect", false],
+	])(
+		"answers %s (Basic: %s) as for any unknown client",
+		async (path, basic) => {
+			const unknown = await send(path, "ab", basic);
+			expect(unknown).toMatchObject({ error: "invalid_client" });
+			expect(clientLookups).toContain("ab");
+
+			for (const clientId of ["a\0b", "a\tb", "a\u00e9b"]) {
+				expect(await send(path, clientId, basic)).toEqual(unknown);
+				expect(clientLookups).not.toContain(clientId);
+			}
+		},
+	);
 });

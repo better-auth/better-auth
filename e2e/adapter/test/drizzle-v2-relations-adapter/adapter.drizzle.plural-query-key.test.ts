@@ -44,7 +44,7 @@ const relations = defineRelationsPart(dbSchema, (r) => ({
 
 describe("drizzle relations-v2 adapter: plural db.query keys", () => {
 	const sqliteDb = new Database(":memory:");
-	const db = drizzle({ client: sqliteDb, schema: dbSchema, relations });
+	const db = drizzle({ client: sqliteDb, relations });
 
 	const adapter = drizzleAdapter(db, {
 		schema: { user: users, session: sessions, relations },
@@ -122,7 +122,7 @@ describe("drizzle relations-v2 adapter: plural db.query keys", () => {
 
 describe("drizzle relations-v2 adapter: missing relational query namespace", () => {
 	const sqliteDb = new Database(":memory:");
-	const db = drizzle({ client: sqliteDb, schema: dbSchema, relations });
+	const db = drizzle({ client: sqliteDb, relations });
 	// Simulate a db built without the relational-query namespace. The adapter
 	// must fall back to the SQL path rather than dereference `undefined`.
 	(db as { query?: unknown }).query = undefined;
@@ -168,67 +168,61 @@ describe("drizzle relations-v2 adapter: missing relational query namespace", () 
 	});
 });
 
-describe("drizzle relations-v2 adapter: query key via relations internal", () => {
-	const sqliteDb = new Database(":memory:");
-	const db = drizzle({ client: sqliteDb, schema: dbSchema, relations });
-	// Drizzle 1.0 drops the v1 `db._.fullSchema` internal, so the key lookup must
-	// also work off `db._.relations`. Remove fullSchema to force that path.
-	(db._ as { fullSchema?: unknown }).fullSchema = undefined;
-
-	const adapter = drizzleAdapter(db, {
-		schema: { user: users, session: sessions, relations },
-		provider: "sqlite",
-	})({
-		advanced: { database: { joins: true } },
-	});
-
-	beforeEach(() => {
-		sqliteDb.exec("DROP TABLE IF EXISTS session;");
-		sqliteDb.exec("DROP TABLE IF EXISTS user;");
+describe("drizzle relations-v2 adapter: model identity", () => {
+	it("uses the user schema when its table name matches the account model key", async ({
+		onTestFinished,
+	}) => {
+		const sqliteDb = new Database(":memory:");
+		onTestFinished(() => {
+			sqliteDb.close();
+		});
 		sqliteDb.exec(`
-			CREATE TABLE user (
+			CREATE TABLE account (
 				id TEXT PRIMARY KEY,
 				name TEXT NOT NULL,
 				email TEXT NOT NULL,
-				emailVerified INTEGER NOT NULL DEFAULT 0,
+				emailVerified INTEGER NOT NULL,
 				image TEXT,
 				createdAt INTEGER NOT NULL,
 				updatedAt INTEGER NOT NULL
 			);
 		`);
-		sqliteDb.exec(`
-			CREATE TABLE session (
-				id TEXT PRIMARY KEY,
-				userId TEXT NOT NULL REFERENCES user(id),
-				createdAt INTEGER NOT NULL,
-				updatedAt INTEGER NOT NULL
-			);
-		`);
-		const nowTs = Date.now();
-		sqliteDb.exec(`
-			INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt)
-			VALUES ('u1', 'Alice', 'alice@test.com', 0, NULL, ${nowTs}, ${nowTs});
-		`);
-		sqliteDb.exec(`
-			INSERT INTO session (id, userId, createdAt, updatedAt)
-			VALUES ('s1', 'u1', ${nowTs}, ${nowTs});
-		`);
-	});
+		const account = sqliteTable("account", {
+			id: text("id").primaryKey(),
+			name: text("name").notNull(),
+			email: text("email").notNull(),
+			emailVerified: integer("emailVerified", { mode: "boolean" }).notNull(),
+			image: text("image"),
+			createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+			updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+		});
+		const db = drizzle({ client: sqliteDb });
+		const adapter = drizzleAdapter(db, {
+			provider: "sqlite",
+			schema: { account },
+		})({
+			user: { modelName: "account" },
+			account: { modelName: "identity" },
+		});
+		const now = new Date();
 
-	afterAll(() => {
-		sqliteDb.close();
-	});
-
-	it("resolves the plural key and joins via db._.relations", async () => {
-		const result = await adapter.findOne<Record<string, any>>({
+		await adapter.create({
 			model: "user",
-			where: [{ field: "id", value: "u1" }],
-			join: { session: true },
+			data: {
+				id: "user-id",
+				name: "Ada",
+				email: "ada@example.com",
+				emailVerified: false,
+				createdAt: now,
+				updatedAt: now,
+			},
+			forceAllowId: true,
+		});
+		const user = await adapter.findOne<{ email: string }>({
+			model: "user",
+			where: [{ field: "email", value: "ada@example.com" }],
 		});
 
-		expect(result?.id).toBe("u1");
-		expect((result?.session as { id: string }[]).map((s) => s.id)).toEqual([
-			"s1",
-		]);
+		expect(user?.email).toBe("ada@example.com");
 	});
 });

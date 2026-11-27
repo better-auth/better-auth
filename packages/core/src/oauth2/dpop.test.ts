@@ -1,6 +1,7 @@
 import type { JWK, JWTPayload } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { DpopReplayStore } from "./dpop";
 import {
 	createDpopReplayStore,
 	createInMemoryDpopReplayStore,
@@ -339,6 +340,41 @@ describe("enforceDpopBinding", () => {
 	});
 });
 
+describe("createInMemoryDpopReplayStore", () => {
+	const at = (seconds: number) => new Date((nowSeconds + seconds) * 1000);
+
+	it("rejects a key until its reservation expires, then accepts it again", () => {
+		const store = createInMemoryDpopReplayStore();
+		const reserve = (now: number) =>
+			store.reserve({ key: "replay-key", expiresAt: at(5), now: at(now) });
+
+		expect(reserve(0)).toBe(true);
+		expect(reserve(4)).toBe(false);
+		// Expiry is checked on lookup, not only when expired entries are swept.
+		expect(reserve(5)).toBe(true);
+	});
+
+	it("keeps unexpired reservations of other keys across a sweep", () => {
+		const store = createInMemoryDpopReplayStore();
+		expect(store.reserve({ key: "short", expiresAt: at(1), now: at(0) })).toBe(
+			true,
+		);
+		expect(store.reserve({ key: "long", expiresAt: at(600), now: at(0) })).toBe(
+			true,
+		);
+
+		expect(
+			store.reserve({ key: "other", expiresAt: at(700), now: at(120) }),
+		).toBe(true);
+		expect(
+			store.reserve({ key: "long", expiresAt: at(700), now: at(121) }),
+		).toBe(false);
+		expect(
+			store.reserve({ key: "short", expiresAt: at(700), now: at(121) }),
+		).toBe(true);
+	});
+});
+
 describe("createDpopReplayStore", () => {
 	it("delegates to reserveVerificationValue, namespaces the key, and rejects a replay", async () => {
 		const seen = new Set<string>();
@@ -360,6 +396,125 @@ describe("createDpopReplayStore", () => {
 		expect(await store.reserve(reservation)).toBe(true);
 		expect(await store.reserve(reservation)).toBe(false);
 		expect(identifiers.every((id) => id.startsWith("dpop-proof:"))).toBe(true);
+	});
+});
+
+describe("createDpopReplayStore with the auth context", () => {
+	const reservation = {
+		key: "replay-key",
+		expiresAt: new Date(nowSeconds * 1000 + 90_500),
+		now: new Date(nowSeconds * 1000),
+	};
+	const reserveVerificationValue = vi.fn(async () => true);
+
+	it("records proofs in secondary storage when verification values live there", async () => {
+		const counts = new Map<string, number>();
+		const increment = vi.fn((key: string, _ttl: number) => {
+			const count = (counts.get(key) ?? 0) + 1;
+			counts.set(key, count);
+			return count;
+		});
+		const store = createDpopReplayStore({
+			internalAdapter: { reserveVerificationValue },
+			secondaryStorage: { increment },
+			options: {},
+		});
+
+		expect(await store.reserve(reservation)).toBe(true);
+		expect(await store.reserve(reservation)).toBe(false);
+		expect(increment).toHaveBeenCalledWith("dpop-proof:replay-key", 91);
+		expect(reserveVerificationValue).not.toHaveBeenCalled();
+	});
+
+	it("records proofs in the database when verification values are stored there", async () => {
+		const increment = vi.fn(() => 1);
+		const store = createDpopReplayStore({
+			internalAdapter: { reserveVerificationValue },
+			secondaryStorage: { increment },
+			options: { verification: { storeInDatabase: true } },
+		});
+
+		expect(await store.reserve(reservation)).toBe(true);
+		expect(reserveVerificationValue).toHaveBeenCalledWith({
+			identifier: "dpop-proof:replay-key",
+			value: "replay-key",
+			expiresAt: reservation.expiresAt,
+		});
+		expect(increment).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * A proof stays acceptable through the whole second at the end of its window,
+ * because `nowSeconds` is floored. Its replay reservation must outlive that
+ * second in every store.
+ * @see https://datatracker.ietf.org/doc/html/rfc9449#section-11.1
+ */
+describe("replay reservation at the end of the proof window", () => {
+	const proofMaxAgeSeconds = 60;
+	const setTime = (offsetMs: number) =>
+		vi.setSystemTime(nowSeconds * 1000 + offsetMs);
+
+	async function expectReplayRejectedInFinalSecond(
+		replayStore: DpopReplayStore,
+	) {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		try {
+			const proofJwt = await createProof();
+			const options = {
+				proofJwt,
+				method,
+				url,
+				proofMaxAgeSeconds,
+				replayStore,
+			};
+			setTime(500);
+			await verifyDpopProof(options);
+			setTime(proofMaxAgeSeconds * 1000 + 900);
+			await expect(verifyDpopProof(options)).rejects.toMatchObject({
+				code: "invalid_dpop_proof",
+				message: "DPoP proof jti has already been used",
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+	}
+
+	it("keeps the in-memory reservation", async () => {
+		await expectReplayRejectedInFinalSecond(createInMemoryDpopReplayStore());
+	});
+
+	it("keeps the secondary-storage reservation", async () => {
+		const expiries = new Map<string, number>();
+		await expectReplayRejectedInFinalSecond(
+			createDpopReplayStore({
+				internalAdapter: { reserveVerificationValue: async () => true },
+				secondaryStorage: {
+					increment: (key, ttl) => {
+						const expiry = expiries.get(key);
+						if (expiry !== undefined && expiry > Date.now()) return 2;
+						expiries.set(key, Date.now() + ttl * 1000);
+						return 1;
+					},
+				},
+				options: {},
+			}),
+		);
+	});
+
+	it("keeps the database reservation", async () => {
+		// Expired verification rows can be deleted, which frees the identifier.
+		const rows = new Map<string, Date>();
+		await expectReplayRejectedInFinalSecond(
+			createDpopReplayStore({
+				reserveVerificationValue: async ({ identifier, expiresAt }) => {
+					const existing = rows.get(identifier);
+					if (existing && existing.getTime() > Date.now()) return false;
+					rows.set(identifier, expiresAt);
+					return true;
+				},
+			}),
+		);
 	});
 });
 

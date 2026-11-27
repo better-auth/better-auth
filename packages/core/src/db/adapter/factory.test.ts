@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
 import type { CleanedWhere, CustomAdapter, Where } from "./index";
@@ -66,6 +66,80 @@ function createTestAdapter({
 		},
 	});
 }
+
+describe("createAdapterFactory model identity", () => {
+	it("keeps the schema model when its custom name matches another schema key", async () => {
+		const findOne = vi.fn(async () => null);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: { adapterId: "test-adapter" },
+			adapter: () => createCustomAdapter({ findOne }),
+		})({
+			user: { modelName: "account" },
+			account: { modelName: "identity" },
+			advanced: { database: { joins: true } },
+		});
+
+		await adapter.findOne({
+			model: "session",
+			where: [{ field: "id", value: "session-id" }],
+			join: { user: true },
+		});
+
+		expect(findOne).toHaveBeenCalledWith(
+			expect.objectContaining({
+				model: "session",
+				modelKey: "session",
+				join: {
+					account: expect.objectContaining({ modelKey: "user" }),
+				},
+			}),
+		);
+	});
+});
+
+describe("createAdapterFactory fallback join", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12064
+	 */
+	it("reports a failed join query only through the configured logger", async ({
+		onTestFinished,
+	}) => {
+		const driverError = new Error('select from "user" where id = user-id');
+		const log = vi.fn();
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		onTestFinished(() => consoleError.mockRestore());
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: { adapterId: "test-adapter" },
+			adapter: () =>
+				createCustomAdapter({
+					findOne: async <T>({
+						model,
+					}: Parameters<CustomAdapter["findOne"]>[0]) => {
+						if (model === "user") throw driverError;
+						return { id: "session-id", userId: "user-id" } as T;
+					},
+				}),
+		})({
+			logger: { log },
+		});
+
+		await expect(
+			adapter.findOne({
+				model: "session",
+				where: [{ field: "id", value: "session-id" }],
+				join: { user: true },
+			}),
+		).rejects.toBe(driverError);
+		expect(log).toHaveBeenCalledWith(
+			"error",
+			expect.any(String),
+			expect.anything(),
+		);
+		expect(consoleError).not.toHaveBeenCalled();
+	});
+});
 
 describe("createAdapterFactory atomic primitives", () => {
 	it("delegates consumeOne to the native adapter with transformed where and output", async () => {
@@ -302,6 +376,46 @@ describe("createAdapterFactory where value coercion", () => {
 				},
 			],
 		]);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/12389#discussion_r4531585767
+ */
+describe("createAdapterFactory serial id where values", () => {
+	it("keeps null for id and reference fields instead of coercing it to 0", async () => {
+		const seenWhere: CleanedWhere[][] = [];
+		const adapter = createAdapterFactory({
+			config: { adapterId: "test-adapter", adapterName: "Test Adapter" },
+			adapter: () =>
+				createCustomAdapter({
+					findMany: async <T>(
+						params: Parameters<CustomAdapter["findMany"]>[0],
+					) => {
+						if (params.where) seenWhere.push(params.where);
+						return [] as T[];
+					},
+				}),
+		})({ advanced: { database: { generateId: "serial" } } });
+
+		await adapter.findMany({
+			model: "session",
+			where: [{ field: "userId", operator: "ne", value: null }],
+		});
+		await adapter.findMany({
+			model: "session",
+			where: [{ field: "userId", value: "2" }],
+		});
+		await adapter.findMany({
+			model: "session",
+			where: [{ field: "id", operator: "ne", value: null }],
+		});
+		await adapter.findMany({
+			model: "session",
+			where: [{ field: "id", value: "3" }],
+		});
+
+		expect(seenWhere.map(([w]) => w!.value)).toEqual([null, 2, null, 3]);
 	});
 });
 
@@ -553,22 +667,18 @@ describe("legacy adapter atomic fallbacks", () => {
 			first.incrementOne({ ...request, increment: { attempts: 1 } }),
 		).rejects.toThrow(/contention/);
 	});
-	it.for([
-		2,
-		-1,
-		0.5,
-		Number.NaN,
-	])("rejects invalid affected counts (%s)", async (count, {
-		onTestFinished,
-	}) => {
-		const { raw, first } = setup(onTestFinished);
-		raw.deleteMany = async () => count;
-		raw.updateMany = async () => count;
-		await expect(first.consumeOne(request)).rejects.toThrow(/affected/);
-		await expect(
-			first.incrementOne({ ...request, increment: { attempts: 1 } }),
-		).rejects.toThrow(/affected/);
-	});
+	it.for([2, -1, 0.5, Number.NaN])(
+		"rejects invalid affected counts (%s)",
+		async (count, { onTestFinished }) => {
+			const { raw, first } = setup(onTestFinished);
+			raw.deleteMany = async () => count;
+			raw.updateMany = async () => count;
+			await expect(first.consumeOne(request)).rejects.toThrow(/affected/);
+			await expect(
+				first.incrementOne({ ...request, increment: { attempts: 1 } }),
+			).rejects.toThrow(/affected/);
+		},
+	);
 	it("identifies invalid increment input before writing", async ({
 		onTestFinished,
 	}) => {

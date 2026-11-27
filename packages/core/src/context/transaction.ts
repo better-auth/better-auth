@@ -1,15 +1,34 @@
 import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
-import { schemaCheckFor } from "../db/schema-check";
+import { runtimeSchemaCheckFor } from "../db/schema-check";
+import { logger } from "../env";
 import type { BetterAuthOptions } from "../types";
 import { __getBetterAuthGlobal } from "./global";
 
 type StoredAdapter = DBTransactionAdapter<BetterAuthOptions>;
 
+type PendingHookFlags = {
+	/**
+	 * Queued with its own `onError`, so it runs even after another hook failed.
+	 */
+	handled?: boolean;
+};
+
+type PendingHook =
+	| ((() => Promise<void>) & PendingHookFlags)
+	| ({ run: () => Promise<void> } & PendingHookFlags);
+
+const runPendingHook = (hook: PendingHook) =>
+	typeof hook === "function" ? hook() : hook.run();
+
 type HookContext = {
 	adapter: StoredAdapter;
-	pendingHooks: Array<() => Promise<void>>;
+	/**
+	 * Other copies of core share this store. Releases up to 1.7.27 queue and run
+	 * plain functions, and 1.7.28 queues and runs `{ run, handled }` objects.
+	 */
+	pendingHooks: Array<PendingHook>;
 	isTransactionActive: boolean;
 };
 
@@ -63,7 +82,7 @@ export const runWithAdapter = async <
 	return ensureAsyncStorage()
 		.then(async (als) => {
 			called = true;
-			const pendingHooks: Array<() => Promise<void>> = [];
+			const pendingHooks: HookContext["pendingHooks"] = [];
 			let result: Awaited<R>;
 			let error: unknown;
 			let hasError = false;
@@ -82,7 +101,7 @@ export const runWithAdapter = async <
 			}
 			// Execute pending hooks after the function completes (even if it threw)
 			for (const hook of pendingHooks) {
-				await hook();
+				await runPendingHook(hook);
 			}
 			if (hasError) {
 				throw error;
@@ -97,6 +116,20 @@ export const runWithAdapter = async <
 		});
 };
 
+/**
+ * Runs `fn` in a transaction on `adapter`, joining the current one when
+ * already inside it, then runs the hooks queued with
+ * `queueAfterTransactionHook` once the work commits.
+ *
+ * When the adapter has no real transaction (`transaction: false`), writes are
+ * applied as they happen and cannot roll back, so queued hooks also run when
+ * `fn` throws. The original error is still rethrown; a hook failure on that
+ * path goes to `onAfterCommitHookError`, or is logged when none is given.
+ *
+ * Otherwise, without `onAfterCommitHookError`, the first hook failure is
+ * rethrown once the queue ends and later failures are logged. A failed hook
+ * without `onError` skips the later hooks that have none.
+ */
 export const runWithTransaction = async <
 	R,
 	Options extends BetterAuthOptions = BetterAuthOptions,
@@ -117,14 +150,17 @@ export const runWithTransaction = async <
 			}
 			// Settle the schema verdict before this transaction holds the
 			// connection a single-connection store would need for the lookup.
-			const pendingSchemaCheck = schemaCheckFor(adapter)?.();
+			const pendingSchemaCheck = runtimeSchemaCheckFor(adapter)?.();
 			if (pendingSchemaCheck) await pendingSchemaCheck;
-			const pendingHooks: Array<() => Promise<void>> = [];
+			let pendingHooks: HookContext["pendingHooks"] = [];
 			let result: Awaited<R>;
 			let error: unknown;
 			let hasError = false;
 			try {
 				result = await adapter.transaction(async (trx) => {
+					// An adapter may run this callback again after a transient abort.
+					// Only the hooks of the attempt that commits may run.
+					pendingHooks = [];
 					return als.run(
 						{
 							adapter: trx as unknown as StoredAdapter,
@@ -138,21 +174,58 @@ export const runWithTransaction = async <
 				hasError = true;
 				error = e;
 			}
-			if (hasError) {
-				throw error;
-			}
-			for (const hook of pendingHooks) {
-				try {
-					await hook();
-				} catch (error) {
-					if (!options?.onAfterCommitHookError) throw error;
+			const runPendingHooks = async (unhandledErrors: "throw" | "log") => {
+				const failures: unknown[] = [];
+				let skipUnhandled = false;
+				for (const hook of pendingHooks) {
+					const handled = hook.handled === true;
+					if (skipUnhandled && !handled) continue;
 					try {
-						await options.onAfterCommitHookError(error);
-					} catch {
-						// Reporting cannot roll back committed work or suppress later hooks.
+						await runPendingHook(hook);
+					} catch (hookError) {
+						if (!options?.onAfterCommitHookError) {
+							if (unhandledErrors === "throw") {
+								failures.push(hookError);
+								skipUnhandled ||= !handled;
+								continue;
+							}
+							try {
+								logger.error(
+									"Failed to run an after-commit hook for work that could not roll back",
+									hookError,
+								);
+							} catch {
+								// A failing logger must not skip later hooks or replace the original error.
+							}
+							continue;
+						}
+						try {
+							await options.onAfterCommitHookError(hookError);
+						} catch {
+							// Reporting cannot roll back committed work or suppress later hooks.
+						}
 					}
 				}
+				if (!failures.length) return;
+				for (const failure of failures.slice(1)) {
+					try {
+						logger.error("Failed to run an after-commit hook", failure);
+					} catch {
+						// A failing logger must not replace the first hook failure.
+					}
+				}
+				throw failures[0];
+			};
+			if (hasError) {
+				// Without a real transaction (`transaction: false`), each write was
+				// applied directly and nothing rolled back, so the hooks queued for
+				// those writes still have to run. The original error wins over theirs.
+				if (adapter.options?.adapterConfig.transaction === false) {
+					await runPendingHooks("log");
+				}
+				throw error;
 			}
+			await runPendingHooks("throw");
 			return result!;
 		})
 		.catch((err) => {
@@ -166,6 +239,11 @@ export const runWithTransaction = async <
 /**
  * Queue a hook to be executed after the current transaction commits.
  * If not in a transaction, the hook will execute immediately.
+ *
+ * When the adapter has no real transaction (`transaction: false`), the hook
+ * also runs if the surrounding work fails, since its writes were kept.
+ *
+ * A hook queued with `onError` also runs when an earlier queued hook failed.
  */
 export const queueAfterTransactionHook = async (
 	hook: () => Promise<void>,
@@ -191,5 +269,11 @@ export const queueAfterTransactionHook = async (
 
 	const store = storage.getStore();
 	if (!store?.isTransactionActive) return executeHook();
-	store.pendingHooks.push(executeHook);
+	// Callable for older copies, with `run` and `handled` for 1.7.28.
+	store.pendingHooks.push(
+		Object.assign(executeHook, {
+			run: executeHook,
+			handled: !!options?.onError,
+		}),
+	);
 };
