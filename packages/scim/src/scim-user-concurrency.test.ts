@@ -42,6 +42,26 @@ interface IncrementOneInput {
 	set?: Record<string, unknown>;
 }
 
+function incrementManyThroughIncrementOne(
+	incrementOne: DBTransactionAdapter["incrementOne"],
+): DBTransactionAdapter["incrementMany"] {
+	return async <Row>(
+		input: Parameters<DBTransactionAdapter["incrementMany"]>[0],
+	) => {
+		const updated: Row[] = [];
+		for (const row of input.rows) {
+			const result = await incrementOne<Row>({
+				model: input.model,
+				where: row.where,
+				increment: input.increment,
+				set: input.set,
+			});
+			if (result) updated.push(result);
+		}
+		return updated;
+	};
+}
+
 type CreateInput = Parameters<DBTransactionAdapter["create"]>[0];
 type FindOneInput = Parameters<DBTransactionAdapter["findOne"]>[0];
 
@@ -157,7 +177,11 @@ function createSourceUpdateRaceAdapter(data: UserDeletionData) {
 							return transaction.incrementOne<Row>(input);
 						};
 
-						return callback({ ...transaction, incrementOne });
+						return callback({
+							...transaction,
+							incrementOne,
+							incrementMany: incrementManyThroughIncrementOne(incrementOne),
+						});
 					}),
 			};
 		},
@@ -251,7 +275,11 @@ function createMembershipRaceAdapter(data: UserDeletionData) {
 							return transaction.incrementOne<Row>(input);
 						};
 
-						return callback({ ...transaction, incrementOne });
+						return callback({
+							...transaction,
+							incrementOne,
+							incrementMany: incrementManyThroughIncrementOne(incrementOne),
+						});
 					});
 				},
 			};
@@ -313,7 +341,11 @@ function createPatchRaceAdapter(data: UserDeletionData) {
 							return transaction.incrementOne<Row>(input);
 						};
 
-						return callback({ ...transaction, incrementOne });
+						return callback({
+							...transaction,
+							incrementOne,
+							incrementMany: incrementManyThroughIncrementOne(incrementOne),
+						});
 					}),
 			};
 		},
