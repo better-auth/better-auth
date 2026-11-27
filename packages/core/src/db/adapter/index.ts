@@ -123,6 +123,16 @@ export interface DBAdapterFactoryConfig<
 	 */
 	supportsArrays?: boolean | undefined;
 	/**
+	 * Whether composed reads such as `findPage` may run `findMany` and
+	 * `count` at the same time.
+	 *
+	 * Set to `false` when operations share a connection that cannot
+	 * overlap, such as a MongoDB `ClientSession` inside a transaction.
+	 *
+	 * @default true
+	 */
+	supportsConcurrentReads?: boolean | undefined;
+	/**
 	 * Execute multiple operations in a transaction.
 	 *
 	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
@@ -396,6 +406,14 @@ export type JoinConfig = {
 	};
 };
 
+export type FindPageResult<T> = {
+	items: T[];
+	total: number;
+	limit: number;
+	offset: number;
+	hasMore: boolean;
+};
+
 export type DBTransactionAdapter<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > = Omit<DBAdapter<Options>, "transaction">;
@@ -433,6 +451,32 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		offset?: number | undefined;
 		join?: JoinOption | undefined;
 	}) => Promise<T[]>;
+	/**
+	 * Return one page of matching rows and the total matching count.
+	 *
+	 * Runs `findMany` and `count` with the same `where`. Those reads run
+	 * together unless `supportsConcurrentReads` is `false`. `limit` follows
+	 * `findMany` (`advanced.database.defaultFindManyLimit`, default `100`;
+	 * `0` returns no rows and skips `findMany`). `offset` defaults to `0`.
+	 * `join` and `select` apply only to `findMany`.
+	 *
+	 * Always defined on the factory-wrapped adapter. Do not implement this
+	 * on a custom adapter.
+	 */
+	findPage: <T>(data: {
+		model: string;
+		where?: Where[] | undefined;
+		limit?: number | undefined;
+		select?: string[] | undefined;
+		sortBy?:
+			| {
+					field: string;
+					direction: "asc" | "desc";
+			  }
+			| undefined;
+		offset?: number | undefined;
+		join?: JoinOption | undefined;
+	}) => Promise<FindPageResult<T>>;
 	count: (data: {
 		model: string;
 		where?: Where[] | undefined;

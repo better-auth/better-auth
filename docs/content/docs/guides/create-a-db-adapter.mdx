@@ -384,6 +384,26 @@ count: async ({ model, where }) => {
 };
 ```
 
+### `findPage` method
+
+`findPage` returns one page of matching records and the total matching count. It runs `findMany` and `count` with the same `where`. Do not implement `findPage` on your custom adapter; the factory provides it.
+
+Public callers pass the same filters as `findMany`: `model`, `where`, `limit`, `offset`, `sortBy`, `select`, and `join`. `limit` follows `findMany` (`advanced.database.defaultFindManyLimit` when omitted, default `100`; `0` returns no rows and skips `findMany`). `offset` defaults to `0`. `join` and `select` apply only to `findMany`.
+
+**Returns** `{ items, total, limit, offset, hasMore }`.
+
+Keep `where` scoped to records the caller is allowed to read. An unscoped page on `user` or `session` returns other people's rows.
+
+```ts title="Example"
+const page = await adapter.findPage({
+  model: "member",
+  where: [{ field: "organizationId", value: organizationId }],
+  limit: 20,
+  offset: 0,
+  sortBy: { field: "createdAt", direction: "desc" },
+});
+```
+
 ### `options` (optional)
 
 The `options` object is for any potential config that you got from your custom adapter options.
@@ -504,6 +524,12 @@ Whether the database supports booleans. If the database doesn't support booleans
 ### `supportsArrays`
 
 Whether the database supports arrays. Defaults to `false`, in which case array fields (`string[]`, `number[]`) are stored as a serialized `string` and safely parsed back when retrieved. Set this to `true` if your database supports array columns natively.
+
+### `supportsConcurrentReads`
+
+Whether composed reads such as `findPage` may run `findMany` and `count` at the same time. Defaults to `true`.
+
+Set this to `false` when operations share a connection that cannot overlap. The MongoDB adapter does this for the adapter instance bound to a `ClientSession` inside a transaction.
 
 ### `usePlural`
 

@@ -1898,6 +1898,61 @@ export const getNormalTestSuiteTests = (
 				expect(user).toHaveProperty("email");
 			});
 		},
+		"findPage - returns a page, total, and hasMore": async () => {
+			await insertRandom("user", 5);
+			const page = await adapter.findPage<User>({
+				model: "user",
+				limit: 2,
+				offset: 0,
+				sortBy: { field: "email", direction: "asc" },
+			});
+			expect(page.items.length).toEqual(2);
+			expect(page.total).toEqual(5);
+			expect(page.limit).toEqual(2);
+			expect(page.offset).toEqual(0);
+			expect(page.hasMore).toEqual(true);
+			page.items.forEach((user) => {
+				expect(user).toHaveProperty("id");
+				expect(user).toHaveProperty("email");
+			});
+		},
+		"findPage - last page has no more rows": async () => {
+			await insertRandom("user", 5);
+			const page = await adapter.findPage<User>({
+				model: "user",
+				limit: 2,
+				offset: 4,
+				sortBy: { field: "email", direction: "asc" },
+			});
+			expect(page.items.length).toEqual(1);
+			expect(page.total).toEqual(5);
+			expect(page.hasMore).toEqual(false);
+		},
+		"findPage - limit 0 returns no rows and still counts": async () => {
+			await insertRandom("user", 3);
+			const page = await adapter.findPage<User>({
+				model: "user",
+				limit: 0,
+				offset: 1,
+			});
+			expect(page.items).toEqual([]);
+			expect(page.total).toEqual(3);
+			expect(page.limit).toEqual(0);
+			expect(page.offset).toEqual(1);
+			expect(page.hasMore).toEqual(true);
+		},
+		"findPage - applies where to both items and total": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const page = await adapter.findPage<User>({
+				model: "user",
+				where: [{ field: "id", value: users[0]!.id }],
+				limit: 10,
+			});
+			expect(page.items.length).toEqual(1);
+			expect(page.items[0]!.id).toEqual(users[0]!.id);
+			expect(page.total).toEqual(1);
+			expect(page.hasMore).toEqual(false);
+		},
 		"findMany - should find many models with sortBy and offset": async () => {
 			let n = -1;
 			await modifyBetterAuthOptions(

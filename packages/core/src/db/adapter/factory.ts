@@ -19,6 +19,7 @@ import type {
 	CleanedWhere,
 	DBAdapter,
 	DBTransactionAdapter,
+	FindPageResult,
 	JoinConfig,
 	JoinOption,
 	Where,
@@ -72,6 +73,7 @@ export const createAdapterFactory =
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 			supportsUUIDs: cfg.supportsUUIDs ?? false,
 			supportsArrays: cfg.supportsArrays ?? false,
+			supportsConcurrentReads: cfg.supportsConcurrentReads ?? true,
 			transaction: cfg.transaction ?? false,
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
@@ -1291,6 +1293,57 @@ export const createAdapterFactory =
 					{ model, data: transformed },
 				);
 				return transformed;
+			},
+			findPage: async <T>(data: {
+				model: string;
+				where?: Where[] | undefined;
+				limit?: number | undefined;
+				select?: string[] | undefined;
+				sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
+				offset?: number | undefined;
+				join?: JoinOption | undefined;
+			}): Promise<FindPageResult<T>> => {
+				const offset = data.offset ?? 0;
+				const limit =
+					data.limit ?? options.advanced?.database?.defaultFindManyLimit ?? 100;
+				if (limit === 0) {
+					const total = await adapter.count({
+						model: data.model,
+						where: data.where,
+					});
+					return {
+						items: [],
+						total,
+						limit,
+						offset,
+						hasMore: total > offset,
+					};
+				}
+				const findItems = () =>
+					adapter.findMany<T>({
+						model: data.model,
+						where: data.where,
+						limit,
+						offset,
+						select: data.select,
+						sortBy: data.sortBy,
+						join: data.join,
+					});
+				const countRows = () =>
+					adapter.count({
+						model: data.model,
+						where: data.where,
+					});
+				const [items, total] = config.supportsConcurrentReads
+					? await Promise.all([findItems(), countRows()])
+					: [await findItems(), await countRows()];
+				return {
+					items,
+					total,
+					limit,
+					offset,
+					hasMore: offset + items.length < total,
+				};
 			},
 			delete: async ({
 				model: inputModel,
