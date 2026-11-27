@@ -3662,6 +3662,96 @@ describe("email OTP issuance vetoed by a verification hook", () => {
 		},
 	);
 
+	it("refuses to send a replacement code that was not stored after a colliding send", async () => {
+		const delivered: string[] = [];
+		const codes = ["111111", "222222"];
+		let sendDuringCreate: (() => Promise<unknown>) | undefined;
+		const { auth, testUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					create: {
+						// Store a concurrent send's code between this send's delete and create.
+						async before() {
+							const send = sendDuringCreate;
+							sendDuringCreate = undefined;
+							await send?.();
+						},
+					},
+					update: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+			plugins: [
+				emailOTP({
+					storeOTP: "hashed",
+					generateOTP: () => codes.shift(),
+					async sendVerificationOTP({ otp }) {
+						delivered.push(otp);
+					},
+				}),
+			],
+		});
+		const body = { email: testUser.email, type: "sign-in" as const };
+		sendDuringCreate = () => auth.api.sendVerificationOTP({ body });
+
+		const res = await auth.api.sendVerificationOTP({ body, asResponse: true });
+
+		expect(res.status).toBe(500);
+		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
+		expect(delivered).toEqual(["222222"]);
+		const stored = await auth.api.checkVerificationOTP({
+			body: { ...body, otp: "222222" },
+			asResponse: true,
+		});
+		expect(stored.status).toBe(200);
+	});
+
+	it("sends a new code when the code being reused is consumed before its expiry is extended", async () => {
+		const delivered: string[] = [];
+		let consumeOnUpdate = false;
+		const { auth, testUser } = await getTestInstance({
+			databaseHooks: {
+				verification: {
+					update: {
+						// Consume the code between the reuse read and its expiry update.
+						async before() {
+							if (!consumeOnUpdate) return;
+							consumeOnUpdate = false;
+							const ctx = await auth.$context;
+							await ctx.internalAdapter.deleteVerificationByIdentifier(
+								`sign-in-otp-${testUser.email}`,
+							);
+						},
+					},
+				},
+			},
+			plugins: [
+				emailOTP({
+					resendStrategy: "reuse",
+					async sendVerificationOTP({ otp }) {
+						delivered.push(otp);
+					},
+				}),
+			],
+		});
+		const body = { email: testUser.email, type: "sign-in" as const };
+		await auth.api.sendVerificationOTP({ body });
+		consumeOnUpdate = true;
+
+		await auth.api.sendVerificationOTP({ body });
+
+		expect(delivered).toHaveLength(2);
+		expect(delivered[1]).not.toBe(delivered[0]);
+		const res = await auth.api.checkVerificationOTP({
+			body: { ...body, otp: delivered[1]! },
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+	});
+
 	it("completes sign-up without sending a sign-up code that was not stored", async () => {
 		const veto = { active: false };
 		const sendVerificationOTP = vi.fn();

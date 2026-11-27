@@ -53,6 +53,25 @@ export const auth = betterAuth({
 })
 ```
 
+### Absolute Session Lifetime
+
+By default, an active session keeps getting extended. You can set an absolute lifetime so that users have to sign in again after a fixed time, even if they keep using the session. The value is in seconds and is measured from the session's `createdAt`. `expiresIn` and `updateAge` still decide when an inactive session expires, but a refresh never extends the session past the absolute lifetime.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    //... other config options
+    session: {
+        expiresIn: 60 * 60, // 1 hour of inactivity
+        updateAge: 60 * 5, // 5 minutes
+        absoluteExpiresIn: 60 * 60 * 24 // sign in again after 24 hours
+    }
+})
+```
+
+The limit applies to sessions that are created or refreshed while it is set. Sessions that already exist when you enable or lower it are no longer refreshed and expire at their stored expiration date, at most `expiresIn` later. To end them right away, [revoke them](#revoke-all-sessions).
+
 ### Defer Session Refresh
 
 By default, `GET /get-session` performs database writes to refresh the session. This can cause issues with read-replica database setups where GET requests are routed to read-only replicas.

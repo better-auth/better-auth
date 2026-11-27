@@ -3161,3 +3161,143 @@ describe("get-session cache headers", async () => {
 		expect(res.headers.get("cache-control")).toBeNull();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10405
+ */
+describe("absolute session lifetime", () => {
+	const startedAt = new Date("2026-01-01T00:00:00Z").getTime();
+	const getSessionTokenMaxAge = (response: Response) =>
+		parseSetCookieHeader(response.headers.get("set-cookie") || "").get(
+			"better-auth.session_token",
+		)?.["max-age"];
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(startedAt);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("stops refreshes at the absolute lifetime and then ends the session", async () => {
+		const { client, signInWithTestUser } = await getTestInstance({
+			session: {
+				expiresIn: 120,
+				updateAge: 60,
+				absoluteExpiresIn: 300,
+			},
+		});
+		const { headers } = await signInWithTestUser();
+
+		const timeline = [
+			{ elapsedSeconds: 60, expiresAfterSeconds: 180, cookieMaxAge: 120 },
+			{ elapsedSeconds: 150, expiresAfterSeconds: 270, cookieMaxAge: 120 },
+			{ elapsedSeconds: 240, expiresAfterSeconds: 300, cookieMaxAge: 60 },
+			// Already at the limit, so the session is not written again.
+			{
+				elapsedSeconds: 280,
+				expiresAfterSeconds: 300,
+				cookieMaxAge: undefined,
+			},
+			{ elapsedSeconds: 301, expiresAfterSeconds: null, cookieMaxAge: 0 },
+		];
+
+		for (const { elapsedSeconds, ...expected } of timeline) {
+			vi.setSystemTime(startedAt + elapsedSeconds * 1000);
+			let cookieMaxAge: number | undefined;
+			const response = await client.getSession({
+				fetchOptions: {
+					headers,
+					onSuccess(context) {
+						cookieMaxAge = getSessionTokenMaxAge(context.response);
+					},
+				},
+			});
+			const expiresAt = response.data?.session.expiresAt;
+
+			expect(
+				{
+					expiresAfterSeconds: expiresAt
+						? (new Date(expiresAt).getTime() - startedAt) / 1000
+						: null,
+					cookieMaxAge,
+				},
+				`after ${elapsedSeconds}s`,
+			).toEqual(expected);
+		}
+	});
+
+	it("caps a new session and its cookie at the absolute lifetime", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				absoluteExpiresIn: 60,
+			},
+		});
+		const headers = new Headers();
+		let cookieMaxAge: number | undefined;
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+					cookieMaxAge = getSessionTokenMaxAge(context.response);
+				},
+			},
+		);
+
+		const response = await client.getSession({ fetchOptions: { headers } });
+
+		expect(cookieMaxAge).toBe(60);
+		expect(new Date(response.data!.session.expiresAt).getTime()).toBe(
+			startedAt + 60_000,
+		);
+	});
+
+	it("caps a session whose creator overrides its expiry", async () => {
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				absoluteExpiresIn: 60,
+			},
+		});
+		const context = await auth.$context;
+		const user = await context.internalAdapter.findUserByEmail(testUser.email);
+
+		const session = await context.internalAdapter.createSession(
+			user!.user.id,
+			false,
+			{ expiresAt: new Date(startedAt + 60 * 60 * 1000) },
+			true,
+		);
+
+		expect(session.expiresAt.getTime()).toBe(startedAt + 60_000);
+	});
+
+	it("lets a session created before the limit applied run out without refreshing it", async () => {
+		const { client, signInWithTestUser, db } = await getTestInstance({
+			session: {
+				expiresIn: 120,
+				updateAge: 60,
+				absoluteExpiresIn: 300,
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const current = await client.getSession({ fetchOptions: { headers } });
+		await db.update({
+			model: "session",
+			where: [{ field: "id", value: current.data!.session.id }],
+			update: { createdAt: new Date(startedAt - 400_000) },
+		});
+
+		vi.setSystemTime(startedAt + 70_000);
+		const unrefreshed = await client.getSession({ fetchOptions: { headers } });
+		vi.setSystemTime(startedAt + 121_000);
+		const expired = await client.getSession({ fetchOptions: { headers } });
+
+		expect(new Date(unrefreshed.data!.session.expiresAt).getTime()).toBe(
+			startedAt + 120_000,
+		);
+		expect(expired.data).toBeNull();
+	});
+});

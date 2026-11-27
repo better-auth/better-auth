@@ -454,6 +454,7 @@ export const auth = betterAuth({
 		},
 		expiresIn: 604800, // 7 days
 		updateAge: 86400, // 1 day
+		absoluteExpiresIn: 2592000, // 30 days (default: disabled)
 		disableSessionRefresh: true, // Disable session refresh so that the session is not updated regardless of the `updateAge` option. (default: `false`)
 		additionalFields: { // Additional fields for the session table
 			customField: {
@@ -475,6 +476,7 @@ export const auth = betterAuth({
 * `fields`: Map fields to different column names
 * `expiresIn`: Expiration time for the session token in seconds (default: `604800` - 7 days)
 * `updateAge`: How often the session should be refreshed in seconds (default: `86400` - 1 day)
+* `absoluteExpiresIn`: Maximum session lifetime in seconds, measured from the session's `createdAt`. Refreshes never extend a session past it. Existing sessions are not refreshed past it either and expire at their stored expiration date (default: disabled)
 * `additionalFields`: Additional fields for the session table
 * `storeSessionInDatabase`: Store session in database when secondary storage is provided (default: `false`)
 * `preserveSessionInDatabase`: Preserve session records in database when deleted from secondary storage (default: `false`)

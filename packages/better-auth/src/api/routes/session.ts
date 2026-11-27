@@ -16,13 +16,18 @@ import {
 	deleteSessionCookie,
 	expireCookie,
 	getChunkedCookie,
+	getSessionCookieMaxAge,
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
 import { getSessionQuerySchema } from "../../cookies/session-store";
 import { parseSessionOutput, parseUserOutput } from "../../db";
 import type { Prettify, Session, User } from "../../types";
-import { getDate } from "../../utils/date";
+import {
+	capSessionExpiresAt,
+	getDate,
+	getSessionExpiryLimit,
+} from "../../utils/date";
 import { isAPIError } from "../../utils/is-api-error";
 import { getShouldSkipSessionRefresh } from "../state/should-session-refresh";
 
@@ -222,7 +227,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								ctx.context.authCookies.sessionToken.attributes;
 							const sessionTokenMaxAge = dontRememberMe
 								? undefined
-								: ctx.context.sessionConfig.expiresIn;
+								: getSessionCookieMaxAge(ctx, session.session.createdAt);
 							await ctx.setSignedCookie(
 								ctx.context.authCookies.sessionToken.name,
 								session.session.token,
@@ -344,8 +349,15 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.query?.disableRefresh ||
 					ctx.context.options.session?.disableSessionRefresh;
 				const shouldSkipSessionRefresh = await getShouldSkipSessionRefresh();
+				const expiryLimit = getSessionExpiryLimit(
+					ctx.context.options,
+					session.session.createdAt,
+				);
 				const needsRefresh =
-					shouldBeUpdated && !disableRefresh && !shouldSkipSessionRefresh;
+					shouldBeUpdated &&
+					session.session.expiresAt.getTime() < expiryLimit &&
+					!disableRefresh &&
+					!shouldSkipSessionRefresh;
 
 				/**
 				 * When deferSessionRefresh is enabled and this is a GET request,
@@ -373,7 +385,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						await ctx.context.internalAdapter.updateSession(
 							session.session.token,
 							{
-								expiresAt: getDate(ctx.context.sessionConfig.expiresIn, "sec"),
+								expiresAt: capSessionExpiresAt(
+									ctx.context.options,
+									session.session.createdAt,
+									getDate(expiresIn, "sec"),
+								),
 								updatedAt: new Date(),
 							},
 						);
@@ -387,7 +403,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 						);
 					}
-					const maxAge = ctx.context.sessionConfig.expiresIn;
 					await setSessionCookie(
 						ctx,
 						{
@@ -395,9 +410,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							user: session.user,
 						},
 						false,
-						{
-							maxAge,
-						},
 					);
 
 					// Parse session and user to ensure additionalFields are included
