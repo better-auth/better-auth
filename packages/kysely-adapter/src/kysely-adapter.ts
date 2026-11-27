@@ -7,7 +7,11 @@ import type {
 	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	createAdapterFactory,
+	findSensitiveIdEq,
+	sortIncrementManyRows,
+} from "@better-auth/core/db/adapter";
 import {
 	checksSchema,
 	createSchemaCheck,
@@ -1048,6 +1052,143 @@ export const kyselyAdapter = (
 						);
 					}
 					return (await updateQuery.returningAll().executeTakeFirst()) ?? null;
+				},
+				async incrementMany({ model, modelKey = model, increment, set, rows }) {
+					if (rows.length === 0) return [];
+					const idField = getFieldName({ model: modelKey, field: "id" });
+					const sorted = sortIncrementManyRows(rows, idField);
+					const assignments: Record<string, any> = {
+						...encodeJSONArrays(modelKey, set ?? {}),
+					};
+					for (const [field, delta] of Object.entries(increment)) {
+						assignments[field] = sql`${sql.ref(field)} + ${delta}`;
+					}
+					const applyRowWhere = (query: any, where: Where[]) => {
+						const { and, or } = convertWhereClause(model, modelKey, where);
+						if (and) {
+							query = query.where((eb: any) =>
+								eb.and(and.map((expr: any) => expr(eb))),
+							);
+						}
+						if (or) {
+							query = query.where((eb: any) =>
+								eb.or(or.map((expr: any) => expr(eb))),
+							);
+						}
+						return query;
+					};
+					if (config?.type === "mysql" || config?.type === "mssql") {
+						const incrementInTransaction = async (trx: any) => {
+							const updated: unknown[] = [];
+							for (const row of sorted) {
+								const expectedId = findSensitiveIdEq(row.where, idField).value;
+								// Default MySQL and SQL Server collations can match
+								// `id = 'ABC'` to stored `'abc'`. Lock one row, then
+								// skip unless the stored id equals the guard exactly.
+								// Do not COLLATE the id column: that fails on
+								// uniqueidentifier and is lossy on non-Latin text.
+								const lockQuery = applyRowWhere(
+									config?.type === "mssql"
+										? trx
+												.selectFrom(
+													// cspell:ignore UPDLOCK
+													sql`${sql.table(model)} as ${sql.table(model)} WITH (UPDLOCK, ROWLOCK)` as never,
+												)
+												.select(`${model}.${idField}`)
+										: trx
+												.selectFrom(model)
+												.select(`${model}.${idField}`)
+												.forUpdate(),
+									row.where,
+								);
+								const target = await (config?.type === "mssql"
+									? lockQuery.top(1)
+									: lockQuery.limit(1)
+								).executeTakeFirst();
+								if (!target) continue;
+								const targetId = target[idField] ?? target.id;
+								// Compare stored and guard ids exactly. Folding GUID
+								// hex case would treat mixed-case duplicates as two
+								// rows and would make varchar UUID ids case-insensitive.
+								if (
+									targetId === undefined ||
+									targetId === null ||
+									targetId !== expectedId
+								)
+									continue;
+								const updateQuery = applyRowWhere(
+									trx.updateTable(model).set(assignments),
+									row.where,
+								).where(`${model}.${idField}`, "=", targetId);
+								if (config?.type === "mssql") {
+									const next =
+										(await updateQuery
+											.outputAll("inserted")
+											.executeTakeFirst()) ?? null;
+									if (next) updated.push(next);
+									continue;
+								}
+								const result = await updateQuery.executeTakeFirst();
+								if (Number(result.numUpdatedRows) === 0) continue;
+								const next =
+									(await trx
+										.selectFrom(model)
+										.selectAll()
+										.where(`${model}.${idField}`, "=", targetId)
+										.limit(1)
+										.executeTakeFirst()) ?? null;
+								if (next) updated.push(next);
+							}
+							return updated;
+						};
+						return inTransaction
+							? incrementInTransaction(db)
+							: db.transaction().execute(incrementInTransaction);
+					}
+					const applyRowsWhere = (query: any) =>
+						query.where((eb: any) =>
+							eb.or(
+								sorted.map((row) => {
+									const { and, or } = convertWhereClause(
+										model,
+										modelKey,
+										row.where,
+									);
+									const parts: unknown[] = [];
+									if (and) {
+										parts.push(eb.and(and.map((expr: any) => expr(eb))));
+									}
+									if (or) {
+										parts.push(eb.or(or.map((expr: any) => expr(eb))));
+									}
+									if (parts.length === 0) return eb.lit(false);
+									if (parts.length === 1) return parts[0];
+									return eb.and(parts);
+								}),
+							),
+						);
+					const executeUpdate = async (trx: typeof db) => {
+						const updateQuery = applyRowsWhere(
+							trx.updateTable(model).set(assignments),
+						);
+						return await updateQuery.returningAll().execute();
+					};
+					if (config?.type === "postgres") {
+						const incrementInTransaction = async (trx: typeof db) => {
+							await applyRowsWhere(
+								trx
+									.selectFrom(model)
+									.select(`${model}.${idField}`)
+									.orderBy(`${model}.${idField}`, "asc")
+									.forUpdate(),
+							).execute();
+							return executeUpdate(trx);
+						};
+						return inTransaction
+							? incrementInTransaction(db)
+							: db.transaction().execute(incrementInTransaction);
+					}
+					return executeUpdate(db);
 				},
 				options: config,
 			};

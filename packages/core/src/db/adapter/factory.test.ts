@@ -957,3 +957,528 @@ describe("legacy adapter atomic fallbacks", () => {
 		).toBeNull();
 	});
 });
+
+describe("createAdapterFactory incrementMany", () => {
+	it("returns an empty array without calling native incrementMany", async () => {
+		const incrementMany = vi.fn(async () => {
+			throw new Error("incrementMany should not be called");
+		});
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({ incrementMany }),
+		});
+		await expect(
+			adapter.incrementMany({
+				model: "verification",
+				increment: { attempts: 1 },
+				rows: [],
+			}),
+		).resolves.toEqual([]);
+		expect(incrementMany).not.toHaveBeenCalled();
+	});
+
+	it("throws when increment and set are both empty", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter(),
+		});
+		await expect(
+			adapter.incrementMany({
+				model: "verification",
+				increment: {},
+				rows: [{ where: [{ field: "id", value: "a" }] }],
+			}),
+		).rejects.toThrow(
+			"incrementMany requires a non-empty `increment` or `set`; both were empty.",
+		);
+	});
+
+	it("delegates to native incrementMany with mapped fields and sorted ids", async () => {
+		const incrementMany = vi.fn(
+			async <T>({
+				model,
+				where,
+				increment,
+				set,
+				rows,
+			}: {
+				model: string;
+				where?: unknown;
+				increment: Record<string, number>;
+				set?: Record<string, unknown> | undefined;
+				rows: Array<{ where: Required<Where>[] }>;
+			}) => {
+				expect(model).toBe("verificationRecords");
+				expect(where).toBeUndefined();
+				expect(increment).toEqual({ attempt_count: 1 });
+				expect(set).toEqual({
+					value: "next",
+					updatedAt: expect.any(Date),
+				});
+				expect(rows.map((row) => row.where[0]?.value)).toEqual(["a", "b"]);
+				expect(rows[0]?.where).toEqual([
+					{
+						field: "id",
+						value: "a",
+						operator: "eq",
+						connector: "AND",
+						mode: "sensitive",
+					},
+					{
+						field: "identifier_text",
+						value: "token:incrementMany",
+						operator: "eq",
+						connector: "AND",
+						mode: "sensitive",
+					},
+				]);
+				return [
+					{
+						id: "b",
+						identifier_text: "stored-token",
+						attempt_count: 2,
+					},
+					{
+						id: "a",
+						identifier_text: "stored-token",
+						attempt_count: 2,
+					},
+				] as T[];
+			},
+		);
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				incrementMany: incrementMany as CustomAdapter["incrementMany"],
+			}),
+		});
+
+		const result = await adapter.incrementMany<{
+			id: string;
+			identifier: string;
+			attempts: number;
+		}>({
+			model: "verification",
+			increment: { attempts: 1 },
+			set: { value: "next" },
+			rows: [
+				{
+					where: [
+						{ field: "id", value: "b" },
+						{ field: "identifier", value: "token" },
+					],
+				},
+				{
+					where: [
+						{ field: "id", value: "a" },
+						{ field: "identifier", value: "token" },
+					],
+				},
+			],
+		});
+
+		expect(incrementMany).toHaveBeenCalledTimes(1);
+		expect(result.map((row) => row.id)).toEqual(["b", "a"]);
+		expect(result[0]?.identifier).toBe("stored-token:output");
+	});
+
+	it("throws on duplicate ids", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				incrementMany: async () => {
+					throw new Error("incrementMany should not be called");
+				},
+			}),
+		});
+		await expect(
+			adapter.incrementMany({
+				model: "verification",
+				increment: { attempts: 1 },
+				rows: [
+					{ where: [{ field: "id", value: "a" }] },
+					{ where: [{ field: "id", value: "a" }] },
+				],
+			}),
+		).rejects.toThrow(/duplicate ids/);
+	});
+
+	it("throws when a row is missing a case-sensitive id equality", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter(),
+		});
+		await expect(
+			adapter.incrementMany({
+				model: "verification",
+				increment: { attempts: 1 },
+				rows: [{ where: [{ field: "identifier", value: "token" }] }],
+			}),
+		).rejects.toThrow(/case-sensitive `id`/);
+		await expect(
+			adapter.incrementMany({
+				model: "verification",
+				increment: { attempts: 1 },
+				rows: [
+					{
+						where: [{ field: "id", value: "a", mode: "insensitive" }],
+					},
+				],
+			}),
+		).rejects.toThrow(/case-sensitive `id`/);
+	});
+
+	it("does not apply native bind limits to sequential incrementOne fallback", async () => {
+		const seen: string[] = [];
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				incrementManyMaxParameters: 2,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					incrementOne: async <T>({ where }: { where: Required<Where>[] }) => {
+						const id = where.find((clause) => clause.field === "id")?.value;
+						if (typeof id === "string") seen.push(id);
+						return { id } as T;
+					},
+				}),
+		})({
+			user: {
+				additionalFields: {
+					attempts: { type: "number", required: false },
+				},
+			},
+		});
+		await expect(
+			adapter.incrementMany({
+				model: "user",
+				increment: { attempts: 1 },
+				set: { name: "token" },
+				rows: [{ where: [{ field: "id", value: "a" }] }],
+			}),
+		).resolves.toEqual([{ id: "a" }]);
+		expect(seen).toEqual(["a"]);
+	});
+
+	it("falls back to sequential incrementOne in id order and omits misses", async () => {
+		const seen: string[] = [];
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				incrementOne: async <T>({ where }: { where: Required<Where>[] }) => {
+					const id = where.find((clause) => clause.field === "id")?.value;
+					if (typeof id === "string") seen.push(id);
+					if (id === "miss") return null;
+					return { id, identifier_text: "stored-token" } as T;
+				},
+			}),
+		});
+		const result = await adapter.incrementMany<{
+			id: string;
+			identifier: string;
+		}>({
+			model: "verification",
+			increment: { attempts: 1 },
+			rows: [
+				{ where: [{ field: "id", value: "c" }] },
+				{ where: [{ field: "id", value: "miss" }] },
+				{ where: [{ field: "id", value: "a" }] },
+			],
+		});
+		expect(seen).toEqual(["a", "c", "miss"]);
+		expect(result.map((row) => row.id)).toEqual(["a", "c"]);
+	});
+
+	it("chunks by bind count so (id, extra) stays under the parameter cap", async () => {
+		const incrementMany = vi.fn(async ({ rows }: { rows: unknown[] }) => rows);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				incrementManyMaxParameters: 999,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					incrementMany: incrementMany as CustomAdapter["incrementMany"],
+				}),
+		})({});
+		const rows = Array.from({ length: 1000 }, (_, index) => ({
+			where: [
+				{ field: "id", value: `id-${index}` },
+				{ field: "name", value: "token" },
+			],
+		}));
+		await adapter.incrementMany({
+			model: "user",
+			increment: {},
+			set: { name: "token" },
+			rows,
+		});
+		// `name` plus transformed `updatedAt` are assignment binds, so 498 not 499.
+		expect(
+			incrementMany.mock.calls.map((call) => call[0]?.rows.length),
+		).toEqual([498, 498, 4]);
+	});
+
+	it("counts increment and set binds when chunking under the SQLite cap", async () => {
+		const incrementMany = vi.fn(async ({ rows }: { rows: unknown[] }) => rows);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				incrementManyMaxParameters: 20,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					incrementMany: incrementMany as CustomAdapter["incrementMany"],
+				}),
+		})({
+			user: {
+				additionalFields: {
+					attempts: { type: "number", required: false },
+				},
+			},
+		});
+		const rows = Array.from({ length: 20 }, (_, index) => ({
+			where: [
+				{ field: "id", value: `id-${index}` },
+				{ field: "name", value: "token" },
+			],
+		}));
+		await adapter.incrementMany({
+			model: "user",
+			increment: { attempts: 1 },
+			set: { name: "token" },
+			rows,
+		});
+		// 2 where binds + `attempts`, `name`, and `updatedAt` assignment binds:
+		// (20 - 3) / 2 = 8.
+		expect(
+			incrementMany.mock.calls.map((call) => call[0]?.rows.length),
+		).toEqual([8, 8, 4]);
+	});
+
+	it("runs native incrementMany chunks inside one transaction", async () => {
+		const order: string[] = [];
+		const innerIncrementMany = vi.fn(
+			async ({ rows }: { rows: Array<{ where: Required<Where>[] }> }) => {
+				order.push(`chunk:${rows.length}`);
+				return rows.map((row) => ({ id: row.where[0]?.value }));
+			},
+		);
+		const transaction = vi.fn(
+			async (
+				cb: (trx: ReturnType<typeof createTestAdapter>) => Promise<unknown>,
+			) => {
+				order.push("begin");
+				const trx = createAdapterFactory<BetterAuthOptions>({
+					config: {
+						adapterId: "trx-adapter",
+						incrementManyMaxParameters: 7,
+						transaction: false,
+					},
+					adapter: () =>
+						createCustomAdapter({
+							incrementMany:
+								innerIncrementMany as CustomAdapter["incrementMany"],
+						}),
+				})({});
+				try {
+					const result = await cb(trx);
+					order.push("commit");
+					return result;
+				} catch (error) {
+					order.push("rollback");
+					throw error;
+				}
+			},
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				incrementManyMaxParameters: 7,
+				transaction: transaction as never,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					incrementMany: async () => {
+						throw new Error("outer native incrementMany should not run");
+					},
+				}),
+		})({});
+		const rows = Array.from({ length: 5 }, (_, index) => ({
+			where: [
+				{ field: "id", value: `id-${index}` },
+				{ field: "name", value: "token" },
+			],
+		}));
+		await adapter.incrementMany({
+			model: "user",
+			increment: {},
+			set: { name: "token" },
+			rows,
+		});
+		expect(order[0]).toBe("begin");
+		expect(order.at(-1)).toBe("commit");
+		expect(order.filter((step) => step.startsWith("chunk:"))).toEqual([
+			"chunk:2",
+			"chunk:2",
+			"chunk:1",
+		]);
+	});
+
+	it("runs sequential incrementOne fallback for multiple rows inside a transaction", async () => {
+		const order: string[] = [];
+		const incrementOne = async <T>({ where }: { where: Required<Where>[] }) => {
+			const id = where.find((clause) => clause.field === "id")?.value;
+			order.push(`one:${String(id)}`);
+			return { id } as T;
+		};
+		const transaction = vi.fn(
+			async (
+				cb: (trx: ReturnType<typeof createTestAdapter>) => Promise<unknown>,
+			) => {
+				order.push("begin");
+				const trx = createAdapterFactory<BetterAuthOptions>({
+					config: {
+						adapterId: "trx-adapter",
+						transaction: false,
+					},
+					adapter: () => createCustomAdapter({ incrementOne }),
+				})({});
+				const result = await cb(trx);
+				order.push("commit");
+				return result;
+			},
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				transaction: transaction as never,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					incrementOne: async () => {
+						throw new Error("outer incrementOne should not run");
+					},
+				}),
+		})({});
+		await adapter.incrementMany({
+			model: "user",
+			increment: {},
+			set: { name: "token" },
+			rows: [
+				{ where: [{ field: "id", value: "b" }] },
+				{ where: [{ field: "id", value: "a" }] },
+			],
+		});
+		expect(order).toEqual(["begin", "one:a", "one:b", "commit"]);
+	});
+
+	it("appends native incrementMany results without spreading the chunk", async () => {
+		const incrementMany = vi.fn(
+			async ({ rows }: { rows: Array<{ where: Required<Where>[] }> }) =>
+				rows.map((row) => ({ id: row.where[0]?.value })),
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				incrementManyMaxParameters: Number.MAX_SAFE_INTEGER,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					incrementMany: incrementMany as CustomAdapter["incrementMany"],
+				}),
+		})({});
+		const rows = Array.from({ length: 3 }, (_, index) => ({
+			where: [{ field: "id", value: `id-${index}` }],
+		}));
+		const result = await adapter.incrementMany<{ id: string }>({
+			model: "user",
+			increment: {},
+			set: { name: "token" },
+			rows,
+		});
+		expect(result.map((row) => row.id)).toEqual(["id-0", "id-1", "id-2"]);
+	});
+
+	it("transforms incrementMany input once when wrapping a transaction", async () => {
+		const setSeen: string[] = [];
+		const whereSeen: string[] = [];
+		const innerIncrementMany = vi.fn(
+			async ({
+				set,
+				rows,
+			}: {
+				set?: Record<string, unknown> | undefined;
+				rows: Array<{ where: Required<Where>[] }>;
+			}) => {
+				expect(set?.name).toBe("token:in");
+				return rows.map((row) => ({ id: row.where[0]?.value }));
+			},
+		);
+		const trackTransform =
+			(scope: "outer" | "inner") =>
+			({
+				data,
+				field,
+				action,
+			}: {
+				data: unknown;
+				field: string;
+				action: string;
+			}) => {
+				if (field !== "name" || typeof data !== "string") return data;
+				if (action === "update") {
+					setSeen.push(scope === "outer" ? `outer:${data}` : data);
+					return scope === "inner" ? `${data}:in` : data;
+				}
+				if (action === "incrementMany") {
+					whereSeen.push(scope === "outer" ? `outer:${data}` : data);
+				}
+				return data;
+			};
+		const transaction = vi.fn(
+			async (
+				cb: (trx: ReturnType<typeof createTestAdapter>) => Promise<unknown>,
+			) => {
+				const trx = createAdapterFactory<BetterAuthOptions>({
+					config: {
+						adapterId: "trx-adapter",
+						incrementManyMaxParameters: 7,
+						transaction: false,
+						customTransformInput: trackTransform("inner"),
+					},
+					adapter: () =>
+						createCustomAdapter({
+							incrementMany:
+								innerIncrementMany as CustomAdapter["incrementMany"],
+						}),
+				})({});
+				return cb(trx);
+			},
+		);
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				incrementManyMaxParameters: 7,
+				transaction: transaction as never,
+				customTransformInput: trackTransform("outer"),
+			},
+			adapter: () =>
+				createCustomAdapter({
+					incrementMany: async () => {
+						throw new Error("outer native incrementMany should not run");
+					},
+				}),
+		})({});
+		const rows = Array.from({ length: 5 }, (_, index) => ({
+			where: [
+				{ field: "id", value: `id-${index}` },
+				{ field: "name", value: "token" },
+			],
+		}));
+		await adapter.incrementMany({
+			model: "user",
+			increment: {},
+			set: { name: "token" },
+			rows,
+		});
+		expect(setSeen).toEqual(["token"]);
+		expect(whereSeen).toEqual(["token", "token", "token", "token", "token"]);
+		expect(innerIncrementMany).toHaveBeenCalled();
+	});
+});

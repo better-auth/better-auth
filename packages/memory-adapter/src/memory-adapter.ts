@@ -4,7 +4,11 @@ import type {
 	DBAdapterDebugLogOption,
 	JoinConfig,
 } from "@better-auth/core/db/adapter";
-import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	createAdapterFactory,
+	findSensitiveIdEq,
+	sortIncrementManyRows,
+} from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 import {
 	insensitiveCompare,
@@ -161,7 +165,7 @@ export const memoryAdapter = (
 	 * edit the same row resolve last-writer-wins. It is built for development
 	 * and tests, not production concurrency control.
 	 */
-	const buildAdapterFactory = (activeDb: MemoryDB) =>
+	const buildAdapterFactory = (activeDb: MemoryDB, inTransaction = false) =>
 		createAdapterFactory({
 			config: {
 				adapterId: "memory",
@@ -169,20 +173,24 @@ export const memoryAdapter = (
 				usePlural: false,
 				debugLogs: config?.debugLogs || false,
 				supportsArrays: true,
-				transaction: async (cb) => {
-					// Copy-on-write isolation: run the callback against a clone, then
-					// replay its delta onto the live db on success. On failure the clone
-					// is discarded and the live db is never touched. `base` captures the
-					// pre-transaction state so the commit can apply only the rows the
-					// transaction changed, preserving writes that interleaved at an
-					// `await` point.
-					const base = structuredClone(activeDb);
-					const clone = structuredClone(activeDb);
-					const trxAdapter = buildAdapterFactory(clone)(lazyOptions!);
-					const result = await cb(trxAdapter);
-					mergeTransactionInto(activeDb, base, clone);
-					return result;
-				},
+				transaction: inTransaction
+					? false
+					: async (cb) => {
+							// Copy-on-write isolation: run the callback against a clone, then
+							// replay its delta onto the live db on success. On failure the clone
+							// is discarded and the live db is never touched. `base` captures the
+							// pre-transaction state so the commit can apply only the rows the
+							// transaction changed, preserving writes that interleaved at an
+							// `await` point. The transaction-scoped factory sets
+							// `transaction: false` so multi-chunk `incrementMany` cannot wrap
+							// itself again.
+							const base = structuredClone(activeDb);
+							const clone = structuredClone(activeDb);
+							const trxAdapter = buildAdapterFactory(clone, true)(lazyOptions!);
+							const result = await cb(trxAdapter);
+							mergeTransactionInto(activeDb, base, clone);
+							return result;
+						},
 			},
 			adapter: ({ getFieldName, getDefaultFieldName, options }) => {
 				const applySortToRecords = (
@@ -596,6 +604,51 @@ export const memoryAdapter = (
 							Object.assign(target, set);
 						}
 						return target as any;
+					},
+					incrementMany: async ({
+						model,
+						modelKey = model,
+						increment,
+						set,
+						rows,
+					}) => {
+						if (rows.length === 0) return [];
+						const idField = getFieldName({
+							model: modelKey,
+							field: "id",
+						});
+						const sorted = sortIncrementManyRows(rows, idField);
+						const updated: unknown[] = [];
+						for (const row of sorted) {
+							const idEq = findSensitiveIdEq(row.where, idField);
+							const rest = row.where.filter(
+								(clause) =>
+									clause.field !== idField ||
+									clause.operator !== "eq" ||
+									clause.mode !== "sensitive" ||
+									clause.connector !== "AND" ||
+									clause.value !== idEq.value,
+							);
+							const matches = convertWhereClause(
+								rest.length > 0 ? rest : row.where,
+								model,
+								modelKey,
+							);
+							const target = matches.find(
+								(record) => record[idField] === idEq.value,
+							);
+							if (!target) continue;
+							for (const [field, delta] of Object.entries(increment)) {
+								const current =
+									typeof target[field] === "number" ? target[field] : 0;
+								target[field] = current + delta;
+							}
+							if (set) {
+								Object.assign(target, set);
+							}
+							updated.push(target);
+						}
+						return updated as any;
 					},
 					updateMany: async ({ model, modelKey = model, where, update }) => {
 						const res = convertWhereClause(where, model, modelKey);

@@ -124,6 +124,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 			| "deleteMany"
 			| "consumeOne"
 			| "incrementOne"
+			| "incrementMany"
 			| "count";
 	}) => W extends undefined ? undefined : CleanedWhere[];
 }) => CustomAdapter;

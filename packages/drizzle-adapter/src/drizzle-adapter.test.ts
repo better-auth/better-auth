@@ -706,4 +706,230 @@ describe("drizzle-adapter", () => {
 			expect(result).toBeNull();
 		});
 	});
+
+	describe.each([
+		{ relations: "Relations v1", adapterFactory: drizzleAdapter },
+		{ relations: "Relations v2", adapterFactory: drizzleRelationsV2Adapter },
+	])("incrementMany ($relations)", ({ adapterFactory }) => {
+		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+		const userTable = pgTable("user", {
+			id: text("id"),
+			name: text("name"),
+			email: text("email"),
+			emailVerified: boolean("emailVerified"),
+			image: text("image"),
+			attempts: integer("attempts"),
+			createdAt: timestamp("createdAt"),
+			updatedAt: timestamp("updatedAt"),
+		});
+
+		function createIncrementManyDb(returned: unknown[]) {
+			const calls: {
+				set?: Record<string, unknown>;
+				whereArgs?: unknown[];
+			} = {};
+			const returning = vi.fn().mockResolvedValue(returned);
+			const updateWhere = vi.fn((...args: unknown[]) => {
+				calls.whereArgs = args;
+				return { returning };
+			});
+			const set = vi.fn((payload: Record<string, unknown>) => {
+				calls.set = payload;
+				return { where: updateWhere };
+			});
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				update: vi.fn().mockReturnValue({ set }),
+			} as any;
+			return { db, calls };
+		}
+
+		function flattenSqlChunks(expr: SQL): unknown[] {
+			return expr.queryChunks.flatMap((chunk) =>
+				is(chunk, SQL) ? [chunk, ...flattenSqlChunks(chunk)] : [chunk],
+			);
+		}
+
+		function createAdapter(db: any) {
+			return adapterFactory(db, { provider: "sqlite" })({
+				secret: defaultSecret,
+				user: {
+					additionalFields: {
+						attempts: { type: "number", required: false },
+					},
+				},
+			});
+		}
+
+		it("updates matching rows in one statement and returns only those rows", async () => {
+			const { db, calls } = createIncrementManyDb([
+				{ id: "user-a", attempts: 2 },
+				{ id: "user-c", attempts: 2 },
+			]);
+			const adapter = createAdapter(db);
+
+			const result = await adapter.incrementMany<{
+				id: string;
+				attempts: number;
+			}>({
+				model: "user",
+				increment: { attempts: 1 },
+				rows: [
+					{ where: [{ field: "id", value: "user-c" }] },
+					{ where: [{ field: "id", value: "user-a" }] },
+					{
+						where: [
+							{ field: "id", value: "user-b" },
+							{ field: "attempts", value: 0, operator: "gt" },
+						],
+					},
+				],
+			});
+
+			expect(result.map((row) => row.id)).toEqual(["user-a", "user-c"]);
+			expect(db.update).toHaveBeenCalledTimes(1);
+			expect(db.transaction).toBeUndefined();
+			expect(is(calls.set?.attempts, SQL)).toBe(true);
+			expect(is(calls.whereArgs?.[0], SQL)).toBe(true);
+			const predicate = flattenSqlChunks(calls.whereArgs?.[0] as SQL);
+			expect(
+				predicate.some((chunk) => is(chunk, Param) && chunk.value === "user-a"),
+			).toBe(true);
+			expect(
+				predicate.some((chunk) => is(chunk, Param) && chunk.value === "user-c"),
+			).toBe(true);
+			expect(predicate).toContain(userTable.attempts);
+		});
+
+		it("does not increment a mysql row twice when two guards differ only by case", async () => {
+			let updates = 0;
+			const stored = { id: "abc", attempts: 1 };
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				select: vi.fn(() => ({
+					from: vi.fn(() => ({
+						where: vi.fn(() => ({
+							for: vi.fn(() => ({
+								limit: vi.fn(async () => [stored]),
+							})),
+							limit: vi.fn(() => ({
+								execute: vi.fn(async () => [
+									{ id: "abc", attempts: stored.attempts + updates },
+								]),
+							})),
+						})),
+					})),
+				})),
+				update: vi.fn(() => ({
+					set: vi.fn(() => ({
+						where: vi.fn(() => ({
+							execute: vi.fn(async () => {
+								updates += 1;
+							}),
+						})),
+					})),
+				})),
+				transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(db)),
+			} as any;
+			const adapter = adapterFactory(db, { provider: "mysql" })({
+				secret: defaultSecret,
+				user: {
+					additionalFields: {
+						attempts: { type: "number", required: false },
+					},
+				},
+			});
+
+			const result = await adapter.incrementMany<{
+				id: string;
+				attempts: number;
+			}>({
+				model: "user",
+				increment: { attempts: 1 },
+				rows: [
+					{ where: [{ field: "id", value: "ABC" }] },
+					{ where: [{ field: "id", value: "abc" }] },
+				],
+			});
+
+			expect(updates).toBe(1);
+			expect(result).toEqual([{ id: "abc", attempts: 2 }]);
+		});
+
+		it("locks matching postgres rows in id order before the update", async () => {
+			const steps: string[] = [];
+			const returning = vi.fn(async () => {
+				steps.push("returning");
+				return [
+					{ id: "user-a", attempts: 2 },
+					{ id: "user-c", attempts: 2 },
+				];
+			});
+			const updateWhere = vi.fn(() => {
+				steps.push("updateWhere");
+				return { returning };
+			});
+			const set = vi.fn((payload: Record<string, unknown>) => ({
+				where: updateWhere,
+				payload,
+			}));
+			const forUpdate = vi.fn(async () => {
+				steps.push("forUpdate");
+				return [];
+			});
+			const orderBy = vi.fn((..._args: unknown[]) => {
+				steps.push("orderBy");
+				return { for: forUpdate };
+			});
+			const selectWhere = vi.fn(() => {
+				steps.push("selectWhere");
+				return { orderBy };
+			});
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				select: vi.fn(() => ({
+					from: vi.fn(() => ({ where: selectWhere })),
+				})),
+				update: vi.fn().mockReturnValue({ set }),
+				transaction: vi.fn(async (fn: (tx: unknown) => unknown) => {
+					steps.push("transaction");
+					return fn(db);
+				}),
+			} as any;
+			const adapter = adapterFactory(db, { provider: "pg" })({
+				secret: defaultSecret,
+				user: {
+					additionalFields: {
+						attempts: { type: "number", required: false },
+					},
+				},
+			});
+
+			const result = await adapter.incrementMany<{
+				id: string;
+				attempts: number;
+			}>({
+				model: "user",
+				increment: { attempts: 1 },
+				rows: [
+					{ where: [{ field: "id", value: "user-c" }] },
+					{ where: [{ field: "id", value: "user-a" }] },
+				],
+			});
+
+			expect(result.map((row) => row.id)).toEqual(["user-a", "user-c"]);
+			expect(steps).toEqual([
+				"transaction",
+				"selectWhere",
+				"orderBy",
+				"forUpdate",
+				"updateWhere",
+				"returning",
+			]);
+			expect(is(orderBy.mock.calls[0]?.[0], SQL)).toBe(true);
+			const orderChunks = flattenSqlChunks(orderBy.mock.calls[0]?.[0] as SQL);
+			expect(orderChunks).toContain(userTable.id);
+			expect(orderChunks).toContainEqual({ value: [" asc"] });
+		});
+	});
 });

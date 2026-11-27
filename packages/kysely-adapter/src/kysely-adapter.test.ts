@@ -2,6 +2,9 @@ import { DatabaseSync } from "node:sqlite";
 import {
 	DummyDriver,
 	Kysely,
+	MssqlAdapter,
+	MssqlIntrospector,
+	MssqlQueryCompiler,
 	PostgresAdapter,
 	PostgresIntrospector,
 	PostgresQueryCompiler,
@@ -181,6 +184,91 @@ describe("kysely-adapter", () => {
 		);
 		expect(deleteQuery.where).toHaveBeenNthCalledWith(2, expect.any(Function));
 		expect(deleteQuery.outputAll).toHaveBeenCalledWith("deleted");
+	});
+
+	// cspell:ignore UPDLOCK
+	it("incrementMany locks mssql rows with UPDLOCK instead of FOR UPDATE", async () => {
+		const executedSql: string[] = [];
+		const db = new Kysely({
+			dialect: {
+				createAdapter: () => new MssqlAdapter(),
+				createDriver: () => new DummyDriver(),
+				createIntrospector: (inner) => new MssqlIntrospector(inner),
+				createQueryCompiler: () => new MssqlQueryCompiler(),
+			},
+			log(event) {
+				if (event.level === "query") executedSql.push(event.query.sql);
+			},
+		});
+		const adapter = kyselyAdapter(db as never, { type: "mssql" })({
+			plugins: [
+				{
+					id: "counters-test",
+					schema: {
+						counters: {
+							fields: {
+								remaining: { type: "number" },
+							},
+						},
+					},
+				},
+			],
+		});
+
+		await adapter.incrementMany({
+			model: "counters",
+			increment: { remaining: 1 },
+			rows: [{ where: [{ field: "id", value: "a" }] }],
+		});
+
+		const lock = executedSql.find((sql) => /updlock/i.test(sql));
+		expect(lock).toBeDefined();
+		expect(lock).toMatch(/as "counters" with \(updlock, rowlock\)/i);
+		expect(lock).not.toMatch(/for update/i);
+		expect(lock).not.toMatch(/with \(updlock, rowlock\) as/i);
+		expect(executedSql.every((sql) => !/collate/i.test(sql))).toBe(true);
+	});
+
+	it("incrementMany locks each mssql row instead of applying a batch id collation", async () => {
+		const executedSql: string[] = [];
+		const db = new Kysely({
+			dialect: {
+				createAdapter: () => new MssqlAdapter(),
+				createDriver: () => new DummyDriver(),
+				createIntrospector: (inner) => new MssqlIntrospector(inner),
+				createQueryCompiler: () => new MssqlQueryCompiler(),
+			},
+			log(event) {
+				if (event.level === "query") executedSql.push(event.query.sql);
+			},
+		});
+		const adapter = kyselyAdapter(db as never, { type: "mssql" })({
+			plugins: [
+				{
+					id: "counters-test",
+					schema: {
+						counters: {
+							fields: {
+								remaining: { type: "number" },
+							},
+						},
+					},
+				},
+			],
+		});
+
+		await adapter.incrementMany({
+			model: "counters",
+			increment: { remaining: 1 },
+			rows: [
+				{ where: [{ field: "id", value: "ABC" }] },
+				{ where: [{ field: "id", value: "abc" }] },
+			],
+		});
+
+		const locks = executedSql.filter((sql) => /updlock/i.test(sql));
+		expect(locks).toHaveLength(2);
+		expect(executedSql.every((sql) => !/collate/i.test(sql))).toBe(true);
 	});
 
 	/**

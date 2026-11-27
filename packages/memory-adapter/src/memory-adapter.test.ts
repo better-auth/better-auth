@@ -313,6 +313,128 @@ describe("memory adapter incrementOne", () => {
 	});
 });
 
+describe("memory adapter incrementMany", () => {
+	it("increments matching rows and omits guard misses", async () => {
+		const { adapter } = setup();
+		await adapter.create({
+			model: "widget",
+			data: { id: "c", name: "carol", count: 1 },
+			forceAllowId: true,
+		});
+		await adapter.create({
+			model: "widget",
+			data: { id: "a", name: "alice", count: 1 },
+			forceAllowId: true,
+		});
+		await adapter.create({
+			model: "widget",
+			data: { id: "b", name: "bob", count: 0 },
+			forceAllowId: true,
+		});
+
+		const updated = await adapter.incrementMany<{
+			id: string;
+			count: number;
+		}>({
+			model: "widget",
+			increment: { count: 1 },
+			rows: [
+				{
+					where: [
+						{ field: "id", value: "c" },
+						{ field: "count", value: 0, operator: "gt" },
+					],
+				},
+				{
+					where: [
+						{ field: "id", value: "b" },
+						{ field: "count", value: 0, operator: "gt" },
+					],
+				},
+				{
+					where: [
+						{ field: "id", value: "a" },
+						{ field: "count", value: 0, operator: "gt" },
+					],
+				},
+			],
+		});
+
+		expect(updated.map((row) => row.id).sort()).toEqual(["a", "c"]);
+		expect(updated.every((row) => row.count === 2)).toBe(true);
+		const bob = await adapter.findOne<{ count: number }>({
+			model: "widget",
+			where: [{ field: "id", value: "b" }],
+		});
+		expect(bob?.count).toBe(0);
+	});
+
+	it("keeps each row pinned to its id when extra guards use OR", async () => {
+		const { adapter } = setup();
+		await adapter.create({
+			model: "widget",
+			data: { id: "a", name: "shared", count: 1 },
+			forceAllowId: true,
+		});
+		await adapter.create({
+			model: "widget",
+			data: { id: "b", name: "shared", count: 1 },
+			forceAllowId: true,
+		});
+
+		const updated = await adapter.incrementMany<{
+			id: string;
+			count: number;
+		}>({
+			model: "widget",
+			increment: { count: 1 },
+			rows: [
+				{
+					where: [
+						{ field: "id", value: "a" },
+						{ field: "name", value: "shared", connector: "OR" },
+					],
+				},
+				{
+					where: [
+						{ field: "id", value: "b" },
+						{ field: "name", value: "shared", connector: "OR" },
+					],
+				},
+			],
+		});
+
+		expect(new Set(updated.map((row) => row.id))).toEqual(new Set(["a", "b"]));
+		expect(updated.every((row) => row.count === 2)).toBe(true);
+	});
+
+	it("runs a multi-chunk incrementMany without nested transactions", async () => {
+		const { adapter } = setup();
+		const ids = Array.from({ length: 1000 }, (_, index) =>
+			index.toString().padStart(4, "0"),
+		);
+		for (const id of ids) {
+			await adapter.create({
+				model: "widget",
+				data: { id, name: `row-${id}`, count: 1 },
+				forceAllowId: true,
+			});
+		}
+
+		const updated = await adapter.incrementMany<{
+			id: string;
+			count: number;
+		}>({
+			model: "widget",
+			increment: { count: 1 },
+			rows: ids.map((id) => ({ where: [{ field: "id", value: id }] })),
+		});
+
+		expect(updated).toHaveLength(1000);
+		expect(updated.every((row) => row.count === 2)).toBe(true);
+	});
+});
+
 describe("memory adapter transaction isolation", () => {
 	it("a failing transaction must not erase a write made by a concurrent in-flight operation", async () => {
 		const { adapter } = setup();

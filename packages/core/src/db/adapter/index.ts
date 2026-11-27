@@ -17,6 +17,7 @@ export type DBAdapterDebugLogOption =
 			deleteMany?: boolean | undefined;
 			consumeOne?: boolean | undefined;
 			incrementOne?: boolean | undefined;
+			incrementMany?: boolean | undefined;
 			count?: boolean | undefined;
 	  }
 	| {
@@ -138,6 +139,27 @@ export interface DBAdapterFactoryConfig<
 		  )
 		| undefined;
 	/**
+	 * Maximum number of bound parameters one native `incrementMany`
+	 * statement may use. Large batches are split so they stay at or below
+	 * this limit. You do not need to chunk rows in `incrementMany`.
+	 *
+	 * Chunk size is
+	 * `(incrementManyMaxParameters - assignmentBinds) / bindsPerRow`.
+	 * Assignment binds are the `increment` deltas and `set` values. A row
+	 * guarded by `(id, revision)` is 2 where binds, so the SQLite default
+	 * of 999 plus one increment yields chunks of 499, not 500. An extra
+	 * `set` field yields 498.
+	 *
+	 * @default 999
+	 */
+	incrementManyMaxParameters?: number | undefined;
+	/**
+	 * Maximum number of rows one native `incrementMany` statement may
+	 * update. Combined with `incrementManyMaxParameters`; the smaller
+	 * chunk size wins.
+	 */
+	incrementManyMaxRows?: number | undefined;
+	/**
 	 * Disable id generation for the `create` method.
 	 *
 	 * This is useful for databases that don't support custom id values and would auto-generate them for you.
@@ -215,6 +237,7 @@ export interface DBAdapterFactoryConfig<
 					| "deleteMany"
 					| "consumeOne"
 					| "incrementOne"
+					| "incrementMany"
 					| "count";
 				/**
 				 * The model name.
@@ -507,6 +530,46 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		set?: Record<string, unknown> | undefined;
 	}) => Promise<T | null>;
 	/**
+	 * Atomically apply the same signed numeric deltas and optional absolute
+	 * `set` assignments to many rows, each with its own `where`.
+	 *
+	 * This is a batch of `incrementOne`, not `updateMany` with arithmetic.
+	 * A shared `WHERE id IN (…)` plus `revision = revision + 1` cannot
+	 * express a per-row expected revision.
+	 *
+	 * Each row `where` is both selector and guard. Comparison operators
+	 * stay valid. Each row mutates at most one record. A guard miss is not
+	 * an error: that row is omitted, like `incrementOne` returning `null`.
+	 *
+	 * Every row `where` must include exactly one case-sensitive `id`
+	 * equality. Extra clauses are the rest of the guard. Duplicate ids
+	 * throw. Throws when `increment` and `set` are both empty. Empty `rows`
+	 * returns `[]`.
+	 *
+	 * Result order is not input order. Callers check `length` and ids;
+	 * they must not zip the result to `rows`. A shorter array means some
+	 * guards missed. That is not a deadlock. Deadlock and serialization
+	 * failures throw. Contention exhaustion on the sequential fallback
+	 * throws, like `incrementOne`.
+	 *
+	 * Always defined on the factory-wrapped adapter. The factory sorts by
+	 * `id` and chunks to the database bind/row limits before calling a
+	 * native method. Without a native method, it loops `incrementOne` in
+	 * that `id` order. When the adapter supports transactions, a multi-row
+	 * call runs in one transaction. Without transactions, sequential
+	 * fallback and multi-chunk native calls are not all-or-nothing across
+	 * rows.
+	 *
+	 * A no-op may return a snapshot without writing. Returned rows do not
+	 * by themselves mean exclusive ownership of those records.
+	 */
+	incrementMany: <T>(data: {
+		model: string;
+		increment: Record<string, number>;
+		set?: Record<string, unknown> | undefined;
+		rows: Array<{ where: Where[] }>;
+	}) => Promise<T[]>;
+	/**
 	 * Execute multiple operations in a transaction.
 	 * If the adapter doesn't support transactions, operations will be executed sequentially.
 	 *
@@ -636,6 +699,32 @@ export interface CustomAdapter {
 			set?: Record<string, unknown> | undefined;
 		},
 	) => Promise<T | null>;
+	// cspell:ignore UPDLOCK
+	/**
+	 * Optional native batch of `incrementOne`.
+	 *
+	 * Applies the same `increment`/`set` to each row's `where`. Each
+	 * `where` must include a case-sensitive `id` equality; extra clauses
+	 * are the rest of the guard. Guard misses omit that row. Result order
+	 * is not input order. Implementations should update in primary-key
+	 * order so concurrent batches deadlock-avoid the same way.
+	 * PostgreSQL should lock matching rows with
+	 * `SELECT ... ORDER BY id FOR UPDATE` before the guarded `UPDATE`.
+	 * MySQL and SQL Server should update one locked row at a time in id
+	 * order. SQL Server should take that lock with
+	 * `WITH (UPDLOCK, ROWLOCK)`. SQLite serializes writers, so the
+	 * guarded `UPDATE` is enough.
+	 *
+	 * This is not `updateMany` with arithmetic. Do not share one `WHERE
+	 * id IN (…)` across rows that carry different expected revisions.
+	 */
+	incrementMany?: <T>(
+		data: ModelTarget & {
+			increment: Record<string, number>;
+			set?: Record<string, unknown> | undefined;
+			rows: Array<{ where: CleanedWhere[] }>;
+		},
+	) => Promise<T[]>;
 	count: ({
 		model,
 		where,
@@ -667,5 +756,6 @@ export interface DBAdapterInstance<
 }
 
 export * from "./factory";
+export * from "./increment-many";
 export * from "./types";
 export * from "./utils";

@@ -2623,6 +2623,9 @@ describe("--adapter flag support (mock adapter)", () => {
 			incrementOne: async () => {
 				throw new Error("Mock adapter methods should not be called");
 			},
+			incrementMany: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
 			transaction: async (callback) => {
 				throw new Error("Mock adapter methods should not be called");
 			},
@@ -2866,6 +2869,9 @@ describe("--dialect flag support", () => {
 				throw new Error("Mock adapter methods should not be called");
 			},
 			incrementOne: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			incrementMany: async () => {
 				throw new Error("Mock adapter methods should not be called");
 			},
 			transaction: async (callback) => {
