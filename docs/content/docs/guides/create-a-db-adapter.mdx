@@ -330,10 +330,11 @@ parameters:
 
 **Returns** `Promise<T[]>`: the updated records. Guard misses are omitted. Result order is not input order; do not zip the result to `rows`.
 
-Do not use a shared `WHERE id IN (…)` when extra guards differ per row. Keep the stored `id` an exact match for the guard, including on case-insensitive collations. Update in `id` order and lock as your database requires so concurrent batches do not deadlock.
+Do not use a shared `WHERE id IN (…)` when extra guards differ per row. A single `UPDATE` that ORs each row's guard is the batch shape when `id` comparison is case-sensitive. On case-insensitive collations, update one locked row at a time and skip unless the stored `id` equals the guard.
 
 ```ts title="Example"
 incrementMany: async ({ model, increment, set, rows }) => {
+  if (rows.length === 0) return [];
   const assignments = { ...set };
   for (const [field, delta] of Object.entries(increment)) {
     assignments[field] = sql`${model[field]} + ${delta}`;
@@ -341,7 +342,7 @@ incrementMany: async ({ model, increment, set, rows }) => {
   return await db
     .update(model)
     .set(assignments)
-    .where(or(rows.map(({ where }) => and(where))))
+    .where(or(...rows.map(({ where }) => and(...where))))
     .returning();
 };
 ```
