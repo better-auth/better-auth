@@ -289,14 +289,80 @@ const jitiOptions = (cwd: string): JitiOptions => {
 	};
 };
 
+type AuthFactory = (...args: unknown[]) => unknown;
+
+/** Exported factory names accepted when no auth instance is exported. */
+const FACTORY_EXPORT_PATTERN = /^(create|make|build|init|get)(Better)?Auth$/;
+
+/**
+ * Stand-in for a factory dependency (`ConfigService`, Prisma client, mailer).
+ * The CLI only needs the resulting options, so `get`/`getOrThrow` return the
+ * given default or a placeholder and everything else returns another stub.
+ */
+function createDependencyStub(): unknown {
+	const stub: unknown = new Proxy(() => {}, {
+		get(_, prop) {
+			if (prop === "then") return undefined;
+			if (prop === Symbol.toPrimitive) return () => "";
+			if (prop === "get" || prop === "getOrThrow") {
+				return (_key: unknown, fallback?: unknown) => fallback ?? "placeholder";
+			}
+			return stub;
+		},
+		apply: () => stub,
+		construct: () => stub as object,
+	});
+	return stub;
+}
+
+/** Calls an auth factory with one stub per declared parameter. */
+function instantiateAuthFactory(factory: AuthFactory) {
+	const args = Array.from({ length: factory.length }, createDependencyStub);
+	try {
+		return factory(...args);
+	} catch (error) {
+		console.error(error);
+		throw new BetterAuthError(
+			`Couldn't create your auth instance from the exported factory function "${factory.name || "default"}". The CLI calls it with placeholder arguments; if it needs real values, export a ready-made instance as \`auth\` instead.`,
+		);
+	}
+}
+
+/** A Better Auth instance carries its resolved `options`. */
+const isAuthInstance = (value: unknown): boolean =>
+	Boolean((value as { options?: unknown } | null)?.options);
+
+/** Finds an exported factory such as `createAuth` on a module-like object. */
+const findAuthFactory = (source: unknown): AuthFactory | undefined => {
+	const exports = (source ?? {}) as Record<string, unknown>;
+	const name = Object.keys(exports).find(
+		(key) =>
+			FACTORY_EXPORT_PATTERN.test(key) && typeof exports[key] === "function",
+	);
+	return name ? (exports[name] as AuthFactory) : undefined;
+};
+
 /**
  * Picks the auth instance from the loaded module, supporting `export const auth`,
- * `export default auth`, and `export default { auth }`. Falls back to the raw
+ * `export default auth`, `export default { auth }`, and exported factories such
+ * as `export const createAuth = (...) => betterAuth(...)`. Falls back to the raw
  * module as a defensive default.
+ *
+ * jiti's interop can expose the module itself as `default` when the file has no
+ * default export, so candidates are checked by shape rather than presence.
  */
 const resolveAuthModule = (mod: unknown): unknown => {
-	const m = mod as { auth?: unknown; default?: { auth?: unknown } };
-	return m?.auth ?? m?.default?.auth ?? m?.default ?? mod;
+	const m = mod as { auth?: unknown; default?: { auth?: unknown } } | undefined;
+	const resolved =
+		[m?.auth, m?.default?.auth, m?.default].find(
+			(it) => typeof it === "function" || isAuthInstance(it),
+		) ??
+		findAuthFactory(m) ??
+		findAuthFactory(m?.default) ??
+		mod;
+	return typeof resolved === "function"
+		? instantiateAuthFactory(resolved as AuthFactory)
+		: resolved;
 };
 
 const isServerOnlyError = (e: unknown): boolean =>
@@ -477,7 +543,7 @@ async function getLoadedConfig({
 			const options = config?.options;
 			if (!options) {
 				return fail(
-					`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
+					`Couldn't read your auth config in ${resolvedPath}. Make sure to default export your auth instance, export it as a variable named auth, or export a factory function such as createAuth.`,
 				);
 			}
 			return config;
@@ -494,7 +560,7 @@ async function getLoadedConfig({
 			if (Object.keys(config).length === 0) continue;
 			if (!config.options) {
 				return fail(
-					"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
+					"Couldn't read your auth config. Make sure to default export your auth instance, export it as a variable named auth, or export a factory function such as createAuth.",
 				);
 			}
 			return config;

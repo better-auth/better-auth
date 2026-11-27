@@ -989,6 +989,30 @@ describe("getConfig", async () => {
 		});
 	});
 
+	it("should resolve an exported auth factory with injected dependencies", async () => {
+		const authPath = path.join(tmpDir, "server", "auth");
+		await fs.mkdir(authPath, { recursive: true });
+
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+
+			 export const createAuth = () =>
+				betterAuth({
+					emailAndPassword: { enabled: true },
+					trustedOrigins: ["http://localhost:3000"]
+				});`,
+		);
+
+		const config = await getConfig({ cwd: tmpDir });
+
+		expect(config).not.toBe(null);
+		expect(config).toMatchObject({
+			emailAndPassword: { enabled: true },
+			baseURL: "http://localhost:3000",
+		});
+	});
+
 	it("should load configs importing cloudflare workers", async () => {
 		await fs.writeFile(
 			path.join(tmpDir, "tsconfig.json"),
