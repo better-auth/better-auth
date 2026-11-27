@@ -67,9 +67,7 @@ describe("mongodb-adapter", () => {
 			expect(trx.options?.adapterConfig.supportsConcurrentReads).toBe(false);
 			return "ok";
 		});
-		expect(adapter.options?.adapterConfig.supportsConcurrentReads).not.toBe(
-			false,
-		);
+		expect(adapter.options?.adapterConfig.supportsConcurrentReads).toBe(true);
 		await client.close();
 	});
 
