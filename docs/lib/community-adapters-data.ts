@@ -297,7 +297,7 @@ export const communityAdapters: CommunityAdapter[] = [
 			avatar: "https://github.com/cemcevik.png",
 		},
 	},
-  {
+	{
 		name: "mongozod",
 		url: "https://mongozod.dev/docs/adapters/better-auth",
 		database: "MongoDB",
