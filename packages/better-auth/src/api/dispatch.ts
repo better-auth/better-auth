@@ -507,21 +507,6 @@ export async function dispatchAuthEndpoint(
 					result.response.stack = result.response.errorStack;
 				}
 
-				if (isAPIError(result.response) && !shouldReturnResponse) {
-					// Non-response path: re-throw the raw APIError to `auth.api.*`
-					// callers, attaching the merged headers so an outer pipeline sees
-					// the same set we would have written on a response.
-					if (result.headers) {
-						Object.defineProperty(result.response, kAPIErrorHeaderSymbol, {
-							enumerable: false,
-							configurable: true,
-							writable: false,
-							value: result.headers,
-						});
-					}
-					throw result.response;
-				}
-
 				const stripReplacedErrorLocation =
 					endpointErrored &&
 					after.response !== originalEndpointResponse &&
@@ -534,6 +519,22 @@ export async function dispatchAuthEndpoint(
 								return headers;
 							})()
 						: (result.headers ?? undefined);
+
+				if (isAPIError(result.response) && !shouldReturnResponse) {
+					// Non-response path: re-throw the raw APIError to `auth.api.*`
+					// callers, attaching the merged headers so an outer pipeline sees
+					// the same set we would have written on a response.
+					if (accumulatedHeaders) {
+						Object.defineProperty(result.response, kAPIErrorHeaderSymbol, {
+							enumerable: false,
+							configurable: true,
+							writable: false,
+							value: accumulatedHeaders,
+						});
+					}
+					throw result.response;
+				}
+
 				const responseHeaders =
 					result.response instanceof Response
 						? mergeHeadersForResponse(result.response, accumulatedHeaders)

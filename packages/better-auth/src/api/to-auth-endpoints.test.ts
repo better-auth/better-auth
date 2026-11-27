@@ -1630,6 +1630,14 @@ describe("after hook Response headers", async () => {
 								throw ctx.redirect("https://example.com/from-endpoint");
 							},
 						),
+						replacedError: createAuthEndpoint(
+							"/repro/replaced-error",
+							{ method: "GET" },
+							async (ctx) => {
+								ctx.setCookie("from_endpoint", "3");
+								throw ctx.redirect("https://example.com/from-endpoint");
+							},
+						),
 					},
 					hooks: {
 						after: [
@@ -1676,6 +1684,12 @@ describe("after hook Response headers", async () => {
 										status: 200,
 										headers: { "Content-Type": "text/html" },
 									});
+								}),
+							},
+							{
+								matcher: (ctx) => ctx.path === "/repro/replaced-error",
+								handler: createAuthMiddleware(async () => {
+									throw new APIError("FORBIDDEN");
 								}),
 							},
 						],
@@ -1728,5 +1742,18 @@ describe("after hook Response headers", async () => {
 			returnHeaders: true,
 		});
 		expect(apiReplaced.headers?.get("location")).toBeNull();
+
+		let thrownReplacement: unknown;
+		try {
+			await auth.api.replacedError();
+		} catch (error) {
+			thrownReplacement = error;
+		}
+		expect(isAPIError(thrownReplacement)).toBe(true);
+		const thrownHeaders = (
+			thrownReplacement as APIError & { [kAPIErrorHeaderSymbol]?: Headers }
+		)[kAPIErrorHeaderSymbol];
+		expect(thrownHeaders?.get("location")).toBeNull();
+		expect(thrownHeaders?.get("set-cookie")).toContain("from_endpoint=3");
 	});
 });
