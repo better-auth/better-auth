@@ -1668,7 +1668,17 @@ export const createInternalAdapter = (
 					);
 				}
 
-				await sweepExpiredVerificationsIfDue(Date.now());
+				// Best-effort maintenance sweep after single-use consumption commits:
+				// a cleanup query or delete-hook failure must not reject a caller whose
+				// single-use row has already been consumed.
+				try {
+					await sweepExpiredVerificationsIfDue(Date.now());
+				} catch (error) {
+					logger.warn(
+						"Failed to sweep expired verification values after consume",
+						error,
+					);
+				}
 			}
 
 			// Single expiry gate. A row past its `expiresAt` is treated as already

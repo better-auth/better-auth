@@ -469,6 +469,33 @@ describe("internal adapter test", async () => {
 		).toBeNull();
 	});
 
+	it("returns the consumed row even when the post-consume cleanup sweep throws", async () => {
+		const opts = {
+			database: new DatabaseSync(":memory:"),
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(opts)).runMigrations();
+		const ctx = await init(opts);
+
+		await ctx.internalAdapter.createVerificationValue({
+			identifier: "consume-cleanup:resilient",
+			value: "valid-token",
+			expiresAt: new Date(Date.now() + 60_000),
+		});
+
+		const deleteManySpy = vi
+			.spyOn(ctx.adapter, "deleteMany")
+			.mockRejectedValueOnce(new Error("transient cleanup failure"));
+
+		try {
+			const consumed = await ctx.internalAdapter.consumeVerificationValue(
+				"consume-cleanup:resilient",
+			);
+			expect(consumed?.value).toBe("valid-token");
+		} finally {
+			deleteManySpy.mockRestore();
+		}
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/12593
 	 */
