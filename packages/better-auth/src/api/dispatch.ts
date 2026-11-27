@@ -277,7 +277,6 @@ async function runAfterHooks(
 ) {
 	const withSpan = createWithSpan(context.context.options);
 	let afterHookSetLocation = false;
-	let replacedResponse = false;
 	for (const hook of hooks) {
 		if (!hook.matcher(context as HookEndpointContext)) continue;
 
@@ -313,14 +312,12 @@ async function runAfterHooks(
 		mergeResponseHeaders(context.context, result.headers);
 		if (result.response !== undefined) {
 			context.context.returned = result.response;
-			replacedResponse = true;
 		}
 	}
 	return {
 		response: context.context.returned,
 		headers: context.context.responseHeaders,
 		afterHookSetLocation,
-		replacedResponse,
 	};
 }
 
@@ -486,7 +483,8 @@ export async function dispatchAuthEndpoint(
 					return result;
 				}
 
-				const endpointErrored = isAPIError(result.response);
+				const originalEndpointResponse = result.response;
+				const endpointErrored = isAPIError(originalEndpointResponse);
 				internalContext.context.returned = result.response;
 				// Merge onto what the before hooks set, so the handler wins on overlap.
 				mergeResponseHeaders(internalContext.context, result.headers);
@@ -526,7 +524,7 @@ export async function dispatchAuthEndpoint(
 
 				const stripReplacedErrorLocation =
 					endpointErrored &&
-					after.replacedResponse &&
+					after.response !== originalEndpointResponse &&
 					!after.afterHookSetLocation;
 				const accumulatedHeaders =
 					stripReplacedErrorLocation && result.headers?.has("location")

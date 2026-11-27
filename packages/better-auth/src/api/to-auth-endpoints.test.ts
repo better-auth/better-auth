@@ -1616,6 +1616,20 @@ describe("after hook Response headers", async () => {
 								throw ctx.redirect("https://example.com/from-endpoint");
 							},
 						),
+						passThroughRedirect: createAuthEndpoint(
+							"/repro/passthrough",
+							{ method: "GET" },
+							async (ctx) => {
+								throw ctx.redirect("https://example.com/from-endpoint");
+							},
+						),
+						mutatedReturned: createAuthEndpoint(
+							"/repro/mutated-returned",
+							{ method: "GET" },
+							async (ctx) => {
+								throw ctx.redirect("https://example.com/from-endpoint");
+							},
+						),
 					},
 					hooks: {
 						after: [
@@ -1649,6 +1663,21 @@ describe("after hook Response headers", async () => {
 									return new Response(null, { status: 302 });
 								}),
 							},
+							{
+								matcher: (ctx) => ctx.path === "/repro/passthrough",
+								handler: createAuthMiddleware(
+									async (ctx) => ctx.context.returned,
+								),
+							},
+							{
+								matcher: (ctx) => ctx.path === "/repro/mutated-returned",
+								handler: createAuthMiddleware(async (ctx) => {
+									ctx.context.returned = new Response("<html>done</html>", {
+										status: 200,
+										headers: { "Content-Type": "text/html" },
+									});
+								}),
+							},
 						],
 					},
 				},
@@ -1680,6 +1709,20 @@ describe("after hook Response headers", async () => {
 			"https://example.com/recovery",
 		);
 		expect(setHeaderRes.headers.get("set-cookie")).toContain("from_endpoint=2");
+
+		const passThroughRes = await auth.handler(
+			new Request("http://localhost:3000/api/auth/repro/passthrough"),
+		);
+		expect(passThroughRes.status).toBe(302);
+		expect(passThroughRes.headers.get("location")).toBe(
+			"https://example.com/from-endpoint",
+		);
+
+		const mutatedRes = await auth.handler(
+			new Request("http://localhost:3000/api/auth/repro/mutated-returned"),
+		);
+		expect(mutatedRes.status).toBe(200);
+		expect(mutatedRes.headers.get("location")).toBeNull();
 
 		const apiReplaced = await auth.api.replaceWithJson({
 			returnHeaders: true,
