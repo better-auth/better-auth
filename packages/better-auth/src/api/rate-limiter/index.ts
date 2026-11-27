@@ -113,6 +113,11 @@ function getRetryAfter(lastRequest: number, window: number) {
 	return Math.ceil((lastRequest + windowInMs - now) / 1000);
 }
 
+// When expired rows were last swept from each database. The storage wrapper
+// and the auth context are both rebuilt per request, so the throttle state is
+// keyed on the adapter, which every request shares.
+const lastSweepAt = new WeakMap<AuthContext["adapter"], number>();
+
 function createDatabaseStorageWrapper(
 	ctx: AuthContext,
 ): BetterAuthRateLimitStorage {
@@ -152,7 +157,6 @@ function createDatabaseStorageWrapper(
 					model,
 					data: { key, count: 1, lastRequest: now },
 				});
-				return { allowed: true, retryAfter: null };
 			} catch (error) {
 				// The create either lost a race against a concurrent opener (the row
 				// now exists) or failed for a real reason. Re-read once: re-decide
@@ -164,6 +168,13 @@ function createDatabaseStorageWrapper(
 				}
 				return consume(key, rule);
 			}
+			// Rows of keys that never return (e.g. one-off client IPs) are never
+			// swept by the reset path below, so sweep here too. Kept outside the
+			// `try` so a sweep failure cannot be mistaken for a lost create race.
+			// A fresh timestamp: `now` predates the awaited create, and the throttle
+			// should count from when the sweep actually starts.
+			await deleteExpiredRowsIfDue(Date.now());
+			return { allowed: true, retryAfter: null };
 		}
 
 		const timeSinceLastRequest = now - data.lastRequest;
@@ -228,6 +239,7 @@ function createDatabaseStorageWrapper(
 	// background handler, the request awaits cleanup so it survives teardown;
 	// failures are logged and do not reject the request.
 	const deleteExpiredRows = async (now: number) => {
+		lastSweepAt.set(db, now);
 		const cutoff = now - longestObservedWindow * 1000;
 		await ctx.runInBackgroundOrAwait(
 			db
@@ -240,9 +252,37 @@ function createDatabaseStorageWrapper(
 		);
 	};
 
+	// `lastRequest` is not indexed, so sweeping on every new key would scan the
+	// table on the hot path. Sweep at most once per longest window instead, which
+	// keeps expired rows to roughly two windows of age.
+	//
+	// A function-valued rule resolves its window per request, so it cannot be
+	// known here and an earlier request's longer window would be forgotten. A
+	// cutoff built from the static windows could then delete a live counter and
+	// let a limited client through, so skip this sweep when any such rule exists.
+	// The reset path is unchanged: it still sweeps with the window resolved for
+	// its own request, so a longer window of another function-valued rule is not
+	// accounted for there.
+	const deleteExpiredRowsIfDue = async (now: number) => {
+		if (hasFunctionValuedRules(ctx)) {
+			return;
+		}
+		const last = lastSweepAt.get(db);
+		if (last !== undefined && now - last < longestObservedWindow * 1000) {
+			return;
+		}
+		await deleteExpiredRows(now);
+	};
+
 	return {
 		consume,
 	};
+}
+
+function hasFunctionValuedRules(ctx: AuthContext) {
+	return Object.values(ctx.rateLimit.customRules ?? {}).some(
+		(rule) => typeof rule === "function",
+	);
 }
 
 function getConfiguredRateLimitWindows(ctx: AuthContext) {
