@@ -968,15 +968,20 @@ describe("createAdapterFactory findPage", () => {
 		onFindMany,
 		onCount,
 		options,
+		supportsConcurrentReads,
 	}: {
-		onFindMany: (params: Parameters<CustomAdapter["findMany"]>[0]) => void;
+		onFindMany: (
+			params: Parameters<CustomAdapter["findMany"]>[0],
+		) => void | Promise<void>;
 		onCount?: (params: Parameters<CustomAdapter["count"]>[0]) => number;
 		options?: BetterAuthOptions;
+		supportsConcurrentReads?: boolean;
 	}) {
 		return createAdapterFactory({
 			config: {
 				adapterId: "test-adapter",
 				adapterName: "Test Adapter",
+				supportsConcurrentReads,
 			},
 			adapter: () =>
 				createCustomAdapter({
@@ -984,7 +989,7 @@ describe("createAdapterFactory findPage", () => {
 					findMany: async <T>(
 						params: Parameters<CustomAdapter["findMany"]>[0],
 					) => {
-						onFindMany(params);
+						await onFindMany(params);
 						return [{ id: "row" }] as T[];
 					},
 				}),
@@ -1031,6 +1036,53 @@ describe("createAdapterFactory findPage", () => {
 		expect(seenCount).toMatchObject({ model: "user" });
 		expect(seenCount?.where).toEqual(seenFindMany?.where);
 		expect(order).toEqual(["findMany", "count"]);
+	});
+
+	it("starts count before findMany finishes when concurrent reads are supported", async () => {
+		let releaseFindMany!: () => void;
+		const findManyGate = new Promise<void>((resolve) => {
+			releaseFindMany = resolve;
+		});
+		let countStarted = false;
+		const adapter = createPageAdapter({
+			onFindMany: async () => {
+				await findManyGate;
+			},
+			onCount: () => {
+				countStarted = true;
+				return 1;
+			},
+		});
+		const page = adapter.findPage({ model: "user", limit: 1 });
+		await vi.waitFor(() => {
+			expect(countStarted).toBe(true);
+		});
+		releaseFindMany();
+		await expect(page).resolves.toMatchObject({ total: 1, hasMore: false });
+	});
+
+	it("waits for findMany to finish before count when concurrent reads are disabled", async () => {
+		let releaseFindMany!: () => void;
+		const findManyGate = new Promise<void>((resolve) => {
+			releaseFindMany = resolve;
+		});
+		let countStarted = false;
+		const adapter = createPageAdapter({
+			supportsConcurrentReads: false,
+			onFindMany: async () => {
+				await findManyGate;
+			},
+			onCount: () => {
+				countStarted = true;
+				return 1;
+			},
+		});
+		const page = adapter.findPage({ model: "user", limit: 1 });
+		await Promise.resolve();
+		expect(countStarted).toBe(false);
+		releaseFindMany();
+		await expect(page).resolves.toMatchObject({ total: 1 });
+		expect(countStarted).toBe(true);
 	});
 
 	it("skips findMany when limit is 0 and still counts", async () => {

@@ -73,6 +73,7 @@ export const createAdapterFactory =
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 			supportsUUIDs: cfg.supportsUUIDs ?? false,
 			supportsArrays: cfg.supportsArrays ?? false,
+			supportsConcurrentReads: cfg.supportsConcurrentReads ?? true,
 			transaction: cfg.transaction ?? false,
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
@@ -1318,19 +1319,24 @@ export const createAdapterFactory =
 						hasMore: total > offset,
 					};
 				}
-				const items = await adapter.findMany<T>({
-					model: data.model,
-					where: data.where,
-					limit,
-					offset,
-					select: data.select,
-					sortBy: data.sortBy,
-					join: data.join,
-				});
-				const total = await adapter.count({
-					model: data.model,
-					where: data.where,
-				});
+				const findItems = () =>
+					adapter.findMany<T>({
+						model: data.model,
+						where: data.where,
+						limit,
+						offset,
+						select: data.select,
+						sortBy: data.sortBy,
+						join: data.join,
+					});
+				const countRows = () =>
+					adapter.count({
+						model: data.model,
+						where: data.where,
+					});
+				const [items, total] = config.supportsConcurrentReads
+					? await Promise.all([findItems(), countRows()])
+					: [await findItems(), await countRows()];
 				return {
 					items,
 					total,

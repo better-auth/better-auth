@@ -1071,6 +1071,7 @@ export const mongodbAdapter = (
 									config: {
 										...adapterOptions!.config,
 										transaction: false,
+										supportsConcurrentReads: false,
 									},
 									adapter: createCustomAdapter(db, session),
 								})(lazyOptions!);

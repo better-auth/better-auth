@@ -525,6 +525,12 @@ Whether the database supports booleans. If the database doesn't support booleans
 
 Whether the database supports arrays. Defaults to `false`, in which case array fields (`string[]`, `number[]`) are stored as a serialized `string` and safely parsed back when retrieved. Set this to `true` if your database supports array columns natively.
 
+### `supportsConcurrentReads`
+
+Whether composed reads such as `findPage` may run `findMany` and `count` at the same time. Defaults to `true`.
+
+Set this to `false` when operations share a connection that cannot overlap. The MongoDB adapter does this for the adapter instance bound to a `ClientSession` inside a transaction.
+
 ### `usePlural`
 
 Whether the table names in the schema are plural. This is often defined by the user, and passed down through your custom adapter options. If you do not intend to allow the user to customize the table names, you can ignore this option, or set this to `false`.

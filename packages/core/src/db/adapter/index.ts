@@ -123,6 +123,16 @@ export interface DBAdapterFactoryConfig<
 	 */
 	supportsArrays?: boolean | undefined;
 	/**
+	 * Whether composed reads such as `findPage` may run `findMany` and
+	 * `count` at the same time.
+	 *
+	 * Set to `false` when operations share a connection that cannot
+	 * overlap, such as a MongoDB `ClientSession` inside a transaction.
+	 *
+	 * @default true
+	 */
+	supportsConcurrentReads?: boolean | undefined;
+	/**
 	 * Execute multiple operations in a transaction.
 	 *
 	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
@@ -444,7 +454,8 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	/**
 	 * Return one page of matching rows and the total matching count.
 	 *
-	 * Runs `findMany` and `count` with the same `where`. `limit` follows
+	 * Runs `findMany` and `count` with the same `where`. Those reads run
+	 * together unless `supportsConcurrentReads` is `false`. `limit` follows
 	 * `findMany` (`advanced.database.defaultFindManyLimit`, default `100`;
 	 * `0` returns no rows and skips `findMany`). `offset` defaults to `0`.
 	 * `join` and `select` apply only to `findMany`.

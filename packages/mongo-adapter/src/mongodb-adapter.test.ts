@@ -50,6 +50,27 @@ describe("mongodb-adapter", () => {
 		await client.close();
 	});
 
+	it("disables concurrent reads on the MongoDB transaction adapter", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const session = client.startSession();
+		vi.spyOn(client, "startSession").mockReturnValue(session);
+		vi.spyOn(session, "withTransaction").mockImplementation(async (cb) => cb());
+		const adapter = mongodbAdapter(client.db("test"), { client })({});
+		const transaction = adapter.options?.adapterConfig.transaction;
+		if (typeof transaction !== "function") {
+			throw new Error("MongoDB transaction is not configured");
+		}
+
+		await transaction(async (trx) => {
+			expect(trx.options?.adapterConfig.supportsConcurrentReads).toBe(false);
+			return "ok";
+		});
+		expect(adapter.options?.adapterConfig.supportsConcurrentReads).not.toBe(
+			false,
+		);
+		await client.close();
+	});
+
 	it("aborts the MongoDB transaction when an operation fails before commit", async () => {
 		const client = new MongoClient("mongodb://localhost:27017");
 		const session = client.startSession();
