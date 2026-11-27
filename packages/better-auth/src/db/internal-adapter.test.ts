@@ -417,6 +417,58 @@ describe("internal adapter test", async () => {
 		expect(await remaining("cleanup:second")).toBe(0);
 	});
 
+	it("sweeps expired verification rows during consumeVerificationValue and supports includeExpired", async () => {
+		const opts = {
+			database: new DatabaseSync(":memory:"),
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(opts)).runMigrations();
+		const ctx = await init(opts);
+		const remaining = (identifier: string) =>
+			ctx.adapter.count({
+				model: "verification",
+				where: [{ field: "identifier", value: identifier }],
+			});
+
+		await ctx.internalAdapter.createVerificationValue({
+			identifier: "consume-cleanup:abandoned",
+			value: "stale",
+			expiresAt: new Date(Date.now() - 1_000),
+		});
+		await ctx.internalAdapter.createVerificationValue({
+			identifier: "consume-cleanup:active",
+			value: "ok",
+			expiresAt: new Date(Date.now() + 60_000),
+		});
+
+		// Consuming the active row triggers the throttled sweep after consumption.
+		const active = await ctx.internalAdapter.consumeVerificationValue(
+			"consume-cleanup:active",
+		);
+		expect(active?.value).toBe("ok");
+		expect(await remaining("consume-cleanup:abandoned")).toBe(0);
+
+		// Add another expired row within the throttle window so sweep skips it,
+		// then confirm includeExpired returns it once and deletes it atomically.
+		await ctx.internalAdapter.createVerificationValue({
+			identifier: "consume-cleanup:expired-once",
+			value: JSON.stringify({ errorURL: "/oauth-error" }),
+			expiresAt: new Date(Date.now() - 1_000),
+		});
+		const expiredFirst = await ctx.internalAdapter.consumeVerificationValue(
+			"consume-cleanup:expired-once",
+			{ includeExpired: true },
+		);
+		expect(expiredFirst?.value).toBe(
+			JSON.stringify({ errorURL: "/oauth-error" }),
+		);
+		expect(
+			await ctx.internalAdapter.consumeVerificationValue(
+				"consume-cleanup:expired-once",
+				{ includeExpired: true },
+			),
+		).toBeNull();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/12593
 	 */

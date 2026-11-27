@@ -473,6 +473,61 @@ describe("Social Providers", async (c) => {
 		expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/13005
+	 */
+	it("preserves errorCallbackURL and consumes expired database OAuth state on expiry", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				account: {
+					storeStateStrategy: "database",
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			errorCallbackURL: "/oauth-error",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state =
+			new URL(signInRes.data?.url ?? "").searchParams.get("state") || "";
+		const callbackUrl = `http://localhost:3000/api/auth/callback/google?state=${encodeURIComponent(state)}&code=test`;
+
+		vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 11 * 60 * 1000 });
+		try {
+			const expiredRes = await auth.handler(
+				new Request(callbackUrl, { headers }),
+			);
+			expect(expiredRes.status).toBe(302);
+			expect(expiredRes.headers.get("location")).toContain(
+				"/oauth-error?error=state_mismatch",
+			);
+
+			// Replay of the already-consumed expired state must not recover errorURL or succeed.
+			const replayRes = await auth.handler(
+				new Request(callbackUrl, { headers }),
+			);
+			expect(replayRes.status).toBe(302);
+			expect(replayRes.headers.get("location")).toBe(
+				"http://localhost:3000/api/auth/error?error=state_mismatch",
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("should be able to sign in with async social provider", async () => {
 		const headers = new Headers();
 		const signInRes = await client.signIn.social({

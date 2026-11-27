@@ -179,6 +179,7 @@ export async function parseGenericState(
 
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 	let parsedData: StateData;
+	let dbExpiresAt: Date | undefined;
 
 	if (storeStateStrategy === "cookie") {
 		// Retrieve state data from encrypted cookie
@@ -269,8 +270,12 @@ export async function parseGenericState(
 			}
 		}
 
-		const data =
-			await c.context.internalAdapter.consumeVerificationValue(identifier);
+		const data = await c.context.internalAdapter.consumeVerificationValue(
+			identifier,
+			{
+				includeExpired: true,
+			},
+		);
 		if (!data) {
 			throw new StateError("State mismatch: verification not found", {
 				code: "state_mismatch",
@@ -278,6 +283,7 @@ export async function parseGenericState(
 			});
 		}
 
+		dbExpiresAt = data.expiresAt;
 		parsedData = stateDataSchema.parse(JSON.parse(data.value));
 
 		if (
@@ -298,11 +304,15 @@ export async function parseGenericState(
 	}
 
 	// Check expiration
-	if (parsedData.expiresAt < Date.now()) {
+	const now = Date.now();
+	const effectiveExpiresAt = dbExpiresAt
+		? Math.min(parsedData.expiresAt, new Date(dbExpiresAt).getTime())
+		: parsedData.expiresAt;
+	if (effectiveExpiresAt < now) {
 		throw new StateError("Invalid state: request expired", {
 			code: "state_mismatch",
 			details: {
-				expiresAt: parsedData.expiresAt,
+				expiresAt: effectiveExpiresAt,
 			},
 			errorURL: parsedData.errorURL,
 		});

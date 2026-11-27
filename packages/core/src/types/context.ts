@@ -278,15 +278,20 @@ export interface InternalAdapter<
 	 * return it. Only the first concurrent caller receives the latest row;
 	 * subsequent callers receive `null`. Consuming one row invalidates the
 	 * whole identifier so stale rows cannot be replayed. Rows past their
-	 * `expiresAt` are treated as already invalid: the row is deleted but
-	 * `null` is returned, so callers do not need to gate on `expiresAt`
-	 * themselves. Callers MUST gate any state change (issue session, mint
-	 * token, change password) on a non-null result.
+	 * `expiresAt` are treated as already invalid: the row is deleted and
+	 * `null` is returned by default, so callers do not need to gate on
+	 * `expiresAt` themselves. Pass `{ includeExpired: true }` when the caller
+	 * needs the deleted expired payload (e.g. to recover `errorURL`) and
+	 * enforces `expiresAt` itself. Callers MUST gate any state change (issue
+	 * session, mint token, change password) on a non-null, non-expired result.
 	 *
 	 * Replaces the racy `findVerificationValue` + `deleteVerificationByIdentifier`
 	 * pair at single-use credential consumption sites.
 	 */
-	consumeVerificationValue(identifier: string): Promise<Verification | null>;
+	consumeVerificationValue(
+		identifier: string,
+		options?: { includeExpired?: boolean },
+	): Promise<Verification | null>;
 
 	/**
 	 * First-writer-wins create keyed by a deterministic primary key derived from
