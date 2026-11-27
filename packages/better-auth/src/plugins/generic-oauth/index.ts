@@ -541,6 +541,16 @@ export const genericOAuth = <const ID extends string>(
 				},
 				async getUserInfo(tokens) {
 					const { expectedIdTokenNonce, ...oauthTokens } = tokens;
+					if (
+						(c.requireIdTokenVerification ||
+							(provider.idToken && !c.getUserInfo)) &&
+						!oauthTokens.idToken
+					) {
+						ctx.logger.error(
+							`Provider "${c.providerId}": token response is missing id_token, but id_token verification is required`,
+						);
+						return null;
+					}
 					if (!oauthTokens.idToken || !provider.idToken) {
 						return resolveUserInfo(oauthTokens);
 					}
