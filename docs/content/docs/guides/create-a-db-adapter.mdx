@@ -338,16 +338,11 @@ incrementMany: async ({ model, increment, set, rows }) => {
   for (const [field, delta] of Object.entries(increment)) {
     assignments[field] = sql`${model[field]} + ${delta}`;
   }
-  const updated = [];
-  for (const { where } of rows) {
-    const [row] = await db
-      .update(model)
-      .set(assignments)
-      .where(where)
-      .returning();
-    if (row) updated.push(row);
-  }
-  return updated;
+  return await db
+    .update(model)
+    .set(assignments)
+    .where(or(rows.map(({ where }) => and(where))))
+    .returning();
 };
 ```
 
