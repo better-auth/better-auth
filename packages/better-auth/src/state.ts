@@ -227,9 +227,50 @@ export async function parseGenericState(
 		expireCookie(c, stateCookie);
 	} else {
 		// Default: database strategy
-		const data = await c.context.internalAdapter.findVerificationValue(
-			getAuthStateVerificationIdentifier(state),
+		const identifier = getAuthStateVerificationIdentifier(state);
+		const stateCookie = c.context.createAuthCookie(
+			settings?.cookieName ?? "state",
 		);
+		/**
+		 * This is generally cause security issue and should only be used in
+		 * dev or staging environments. It's currently used by the oauth-proxy
+		 * plugin
+		 *
+		 * Also used by SAML relay state parsing via settings.skipStateCookieCheck,
+		 * where the IdP POST is typically cross-origin and SameSite=Lax cookies
+		 * are not sent.
+		 */
+		const skipStateCookieCheck =
+			settings?.skipStateCookieCheck ??
+			c.context.oauthConfig.skipStateCookieCheck;
+
+		if (!skipStateCookieCheck) {
+			const stateCookieValue = await c.getSignedCookie(
+				stateCookie.name,
+				c.context.secret,
+			);
+			if (!stateCookieValue || stateCookieValue !== state) {
+				// Read without consuming so a request missing a valid cookie cannot
+				// spend a live verification row while still recovering errorURL.
+				const existing =
+					await c.context.internalAdapter.findVerificationValue(identifier);
+				if (!existing) {
+					throw new StateError("State mismatch: verification not found", {
+						code: "state_mismatch",
+						details: { state },
+					});
+				}
+				const existingData = stateDataSchema.parse(JSON.parse(existing.value));
+				throw new StateError("State mismatch: State not persisted correctly", {
+					code: "state_security_mismatch",
+					details: { state },
+					errorURL: existingData.errorURL,
+				});
+			}
+		}
+
+		const data =
+			await c.context.internalAdapter.consumeVerificationValue(identifier);
 		if (!data) {
 			throw new StateError("State mismatch: verification not found", {
 				code: "state_mismatch",
@@ -253,44 +294,7 @@ export async function parseGenericState(
 			);
 		}
 
-		const stateCookie = c.context.createAuthCookie(
-			settings?.cookieName ?? "state",
-		);
-
-		const stateCookieValue = await c.getSignedCookie(
-			stateCookie.name,
-			c.context.secret,
-		);
-
-		/**
-		 * This is generally cause security issue and should only be used in
-		 * dev or staging environments. It's currently used by the oauth-proxy
-		 * plugin
-		 *
-		 * Also used by SAML relay state parsing via settings.skipStateCookieCheck,
-		 * where the IdP POST is typically cross-origin and SameSite=Lax cookies
-		 * are not sent.
-		 */
-		const skipStateCookieCheck =
-			settings?.skipStateCookieCheck ??
-			c.context.oauthConfig.skipStateCookieCheck;
-		if (
-			!skipStateCookieCheck &&
-			(!stateCookieValue || stateCookieValue !== state)
-		) {
-			throw new StateError("State mismatch: State not persisted correctly", {
-				code: "state_security_mismatch",
-				details: { state },
-				errorURL: parsedData.errorURL,
-			});
-		}
-
 		expireCookie(c, stateCookie);
-
-		// Delete verification value after retrieval
-		await c.context.internalAdapter.deleteVerificationByIdentifier(
-			getAuthStateVerificationIdentifier(state),
-		);
 	}
 
 	// Check expiration
