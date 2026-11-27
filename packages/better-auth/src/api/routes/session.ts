@@ -164,15 +164,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 					if (!shouldExpireCookieCache) {
 						const now = Date.now();
-						const cachedSessionExpiresAt = Math.min(
-							new Date(
-								session.session.expiresAt as unknown as string | number | Date,
-							).getTime(),
-							getSessionExpiryLimit(
-								ctx.context.options,
-								session.session.createdAt,
-							),
-						);
+						const cachedSessionExpiresAt = new Date(
+							session.session.expiresAt as unknown as string | number | Date,
+						).getTime();
 						shouldExpireCookieCache =
 							sessionDataPayload.expiresAt < now ||
 							!Number.isFinite(cachedSessionExpiresAt) ||

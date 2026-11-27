@@ -801,11 +801,7 @@ export const createInternalAdapter = (
 					if (!user) return null;
 					const parsedSession = parseSessionOutput(ctx.options, {
 						...s.session,
-						expiresAt: capSessionExpiresAt(
-							ctx.options,
-							s.session.createdAt,
-							new Date(s.session.expiresAt),
-						),
+						expiresAt: new Date(s.session.expiresAt),
 						createdAt: new Date(s.session.createdAt),
 						updatedAt: new Date(s.session.updatedAt),
 					});
@@ -842,14 +838,7 @@ export const createInternalAdapter = (
 			// Bulk revocation deletes database rows, so a row read here outlived
 			// it. Its `createdAt` may be rounded, so the cutoff is not compared.
 			if (!user) return null;
-			const parsedSession = parseSessionOutput(ctx.options, {
-				...session,
-				expiresAt: capSessionExpiresAt(
-					ctx.options,
-					session.createdAt,
-					session.expiresAt,
-				),
-			});
+			const parsedSession = parseSessionOutput(ctx.options, session);
 			const parsedUser = parseUserOutput(ctx.options, user);
 			return {
 				session: parsedSession,

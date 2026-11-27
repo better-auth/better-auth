@@ -362,7 +362,7 @@ export function getSessionCookieMaxAge(
 	createdAt: Date | string,
 ) {
 	const limit = getSessionExpiryLimit(ctx.context.options, createdAt);
-	const secondsLeft = Math.ceil((limit - Date.now()) / 1000);
+	const secondsLeft = Math.floor((limit - Date.now()) / 1000);
 	return Math.max(
 		0,
 		Math.min(ctx.context.sessionConfig.expiresIn, secondsLeft),

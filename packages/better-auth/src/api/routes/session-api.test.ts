@@ -1,8 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import type {
-	BetterAuthOptions,
-	GenericEndpointContext,
-} from "@better-auth/core";
+import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import {
 	runWithEndpointContext,
@@ -3277,58 +3274,30 @@ describe("absolute session lifetime", () => {
 		expect(session.expiresAt.getTime()).toBe(startedAt + 60_000);
 	});
 
-	it("ends a session created before the limit applied", async () => {
-		const { auth, client, signInWithTestUser, db } = await getTestInstance({
+	it("lets a session created before the limit applied run out without refreshing it", async () => {
+		const { client, signInWithTestUser, db } = await getTestInstance({
 			session: {
+				expiresIn: 120,
+				updateAge: 60,
 				absoluteExpiresIn: 300,
 			},
 		});
 		const { headers } = await signInWithTestUser();
 		const current = await client.getSession({ fetchOptions: { headers } });
-		const sessionId = current.data!.session.id;
 		await db.update({
 			model: "session",
-			where: [{ field: "id", value: sessionId }],
-			update: { createdAt: new Date(startedAt - 301_000) },
+			where: [{ field: "id", value: current.data!.session.id }],
+			update: { createdAt: new Date(startedAt - 400_000) },
 		});
-		const context = await auth.$context;
-		const found = await context.internalAdapter.findSession(
-			current.data!.session.token,
+
+		vi.setSystemTime(startedAt + 70_000);
+		const unrefreshed = await client.getSession({ fetchOptions: { headers } });
+		vi.setSystemTime(startedAt + 121_000);
+		const expired = await client.getSession({ fetchOptions: { headers } });
+
+		expect(new Date(unrefreshed.data!.session.expiresAt).getTime()).toBe(
+			startedAt + 120_000,
 		);
-		expect(found?.session.expiresAt.getTime()).toBe(startedAt - 1_000);
-
-		const response = await client.getSession({ fetchOptions: { headers } });
-
-		expect(response.data).toBeNull();
-		expect(
-			await db.findOne({
-				model: "session",
-				where: [{ field: "id", value: sessionId }],
-			}),
-		).toBeNull();
-	});
-
-	it("does not serve a cookie-cached session past the limit", async () => {
-		const { auth, client, signInWithTestUser } = await getTestInstance({
-			session: {
-				cookieCache: {
-					enabled: true,
-					maxAge: 300,
-					refreshCache: false,
-				},
-			},
-		});
-		const { headers } = await signInWithTestUser();
-		const cached = await client.getSession({ fetchOptions: { headers } });
-		expect(cached.data).not.toBeNull();
-
-		const sessionOptions: NonNullable<BetterAuthOptions["session"]> = (
-			await auth.$context
-		).options.session;
-		sessionOptions.absoluteExpiresIn = 60;
-		vi.setSystemTime(startedAt + 61_000);
-		const response = await client.getSession({ fetchOptions: { headers } });
-
-		expect(response.data).toBeNull();
+		expect(expired.data).toBeNull();
 	});
 });
