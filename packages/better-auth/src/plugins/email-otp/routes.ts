@@ -133,15 +133,11 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 					message: "Invalid OTP type",
 				});
 			}
-			const identifier = toOTPIdentifier(ctx.body.type, email);
 			const otp = await resolveOTP(ctx, opts, email, ctx.body.type);
 
 			const shouldSendOTP = ctx.body.type === "sign-in" && !opts.disableSignUp;
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user && !shouldSendOTP) {
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					identifier,
-				);
 				return ctx.json({ success: true });
 			}
 			// A vetoed code is not sent. Where the reply hides whether the account
@@ -751,13 +747,9 @@ export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
-			const identifier = toOTPIdentifier("forget-password", email);
 			const otp = await resolveOTP(ctx, opts, email, "forget-password");
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					identifier,
-				);
 				return ctx.json({
 					success: true,
 				});
@@ -854,13 +846,9 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
-			const identifier = toOTPIdentifier("forget-password", email);
 			const otp = await resolveOTP(ctx, opts, email, "forget-password");
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					identifier,
-				);
 				return ctx.json({
 					success: true,
 				});
@@ -1103,9 +1091,6 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 
 			const user = await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (user) {
-				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					identifier,
-				);
 				return ctx.json({
 					success: true,
 				});
