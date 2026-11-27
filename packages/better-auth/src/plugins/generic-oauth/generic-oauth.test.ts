@@ -2731,7 +2731,7 @@ describe("oauth2", async () => {
 		expect(accounts[0]!.accountId).toBe(String(numericProfileId));
 	});
 
-	it("should handle Strava OAuth with custom mapProfileToUser", async () => {
+	it("maps the Strava profile to user and account fields", async () => {
 		const stravaUserId = 12345678;
 		const stravaProfile = {
 			id: stravaUserId,
@@ -2747,11 +2747,17 @@ describe("oauth2", async () => {
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			account: {
+				additionalFields: { displayName: { type: "string", required: false } },
+			},
 			plugins: [
 				genericOAuth({
 					config: [
 						{
 							providerId: "strava",
+							getAccountFields: (_tokens, userInfo) => ({
+								displayName: userInfo.name,
+							}),
 							authorizationUrl: `http://localhost:${port}/authorize`,
 							tokenUrl: `http://localhost:${port}/token`,
 							userInfoUrl: `http://localhost:${port}/userinfo`,
@@ -2820,6 +2826,7 @@ describe("oauth2", async () => {
 
 		expect(accounts[0]).toMatchObject({
 			providerId: "strava",
+			displayName: "John Doe",
 			accountId: String(stravaUserId),
 			userId: session.data?.user.id,
 		});

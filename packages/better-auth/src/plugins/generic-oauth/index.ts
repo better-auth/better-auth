@@ -590,6 +590,7 @@ export const genericOAuth = <const ID extends string>(
 				disableImplicitSignUp: c.disableImplicitSignUp,
 				disableSignUp: c.disableSignUp,
 				options: {
+					getAccountFields: c.getAccountFields,
 					disableSignUp: c.disableSignUp,
 					overrideUserInfoOnSignIn: c.overrideUserInfo,
 					requireEmailVerification: c.requireEmailVerification,
