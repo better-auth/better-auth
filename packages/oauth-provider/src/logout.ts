@@ -35,6 +35,11 @@ const LOGOUT_TOKEN_LIFETIME_SECONDS = 120;
 // window is enough.
 const BACKCHANNEL_DISPATCH_TIMEOUT_MS = 5_000;
 
+// Adapter `findMany` defaults to 100 when `limit` is omitted. A full-set
+// primitive is a follow-up; this explicit cap makes the bound visible rather
+// than inheriting that default silently.
+const BACKCHANNEL_LOGOUT_TOKEN_SCAN_LIMIT = 100;
+
 interface TokenRow {
 	id: string;
 	clientId: string;
@@ -138,16 +143,21 @@ async function prepareBackchannelLogoutPlan(
 	const logger = ctx.context.logger;
 	try {
 		const adapter = await getCurrentAdapter(ctx.context.adapter);
-		const where = [{ field: "sessionId", value: sessionId }];
+		const where = [
+			{ field: "sessionId", value: sessionId },
+			{ field: "revoked", value: null },
+		];
 
 		const [accessTokens, refreshTokens] = await Promise.all([
 			adapter.findMany<TokenRow>({
 				model: "oauthAccessToken",
 				where,
+				limit: BACKCHANNEL_LOGOUT_TOKEN_SCAN_LIMIT,
 			}),
 			adapter.findMany<TokenRow>({
 				model: "oauthRefreshToken",
 				where,
+				limit: BACKCHANNEL_LOGOUT_TOKEN_SCAN_LIMIT,
 			}),
 		]);
 
@@ -170,11 +180,11 @@ async function prepareBackchannelLogoutPlan(
 		// Access tokens are always revoked (OP hardening). Refresh tokens follow
 		// §2.7: revoke unless `offline_access` was granted. The non-offline_access
 		// branch is reachable via refresh-token scope narrowing, so it must stay.
-		const accessToRevokeIds = accessTokens
-			.filter((t) => !t.revoked)
-			.map((t) => t.id);
+		// `revoked IS NULL` is already in `where`; array membership is not a
+		// portable Where operator, so offline_access is still filtered in JS.
+		const accessToRevokeIds = accessTokens.map((t) => t.id);
 		const refreshToRevokeIds = refreshTokens
-			.filter((t) => !t.revoked && !t.scopes?.includes("offline_access"))
+			.filter((t) => !t.scopes?.includes("offline_access"))
 			.map((t) => t.id);
 
 		// Logout Tokens are signed through the JWT plugin's JWKS, so skip the

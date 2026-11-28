@@ -642,6 +642,147 @@ describe("oauth back-channel logout", async () => {
 		for (const t of accessAfter) expect(t.revoked).toBeInstanceOf(Date);
 	});
 
+	it("excludes already-revoked tokens from the session-end revocation set", async () => {
+		const oauthClient = await registerClient();
+		await issueTokens({
+			client: oauthClient,
+			requestScopes: ["openid", "email", "profile"],
+		});
+
+		const ctx = await auth.$context;
+		const session = await auth.api.getSession({ headers });
+		expect(session).not.toBeNull();
+		const previouslyRevokedAt = new Date("2024-01-01T00:00:00.000Z");
+		await ctx.adapter.create({
+			model: "oauthAccessToken",
+			data: {
+				token: "already-revoked-access",
+				clientId: oauthClient.client_id,
+				sessionId: session!.session.id,
+				userId: session!.user.id,
+				scopes: ["openid"],
+				expiresAt: new Date(Date.now() + 60_000),
+				createdAt: new Date(),
+				revoked: previouslyRevokedAt,
+			},
+		});
+		await ctx.adapter.create({
+			model: "oauthAccessToken",
+			data: {
+				token: "still-live-access",
+				clientId: oauthClient.client_id,
+				sessionId: session!.session.id,
+				userId: session!.user.id,
+				scopes: ["openid"],
+				expiresAt: new Date(Date.now() + 60_000),
+				createdAt: new Date(),
+				revoked: null,
+			},
+		});
+		await ctx.adapter.create({
+			model: "oauthRefreshToken",
+			data: {
+				token: "already-revoked-refresh",
+				clientId: oauthClient.client_id,
+				sessionId: session!.session.id,
+				userId: session!.user.id,
+				scopes: ["openid"],
+				expiresAt: new Date(Date.now() + 60_000),
+				createdAt: new Date(),
+				revoked: previouslyRevokedAt,
+			},
+		});
+		await ctx.adapter.create({
+			model: "oauthRefreshToken",
+			data: {
+				token: "still-live-refresh",
+				clientId: oauthClient.client_id,
+				sessionId: session!.session.id,
+				userId: session!.user.id,
+				scopes: ["openid"],
+				expiresAt: new Date(Date.now() + 60_000),
+				createdAt: new Date(),
+				revoked: null,
+			},
+		});
+
+		const findMany = vi.spyOn(ctx.adapter, "findMany");
+		try {
+			await client.signOut({ fetchOptions: { headers } });
+			await waitForDispatches();
+
+			const tokenScans = findMany.mock.calls.filter(([query]) => {
+				if (
+					query.model !== "oauthAccessToken" &&
+					query.model !== "oauthRefreshToken"
+				) {
+					return false;
+				}
+				return query.where?.some(
+					(clause) =>
+						clause.field === "sessionId" &&
+						clause.value === session!.session.id,
+				);
+			});
+			expect(tokenScans.map(([query]) => query.model).sort()).toEqual([
+				"oauthAccessToken",
+				"oauthRefreshToken",
+			]);
+			for (const [query] of tokenScans) {
+				expect(query.where).toEqual([
+					{ field: "sessionId", value: session!.session.id },
+					{ field: "revoked", value: null },
+				]);
+				expect(query.limit).toBe(100);
+			}
+		} finally {
+			findMany.mockRestore();
+		}
+
+		const accessAfter = await ctx.adapter.findMany<{
+			token: string;
+			revoked?: Date | null;
+		}>({
+			model: "oauthAccessToken",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+		});
+		const refreshAfter = await ctx.adapter.findMany<{
+			token: string;
+			revoked?: Date | null;
+		}>({
+			model: "oauthRefreshToken",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+		});
+		const revokedTime = (value: Date | null | undefined) =>
+			value instanceof Date ? value.getTime() : value;
+		expect(
+			revokedTime(
+				accessAfter.find((t) => t.token === "already-revoked-access")?.revoked,
+			),
+		).toBe(previouslyRevokedAt.getTime());
+		expect(
+			accessAfter.find((t) => t.token === "still-live-access")?.revoked,
+		).toBeInstanceOf(Date);
+		expect(
+			revokedTime(
+				refreshAfter.find((t) => t.token === "already-revoked-refresh")
+					?.revoked,
+			),
+		).toBe(previouslyRevokedAt.getTime());
+		expect(
+			refreshAfter.find((t) => t.token === "still-live-refresh")?.revoked,
+		).toBeInstanceOf(Date);
+		for (const token of accessAfter) {
+			if (
+				token.token === "already-revoked-access" ||
+				token.token === "still-live-access"
+			) {
+				continue;
+			}
+			expect(token.revoked).toBeInstanceOf(Date);
+		}
+	});
+
 	it("does not dispatch to clients without a backchannel_logout_uri", async () => {
 		const oauthClient = await registerClient({
 			backchannel_logout_uri: undefined,
