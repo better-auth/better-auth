@@ -1581,3 +1581,179 @@ describe("Access-Control-Expose-Headers on APIError", async () => {
 		);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/13008
+ */
+describe("after hook Response headers", async () => {
+	it("preserves Location and other headers on a Response returned by an after hook over an endpoint redirect", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				{
+					id: "redirect-override-repro",
+					endpoints: {
+						jump: createAuthEndpoint(
+							"/repro/jump",
+							{ method: "GET" },
+							async (ctx) => {
+								ctx.setCookie("from_endpoint", "1");
+								ctx.setHeader("X-Endpoint-Header", "keep-me");
+								throw ctx.redirect("https://example.com/from-endpoint");
+							},
+						),
+						replaceWithJson: createAuthEndpoint(
+							"/repro/replace",
+							{ method: "GET" },
+							async (ctx) => {
+								throw ctx.redirect("https://example.com/from-endpoint");
+							},
+						),
+						setHeaderRedirect: createAuthEndpoint(
+							"/repro/set-header-redirect",
+							{ method: "GET" },
+							async (ctx) => {
+								ctx.setCookie("from_endpoint", "2");
+								throw ctx.redirect("https://example.com/from-endpoint");
+							},
+						),
+						passThroughRedirect: createAuthEndpoint(
+							"/repro/passthrough",
+							{ method: "GET" },
+							async (ctx) => {
+								throw ctx.redirect("https://example.com/from-endpoint");
+							},
+						),
+						mutatedReturned: createAuthEndpoint(
+							"/repro/mutated-returned",
+							{ method: "GET" },
+							async (ctx) => {
+								throw ctx.redirect("https://example.com/from-endpoint");
+							},
+						),
+						replacedError: createAuthEndpoint(
+							"/repro/replaced-error",
+							{ method: "GET" },
+							async (ctx) => {
+								ctx.setCookie("from_endpoint", "3");
+								throw ctx.redirect("https://example.com/from-endpoint");
+							},
+						),
+					},
+					hooks: {
+						after: [
+							{
+								matcher: (ctx) => ctx.path === "/repro/jump",
+								handler: createAuthMiddleware(
+									async () =>
+										new Response(null, {
+											status: 302,
+											headers: {
+												Location: "https://example.com/from-after-hook",
+												"X-Hook-Header": "from-hook",
+											},
+										}),
+								),
+							},
+							{
+								matcher: (ctx) => ctx.path === "/repro/replace",
+								handler: createAuthMiddleware(
+									async () =>
+										new Response(JSON.stringify({ handled: true }), {
+											status: 200,
+											headers: { "Content-Type": "application/json" },
+										}),
+								),
+							},
+							{
+								matcher: (ctx) => ctx.path === "/repro/set-header-redirect",
+								handler: createAuthMiddleware(async (ctx) => {
+									ctx.setHeader("Location", "https://example.com/recovery");
+									return new Response(null, { status: 302 });
+								}),
+							},
+							{
+								matcher: (ctx) => ctx.path === "/repro/passthrough",
+								handler: createAuthMiddleware(
+									async (ctx) => ctx.context.returned,
+								),
+							},
+							{
+								matcher: (ctx) => ctx.path === "/repro/mutated-returned",
+								handler: createAuthMiddleware(async (ctx) => {
+									ctx.context.returned = new Response("<html>done</html>", {
+										status: 200,
+										headers: { "Content-Type": "text/html" },
+									});
+								}),
+							},
+							{
+								matcher: (ctx) => ctx.path === "/repro/replaced-error",
+								handler: createAuthMiddleware(async () => {
+									throw new APIError("FORBIDDEN");
+								}),
+							},
+						],
+					},
+				},
+			],
+		});
+
+		const redirectRes = await auth.handler(
+			new Request("http://localhost:3000/api/auth/repro/jump"),
+		);
+		expect(redirectRes.status).toBe(302);
+		expect(redirectRes.headers.get("location")).toBe(
+			"https://example.com/from-after-hook",
+		);
+		expect(redirectRes.headers.get("set-cookie")).toContain("from_endpoint=1");
+		expect(redirectRes.headers.get("x-endpoint-header")).toBe("keep-me");
+		expect(redirectRes.headers.get("x-hook-header")).toBe("from-hook");
+
+		const replacedRes = await auth.handler(
+			new Request("http://localhost:3000/api/auth/repro/replace"),
+		);
+		expect(replacedRes.status).toBe(200);
+		expect(replacedRes.headers.get("location")).toBeNull();
+
+		const setHeaderRes = await auth.handler(
+			new Request("http://localhost:3000/api/auth/repro/set-header-redirect"),
+		);
+		expect(setHeaderRes.status).toBe(302);
+		expect(setHeaderRes.headers.get("location")).toBe(
+			"https://example.com/recovery",
+		);
+		expect(setHeaderRes.headers.get("set-cookie")).toContain("from_endpoint=2");
+
+		const passThroughRes = await auth.handler(
+			new Request("http://localhost:3000/api/auth/repro/passthrough"),
+		);
+		expect(passThroughRes.status).toBe(302);
+		expect(passThroughRes.headers.get("location")).toBe(
+			"https://example.com/from-endpoint",
+		);
+
+		const mutatedRes = await auth.handler(
+			new Request("http://localhost:3000/api/auth/repro/mutated-returned"),
+		);
+		expect(mutatedRes.status).toBe(200);
+		expect(mutatedRes.headers.get("location")).toBeNull();
+
+		const apiReplaced = await auth.api.replaceWithJson({
+			returnHeaders: true,
+		});
+		expect(apiReplaced.headers?.get("location")).toBeNull();
+
+		let thrownReplacement: unknown;
+		try {
+			await auth.api.replacedError();
+		} catch (error) {
+			thrownReplacement = error;
+		}
+		expect(isAPIError(thrownReplacement)).toBe(true);
+		const thrownHeaders = (
+			thrownReplacement as APIError & { [kAPIErrorHeaderSymbol]?: Headers }
+		)[kAPIErrorHeaderSymbol];
+		expect(thrownHeaders?.get("location")).toBeNull();
+		expect(thrownHeaders?.get("set-cookie")).toContain("from_endpoint=3");
+	});
+});

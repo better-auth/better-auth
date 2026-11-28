@@ -125,6 +125,33 @@ function mergeResponseHeaders(
 	});
 }
 
+function mergeHeadersForResponse(
+	response: Response,
+	accumulated: Headers | null | undefined,
+): Headers | undefined {
+	if (!accumulated) return undefined;
+	const merged = new Headers();
+	accumulated.forEach((value, key) => {
+		const lower = key.toLowerCase();
+		if (lower === "set-cookie") {
+			merged.append(key, value);
+			return;
+		}
+		if (lower === "access-control-expose-headers") {
+			const existing = response.headers.get(key);
+			if (existing && !merged.has(key)) {
+				mergeHeader(merged, key, existing);
+			}
+			mergeHeader(merged, key, value);
+			return;
+		}
+		// Never overwrite headers a hook already set on its own Response.
+		if (response.headers.has(key)) return;
+		mergeHeader(merged, key, value);
+	});
+	return merged;
+}
+
 /**
  * Combine the two header sources an `APIError` can carry into one set:
  * - `kAPIErrorHeaderSymbol`: `ctx.responseHeaders` accumulated via
@@ -249,6 +276,7 @@ async function runAfterHooks(
 	operationId: string,
 ) {
 	const withSpan = createWithSpan(context.context.options);
+	let afterHookSetLocation = false;
 	for (const hook of hooks) {
 		if (!hook.matcher(context as HookEndpointContext)) continue;
 
@@ -278,6 +306,9 @@ async function runAfterHooks(
 			response: unknown;
 			headers?: Headers | null;
 		};
+		if (result.headers?.has("location")) {
+			afterHookSetLocation = true;
+		}
 		mergeResponseHeaders(context.context, result.headers);
 		if (result.response !== undefined) {
 			context.context.returned = result.response;
@@ -286,6 +317,7 @@ async function runAfterHooks(
 	return {
 		response: context.context.returned,
 		headers: context.context.responseHeaders,
+		afterHookSetLocation,
 	};
 }
 
@@ -410,7 +442,12 @@ export async function dispatchAuthEndpoint(
 					// accumulated (`c.setHeader` / `c.setCookie`), not the request headers.
 					const responseHeaders = internalContext.context.responseHeaders;
 					return shouldReturnResponse
-						? toResponse(before, { headers: responseHeaders })
+						? toResponse(before, {
+								headers:
+									before instanceof Response
+										? mergeHeadersForResponse(before, responseHeaders)
+										: responseHeaders,
+							})
 						: input.returnHeaders
 							? { headers: responseHeaders, response: before }
 							: before;
@@ -446,6 +483,8 @@ export async function dispatchAuthEndpoint(
 					return result;
 				}
 
+				const originalEndpointResponse = result.response;
+				const endpointErrored = isAPIError(originalEndpointResponse);
 				internalContext.context.returned = result.response;
 				// Merge onto what the before hooks set, so the handler wins on overlap.
 				mergeResponseHeaders(internalContext.context, result.headers);
@@ -468,35 +507,53 @@ export async function dispatchAuthEndpoint(
 					result.response.stack = result.response.errorStack;
 				}
 
+				const stripReplacedErrorLocation =
+					endpointErrored &&
+					after.response !== originalEndpointResponse &&
+					!after.afterHookSetLocation;
+				const accumulatedHeaders =
+					stripReplacedErrorLocation && result.headers?.has("location")
+						? (() => {
+								const headers = new Headers(result.headers);
+								headers.delete("location");
+								return headers;
+							})()
+						: (result.headers ?? undefined);
+
 				if (isAPIError(result.response) && !shouldReturnResponse) {
 					// Non-response path: re-throw the raw APIError to `auth.api.*`
 					// callers, attaching the merged headers so an outer pipeline sees
 					// the same set we would have written on a response.
-					if (result.headers) {
+					if (accumulatedHeaders) {
 						Object.defineProperty(result.response, kAPIErrorHeaderSymbol, {
 							enumerable: false,
 							configurable: true,
 							writable: false,
-							value: result.headers,
+							value: accumulatedHeaders,
 						});
 					}
 					throw result.response;
 				}
 
+				const responseHeaders =
+					result.response instanceof Response
+						? mergeHeadersForResponse(result.response, accumulatedHeaders)
+						: accumulatedHeaders;
+
 				return shouldReturnResponse
 					? toResponse(result.response, {
-							headers: result.headers ?? undefined,
+							headers: responseHeaders,
 							status: result.status,
 						})
 					: input.returnHeaders
 						? input.returnStatus
 							? {
-									headers: result.headers,
+									headers: responseHeaders ?? null,
 									response: result.response,
 									status: result.status,
 								}
 							: {
-									headers: result.headers,
+									headers: responseHeaders ?? null,
 									response: result.response,
 								}
 						: input.returnStatus
