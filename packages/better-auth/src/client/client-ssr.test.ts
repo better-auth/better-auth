@@ -1,7 +1,10 @@
 // @vitest-environment node
-import { afterEach, expect, it, vi } from "vitest";
+import type { BetterFetch } from "@better-fetch/fetch";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 import { getGlobalBroadcastChannel } from "./broadcast-channel";
+import { setIsServer } from "./environment";
+import { getSessionAtom } from "./session-atom";
 import { createAuthClient as createVueClient } from "./vue";
 
 afterEach(() => {
@@ -162,5 +165,45 @@ it("refetches the session on the server when the session signal fires", async ()
 
 	await vi.waitFor(() => {
 		expect(client.useSession.get().isPending).toBe(false);
+	});
+});
+
+/**
+ * @see https://www.electronjs.org/docs/latest/tutorial/process-model#the-main-process
+ */
+describe("setIsServer", () => {
+	afterEach(() => {
+		Reflect.deleteProperty(globalThis, Symbol.for("better-auth:is-server"));
+		vi.useRealTimers();
+	});
+
+	it("fetches on mount and polls in a client runtime without window", async () => {
+		vi.useFakeTimers();
+		setIsServer(() => false);
+		const $fetch = vi.fn(async () => ({
+			data: {
+				session: {
+					id: "session-id",
+					expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+				},
+				user: {
+					id: "user-id",
+				},
+			},
+			error: null,
+		}));
+		const { session } = getSessionAtom($fetch as unknown as BetterFetch, {
+			sessionOptions: {
+				refetchInterval: 5,
+			},
+		});
+
+		const unsubscribe = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		expect($fetch).toHaveBeenCalledOnce();
+
+		await vi.advanceTimersByTimeAsync(5000);
+		expect($fetch).toHaveBeenCalledTimes(2);
+		unsubscribe();
 	});
 });

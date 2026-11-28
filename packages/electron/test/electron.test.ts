@@ -1,19 +1,30 @@
 import { randomBytes } from "node:crypto";
+import type { BetterAuthClientOptions } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import type { User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import { base64Url } from "@better-auth/utils/base64";
+import type { FetchEsque } from "better-auth/client";
 import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
 import { generateCodeChallenge } from "better-auth/oauth2";
 import { getTestInstance } from "better-auth/test";
-import { beforeEach, describe, expect, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	onTestFinished,
+	vi,
+} from "vitest";
 import { authenticate, kElectron } from "../src/authenticate";
 import { electronClient } from "../src/client";
 import { getCookie } from "../src/cookies";
 import { ELECTRON_ERROR_CODES } from "../src/error-codes";
 import { electron } from "../src/index";
+import { setupRenderer } from "../src/preload";
 import { hashSessionToken } from "../src/routes";
 import { fetchUserImage, normalizeUserOutput } from "../src/user";
 import { encodeRedirectToken, it, testUtils } from "./utils";
@@ -21,6 +32,7 @@ import { encodeRedirectToken, it, testUtils } from "./utils";
 const mockElectron = vi.hoisted(() => {
 	const BrowserWindow = {
 		constructor: vi.fn(),
+		getAllWindows: vi.fn((): unknown[] => []),
 		send: vi.fn(),
 		webContents: {
 			send: vi.fn(),
@@ -30,13 +42,26 @@ const mockElectron = vi.hoisted(() => {
 	const electron = {
 		ipcMain: {
 			handle: vi.fn(),
+			on: vi.fn(),
+			off: vi.fn(),
+		},
+		ipcRenderer: {
+			send: vi.fn(),
+			on: vi.fn(),
+			off: vi.fn(),
+			invoke: vi.fn(),
+		},
+		contextBridge: {
+			exposeInMainWorld: vi.fn(),
 		},
 		app: {
 			userAgentFallback: "test-user-agent",
 			whenReady: vi.fn(() => Promise.resolve()),
+			isReady: vi.fn(() => true),
 			setAsDefaultProtocolClient: vi.fn(() => true),
 			requestSingleInstanceLock: vi.fn(() => true),
 			on: vi.fn(),
+			off: vi.fn(),
 			quit: vi.fn(),
 		},
 		shell: {
@@ -64,6 +89,7 @@ const mockElectron = vi.hoisted(() => {
 		},
 		net: {
 			fetch: vi.fn(),
+			isOnline: vi.fn(() => true),
 		},
 		protocol: {
 			registerSchemesAsPrivileged: vi.fn(),
@@ -95,6 +121,419 @@ describe("Electron", () => {
 		await expect(client.getSession()).rejects.toThrowError(
 			"Requests must be made from the Electron main process",
 		);
+	});
+
+	/**
+	 * @see https://www.electronjs.org/docs/latest/tutorial/process-model#the-main-process
+	 */
+	describe("main process session", () => {
+		const getSessionRequests: Request[] = [];
+		let failGetSession = false;
+		const fetchImpl: FetchEsque = async (url, init) => {
+			const request = new Request(url.toString(), init);
+			if (request.url.includes("/get-session")) {
+				getSessionRequests.push(request);
+				if (failGetSession) throw new TypeError("fetch failed");
+			}
+			return customFetchImpl(url, init);
+		};
+
+		const createMainClient = (
+			sessionOptions?: BetterAuthClientOptions["sessionOptions"],
+		) =>
+			createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl: fetchImpl,
+				},
+				sessionOptions,
+				plugins: [electronClient(options)],
+			});
+
+		const signUp = (
+			client: ReturnType<typeof createMainClient>,
+			email: string,
+		) =>
+			client.signUp.email({
+				name: "Main Process User",
+				email,
+				password: "password",
+			});
+
+		const emitAppEvent = (event: string) => {
+			const listener = mockElectron.app.on.mock.calls
+				.filter(([name]) => name === event)
+				.at(-1)?.[1];
+			expect(listener).toBeDefined();
+			listener?.();
+		};
+
+		const emitIpcMainEvent = (channel: string) => {
+			const listener = mockElectron.ipcMain.on.mock.calls
+				.filter(([name]) => name === channel)
+				.at(-1)?.[1];
+			expect(listener).toBeDefined();
+			listener?.({});
+		};
+
+		afterEach(() => {
+			for (const key of ["is-server", "focus-manager", "online-manager"]) {
+				Reflect.deleteProperty(globalThis, Symbol.for(`better-auth:${key}`));
+			}
+			getSessionRequests.length = 0;
+			failGetSession = false;
+			mockElectron.app.whenReady.mockImplementation(() => Promise.resolve());
+			mockElectron.safeStorage.isEncryptionAvailable.mockImplementation(
+				() => true,
+			);
+			mockElectron.net.isOnline.mockImplementation(() => true);
+			mockElectron.BrowserWindow.getAllWindows.mockImplementation(() => []);
+		});
+
+		it("loads the stored session when the session store mounts", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			const mainClient = createMainClient();
+			await signUp(mainClient, "main-mount@test.com");
+
+			onTestFinished(mainClient.useSession.listen(() => {}));
+			await vi.waitFor(() => {
+				expect(mainClient.useSession.get().data?.user.email).toBe(
+					"main-mount@test.com",
+				);
+			});
+			expect(mainClient.useSession.get().error).toBeNull();
+		});
+
+		/**
+		 * @see https://www.electronjs.org/docs/latest/api/safe-storage#safestorageisencryptionavailable
+		 */
+		it("waits for the app to be ready before reading the stored cookie", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			const mainClient = createMainClient();
+			await signUp(mainClient, "main-ready@test.com");
+
+			let markReady = () => {};
+			const ready = new Promise<void>((resolve) => {
+				markReady = resolve;
+			});
+			mockElectron.app.whenReady.mockImplementation(() => ready);
+			mockElectron.safeStorage.isEncryptionAvailable.mockImplementation(
+				() => false,
+			);
+			getSessionRequests.length = 0;
+
+			onTestFinished(mainClient.useSession.listen(() => {}));
+			await vi.advanceTimersByTimeAsync(0);
+			expect(getSessionRequests).toHaveLength(0);
+
+			mockElectron.safeStorage.isEncryptionAvailable.mockImplementation(
+				() => true,
+			);
+			markReady();
+			await vi.waitFor(() => {
+				expect(mainClient.useSession.get().data?.user.email).toBe(
+					"main-ready@test.com",
+				);
+			});
+			expect(getSessionRequests[0]?.headers.get("cookie")).toContain(
+				"better-auth.session_token",
+			);
+		});
+
+		/**
+		 * @see https://www.electronjs.org/docs/latest/api/app#event-browser-window-focus
+		 */
+		describe("window focus", () => {
+			it("skips a window focus right after the session loads", async ({
+				setProcessType,
+			}) => {
+				setProcessType("browser");
+				const mainClient = createMainClient();
+				await signUp(mainClient, "main-focus-startup@test.com");
+
+				onTestFinished(mainClient.useSession.listen(() => {}));
+				await vi.waitFor(() => {
+					expect(mainClient.useSession.get().data?.user.email).toBe(
+						"main-focus-startup@test.com",
+					);
+				});
+				getSessionRequests.length = 0;
+
+				emitAppEvent("browser-window-focus");
+				await vi.advanceTimersByTimeAsync(1_000);
+				expect(getSessionRequests).toHaveLength(0);
+			});
+
+			it("refetches when the first window opens later", async ({
+				setProcessType,
+			}) => {
+				setProcessType("browser");
+				const mainClient = createMainClient();
+				await signUp(mainClient, "main-focus-later@test.com");
+
+				onTestFinished(mainClient.useSession.listen(() => {}));
+				await vi.waitFor(() => {
+					expect(mainClient.useSession.get().data?.user.email).toBe(
+						"main-focus-later@test.com",
+					);
+				});
+				getSessionRequests.length = 0;
+
+				await vi.advanceTimersByTimeAsync(5_000);
+				emitAppEvent("browser-window-focus");
+				await vi.advanceTimersByTimeAsync(0);
+				expect(getSessionRequests).toHaveLength(1);
+			});
+
+			it("refetches a failed startup session when an app window gains focus", async ({
+				setProcessType,
+			}) => {
+				setProcessType("browser");
+				const mainClient = createMainClient();
+				await signUp(mainClient, "main-focus@test.com");
+
+				failGetSession = true;
+				onTestFinished(mainClient.useSession.listen(() => {}));
+				await vi.waitFor(() => {
+					expect(mainClient.useSession.get().error).not.toBeNull();
+				});
+				expect(mainClient.useSession.get().data).toBeNull();
+
+				failGetSession = false;
+				await vi.advanceTimersByTimeAsync(5_000);
+				emitAppEvent("browser-window-focus");
+				await vi.waitFor(() => {
+					expect(mainClient.useSession.get().data?.user.email).toBe(
+						"main-focus@test.com",
+					);
+				});
+			});
+		});
+
+		/**
+		 * @see https://www.electronjs.org/docs/latest/tutorial/online-offline-events
+		 */
+		describe("network", () => {
+			it("skips polling while the main process is offline", async ({
+				setProcessType,
+			}) => {
+				setProcessType("browser");
+				const mainClient = createMainClient({
+					refetchInterval: 5,
+				});
+				await signUp(mainClient, "main-offline@test.com");
+
+				onTestFinished(mainClient.useSession.listen(() => {}));
+				await vi.waitFor(() => {
+					expect(mainClient.useSession.get().data?.user.email).toBe(
+						"main-offline@test.com",
+					);
+				});
+				getSessionRequests.length = 0;
+
+				mockElectron.net.isOnline.mockImplementation(() => false);
+				await vi.advanceTimersByTimeAsync(10_000);
+				expect(getSessionRequests).toHaveLength(0);
+
+				mockElectron.net.isOnline.mockImplementation(() => true);
+				await vi.advanceTimersByTimeAsync(5_000);
+				expect(getSessionRequests).toHaveLength(1);
+			});
+
+			it("refetches a failed startup session when a renderer reports the network is back", async ({
+				setProcessType,
+			}) => {
+				setProcessType("browser");
+				const mainClient = createMainClient();
+				await signUp(mainClient, "main-reconnect@test.com");
+
+				failGetSession = true;
+				onTestFinished(mainClient.useSession.listen(() => {}));
+				await vi.waitFor(() => {
+					expect(mainClient.useSession.get().error).not.toBeNull();
+				});
+
+				failGetSession = false;
+				await vi.advanceTimersByTimeAsync(5_000);
+				emitIpcMainEvent("better-auth:online");
+				await vi.waitFor(() => {
+					expect(mainClient.useSession.get().data?.user.email).toBe(
+						"main-reconnect@test.com",
+					);
+				});
+			});
+
+			it("forwards the renderer's online event to the main process", async ({
+				setProcessType,
+			}) => {
+				setProcessType("renderer");
+				const target = new EventTarget();
+				vi.stubGlobal("window", target);
+				Object.defineProperty(process, "contextIsolated", {
+					configurable: true,
+					value: true,
+				});
+				onTestFinished(() => {
+					vi.unstubAllGlobals();
+					Reflect.deleteProperty(process, "contextIsolated");
+				});
+
+				setupRenderer();
+				target.dispatchEvent(new Event("online"));
+				expect(mockElectron.ipcRenderer.send).toHaveBeenCalledWith(
+					"better-auth:online",
+				);
+			});
+		});
+
+		describe("user-updated bridge", () => {
+			const secondWindow = {
+				webContents: {
+					send: vi.fn(),
+				},
+			};
+
+			const userUpdates = (
+				window: typeof secondWindow = mockElectron.BrowserWindow,
+			) =>
+				window.webContents.send.mock.calls
+					.filter(([channel]) => channel === "better-auth:user-updated")
+					.map(([, user]) => user?.email ?? null);
+
+			const setupBridges = (client: ReturnType<typeof createMainClient>) => {
+				mockElectron.BrowserWindow.webContents.send.mockClear();
+				secondWindow.webContents.send.mockClear();
+				mockElectron.BrowserWindow.getAllWindows.mockImplementation(() => [
+					mockElectron.BrowserWindow,
+				]);
+				client.setupMain({
+					csp: false,
+					scheme: false,
+					bridges: true,
+				});
+			};
+
+			it("sends the user only when it changes", async ({ setProcessType }) => {
+				setProcessType("browser");
+				const mainClient = createMainClient();
+				await signUp(mainClient, "main-bridge@test.com");
+
+				setupBridges(mainClient);
+				await vi.waitFor(() => {
+					expect(userUpdates()).toEqual(["main-bridge@test.com"]);
+				});
+
+				await mainClient.useSession.get().refetch();
+				await mainClient.useSession.get().refetch();
+				expect(userUpdates()).toEqual(["main-bridge@test.com"]);
+
+				await mainClient.signOut();
+				await vi.waitFor(() => {
+					expect(userUpdates()).toEqual(["main-bridge@test.com", null]);
+				});
+			});
+
+			it("sends each change to every open window", async ({
+				setProcessType,
+			}) => {
+				setProcessType("browser");
+				const mainClient = createMainClient();
+				await signUp(mainClient, "main-bridge-windows@test.com");
+
+				setupBridges(mainClient);
+				mockElectron.BrowserWindow.getAllWindows.mockImplementation(() => [
+					mockElectron.BrowserWindow,
+					secondWindow,
+				]);
+				await vi.waitFor(() => {
+					expect(userUpdates()).toEqual(["main-bridge-windows@test.com"]);
+				});
+
+				await mainClient.signOut();
+				await vi.waitFor(() => {
+					expect(userUpdates()).toEqual(["main-bridge-windows@test.com", null]);
+					expect(userUpdates(secondWindow)).toEqual([
+						"main-bridge-windows@test.com",
+						null,
+					]);
+				});
+			});
+
+			it("sends a change made while no window was open once one opens", async ({
+				setProcessType,
+			}) => {
+				setProcessType("browser");
+				const mainClient = createMainClient();
+				await signUp(mainClient, "main-bridge-closed@test.com");
+
+				setupBridges(mainClient);
+				await vi.waitFor(() => {
+					expect(userUpdates()).toEqual(["main-bridge-closed@test.com"]);
+				});
+
+				mockElectron.BrowserWindow.getAllWindows.mockImplementation(() => []);
+				await mainClient.signOut();
+				await vi.advanceTimersByTimeAsync(100);
+				expect(userUpdates()).toEqual(["main-bridge-closed@test.com"]);
+
+				mockElectron.BrowserWindow.getAllWindows.mockImplementation(() => [
+					mockElectron.BrowserWindow,
+				]);
+				await mainClient.useSession.get().refetch();
+				await vi.waitFor(() => {
+					expect(userUpdates()).toEqual(["main-bridge-closed@test.com", null]);
+				});
+			});
+
+			it("retries a user that failed to sanitize on the next refetch", async ({
+				setProcessType,
+			}) => {
+				setProcessType("browser");
+				const sanitizeUser = vi
+					.fn((user: User & Record<string, any>) => user)
+					.mockImplementationOnce(() => {
+						throw new Error("sanitize failed");
+					});
+				const consoleError = vi
+					.spyOn(console, "error")
+					.mockImplementation(() => {});
+				onTestFinished(() => consoleError.mockRestore());
+				const mainClient = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: {
+						customFetchImpl: fetchImpl,
+					},
+					plugins: [
+						electronClient({
+							...options,
+							sanitizeUser,
+						}),
+					],
+				});
+				await mainClient.signUp.email({
+					name: "Main Process User",
+					email: "main-bridge-sanitize@test.com",
+					password: "password",
+				});
+
+				setupBridges(mainClient);
+				await vi.waitFor(() => {
+					expect(userUpdates()).toEqual([null]);
+				});
+
+				await mainClient.useSession.get().refetch();
+				await vi.waitFor(() => {
+					expect(userUpdates()).toEqual([
+						null,
+						"main-bridge-sanitize@test.com",
+					]);
+				});
+			});
+		});
 	});
 
 	it("should open external url in default browser", async ({
@@ -417,6 +856,12 @@ describe("Electron", () => {
 		setProcessType,
 	}) => {
 		setProcessType("browser");
+		mockElectron.BrowserWindow.getAllWindows.mockImplementation(() => [
+			mockElectron.BrowserWindow,
+		]);
+		onTestFinished(() => {
+			mockElectron.BrowserWindow.getAllWindows.mockImplementation(() => []);
+		});
 
 		client.setupMain();
 
@@ -433,7 +878,7 @@ describe("Electron", () => {
 		// flush
 		await Promise.resolve();
 
-		expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
+		expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
 			"better-auth:user-updated",
 			mockUser,
 		);
@@ -2377,6 +2822,12 @@ describe("Electron", () => {
 			setProcessType,
 		}) => {
 			setProcessType("browser");
+			mockElectron.BrowserWindow.getAllWindows.mockImplementation(() => [
+				mockElectron.BrowserWindow,
+			]);
+			onTestFinished(() => {
+				mockElectron.BrowserWindow.getAllWindows.mockImplementation(() => []);
+			});
 
 			const sanitizeUser = vi.fn((u: any) => {
 				const { email, ...rest } = u;
@@ -2404,7 +2855,7 @@ describe("Electron", () => {
 				getWindow: () => mockElectron.BrowserWindow,
 			});
 
-			mockElectron.BrowserWindow.send.mockClear();
+			mockElectron.BrowserWindow.webContents.send.mockClear();
 
 			sanitizedClient.$store.atoms.session!.set({
 				data: {
@@ -2422,11 +2873,11 @@ describe("Electron", () => {
 			await Promise.resolve();
 
 			expect(sanitizeUser).toHaveBeenCalled();
-			expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
+			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
 				"better-auth:user-updated",
 				expect.objectContaining({ id: "user-123" }),
 			);
-			expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
+			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
 				"better-auth:user-updated",
 				expect.not.objectContaining({ email: expect.any(String) }),
 			);
@@ -2436,6 +2887,12 @@ describe("Electron", () => {
 			setProcessType,
 		}) => {
 			setProcessType("browser");
+			mockElectron.BrowserWindow.getAllWindows.mockImplementation(() => [
+				mockElectron.BrowserWindow,
+			]);
+			onTestFinished(() => {
+				mockElectron.BrowserWindow.getAllWindows.mockImplementation(() => []);
+			});
 
 			const { client: sanitizedClient } = (() => {
 				const sanitizedOptions = {
@@ -2463,7 +2920,7 @@ describe("Electron", () => {
 				getWindow: () => mockElectron.BrowserWindow,
 			});
 
-			mockElectron.BrowserWindow.send.mockClear();
+			mockElectron.BrowserWindow.webContents.send.mockClear();
 			const consoleSpy = vi
 				.spyOn(console, "error")
 				.mockImplementation(() => {});
@@ -2487,7 +2944,7 @@ describe("Electron", () => {
 				"Error while sanitizing user",
 				expect.any(Error),
 			);
-			expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
+			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
 				"better-auth:user-updated",
 				null,
 			);

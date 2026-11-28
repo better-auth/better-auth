@@ -8,48 +8,65 @@ export interface FocusManager {
 	setup(): () => void;
 }
 
-class WindowFocusManager implements FocusManager {
-	listeners = new Set<FocusListener>();
+// Shared through globalThis so every bundled copy of the client uses the same manager.
+const registry = globalThis as Record<symbol, FocusManager | undefined>;
 
-	subscribe(listener: FocusListener) {
-		this.listeners.add(listener);
-		return () => {
-			this.listeners.delete(listener);
-		};
-	}
+function createWindowFocusManager(): FocusManager {
+	const listeners = new Set<FocusListener>();
+	const setFocused = (focused: boolean) => {
+		listeners.forEach((listener) => listener(focused));
+	};
 
-	setFocused(focused: boolean) {
-		this.listeners.forEach((listener) => listener(focused));
-	}
-
-	setup() {
-		if (
-			typeof window === "undefined" ||
-			typeof document === "undefined" ||
-			typeof window.addEventListener === "undefined"
-		) {
-			return () => {};
-		}
-
-		// Cleanup can run after a test environment has removed this global.
-		const target = document;
-		const visibilityHandler = () => {
-			if (document.visibilityState === "visible") {
-				this.setFocused(true);
+	return {
+		setFocused,
+		subscribe(listener) {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		},
+		setup() {
+			if (
+				typeof window === "undefined" ||
+				typeof document === "undefined" ||
+				typeof window.addEventListener === "undefined"
+			) {
+				return () => {};
 			}
-		};
 
-		target.addEventListener("visibilitychange", visibilityHandler, false);
+			// Cleanup can run after a test environment has removed this global.
+			const target = document;
+			const visibilityHandler = () => {
+				if (document.visibilityState === "visible") {
+					setFocused(true);
+				}
+			};
 
-		return () => {
-			target.removeEventListener("visibilitychange", visibilityHandler, false);
-		};
-	}
+			target.addEventListener("visibilitychange", visibilityHandler, false);
+
+			return () => {
+				target.removeEventListener(
+					"visibilitychange",
+					visibilityHandler,
+					false,
+				);
+			};
+		},
+	};
 }
 
 export function getGlobalFocusManager() {
-	if (!(globalThis as any)[kFocusManager]) {
-		(globalThis as any)[kFocusManager] = new WindowFocusManager();
-	}
-	return (globalThis as any)[kFocusManager] as FocusManager;
+	const existing = registry[kFocusManager];
+	if (existing) return existing;
+	const manager = createWindowFocusManager();
+	registry[kFocusManager] = manager;
+	return manager;
+}
+
+/**
+ * Replaces the focus manager for runtimes whose focus events do not come
+ * from `document`, such as React Native.
+ */
+export function setFocusManager(manager: FocusManager) {
+	registry[kFocusManager] = manager;
 }

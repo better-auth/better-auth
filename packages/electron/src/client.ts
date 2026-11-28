@@ -3,6 +3,11 @@ import { isDevelopment, isTest } from "@better-auth/core/env";
 import { base64 } from "@better-auth/utils/base64";
 import type { BetterFetch } from "@better-fetch/fetch";
 import type { BetterAuthClientPlugin, ClientStore } from "better-auth";
+import {
+	setFocusManager,
+	setIsServer,
+	setOnlineManager,
+} from "better-auth/client";
 import electron from "electron";
 import type {
 	ElectronAuthenticateOptions,
@@ -16,6 +21,8 @@ import {
 	hasBetterAuthCookies,
 	hasSessionCookieChanged,
 } from "./cookies";
+import { createMainFocusManager } from "./focus-manager";
+import { createMainOnlineManager } from "./online-manager";
 import type { ExposedBridges } from "./preload";
 import type { ElectronClientOptions, Storage } from "./types/client";
 import {
@@ -101,6 +108,17 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 		);
 	}
 
+	// The main process has no `window`, yet it hosts the app's long-lived client.
+	if (isProcessType("browser")) {
+		setIsServer(() => false);
+		setFocusManager(createMainFocusManager());
+		setOnlineManager(
+			createMainOnlineManager(
+				`${getChannelPrefixWithDelimiter(opts.channelPrefix)}online`,
+			),
+		);
+	}
+
 	return {
 		id: "electron",
 		version: PACKAGE_VERSION,
@@ -114,6 +132,8 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 							"Requests must be made from the Electron main process",
 						);
 					}
+					// `safeStorage` cannot decrypt the stored cookie before the app is ready.
+					await app.whenReady();
 					const storedCookie = getDecrypted(cookieName);
 					const cookie = getCookie(storedCookie || "{}");
 					options ||= {};
