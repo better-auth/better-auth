@@ -593,3 +593,65 @@ describe("memory adapter serial ids", () => {
 		expect(db.widget!.map((row) => row.name).sort()).toEqual(["a", "b"]);
 	});
 });
+
+/**
+ * Two timestamps are equal when they are the same instant, so a date field
+ * matches an equal `Date` even when it is a different object.
+ *
+ * @see https://www.postgresql.org/docs/current/functions-datetime.html
+ */
+describe("memory adapter date equality", () => {
+	const early = "2026-01-01T00:00:00.000Z";
+	const late = "2026-06-01T00:00:00.000Z";
+
+	async function seedDates() {
+		const db: MemoryDB = { user: [] };
+		const adapter = memoryAdapter(db)({});
+		for (const [id, at] of [
+			["early", early],
+			["late", late],
+		] as const) {
+			await adapter.create({
+				model: "user",
+				data: {
+					id,
+					name: id,
+					email: `${id}@example.com`,
+					emailVerified: false,
+					createdAt: new Date(at),
+					updatedAt: new Date(at),
+				},
+				forceAllowId: true,
+			});
+		}
+		expect(db.user!.map((row) => row.createdAt)).toEqual([
+			new Date(early),
+			new Date(late),
+		]);
+		return adapter;
+	}
+
+	it.each([
+		{ operator: "eq", value: new Date(early), expected: ["early"] },
+		{ operator: "ne", value: new Date(early), expected: ["late"] },
+		{ operator: "in", value: [new Date(early)], expected: ["early"] },
+		{ operator: "not_in", value: [new Date(early)], expected: ["late"] },
+		{ operator: "eq", value: new Date(0), expected: [] },
+		{ operator: "ne", value: new Date(0), expected: ["early", "late"] },
+		{ operator: "in", value: [new Date(0)], expected: [] },
+		{ operator: "not_in", value: [new Date(0)], expected: ["early", "late"] },
+	] as const)(
+		"$operator $value matches $expected",
+		async ({ operator, value, expected }) => {
+			const adapter = await seedDates();
+
+			const rows = await adapter.findMany<{ id: string }>({
+				model: "user",
+				// The public `in` and `not_in` value type lists no `Date[]`.
+				where: [{ field: "createdAt", operator, value: value as Date }],
+			});
+
+			expect(rows.map((row) => row.id)).toEqual(expected);
+		},
+	);
+});

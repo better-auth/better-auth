@@ -7,12 +7,14 @@ import type {
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 import {
+	includesValue,
 	insensitiveCompare,
 	insensitiveContains,
 	insensitiveEndsWith,
 	insensitiveIn,
 	insensitiveNotIn,
 	insensitiveStartsWith,
+	isSameValue,
 } from "./query-builders";
 
 export interface MemoryDB {
@@ -270,8 +272,7 @@ export const memoryAdapter = (
 									if (isInsensitive) {
 										return insensitiveIn(record[field], value);
 									}
-									// @ts-expect-error
-									return value.includes(record[field]);
+									return includesValue(value, record[field]);
 								case "not_in":
 									if (!Array.isArray(value)) {
 										throw new Error("Value must be an array");
@@ -279,8 +280,7 @@ export const memoryAdapter = (
 									if (isInsensitive) {
 										return insensitiveNotIn(record[field], value);
 									}
-									// @ts-expect-error
-									return !value.includes(record[field]);
+									return !includesValue(value, record[field]);
 								case "contains":
 									if (isInsensitive) {
 										return insensitiveContains(record[field], value);
@@ -304,7 +304,7 @@ export const memoryAdapter = (
 									if (value === null) {
 										return record[field] != null;
 									}
-									return record[field] !== value;
+									return !isSameValue(record[field], value);
 								case "gt":
 									return value != null && Boolean(record[field] > value);
 								case "gte":
@@ -327,7 +327,7 @@ export const memoryAdapter = (
 									if (value === null) {
 										return record[field] == null;
 									}
-									return record[field] === value;
+									return isSameValue(record[field], value);
 							}
 						};
 
