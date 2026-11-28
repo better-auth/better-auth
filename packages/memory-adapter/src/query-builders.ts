@@ -1,5 +1,6 @@
 /**
- * Case-insensitive in-memory comparison helpers.
+ * In-memory comparison helpers: case-insensitive string matching, and
+ * date-by-value equality for `eq`, `ne`, `in` and `not_in`.
  * Used when evaluating where clauses in the memory adapter.
  */
 
