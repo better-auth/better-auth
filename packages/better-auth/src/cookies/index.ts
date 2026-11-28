@@ -12,10 +12,10 @@ import { filterOutputFields } from "@better-auth/core/utils/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
-import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import { shouldBindAccountCookieToSessionUser } from "../context/store-capabilities";
+import { signHmacSha256, verifyHmacSha256 } from "../crypto";
 import {
 	signJWT as signSecretJWT,
 	symmetricDecodeJWT,
@@ -228,7 +228,7 @@ export async function setCookieCache(
 			JSON.stringify({
 				session: sessionData,
 				expiresAt: expiresAtDate,
-				signature: await createHMAC("SHA-256", "base64urlnopad").sign(
+				signature: await signHmacSha256(
 					ctx.context.secret,
 					JSON.stringify({
 						...sessionData,
@@ -332,7 +332,7 @@ export async function decodeCookieCache(
 		return null;
 	}
 
-	const valid = await createHMAC("SHA-256", "base64urlnopad").verify(
+	const valid = await verifyHmacSha256(
 		ctx.context.secret,
 		JSON.stringify({
 			...parsed.session,
@@ -746,7 +746,7 @@ export const getCookieCache = async <
 			if (!sessionDataPayload) {
 				return null;
 			}
-			const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
+			const isValid = await verifyHmacSha256(
 				secret,
 				JSON.stringify({
 					...sessionDataPayload.session,

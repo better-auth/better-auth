@@ -1,6 +1,7 @@
 import type { SecretConfig } from "@better-auth/core";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { createHash } from "@better-auth/utils/hash";
+import { createHMAC } from "@better-auth/utils/hmac";
 import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
 import {
 	bytesToHex,
@@ -97,16 +98,80 @@ export const symmetricDecrypt = async ({
 	);
 };
 
+const MAX_HMAC_KEY_CACHE_SIZE = 64;
+const hmacKeyCache = new WeakMap<object, Map<string, Promise<CryptoKey>>>();
+const textEncoder = new TextEncoder();
+const hmacSha256Base64Url = createHMAC("SHA-256", "base64urlnopad");
+
 export const getCryptoKey = async (secret: string | BufferSource) => {
-	const secretBuf =
-		typeof secret === "string" ? new TextEncoder().encode(secret) : secret;
-	return await getWebcryptoSubtle().importKey(
-		"raw",
-		secretBuf,
-		algorithm,
-		false,
-		["sign", "verify"],
-	);
+	const subtle = getWebcryptoSubtle();
+	if (typeof secret !== "string") {
+		return await subtle.importKey("raw", secret, algorithm, false, [
+			"sign",
+			"verify",
+		]);
+	}
+	let secretCache = hmacKeyCache.get(subtle);
+	if (!secretCache) {
+		secretCache = new Map();
+		hmacKeyCache.set(subtle, secretCache);
+	}
+	const cached = secretCache.get(secret);
+	if (cached) {
+		// Refresh insertion order for simple LRU eviction.
+		secretCache.delete(secret);
+		secretCache.set(secret, cached);
+		return await cached;
+	}
+	if (secretCache.size >= MAX_HMAC_KEY_CACHE_SIZE) {
+		const oldestKey = secretCache.keys().next().value;
+		if (oldestKey !== undefined) {
+			secretCache.delete(oldestKey);
+		}
+	}
+	const keyPromise = Promise.resolve()
+		.then(() =>
+			subtle.importKey(
+				"raw",
+				textEncoder.encode(secret),
+				algorithm,
+				false,
+				["sign", "verify"],
+			),
+		)
+		.catch((err) => {
+			if (secretCache.get(secret) === keyPromise) {
+				secretCache.delete(secret);
+			}
+			throw err;
+		});
+	secretCache.set(secret, keyPromise);
+	return await keyPromise;
+};
+
+/**
+ * Sign `data` using HMAC-SHA256 encoded as unpadded base64url, reusing the
+ * cached CryptoKey for `secret`.
+ */
+export const signHmacSha256 = async (
+	secret: string,
+	data: string,
+): Promise<string> => {
+	const key = await getCryptoKey(secret);
+	return await hmacSha256Base64Url.sign(key, data);
+};
+
+/**
+ * Verify an unpadded base64url HMAC-SHA256 `signature` for `data`, reusing the
+ * cached CryptoKey for `secret`.
+ */
+export const verifyHmacSha256 = async (
+	secret: string,
+	data: string,
+	signature: string,
+): Promise<boolean> => {
+	const key = await getCryptoKey(secret);
+	return await hmacSha256Base64Url.verify(key, data, signature);
 };
 
 export const makeSignature = async (

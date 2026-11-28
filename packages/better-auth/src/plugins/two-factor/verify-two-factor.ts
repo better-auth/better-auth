@@ -1,9 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
-import { createHMAC } from "@better-auth/utils/hmac";
 import { getAuthoritativeSessionFromCtx } from "../../api";
 import { isSessionOutsideStore } from "../../api/state/session-source";
 import { expireCookie, setSessionCookie } from "../../cookies";
+import { signHmacSha256 } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserOutput } from "../../db/schema";
 import {
@@ -123,7 +123,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					 * so the server can validate and revoke it.
 					 */
 					const trustIdentifier = `trust-device-${generateRandomString(32)}`;
-					const token = await createHMAC("SHA-256", "base64urlnopad").sign(
+					const token = await signHmacSha256(
 						ctx.context.secret,
 						`${user.id}!${trustIdentifier}`,
 					);
