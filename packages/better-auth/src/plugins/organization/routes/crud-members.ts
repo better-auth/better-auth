@@ -443,13 +443,10 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				organizationId: organizationId,
 				userId: toBeRemovedMember.userId,
 			});
-			if (
-				session.user.id === toBeRemovedMember.userId &&
-				session.session.activeOrganizationId ===
-					toBeRemovedMember.organizationId
-			) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
+			await adapter.clearActiveOrganizationFromSessions(
+				toBeRemovedMember.userId,
+				organizationId,
+			);
 
 			// Run afterRemoveMember hook
 			if (options?.organizationHooks?.afterRemoveMember) {
@@ -905,9 +902,10 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 				organizationId: ctx.body.organizationId,
 				userId: session.user.id,
 			});
-			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
+			await adapter.clearActiveOrganizationFromSessions(
+				session.user.id,
+				ctx.body.organizationId,
+			);
 			return ctx.json(member);
 		},
 	);
