@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { getAuthStateVerificationIdentifier } from "@better-auth/core/utils/state";
 import * as z from "zod";
+import { getOAuthServerContext, setOAuthState } from "./api/state/oauth";
 import { expireCookie } from "./cookies";
 import {
 	generateRandomString,
@@ -36,7 +37,7 @@ const stateDataSchema = z.looseObject({
 	idTokenNonce: z.string().optional(),
 	/**
 	 * Server-controlled values that ride the state across the provider redirect.
-	 * Populated only by `generateState` from `addOAuthServerContext`, never from
+	 * Populated from `addOAuthServerContext` during state generation, never from
 	 * the request body, so it is safe to trust on the callback.
 	 */
 	serverContext: z.record(z.string(), z.unknown()).optional(),
@@ -93,12 +94,27 @@ export async function generateGenericState(
 	const state = generateRandomString(32);
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
+	const pendingServerContext = await getOAuthServerContext();
+	const mergedServerContext =
+		pendingServerContext || stateData.serverContext
+			? {
+					...(pendingServerContext ?? {}),
+					...(stateData.serverContext ?? {}),
+				}
+			: undefined;
+	const resolvedStateData: StateData =
+		mergedServerContext && Object.keys(mergedServerContext).length
+			? { ...stateData, serverContext: mergedServerContext }
+			: stateData;
+
+	await setOAuthState(resolvedStateData);
+
 	// Cookie strategy:
 	//
 	// State data is encrypted into the cookie
 	// no verification record created
 	if (storeStateStrategy === "cookie") {
-		const payload: StateData = { ...stateData, oauthState: state };
+		const payload: StateData = { ...resolvedStateData, oauthState: state };
 		const encryptedData = await symmetricEncrypt({
 			key: derivePurposeKey(c.context.secretConfig, "oauth-state-cookie"),
 			data: JSON.stringify(payload),
@@ -141,7 +157,7 @@ export async function generateGenericState(
 
 	const verification = await c.context.internalAdapter.createVerificationValue({
 		value: JSON.stringify({
-			...stateData,
+			...resolvedStateData,
 			oauthState: state,
 		} satisfies StateData),
 		identifier: getAuthStateVerificationIdentifier(state),
@@ -303,6 +319,8 @@ export async function parseGenericState(
 			errorURL: parsedData.errorURL,
 		});
 	}
+
+	await setOAuthState(parsedData);
 
 	return parsedData;
 }
