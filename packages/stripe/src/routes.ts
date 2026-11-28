@@ -499,33 +499,78 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							}
 						}
 
+						let createdCustomer = false;
 						if (!stripeCustomer) {
-							stripeCustomer = await client.customers.create({
-								email: user.email,
-								name: user.name,
-								metadata: customerMetadata.set(
-									{
-										userId: user.id,
-										customerType: "user",
-									},
-									ctx.body.metadata,
-								),
-							});
+							let extraCreateParams: Partial<StripeType.CustomerCreateParams> =
+								{};
+							if (options.getCustomerCreateParams) {
+								extraCreateParams = await options.getCustomerCreateParams(
+									user,
+									ctx,
+								);
+							}
+							// Use defu to merge params (first argument takes priority)
+							const customerParams = defu(
+								{
+									email: user.email,
+									name: user.name,
+									metadata: customerMetadata.set(
+										{
+											userId: user.id,
+											customerType: "user",
+										},
+										ctx.body.metadata,
+									),
+								},
+								extraCreateParams,
+							);
+							stripeCustomer = await client.customers.create(customerParams);
+							createdCustomer = true;
 						}
 
-						// Update local DB with Stripe customer ID
-						await ctx.context.adapter.update({
-							model: "user",
-							update: {
+						// Update local DB with Stripe customer ID. Going through the
+						// internal adapter runs user update database hooks, as on sign-up.
+						const linkedUser = await ctx.context.internalAdapter.updateUser(
+							user.id,
+							{
 								stripeCustomerId: stripeCustomer.id,
 							},
-							where: [
-								{
-									field: "id",
-									value: user.id,
-								},
-							],
-						});
+						);
+
+						// A user.update.before hook can veto the write, in which case
+						// updateUser returns null. Stop before the callback and checkout
+						// rather than continue with a customer that isn't linked to the
+						// user: a later upgrade can't reuse it by email for an unverified
+						// user and would create a duplicate customer and subscription.
+						if (!linkedUser) {
+							throw new Error(
+								"Stripe customer was created but could not be saved to the user",
+							);
+						}
+
+						// Call onCustomerCreate callback only for newly created
+						// customers. The customer is already created and linked here, so
+						// a throwing callback is logged rather than failing the upgrade:
+						// a retry would reuse this customer and never re-run the callback.
+						if (createdCustomer) {
+							try {
+								await options.onCustomerCreate?.(
+									{
+										stripeCustomer,
+										user: {
+											...user,
+											stripeCustomerId: stripeCustomer.id,
+										},
+									},
+									ctx,
+								);
+							} catch (error) {
+								ctx.context.logger.error(
+									"Stripe onCustomerCreate callback failed",
+									error,
+								);
+							}
+						}
 
 						customerId = stripeCustomer.id;
 					} catch (e: any) {
