@@ -2,6 +2,7 @@
   "name": "@better-auth-test/drizzle-v2-relations-adapter",
   "private": true,
   "type": "module",
+  "e2eComposeServices": "postgres mysql",
   "scripts": {
     "e2e:integration": "vitest run"
   },

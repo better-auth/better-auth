@@ -2,6 +2,7 @@
   "name": "@better-auth-test/prisma-adapter",
   "private": true,
   "type": "module",
+  "e2eComposeServices": "postgres-prisma mysql-prisma",
   "scripts": {
     "e2e:integration": "vitest run",
     "prepare": "prisma generate"
