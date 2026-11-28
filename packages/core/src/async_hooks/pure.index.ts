@@ -51,6 +51,12 @@ class AsyncLocalStoragePolyfill<T> {
 	}
 }
 
+export function isNativeAsyncLocalStorage(
+	constructor: typeof AsyncLocalStorage,
+): boolean {
+	return (constructor as unknown) !== AsyncLocalStoragePolyfill;
+}
+
 let cachedAsyncLocalStorageConstructor: typeof AsyncLocalStorage | undefined;
 
 export async function getAsyncLocalStorage(): Promise<

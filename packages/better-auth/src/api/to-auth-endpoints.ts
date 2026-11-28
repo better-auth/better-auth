@@ -1,4 +1,4 @@
-import type { AuthContext } from "@better-auth/core";
+import type { AuthContext, Awaitable } from "@better-auth/core";
 import type { RequestStateWeakMap } from "@better-auth/core/context";
 import {
 	hasRequestState,
@@ -70,10 +70,13 @@ async function resolveDynamicContext(
  * configured hook pipeline. Per-call work that is specific to this entry point
  * (dynamic `baseURL` resolution, request-state initialization) happens here;
  * the hook pipeline itself lives in {@link dispatchAuthEndpoint}.
+ *
+ * When `ctx` is a function it is called on every call, so one set of wrappers
+ * can serve requests that each carry their own context.
  */
 export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 	endpoints: E,
-	ctx: AuthContext | Promise<AuthContext>,
+	ctx: Awaitable<AuthContext> | (() => Awaitable<AuthContext>),
 ): E {
 	const api: Record<
 		string,
@@ -90,7 +93,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 			const operationId = getOperationId(endpoint, key);
 
 			const run = async () => {
-				const rawContext = await ctx;
+				const rawContext = await (typeof ctx === "function" ? ctx() : ctx);
 				const pendingSchemaCheck = rawContext.checkSchema?.();
 				if (pendingSchemaCheck) await pendingSchemaCheck;
 				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)

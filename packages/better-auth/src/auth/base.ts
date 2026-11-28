@@ -1,7 +1,12 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
+import {
+	getAsyncLocalStorage,
+	isNativeAsyncLocalStorage,
+} from "@better-auth/core/async_hooks";
 import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
-import { getEndpoints, router } from "../api";
+import { createAuthRouter, getEndpoints, router } from "../api";
 import {
 	getTrustedOrigins,
 	getTrustedProviders,
@@ -35,6 +40,17 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 		}
 		return acc;
 	}, {});
+	// One router per base path, reused across requests. A base path comes from
+	// the configuration (a configured URL's path, otherwise `basePath`) and never
+	// from the request, so this holds one entry per configured base path. Each
+	// request runs inside `requestContext` holding its own `handlerCtx`, which is
+	// the context the shared router's hooks and endpoints read. That needs a
+	// runtime AsyncLocalStorage: the polyfill shares one store across overlapping
+	// requests, so without one each request builds a router around its context.
+	const routers = new Map<string, (request: Request) => Promise<Response>>();
+	let requestContext:
+		| Promise<AsyncLocalStorage<AuthContext> | undefined>
+		| undefined;
 	const handler = async (request: Request) => {
 		const ctx = await authContext;
 		const basePath = ctx.options.basePath || "/api/auth";
@@ -93,8 +109,31 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 			);
 		}
 
-		const { handler } = router(handlerCtx, options);
-		return runWithAdapter(handlerCtx.adapter, () => handler(request));
+		requestContext ??= getAsyncLocalStorage().then(
+			(AsyncLocalStorage) =>
+				isNativeAsyncLocalStorage(AsyncLocalStorage)
+					? new AsyncLocalStorage<AuthContext>()
+					: undefined,
+			() => undefined,
+		);
+		const storage = await requestContext;
+		if (!storage) {
+			const { handler } = router(handlerCtx, options);
+			return runWithAdapter(handlerCtx.adapter, () => handler(request));
+		}
+		const routerBasePath = new URL(handlerCtx.baseURL).pathname;
+		let routerHandler = routers.get(routerBasePath);
+		if (!routerHandler) {
+			routerHandler = createAuthRouter(
+				() => storage.getStore()!,
+				routerBasePath,
+				options,
+			).handler;
+			routers.set(routerBasePath, routerHandler);
+		}
+		return runWithAdapter(handlerCtx.adapter, () =>
+			storage.run(handlerCtx, () => routerHandler(request)),
+		);
 	};
 	return {
 		handler,

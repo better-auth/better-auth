@@ -171,7 +171,7 @@ To resolve this, you can:
 }
 
 export function getEndpoints<Option extends BetterAuthOptions>(
-	ctx: Awaitable<AuthContext>,
+	ctx: Awaitable<AuthContext> | (() => Awaitable<AuthContext>),
 	options: Option,
 ) {
 	const withSpan = createWithSpan(options);
@@ -200,7 +200,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 			?.map((plugin) =>
 				plugin.middlewares?.map((m) => {
 					const middleware = (async (context: any) => {
-						const authContext = await ctx;
+						const authContext = await (typeof ctx === "function" ? ctx() : ctx);
 						return withSpan(
 							`middleware ${m.path} ${plugin.id}`,
 							{
@@ -271,16 +271,25 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		middlewares,
 	};
 }
-export const router = <Option extends BetterAuthOptions>(
-	ctx: AuthContext,
+/**
+ * Builds the router that serves `basePath`. Its routes depend only on
+ * `options` and `basePath`. The hooks and endpoints call `getContext` each time
+ * they run, so one router can serve every request on `basePath`, each request
+ * with its own context.
+ */
+export const createAuthRouter = <Option extends BetterAuthOptions>(
+	getContext: () => AuthContext,
+	basePath: string,
 	options: Option,
 ) => {
 	const withSpan = createWithSpan(options);
-	const { api, middlewares } = getEndpoints(ctx, options);
-	const basePath = new URL(ctx.baseURL).pathname;
+	const { api, middlewares } = getEndpoints(getContext, options);
 
 	return createRouter(api, {
-		routerContext: ctx,
+		// better-call reads this once per request.
+		get routerContext() {
+			return getContext();
+		},
 		openapi: {
 			disabled: true,
 		},
@@ -295,6 +304,7 @@ export const router = <Option extends BetterAuthOptions>(
 		allowedMediaTypes: ["application/json"],
 		skipTrailingSlashes: options.advanced?.skipTrailingSlashes ?? false,
 		async onRequest(req) {
+			const ctx = getContext();
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
 			const normalizedPath = normalizePathname(req.url, basePath);
@@ -334,6 +344,7 @@ export const router = <Option extends BetterAuthOptions>(
 			return currentRequest;
 		},
 		async onResponse(res, req) {
+			const ctx = getContext();
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onResponse) {
 					const response = await withSpan(
@@ -353,6 +364,7 @@ export const router = <Option extends BetterAuthOptions>(
 			return res;
 		},
 		async onError(e) {
+			const ctx = getContext();
 			if (isAPIError(e) && e.status === "FOUND") {
 				return;
 			}
@@ -409,6 +421,11 @@ export const router = <Option extends BetterAuthOptions>(
 		},
 	});
 };
+
+export const router = <Option extends BetterAuthOptions>(
+	ctx: AuthContext,
+	options: Option,
+) => createAuthRouter(() => ctx, new URL(ctx.baseURL).pathname, options);
 
 export {
 	type AuthEndpoint,

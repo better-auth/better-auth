@@ -3,6 +3,18 @@ import { getBuiltinAsyncLocalStorage } from "./builtin";
 
 export type { AsyncLocalStorage };
 
+/**
+ * Whether `constructor`, from `getAsyncLocalStorage`, keeps each `run` to its
+ * own asynchronous work. False for the edge and browser build's polyfill, which
+ * shares one store across overlapping runs. This build only returns the
+ * runtime's own constructor.
+ */
+export function isNativeAsyncLocalStorage(
+	_constructor: typeof AsyncLocalStorage,
+): boolean {
+	return true;
+}
+
 let cachedAsyncLocalStorageConstructor: typeof AsyncLocalStorage | undefined;
 let availabilityWarningLogged = false;
 
