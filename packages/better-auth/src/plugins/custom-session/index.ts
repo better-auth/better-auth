@@ -43,7 +43,7 @@ export const customSession = <
 			session: Session<O["session"], O["plugins"]>;
 		},
 		ctx: GenericEndpointContext,
-	) => Promise<Returns>,
+	) => Promise<Returns | null>,
 	options?: O | undefined,
 	pluginOptions?: CustomSessionPluginOptions | undefined,
 ) => {
@@ -59,9 +59,9 @@ export const customSession = <
 					handler: createAuthMiddleware(async (ctx) => {
 						const response = await getEndpointResponse<[]>(ctx);
 						if (!response) return;
-						const newResponse = await Promise.all(
-							response.map(async (v) => await fn(v, ctx)),
-						);
+						const newResponse = (
+							await Promise.all(response.map(async (v) => await fn(v, ctx)))
+						).filter((v): v is Awaited<Returns> => v !== null);
 						return ctx.json(newResponse);
 					}),
 				},
@@ -106,8 +106,6 @@ export const customSession = <
 						returnHeaders: true,
 					});
 
-					const sessionPayload = response ? await fn(response, ctx) : null;
-
 					for (const cookie of headers.getSetCookie()) {
 						for (const [name, attributes] of parseSetCookieHeader(cookie)) {
 							ctx.setCookie(
@@ -118,6 +116,9 @@ export const customSession = <
 						}
 					}
 					headers.delete("set-cookie");
+
+					const sessionPayload = response ? await fn(response, ctx) : null;
+
 					headers.forEach((value, name) => ctx.setHeader(name, value));
 
 					return ctx.json(sessionPayload);
@@ -125,7 +126,7 @@ export const customSession = <
 			),
 		},
 		$Infer: {
-			Session: {} as Awaited<ReturnType<typeof fn>>,
+			Session: {} as Returns,
 		},
 		options: pluginOptions,
 	} satisfies BetterAuthPlugin;
