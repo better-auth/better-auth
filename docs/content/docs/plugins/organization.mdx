@@ -1245,7 +1245,7 @@ By default, there are three roles in the organization:
 
 ### Permissions
 
-By default, there are three resources, and these have two to three actions.
+By default, there are five resources, and these have two to four actions.
 
 **organization**:
 
@@ -1259,7 +1259,17 @@ By default, there are three resources, and these have two to three actions.
 
 `create` `cancel`
 
-The owner has full control over all the resources and actions. The admin has full control over all the resources except for deleting the organization or changing the owner. The member has no control over any of those actions other than reading the data.
+**team**:
+
+`create` `update` `delete`
+
+**ac**:
+
+`create` `read` `update` `delete`
+
+The `ac` resource controls [dynamic access control](#dynamic-access-control). It decides who can create, read, update and delete roles.
+
+The owner has full control over all the resources and actions. The admin has full control over all the resources except for deleting the organization or changing the owner. The member has no control over any of those actions other than reading the data. The member holds only `ac: ["read"]`, so every member with the default `member` role can list roles.
 
 ### Custom Permissions
 
@@ -1524,13 +1534,20 @@ export const authClient = createAuthClient({
   Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles.
 </Callout>
 
+<Callout>
+  A role created at runtime holds only the permissions stored for it. If the `roles` option of the plugin has a role with the same name, the role also holds the permissions of that role. It does not inherit from any other role.
+  A dynamic role therefore needs `ac: ["read"]` to list or get roles, and `ac: ["create"]`, `ac: ["update"]` or `ac: ["delete"]` to create, update or delete roles.
+
+  The built-in `admin`, `owner` and `member` roles exist only when you do not set the `roles` option. If you set it without an `admin` role, an `admin` role in the `organizationRole` table holds only its stored permissions.
+</Callout>
+
 ### Creating a role
 
 To create a new role for an organization at runtime, you can use the `createRole` function.
 
 Only users with roles which contain the `ac` resource with the `create` permission can create a new role.
 By default, only the `admin` and `owner` roles have this permission. You also cannot add permissions that your
-current role in that organization can't already access.
+current role in that organization can't already access. The same limit applies when you update the permissions of a role.
 
 <APIMethod path="/organization/create-role" method="POST" requireSession noResult>
   ```ts
