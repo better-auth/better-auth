@@ -144,6 +144,18 @@ export interface OAuthProvider<
 > {
 	id: LiteralString;
 	/**
+	 * How the provider's callback proves the sign-in.
+	 *
+	 * - `"oauth2"` (default): the callback carries an authorization `code`, and
+	 *   `validateAuthorizationCode` exchanges it for tokens.
+	 * - `"openid2"`: the callback is an OpenID 2.0 assertion with no `code`. The
+	 *   shared callback passes the callback request to
+	 *   `validateAuthorizationCode` as `request`, and the provider verifies it.
+	 *
+	 * Leave it unset for OAuth 2.0 providers: nothing changes for them.
+	 */
+	protocol?: "oauth2" | "openid2" | undefined;
+	/**
 	 * Optional path under the resolved per-request `baseURL` where this
 	 * provider's OAuth callback handler is mounted. Providers that use the
 	 * shared `/callback/<id>` route can omit this.
@@ -190,6 +202,12 @@ export interface OAuthProvider<
 		redirectURI: string;
 		codeVerifier?: string | undefined;
 		deviceId?: string | undefined;
+		/**
+		 * The callback request. Passed only to providers with
+		 * `protocol: "openid2"`, such as Steam, which verify the assertion in
+		 * its query string instead of exchanging a code.
+		 */
+		request?: Request | undefined;
 	}) => Promise<OAuth2Tokens | null>;
 	getUserInfo: (
 		token: OAuth2Tokens & {

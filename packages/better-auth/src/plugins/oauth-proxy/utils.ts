@@ -74,6 +74,13 @@ export function checkSkipProxy(
 	if (skipProxyHeader) {
 		return true;
 	}
+	// OpenID assertions use direct callbacks in the initiating environment.
+	const provider = ctx.context.socialProviders.find(
+		(provider) => provider.id === ctx.body?.provider,
+	);
+	if (provider?.protocol === "openid2") {
+		return true;
+	}
 
 	// Determine production URL (fallback to baseURL if not set)
 	const productionURL =
