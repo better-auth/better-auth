@@ -2,6 +2,7 @@ import type { ClientFetchOption } from "@better-auth/core";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
 import type { PreinitializedWritableAtom } from "nanostores";
 import { onMount } from "nanostores";
+import { bindAuthChange } from "./auth-change";
 import { isJsonEqual, withEquality } from "./equality";
 import { createAuthQueryAtom } from "./query-atom";
 import type { SessionQueryParams } from "./types";
@@ -60,12 +61,28 @@ export const useAuthQuery = <T>(
 	});
 	onMount(value, () => withEquality(value, isAuthQueryStateEqual));
 	let latestRequestId = 0;
+	let pending: Promise<void> | undefined;
 
-	const fn = async (
-		queryParams?: { query?: SessionQueryParams } | undefined,
-	) => {
+	const settle = (result: Pick<AuthQueryState<T>, "data" | "error">) => {
+		// During a sign-in, missing data may predate the new credentials.
+		if (result.data === null && isIdentityChanging()) {
+			value.set({
+				...value.get(),
+				isRefetching: false,
+			});
+			return;
+		}
+		value.set({
+			...result,
+			isPending: false,
+			isRefetching: false,
+			refetch: value.value.refetch,
+		});
+	};
+
+	const fn = (queryParams?: { query?: SessionQueryParams } | undefined) => {
 		const requestId = ++latestRequestId;
-		return new Promise<void>((resolve) => {
+		pending = new Promise<void>((resolve) => {
 			const opts =
 				typeof options === "function"
 					? options({
@@ -90,12 +107,9 @@ export const useAuthQuery = <T>(
 							isJsonEqual(current.data, context.data)
 								? current.data
 								: context.data;
-						value.set({
+						settle({
 							data: stableData,
 							error: null,
-							isPending: false,
-							isRefetching: false,
-							refetch: value.value.refetch,
 						});
 					}
 					await opts?.onSuccess?.(context);
@@ -110,14 +124,11 @@ export const useAuthQuery = <T>(
 					if (retryAttempts && retryAttempt < retryAttempts) return;
 					if (requestId === latestRequestId) {
 						const isUnauthorized = context.error.status === 401;
-						value.set({
+						settle({
 							error: context.error,
 							data: isUnauthorized
 								? null // clear session on HTTP 401
 								: value.get().data, // preserve stale data on other errors
-							isPending: false,
-							isRefetching: false,
-							refetch: value.value.refetch,
 						});
 					}
 					await opts?.onError?.(context);
@@ -126,7 +137,7 @@ export const useAuthQuery = <T>(
 					if (requestId === latestRequestId) {
 						const currentValue = value.get();
 						value.set({
-							isPending: currentValue.data === null,
+							isPending: currentValue.isPending,
 							data: currentValue.data,
 							error: null,
 							isRefetching: true,
@@ -138,22 +149,25 @@ export const useAuthQuery = <T>(
 			})
 				.catch((error) => {
 					if (requestId !== latestRequestId) return;
-					value.set({
+					settle({
 						error,
 						data: value.get().data,
-						isPending: false,
-						isRefetching: false,
-						refetch: value.value.refetch,
 					});
 				})
 				.finally(() => {
 					resolve(void 0);
 				});
 		});
+		return pending;
 	};
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];
+	const isIdentityChanging = bindAuthChange(
+		initializedAtom,
+		value,
+		() => pending,
+	);
 	let isMountFetchPending = false;
 	let isMounted = false;
 	let shouldRefetchAfterPending = false;
