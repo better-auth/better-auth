@@ -3663,6 +3663,123 @@ describe("api-key", async () => {
 		});
 	});
 
+	describe("usage write for keys without quota or rate limiting", () => {
+		async function setup(options: Parameters<typeof apiKey>[0] = {}) {
+			const deferredPromises: Array<Promise<unknown>> = [];
+			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<unknown>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
+				plugins: [apiKey(options)],
+			});
+			const { headers, user } = await signInWithTestUser();
+			return { auth, headers, user, deferredPromises };
+		}
+
+		it("verifies without waiting for the lastRequest write when rate limiting is disabled", async () => {
+			const { auth, headers, user, deferredPromises } = await setup({
+				rateLimit: { enabled: false },
+			});
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+
+			const result = await auth.api.verifyApiKey({ body: { key: key.key } });
+
+			expect(result.valid).toBe(true);
+			expect(deferredPromises).toHaveLength(1);
+			await Promise.all(deferredPromises);
+			const stored = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(stored.lastRequest).not.toBeNull();
+		});
+
+		it("defers the write for a key that opted out of rate limiting", async () => {
+			const { auth, headers, user, deferredPromises } = await setup();
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id, rateLimitEnabled: false },
+			});
+
+			const result = await auth.api.verifyApiKey({ body: { key: key.key } });
+
+			expect(result.valid).toBe(true);
+			expect(deferredPromises).toHaveLength(1);
+			await Promise.all(deferredPromises);
+			const stored = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(stored.lastRequest).not.toBeNull();
+		});
+
+		it("still verifies when the deferred write fails", async () => {
+			const { auth, headers, user, deferredPromises } = await setup({
+				rateLimit: { enabled: false },
+			});
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+			const ctx = await auth.$context;
+			const update = vi
+				.spyOn(ctx.adapter, "update")
+				.mockRejectedValueOnce(new Error("write failed"));
+
+			const result = await auth.api.verifyApiKey({ body: { key: key.key } });
+
+			expect(result.valid).toBe(true);
+			await expect(Promise.all(deferredPromises)).resolves.toBeDefined();
+			update.mockRestore();
+		});
+
+		it("writes synchronously when the key has a remaining count", async () => {
+			const { auth, headers, user, deferredPromises } = await setup({
+				rateLimit: { enabled: false },
+			});
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id, remaining: 2 },
+			});
+
+			const result = await auth.api.verifyApiKey({ body: { key: key.key } });
+
+			expect(result.valid).toBe(true);
+			expect(deferredPromises).toHaveLength(0);
+			const stored = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(stored.remaining).toBe(1);
+		});
+
+		it("writes synchronously when rate limiting applies", async () => {
+			const { auth, headers, user, deferredPromises } = await setup({
+				rateLimit: { enabled: true, maxRequests: 5, timeWindow: 60_000 },
+			});
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+
+			const result = await auth.api.verifyApiKey({ body: { key: key.key } });
+
+			expect(result.valid).toBe(true);
+			expect(deferredPromises).toHaveLength(0);
+			const stored = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(stored.lastRequest).not.toBeNull();
+			expect(stored.requestCount).toBe(1);
+		});
+	});
+
 	describe("custom storage methods", async () => {
 		const customStore = new Map<string, string>();
 		let customGetCalled = false;

@@ -192,6 +192,32 @@ async function claimUsageInDatabase({
 	opts: PredefinedApiKeyOptions;
 	hashedKey: string;
 }): Promise<ApiKey> {
+	// With no quota and no rate-limit counter, nothing in the verification
+	// decision depends on the usage write, so the `lastRequest` stamp does not
+	// need to block the response.
+	if (
+		opts.storage === "database" &&
+		apiKey.remaining === null &&
+		(opts.rateLimit.enabled === false || apiKey.rateLimitEnabled === false)
+	) {
+		const usedAt = new Date();
+		ctx.context.runInBackground(
+			ctx.context.adapter
+				.update({
+					model: API_KEY_TABLE_NAME,
+					where: [{ field: "id", value: apiKey.id }],
+					update: { lastRequest: usedAt, updatedAt: usedAt },
+				})
+				.catch((error) => {
+					ctx.context.logger.error(
+						"Deferred API key usage write failed:",
+						error,
+					);
+				}),
+		);
+		return { ...apiKey, lastRequest: usedAt, updatedAt: usedAt };
+	}
+
 	let row: ApiKey = apiKey;
 
 	if (apiKey.remaining !== null) {
