@@ -10,6 +10,7 @@ export {
 	resolveDatabaseSchemaIndexes,
 	resolveDatabaseTableIndexes,
 } from "./database-index";
+export { isCurrentDateDefault } from "./date-default";
 export { isUniqueViolation } from "./errors";
 export { getAuthTablesWithResolvedIndexes } from "./get-tables";
 export {

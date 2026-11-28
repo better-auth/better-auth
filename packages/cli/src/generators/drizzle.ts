@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import {
 	getDatabaseFieldIndexName,
 	getDatabaseIndexStringLength,
+	isCurrentDateDefault,
 	resolveDatabaseSchemaIndexes,
 } from "@better-auth/core/db/internal";
 import { toSnakeCase } from "@better-auth/core/utils/string";
@@ -330,7 +331,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 								if (typeof attr.defaultValue === "function") {
 									if (
 										attr.type === "date" &&
-										attr.defaultValue.toString().includes("new Date()")
+										isCurrentDateDefault(attr.defaultValue)
 									) {
 										if (databaseType === "sqlite") {
 											type += `.default(sql\`(cast(unixepoch('subsecond') * 1000 as integer))\`)`;
@@ -703,10 +704,7 @@ function generateImport({
 		Object.values(tables).some((table) =>
 			Object.values(table.fields).some(
 				(field) =>
-					field.type === "date" &&
-					field.defaultValue &&
-					typeof field.defaultValue === "function" &&
-					field.defaultValue.toString().includes("new Date()"),
+					field.type === "date" && isCurrentDateDefault(field.defaultValue),
 			),
 		);
 
