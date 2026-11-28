@@ -9,6 +9,7 @@ import { toZodSchema } from "../../../db/to-zod";
 import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
+import { withLock } from "../concurrency";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { parseRoleList, parseRoles } from "../roles";
@@ -333,125 +334,142 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				);
 			}
-			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
-			if (!member) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				);
-			}
-			let toBeRemovedMember: InferMember<O> | null = null;
-			if (ctx.body.memberIdOrEmail.includes("@")) {
-				toBeRemovedMember = await adapter.findMemberByEmail({
-					email: ctx.body.memberIdOrEmail,
-					organizationId: organizationId,
-				});
-			} else {
-				const result = await adapter.findMemberById(ctx.body.memberIdOrEmail);
-				if (!result) toBeRemovedMember = null;
-				else {
-					const { user: _user, ...member } = result;
-					toBeRemovedMember = member as unknown as InferMember<O>;
-				}
-			}
-			if (!toBeRemovedMember) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				);
-			}
-			const roles = parseRoleList(toBeRemovedMember.role);
-			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
-			const isOwner = roles.includes(creatorRole);
-			if (isOwner) {
-				if (!parseRoleList(member.role).includes(creatorRole)) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
+			const { toBeRemovedMember, userBeingRemoved, organization } =
+				await withLock(`org-member:${organizationId}`, async () => {
+					const adapter = getOrgAdapter<O>(ctx.context, options);
+					const member = await adapter.findMemberByOrgId({
+						userId: session.user.id,
+						organizationId: organizationId,
+					});
+					if (!member) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+						);
+					}
+					let toBeRemovedMember: InferMember<O> | null = null;
+					if (ctx.body.memberIdOrEmail.includes("@")) {
+						toBeRemovedMember = await adapter.findMemberByEmail({
+							email: ctx.body.memberIdOrEmail,
+							organizationId: organizationId,
+						});
+					} else {
+						const result = await adapter.findMemberById(
+							ctx.body.memberIdOrEmail,
+						);
+						if (!result) toBeRemovedMember = null;
+						else {
+							const { user: _user, ...member } = result;
+							toBeRemovedMember = member as unknown as InferMember<O>;
+						}
+					}
+					if (!toBeRemovedMember) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+						);
+					}
+					const roles = parseRoleList(toBeRemovedMember.role);
+					const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
+					const isOwner = roles.includes(creatorRole);
+					if (isOwner) {
+						if (!parseRoleList(member.role).includes(creatorRole)) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
+							);
+						}
+						const { members } = await adapter.listMembers({
+							organizationId: organizationId,
+						});
+						const owners = members.filter((member) =>
+							parseRoleList(member.role).includes(creatorRole),
+						);
+						if (owners.length <= 1) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
+							);
+						}
+					}
+					const canDeleteMember = await hasPermission(
+						{
+							role: member.role,
+							options: ctx.context.orgOptions,
+							permissions: {
+								member: ["delete"],
+							},
+							organizationId,
+						},
+						ctx,
 					);
-				}
-				const { members } = await adapter.listMembers({
-					organizationId: organizationId,
+
+					if (!canDeleteMember) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER,
+						);
+					}
+
+					if (toBeRemovedMember?.organizationId !== organizationId) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+						);
+					}
+
+					const organization =
+						await adapter.findOrganizationById(organizationId);
+					if (!organization) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+						);
+					}
+
+					const userBeingRemoved =
+						await ctx.context.internalAdapter.findUserById(
+							toBeRemovedMember.userId,
+						);
+					if (!userBeingRemoved) {
+						throw APIError.fromStatus("BAD_REQUEST", {
+							message: "User not found",
+						});
+					}
+
+					// Run beforeRemoveMember hook
+					if (options?.organizationHooks?.beforeRemoveMember) {
+						await options?.organizationHooks.beforeRemoveMember({
+							member: toBeRemovedMember,
+							user: userBeingRemoved,
+							organization,
+						});
+					}
+					await adapter.deleteMember({
+						memberId: toBeRemovedMember.id,
+						organizationId: organizationId,
+						userId: toBeRemovedMember.userId,
+					});
+					if (
+						session.user.id === toBeRemovedMember.userId &&
+						session.session.activeOrganizationId ===
+							toBeRemovedMember.organizationId
+					) {
+						await adapter.setActiveOrganization(
+							session.session.token,
+							null,
+							ctx,
+						);
+					}
+
+					return {
+						toBeRemovedMember,
+						userBeingRemoved,
+						organization,
+					};
 				});
-				const owners = members.filter((member) =>
-					parseRoleList(member.role).includes(creatorRole),
-				);
-				if (owners.length <= 1) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
-					);
-				}
-			}
-			const canDeleteMember = await hasPermission(
-				{
-					role: member.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						member: ["delete"],
-					},
-					organizationId,
-				},
-				ctx,
-			);
 
-			if (!canDeleteMember) {
-				throw APIError.from(
-					"UNAUTHORIZED",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER,
-				);
-			}
-
-			if (toBeRemovedMember?.organizationId !== organizationId) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				);
-			}
-
-			const organization = await adapter.findOrganizationById(organizationId);
-			if (!organization) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				);
-			}
-
-			const userBeingRemoved = await ctx.context.internalAdapter.findUserById(
-				toBeRemovedMember.userId,
-			);
-			if (!userBeingRemoved) {
-				throw APIError.fromStatus("BAD_REQUEST", {
-					message: "User not found",
-				});
-			}
-
-			// Run beforeRemoveMember hook
-			if (options?.organizationHooks?.beforeRemoveMember) {
-				await options?.organizationHooks.beforeRemoveMember({
-					member: toBeRemovedMember,
-					user: userBeingRemoved,
-					organization,
-				});
-			}
-			await adapter.deleteMember({
-				memberId: toBeRemovedMember.id,
-				organizationId: organizationId,
-				userId: toBeRemovedMember.userId,
-			});
-			if (
-				session.user.id === toBeRemovedMember.userId &&
-				session.session.activeOrganizationId ===
-					toBeRemovedMember.organizationId
-			) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
-
-			// Run afterRemoveMember hook
+			// Run afterRemoveMember hook outside the lock to prevent deadlocks
 			if (options?.organizationHooks?.afterRemoveMember) {
 				await options?.organizationHooks.afterRemoveMember({
 					member: toBeRemovedMember,
@@ -562,181 +580,207 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				);
 			}
 
-			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-			const roleToSet = parseRoleList(ctx.body.role);
+			const { updatedMember, previousRole, userBeingUpdated, organization } =
+				await withLock(`org-member:${organizationId}`, async () => {
+					const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+					const roleToSet = parseRoleList(ctx.body.role);
 
-			if (roleToSet.length === 0) {
-				throw APIError.fromStatus("BAD_REQUEST");
-			}
+					if (roleToSet.length === 0) {
+						throw APIError.fromStatus("BAD_REQUEST");
+					}
 
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
-
-			if (!member) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				);
-			}
-
-			const toBeUpdatedMember =
-				member.id !== ctx.body.memberId
-					? await adapter.findMemberById(ctx.body.memberId)
-					: member;
-
-			if (!toBeUpdatedMember) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				);
-			}
-
-			const memberBelongsToOrganization =
-				toBeUpdatedMember.organizationId === organizationId;
-
-			if (!memberBelongsToOrganization) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
-				);
-			}
-
-			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
-
-			const updatingMemberRoles = parseRoleList(member.role);
-			const toBeUpdatedMemberRoles = parseRoleList(toBeUpdatedMember.role);
-
-			const isUpdatingCreator = toBeUpdatedMemberRoles.includes(creatorRole);
-			const updaterIsCreator = updatingMemberRoles.includes(creatorRole);
-
-			const isSettingCreatorRole = roleToSet.includes(creatorRole);
-
-			const memberIsUpdatingThemselves = member.id === toBeUpdatedMember.id;
-
-			if (
-				(isUpdatingCreator && !updaterIsCreator) ||
-				(isSettingCreatorRole && !updaterIsCreator)
-			) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
-				);
-			}
-
-			if (updaterIsCreator && memberIsUpdatingThemselves) {
-				const members = await ctx.context.adapter.findMany<Member>({
-					model: "member",
-					where: [
-						{
-							field: "organizationId",
-							value: organizationId,
-						},
-					],
-				});
-				const owners = members.filter((member: Member) =>
-					parseRoleList(member.role).includes(creatorRole),
-				);
-				if (owners.length <= 1 && !isSettingCreatorRole) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER,
-					);
-				}
-			}
-
-			const canUpdateMember = await hasPermission(
-				{
-					role: member.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						member: ["update"],
-					},
-					allowCreatorAllPermissions: true,
-					organizationId,
-				},
-				ctx,
-			);
-
-			if (!canUpdateMember) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
-				);
-			}
-
-			const validStaticRoles = new Set([
-				...Object.keys(defaultRoles),
-				...Object.keys(ctx.context.orgOptions.roles || {}),
-			]);
-			const unknownRoles = roleToSet.filter(
-				(role) => !validStaticRoles.has(role),
-			);
-			if (unknownRoles.length > 0) {
-				if (ctx.context.orgOptions.dynamicAccessControl?.enabled) {
-					const foundRoles = await ctx.context.adapter.findMany<{
-						role: string;
-					}>({
-						model: "organizationRole",
-						where: [
-							{ field: "organizationId", value: organizationId },
-							{ field: "role", value: unknownRoles, operator: "in" },
-						],
+					const member = await adapter.findMemberByOrgId({
+						userId: session.user.id,
+						organizationId: organizationId,
 					});
-					const foundRoleNames = foundRoles.map((role) => role.role);
-					const stillInvalid = unknownRoles.filter(
-						(role) => !foundRoleNames.includes(role),
+
+					if (!member) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+						);
+					}
+
+					const toBeUpdatedMember =
+						member.id !== ctx.body.memberId
+							? await adapter.findMemberById(ctx.body.memberId)
+							: member;
+
+					if (!toBeUpdatedMember) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+						);
+					}
+
+					const memberBelongsToOrganization =
+						toBeUpdatedMember.organizationId === organizationId;
+
+					if (!memberBelongsToOrganization) {
+						throw APIError.from(
+							"FORBIDDEN",
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+						);
+					}
+
+					const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
+
+					const updatingMemberRoles = parseRoleList(member.role);
+					const toBeUpdatedMemberRoles = parseRoleList(toBeUpdatedMember.role);
+
+					const isUpdatingCreator =
+						toBeUpdatedMemberRoles.includes(creatorRole);
+					const updaterIsCreator = updatingMemberRoles.includes(creatorRole);
+
+					const isSettingCreatorRole = roleToSet.includes(creatorRole);
+
+					if (
+						(isUpdatingCreator && !updaterIsCreator) ||
+						(isSettingCreatorRole && !updaterIsCreator)
+					) {
+						throw APIError.from(
+							"FORBIDDEN",
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+						);
+					}
+
+					if (isUpdatingCreator && !isSettingCreatorRole) {
+						const members = await ctx.context.adapter.findMany<Member>({
+							model: "member",
+							where: [
+								{
+									field: "organizationId",
+									value: organizationId,
+								},
+							],
+						});
+						const owners = members.filter((member: Member) =>
+							parseRoleList(member.role).includes(creatorRole),
+						);
+						if (owners.length <= 1) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER,
+							);
+						}
+					}
+
+					const canUpdateMember = await hasPermission(
+						{
+							role: member.role,
+							options: ctx.context.orgOptions,
+							permissions: {
+								member: ["update"],
+							},
+							allowCreatorAllPermissions: true,
+							organizationId,
+						},
+						ctx,
 					);
-					if (stillInvalid.length > 0) {
-						throw new APIError("BAD_REQUEST", {
-							code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
-							message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${stillInvalid.join(", ")}`,
+
+					if (!canUpdateMember) {
+						throw APIError.from(
+							"FORBIDDEN",
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+						);
+					}
+
+					const validStaticRoles = new Set([
+						...Object.keys(defaultRoles),
+						...Object.keys(ctx.context.orgOptions.roles || {}),
+					]);
+					const unknownRoles = roleToSet.filter(
+						(role) => !validStaticRoles.has(role),
+					);
+					if (unknownRoles.length > 0) {
+						if (ctx.context.orgOptions.dynamicAccessControl?.enabled) {
+							const foundRoles = await ctx.context.adapter.findMany<{
+								role: string;
+							}>({
+								model: "organizationRole",
+								where: [
+									{ field: "organizationId", value: organizationId },
+									{ field: "role", value: unknownRoles, operator: "in" },
+								],
+							});
+							const foundRoleNames = foundRoles.map((role) => role.role);
+							const stillInvalid = unknownRoles.filter(
+								(role) => !foundRoleNames.includes(role),
+							);
+							if (stillInvalid.length > 0) {
+								throw new APIError("BAD_REQUEST", {
+									code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+									message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${stillInvalid.join(", ")}`,
+								});
+							}
+						} else {
+							throw new APIError("BAD_REQUEST", {
+								code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+								message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${unknownRoles.join(", ")}`,
+							});
+						}
+					}
+
+					const organization =
+						await adapter.findOrganizationById(organizationId);
+					if (!organization) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+						);
+					}
+
+					const userBeingUpdated =
+						await ctx.context.internalAdapter.findUserById(
+							toBeUpdatedMember.userId,
+						);
+					if (!userBeingUpdated) {
+						throw APIError.fromStatus("BAD_REQUEST", {
+							message: "User not found",
 						});
 					}
-				} else {
-					throw new APIError("BAD_REQUEST", {
-						code: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
-						message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code}: ${unknownRoles.join(", ")}`,
-					});
-				}
-			}
 
-			const organization = await adapter.findOrganizationById(organizationId);
-			if (!organization) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				);
-			}
+					const previousRole = toBeUpdatedMember.role;
+					const newRole = parseRoles(roleToSet);
 
-			const userBeingUpdated = await ctx.context.internalAdapter.findUserById(
-				toBeUpdatedMember.userId,
-			);
-			if (!userBeingUpdated) {
-				throw APIError.fromStatus("BAD_REQUEST", {
-					message: "User not found",
-				});
-			}
+					// Run beforeUpdateMemberRole hook
+					if (option?.organizationHooks?.beforeUpdateMemberRole) {
+						const response =
+							await option?.organizationHooks.beforeUpdateMemberRole({
+								member: toBeUpdatedMember,
+								newRole,
+								user: userBeingUpdated,
+								organization,
+							});
+						if (
+							response &&
+							typeof response === "object" &&
+							"data" in response
+						) {
+							// Allow the hook to modify the role
+							const updatedMember = await adapter.updateMember(
+								ctx.body.memberId,
+								response.data.role || newRole,
+							);
+							if (!updatedMember) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+								);
+							}
 
-			const previousRole = toBeUpdatedMember.role;
-			const newRole = parseRoles(roleToSet);
+							return {
+								updatedMember,
+								previousRole,
+								userBeingUpdated,
+								organization,
+							};
+						}
+					}
 
-			// Run beforeUpdateMemberRole hook
-			if (option?.organizationHooks?.beforeUpdateMemberRole) {
-				const response = await option?.organizationHooks.beforeUpdateMemberRole(
-					{
-						member: toBeUpdatedMember,
-						newRole,
-						user: userBeingUpdated,
-						organization,
-					},
-				);
-				if (response && typeof response === "object" && "data" in response) {
-					// Allow the hook to modify the role
 					const updatedMember = await adapter.updateMember(
 						ctx.body.memberId,
-						response.data.role || newRole,
+						newRole,
 					);
 					if (!updatedMember) {
 						throw APIError.from(
@@ -745,32 +789,15 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 						);
 					}
 
-					// Run afterUpdateMemberRole hook
-					if (option?.organizationHooks?.afterUpdateMemberRole) {
-						await option?.organizationHooks.afterUpdateMemberRole({
-							member: updatedMember,
-							previousRole,
-							user: userBeingUpdated,
-							organization,
-						});
-					}
+					return {
+						updatedMember,
+						previousRole,
+						userBeingUpdated,
+						organization,
+					};
+				});
 
-					return ctx.json(updatedMember);
-				}
-			}
-
-			const updatedMember = await adapter.updateMember(
-				ctx.body.memberId,
-				newRole,
-			);
-			if (!updatedMember) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				);
-			}
-
-			// Run afterUpdateMemberRole hook
+			// Run afterUpdateMemberRole hook outside the lock to prevent deadlocks
 			if (option?.organizationHooks?.afterUpdateMemberRole) {
 				await option?.organizationHooks.afterUpdateMemberRole({
 					member: updatedMember,
@@ -866,49 +893,52 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: ctx.body.organizationId,
-			});
-
-			if (!member) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				);
-			}
-			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
-			const isOwnerLeaving = parseRoleList(member.role).includes(creatorRole);
-			if (isOwnerLeaving) {
-				const members = await ctx.context.adapter.findMany<Member>({
-					model: "member",
-					where: [
-						{
-							field: "organizationId",
-							value: ctx.body.organizationId,
-						},
-					],
+			const organizationId = ctx.body.organizationId;
+			return withLock(`org-member:${organizationId}`, async () => {
+				const adapter = getOrgAdapter<O>(ctx.context, options);
+				const member = await adapter.findMemberByOrgId({
+					userId: session.user.id,
+					organizationId,
 				});
-				const owners = members.filter((member) =>
-					parseRoleList(member.role).includes(creatorRole),
-				);
-				if (owners.length <= 1) {
+
+				if (!member) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
+						ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 					);
 				}
-			}
-			await adapter.deleteMember({
-				memberId: member.id,
-				organizationId: ctx.body.organizationId,
-				userId: session.user.id,
+				const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
+				const isOwnerLeaving = parseRoleList(member.role).includes(creatorRole);
+				if (isOwnerLeaving) {
+					const members = await ctx.context.adapter.findMany<Member>({
+						model: "member",
+						where: [
+							{
+								field: "organizationId",
+								value: organizationId,
+							},
+						],
+					});
+					const owners = members.filter((member) =>
+						parseRoleList(member.role).includes(creatorRole),
+					);
+					if (owners.length <= 1) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
+						);
+					}
+				}
+				await adapter.deleteMember({
+					memberId: member.id,
+					organizationId,
+					userId: session.user.id,
+				});
+				if (session.session.activeOrganizationId === organizationId) {
+					await adapter.setActiveOrganization(session.session.token, null, ctx);
+				}
+				return ctx.json(member);
 			});
-			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
-			return ctx.json(member);
 		},
 	);
 
