@@ -5,6 +5,7 @@ import type {
 	OAuthAccountKeyContext,
 	OAuthMappedUser,
 	OAuthRefreshContext,
+	ProviderOptions,
 	TokenEndpointAuth,
 } from "@better-auth/core/oauth2";
 
@@ -25,7 +26,8 @@ export interface GenericOAuthOptions<ID extends string = string> {
 /**
  * Configuration interface for generic OAuth providers.
  */
-export interface GenericOAuthConfig<ID extends string = string> {
+export interface GenericOAuthConfig<ID extends string = string>
+	extends Pick<ProviderOptions, "getAccountFields"> {
 	/** Unique identifier for the OAuth provider */
 	providerId: ID;
 	/**
