@@ -554,6 +554,7 @@
     "@sveltejs/kit": "^2.0.0 || ^3.0.0",
     "@tanstack/react-start": "^1.0.0",
     "@tanstack/solid-start": "^1.0.0",
+    "@types/react": "^18.0.0 || ^19.0.0",
     "drizzle-kit": ">=0.31.4 || >=1.0.0-beta.1",
     "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0",
     "mongodb": "^6.0.0 || ^7.0.0",
@@ -582,6 +583,9 @@
       "optional": true
     },
     "@tanstack/solid-start": {
+      "optional": true
+    },
+    "@types/react": {
       "optional": true
     },
     "next": {
