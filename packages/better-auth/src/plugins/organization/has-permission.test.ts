@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createAccessControl } from "../access";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { hasPermission } from "./has-permission";
+import { hasPermissionFn } from "./permission";
 import { organization } from "./organization";
 import type { OrganizationRole } from "./schema";
 import type { OrganizationOptions } from "./types";
@@ -264,5 +265,91 @@ describe("hasPermission role cache", () => {
 		});
 
 		expect(await check(organizationId, "update", true)).toBe(false);
+	});
+});
+
+describe("hasPermission multiple roles permission union (#3011)", () => {
+	const ac = createAccessControl({
+		a: ["use-a"],
+		b: ["use-b"],
+		project: ["create", "read", "update", "delete"],
+		...defaultStatements,
+	});
+
+	const roles = {
+		aUser: ac.newRole({
+			a: ["use-a"],
+			project: ["create"],
+		}),
+		bUser: ac.newRole({
+			b: ["use-b"],
+			project: ["read"],
+		}),
+	};
+
+	const options = {
+		ac,
+		roles,
+	} satisfies OrganizationOptions;
+
+	it("returns true when multiple permissions are satisfied by the union of assigned roles", () => {
+		const result = hasPermissionFn(
+			{
+				role: "aUser, bUser",
+				permissions: {
+					a: ["use-a"],
+					b: ["use-b"],
+				},
+				options,
+			},
+			roles,
+		);
+		expect(result).toBe(true);
+	});
+
+	it("returns true when multiple actions on the same resource are granted across different roles", () => {
+		const result = hasPermissionFn(
+			{
+				role: ["aUser", "bUser"],
+				permissions: {
+					project: ["create", "read"],
+				},
+				options,
+			},
+			roles,
+		);
+		expect(result).toBe(true);
+	});
+
+	it("returns false when requested permissions exceed what assigned roles grant", () => {
+		const result = hasPermissionFn(
+			{
+				role: "aUser, bUser",
+				permissions: {
+					a: ["use-a"],
+					b: ["use-b"],
+					project: ["delete"],
+				},
+				options,
+			},
+			roles,
+		);
+		expect(result).toBe(false);
+	});
+
+	it("returns true when multiple permissions are checked via hasPermission with multiple roles", async () => {
+		const result = await hasPermission(
+			{
+				organizationId: "test-org",
+				role: "aUser, bUser",
+				permissions: {
+					a: ["use-a"],
+					b: ["use-b"],
+				},
+				options,
+			},
+			{} as any,
+		);
+		expect(result).toBe(true);
 	});
 });

@@ -1,4 +1,4 @@
-import type { Role, Statements } from "../access";
+import { role as createRole, type Role, type Statements } from "../access";
 import { parseRoleList } from "./roles";
 import type { OrganizationOptions } from "./types";
 
@@ -24,6 +24,33 @@ export const hasPermissionFn = (
 			return true;
 		}
 	}
+
+	if (roles.length > 1) {
+		const mergedStatements: Record<string, string[]> = {};
+		for (const role of roles) {
+			const _role = acRoles[role as keyof typeof acRoles];
+			if (_role?.statements) {
+				for (const [resource, actions] of Object.entries(_role.statements)) {
+					const existing = mergedStatements[resource];
+					if (!existing) {
+						mergedStatements[resource] = [...actions];
+					} else {
+						for (const action of actions) {
+							if (!existing.includes(action)) {
+								existing.push(action);
+							}
+						}
+					}
+				}
+			}
+		}
+		const combinedRole = createRole(mergedStatements);
+		const result = combinedRole.authorize(input.permissions);
+		if (result.success) {
+			return true;
+		}
+	}
+
 	return false;
 };
 
@@ -32,7 +59,7 @@ export type PermissionExclusive = {
 };
 
 export type HasPermissionBaseInput = {
-	role: string;
+	role: string | string[];
 	options: OrganizationOptions;
 	allowCreatorAllPermissions?: boolean | undefined;
 } & PermissionExclusive;
