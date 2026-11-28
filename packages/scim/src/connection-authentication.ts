@@ -31,8 +31,17 @@ const SCIM_SCOPES = [
 	"scim.groups.write",
 ] as const satisfies readonly SCIMScope[];
 
+function isSCIMCollectionSearch(path: string, method: string): boolean {
+	return method === "POST" && path.endsWith("/.search");
+}
+
 function getRequiredSCIMScope(path: string, method: string): SCIMScope {
-	const operation = method === "GET" || method === "HEAD" ? "read" : "write";
+	const operation =
+		method === "GET" ||
+		method === "HEAD" ||
+		isSCIMCollectionSearch(path, method)
+			? "read"
+			: "write";
 	return path.includes("/Groups")
 		? `scim.groups.${operation}`
 		: `scim.users.${operation}`;

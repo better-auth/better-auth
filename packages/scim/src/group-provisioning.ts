@@ -8,15 +8,19 @@ import {
 } from "./attribute-names";
 import type {
 	SCIMAttributeProjection,
+	SCIMCollectionQuery,
 	SCIMCollectionQueryInput,
 	SCIMEqualityFilter,
 	SCIMGroupFilterAttribute,
+	SCIMQueryParseResult,
 } from "./collection-query";
 import {
 	parseSCIMAttributeProjection,
 	parseSCIMCollectionQuery,
+	parseSCIMSearchCollectionQuery,
 	scimAttributeProjectionQuerySchema,
 	scimCollectionQuerySchema,
+	scimSearchRequestSchema,
 } from "./collection-query";
 import { querySCIMFilteredCollection } from "./collection-read";
 import type { SCIMConnection } from "./configuration";
@@ -69,6 +73,37 @@ function requireGroupAttributeProjection(
 	}
 	return projection.value;
 }
+
+function requireParsedSCIMCollectionQuery<Value>(
+	parsed: SCIMQueryParseResult<Value>,
+): Value {
+	if (!parsed.ok) {
+		throw createSCIMError("BAD_REQUEST", {
+			detail: parsed.error.detail,
+			scimType: parsed.error.scimType,
+		});
+	}
+	return parsed.value;
+}
+
+const listSCIMGroupsOpenAPIResponses = {
+	"200": {
+		description: "SCIM Group list",
+		content: createSCIMOpenAPIContent({
+			type: "object",
+			properties: {
+				totalResults: { type: "number" },
+				itemsPerPage: { type: "number" },
+				startIndex: { type: "number" },
+				Resources: {
+					type: "array",
+					items: OpenAPIGroupResourceSchema,
+				},
+			},
+		}),
+	},
+	...SCIMErrorOpenAPISchemas,
+} as const;
 
 const patchSCIMGroupBodySchema = z.object({
 	schemas: z
@@ -1099,6 +1134,39 @@ export function getSCIMGroup(authMiddleware: SCIMConnectionMiddleware) {
 	);
 }
 
+async function executeSCIMGroupCollectionQuery(
+	adapter: DBAdapter,
+	connection: SCIMConnection,
+	baseURL: string,
+	query: SCIMCollectionQuery<SCIMGroupFilterAttribute>,
+) {
+	await assertGroupConnectionDomainStable(adapter, connection);
+	const { totalResults, rows: groups } = await querySCIMFilteredCollection<
+		SCIMEqualityFilter<SCIMGroupFilterAttribute>,
+		SCIMGroup
+	>(adapter, {
+		model: "scimGroup",
+		connectionId: connection.id,
+		filters: query.filters,
+		combinator: query.filterCombinator,
+		pagination: query.pagination,
+		createWhere: createGroupCollectionWhere,
+	});
+	const resources = await createProjectedGroupResources(
+		adapter,
+		baseURL,
+		groups,
+		query.projection,
+	);
+	return {
+		schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+		totalResults,
+		startIndex: query.pagination.startIndex,
+		itemsPerPage: resources.length,
+		Resources: resources,
+	};
+}
+
 export function listSCIMGroups(authMiddleware: SCIMConnectionMiddleware) {
 	return createAuthEndpoint(
 		"/scim/v2/Groups",
@@ -1110,72 +1178,55 @@ export function listSCIMGroups(authMiddleware: SCIMConnectionMiddleware) {
 				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "List SCIM Groups",
-					responses: {
-						"200": {
-							description: "SCIM Group list",
-							content: createSCIMOpenAPIContent({
-								type: "object",
-								properties: {
-									totalResults: { type: "number" },
-									itemsPerPage: { type: "number" },
-									startIndex: { type: "number" },
-									Resources: {
-										type: "array",
-										items: OpenAPIGroupResourceSchema,
-									},
-								},
-							}),
-						},
-						...SCIMErrorOpenAPISchemas,
-					},
+					responses: listSCIMGroupsOpenAPIResponses,
 				},
 			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {
-			const adapter: DBAdapter = ctx.context.adapter;
-			await assertGroupConnectionDomainStable(
-				adapter,
-				ctx.context.scimConnection,
+			const query = requireParsedSCIMCollectionQuery(
+				parseSCIMCollectionQuery("Group", ctx.query ?? {}),
 			);
-			const parsedQuery = parseSCIMCollectionQuery("Group", ctx.query ?? {});
-			if (!parsedQuery.ok) {
-				throw createSCIMError("BAD_REQUEST", {
-					detail: parsedQuery.error.detail,
-					scimType: parsedQuery.error.scimType,
-				});
-			}
-			const {
-				filters,
-				filterCombinator,
-				pagination,
-				projection: attributeProjection,
-			} = parsedQuery.value;
-			const { totalResults, rows: groups } = await querySCIMFilteredCollection<
-				SCIMEqualityFilter<SCIMGroupFilterAttribute>,
-				SCIMGroup
-			>(adapter, {
-				model: "scimGroup",
-				connectionId: ctx.context.scimConnection.id,
-				filters,
-				combinator: filterCombinator,
-				pagination,
-				createWhere: createGroupCollectionWhere,
-			});
-			const resources = await createProjectedGroupResources(
-				adapter,
-				ctx.context.baseURL,
-				groups,
-				attributeProjection,
+			return ctx.json(
+				await executeSCIMGroupCollectionQuery(
+					ctx.context.adapter,
+					ctx.context.scimConnection,
+					ctx.context.baseURL,
+					query,
+				),
 			);
+		},
+	);
+}
 
-			return ctx.json({
-				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-				totalResults,
-				startIndex: pagination.startIndex,
-				itemsPerPage: resources.length,
-				Resources: resources,
-			});
+export function searchSCIMGroups(authMiddleware: SCIMConnectionMiddleware) {
+	return createAuthEndpoint(
+		"/scim/v2/Groups/.search",
+		{
+			method: "POST",
+			body: scimSearchRequestSchema,
+			metadata: defineSCIMEndpointMetadata({
+				...HIDE_METADATA,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
+				openapi: {
+					summary: "Search SCIM Groups",
+					responses: listSCIMGroupsOpenAPIResponses,
+				},
+			}),
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			const query = requireParsedSCIMCollectionQuery(
+				parseSCIMSearchCollectionQuery("Group", ctx.body),
+			);
+			return ctx.json(
+				await executeSCIMGroupCollectionQuery(
+					ctx.context.adapter,
+					ctx.context.scimConnection,
+					ctx.context.baseURL,
+					query,
+				),
+			);
 		},
 	);
 }

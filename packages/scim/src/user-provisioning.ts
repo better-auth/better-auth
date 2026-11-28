@@ -9,15 +9,19 @@ import type {
 import { createAuthEndpoint } from "better-auth/api";
 import type {
 	SCIMAttributeProjection,
+	SCIMCollectionQuery,
 	SCIMCollectionQueryInput,
 	SCIMEqualityFilter,
+	SCIMQueryParseResult,
 	SCIMUserFilterAttribute,
 } from "./collection-query";
 import {
 	parseSCIMAttributeProjection,
 	parseSCIMCollectionQuery,
+	parseSCIMSearchCollectionQuery,
 	scimAttributeProjectionQuerySchema,
 	scimCollectionQuerySchema,
+	scimSearchRequestSchema,
 } from "./collection-query";
 import { querySCIMFilteredCollection } from "./collection-read";
 import type { SCIMConnection } from "./configuration";
@@ -92,6 +96,37 @@ function requireUserAttributeProjection(
 	}
 	return projection.value;
 }
+
+function requireParsedSCIMCollectionQuery<Value>(
+	parsed: SCIMQueryParseResult<Value>,
+): Value {
+	if (!parsed.ok) {
+		throw createSCIMError("BAD_REQUEST", {
+			detail: parsed.error.detail,
+			scimType: parsed.error.scimType,
+		});
+	}
+	return parsed.value;
+}
+
+const listSCIMUsersOpenAPIResponses = {
+	"200": {
+		description: "SCIM User list",
+		content: createSCIMOpenAPIContent({
+			type: "object",
+			properties: {
+				totalResults: { type: "number" },
+				itemsPerPage: { type: "number" },
+				startIndex: { type: "number" },
+				Resources: {
+					type: "array",
+					items: OpenAPIUserResourceSchema,
+				},
+			},
+		}),
+	},
+	...SCIMErrorOpenAPISchemas,
+} as const;
 
 function createUserNameKey(connectionId: string, userName: string): string {
 	return createScopedKey(["scim-user-name", connectionId, userName]);
@@ -858,6 +893,39 @@ export function getSCIMUser(authMiddleware: SCIMConnectionMiddleware) {
 	);
 }
 
+async function executeSCIMUserCollectionQuery(
+	adapter: DBAdapter,
+	connection: SCIMConnection,
+	baseURL: string,
+	query: SCIMCollectionQuery<SCIMUserFilterAttribute>,
+) {
+	await assertUserConnectionDomainStable(adapter, connection);
+	const { totalResults, rows: scimUsers } = await querySCIMFilteredCollection<
+		SCIMEqualityFilter<SCIMUserFilterAttribute>,
+		SCIMUser
+	>(adapter, {
+		model: "scimUser",
+		connectionId: connection.id,
+		filters: query.filters,
+		combinator: query.filterCombinator,
+		pagination: query.pagination,
+		createWhere: createUserCollectionWhere,
+	});
+	const resources = scimUsers.map((scimUser) =>
+		projectSCIMResourceAttributes(
+			createUserResource(baseURL, scimUser),
+			query.projection,
+		),
+	);
+	return {
+		schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+		totalResults,
+		startIndex: query.pagination.startIndex,
+		itemsPerPage: resources.length,
+		Resources: resources,
+	};
+}
+
 export function listSCIMUsers(authMiddleware: SCIMConnectionMiddleware) {
 	return createAuthEndpoint(
 		"/scim/v2/Users",
@@ -869,74 +937,55 @@ export function listSCIMUsers(authMiddleware: SCIMConnectionMiddleware) {
 				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "List SCIM Users",
-					responses: {
-						"200": {
-							description: "SCIM User list",
-							content: createSCIMOpenAPIContent({
-								type: "object",
-								properties: {
-									totalResults: { type: "number" },
-									itemsPerPage: { type: "number" },
-									startIndex: { type: "number" },
-									Resources: {
-										type: "array",
-										items: OpenAPIUserResourceSchema,
-									},
-								},
-							}),
-						},
-						...SCIMErrorOpenAPISchemas,
-					},
+					responses: listSCIMUsersOpenAPIResponses,
 				},
 			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {
-			const adapter: DBAdapter = ctx.context.adapter;
-			await assertUserConnectionDomainStable(
-				adapter,
-				ctx.context.scimConnection,
+			const query = requireParsedSCIMCollectionQuery(
+				parseSCIMCollectionQuery("User", ctx.query ?? {}),
 			);
-			const parsedQuery = parseSCIMCollectionQuery("User", ctx.query ?? {});
-			if (!parsedQuery.ok) {
-				throw createSCIMError("BAD_REQUEST", {
-					detail: parsedQuery.error.detail,
-					scimType: parsedQuery.error.scimType,
-				});
-			}
-			const {
-				filters,
-				filterCombinator,
-				pagination,
-				projection: attributeProjection,
-			} = parsedQuery.value;
-			const { totalResults, rows: scimUsers } =
-				await querySCIMFilteredCollection<
-					SCIMEqualityFilter<SCIMUserFilterAttribute>,
-					SCIMUser
-				>(adapter, {
-					model: "scimUser",
-					connectionId: ctx.context.scimConnection.id,
-					filters,
-					combinator: filterCombinator,
-					pagination,
-					createWhere: createUserCollectionWhere,
-				});
-
-			const resources = scimUsers.map((scimUser) =>
-				projectSCIMResourceAttributes(
-					createUserResource(ctx.context.baseURL, scimUser),
-					attributeProjection,
+			return ctx.json(
+				await executeSCIMUserCollectionQuery(
+					ctx.context.adapter,
+					ctx.context.scimConnection,
+					ctx.context.baseURL,
+					query,
 				),
 			);
+		},
+	);
+}
 
-			return ctx.json({
-				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-				totalResults,
-				startIndex: pagination.startIndex,
-				itemsPerPage: resources.length,
-				Resources: resources,
-			});
+export function searchSCIMUsers(authMiddleware: SCIMConnectionMiddleware) {
+	return createAuthEndpoint(
+		"/scim/v2/Users/.search",
+		{
+			method: "POST",
+			body: scimSearchRequestSchema,
+			metadata: defineSCIMEndpointMetadata({
+				...HIDE_METADATA,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
+				openapi: {
+					summary: "Search SCIM Users",
+					responses: listSCIMUsersOpenAPIResponses,
+				},
+			}),
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			const query = requireParsedSCIMCollectionQuery(
+				parseSCIMSearchCollectionQuery("User", ctx.body),
+			);
+			return ctx.json(
+				await executeSCIMUserCollectionQuery(
+					ctx.context.adapter,
+					ctx.context.scimConnection,
+					ctx.context.baseURL,
+					query,
+				),
+			);
 		},
 	);
 }

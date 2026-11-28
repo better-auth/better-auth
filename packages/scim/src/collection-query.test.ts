@@ -6,10 +6,14 @@ import type {
 import {
 	parseSCIMAttributeProjection,
 	parseSCIMCollectionQuery,
+	parseSCIMSearchCollectionQuery,
+	scimSearchRequestSchema,
 } from "./collection-query";
 
 const SCIM_ENTERPRISE_USER_SCHEMA =
 	"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User";
+const SCIM_SEARCH_REQUEST_SCHEMA =
+	"urn:ietf:params:scim:api:messages:2.0:SearchRequest";
 
 describe("parseSCIMCollectionQuery", () => {
 	it("defaults classic pagination to the first page capped at 100 resources", () => {
@@ -420,4 +424,105 @@ describe("parseSCIMAttributeProjection", () => {
 			},
 		});
 	});
+});
+
+describe("SCIM SearchRequest", () => {
+	it("maps a SearchRequest body onto the shared collection query", () => {
+		const result = parseSCIMSearchCollectionQuery("User", {
+			schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+			filter: 'userName eq "ada@example.com"',
+			startIndex: 1,
+			count: 100,
+			attributes: ["userName", "emails"],
+		});
+
+		expect(result).toMatchObject({
+			ok: true,
+			value: {
+				filterCombinator: "and",
+				filters: [
+					{
+						attribute: "userName",
+						operator: "eq",
+						value: "ada@example.com",
+					},
+				],
+				pagination: { startIndex: 1, offset: 0, count: 100 },
+				projection: {
+					mode: "include",
+					attributes: new Set(["username", "emails"]),
+				},
+			},
+		});
+	});
+
+	it("rejects string-valued startIndex and count in the JSON body", () => {
+		expect(() =>
+			scimSearchRequestSchema.parse({
+				schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+				startIndex: "1",
+			}),
+		).toThrow();
+		expect(() =>
+			scimSearchRequestSchema.parse({
+				schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+				count: "25",
+			}),
+		).toThrow();
+	});
+
+	it("parses JSON attribute arrays and or filters through the GET grammar", () => {
+		const result = parseSCIMSearchCollectionQuery("User", {
+			schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+			filter:
+				'userName eq "ada@example.com" or emails.value eq "ada.alias@example.com"',
+			attributes: ["userName", "emails"],
+		});
+
+		expect(result).toMatchObject({
+			ok: true,
+			value: {
+				filterCombinator: "or",
+				filters: [
+					{
+						attribute: "userName",
+						operator: "eq",
+						value: "ada@example.com",
+					},
+					{
+						attribute: "emails.value",
+						operator: "eq",
+						value: "ada.alias@example.com",
+					},
+				],
+				projection: {
+					mode: "include",
+					attributes: new Set(["username", "emails"]),
+				},
+			},
+		});
+	});
+
+	it("does not treat omitted SearchRequest fields as a query-string filter", () => {
+		expect(
+			parseSCIMSearchCollectionQuery("User", {
+				schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+			}),
+		).toEqual(parseSCIMCollectionQuery("User", {}));
+	});
+
+	it.each(["sortBy", "sortOrder"] as const)(
+		"ignores %s like unknown GET query parameters",
+		(parameter) => {
+			const parsed = scimSearchRequestSchema.parse({
+				schemas: [SCIM_SEARCH_REQUEST_SCHEMA],
+				[parameter]: parameter === "sortBy" ? "userName" : "ascending",
+			});
+
+			expect(parsed).toEqual({ schemas: [SCIM_SEARCH_REQUEST_SCHEMA] });
+			expect(parseSCIMSearchCollectionQuery("User", parsed)).toEqual(
+				parseSCIMCollectionQuery("User", {}),
+			);
+		},
+	);
 });

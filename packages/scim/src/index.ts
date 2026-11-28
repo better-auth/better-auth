@@ -6,6 +6,7 @@ import { normalizeSCIMUserEntraCompatibilityRequestBody } from "./active-normali
 import {
 	canonicalizeSCIMPatchRequestBody,
 	canonicalizeSCIMResourceAttributeNames,
+	canonicalizeSCIMSearchRequestAttributeNames,
 } from "./attribute-names";
 import type { SCIMOptions } from "./configuration";
 import {
@@ -30,6 +31,7 @@ import {
 	listSCIMGroups,
 	patchSCIMGroup,
 	replaceSCIMGroup,
+	searchSCIMGroups,
 } from "./group-provisioning";
 import { normalizeMicrosoftEntraGroupSchema } from "./group-schemas";
 import {
@@ -61,6 +63,7 @@ import {
 	listSCIMUsers,
 	patchSCIMUser,
 	replaceSCIMUser,
+	searchSCIMUsers,
 } from "./user-provisioning";
 import { PACKAGE_VERSION } from "./version";
 
@@ -331,7 +334,24 @@ function createSCIMPlugin(options: SCIMOptions) {
 				(isGroupCreate ||
 					(["PUT", "PATCH"].includes(request.method) &&
 						!path.endsWith("/Groups")));
+			const isCollectionSearch =
+				request.method === "POST" &&
+				(path.endsWith("/Users/.search") || path.endsWith("/Groups/.search"));
 			let normalizedBody = body;
+			if (isCollectionSearch) {
+				try {
+					normalizedBody = canonicalizeSCIMSearchRequestAttributeNames(body);
+				} catch (error) {
+					if (!isAPIError(error)) throw error;
+					return {
+						response: createSCIMErrorResponse(
+							"BAD_REQUEST",
+							error.message,
+							"invalidSyntax",
+						),
+					};
+				}
+			}
 			if (isUserMutation || isGroupMutation) {
 				try {
 					normalizedBody =
@@ -409,6 +429,7 @@ function createSCIMPlugin(options: SCIMOptions) {
 			deleteSCIMGroup: deleteSCIMGroup(connectionMiddleware, projection),
 			getSCIMGroup: getSCIMGroup(connectionMiddleware),
 			listSCIMGroups: listSCIMGroups(connectionMiddleware),
+			searchSCIMGroups: searchSCIMGroups(connectionMiddleware),
 			patchSCIMGroup: patchSCIMGroup(connectionMiddleware, projection),
 			replaceSCIMGroup: replaceSCIMGroup(connectionMiddleware, projection),
 			createSCIMUser: createSCIMUser(
@@ -423,6 +444,7 @@ function createSCIMPlugin(options: SCIMOptions) {
 			),
 			getSCIMUser: getSCIMUser(connectionMiddleware),
 			listSCIMUsers: listSCIMUsers(connectionMiddleware),
+			searchSCIMUsers: searchSCIMUsers(connectionMiddleware),
 			patchSCIMUser: patchSCIMUser(connectionMiddleware, identity, projection),
 			replaceSCIMUser: replaceSCIMUser(
 				connectionMiddleware,

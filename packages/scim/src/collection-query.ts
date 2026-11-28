@@ -49,6 +49,10 @@ export type SCIMCollectionQueryInput = {
 	excludedAttributes?: string | readonly string[];
 };
 
+/** RFC 7644 SearchRequest schema URI. */
+const SCIM_SEARCH_REQUEST_SCHEMA =
+	"urn:ietf:params:scim:api:messages:2.0:SearchRequest";
+
 /** HTTP query shape shared by resource-returning SCIM endpoints. */
 export const scimAttributeProjectionQuerySchema = z.object({
 	attributes: z.union([z.string(), z.array(z.string())]).optional(),
@@ -62,6 +66,17 @@ export const scimCollectionQuerySchema =
 		startIndex: z.union([z.string(), z.number()]).optional(),
 		count: z.union([z.string(), z.number()]).optional(),
 	});
+
+/** JSON body for RFC 7644 POST /.search on a resource collection. */
+export const scimSearchRequestSchema = scimCollectionQuerySchema.extend({
+	schemas: z
+		.array(z.literal(SCIM_SEARCH_REQUEST_SCHEMA))
+		.length(1, "schemas must contain only the SearchRequest schema"),
+	startIndex: z.number().int().optional(),
+	count: z.number().int().optional(),
+});
+
+export type SCIMSearchRequest = z.infer<typeof scimSearchRequestSchema>;
 
 export type SCIMCollectionQueryError =
 	| {
@@ -648,4 +663,47 @@ export function parseSCIMCollectionQuery(
 			projection: projection.value,
 		},
 	};
+}
+
+/** Copy SearchRequest query fields into the shared collection-query input. */
+function toSCIMCollectionQueryInput(
+	request: SCIMCollectionQueryInput | SCIMSearchRequest,
+): SCIMCollectionQueryInput {
+	return {
+		...(request.filter !== undefined ? { filter: request.filter } : {}),
+		...(request.startIndex !== undefined
+			? { startIndex: request.startIndex }
+			: {}),
+		...(request.count !== undefined ? { count: request.count } : {}),
+		...(request.attributes !== undefined
+			? { attributes: request.attributes }
+			: {}),
+		...(request.excludedAttributes !== undefined
+			? { excludedAttributes: request.excludedAttributes }
+			: {}),
+	};
+}
+
+export function parseSCIMSearchCollectionQuery(
+	resourceType: "User",
+	request: SCIMSearchRequest,
+): SCIMQueryParseResult<SCIMCollectionQuery<SCIMUserFilterAttribute>>;
+export function parseSCIMSearchCollectionQuery(
+	resourceType: "Group",
+	request: SCIMSearchRequest,
+): SCIMQueryParseResult<SCIMCollectionQuery<SCIMGroupFilterAttribute>>;
+/**
+ * Parse a SearchRequest body into the same collection query as GET list.
+ *
+ * `sortBy` and `sortOrder` are omitted from the body schema so they are
+ * ignored like unknown GET query parameters. ServiceProviderConfig
+ * advertises `sort.supported: false`.
+ */
+export function parseSCIMSearchCollectionQuery(
+	resourceType: SCIMResourceType,
+	request: SCIMSearchRequest,
+): SCIMQueryParseResult<SCIMCollectionQuery<SCIMFilterAttribute>> {
+	return resourceType === "User"
+		? parseSCIMCollectionQuery("User", toSCIMCollectionQueryInput(request))
+		: parseSCIMCollectionQuery("Group", toSCIMCollectionQueryInput(request));
 }
