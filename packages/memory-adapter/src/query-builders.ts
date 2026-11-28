@@ -53,3 +53,22 @@ export function insensitiveEndsWith(
 	}
 	return recordVal.toLowerCase().endsWith(value.toLowerCase());
 }
+
+/**
+ * Strict equality, except that two `Date` values are equal when they are the
+ * same instant. `===` compares dates by identity, so a stored date would never
+ * match an equal date from a query.
+ */
+export function isSameValue(a: unknown, b: unknown): boolean {
+	return (
+		a === b ||
+		(a instanceof Date && b instanceof Date && a.getTime() === b.getTime())
+	);
+}
+
+export function includesValue(values: unknown[], recordVal: unknown): boolean {
+	return (
+		values.includes(recordVal) ||
+		(recordVal instanceof Date && values.some((v) => isSameValue(v, recordVal)))
+	);
+}
