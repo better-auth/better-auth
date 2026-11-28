@@ -1760,6 +1760,97 @@ describe("stripe webhook", () => {
 		expect(sub?.stripeScheduleId).toBeNull();
 	});
 
+	test("an early customer.subscription.updated does not overwrite a customer's other subscription row (#12642)", async ({
+		memory,
+		stripeOptions,
+	}) => {
+		const updateEventSubB = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_b",
+					customer: "cus_multi_sub",
+					status: "active",
+					metadata: {},
+					items: {
+						data: [
+							{
+								price: { id: TEST_PRICES.pro },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+				},
+			},
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(updateEventSubB),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		} satisfies StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const ctx = await testAuth.$context;
+
+		const { id: userId } = await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: "multi-sub@example.com",
+			},
+		});
+
+		// User already has an active subscription sub_a
+		const { id: subAId } = await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userId,
+				stripeCustomerId: "cus_multi_sub",
+				stripeSubscriptionId: "sub_a",
+				status: "active",
+				plan: "starter",
+				seats: 1,
+			},
+		});
+
+		// Delivery of updated for sub_b before sub_b is created in DB
+		await testAuth.handler(
+			new Request("http://localhost:3000/api/auth/stripe/webhook", {
+				method: "POST",
+				headers: { "stripe-signature": "test_signature" },
+				body: JSON.stringify(updateEventSubB),
+			}),
+		);
+
+		// Assert sub_a was not overwritten/clobbered by sub_b
+		const subA = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: subAId }],
+		});
+		expect(subA?.stripeSubscriptionId).toBe("sub_a");
+		expect(subA?.plan).toBe("starter");
+		expect(subA?.status).toBe("active");
+	});
+
 	test("should clear stripeScheduleId on subscription deleted webhook", async ({
 		memory,
 		stripeOptions,
