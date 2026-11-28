@@ -6,6 +6,7 @@ import {
 	symmetricEncrypt,
 } from "../../crypto";
 import { createOrFindVerification } from "../../db/verification";
+import { hasAttemptsBesideValue } from "../../db/verification-attempt";
 import { getDate } from "../../utils/date";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
@@ -104,6 +105,7 @@ export async function tryReuseOTP(
 	const [storedOtpValue, attempts] = splitAtLastColon(existing.value);
 	const allowedAttempts = opts.allowedAttempts || 3;
 	if (attempts && parseInt(attempts) >= allowedAttempts) return null;
+	if (await hasAttemptsBesideValue(ctx, existing)) return null;
 
 	const plainOtp = await retrieveOTP(ctx, opts, storedOtpValue);
 	if (!plainOtp) return null;
@@ -114,7 +116,11 @@ export async function tryReuseOTP(
 			{ expiresAt: getDate(opts.expiresIn, "sec") },
 		);
 	// The code may have been consumed since the read, or the extension vetoed.
-	return extended ? plainOtp : null;
+	if (!extended) return null;
+	// A guess counted during the extension keeps the original expiry, so the
+	// code is replaced instead of outliving its attempt count.
+	if (await hasAttemptsBesideValue(ctx, existing)) return null;
+	return plainOtp;
 }
 
 export const defaultOTPGenerator = (options: EmailOTPOptions) =>

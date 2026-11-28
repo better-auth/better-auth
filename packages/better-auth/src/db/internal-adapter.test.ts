@@ -2912,6 +2912,488 @@ describe("internal adapter test", async () => {
 		});
 	});
 
+	/**
+	 * @see https://better-auth.com/docs/concepts/database#database-hooks
+	 */
+	describe("verifyVerificationValue", () => {
+		async function makeAdapter(overrides?: Partial<BetterAuthOptions>) {
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				...overrides,
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			return ctx.internalAdapter;
+		}
+
+		it("runs the update hooks to count an attempt and the delete hooks to consume", async () => {
+			const events: string[] = [];
+			const adapter = await makeAdapter({
+				databaseHooks: {
+					verification: {
+						update: {
+							async before(data) {
+								events.push(`update.before ${String(data.value)}`);
+							},
+							async after(verification) {
+								events.push(`update.after ${verification.value}`);
+							},
+						},
+						delete: {
+							async before(verification) {
+								events.push(`delete.before ${verification.value}`);
+							},
+							async after(verification) {
+								events.push(`delete.after ${verification.value}`);
+							},
+						},
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "attempt:hooks",
+				value: "123456:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const verify = (guess: string) =>
+				adapter.verifyVerificationValue("attempt:hooks", {
+					allowedAttempts: 3,
+					matches: (code) => code === guess,
+				});
+
+			expect((await verify("000000")).status).toBe("invalid");
+			const verified = await verify("123456");
+
+			expect(verified.status).toBe("verified");
+			expect(events).toEqual([
+				"update.before 123456:1",
+				"update.after 123456:1",
+				"update.before 123456:2",
+				"update.after 123456:2",
+				"delete.before 123456:2",
+				"delete.after 123456:2",
+			]);
+			expect(await adapter.findVerificationValue("attempt:hooks")).toBeNull();
+		});
+
+		it("does not compare a guess when an update hook vetoes counting it", async () => {
+			const adapter = await makeAdapter({
+				databaseHooks: {
+					verification: {
+						update: {
+							async before() {
+								return false;
+							},
+						},
+					},
+				},
+			});
+			await adapter.createVerificationValue({
+				identifier: "attempt:veto",
+				value: "123456:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const matches = vi.fn(() => true);
+
+			const result = await adapter.verifyVerificationValue("attempt:veto", {
+				allowedAttempts: 3,
+				matches,
+			});
+
+			expect(result.status).toBe("vetoed");
+			expect(matches).not.toHaveBeenCalled();
+			expect((await adapter.findVerificationValue("attempt:veto"))?.value).toBe(
+				"123456:0",
+			);
+		});
+
+		it("keeps the attempt count of secondary storage until the code expires", async () => {
+			const values = new Map<string, string>();
+			const ttls = new Map<string, number>();
+			const adapter = await makeAdapter({
+				secondaryStorage: {
+					get: (key) => values.get(key) ?? null,
+					getAndDelete: (key) => {
+						const value = values.get(key) ?? null;
+						values.delete(key);
+						return value;
+					},
+					increment: (key, ttl) => {
+						if (!values.has(key)) ttls.set(key, ttl);
+						const value = Number(values.get(key) ?? 0) + 1;
+						values.set(key, String(value));
+						return value;
+					},
+					set: (key, value) => {
+						values.set(key, value);
+					},
+					delete: (key) => {
+						values.delete(key);
+					},
+				},
+			});
+			const expiresAt = new Date(Date.now() + 10_500);
+			await adapter.createVerificationValue({
+				identifier: "attempt:ttl",
+				value: "123456:0",
+				expiresAt,
+			});
+
+			await adapter.verifyVerificationValue("attempt:ttl", {
+				allowedAttempts: 3,
+				matches: () => false,
+			});
+
+			const [ttl] = [...ttls.values()];
+			expect(Date.now() + ttl! * 1000).toBeGreaterThanOrEqual(
+				expiresAt.getTime(),
+			);
+		});
+
+		it("accepts a secondary storage code stored without a creation time", async () => {
+			const values = new Map<string, string>();
+			const adapter = await makeAdapter({
+				secondaryStorage: {
+					get: (key) => values.get(key) ?? null,
+					getAndDelete: (key) => {
+						const value = values.get(key) ?? null;
+						values.delete(key);
+						return value;
+					},
+					increment: (key) => {
+						const value = Number(values.get(key) ?? 0) + 1;
+						values.set(key, String(value));
+						return value;
+					},
+					set: (key, value) => {
+						values.set(key, value);
+					},
+					delete: (key) => {
+						values.delete(key);
+					},
+				},
+			});
+			values.set(
+				"verification:attempt:legacy",
+				JSON.stringify({
+					identifier: "attempt:legacy",
+					value: "123456:0",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+			);
+
+			const result = await adapter.verifyVerificationValue("attempt:legacy", {
+				allowedAttempts: 3,
+				matches: (code) => code === "123456",
+			});
+
+			expect(result.status).toBe("verified");
+		});
+
+		it("reports a kept code that expired during the comparison as expired", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "attempt:expiring",
+				value: "123456:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				const result = await adapter.verifyVerificationValue(
+					"attempt:expiring",
+					{
+						allowedAttempts: 3,
+						matches: () => {
+							vi.setSystemTime(new Date(Date.now() + 120_000));
+							return true;
+						},
+						keep: true,
+					},
+				);
+
+				expect(result.status).toBe("expired");
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		function memoryStorage(): SecondaryStorage {
+			const values = new Map<string, string>();
+			return {
+				get: (key) => values.get(key) ?? null,
+				getAndDelete: (key) => {
+					const value = values.get(key) ?? null;
+					values.delete(key);
+					return value;
+				},
+				increment: (key) => {
+					const value = Number(values.get(key) ?? 0) + 1;
+					values.set(key, String(value));
+					return value;
+				},
+				set: (key, value) => {
+					values.set(key, value);
+				},
+				delete: (key) => {
+					values.delete(key);
+				},
+			};
+		}
+
+		it("reports a kept secondary storage code that expired during the comparison as expired", async () => {
+			const adapter = await makeAdapter({ secondaryStorage: memoryStorage() });
+			await adapter.createVerificationValue({
+				identifier: "attempt:expiring-kv",
+				value: "123456:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				const result = await adapter.verifyVerificationValue(
+					"attempt:expiring-kv",
+					{
+						allowedAttempts: 3,
+						matches: () => {
+							vi.setSystemTime(new Date(Date.now() + 120_000));
+							return true;
+						},
+						keep: true,
+					},
+				);
+
+				expect(result.status).toBe("expired");
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("does not count a refused attempt against a code a check keeps in secondary storage", async () => {
+			const adapter = await makeAdapter({ secondaryStorage: memoryStorage() });
+			await adapter.createVerificationValue({
+				identifier: "attempt:refused",
+				value: "123456:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const verify = (
+				guess: string,
+				options: {
+					keep?: boolean;
+					hold?: Promise<void>;
+					onCompare?: () => void;
+				} = {},
+			) =>
+				adapter.verifyVerificationValue("attempt:refused", {
+					allowedAttempts: 2,
+					keep: options.keep,
+					matches: async (code) => {
+						options.onCompare?.();
+						await options.hold;
+						return code === guess;
+					},
+				});
+			expect((await verify("000000")).status).toBe("invalid");
+
+			let release: () => void = () => {};
+			const hold = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			let compareStarted: () => void = () => {};
+			const comparing = new Promise<void>((resolve) => {
+				compareStarted = resolve;
+			});
+			const check = verify("123456", {
+				keep: true,
+				hold,
+				onCompare: compareStarted,
+			});
+			// The check has claimed the last attempt and is comparing.
+			await comparing;
+			expect((await verify("111111")).status).toBe("exhausted");
+			release();
+
+			expect((await check).status).toBe("verified");
+			expect((await verify("123456")).status).toBe("verified");
+		});
+
+		it("does not count an attempt refused after both requests passed the count check", async () => {
+			const storage = memoryStorage();
+			const increment = storage.increment;
+			const arrivals: Array<() => void> = [];
+			let gateIncrements = false;
+			let bothArrived: () => void = () => {};
+			const gateOpen = new Promise<void>((resolve) => {
+				bothArrived = resolve;
+			});
+			// Hold the first two attempt claims until both have read the count,
+			// then let them increment in arrival order.
+			storage.increment = async (key, ttl) => {
+				if (!gateIncrements || !key.startsWith("verification-attempts:")) {
+					return increment(key, ttl);
+				}
+				const turn = arrivals.length;
+				let proceed: () => void = () => {};
+				const allowed = new Promise<void>((resolve) => {
+					proceed = resolve;
+				});
+				arrivals.push(proceed);
+				if (arrivals.length === 2) {
+					gateIncrements = false;
+					bothArrived();
+				}
+				await gateOpen;
+				if (turn === 0) arrivals[0]!();
+				await allowed;
+				const value = await increment(key, ttl);
+				arrivals[turn + 1]?.();
+				return value;
+			};
+			const adapter = await makeAdapter({ secondaryStorage: storage });
+			await adapter.createVerificationValue({
+				identifier: "attempt:both-passed",
+				value: "123456:0",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const verify = (guess: string, keep?: boolean) =>
+				adapter.verifyVerificationValue("attempt:both-passed", {
+					allowedAttempts: 2,
+					keep,
+					matches: (code) => code === guess,
+				});
+			expect((await verify("000000")).status).toBe("invalid");
+
+			gateIncrements = true;
+			const [check, refused] = await Promise.all([
+				verify("123456", true),
+				verify("111111"),
+			]);
+
+			expect(check.status).toBe("verified");
+			expect(refused.status).toBe("exhausted");
+			expect((await verify("123456")).status).toBe("verified");
+		});
+
+		it.for(["database", "secondary"] as const)(
+			"rejects a code that expired while a slow comparison ran in %s storage",
+			async (storage) => {
+				const adapter = await makeAdapter(
+					storage === "secondary" ? { secondaryStorage: memoryStorage() } : {},
+				);
+				await adapter.createVerificationValue({
+					identifier: "attempt:slow",
+					value: "123456:0",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+				vi.useFakeTimers({ toFake: ["Date"] });
+				try {
+					const result = await adapter.verifyVerificationValue("attempt:slow", {
+						allowedAttempts: 3,
+						matches: () => {
+							vi.setSystemTime(new Date(Date.now() + 120_000));
+							return true;
+						},
+					});
+
+					expect(result.status).toBe("expired");
+				} finally {
+					vi.useRealTimers();
+				}
+			},
+		);
+
+		it("keeps the attempt count of a secondary storage code whose expiry a resend extended", async () => {
+			const values = new Map<string, { value: string; expiresAt: number }>();
+			const live = (key: string) => {
+				const entry = values.get(key);
+				if (!entry || entry.expiresAt <= Date.now()) {
+					values.delete(key);
+					return undefined;
+				}
+				return entry;
+			};
+			const adapter = await makeAdapter({
+				secondaryStorage: {
+					get: (key) => live(key)?.value ?? null,
+					getAndDelete: (key) => {
+						const value = live(key)?.value ?? null;
+						values.delete(key);
+						return value;
+					},
+					increment: (key, ttl) => {
+						const entry = live(key);
+						const value = Number(entry?.value ?? 0) + 1;
+						values.set(key, {
+							value: String(value),
+							expiresAt: entry?.expiresAt ?? Date.now() + ttl * 1000,
+						});
+						return value;
+					},
+					set: (key, value, ttl) => {
+						values.set(key, {
+							value,
+							expiresAt: Date.now() + (ttl ?? 3600) * 1000,
+						});
+					},
+					delete: (key) => {
+						values.delete(key);
+					},
+				},
+			});
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+				await adapter.createVerificationValue({
+					identifier: "attempt:extended",
+					value: "123456:0",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+				const verify = () =>
+					adapter.verifyVerificationValue("attempt:extended", {
+						allowedAttempts: 1,
+						matches: (code) => code === "123456",
+					});
+				vi.setSystemTime(new Date("2026-01-01T00:00:50.000Z"));
+				expect(
+					(
+						await adapter.verifyVerificationValue("attempt:extended", {
+							allowedAttempts: 1,
+							matches: () => false,
+						})
+					).status,
+				).toBe("invalid");
+				// A reuse resend that raced the guess extends the code.
+				await adapter.updateVerificationByIdentifier("attempt:extended", {
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+
+				vi.setSystemTime(new Date("2026-01-01T00:01:30.000Z"));
+
+				expect((await verify()).status).toBe("exhausted");
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("returns the attempt of a matching guess it keeps", async () => {
+			const adapter = await makeAdapter();
+			await adapter.createVerificationValue({
+				identifier: "attempt:keep",
+				value: "123456:1",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const result = await adapter.verifyVerificationValue("attempt:keep", {
+				allowedAttempts: 3,
+				matches: (code) => code === "123456",
+				keep: true,
+			});
+
+			expect(result.status).toBe("verified");
+			expect((await adapter.findVerificationValue("attempt:keep"))?.value).toBe(
+				"123456:1",
+			);
+		});
+	});
+
 	describe("reserveVerificationValue", () => {
 		async function makeAdapter(overrides?: Partial<BetterAuthOptions>) {
 			const opts = {

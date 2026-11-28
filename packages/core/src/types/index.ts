@@ -8,6 +8,7 @@ export type {
 	InfoContext,
 	InternalAdapter,
 	PluginContext,
+	VerificationAttemptResult,
 } from "./context";
 export type {
 	BetterAuthCookie,

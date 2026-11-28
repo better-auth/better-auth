@@ -2667,7 +2667,7 @@ describe("race condition protection", async () => {
 		expect(replay.error?.code).toBe("INVALID_OTP");
 	});
 
-	it("should lock out after the attempt budget is exhausted and not recreate the OTP", async () => {
+	it("should keep the OTP locked out after the attempt budget is exhausted", async () => {
 		const email = "race-lockout@domain.com";
 		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
 		const validOtp = otp;
@@ -2684,13 +2684,13 @@ describe("race condition protection", async () => {
 			await authCtx.internalAdapter.findVerificationValue(
 				`sign-in-otp-${email}`,
 			);
-		expect(verificationValue).toBeNull();
+		expect(verificationValue?.value).toBe(`${validOtp}:3`);
 
 		const afterLockout = await client.signIn.emailOtp({
 			email,
 			otp: validOtp,
 		});
-		expect(afterLockout.error?.code).toBe("INVALID_OTP");
+		expect(afterLockout.error?.code).toBe("TOO_MANY_ATTEMPTS");
 	});
 });
 
@@ -3291,24 +3291,24 @@ describe("email-otp verification rows", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10437
 	 */
-	it("accepts the newest code sent while a checked code is written back", async () => {
+	it("accepts the newest code sent while a check returns its attempt", async () => {
 		const codes = ["111111", "222222"];
-		let sendDuringRestore = false;
+		let sendDuringReturn = false;
 		const body = { email: "", type: "sign-in" as const };
 		const { auth, client, testUser } = await getTestInstance(
 			{
 				databaseHooks: {
 					verification: {
-						create: {
-							// Runs after the check found no replacement.
+						update: {
+							// Runs after the check matched, before its attempt is returned.
 							async before(verification) {
 								if (
-									!sendDuringRestore ||
+									!sendDuringReturn ||
 									verification.value !== "stored-111111:0"
 								) {
 									return;
 								}
-								sendDuringRestore = false;
+								sendDuringReturn = false;
 								vi.setSystemTime(new Date("2026-01-01T00:00:02.000Z"));
 								await auth.api.sendVerificationOTP({ body });
 							},
@@ -3334,7 +3334,7 @@ describe("email-otp verification rows", () => {
 		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
 		await auth.api.sendVerificationOTP({ body });
 
-		sendDuringRestore = true;
+		sendDuringReturn = true;
 		vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
 		const check = await client.emailOtp.checkVerificationOtp({
 			...body,
@@ -3364,18 +3364,6 @@ describe("email-otp verification rows", () => {
 		const body = { email: "", type: "sign-in" as const };
 		const { auth, client, testUser } = await getTestInstance(
 			{
-				databaseHooks: {
-					verification: {
-						delete: {
-							// Runs when the check's lookup drops the expired code.
-							async after() {
-								if (!sendDuringCheck) return;
-								sendDuringCheck = false;
-								await auth.api.sendVerificationOTP({ body });
-							},
-						},
-					},
-				},
 				plugins: [
 					emailOTP({
 						generateOTP: () => codes.shift(),
@@ -3386,6 +3374,17 @@ describe("email-otp verification rows", () => {
 			{ clientOptions: { plugins: [emailOTPClient()] } },
 		);
 		body.email = testUser.email;
+		const { adapter } = await auth.$context;
+		const findMany = adapter.findMany;
+		// Sends once the check has read the expired code.
+		vi.spyOn(adapter, "findMany").mockImplementation(async (query) => {
+			const rows = await findMany(query);
+			if (sendDuringCheck && query.model === "verification") {
+				sendDuringCheck = false;
+				await auth.api.sendVerificationOTP({ body });
+			}
+			return rows;
+		});
 		vi.useFakeTimers({ toFake: ["Date"] });
 		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
 		await auth.api.sendVerificationOTP({ body });
@@ -3628,6 +3627,7 @@ describe("email OTP issuance vetoed by a verification hook", () => {
 		const delivered: string[] = [];
 		const codes = ["111111", "222222"];
 		let sendDuringCreate: (() => Promise<unknown>) | undefined;
+		let vetoUpdates = true;
 		const { auth, testUser } = await getTestInstance({
 			databaseHooks: {
 				verification: {
@@ -3641,7 +3641,7 @@ describe("email OTP issuance vetoed by a verification hook", () => {
 					},
 					update: {
 						async before() {
-							return false;
+							return vetoUpdates ? false : undefined;
 						},
 					},
 				},
@@ -3664,6 +3664,7 @@ describe("email OTP issuance vetoed by a verification hook", () => {
 		expect(res.status).toBe(500);
 		expect((await res.json()).code).toBe("FAILED_TO_CREATE_VERIFICATION");
 		expect(delivered).toEqual(["222222"]);
+		vetoUpdates = false;
 		const stored = await auth.api.checkVerificationOTP({
 			body: { ...body, otp: "222222" },
 			asResponse: true,
