@@ -58,12 +58,20 @@ type SessionFlight = {
 
 /**
  * Normalize $fetch response: `throw: true` returns data directly,
- * otherwise `{ data, error }`.
+ * otherwise `{ data, error }`. `throws` is the request's effective `throw`
+ * option when a successful response reported it; without it the shape is
+ * inferred from the result.
  */
-function normalizeSessionResponse(res: unknown): {
+function normalizeSessionResponse(
+	res: unknown,
+	throws?: boolean | undefined,
+): {
 	data: SessionResponse | null;
 	error: unknown;
 } {
+	if (throws === true) {
+		return { data: res as SessionResponse, error: null };
+	}
 	if (
 		typeof res === "object" &&
 		res !== null &&
@@ -73,6 +81,31 @@ function normalizeSessionResponse(res: unknown): {
 		return res as { data: SessionResponse | null; error: unknown };
 	}
 	return { data: res as SessionResponse, error: null };
+}
+
+/**
+ * `/get-session` answers with a session object or `null`. A non-object body, such as
+ * an HTML page that a SPA fallback, reverse proxy or CDN served with `200`, is not a
+ * session, even though the request succeeded.
+ */
+export function isSessionPayload(data: unknown): boolean {
+	return data == null || (typeof data === "object" && !Array.isArray(data));
+}
+
+/**
+ * The error returned in place of a `/get-session` body that is not a session, shaped
+ * like the errors `$fetch` returns for failed responses.
+ */
+export function createInvalidSessionPayloadError(
+	status: number,
+	statusText: string,
+) {
+	return {
+		status,
+		statusText,
+		message:
+			"Invalid response from /get-session: expected a session object or null. Check that the auth base URL reaches the Better Auth handler.",
+	};
 }
 
 function normalizeSessionData(
@@ -139,17 +172,47 @@ export function getSessionAtom(
 		});
 		if (signal.aborted) return "aborted";
 
+		let responseStatus = 200;
+		let responseStatusText = "";
+		let responseThrows: boolean | undefined;
+		const recordResponse = (context: {
+			response?: Response | undefined;
+			request?: { throw?: boolean | undefined } | undefined;
+		}) => {
+			if (context.response) {
+				responseStatus = context.response.status;
+				responseStatusText = context.response.statusText;
+				responseThrows = context.request?.throw === true;
+			}
+		};
+		const rejectNonSessionPayload = (result: {
+			data: SessionResponse | null;
+			error: unknown;
+		}): { data: SessionResponse | null; error: unknown } =>
+			result.error || isSessionPayload(result.data)
+				? result
+				: {
+						data: null,
+						error: createInvalidSessionPayloadError(
+							responseStatus,
+							responseStatusText,
+						),
+					};
+
 		try {
 			const res = await $fetch<SessionResponse>("/get-session", {
 				method: "GET",
 				query: queryParams?.query,
 				signal,
+				onSuccess: recordResponse,
 			});
 			if (signal.aborted) {
 				return "aborted";
 			}
 
-			let { data, error } = normalizeSessionResponse(res);
+			let { data, error } = rejectNonSessionPayload(
+				normalizeSessionResponse(res, responseThrows),
+			);
 			let outcome: SessionFetchOutcome = "fresh";
 
 			if (data?.needsRefresh) {
@@ -158,11 +221,14 @@ export function getSessionAtom(
 						method: "POST",
 						body: {},
 						signal,
+						onSuccess: recordResponse,
 					});
 					if (signal.aborted) {
 						return "aborted";
 					}
-					({ data, error } = normalizeSessionResponse(refreshRes));
+					({ data, error } = rejectNonSessionPayload(
+						normalizeSessionResponse(refreshRes, responseThrows),
+					));
 				} catch {
 					if (signal.aborted) {
 						return "aborted";

@@ -148,6 +148,141 @@ describe("run time proxy", async () => {
 		vi.useRealTimers();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12877
+	 */
+	describe("a /get-session body that is not a session", () => {
+		const htmlFetch = async () =>
+			new Response("<!DOCTYPE html><html></html>", {
+				status: 200,
+				headers: { "content-type": "text/html" },
+			});
+
+		it("is an error for useSession, not session data", async () => {
+			vi.useFakeTimers();
+			const client = createSolidClient({
+				fetchOptions: {
+					customFetchImpl: htmlFetch,
+					baseURL: "http://localhost:3000",
+				},
+			});
+			const res = client.useSession();
+			await vi.runAllTimersAsync();
+			expect(res()).toMatchObject({
+				data: null,
+				error: { status: 200 },
+				isPending: false,
+			});
+			expect(res().error?.message).toContain("/get-session");
+			vi.useRealTimers();
+		});
+
+		it("is an error for getSession, not session data", async () => {
+			const client = createVanillaClient({
+				fetchOptions: {
+					customFetchImpl: htmlFetch,
+					baseURL: "http://localhost:3000",
+				},
+			});
+			const res = await client.getSession();
+			expect(res.data).toBeNull();
+			expect(res.error).toMatchObject({ status: 200 });
+		});
+
+		it("is thrown by getSession with throw: true", async () => {
+			const client = createVanillaClient({
+				fetchOptions: {
+					customFetchImpl: htmlFetch,
+					baseURL: "http://localhost:3000",
+					throw: true,
+				},
+			});
+			await expect(client.getSession()).rejects.toMatchObject({ status: 200 });
+		});
+
+		it("still accepts a null session", async () => {
+			const client = createVanillaClient({
+				fetchOptions: {
+					customFetchImpl: async () => new Response(JSON.stringify(null)),
+					baseURL: "http://localhost:3000",
+				},
+			});
+			const res = await client.getSession();
+			expect(res).toMatchObject({ data: null, error: null });
+		});
+
+		it("is an error when the needsRefresh POST returns it", async () => {
+			vi.useFakeTimers();
+			const client = createSolidClient({
+				fetchOptions: {
+					customFetchImpl: async (_, init) =>
+						init?.method === "POST"
+							? htmlFetch()
+							: new Response(
+									JSON.stringify({
+										user: { id: "1" },
+										session: { id: "s1" },
+										needsRefresh: true,
+									}),
+								),
+					baseURL: "http://localhost:3000",
+				},
+			});
+			const res = client.useSession();
+			await vi.runAllTimersAsync();
+			expect(res()).toMatchObject({
+				data: null,
+				error: { status: 200 },
+				isPending: false,
+			});
+			vi.useRealTimers();
+		});
+
+		describe("a custom session with data and error fields, with throw: true", () => {
+			const customSession = {
+				user: { id: "1" },
+				session: { id: "s1" },
+				data: "extra",
+				error: null,
+			};
+			const customSessionClient = <T>(
+				create: (options: {
+					fetchOptions: {
+						customFetchImpl: () => Promise<Response>;
+						baseURL: string;
+						throw: true;
+					};
+				}) => T,
+			) =>
+				create({
+					fetchOptions: {
+						customFetchImpl: async () =>
+							new Response(JSON.stringify(customSession)),
+						baseURL: "http://localhost:3000",
+						throw: true,
+					},
+				});
+
+			it("is returned by getSession", async () => {
+				const client = customSessionClient(createVanillaClient);
+				await expect(client.getSession()).resolves.toEqual(customSession);
+			});
+
+			it("is the useSession data", async () => {
+				vi.useFakeTimers();
+				const client = customSessionClient(createSolidClient);
+				const res = client.useSession();
+				await vi.runAllTimersAsync();
+				expect(res()).toMatchObject({
+					data: customSession,
+					error: null,
+					isPending: false,
+				});
+				vi.useRealTimers();
+			});
+		});
+	});
+
 	it("should hydrate session on an existing client", async () => {
 		vi.useFakeTimers();
 		const client = createSolidClient({
