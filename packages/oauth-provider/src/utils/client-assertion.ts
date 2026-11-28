@@ -824,7 +824,7 @@ export async function consumeClientAssertion(
 		new TextEncoder().encode(`${namespace}:${payload.jti}`),
 	);
 	const jtiId = encodeDeterministicId(
-		new Uint8Array(jtiDigest).slice(0, 24),
+		new Uint8Array(jtiDigest),
 		ctx.context.options,
 		{ adapter: ctx.context.adapter, model: "oauthClientAssertion" },
 	);

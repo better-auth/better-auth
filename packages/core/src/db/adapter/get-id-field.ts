@@ -18,13 +18,14 @@ let warnedSerialDeterministicId = false;
  * replaces a forced id that does not fit the strategy with a fresh one, which
  * would let every insert win. Under `"uuid"` the first 16 bytes are formatted
  * with version 5 and RFC 9562 variant bits, the shape the id field accepts.
- * Other string strategies get the base64url digest. Under `"serial"` the
- * base64url digest is still replaced by a database number, so the record is
+ * Other string strategies get the base64url encoding of the first 24 bytes,
+ * 32 characters that fit the generated `varchar(36)` id column. Under
+ * `"serial"` that id is still replaced by a database number, so the record is
  * not single use; this logs a warning once per process.
  *
  * When the adapter reports an ObjectId id column for `model` (Prisma with
  * `@db.ObjectId`), the first 12 bytes become 24 hex characters, the only id
- * that column accepts. Every other column keeps the base64url digest.
+ * that column accepts. Every other column keeps the base64url id.
  *
  * @internal Shared by Better Auth packages; not a supported public API.
  * @param digest - A hash of the guarded value, at least 16 bytes long.
@@ -55,7 +56,7 @@ export function encodeDeterministicId(
 		return hex.encode(digest.slice(0, 12));
 	}
 	if (generateId !== "uuid") {
-		return base64Url.encode(digest, { padding: false });
+		return base64Url.encode(digest.slice(0, 24), { padding: false });
 	}
 	const bytes = digest.slice(0, 16);
 	bytes[6] = (bytes[6]! & 0x0f) | 0x50;

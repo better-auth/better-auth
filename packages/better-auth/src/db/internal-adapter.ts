@@ -1719,6 +1719,13 @@ export const createInternalAdapter = (
 				);
 			}
 
+			// Also finds a marker whose id another release or id strategy derived.
+			const existing = await adapter.findOne<Verification>({
+				model: "verification",
+				where: [{ field: "identifier", value: storedIdentifier }],
+			});
+			if (existing) return false;
+
 			try {
 				await adapter.create({
 					model: "verification",

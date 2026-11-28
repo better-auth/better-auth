@@ -268,6 +268,12 @@ describe("encodeDeterministicId", () => {
 		});
 	});
 
+	it("fits the default id in a varchar(36) id column", () => {
+		expect(encodeDeterministicId(digest(1), {})).toBe(
+			"HyYtNDtCSVBXXmVsc3qBiI-WnaSrsrnA",
+		);
+	});
+
 	it("formats a uuid when ids are uuids", () => {
 		const id = encodeDeterministicId(digest(1), {
 			advanced: { database: { generateId: "uuid" } },

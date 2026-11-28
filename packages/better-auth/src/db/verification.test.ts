@@ -60,7 +60,7 @@ describe("createOrFindVerification", () => {
 });
 
 describe.runIf(isMysqlAvailable || Boolean(process.env.CI))(
-	"createOrFindVerification with MySQL",
+	"derived verification ids with MySQL",
 	() => {
 		it("fits the derived id in the varchar(36) id column", async () => {
 			const { auth } = await getTestInstance(undefined, { testWith: "mysql" });
@@ -79,6 +79,19 @@ describe.runIf(isMysqlAvailable || Boolean(process.env.CI))(
 
 			expect(created?.value).toBe("first");
 			expect(found?.value).toBe("first");
+		});
+
+		it("reserves a marker once in the varchar(36) id column", async () => {
+			const { auth } = await getTestInstance(undefined, { testWith: "mysql" });
+			const { internalAdapter } = await auth.$context;
+			const data = {
+				identifier: "reserve:mysql",
+				value: "used",
+				expiresAt: new Date(Date.now() + 60_000),
+			};
+
+			expect(await internalAdapter.reserveVerificationValue(data)).toBe(true);
+			expect(await internalAdapter.reserveVerificationValue(data)).toBe(false);
 		});
 	},
 );
