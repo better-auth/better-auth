@@ -11,6 +11,7 @@ import {
 } from "better-call";
 import { runWithEndpointContext } from "../context";
 import type { AuthContext } from "../types";
+import { wrapContextWithRotatedSignedCookies } from "../types/secret";
 import { isAPIError } from "../utils/is-api-error";
 
 /**
@@ -113,6 +114,9 @@ function wrapEndpointHandler<
 				context.setHeader(name, value);
 			}
 		}
+
+		wrapContextWithRotatedSignedCookies(context);
+
 		try {
 			return await runWithEndpointContext(context, () => handler(context));
 		} catch (error) {

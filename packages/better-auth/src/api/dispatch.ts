@@ -1,4 +1,8 @@
-import type { AuthContext, HookEndpointContext } from "@better-auth/core";
+import {
+	wrapContextWithRotatedSignedCookies,
+	type AuthContext,
+	type HookEndpointContext,
+} from "@better-auth/core";
 import type { AuthMiddleware } from "@better-auth/core/api";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { shouldPublishLog } from "@better-auth/core/env";
@@ -371,6 +375,8 @@ export async function dispatchAuthEndpoint(
 		path: endpoint.path,
 		headers: input.headers ? new Headers(input.headers) : undefined,
 	};
+
+	wrapContextWithRotatedSignedCookies(internalContext);
 
 	return withSpan(
 		`${methodName} ${route}`,

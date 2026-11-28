@@ -356,7 +356,25 @@ Most of the features of Better Auth will not work correctly.`,
 				};
 			})(),
 		},
-		secret,
+		get secret() {
+			if (
+				typeof this.secretConfig === "object" &&
+				this.secretConfig !== null &&
+				"keys" in this.secretConfig
+			) {
+				const val = this.secretConfig.keys.get(this.secretConfig.currentVersion);
+				if (!val) {
+					throw new Error(
+						`Secret version ${this.secretConfig.currentVersion} not found in keys`,
+					);
+				}
+				return val;
+			}
+			return secret;
+		},
+		set secret(val: string) {
+			secret = val;
+		},
 		secretConfig,
 		rateLimit: {
 			...options.rateLimit,
