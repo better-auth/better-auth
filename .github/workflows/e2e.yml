@@ -53,7 +53,7 @@ jobs:
           docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
         background: true
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@93cb569f835297529614ed443414b4a372d2dd7b
         with:
           node-version: ${{ matrix.node-version }}
 
@@ -115,7 +115,7 @@ jobs:
           docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
         background: true
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@93cb569f835297529614ed443414b4a372d2dd7b
 
       - name: Install Next.js demo
         run: pnpm --dir demo/nextjs install --frozen-lockfile
@@ -228,7 +228,7 @@ jobs:
           done
         background: true
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@93cb569f835297529614ed443414b4a372d2dd7b
 
       - name: Build Adapter Dependencies
         run: pnpm exec turbo run build --filter="$FILTER..."
