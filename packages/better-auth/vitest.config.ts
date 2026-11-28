@@ -1,5 +1,7 @@
 import { defineProject } from "vitest/config";
 
+const solidV2Test = "src/client/solid/v2.test.ts";
+
 export default defineProject({
 	test: {
 		fsModuleCache: true,
@@ -11,6 +13,13 @@ export default defineProject({
 			"**/node_modules/**",
 			"**/dist/**",
 			"**/src/adapters/**/*.test.ts",
+		],
+		projects: [
+			{ test: { name: "unit", exclude: [solidV2Test] } },
+			{
+				ssr: { resolve: { conditions: ["dev-source", "browser"] } },
+				test: { name: "solid-v2", include: [solidV2Test] },
+			},
 		],
 	},
 });

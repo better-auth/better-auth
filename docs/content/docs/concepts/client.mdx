@@ -64,6 +64,8 @@ Import `createAuthClient` from the package for your framework (e.g., "better-aut
   </Tab>
 
   <Tab value="solid" title="lib/auth-client.ts">
+    Use `better-auth/solid` with Solid 1. With Solid 2, import `createAuthClient` from `better-auth/solid/v2`; importing `better-auth/solid` fails to resolve `solid-js/store`. Both clients expose `useSession()` and plugin hooks as Solid accessors.
+
     ```ts title="lib/auth-client.ts" 
     import { createAuthClient } from "better-auth/solid" // [!code highlight]
     export const authClient = createAuthClient({
@@ -192,7 +194,7 @@ In addition to the standard methods, the client provides hooks to easily access 
         const session = authClient.useSession()
         return (
             <Show
-                when={session()}
+                when={session().data}
                 fallback={<button onClick={toggle}>Log in</button>}
             >
                 <button onClick={toggle}>Log out</button>
