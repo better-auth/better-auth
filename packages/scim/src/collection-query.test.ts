@@ -18,6 +18,7 @@ describe("parseSCIMCollectionQuery", () => {
 		expect(result).toEqual({
 			ok: true,
 			value: {
+				filterCombinator: "and",
 				filters: [],
 				pagination: {
 					count: 100,
@@ -184,6 +185,7 @@ describe("collection filters", () => {
 		).toMatchObject({
 			ok: true,
 			value: {
+				filterCombinator: "and",
 				filters: [
 					{
 						attribute: "displayName",
@@ -194,6 +196,58 @@ describe("collection filters", () => {
 						attribute: "externalId",
 						operator: "eq",
 						value: "research-and-development",
+					},
+				],
+			},
+		});
+	});
+
+	it("parses a uniform disjunction of equality expressions", () => {
+		expect(
+			parseSCIMCollectionQuery("User", {
+				filter:
+					'UsErNaMe EQ "ada@example.com" OR Emails.Value eq "ada.alias@example.com"',
+			}),
+		).toMatchObject({
+			ok: true,
+			value: {
+				filterCombinator: "or",
+				filters: [
+					{
+						attribute: "userName",
+						operator: "eq",
+						value: "ada@example.com",
+					},
+					{
+						attribute: "emails.value",
+						operator: "eq",
+						value: "ada.alias@example.com",
+					},
+				],
+			},
+		});
+	});
+
+	it("preserves top-level disjunctions when a quoted value contains or", () => {
+		expect(
+			parseSCIMCollectionQuery("Group", {
+				filter:
+					'displayName eq "Research or Development" or externalId eq "research-or-development"',
+			}),
+		).toMatchObject({
+			ok: true,
+			value: {
+				filterCombinator: "or",
+				filters: [
+					{
+						attribute: "displayName",
+						operator: "eq",
+						value: "Research or Development",
+					},
+					{
+						attribute: "externalId",
+						operator: "eq",
+						value: "research-or-development",
 					},
 				],
 			},
@@ -214,6 +268,20 @@ describe("collection filters", () => {
 		["User", 'userName eq "ada" trailing', "invalid-filter-value"],
 		["User", "userName eq 7", "invalid-filter-value"],
 		["Group", 'displayName eq "one" ne "two"', "invalid-filter-value"],
+		[
+			"User",
+			'userName eq "ada" and externalId eq "entra-ada" or emails.value eq "ada.alias@example.com"',
+			"invalid-filter-syntax",
+		],
+		["User", '(userName eq "ada")', "invalid-filter-syntax"],
+		[
+			"User",
+			Array.from(
+				{ length: 11 },
+				(_, index) => `userName eq "user-${index}@example.com"`,
+			).join(" or "),
+			"invalid-filter-syntax",
+		],
 	] as const)(
 		"returns %s filter failures without throwing",
 		(resourceType, filter, code) => {
