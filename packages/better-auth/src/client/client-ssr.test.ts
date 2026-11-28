@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from "vitest";
+import { createSSRApp, h } from "vue";
+import { renderToString } from "vue/server-renderer";
 import { getTestInstance } from "../test-utils/test-instance";
 import { getGlobalBroadcastChannel } from "./broadcast-channel";
 import { createAuthClient as createVueClient } from "./vue";
@@ -163,4 +165,40 @@ it("refetches the session on the server when the session signal fires", async ()
 	await vi.waitFor(() => {
 		expect(client.useSession.get().isPending).toBe(false);
 	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12862
+ */
+it("does not leave atom listeners after Vue SSR with a module-level client", async () => {
+	const authClient = createVueClient({ baseURL: "http://localhost:3000" });
+	const atoms = authClient.$store.atoms;
+	const fakeUseFetch = async () => ({
+		data: { value: null },
+		error: { value: null },
+	});
+
+	async function renderRequest() {
+		const app = createSSRApp({
+			async setup() {
+				authClient.useSession();
+				await authClient.useSession(fakeUseFetch);
+				return () => h("div", "Hello");
+			},
+		});
+		await renderToString(app);
+	}
+
+	// Warm up once so client-owned listeners are established, then assert
+	// subsequent SSR renders do not accumulate atom subscriptions.
+	await renderRequest();
+	const sessionListenersAfterWarmup = atoms.session.lc;
+	const signalListenersAfterWarmup = atoms.$sessionSignal.lc;
+
+	for (let request = 0; request < 20; request++) {
+		await renderRequest();
+	}
+
+	expect(atoms.session.lc).toBe(sessionListenersAfterWarmup);
+	expect(atoms.$sessionSignal.lc).toBe(signalListenersAfterWarmup);
 });
