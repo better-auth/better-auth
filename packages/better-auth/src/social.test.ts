@@ -362,6 +362,172 @@ describe("Social Providers", async (c) => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/13005
+	 */
+	it("allows only one concurrent callback per database OAuth state", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				account: {
+					storeStateStrategy: "database",
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		let tokenRequests = 0;
+		const onRequest = ({ request }: { request: Request }) => {
+			if (request.url === "https://oauth2.googleapis.com/token") {
+				tokenRequests++;
+			}
+		};
+		mswServer.events.on("request:start", onRequest);
+		onTestFinished(() => {
+			mswServer.events.removeListener("request:start", onRequest);
+		});
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state =
+			new URL(signInRes.data?.url ?? "").searchParams.get("state") || "";
+		const callbackUrl = `http://localhost:3000/api/auth/callback/google?state=${encodeURIComponent(state)}&code=test`;
+
+		const responses = await Promise.all([
+			auth.handler(new Request(callbackUrl, { headers })),
+			auth.handler(new Request(callbackUrl, { headers })),
+		]);
+
+		const locations = responses.map((res) => res.headers.get("location") ?? "");
+		const successes = locations.filter((loc) => loc.includes("/welcome"));
+		const mismatches = locations.filter((loc) =>
+			loc.includes("error=state_mismatch"),
+		);
+
+		expect(responses.every((res) => res.status === 302)).toBe(true);
+		expect(successes).toHaveLength(1);
+		expect(mismatches).toHaveLength(1);
+		expect(tokenRequests).toBe(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/13005
+	 */
+	it("does not consume database OAuth state when the signed state cookie is missing", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				account: {
+					storeStateStrategy: "database",
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			errorCallbackURL: "/oauth-error",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state =
+			new URL(signInRes.data?.url ?? "").searchParams.get("state") || "";
+		const callbackUrl = `http://localhost:3000/api/auth/callback/google?state=${encodeURIComponent(state)}&code=test`;
+
+		// Request without cookie must fail without consuming the live state row.
+		const unauthenticatedRes = await auth.handler(new Request(callbackUrl));
+		expect(unauthenticatedRes.status).toBe(302);
+		expect(unauthenticatedRes.headers.get("location")).toContain(
+			"/oauth-error?error=state_mismatch",
+		);
+
+		// Legitimate callback carrying the signed state cookie still succeeds.
+		const authenticatedRes = await auth.handler(
+			new Request(callbackUrl, { headers }),
+		);
+		expect(authenticatedRes.status).toBe(302);
+		expect(authenticatedRes.headers.get("location")).toContain("/callback");
+		const cookies = parseSetCookieHeader(
+			authenticatedRes.headers.get("set-cookie") || "",
+		);
+		expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/13005
+	 */
+	it("preserves errorCallbackURL and consumes expired database OAuth state on expiry", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				account: {
+					storeStateStrategy: "database",
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			errorCallbackURL: "/oauth-error",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state =
+			new URL(signInRes.data?.url ?? "").searchParams.get("state") || "";
+		const callbackUrl = `http://localhost:3000/api/auth/callback/google?state=${encodeURIComponent(state)}&code=test`;
+
+		vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 11 * 60 * 1000 });
+		try {
+			const expiredRes = await auth.handler(
+				new Request(callbackUrl, { headers }),
+			);
+			expect(expiredRes.status).toBe(302);
+			expect(expiredRes.headers.get("location")).toContain(
+				"/oauth-error?error=state_mismatch",
+			);
+
+			// Replay of the already-consumed expired state must not recover errorURL or succeed.
+			const replayRes = await auth.handler(
+				new Request(callbackUrl, { headers }),
+			);
+			expect(replayRes.status).toBe(302);
+			expect(replayRes.headers.get("location")).toBe(
+				"http://localhost:3000/api/auth/error?error=state_mismatch",
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("should be able to sign in with async social provider", async () => {
 		const headers = new Headers();
 		const signInRes = await client.signIn.social({

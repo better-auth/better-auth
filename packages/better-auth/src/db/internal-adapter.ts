@@ -87,6 +87,28 @@ export const createInternalAdapter = (
 		consumeOneWithHooks,
 	} = getWithHooks(adapter, ctx);
 
+	const sweepExpiredVerificationsIfDue = async (now: number) => {
+		if (options.verification?.disableCleanup) {
+			return false;
+		}
+		if (now >= nextVerificationCleanupAt) {
+			nextVerificationCleanupAt = now + VERIFICATION_CLEANUP_INTERVAL_MS;
+			await deleteManyWithHooks(
+				[
+					{
+						field: "expiresAt",
+						value: new Date(now),
+						operator: "lt",
+					},
+				],
+				"verification",
+				undefined,
+			);
+			return true;
+		}
+		return false;
+	};
+
 	/**
 	 * Ends the live session rows matched by `where` without physically deleting
 	 * them.
@@ -1469,20 +1491,8 @@ export const createInternalAdapter = (
 			if (options.verification?.disableCleanup) {
 				return found;
 			}
-			if (now >= nextVerificationCleanupAt) {
-				nextVerificationCleanupAt = now + VERIFICATION_CLEANUP_INTERVAL_MS;
-				await deleteManyWithHooks(
-					[
-						{
-							field: "expiresAt",
-							value: new Date(now),
-							operator: "lt",
-						},
-					],
-					"verification",
-					undefined,
-				);
-			} else if (found && new Date(found.expiresAt).getTime() < now) {
+			const ranSweep = await sweepExpiredVerificationsIfDue(now);
+			if (!ranSweep && found && new Date(found.expiresAt).getTime() < now) {
 				// Not every reader checks `expiresAt`, so when a lookup finds an
 				// expired row, it deletes every expired row of that identifier
 				// and no later lookup returns one. The throttled sweep above only
@@ -1542,6 +1552,7 @@ export const createInternalAdapter = (
 		 */
 		consumeVerificationValue: async (
 			identifier: string,
+			consumeOptions?: { includeExpired?: boolean },
 		): Promise<Verification | null> => {
 			const storageOption = getStorageOption(
 				identifier,
@@ -1656,11 +1667,27 @@ export const createInternalAdapter = (
 						),
 					);
 				}
+
+				// Best-effort maintenance sweep after single-use consumption commits:
+				// a cleanup query or delete-hook failure must not reject a caller whose
+				// single-use row has already been consumed.
+				try {
+					await sweepExpiredVerificationsIfDue(Date.now());
+				} catch (error) {
+					logger.warn(
+						"Failed to sweep expired verification values after consume",
+						error,
+					);
+				}
 			}
 
 			// Single expiry gate. A row past its `expiresAt` is treated as already
-			// invalid, so callers can rely on a non-null return meaning "valid".
-			if (!consumed || consumed.expiresAt < new Date()) return null;
+			// invalid by default, so callers can rely on a non-null return meaning
+			// "valid" unless they opt in with `includeExpired` to inspect it.
+			if (!consumed) return null;
+			if (!consumeOptions?.includeExpired && consumed.expiresAt < new Date()) {
+				return null;
+			}
 			return consumed;
 		},
 		/**
