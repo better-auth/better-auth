@@ -104,6 +104,7 @@ export async function runPluginInit(context: AuthContext) {
 
 	context.internalAdapter = createInternalAdapter(context.adapter, {
 		options,
+		secret: context.secret,
 		logger: context.logger,
 		hooks: dbHooks,
 		generateId: context.generateId,

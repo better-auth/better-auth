@@ -617,6 +617,7 @@ export const auth = betterAuth({
 * `window`: Time window to use for rate limiting. The value should be in seconds. (default: `10`)
 * `max`: The default maximum number of requests allowed within the window. (default: `100`)
 * `customRules`: Custom rate limit rules to apply to specific paths.
+* `transformKey`: A synchronous or asynchronous function that transforms the rate-limit key before storage. See [Transforming the Rate Limit Key](/docs/concepts/rate-limit#transforming-the-rate-limit-key).
 * `storage`: Storage configuration. If you passed a secondary storage, rate limiting will be stored in the secondary storage. (options: `"memory", "database", "secondary-storage"`, default: `"memory"`)
 * `modelName`: The name of the table to use for rate limiting if database is used as storage. (default: `"rateLimit"`)
 
@@ -679,6 +680,7 @@ export const auth = betterAuth({
 ```
 
 * `ipAddress`: IP address configuration for rate limiting and session tracking
+  * `anonymize`: Store a keyed digest of the client IP in new sessions and rate-limit keys (default: `false`). See [IP Address Hashing](/docs/concepts/rate-limit#ip-address-hashing).
   * `disableIpTracking`: Disable IP address tracking. This also turns off the built-in rate limiter for HTTP requests.
   * `ipAddressHeaders`: Header names to read the client IP address from. The first header with a valid address is used. Defaults to `["x-forwarded-for"]`. List only headers that your proxy or server code sets on every request. It must replace any value the client sent. If your proxies append to the header instead, list them in `trustedProxies`. See [Connecting IP Address](/docs/concepts/rate-limit#connecting-ip-address).
   * `trustedProxies`: IP addresses or CIDR ranges of your reverse proxies. Better Auth reads forwarded addresses from right to left. It skips these proxies and uses the first other address as the client IP.

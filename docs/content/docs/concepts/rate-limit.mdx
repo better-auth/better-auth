@@ -182,6 +182,24 @@ Any integer prefix length from `0` to `128` is accepted; the values above are th
   IPv6 subnet configuration only affects IPv6 addresses. IPv4 addresses are always rate limited individually.
 </Callout>
 
+### IP Address Hashing
+
+Enable `advanced.ipAddress.anonymize` to store a keyed digest of the normalized client IP in new sessions and rate-limit keys. Better Auth uses HMAC-SHA-256 with the active auth secret and produces a different digest for each storage purpose. IPv6 subnet grouping still applies before hashing.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    advanced: {
+        ipAddress: {
+            anonymize: true,
+        },
+    },
+});
+```
+
+Use a strong auth secret and share it across instances that share rate-limit storage. Enabling this option or rotating the active secret starts new counters for requests with a client IP. Previously stored addresses need separate cleanup.
+
 ### Rate Limit Window
 
 ```ts title="auth.ts"
@@ -237,6 +255,28 @@ export const auth = betterAuth({
     },
 })
 ```
+
+### Transforming the Rate Limit Key
+
+Use `rateLimit.transformKey` to customize the key seen by any rate-limit storage backend, including custom storage. Better Auth calls and awaits the transform once for each request it rate-limits. The input is `ip|path`. With `advanced.ipAddress.anonymize`, the IP segment is already hashed. When no client IP can be resolved, the input uses `no-trusted-ip` in the IP segment.
+
+For example, in Node.js you can hash the whole key to hide both the IP and path:
+
+```ts title="auth.ts"
+import { createHmac } from "node:crypto";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    rateLimit: {
+        transformKey: (key) =>
+            createHmac("sha256", process.env.RATE_LIMIT_KEY_SECRET!)
+                .update(key)
+                .digest("hex"),
+    },
+});
+```
+
+Use a deterministic transform and preserve distinctions between keys that need separate limits. Changing the output format starts new counters for affected keys. To hash IPs stored in sessions, enable `advanced.ipAddress.anonymize`.
 
 ### Storage
 

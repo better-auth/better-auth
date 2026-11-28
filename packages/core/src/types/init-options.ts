@@ -290,6 +290,12 @@ export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> &
 		 * is ignored
 		 */
 		customStorage?: BetterAuthRateLimitStorage;
+		/**
+		 * Transform the rate-limit key once per rate-limited request before it
+		 * reaches storage. The input is `ip|path`, with the IP already hashed
+		 * when `advanced.ipAddress.anonymize` is enabled.
+		 */
+		transformKey?: ((key: string) => Awaitable<string>) | undefined;
 	};
 
 export type BetterAuthAdvancedOptions = {
@@ -318,6 +324,13 @@ export type BetterAuthAdvancedOptions = {
 				 * ⚠︎ This is a security risk and it may expose your application to abuse
 				 */
 				disableIpTracking?: boolean;
+				/**
+				 * Store a keyed HMAC-SHA-256 digest of the client IP in new sessions
+				 * and rate-limit keys. Uses the active auth secret.
+				 *
+				 * @default false
+				 */
+				anonymize?: boolean;
 				/**
 				 * IPv6 prefix length used to collapse addresses before rate-limit keying.
 				 * Any integer from 0 to 128 is accepted; common values are 32, 48, 56, 64, 128.

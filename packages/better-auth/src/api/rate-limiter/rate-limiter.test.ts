@@ -1,8 +1,17 @@
+import { createHmac } from "node:crypto";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { createRateLimitKey, normalizeIP } from "@better-auth/core/utils/ip";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	assert,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import type { RateLimit } from "../../types";
+import type { RateLimit, Session } from "../../types";
 
 function createRateLimitSecondaryStorage(
 	store: Map<string, string>,
@@ -162,6 +171,130 @@ describe("rate-limiter", async () => {
 				expect(response.error?.status).toBe(401);
 			}
 		}
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12966
+ */
+describe("client IP hashing and rate-limit key transforms", () => {
+	const secret = "better-auth-secret-for-ip-hashing-tests";
+
+	it("hashes stored IPs and keeps enforcing limits per IPv6 subnet", async () => {
+		const { client, db, testUser } = await getTestInstance({
+			secret,
+			advanced: { ipAddress: { anonymize: true, ipv6Subnet: 64 } },
+			rateLimit: {
+				enabled: true,
+				storage: "database",
+				customRules: { "/sign-in/email": { window: 60, max: 1 } },
+			},
+		});
+		const signIn = (ip: string) =>
+			client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: { headers: { "x-forwarded-for": ip } },
+			});
+		const firstIP = "2001:db8:1::1";
+		const otherIP = "2001:db8:2::1";
+		const first = await signIn(firstIP);
+		expect(first.error).toBeNull();
+		assert(first.data);
+		expect((await signIn("2001:db8:1::2")).error?.status).toBe(429);
+		expect((await signIn(otherIP)).error).toBeNull();
+
+		const rows = await db.findMany<RateLimit>({ model: "rateLimit" });
+		expect(rows.map((row) => row.key).sort()).toEqual(
+			[firstIP, otherIP]
+				.map((ip) => {
+					const digest = createHmac("sha256", secret)
+						.update(`better-auth:rate-limit:ip:${normalizeIP(ip)}`)
+						.digest("hex");
+					return `${digest}|/sign-in/email`;
+				})
+				.sort(),
+		);
+		const session = await db.findOne<Session>({
+			model: "session",
+			where: [{ field: "token", value: first.data.token }],
+		});
+		expect(session?.ipAddress).toBe(
+			createHmac("sha256", secret)
+				.update(`better-auth:session:ip:${normalizeIP(firstIP)}`)
+				.digest("hex"),
+		);
+	});
+
+	it("hashes a legacy IP carried into a replacement session only once", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			secret,
+			advanced: { ipAddress: { anonymize: true } },
+		});
+		const { user } = await signInWithTestUser();
+		const { internalAdapter } = await auth.$context;
+		const ip = "203.0.113.24";
+		const digest = createHmac("sha256", secret)
+			.update(`better-auth:session:ip:${ip}`)
+			.digest("hex");
+		const first = await internalAdapter.createSession(user.id, false, {
+			ipAddress: ip,
+		});
+		expect(first.ipAddress).toBe(digest);
+		const replacement = await internalAdapter.createSession(
+			user.id,
+			false,
+			first,
+		);
+		expect(replacement.ipAddress).toBe(digest);
+	});
+
+	it("passes only the transformed key to secondary storage", async () => {
+		const store = new Map<string, string>();
+		const transformKey = vi.fn((key: string) => `auth:${key}`);
+		const { client } = await getTestInstance({
+			rateLimit: { enabled: true, transformKey },
+			secondaryStorage: createRateLimitSecondaryStorage(store),
+		});
+		const response = await client.getSession({
+			fetchOptions: { headers: { "x-forwarded-for": "203.0.113.25" } },
+		});
+
+		expect(response.error).toBeNull();
+		expect(transformKey.mock.calls).toEqual([["203.0.113.25|/get-session"]]);
+		expect(store.has("auth:203.0.113.25|/get-session")).toBe(true);
+		expect(store.has("203.0.113.25|/get-session")).toBe(false);
+	});
+
+	it("awaits the key transform after hashing the IP and only for limited routes", async () => {
+		const consume = vi.fn(async () => ({ allowed: true, retryAfter: null }));
+		const transformKey = vi.fn(async () => "transformed-key");
+		const { auth } = await getTestInstance({
+			secret,
+			advanced: { ipAddress: { anonymize: true } },
+			rateLimit: {
+				enabled: true,
+				transformKey,
+				customRules: { "/list-sessions": false },
+				customStorage: { consume },
+			},
+		});
+		const ip = "203.0.113.26";
+		const request = (path: string) =>
+			auth.handler(
+				new Request(`http://localhost:3000/api/auth${path}`, {
+					headers: { "x-forwarded-for": ip },
+				}),
+			);
+		expect((await request("/list-sessions")).status).toBe(401);
+		expect((await request("/get-session")).status).toBe(200);
+		const digest = createHmac("sha256", secret)
+			.update(`better-auth:rate-limit:ip:${ip}`)
+			.digest("hex");
+		expect(transformKey.mock.calls).toEqual([[`${digest}|/get-session`]]);
+		expect(consume.mock.calls).toEqual([
+			["transformed-key", { window: 10, max: 100 }],
+		]);
 	});
 });
 
