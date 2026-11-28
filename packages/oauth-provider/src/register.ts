@@ -1133,12 +1133,19 @@ async function persistOAuthClientRegistration(
 				created = true;
 			}
 
+			// Bound the lookup to the resources being registered. findMany
+			// defaults to defaultFindManyLimit (100), so loading every link
+			// for the client can miss existing rows and hit the unique index.
 			const linkedResources =
 				resources.length === 0
 					? []
 					: await adapter.findMany<OAuthClientResource>({
 							model: clientResourceModel,
-							where: [{ field: "clientId", value: clientId }],
+							where: [
+								{ field: "clientId", value: clientId },
+								{ field: "resourceId", operator: "in", value: resources },
+							],
+							limit: resources.length,
 						});
 			const linkedResourceIds = new Set(
 				linkedResources.map((link) => link.resourceId),
