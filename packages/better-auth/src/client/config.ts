@@ -6,6 +6,7 @@ import { createFetch } from "@better-fetch/fetch";
 import { defu } from "defu";
 import type { WritableAtom } from "nanostores";
 import { getBaseURL } from "../utils/url";
+import { beginAuthChange, classifyAuthChange } from "./auth-change";
 import { redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
 import type { SessionData } from "./session-atom";
@@ -159,9 +160,15 @@ export const getClientConfig = (
 		notify: (
 			signal?: (Omit<string, "$sessionSignal"> | "$sessionSignal") | undefined,
 		) => {
-			pluginsAtoms[signal as keyof typeof pluginsAtoms]!.set(
-				!pluginsAtoms[signal as keyof typeof pluginsAtoms]!.get(),
+			const atom = pluginsAtoms[signal as string];
+			if (!atom) return;
+			// A notification reports a change that already happened.
+			const ends = beginAuthChange(
+				atom,
+				classifyAuthChange(pluginsAtoms, [signal as string]),
 			);
+			for (const end of ends) void end();
+			atom.set(!atom.get());
 		},
 		listen: (
 			signal: Omit<string, "$sessionSignal"> | "$sessionSignal",
