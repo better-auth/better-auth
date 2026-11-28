@@ -192,13 +192,13 @@ async function claimUsageInDatabase({
 	opts: PredefinedApiKeyOptions;
 	hashedKey: string;
 }): Promise<ApiKey> {
-	let row: ApiKey = apiKey;
+	// Rate limit first: a rate-limited request must not spend `remaining`, and
+	// a window slot (unlike quota) is restored when the window rolls over.
+	let row = await consumeRateLimit(ctx, apiKey, opts);
 
-	if (apiKey.remaining !== null) {
-		row = await consumeRemaining(ctx, apiKey);
+	if (row.remaining !== null) {
+		row = await consumeRemaining(ctx, row);
 	}
-
-	row = await consumeRateLimit(ctx, row, opts);
 
 	// A final `updatedAt` stamp returns the fully consolidated row, reflecting
 	// every guarded counter write applied above.

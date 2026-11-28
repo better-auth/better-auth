@@ -5123,6 +5123,41 @@ describe("verify should not write back stale state", async () => {
 	});
 });
 
+describe("rate-limited verification", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [apiKey()],
+	});
+
+	/**
+	 * @see https://www.better-auth.com/docs/plugins/api-key/advanced
+	 */
+	it("does not consume remaining when the request is rate limited", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const created = await auth.api.createApiKey({
+			body: {
+				remaining: 5,
+				rateLimitEnabled: true,
+				rateLimitMax: 1,
+				rateLimitTimeWindow: 60_000,
+				userId: user.id,
+			},
+		});
+
+		const first = await auth.api.verifyApiKey({ body: { key: created.key } });
+		expect(first.valid).toBe(true);
+
+		const second = await auth.api.verifyApiKey({ body: { key: created.key } });
+		expect(second.valid).toBe(false);
+		expect(second.error?.code).toBe("RATE_LIMITED");
+
+		const stored = await auth.api.getApiKey({
+			query: { id: created.id },
+			headers,
+		});
+		expect(stored.remaining).toBe(4);
+	});
+});
+
 describe("concurrent verification enforces atomic counters", async () => {
 	describe("database storage", async () => {
 		// A gate that releases all waiters only once `size` of them have arrived,
@@ -5228,6 +5263,40 @@ describe("concurrent verification enforces atomic counters", async () => {
 				headers,
 			});
 			expect(stored.requestCount).toBe(2);
+		});
+
+		it("does not let a rate-limited burst consume remaining or delete the key", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: {
+					remaining: 2,
+					rateLimitEnabled: true,
+					rateLimitMax: 1,
+					rateLimitTimeWindow: 60_000,
+					userId: user.id,
+				},
+			});
+
+			// Use the only slot in the window, leaving remaining at 1.
+			await auth.api.verifyApiKey({ body: { key: created.key } });
+
+			gate = createArrivalGate(concurrency);
+			const results = await Promise.all(
+				Array.from({ length: concurrency }, () =>
+					auth.api.verifyApiKey({ body: { key: created.key } }),
+				),
+			);
+
+			for (const r of results) {
+				expect(r.valid).toBe(false);
+				expect(r.error?.code).toBe("RATE_LIMITED");
+			}
+
+			const stored = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(stored.remaining).toBe(1);
 		});
 	});
 
