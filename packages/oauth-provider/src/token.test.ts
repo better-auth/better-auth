@@ -14,6 +14,7 @@ import {
 	deriveDpopJkt,
 	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
+import { admin } from "better-auth/plugins/admin";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin } from "better-auth/types";
@@ -893,10 +894,12 @@ describe("oauth token - refresh_token", async () => {
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
+		signInWithUser,
 		customFetchImpl,
 	} = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
+			admin(),
 			jwt({
 				jwt: {
 					issuer: authServerBaseUrl,
@@ -2252,6 +2255,91 @@ describe("oauth token - refresh_token", async () => {
 			});
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12973
+	 */
+	describe("banned user", () => {
+		async function refresh(refreshToken: string) {
+			const { body, headers: tokenHeaders } = await refreshAccessTokenRequest({
+				refreshToken,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+				resource: validResource,
+			});
+			return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: tokenHeaders,
+			});
+		}
+
+		async function signUpUser() {
+			const email = `user-${generateRandomString(8).toLowerCase()}@test.com`;
+			const password = "password1234";
+			const { user } = await authorizationServer.api.signUpEmail({
+				body: { email, password, name: "User" },
+			});
+			const { headers: userHeaders } = await signInWithUser(email, password);
+			return { userId: user.id, headers: userHeaders };
+		}
+
+		it("refuses to refresh an offline_access token until the ban expires", async () => {
+			const { userId, headers: userHeaders } = await signUpUser();
+			const tokens = await authorizeForRefreshToken(
+				["openid", "profile", "offline_access"],
+				userHeaders,
+			);
+			const adminUser = await signUpUser();
+			const context = await authorizationServer.$context;
+			await context.internalAdapter.updateUser(adminUser.userId, {
+				role: "admin",
+			});
+			await authorizationServer.api.banUser({
+				headers: adminUser.headers,
+				body: { userId, banExpiresIn: 60 },
+			});
+
+			const refused = await refresh(tokens!.refresh_token!);
+			expect(refused.error).toMatchObject({
+				status: 400,
+				error: "invalid_grant",
+				error_description: "user is banned",
+			});
+
+			await context.internalAdapter.updateUser(userId, {
+				banExpires: new Date(Date.now() - 1_000),
+			});
+			const refreshed = await refresh(tokens!.refresh_token!);
+			expect(refreshed.error).toBeNull();
+		});
+
+		it("refuses to exchange an authorization code when the ban left the session alive", async () => {
+			const { userId, headers: userHeaders } = await signUpUser();
+			const { url: authUrl, codeVerifier } = await createAuthUrl();
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				headers: userHeaders,
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			const code = new URL(callbackRedirectUrl).searchParams.get("code");
+			expect(code).toBeTruthy();
+			const context = await authorizationServer.$context;
+			await context.internalAdapter.updateUser(userId, { banned: true });
+
+			const tokens = await validateAuthCode({ code: code!, codeVerifier });
+			expect(tokens.error).toMatchObject({
+				status: 400,
+				error: "invalid_grant",
+				error_description: "user is banned",
+			});
+		});
+	});
 });
 
 describe("oauth token - refresh_token reuse interval", async () => {
@@ -2267,6 +2355,7 @@ describe("oauth token - refresh_token reuse interval", async () => {
 	} = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
+			admin(),
 			jwt({
 				jwt: {
 					issuer: authServerBaseUrl,
@@ -2473,6 +2562,35 @@ describe("oauth token - refresh_token reuse interval", async () => {
 			refresh_call: "1",
 		});
 		expect(refreshTokenResponseCalls).toBe(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12973
+	 */
+	it("refuses to replay a rotated refresh response while the user is banned", async () => {
+		oauthClient = await createOAuthClient();
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const firstRefresh = await refresh(tokens.refresh_token!);
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+
+		const context = await authorizationServer.$context;
+		const session = await authorizationServer.api.getSession({ headers });
+		const userId = session!.user.id;
+		await context.internalAdapter.updateUser(userId, { banned: true });
+		const refused = await refresh(tokens.refresh_token!);
+		await context.internalAdapter.updateUser(userId, { banned: false });
+		expect(refused.error).toMatchObject({
+			status: 400,
+			error: "invalid_grant",
+			error_description: "user is banned",
+		});
+
+		const replay = await refresh(tokens.refresh_token!);
+		expect(replay.data?.refresh_token).toBe(firstRefresh.data?.refresh_token);
 	});
 
 	/**
