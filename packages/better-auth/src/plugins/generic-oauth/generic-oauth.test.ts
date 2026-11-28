@@ -4795,6 +4795,93 @@ describe("oauth2", async () => {
 			expect(location).toContain("error=state_mismatch");
 			expect(location).not.toContain("please_restart_the_process");
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12644
+		 */
+		it("should forward a stateless provider error code when the provider opts in", async () => {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "idp-initiated-error",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								allowIdpInitiated: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const res = await customFetchImpl(
+				"http://localhost:3000/api/auth/callback/idp-initiated-error?error=access_denied&error_description=Call+this+number",
+				{ method: "GET", redirect: "manual" },
+			);
+
+			expect(res.status).toBe(302);
+			const url = new URL(res.headers.get("location") || "");
+			expect(url.origin + url.pathname).toBe(
+				"http://localhost:3000/api/auth/error",
+			);
+			expect(url.searchParams.get("error")).toBe("access_denied");
+			expect(url.searchParams.get("error_description")).toBeNull();
+		});
+
+		it("should not forward a stateless provider error that is not a code", async () => {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "idp-initiated-free-text",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								allowIdpInitiated: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const res = await customFetchImpl(
+				"http://localhost:3000/api/auth/callback/idp-initiated-free-text?error=Call+this+number",
+				{ method: "GET", redirect: "manual" },
+			);
+
+			expect(res.status).toBe(302);
+			const url = new URL(res.headers.get("location") || "");
+			expect(url.searchParams.get("error")).toBe("state_not_found");
+		});
+
+		it("should keep state_not_found for a stateless provider error without the flag", async () => {
+			const { customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "strict-error",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+							},
+						],
+					}),
+				],
+			});
+
+			const res = await customFetchImpl(
+				"http://localhost:3000/api/auth/callback/strict-error?error=access_denied",
+				{ method: "GET", redirect: "manual" },
+			);
+
+			expect(res.status).toBe(302);
+			const url = new URL(res.headers.get("location") || "");
+			expect(url.searchParams.get("error")).toBe("state_not_found");
+		});
 	});
 
 	describe("validateUserInfo callback", () => {
