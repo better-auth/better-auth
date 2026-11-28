@@ -64,7 +64,9 @@ import {
 	getJwtPlugin,
 	getStoredToken,
 	isInvalidJwtError,
+	hasExpectedRefreshParentState,
 	isPKCERequired,
+	isSessionActive,
 	isSessionBoundRefreshToken,
 	normalizeTimestampValue,
 	parseClientMetadata,
@@ -573,7 +575,10 @@ async function createOpaqueAccessToken(
 		});
 		throw grantRevokedDuringIssuance();
 	}
-	return (opts.prefix?.opaqueAccessToken ?? "") + token;
+	return {
+		id: accessTokenId,
+		token: (opts.prefix?.opaqueAccessToken ?? "") + token,
+	};
 }
 
 async function refreshTokenExists(
@@ -1402,7 +1407,7 @@ async function createUserTokens(
 		: undefined;
 
 	// Create access token and refresh token in parallel
-	const [accessToken, refreshToken] = await Promise.all([
+	const [issuedAccessToken, refreshToken] = await Promise.all([
 		isJwtAccessToken
 			? createJwtAccessToken(
 					ctx,
@@ -1464,6 +1469,10 @@ async function createUserTokens(
 				: undefined,
 	]);
 
+	const accessToken =
+		typeof issuedAccessToken === "string"
+			? issuedAccessToken
+			: issuedAccessToken.token;
 	// ID token created after access token so at_hash can be computed
 	const idToken = isIdToken
 		? await createIdToken(
@@ -1509,6 +1518,73 @@ async function createUserTokens(
 				"failed to store refresh token rotation replay",
 				error,
 			);
+		}
+	}
+	if (existingRefreshToken?.id) {
+		// A revoke-all sweep clears rotatedAt on every parent, including one
+		// already consumed by this request. Check after all token inserts and
+		// replay writes, so a sweep between the parent CAS and either insert
+		// cannot leave newly issued tokens active. A later sweep sees all of
+		// these rows and revokes them itself (refresh rows before access rows).
+		const parent = await ctx.context.adapter.findOne<
+			OAuthRefreshToken<Scope[]>
+		>({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: existingRefreshToken.id }],
+		});
+		if (!hasExpectedRefreshParentState(parent, !!refreshToken?.id)) {
+			const revokedAt = new Date();
+			if (refreshToken?.id) {
+				await ctx.context.adapter.updateMany({
+					model: "oauthRefreshToken",
+					where: [{ field: "id", value: refreshToken.id }],
+					update: {
+						revoked: revokedAt,
+						rotatedAt: null,
+						rotationReplayExpiresAt: null,
+					},
+				});
+			}
+			if (typeof issuedAccessToken !== "string") {
+				await ctx.context.adapter.updateMany({
+					model: "oauthAccessToken",
+					where: [{ field: "id", value: issuedAccessToken.id }],
+					update: { revoked: revokedAt },
+				});
+			}
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_grant",
+				error_description: "invalid refresh token",
+			});
+		}
+	}
+	if (grantType === "authorization_code" && sessionId) {
+		// An initial grant has no rotation parent to fence issuance. Read the
+		// session after every insert: a concurrent logout may already have
+		// completed its sweep before these rows became visible. A later logout
+		// sees all inserted rows and revokes them itself.
+		const session = await ctx.context.adapter.findOne<Session>({
+			model: "session",
+			where: [{ field: "id", value: sessionId }],
+		});
+		if (!isSessionActive(session)) {
+			const revokedAt = new Date();
+			for (const model of ["oauthRefreshToken", "oauthAccessToken"] as const) {
+				await ctx.context.adapter.updateMany({
+					model,
+					where: [
+						{
+							field: "authorizationCodeId",
+							value: params.authorizationCodeId!,
+						},
+					],
+					update: { revoked: revokedAt },
+				});
+			}
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_grant",
+				error_description: "session ended during token issuance",
+			});
 		}
 	}
 	return ctx.json(responseBody);
@@ -1833,7 +1909,7 @@ async function handleAuthorizationCodeGrant(
 			},
 		],
 	});
-	if (!session || session.expiresAt < new Date()) {
+	if (!isSessionActive(session)) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "session no longer exists",
 			error: "invalid_request",
