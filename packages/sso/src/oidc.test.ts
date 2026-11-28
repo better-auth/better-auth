@@ -1,14 +1,24 @@
 import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
+import type { ClientAssertionGetter } from "better-auth";
 import { createAuthClient } from "better-auth/client";
 import { organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
-import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify } from "jose";
+import {
+	createLocalJWKSet,
+	decodeProtectedHeader,
+	exportJWK,
+	generateKeyPair,
+	importJWK,
+	jwtVerify,
+	SignJWT,
+} from "jose";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getAuthStateVerificationIdentifier } from "../../better-auth/src/state";
 import { sso } from ".";
 import { ssoClient } from "./client";
+import type { SSOOptions } from "./types";
 
 const server = new OAuth2Server();
 
@@ -1729,11 +1739,13 @@ describe("OIDC SSO with private_key_jwt", async () => {
 	let publicJwk: JsonWebKey;
 	let capturedTokenRequest: Record<string, any> | undefined;
 
-	const resolvePrivateKey = vi.fn(async ({ keyId }: { keyId?: string }) => ({
-		privateKeyJwk: privateJwk,
-		kid: keyId,
-		algorithm: "RS256",
-	}));
+	const resolvePrivateKey = vi.fn<NonNullable<SSOOptions["resolvePrivateKey"]>>(
+		async ({ keyId }) => ({
+			privateKeyJwk: privateJwk,
+			kid: keyId,
+			algorithm: "RS256",
+		}),
+	);
 
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
@@ -1889,6 +1901,11 @@ describe("OIDC SSO with private_key_jwt", async () => {
 		);
 		expect(tokenReq.client_id).toBe("private-key-jwt-client");
 		expect(tokenReq.client_secret).toBeUndefined();
+		expect(decodeProtectedHeader(tokenReq.client_assertion as string)).toEqual({
+			alg: "RS256",
+			typ: "JWT",
+			kid: "private-key-jwt-key",
+		});
 
 		const jwks = createLocalJWKSet({
 			keys: [
@@ -1910,6 +1927,64 @@ describe("OIDC SSO with private_key_jwt", async () => {
 		);
 		expect(payload.iss).toBe("private-key-jwt-client");
 		expect(payload.sub).toBe("private-key-jwt-client");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe("jwt-auth-user@private-key-jwt.com");
+	});
+
+	// Providers that need header parameters Better Auth does not set (e.g. Entra's x5t#S256).
+	it("should send the client assertion returned by resolvePrivateKey", async () => {
+		capturedTokenRequest = undefined;
+		const clientAssertion = vi.fn<ClientAssertionGetter>(
+			async ({ clientId, tokenEndpoint }) => {
+				const now = Math.floor(Date.now() / 1000);
+				return new SignJWT({})
+					.setProtectedHeader({
+						alg: "RS256",
+						typ: "JWT",
+						"x5t#S256": "thumbprint",
+					})
+					.setIssuer(clientId)
+					.setSubject(clientId)
+					.setAudience(tokenEndpoint)
+					.setIssuedAt(now)
+					.setExpirationTime(now + 120)
+					.setJti(crypto.randomUUID())
+					.sign(await importJWK(privateJwk, "RS256"));
+			},
+		);
+		resolvePrivateKey.mockResolvedValueOnce({ clientAssertion });
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "private-key-jwt-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			signInHeaders,
+		);
+
+		expect(callbackURL).toContain("/dashboard");
+		expect(clientAssertion).toHaveBeenCalledWith({
+			clientId: "private-key-jwt-client",
+			tokenEndpoint: `${server.issuer.url}/token`,
+			grantType: "authorization_code",
+		});
+		const tokenReq = capturedTokenRequest! as unknown as Record<
+			string,
+			unknown
+		>;
+		expect(tokenReq.client_assertion).toBe(
+			await clientAssertion.mock.results[0]!.value,
+		);
+		expect(tokenReq.client_secret).toBeUndefined();
 
 		const session = await authClient.getSession({
 			fetchOptions: { headers: sessionHeaders },

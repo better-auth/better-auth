@@ -15,6 +15,7 @@ import {
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import type {
+	ClientAssertionGetter,
 	PrivateKeyJwtSigningAlgorithm,
 	TokenEndpointAuth,
 } from "better-auth";
@@ -1455,6 +1456,7 @@ async function handleOIDCCallback(
 			privateKeyPem?: string;
 			kid?: string;
 			algorithm?: string;
+			clientAssertion?: ClientAssertionGetter;
 		};
 		let resolved: PrivateKeyResult | undefined;
 
@@ -1476,7 +1478,12 @@ async function handleOIDCCallback(
 			});
 		}
 
-		if (!resolved || (!resolved.privateKeyJwk && !resolved.privateKeyPem)) {
+		if (
+			!resolved ||
+			(!resolved.clientAssertion &&
+				!resolved.privateKeyJwk &&
+				!resolved.privateKeyPem)
+		) {
 			return redirectOIDCError("invalid_provider", "no_private_key_available");
 		}
 
@@ -1489,12 +1496,14 @@ async function handleOIDCCallback(
 
 		tokenEndpointAuth = {
 			method: "private_key_jwt",
-			getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
-				privateKeyJwk: resolved.privateKeyJwk,
-				privateKeyPem: resolved.privateKeyPem,
-				kid: config.privateKeyId ?? resolved.kid,
-				algorithm,
-			}),
+			getClientAssertion:
+				resolved.clientAssertion ??
+				createPrivateKeyJwtClientAssertionGetter({
+					privateKeyJwk: resolved.privateKeyJwk,
+					privateKeyPem: resolved.privateKeyPem,
+					kid: config.privateKeyId ?? resolved.kid,
+					algorithm,
+				}),
 		};
 	}
 
