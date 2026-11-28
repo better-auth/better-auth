@@ -104,7 +104,11 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						{ onlyActiveSessions: true },
 					);
 					const validSessions = sessions.filter(
-						(session) => session && session.session.expiresAt > new Date(),
+						(session) =>
+							session &&
+							!(session.session as { impersonatedBy?: string })
+								.impersonatedBy &&
+							session.session.expiresAt > new Date(),
 					);
 					const uniqueUserSessions = validSessions.reduce(
 						(acc, session) => {
@@ -328,6 +332,11 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						if (!cookieString) return;
 						const newSession = ctx.context.newSession;
 						if (!newSession) return;
+						// An impersonation session is temporary: the admin plugin deletes it
+						// when impersonation stops. Treating it as a new device session would
+						// replace the target user's real session and leave a cookie pointing
+						// at a session that no longer exists.
+						if (newSession.session.impersonatedBy) return;
 
 						const sessionCookieConfig = ctx.context.authCookies.sessionToken;
 						const sessionToken = newSession.session.token;
@@ -341,27 +350,89 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							Object.fromEntries(cookies),
 						).filter(isMultiSessionCookie);
 
-						const tokensToDelete: string[] = [];
-						for (const key of multiSessionKeys) {
+						// The same deployment can be served over HTTP and HTTPS, so a
+						// browser may hold either variant of this instance's cookie name.
+						// Ownership is still verified below by the signature and by
+						// matching the full name against the signed token, so another
+						// app's cookies are never counted or cleared.
+						const ownedNames = [
+							sessionCookieConfig.name,
+							sessionCookieConfig.name.startsWith(SECURE_COOKIE_PREFIX)
+								? sessionCookieConfig.name.slice(SECURE_COOKIE_PREFIX.length)
+								: `${SECURE_COOKIE_PREFIX}${sessionCookieConfig.name}`,
+						];
+						const expireDeviceCookie = (name: string) =>
+							ctx.setCookie(name, "", {
+								...sessionCookieConfig.attributes,
+								// Browsers ignore the deletion of a `__Secure-` cookie unless
+								// the Secure attribute is set on the expiring entry too.
+								secure: name.startsWith(SECURE_COOKIE_PREFIX),
+								maxAge: 0,
+							});
+
+						const candidateCookies = multiSessionKeys
+							.map((key) => ({
+								key,
+								name: ownedNames.find((ownedName) =>
+									key.startsWith(`${ownedName}_multi-`),
+								),
+							}))
+							.filter(
+								(candidate): candidate is { key: string; name: string } =>
+									candidate.name !== undefined,
+							);
+
+						// Group every verified cookie name by the token it holds. The
+						// secure and plain variants of one session must be handled
+						// together: a live session keeps both, while a dead or replaced
+						// session must have every variant cleared.
+						const cookiesByToken = new Map<
+							string,
+							{ token: string; keys: string[] }
+						>();
+						for (const { key, name } of candidateCookies) {
 							const token = await ctx.getSignedCookie(key, ctx.context.secret);
+							// A cookie we cannot verify may belong to another app on this
+							// host, so never clear it based on its name alone.
 							if (!token) continue;
+							// The signed token must be exactly the one in the cookie name.
+							// This works for custom token formats and ignores cookies
+							// another app signed or named differently.
+							if (key !== `${name}_multi-${token.toLowerCase()}`) continue;
+							const group = cookiesByToken.get(token);
+							if (group) group.keys.push(key);
+							else cookiesByToken.set(token, { token, keys: [key] });
+						}
+
+						const tokensToDelete: string[] = [];
+						let liveSessionCount = 0;
+						for (const { token, keys } of cookiesByToken.values()) {
 							const session =
 								await ctx.context.internalAdapter.findSession(token);
-							if (session?.user.id === newSession.user.id) {
-								tokensToDelete.push(token);
-								ctx.setCookie(key, "", {
-									...sessionCookieConfig.attributes,
-									maxAge: 0,
-								});
+							const isDead =
+								!session ||
+								!!(session.session as { impersonatedBy?: string })
+									.impersonatedBy ||
+								session.session.expiresAt < new Date();
+							const isReplaced = session?.user.id === newSession.user.id;
+							if (isDead || isReplaced) {
+								for (const key of keys) expireDeviceCookie(key);
+								// Delete the stale row for a session being replaced, including
+								// expired ones. An impersonation session belongs to the admin
+								// plugin, which deletes it when impersonation stops.
+								if (session && isReplaced && !session.session.impersonatedBy) {
+									tokensToDelete.push(token);
+								}
+								continue;
 							}
+							liveSessionCount++;
 						}
 						if (tokensToDelete.length > 0) {
 							await ctx.context.internalAdapter.deleteSessions(tokensToDelete);
 						}
 
 						const currentCount =
-							multiSessionKeys.length -
-							tokensToDelete.length +
+							liveSessionCount +
 							(cookieString.includes(sessionCookieConfig.name) ? 1 : 0);
 
 						if (currentCount > opts.maximumSessions) return;
