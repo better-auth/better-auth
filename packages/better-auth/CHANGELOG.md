@@ -1,5 +1,48 @@
 # better-auth
 
+## 1.7.29
+
+### Patch Changes
+
+- [#12959](https://github.com/better-auth/better-auth/pull/12959) [`017a985`](https://github.com/better-auth/better-auth/commit/017a985eea43bb3294661d70eaa5750eabfe9c4c) Thanks [@bytaesu](https://github.com/bytaesu)! - Sign-up no longer fails, or stores a wrong value, when the request includes an `input: false` field whose `defaultValue` is a function.
+
+- [#12962](https://github.com/better-auth/better-auth/pull/12962) [`59da7fb`](https://github.com/better-auth/better-auth/commit/59da7fbdcf522be816254e006237f2eb1f736bc6) Thanks [@bytaesu](https://github.com/bytaesu)! - `oneTap({ disableSignUp: true })` was ignored and `/one-tap/callback` still created new users. It now closes sign-up, and `disableSignup` stays as a deprecated alias.
+
+- [#12952](https://github.com/better-auth/better-auth/pull/12952) [`b87f41f`](https://github.com/better-auth/better-auth/commit/b87f41f1ae8007bc94c71cd7488ea5a3df3d9f0f) Thanks [@bytaesu](https://github.com/bytaesu)! - Organization dynamic role names are now trimmed when created or renamed, and names that are empty or contain a comma are rejected with `INVALID_ROLE_NAME`.
+
+- [#12956](https://github.com/better-auth/better-auth/pull/12956) [`61bfa16`](https://github.com/better-auth/better-auth/commit/61bfa16c5a5af3a444e33c61dcc280c99a30b723) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Email OTP and phone number codes resent while a wrong guess was being checked are no longer replaced by the old code when verification lives only in secondary storage.
+
+- [#12975](https://github.com/better-auth/better-auth/pull/12975) [`fcd3cbf`](https://github.com/better-auth/better-auth/commit/fcd3cbf4a71f8d19b295383b10a44f829e3e80c5) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - With `resendStrategy: "reuse"`, an email OTP resend no longer repeats a code that was used or removed before the resend could extend its expiry. It sends a new code instead.
+
+- [#12958](https://github.com/better-auth/better-auth/pull/12958) [`bde96d1`](https://github.com/better-auth/better-auth/commit/bde96d18d5f64b956d190e5cf092db50e862781a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Email OTP and phone number OTP no longer send a code when a `verification.create.before` database hook returns `false`. Before, the code was sent even though it was never stored, so every attempt to use it failed with `INVALID_OTP`.
+
+  - Sign-in codes, phone verification codes, and the server-only `createVerificationOTP` now fail with `FAILED_TO_CREATE_VERIFICATION` (HTTP 500).
+  - Endpoints whose reply hides whether an account exists send nothing and return their usual reply. This covers password reset, email verification, change email, and sign-in codes when `disableSignUp` is set.
+  - With `sendVerificationOnSignUp`, sign-up still succeeds without sending a code, and the error is logged. The user can request a new code later.
+
+- [#12975](https://github.com/better-auth/better-auth/pull/12975) [`fcd3cbf`](https://github.com/better-auth/better-auth/commit/fcd3cbf4a71f8d19b295383b10a44f829e3e80c5) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Email OTP and phone number OTP no longer send a code when a `verification.update.before` database hook blocks it from replacing an earlier code. Before, a send that overlapped an earlier one could deliver a code that was never stored, so it always failed with `INVALID_OTP`. The send now fails with `FAILED_TO_CREATE_VERIFICATION`, or returns the usual reply on endpoints that hide whether an account exists.
+
+- [#12969](https://github.com/better-auth/better-auth/pull/12969) [`a55ade9`](https://github.com/better-auth/better-auth/commit/a55ade9c4f3737a367f7cbff2dbb5f8b1e7494d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - When secondary storage fails, Better Auth logs and rethrows the error without the keys and values it was called with, so session tokens and cached sessions no longer reach application logs. The error keeps its name, message, and properties, such as the Redis command name, except where they contain one of those keys or values.
+
+- [#12956](https://github.com/better-auth/better-auth/pull/12956) [`61bfa16`](https://github.com/better-auth/better-auth/commit/61bfa16c5a5af3a444e33c61dcc280c99a30b723) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Two-factor OTP codes resent while a wrong guess was being checked are no longer rejected in favor of the old code.
+
+- [#12955](https://github.com/better-auth/better-auth/pull/12955) [`6b883ac`](https://github.com/better-auth/better-auth/commit/6b883aca559598c756a0999523a508be20ab281a) Thanks [@bytaesu](https://github.com/bytaesu)! - Two-factor enable, disable and enrollment now keep the original sign-in time when they replace the session, even after a password check, so the replacement is only as fresh as the session it replaces for `session.freshAge`.
+
+- [#12975](https://github.com/better-auth/better-auth/pull/12975) [`fcd3cbf`](https://github.com/better-auth/better-auth/commit/fcd3cbf4a71f8d19b295383b10a44f829e3e80c5) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `update.after` database hooks no longer run when an update matches no record. Before, they ran with `null`, although their type promises the updated record, so hooks that read a field, such as the Stripe plugin's user hook, could throw.
+
+- [#12975](https://github.com/better-auth/better-auth/pull/12975) [`fcd3cbf`](https://github.com/better-auth/better-auth/commit/fcd3cbf4a71f8d19b295383b10a44f829e3e80c5) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `verification.update` database hooks now run when verification values are kept in secondary storage, as `verification.create` hooks already did. With `verification.storeInDatabase`, secondary storage now changes only after the database update succeeds, so an update that a hook blocks or that finds no row leaves both stores with the same value.
+
+- [#12958](https://github.com/better-auth/better-auth/pull/12958) [`bde96d1`](https://github.com/better-auth/better-auth/commit/bde96d18d5f64b956d190e5cf092db50e862781a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Magic link, password reset, account deletion, one-time token, SIWE nonce, two-factor OTP, and two-factor sign-in no longer hand out a link, code, token, or challenge when a `verification.create.before` database hook returns `false`. Before, they sent something that could never be verified. Most of these endpoints now fail with `FAILED_TO_CREATE_VERIFICATION` (HTTP 500). Password reset sends no email and returns its usual reply, so it still does not reveal whether the account exists. Sign-in still succeeds when the hook vetoes an optional record: a trusted device is not trusted, and the `set-ott` header is left out.
+
+- Updated dependencies [[`55513e8`](https://github.com/better-auth/better-auth/commit/55513e8533862f3f50efafc626d61ec927ae1728), [`55513e8`](https://github.com/better-auth/better-auth/commit/55513e8533862f3f50efafc626d61ec927ae1728), [`23adcb1`](https://github.com/better-auth/better-auth/commit/23adcb11d77b085b94c58cda78766ffda278d36d), [`bde96d1`](https://github.com/better-auth/better-auth/commit/bde96d18d5f64b956d190e5cf092db50e862781a), [`a55ade9`](https://github.com/better-auth/better-auth/commit/a55ade9c4f3737a367f7cbff2dbb5f8b1e7494d1), [`fcd3cbf`](https://github.com/better-auth/better-auth/commit/fcd3cbf4a71f8d19b295383b10a44f829e3e80c5)]:
+  - @better-auth/core@1.7.29
+  - @better-auth/drizzle-adapter@1.7.29
+  - @better-auth/kysely-adapter@1.7.29
+  - @better-auth/memory-adapter@1.7.29
+  - @better-auth/mongo-adapter@1.7.29
+  - @better-auth/prisma-adapter@1.7.29
+  - @better-auth/telemetry@1.7.29
+
 ## 1.7.28
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @better-auth/api-key
 
+## 1.7.29
+
+### Patch Changes
+
+- [#12969](https://github.com/better-auth/better-auth/pull/12969) [`a55ade9`](https://github.com/better-auth/better-auth/commit/a55ade9c4f3737a367f7cbff2dbb5f8b1e7494d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - When the API key plugin's `customStorage` fails, the error is logged and rethrown without the keys and values it was called with, so API keys stored without hashing no longer reach application logs.
+
 ## 1.7.28
 
 ### Patch Changes

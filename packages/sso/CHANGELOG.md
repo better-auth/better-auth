@@ -1,5 +1,11 @@
 # @better-auth/sso
 
+## 1.7.29
+
+### Patch Changes
+
+- [#12958](https://github.com/better-auth/better-auth/pull/12958) [`bde96d1`](https://github.com/better-auth/better-auth/commit/bde96d18d5f64b956d190e5cf092db50e862781a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SSO no longer returns a domain verification token, or redirects to a SAML identity provider, when a `verification.create.before` database hook returns `false` for the record that backs it. Provider registration with domain verification, `/sso/request-domain-verification`, and SAML sign-in with `InResponseTo` validation now fail with `FAILED_TO_CREATE_VERIFICATION` (HTTP 500). A failed registration does not leave the provider behind, with or without database transactions, so it can be retried. SP-initiated SAML logout still revokes the local session, because the logout response does not require the stored request.
+
 ## 1.7.28
 
 ### Patch Changes
