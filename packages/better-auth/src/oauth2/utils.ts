@@ -9,7 +9,10 @@ function isLikelyEncrypted(token: string): boolean {
 	return token.length % 2 === 0 && /^[0-9a-f]+$/i.test(token);
 }
 
-export function decryptOAuthToken(token: string, ctx: AuthContext) {
+export function decryptOAuthToken<T extends string | null | undefined>(
+	token: T,
+	ctx: AuthContext,
+) {
 	if (!token) return token;
 	if (ctx.options.account?.encryptOAuthTokens) {
 		if (!isLikelyEncrypted(token)) {
@@ -34,6 +37,26 @@ export function setTokenUtil(
 		});
 	}
 	return token;
+}
+
+/**
+ * Encrypts the tokens of an account record when `account.encryptOAuthTokens` is on.
+ *
+ * @internal
+ */
+export async function encryptAccountTokens(
+	tokens: {
+		accessToken?: string | null | undefined;
+		refreshToken?: string | null | undefined;
+		idToken?: string | null | undefined;
+	},
+	ctx: AuthContext,
+) {
+	return {
+		accessToken: await setTokenUtil(tokens.accessToken, ctx),
+		refreshToken: await setTokenUtil(tokens.refreshToken, ctx),
+		idToken: await setTokenUtil(tokens.idToken, ctx),
+	};
 }
 
 export function getOAuthCallbackPath(provider: {

@@ -20,7 +20,7 @@ import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { assertValidUserInfo } from "../utils/validate-user-info";
 import { OAUTH_CALLBACK_ERROR_CODES, redirectOnError } from "./errors";
-import { setTokenUtil } from "./utils";
+import { encryptAccountTokens } from "./utils";
 
 type OAuthAccountData = Omit<
 	Account,
@@ -165,9 +165,7 @@ export async function linkOAuthAccount(
 			Object.entries({
 				...accountFields,
 				providerId: account.providerId,
-				accessToken: await setTokenUtil(account.accessToken, c.context),
-				refreshToken: await setTokenUtil(account.refreshToken, c.context),
-				idToken: account.idToken,
+				...(await encryptAccountTokens(account, c.context)),
 				accessTokenExpiresAt: account.accessTokenExpiresAt,
 				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 				scope: mergedScope || undefined,
@@ -182,8 +180,7 @@ export async function linkOAuthAccount(
 			...accountFields,
 			userId: link.userId,
 			...account,
-			accessToken: await setTokenUtil(account.accessToken, c.context),
-			refreshToken: await setTokenUtil(account.refreshToken, c.context),
+			...(await encryptAccountTokens(account, c.context)),
 			scope: scopes?.join(",") ?? account.scope,
 		});
 		if (!newAccount) {
@@ -376,9 +373,7 @@ export async function handleOAuthUserInfo(
 					providerId: account.providerId,
 					accountId: account.accountId,
 					userId: dbUser.user.id,
-					accessToken: await setTokenUtil(account.accessToken, c.context),
-					refreshToken: await setTokenUtil(account.refreshToken, c.context),
-					idToken: account.idToken,
+					...(await encryptAccountTokens(account, c.context)),
 					accessTokenExpiresAt: account.accessTokenExpiresAt,
 					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 					scope: account.scope,
@@ -458,9 +453,7 @@ export async function handleOAuthUserInfo(
 				? Object.fromEntries(
 						Object.entries({
 							providerId: account.providerId,
-							idToken: account.idToken,
-							accessToken: await setTokenUtil(account.accessToken, c.context),
-							refreshToken: await setTokenUtil(account.refreshToken, c.context),
+							...(await encryptAccountTokens(account, c.context)),
 							accessTokenExpiresAt: account.accessTokenExpiresAt,
 							refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 						}).filter(([_, value]) => value !== undefined),
@@ -590,9 +583,7 @@ export async function handleOAuthUserInfo(
 			);
 			const accountData = {
 				...accountFields,
-				accessToken: await setTokenUtil(account.accessToken, c.context),
-				refreshToken: await setTokenUtil(account.refreshToken, c.context),
-				idToken: account.idToken,
+				...(await encryptAccountTokens(account, c.context)),
 				accessTokenExpiresAt: account.accessTokenExpiresAt,
 				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 				scope: account.scope,
