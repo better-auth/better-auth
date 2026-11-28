@@ -48,6 +48,16 @@ export async function resolveOAuthAccountFields(
 		return undefined;
 	}
 	const fields = await getAccountFields(tokens, userInfo);
+	return parseOAuthAccountFields(c, fields);
+}
+
+/**
+ * Checks `getAccountFields` values against this server's account schema.
+ */
+export function parseOAuthAccountFields(
+	c: GenericEndpointContext,
+	fields: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | undefined {
 	if (!fields) {
 		return undefined;
 	}

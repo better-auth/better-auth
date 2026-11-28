@@ -1,5 +1,11 @@
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import { APIError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
+import type {
+	GoogleOptions,
+	GoogleProfile,
+} from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -11,6 +17,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import * as z from "zod";
 import {
 	addOAuthServerContext,
 	createAuthMiddleware,
@@ -2617,5 +2624,419 @@ describe("oauth-proxy callback binding", () => {
 		});
 
 		expect(location.searchParams.get("error")).toBe("invalid_code");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12429
+ */
+describe("oauth-proxy mapped user fields", () => {
+	const proxySecret = "shared-oauth-proxy-secret";
+	const email = "user@email.com";
+
+	type PairOptions = Pick<
+		BetterAuthOptions,
+		"user" | "account" | "databaseHooks"
+	>;
+
+	async function createProxyPair({
+		options,
+		previewOptions,
+		google = {},
+		disableTestUser = true,
+	}: {
+		options: PairOptions;
+		previewOptions?: PairOptions;
+		google?: Partial<GoogleOptions>;
+		disableTestUser?: boolean;
+	}) {
+		const socialProviders = {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				mapProfileToUser: () => ({
+					department: "engineering",
+					role: "admin",
+				}),
+				...google,
+			},
+		};
+		const preview = await getTestInstance(
+			{
+				...options,
+				...previewOptions,
+				baseURL: "http://preview.example.com",
+				secret: "preview-main-secret",
+				plugins: [
+					oAuthProxy({
+						productionURL: "http://localhost:3000",
+						secret: proxySecret,
+					}),
+				],
+				socialProviders,
+			},
+			{ disableTestUser },
+		);
+		const production = await getTestInstance(
+			{
+				...options,
+				baseURL: "http://localhost:3000",
+				secret: "production-main-secret",
+				plugins: [oAuthProxy({ secret: proxySecret })],
+				socialProviders,
+			},
+			{ disableTestUser: true },
+		);
+
+		async function startSignIn() {
+			const signIn = await preview.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{ throw: true },
+			);
+			return signIn.url!;
+		}
+
+		async function relay(authorizationURL: string) {
+			const state = new URL(authorizationURL).searchParams.get("state");
+			if (!state) throw new Error("OAuth state is missing");
+			let location: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${encodeURIComponent(state)}`,
+				{
+					onError(context) {
+						location = context.response.headers.get("location");
+					},
+				},
+			);
+			if (!location) throw new Error("Production redirect is missing");
+			return new URL(location);
+		}
+
+		async function completeProxy(authorizationURL: string, headers?: Headers) {
+			const proxyCallback = await relay(authorizationURL);
+			let finalRedirect: string | null = null;
+			await preview.client.$fetch(
+				`${proxyCallback.pathname.replace("/api/auth", "")}${proxyCallback.search}`,
+				{
+					headers,
+					onError(context) {
+						finalRedirect = context.response.headers.get("location");
+					},
+				},
+			);
+			return finalRedirect;
+		}
+
+		async function signInThroughProxy() {
+			const authorizationURL = await startSignIn();
+			const finalRedirect = await completeProxy(authorizationURL);
+			const context = await preview.auth.$context;
+			const found = await context.internalAdapter.findUserByEmail(email);
+			const accounts = found
+				? await context.internalAdapter.findAccounts(found.user.id)
+				: [];
+			return { finalRedirect, user: found?.user, accounts };
+		}
+
+		async function linkThroughProxy() {
+			const { user, headers } = await preview.signInWithTestUser();
+			const link = await preview.client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/settings",
+				},
+				{ headers, throw: true },
+			);
+			const finalRedirect = await completeProxy(link.url, headers);
+			const context = await preview.auth.$context;
+			const linked = await context.internalAdapter.findUserById(user.id);
+			const accounts = await context.internalAdapter.findAccounts(user.id);
+			return { finalRedirect, user: linked, accounts };
+		}
+
+		return { startSignIn, relay, signInThroughProxy, linkThroughProxy };
+	}
+
+	it.for([
+		{ kind: "optional", field: { type: "string", required: false } },
+		{
+			kind: "defaulted",
+			field: { type: "string", required: false, defaultValue: "none" },
+		},
+		{ kind: "required", field: { type: "string", required: true } },
+	] satisfies { kind: string; field: DBFieldAttribute }[])(
+		"creates the preview user with $kind fields from mapProfileToUser",
+		async ({ field }) => {
+			const { signInThroughProxy } = await createProxyPair({
+				options: { user: { additionalFields: { department: field } } },
+			});
+
+			const { finalRedirect, user } = await signInThroughProxy();
+
+			expect(finalRedirect).toBe("/dashboard");
+			expect(user).toMatchObject({ department: "engineering" });
+		},
+	);
+
+	it("keeps fields the preview schema does not accept out of the user", async () => {
+		const { signInThroughProxy } = await createProxyPair({
+			options: {
+				user: {
+					additionalFields: {
+						role: { type: "string", input: false, defaultValue: "user" },
+					},
+				},
+			},
+		});
+
+		const { finalRedirect, user } = await signInThroughProxy();
+
+		expect(finalRedirect).toBe("/dashboard");
+		expect(user).toMatchObject({ role: "user" });
+		expect(user).not.toHaveProperty("department");
+	});
+
+	it("keeps a mapped string that looks like a date as a string", async () => {
+		const registeredAt = "2026-11-12T12:00:00.000Z";
+		const { signInThroughProxy } = await createProxyPair({
+			options: {
+				user: {
+					additionalFields: {
+						registeredAt: { type: "string", required: false },
+					},
+				},
+			},
+			google: { mapProfileToUser: () => ({ registeredAt }) },
+		});
+
+		const { finalRedirect, user } = await signInThroughProxy();
+
+		expect(finalRedirect).toBe("/dashboard");
+		expect(user).toMatchObject({ registeredAt });
+	});
+
+	it("passes a mapped date field to user hooks as a date", async () => {
+		const joinedAt = new Date("2026-11-12T12:00:00.000Z");
+		const createBefore = vi.fn();
+		const { signInThroughProxy } = await createProxyPair({
+			options: {
+				user: {
+					additionalFields: {
+						joinedAt: { type: "date", required: false },
+					},
+				},
+				databaseHooks: { user: { create: { before: createBefore } } },
+			},
+			google: { mapProfileToUser: () => ({ joinedAt }) },
+		});
+
+		const { finalRedirect, user } = await signInThroughProxy();
+
+		expect(finalRedirect).toBe("/dashboard");
+		expect(createBefore).toHaveBeenCalledWith(
+			expect.objectContaining({ joinedAt }),
+			expect.anything(),
+		);
+		expect(user).toMatchObject({ joinedAt });
+	});
+
+	it("applies fields from mapProfileToUser on a proxied link with updateUserInfoOnLink", async () => {
+		const { linkThroughProxy } = await createProxyPair({
+			options: {
+				user: {
+					additionalFields: {
+						department: { type: "string", required: false },
+					},
+				},
+				account: {
+					accountLinking: {
+						allowDifferentEmails: true,
+						updateUserInfoOnLink: true,
+					},
+				},
+			},
+			disableTestUser: false,
+		});
+
+		const { finalRedirect, user } = await linkThroughProxy();
+
+		expect(finalRedirect).toBe("/settings");
+		expect(user).toMatchObject({ department: "engineering" });
+	});
+
+	it("stores account fields from getAccountFields on the preview account", async () => {
+		const linkedAt = new Date("2026-11-12T12:00:00.000Z");
+		const accountCreateBefore = vi.fn();
+		const { signInThroughProxy } = await createProxyPair({
+			options: {
+				account: {
+					additionalFields: {
+						tenant: { type: "string", required: false },
+						linkedAt: { type: "date", required: false },
+					},
+				},
+				databaseHooks: { account: { create: { before: accountCreateBefore } } },
+			},
+			google: { getAccountFields: () => ({ tenant: "acme", linkedAt }) },
+		});
+
+		const { finalRedirect, accounts } = await signInThroughProxy();
+
+		expect(finalRedirect).toBe("/dashboard");
+		expect(accountCreateBefore).toHaveBeenCalledWith(
+			expect.objectContaining({ tenant: "acme", linkedAt }),
+			expect.anything(),
+		);
+		expect(accounts[0]).toMatchObject({ tenant: "acme", linkedAt });
+	});
+
+	it.for([
+		{
+			kind: "an APIError with a code",
+			error: new APIError("FORBIDDEN", {
+				code: "tenant_not_allowed",
+				message: "Tenant is not allowed",
+			}),
+			code: "tenant_not_allowed",
+			description: "Tenant is not allowed",
+		},
+		{
+			kind: "any other error",
+			error: new Error("lookup failed"),
+			code: "unable_to_get_user_info",
+			description: null,
+		},
+	])(
+		"redirects before relaying when getAccountFields throws $kind",
+		async ({ error, code, description }) => {
+			const { startSignIn, relay } = await createProxyPair({
+				options: {
+					account: {
+						additionalFields: { tenant: { type: "string", required: false } },
+					},
+				},
+				google: {
+					getAccountFields: () => {
+						throw error;
+					},
+				},
+			});
+			const authorizationURL = await startSignIn();
+
+			const redirect = await relay(authorizationURL);
+
+			expect(redirect.searchParams.get("error")).toBe(code);
+			expect(redirect.searchParams.get("error_description")).toBe(description);
+			expect(redirect.searchParams.has("profile")).toBe(false);
+		},
+	);
+
+	it("stores account fields from getAccountFields on a proxied link", async () => {
+		const { linkThroughProxy } = await createProxyPair({
+			options: {
+				account: {
+					additionalFields: { tenant: { type: "string", required: false } },
+					accountLinking: { allowDifferentEmails: true },
+				},
+			},
+			google: { getAccountFields: () => ({ tenant: "acme" }) },
+			disableTestUser: false,
+		});
+
+		const { finalRedirect, accounts } = await linkThroughProxy();
+
+		expect(finalRedirect).toBe("/settings");
+		expect(accounts.find((a) => a.providerId === "google")).toMatchObject({
+			tenant: "acme",
+		});
+	});
+
+	it.for<{
+		when: string;
+		production: Record<string, DBFieldAttribute>;
+		preview: Record<string, DBFieldAttribute>;
+		tier: string;
+	}>([
+		{
+			when: "the preview does not accept the field",
+			production: { tier: { type: "string", required: false } },
+			preview: { tier: { type: "string", input: false, defaultValue: "free" } },
+			tier: "free",
+		},
+		{
+			when: "only the preview declares the field",
+			production: {},
+			preview: { tier: { type: "string", required: false } },
+			tier: "gold",
+		},
+	])(
+		"stores account fields by the preview schema when $when",
+		async ({ production, preview, tier }) => {
+			const { signInThroughProxy } = await createProxyPair({
+				options: { account: { additionalFields: production } },
+				previewOptions: { account: { additionalFields: preview } },
+				google: { getAccountFields: () => ({ tier: "gold" }) },
+			});
+
+			const { finalRedirect, accounts } = await signInThroughProxy();
+
+			expect(finalRedirect).toBe("/dashboard");
+			expect(accounts[0]).toMatchObject({ tier });
+		},
+	);
+
+	it("redirects when an account field fails the preview validator", async () => {
+		const { signInThroughProxy } = await createProxyPair({
+			options: {
+				account: {
+					additionalFields: { tenant: { type: "string", required: false } },
+				},
+			},
+			previewOptions: {
+				account: {
+					additionalFields: {
+						tenant: {
+							type: "string",
+							required: false,
+							validator: { input: z.string().max(2) },
+						},
+					},
+				},
+			},
+			google: { getAccountFields: () => ({ tenant: "acme" }) },
+		});
+		const { finalRedirect, user } = await signInThroughProxy();
+
+		const redirect = new URL(finalRedirect!, "http://preview.example.com");
+		expect(redirect.searchParams.get("error")).toBe("VALIDATION_ERROR");
+		expect(user).toBeUndefined();
+	});
+
+	it("updates a returning user from mapProfileToUser with overrideUserInfoOnSignIn", async () => {
+		let department = "engineering";
+		const { signInThroughProxy } = await createProxyPair({
+			options: {
+				user: {
+					additionalFields: {
+						department: { type: "string", required: false },
+					},
+				},
+			},
+			google: {
+				overrideUserInfoOnSignIn: true,
+				mapProfileToUser: () => ({ department }),
+			},
+		});
+		const first = await signInThroughProxy();
+		expect(first.user).toMatchObject({ department: "engineering" });
+
+		department = "product";
+		const second = await signInThroughProxy();
+
+		expect(second.finalRedirect).toBe("/dashboard");
+		expect(second.user).toMatchObject({ department: "product" });
 	});
 });
