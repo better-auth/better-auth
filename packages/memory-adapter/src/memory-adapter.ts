@@ -336,18 +336,23 @@ export const memoryAdapter = (
 								return true;
 							}
 
-							let result = evalClause(record, where[0]!);
-							for (const clause of where) {
-								const clauseResult = evalClause(record, clause);
+							// Match other adapters (Kysely, Prisma, Mongo, Drizzle):
+							// `(AND group) AND (OR group)`, not a left-to-right fold.
+							const andGroup = where.filter(
+								(clause) => clause.connector === "AND" || !clause.connector,
+							);
+							const orGroup = where.filter(
+								(clause) => clause.connector === "OR",
+							);
 
-								if (clause.connector === "OR") {
-									result = result || clauseResult;
-								} else {
-									result = result && clauseResult;
-								}
-							}
+							const andMatches =
+								andGroup.length === 0 ||
+								andGroup.every((clause) => evalClause(record, clause));
+							const orMatches =
+								orGroup.length === 0 ||
+								orGroup.some((clause) => evalClause(record, clause));
 
-							return result;
+							return andMatches && orMatches;
 						});
 						if (select?.length && select.length > 0) {
 							records = records.map((record: any) =>
