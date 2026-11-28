@@ -304,6 +304,13 @@ export const expoClient = (opts: ExpoClientOptions) => {
 		});
 		await storage.setItemAsync(localCacheName, "{}");
 	};
+	// A session read carries the session itself, so it signals a refetch only
+	// when it finds no session while the store still shows one. The store
+	// applies the result of its own fetch.
+	const hasLostStoredSession = (data: { session?: unknown } | null) => {
+		const current = store?.atoms.session?.get();
+		return !!current?.data && !current.isRefetching && !data?.session;
+	};
 
 	const rawScheme =
 		opts?.scheme || Constants.expoConfig?.scheme || Constants.platform?.scheme;
@@ -348,6 +355,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					async onSuccess(context) {
 						if (isWeb) return;
 						const { pathname } = new URL(context.request.url);
+						const isSessionRead = pathname.endsWith("/get-session");
 						const setCookie = context.response.headers.get("set-cookie");
 						if (setCookie) {
 							// Only process and notify if the Set-Cookie header contains better-auth cookies
@@ -362,6 +370,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								// This prevents infinite refetching when the server sends the same cookie with updated expiry
 								if (
 									update &&
+									!isSessionRead &&
 									hasSessionCookieChanged(update.previousValue, update.value)
 								) {
 									store?.notify("$sessionSignal");
@@ -369,9 +378,17 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							}
 						}
 
-						if (pathname.endsWith("/get-session") && !opts?.disableCache) {
-							const data = context.data;
-							await storage.setItemAsync(localCacheName, JSON.stringify(data));
+						if (isSessionRead) {
+							if (hasLostStoredSession(context.data)) {
+								store?.notify("$sessionSignal");
+							}
+							if (!opts?.disableCache) {
+								const data = context.data;
+								await storage.setItemAsync(
+									localCacheName,
+									JSON.stringify(data),
+								);
+							}
 						}
 						if (pathname.endsWith("/sign-out")) {
 							await clearSessionCache();
