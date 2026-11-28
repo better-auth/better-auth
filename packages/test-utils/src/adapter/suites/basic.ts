@@ -1774,6 +1774,74 @@ export const getNormalTestSuiteTests = (
 			);
 			expect(sortModels(result)).toEqual(sortModels(expectedResult));
 		},
+		/**
+		 * A comparison against NULL is unknown in SQL, so a row whose field is
+		 * null never matches `lt`, `lte`, `gt` or `gte`.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12995
+		 * @see https://www.postgresql.org/docs/current/functions-comparison.html
+		 */
+		"findMany - lt, lte, gt and gte should not match rows whose field is null":
+			async () => {
+				await modifyBetterAuthOptions(
+					{
+						user: {
+							additionalFields: {
+								lastActiveAt: { type: "date", required: false },
+								score: { type: "number", required: false },
+							},
+						},
+					},
+					true,
+				);
+				type Tracked = User & {
+					lastActiveAt: Date | null;
+					score: number | null;
+				};
+				const withNull = await adapter.create<Tracked>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						lastActiveAt: null,
+						score: null,
+					},
+					forceAllowId: true,
+				});
+				const withValue = await adapter.create<Tracked>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						lastActiveAt: new Date("2026-01-01T00:00:00.000Z"),
+						score: 5,
+					},
+					forceAllowId: true,
+				});
+				const past = new Date("2000-01-01T00:00:00.000Z");
+				const future = new Date("2100-01-01T00:00:00.000Z");
+				const cases = [
+					{ field: "lastActiveAt", operator: "lt", value: future },
+					{ field: "lastActiveAt", operator: "lte", value: future },
+					{ field: "lastActiveAt", operator: "gt", value: past },
+					{ field: "lastActiveAt", operator: "gte", value: past },
+					{ field: "score", operator: "lt", value: 10 },
+					{ field: "score", operator: "lte", value: 10 },
+					{ field: "score", operator: "gt", value: -1 },
+					{ field: "score", operator: "gte", value: 0 },
+				] as const;
+				for (const where of cases) {
+					const result = await adapter.findMany<User>({
+						model: "user",
+						where: [where],
+					});
+					const ids = result.map((user) => user.id);
+					expect(ids, `${where.field} ${where.operator}`).toContain(
+						withValue.id,
+					);
+					expect(ids, `${where.field} ${where.operator}`).not.toContain(
+						withNull.id,
+					);
+				}
+			},
 		"findMany - should find many models with in operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const result = await adapter.findMany<User>({
