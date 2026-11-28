@@ -1,5 +1,7 @@
 # @better-auth/memory-adapter
 
+## 1.7.29
+
 ## 1.7.28
 
 ## 1.7.27

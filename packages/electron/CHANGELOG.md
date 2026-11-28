@@ -1,5 +1,11 @@
 # @better-auth/electron
 
+## 1.7.29
+
+### Patch Changes
+
+- [#12958](https://github.com/better-auth/better-auth/pull/12958) [`bde96d1`](https://github.com/better-auth/better-auth/commit/bde96d18d5f64b956d190e5cf092db50e862781a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Electron no longer returns an authorization code when a `verification.create.before` database hook returns `false` for its record. The sign-in transfer and `/electron/transfer-user` now fail with `FAILED_TO_CREATE_VERIFICATION` (HTTP 500) instead of returning a code that `/electron/token` would reject.
+
 ## 1.7.28
 
 ## 1.7.27

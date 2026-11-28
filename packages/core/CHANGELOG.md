@@ -1,5 +1,25 @@
 # @better-auth/core
 
+## 1.7.29
+
+### Patch Changes
+
+- [#12953](https://github.com/better-auth/better-auth/pull/12953) [`55513e8`](https://github.com/better-auth/better-auth/commit/55513e8533862f3f50efafc626d61ec927ae1728) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - When a committed transaction has several failing after-commit hooks and no `onAfterCommitHookError` handler, the first failure is still thrown and later failures from hooks that run are now logged. Previously only the first was reported, so a failed secondary-storage session revocation after a failing `session.delete.after` hook went unnoticed.
+
+- [#12953](https://github.com/better-auth/better-auth/pull/12953) [`55513e8`](https://github.com/better-auth/better-auth/commit/55513e8533862f3f50efafc626d61ec927ae1728) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - After-commit hooks run again when an app loads more than one copy of `@better-auth/core`. Since 1.7.28, a hook queued by one copy and run by a copy from a different release failed with `TypeError: hook is not a function`, so cache evictions and other after-commit work were skipped or the committed request was rejected.
+
+- [#12948](https://github.com/better-auth/better-auth/pull/12948) [`23adcb1`](https://github.com/better-auth/better-auth/commit/23adcb11d77b085b94c58cda78766ffda278d36d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Database errors that carry a driver code other than a unique violation are no longer treated as unique violations when their message contains words such as "duplicate key". Device code creation now returns the original database error instead of retrying and failing with "Failed to generate a unique device code", and verification and client metadata document registration no longer fall back to an existing record for such errors. SQLite primary key collisions and MongoDB `11001` duplicate key errors are now recognized by their code, and a SQLite error with only the base constraint code, or a libSQL `PROXY_ERROR` for a write forwarded by a replica, is matched only by SQLite's "UNIQUE constraint failed" wording.
+
+- [#12958](https://github.com/better-auth/better-auth/pull/12958) [`bde96d1`](https://github.com/better-auth/better-auth/commit/bde96d18d5f64b956d190e5cf092db50e862781a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `InternalAdapter.createVerificationValue` is now typed as returning `Promise<Verification | null>`. It already resolved to `null` when a `verification.create.before` database hook returned `false`, but the type said it always returned a record.
+
+  Plugins that read the result now need to handle `null`. TypeScript reports an error where the result is used without a check, such as `(await createVerificationValue(data)).identifier`.
+
+- [#12969](https://github.com/better-auth/better-auth/pull/12969) [`a55ade9`](https://github.com/better-auth/better-auth/commit/a55ade9c4f3737a367f7cbff2dbb5f8b1e7494d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - When secondary storage fails, Better Auth logs and rethrows the error without the keys and values it was called with, so session tokens and cached sessions no longer reach application logs. The error keeps its name, message, and properties, such as the Redis command name, except where they contain one of those keys or values.
+
+- [#12975](https://github.com/better-auth/better-auth/pull/12975) [`fcd3cbf`](https://github.com/better-auth/better-auth/commit/fcd3cbf4a71f8d19b295383b10a44f829e3e80c5) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `InternalAdapter.updateVerificationByIdentifier` is now typed as returning `Promise<Verification | null>`. It resolves to `null` when a `verification.update.before` database hook returns `false` or when no value is stored for the identifier. Before, the type said it always returned a record, and with secondary storage only it returned the update input even when nothing was stored.
+
+  Plugins that read the result now need to handle `null`, which means a hook blocked the update or the value is gone. TypeScript reports an error where the result is used without a check.
+
 ## 1.7.28
 
 ### Patch Changes

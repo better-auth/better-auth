@@ -1,5 +1,13 @@
 # @better-auth/oauth-provider
 
+## 1.7.29
+
+### Patch Changes
+
+- [#12958](https://github.com/better-auth/better-auth/pull/12958) [`bde96d1`](https://github.com/better-auth/better-auth/commit/bde96d18d5f64b956d190e5cf092db50e862781a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The authorization endpoint no longer redirects with an authorization code when a `verification.create.before` database hook returns `false` for the code record. It now redirects to the client with `error=server_error`, as RFC 6749 §4.1.2.1 defines, instead of a code that the token endpoint would reject.
+
+- [#12951](https://github.com/better-auth/better-auth/pull/12951) [`1e05684`](https://github.com/better-auth/better-auth/commit/1e05684af9f0f7fc226651d2453283f5b06dc740) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix the resource admin endpoints returning a 500 with the Drizzle adapter when a resource or client-resource link already exists. Creating a duplicate resource now returns the 400 "already exists" error, and linking an already linked client returns `alreadyLinked: true`. Other database errors are no longer reported as "already exists" when the resource identifier or client ID contains words such as "duplicate" or "unique".
+
 ## 1.7.28
 
 ### Patch Changes

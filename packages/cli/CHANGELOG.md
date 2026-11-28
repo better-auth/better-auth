@@ -1,5 +1,16 @@
 # auth
 
+## 1.7.29
+
+### Patch Changes
+
+- [#12954](https://github.com/better-auth/better-auth/pull/12954) [`020e28c`](https://github.com/better-auth/better-auth/commit/020e28c3fe760953df25b2366fc63975d1176310) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `auth generate` now gives a missing Prisma back-relation the same `@relation` name as its foreign-key side, and stops with an error when it cannot add one that Prisma would accept.
+
+- Updated dependencies [[`55513e8`](https://github.com/better-auth/better-auth/commit/55513e8533862f3f50efafc626d61ec927ae1728), [`55513e8`](https://github.com/better-auth/better-auth/commit/55513e8533862f3f50efafc626d61ec927ae1728), [`23adcb1`](https://github.com/better-auth/better-auth/commit/23adcb11d77b085b94c58cda78766ffda278d36d), [`bde96d1`](https://github.com/better-auth/better-auth/commit/bde96d18d5f64b956d190e5cf092db50e862781a), [`017a985`](https://github.com/better-auth/better-auth/commit/017a985eea43bb3294661d70eaa5750eabfe9c4c), [`59da7fb`](https://github.com/better-auth/better-auth/commit/59da7fbdcf522be816254e006237f2eb1f736bc6), [`b87f41f`](https://github.com/better-auth/better-auth/commit/b87f41f1ae8007bc94c71cd7488ea5a3df3d9f0f), [`61bfa16`](https://github.com/better-auth/better-auth/commit/61bfa16c5a5af3a444e33c61dcc280c99a30b723), [`fcd3cbf`](https://github.com/better-auth/better-auth/commit/fcd3cbf4a71f8d19b295383b10a44f829e3e80c5), [`bde96d1`](https://github.com/better-auth/better-auth/commit/bde96d18d5f64b956d190e5cf092db50e862781a), [`fcd3cbf`](https://github.com/better-auth/better-auth/commit/fcd3cbf4a71f8d19b295383b10a44f829e3e80c5), [`a55ade9`](https://github.com/better-auth/better-auth/commit/a55ade9c4f3737a367f7cbff2dbb5f8b1e7494d1), [`61bfa16`](https://github.com/better-auth/better-auth/commit/61bfa16c5a5af3a444e33c61dcc280c99a30b723), [`6b883ac`](https://github.com/better-auth/better-auth/commit/6b883aca559598c756a0999523a508be20ab281a), [`fcd3cbf`](https://github.com/better-auth/better-auth/commit/fcd3cbf4a71f8d19b295383b10a44f829e3e80c5), [`fcd3cbf`](https://github.com/better-auth/better-auth/commit/fcd3cbf4a71f8d19b295383b10a44f829e3e80c5), [`fcd3cbf`](https://github.com/better-auth/better-auth/commit/fcd3cbf4a71f8d19b295383b10a44f829e3e80c5), [`bde96d1`](https://github.com/better-auth/better-auth/commit/bde96d18d5f64b956d190e5cf092db50e862781a)]:
+  - @better-auth/core@1.7.29
+  - better-auth@1.7.29
+  - @better-auth/telemetry@1.7.29
+
 ## 1.7.28
 
 ### Patch Changes

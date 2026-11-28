@@ -1,5 +1,11 @@
 # @better-auth/passkey
 
+## 1.7.29
+
+### Patch Changes
+
+- [#12958](https://github.com/better-auth/better-auth/pull/12958) [`bde96d1`](https://github.com/better-auth/better-auth/commit/bde96d18d5f64b956d190e5cf092db50e862781a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Passkey registration and authentication options are no longer returned when a `verification.create.before` database hook returns `false` for the challenge record. Both endpoints now fail with `FAILED_TO_CREATE_VERIFICATION` (HTTP 500) instead of returning a challenge that verification would reject.
+
 ## 1.7.28
 
 ## 1.7.27
