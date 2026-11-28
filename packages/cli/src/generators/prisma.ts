@@ -764,13 +764,13 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					if (!unpairedNames.length) continue;
 					if (unpairedNames.length > 1) {
 						throw new BetterAuthError(
-							`Model "${relatedModel}" has several relations to "${modelName}" through "${foreignKey}" without a back-relation: ${unpairedNames.map((name) => name ?? "an unnamed relation").join(", ")}. Add the back-relations to "${modelName}", then generate the schema again.`,
+							`Model "${relatedModel}" has several relations to "${modelName}" through "${foreignKey}" without a back-relation: ${unpairedNames.map((name) => name ?? "an unnamed relation").join(", ")}.`,
 						);
 					}
 					const [relationName] = unpairedNames;
 					if (existingField) {
 						throw new BetterAuthError(
-							`Model "${modelName}" needs a back-relation for ${relationName ?? "the unnamed relation"} from "${relatedModel}", but its field "${fieldName}" is already taken. Add the back-relation to "${modelName}" under another field name, then generate the schema again.`,
+							`Model "${modelName}" needs a back-relation for ${relationName ?? "the unnamed relation"} from "${relatedModel}", but its field "${fieldName}" is already taken.`,
 						);
 					}
 					const backRelation = builder
