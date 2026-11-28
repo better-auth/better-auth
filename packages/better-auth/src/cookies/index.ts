@@ -9,9 +9,7 @@ import type {
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
-import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
-import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
@@ -28,7 +26,7 @@ import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
 import { isDynamicBaseURLConfig } from "../utils/url";
-import { parseCompactCookieCache, parseCookieCachePayload } from "./cache";
+import { decodeCompactCookieCache, parseCookieCachePayload } from "./cache";
 import {
 	parseCookies,
 	SECURE_COOKIE_PREFIX,
@@ -325,9 +323,7 @@ export async function decodeCookieCache(
 		};
 	}
 
-	const parsed = parseCompactCookieCache(
-		safeJSONParse(binary.decode(base64Url.decode(value))),
-	);
+	const parsed = decodeCompactCookieCache(value);
 	if (!parsed) {
 		return null;
 	}
@@ -740,9 +736,7 @@ export const getCookieCache = async <
 				);
 			}
 			// Use compact strategy (or legacy base64-hmac)
-			const sessionDataPayload = parseCompactCookieCache(
-				safeJSONParse(binary.decode(base64Url.decode(sessionData))),
-			);
+			const sessionDataPayload = decodeCompactCookieCache(sessionData);
 			if (!sessionDataPayload) {
 				return null;
 			}
