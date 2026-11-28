@@ -305,7 +305,11 @@ function createDependencyStub(): unknown {
 			if (prop === "then") return undefined;
 			if (prop === Symbol.toPrimitive) return () => "";
 			if (prop === "get" || prop === "getOrThrow") {
-				return (key: string, fallback?: unknown) => fallback ?? key.toLocaleLowerCase().includes("url") ? "http://localhost:3000" : 'placeholder';
+				return (key: string, fallback?: unknown) =>
+					fallback ??
+					(key.toLocaleLowerCase().includes("url")
+						? "http://localhost:3000"
+						: "placeholder");
 			}
 			return stub;
 		},
