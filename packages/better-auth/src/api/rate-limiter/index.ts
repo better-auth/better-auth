@@ -345,15 +345,6 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 		// IP tracking is explicitly disabled; per-IP rate limiting does not apply.
 		return null;
 	}
-	if (!ip && !ipWarningLogged) {
-		ctx.logger.warn(
-			"Rate limiting could not determine a client IP and is falling back to a " +
-				"single shared per-path bucket. Ensure your runtime forwards a trusted " +
-				"client IP header, then set `advanced.ipAddress.ipAddressHeaders` or " +
-				"`advanced.ipAddress.trustedProxies` so the address can be resolved.",
-		);
-		ipWarningLogged = true;
-	}
 	// Fail closed when no client IP can be derived: key on a shared per-path
 	// bucket and still enforce the limit, instead of skipping rate limiting
 	// entirely (which let a client omit the IP header to bypass the limit).
@@ -405,6 +396,19 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 				return null;
 			}
 		}
+	}
+
+	// Only warn once the path is known to be rate limited: exempt paths never
+	// use the shared bucket, and warning for them would consume the one-time
+	// warning before a limited path needs it.
+	if (!ip && !ipWarningLogged) {
+		ctx.logger.warn(
+			"Rate limiting could not determine a client IP and is falling back to a " +
+				"single shared per-path bucket. Ensure your runtime forwards a trusted " +
+				"client IP header, then set `advanced.ipAddress.ipAddressHeaders` or " +
+				"`advanced.ipAddress.trustedProxies` so the address can be resolved.",
+		);
+		ipWarningLogged = true;
 	}
 
 	return { key, currentWindow, currentMax };
