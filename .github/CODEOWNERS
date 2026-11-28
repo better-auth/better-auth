@@ -19,8 +19,7 @@
 
 # ── Identity & Auth ──
 /packages/oauth-provider/                          @better-auth/identity @bytaesu
-/packages/better-auth/src/plugins/oidc-provider/   @better-auth/identity @bytaesu
-/packages/better-auth/src/plugins/mcp/             @better-auth/identity @bytaesu
+/packages/mcp/                                     @better-auth/identity @bytaesu
 /packages/better-auth/src/plugins/device-authorization/ @better-auth/identity @bytaesu
 /packages/sso/                                     @better-auth/identity @bytaesu
 /packages/scim/                                    @better-auth/identity @bytaesu
