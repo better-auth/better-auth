@@ -40,7 +40,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@93cb569f835297529614ed443414b4a372d2dd7b
 
       - name: Reject stale release merge groups
         if: github.event_name == 'merge_group'
@@ -118,7 +118,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@93cb569f835297529614ed443414b4a372d2dd7b
 
       - name: Typecheck
         run: pnpm typecheck
@@ -171,7 +171,7 @@ jobs:
           docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
         background: true
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@93cb569f835297529614ed443414b4a372d2dd7b
         with:
           node-version: ${{ matrix.node-version }}
 
