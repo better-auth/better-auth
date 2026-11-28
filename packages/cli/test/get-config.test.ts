@@ -1018,6 +1018,47 @@ describe("getConfig", async () => {
 		expect(config?.emailAndPassword?.enabled).toBe(true);
 	});
 
+	it("should load configs that import server-only", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.json"),
+			`{
+				"compilerOptions": {}
+			}`,
+		);
+		// Same behavior as the real package outside the react-server condition.
+		const pkgDir = path.join(tmpDir, "node_modules", "server-only");
+		await fs.mkdir(pkgDir, { recursive: true });
+		await fs.writeFile(
+			path.join(pkgDir, "package.json"),
+			JSON.stringify({ name: "server-only", main: "index.js" }),
+		);
+		await fs.writeFile(
+			path.join(pkgDir, "index.js"),
+			`throw new Error("This module cannot be imported from a Client Component module. It should only be used from a Server Component.");`,
+		);
+
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import "server-only";
+			 import { betterAuth } from "better-auth";
+
+			 export const auth = betterAuth({
+					emailAndPassword: {
+						enabled: true,
+					},
+			 });`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "auth.ts",
+			shouldThrowOnError: true,
+		});
+
+		expect(config).not.toBe(null);
+		expect(config?.emailAndPassword?.enabled).toBe(true);
+	});
+
 	it("should load configs importing cloudflare class and proxy exports", async () => {
 		await fs.writeFile(
 			path.join(tmpDir, "tsconfig.json"),
