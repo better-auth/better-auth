@@ -294,7 +294,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				| undefined;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const members = await Promise.all([
+			const [members, total] = await Promise.all([
 				adapter.findMany<InferMember<O, false>>({
 					model: "member",
 					where: [
@@ -321,6 +321,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					sortBy: data.sortBy
 						? { field: data.sortBy, direction: data.sortOrder || "asc" }
 						: undefined,
+					join: {
+						user: true,
+					},
 				}),
 				adapter.count({
 					model: "member",
@@ -340,29 +343,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					],
 				}),
 			]);
-			// An empty `in` list is a syntax error on Postgres and MSSQL.
-			if (members[0].length === 0) {
+			if (members.length === 0) {
 				return {
 					members: [],
-					total: members[1],
+					total,
 				};
 			}
-			// Prisma/Drizzle default findMany to ~100 when limit is omitted.
-			// Bound by the members result so every joined user row is fetched.
-			const users = await adapter.findMany<User>({
-				model: "user",
-				where: [
-					{
-						field: "id",
-						value: members[0].map((member) => member.userId),
-						operator: "in",
-					},
-				],
-				limit: members[0].length,
-			});
 			return {
-				members: members[0].map((member) => {
-					const user = users.find((user) => user.id === member.userId);
+				members: members.map((member) => {
+					const user = member.user as User | null | undefined;
 					if (!user) {
 						throw new BetterAuthError(
 							"Unexpected error: User not found for member",
@@ -378,7 +367,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						},
 					};
 				}),
-				total: members[1],
+				total,
 			};
 		},
 		findMemberByOrgId: async (data: {
