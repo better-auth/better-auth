@@ -113,6 +113,186 @@ describe("Electron", () => {
 		return generateCodeChallenge(verifier);
 	}
 
+	describe("session reads", () => {
+		let respond: ((url: string) => Response | undefined) | undefined;
+		const createReadClient = () =>
+			createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl: (async (url, init) => {
+						return respond?.(url.toString()) ?? customFetchImpl(url, init);
+					}) satisfies FetchEsque,
+				},
+				plugins: [electronClient(options)],
+			});
+
+		const signUp = async (email: string) => {
+			const readClient = createReadClient();
+			await readClient.signUp.email({
+				name: "Session Read User",
+				email,
+				password: "password",
+			});
+			await vi.advanceTimersByTimeAsync(100);
+			return readClient;
+		};
+
+		const countSignals = (readClient: ReturnType<typeof createReadClient>) => {
+			let signals = 0;
+			readClient.$store.listen("$sessionSignal", () => {
+				signals++;
+			});
+			const initial = signals;
+			return () => signals - initial;
+		};
+
+		const respondToSessionReads = (response: () => Response) => {
+			respond = (url) =>
+				new URL(url).pathname.endsWith("/get-session") ? response() : undefined;
+			onTestFinished(() => {
+				respond = undefined;
+			});
+		};
+
+		it("does not notify the session signal when a read only renews the cookie cache", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			const readClient = await signUp("read-cache-renewal@test.com");
+			await readClient.getSession();
+			const signals = countSignals(readClient);
+			const { data } = await readClient.getSession();
+			respondToSessionReads(
+				() =>
+					new Response(JSON.stringify(data), {
+						headers: {
+							"set-cookie":
+								"better-auth.session_data=renewed; Max-Age=300; Path=/",
+						},
+					}),
+			);
+
+			await readClient.getSession();
+			expect(signals()).toBe(0);
+		});
+
+		const respondWithNoSession = () =>
+			respondToSessionReads(
+				() =>
+					new Response(JSON.stringify(null), {
+						headers: {
+							"set-cookie": "custom_sid=; Max-Age=0; Path=/",
+						},
+					}),
+			);
+
+		const showStoredSession = async (
+			readClient: ReturnType<typeof createReadClient>,
+			isRefetching: boolean,
+		) => {
+			const { data } = await readClient.getSession();
+			const session = readClient.$store.atoms.session!;
+			session.set({
+				...session.get(),
+				data,
+				isPending: false,
+				isRefetching,
+			});
+		};
+
+		it("notifies the session signal when a read finds the stored session gone", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			const readClient = await signUp("read-revoked@test.com");
+			await showStoredSession(readClient, false);
+			const signals = countSignals(readClient);
+			respondWithNoSession();
+
+			await readClient.getSession();
+			expect(signals()).toBe(1);
+		});
+
+		it("leaves a missing session to the store while it is fetching", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			const readClient = await signUp("read-revoked-fetching@test.com");
+			await showStoredSession(readClient, true);
+			const signals = countSignals(readClient);
+			respondWithNoSession();
+
+			await readClient.getSession();
+			expect(signals()).toBe(0);
+		});
+
+		it("treats only the get-session path as a session read", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			const readClient = await signUp("read-path@test.com");
+			const signals = countSignals(readClient);
+			respond = (url) =>
+				new URL(url).pathname.endsWith("/get-session-history")
+					? new Response(JSON.stringify([]), {
+							headers: {
+								"set-cookie":
+									"better-auth.session_data=renewed; Max-Age=300; Path=/",
+							},
+						})
+					: undefined;
+			onTestFinished(() => {
+				respond = undefined;
+			});
+
+			await readClient.$fetch("/get-session-history");
+			expect(signals()).toBe(1);
+		});
+
+		it("writes the local session cache only when the session changes", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			const readClient = await signUp("read-local-cache@test.com");
+			const setItem = vi.spyOn(options.storage, "setItem");
+			onTestFinished(() => setItem.mockRestore());
+
+			await readClient.getSession();
+			await readClient.getSession();
+			await readClient.getSession();
+			const cacheWrites = setItem.mock.calls.filter(
+				([key]) => key === "better-auth.local_cache",
+			);
+			expect(cacheWrites).toHaveLength(1);
+		});
+
+		it("rewrites the local session cache after a failed write", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			const readClient = await signUp("read-local-cache-retry@test.com");
+			const writeItem = options.storage.setItem.bind(options.storage);
+			let failNextCacheWrite = true;
+			const setItem = vi
+				.spyOn(options.storage, "setItem")
+				.mockImplementation((key, value) => {
+					if (key === "better-auth.local_cache" && failNextCacheWrite) {
+						failNextCacheWrite = false;
+						throw new Error("disk full");
+					}
+					writeItem(key, value);
+				});
+			onTestFinished(() => setItem.mockRestore());
+
+			await readClient.getSession();
+			await readClient.getSession();
+			const cacheWrites = setItem.mock.calls.filter(
+				([key]) => key === "better-auth.local_cache",
+			);
+			expect(cacheWrites).toHaveLength(2);
+		});
+	});
+
 	it("should throw error when making requests outside the main process", async ({
 		setProcessType,
 	}) => {

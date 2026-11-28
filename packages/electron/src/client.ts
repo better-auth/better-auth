@@ -57,13 +57,15 @@ const storageAdapter = (storage: Storage, sessionKeys: Set<string>) => {
 			if (!safeStorage.isEncryptionAvailable()) {
 				if (sessionKeys.has(name)) {
 					memory.set(name, value);
+					return true;
 				}
-				return;
+				return false;
 			}
 			try {
 				storage.setItem(name, base64.encode(safeStorage.encryptString(value)));
+				return true;
 			} catch {
-				return;
+				return false;
 			}
 		},
 	};
@@ -87,6 +89,21 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 		opts.storage,
 		new Set([cookieName, localCacheName]),
 	);
+	let localCache: string | undefined;
+	// Session refreshes repeat the same payload, so skip rewriting it to storage.
+	const writeLocalCache = (value: string) => {
+		if (value === localCache) return;
+		if (setEncrypted(localCacheName, value)) {
+			localCache = value;
+		}
+	};
+	// A session read carries the session itself, so it signals a refetch only
+	// when it finds no session while the store still shows one. The store
+	// applies the result of its own fetch.
+	const hasLostStoredSession = (data: { session?: unknown } | null) => {
+		const current = store?.atoms.session?.get();
+		return !!current?.data && !current.isRefetching && !data?.session;
+	};
 	const clearSessionCache = () => {
 		setEncrypted(cookieName, "{}");
 		store?.atoms.session?.set({
@@ -95,7 +112,7 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 			error: null,
 			isPending: false,
 		});
-		setEncrypted(localCacheName, "{}");
+		writeLocalCache("{}");
 	};
 
 	if (
@@ -157,6 +174,8 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 				},
 				hooks: {
 					onSuccess: async (context) => {
+						const { pathname } = new URL(context.request.url);
+						const isSessionRead = pathname.endsWith("/get-session");
 						const setCookie = context.response.headers.get("set-cookie");
 
 						if (setCookie) {
@@ -167,7 +186,10 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 									prevCookie ?? undefined,
 								);
 
-								if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
+								if (
+									!isSessionRead &&
+									hasSessionCookieChanged(prevCookie, toSetCookie)
+								) {
 									setEncrypted(cookieName, toSetCookie);
 									store?.notify("$sessionSignal");
 								} else {
@@ -176,12 +198,13 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 							}
 						}
 
-						if (
-							context.request.url.toString().includes("/get-session") &&
-							!opts.disableCache
-						) {
-							const data = context.data;
-							setEncrypted(localCacheName, JSON.stringify(data));
+						if (isSessionRead) {
+							if (hasLostStoredSession(context.data)) {
+								store?.notify("$sessionSignal");
+							}
+							if (!opts.disableCache) {
+								writeLocalCache(JSON.stringify(context.data));
+							}
 						}
 						if (context.request.url.toString().includes("/sign-out")) {
 							clearSessionCache();
