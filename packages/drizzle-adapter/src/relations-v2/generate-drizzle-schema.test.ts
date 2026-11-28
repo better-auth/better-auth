@@ -167,6 +167,34 @@ describe("relations-v2 schema generator", () => {
 		expect(typeErrors(code)).toEqual([]);
 	});
 
+	test("does not emit duplicate unique indexes for unique indexed fields", async () => {
+		const { code = "" } = await generate({
+			plugins: [
+				{
+					id: "unique-index-test",
+					schema: {
+						testTable: {
+							fields: {
+								slug: {
+									type: "string",
+									required: true,
+									index: true,
+									unique: true,
+								},
+							},
+						},
+					},
+				},
+			],
+		});
+
+		expect(code).toMatch(/slug: text\(["']slug["']\)\.notNull\(\)\.unique\(\)/);
+		expect(code).not.toContain("uniqueIndex");
+		expect(code).not.toContain("slug_uidx");
+		expect(code).not.toContain("slug_idx");
+		expect(typeErrors(code)).toEqual([]);
+	});
+
 	/**
 	 * A hardcoded `export const relations = defineRelationsPart(...)` collides
 	 * with a user model whose table name is `relations` (e.g.

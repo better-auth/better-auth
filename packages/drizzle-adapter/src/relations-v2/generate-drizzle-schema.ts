@@ -341,12 +341,6 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									name: getDatabaseFieldIndexName(modelName, fieldName, false),
 									on: [fieldName],
 								});
-							} else if (attr.index && attr.unique) {
-								indexes.push({
-									type: "uniqueIndex",
-									name: getDatabaseFieldIndexName(modelName, fieldName, true),
-									on: [fieldName],
-								});
 							}
 
 							if (
@@ -776,11 +770,7 @@ function generateImport({
 			(table.indexes?.some((index) => !index.unique) ?? false),
 	);
 	const hasUniqueIndexes = Object.values(tables).some(
-		(table) =>
-			Object.values(table.fields).some(
-				(field) => field.unique && field.index,
-			) ||
-			(table.indexes?.some((index) => index.unique) ?? false),
+		(table) => table.indexes?.some((index) => index.unique) ?? false,
 	);
 	if (hasIndexes) {
 		coreImports.push("index");
