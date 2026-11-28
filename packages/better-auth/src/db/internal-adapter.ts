@@ -1686,9 +1686,8 @@ export const createInternalAdapter = (
 		 * backed by the database.
 		 *
 		 * The atomic guarantee requires the configured adapter to reject a
-		 * duplicate primary key on insert, which every real database enforces. The
-		 * in-memory adapter does not enforce primary-key uniqueness, so reservation
-		 * is best-effort there (it is intended for development and tests).
+		 * duplicate primary key on insert, which databases and the in-memory
+		 * adapter enforce.
 		 */
 		reserveVerificationValue: async (data: {
 			identifier: string;

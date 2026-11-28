@@ -49,7 +49,9 @@ function indexById(rows: any[]): Map<unknown, any> {
  * concurrent edit to a different row is preserved. A row the transaction did
  * change wins last-writer-wins over a concurrent edit to the same row, which is
  * acceptable for an in-memory development adapter; isolation is guaranteed only
- * at row/table granularity.
+ * at row/table granularity. If a concurrent write inserted a row whose id collides
+ * with a row created within the transaction, the merge throws an error to reject
+ * the duplicate id.
  *
  * `target` is mutated in place so any reference held elsewhere (for example the
  * `db` object the caller passed to `memoryAdapter`) stays valid.
@@ -60,6 +62,19 @@ function mergeTransactionInto(
 	clone: MemoryDB,
 ): void {
 	const models = new Set([...Object.keys(base), ...Object.keys(clone)]);
+
+	for (const model of models) {
+		if (!(model in clone)) continue;
+		const baseById = indexById(base[model] ?? []);
+		const cloneById = indexById(clone[model] ?? []);
+		const liveRows = target[model] ?? [];
+		for (const liveRow of liveRows) {
+			const id = liveRow.id;
+			if (id !== undefined && !baseById.has(id) && cloneById.has(id)) {
+				throw new Error(`Record with id ${id} already exists in ${model}`);
+			}
+		}
+	}
 
 	for (const model of models) {
 		// A table present at start but absent after commit was dropped wholesale
@@ -445,6 +460,14 @@ export const memoryAdapter = (
 						}
 						if (!activeDb[model]) {
 							activeDb[model] = [];
+						}
+						if (
+							data.id !== undefined &&
+							activeDb[model].some((record: any) => record.id === data.id)
+						) {
+							throw new Error(
+								`Record with id ${data.id} already exists in ${model}`,
+							);
 						}
 						activeDb[model].push(data);
 						return data;
