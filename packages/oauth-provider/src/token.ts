@@ -594,8 +594,11 @@ function grantRevokedDuringIssuance() {
 }
 
 /**
- * Tear down the entire refresh-token family for a (client, user) pair, plus
+ * Tear down the refresh-token family for a (client, user) pair — scoped to
+ * `authorizationCodeId` when provided so concurrent logins stay isolated — plus
  * any access tokens that reference those refresh rows, per RFC 9700 §4.14.
+ * Grants without an `authorizationCodeId` (such as device-code grants) still fall
+ * back to tearing down all matching (client, user) rows.
  * Access tokens are deleted first so the parent rows' foreign-key children
  * do not block the refresh-row delete.
  *
@@ -614,26 +617,27 @@ export async function invalidateRefreshFamily(
 	ctx: GenericEndpointContext,
 	clientId: string,
 	userId: string,
+	authorizationCodeId?: string,
 ) {
 	// Every access token linked to this family's refresh rows carries the same
 	// client and user, so the delete needs no list of refresh IDs, which
 	// `findMany` would cap at `defaultFindManyLimit`.
+	const familyWhere = [
+		{ field: "clientId", value: clientId },
+		{ field: "userId", value: userId },
+		...(authorizationCodeId
+			? [{ field: "authorizationCodeId", value: authorizationCodeId }]
+			: []),
+	];
 	const deleteLinkedAccessTokens = () =>
 		ctx.context.adapter.deleteMany({
 			model: "oauthAccessToken",
-			where: [
-				{ field: "clientId", value: clientId },
-				{ field: "userId", value: userId },
-				{ field: "refreshId", operator: "ne", value: null },
-			],
+			where: [...familyWhere, { field: "refreshId", operator: "ne", value: null }],
 		});
 	await deleteLinkedAccessTokens();
 	await ctx.context.adapter.deleteMany({
 		model: "oauthRefreshToken",
-		where: [
-			{ field: "clientId", value: clientId },
-			{ field: "userId", value: userId },
-		],
+		where: familyWhere,
 	});
 	// Without a foreign key, an in-flight issuance can store an access token
 	// between the two deletes above. See `createOpaqueAccessToken`.
@@ -2138,7 +2142,12 @@ async function handleRefreshTokenGrant(
 				error: "invalid_grant",
 			});
 		}
-		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
+		await invalidateRefreshFamily(
+			ctx,
+			client_id,
+			refreshToken.userId,
+			refreshToken.authorizationCodeId,
+		);
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",
