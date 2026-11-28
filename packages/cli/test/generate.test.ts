@@ -584,6 +584,24 @@ model TenantMember {
 			);
 		});
 
+		const singleAndCompoundUser = existing({
+			userRelations: `tenantId      String
+  accounts      Account[]
+
+  @@unique([tenantId, id])`,
+			sessionRelations: `tenantId   String
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantUser User     @relation("TenantSessions", fields: [tenantId, userId], references: [tenantId, id])`,
+		});
+
+		it("adds only the back-relation of the single-column relation when a compound one also lacks it", async () => {
+			const { code } = await generate(singleAndCompoundUser);
+
+			expect(code).toMatch(/^\s*sessions\s+Session\[\]\s*$/m);
+			expect(userFieldsOfType(code, "Session")).toHaveLength(1);
+		});
+
 		const revokedBy = `revokedById String?
   revokedBy   User?    @relation("RevokedBy", fields: [revokedById], references: [id])`;
 		const ownedSession = `userId    String

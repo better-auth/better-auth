@@ -743,13 +743,13 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							relation.type === modelName &&
 							relation.fields.some((field) => field === foreignKey),
 					);
-					const singleColumnRelations = relationsToThisModel.filter(
+					// Better Auth writes `fields: [foreignKey]`, so a compound relation
+					// only counts when the schema has no such relation.
+					const exactRelations = relationsToThisModel.filter(
 						(relation) => relation.fields.length === 1,
 					);
-					const candidateNames = (
-						singleColumnRelations.length
-							? singleColumnRelations
-							: relationsToThisModel
+					const relationNames = (
+						exactRelations.length ? exactRelations : relationsToThisModel
 					).map((relation) => relation.name);
 					const backRelationNames = readRelations(prismaModel)
 						.filter(
@@ -757,28 +757,28 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								relation.type === relatedModel && relation.fields.length === 0,
 						)
 						.map((relation) => relation.name);
+					// With no relation in the schema yet, this run generates an unnamed one.
 					const unpairedNames = (
-						candidateNames.length ? candidateNames : [undefined]
+						relationNames.length ? relationNames : [undefined]
 					).filter((name) => !backRelationNames.includes(name));
+					if (!unpairedNames.length) continue;
 					if (unpairedNames.length > 1) {
 						throw new BetterAuthError(
-							`Model "${relatedModel}" has several relations to "${modelName}" through "${foreignKey}" without a back-relation: ${unpairedNames.map((name) => name ?? "an unnamed relation").join(", ")}. Add the back-relations to "${modelName}", then generate the schema again.`,
+							`Model "${relatedModel}" has several relations to "${modelName}" through "${foreignKey}" without a back-relation: ${unpairedNames.map((name) => name ?? "an unnamed relation").join(", ")}.`,
 						);
 					}
-					const relationName = unpairedNames[0];
-					if (existingField && unpairedNames.length === 1) {
+					const [relationName] = unpairedNames;
+					if (existingField) {
 						throw new BetterAuthError(
-							`Model "${modelName}" needs a back-relation for ${relationName ?? "the unnamed relation"} from "${relatedModel}", but its field "${fieldName}" is already taken. Add the back-relation to "${modelName}" under another field name, then generate the schema again.`,
+							`Model "${modelName}" needs a back-relation for ${relationName ?? "the unnamed relation"} from "${relatedModel}", but its field "${fieldName}" is already taken.`,
 						);
 					}
-					if (unpairedNames.length === 1) {
-						const backRelation = builder
-							.model(modelName)
-							.field(fieldName, `${relatedModel}${isUnique ? "?" : "[]"}`);
-						if (relationName !== undefined) {
-							// The parsed name is the quoted literal from the schema.
-							backRelation.attribute(`relation(${relationName})`);
-						}
+					const backRelation = builder
+						.model(modelName)
+						.field(fieldName, `${relatedModel}${isUnique ? "?" : "[]"}`);
+					if (relationName !== undefined) {
+						// The parsed name is the quoted literal from the schema.
+						backRelation.attribute(`relation(${relationName})`);
 					}
 				}
 			}
