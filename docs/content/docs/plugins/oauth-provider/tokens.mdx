@@ -272,7 +272,7 @@ oauthProvider({
 
 ## Revocation
 
-`POST /oauth2/revoke` implements [RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1). What it does depends on the token:
+`POST /oauth2/revoke` implements [RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1). A confidential client authenticates as it does at the token endpoint. A public client sends only its `client_id`. Either can revoke only tokens issued to it. What the endpoint does depends on the token:
 
 * **Opaque access token**: deleted. Refresh tokens from the same grant stay valid.
 * **Refresh token**: revoked, and the opaque access tokens it issued are deleted. JWT access tokens it issued stay valid until they expire.

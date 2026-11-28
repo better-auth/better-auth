@@ -170,12 +170,13 @@ describe("oauth metadata", async () => {
 				...confidential,
 			]);
 
-			// The introspection and revocation endpoints never accept public
-			// clients, so they must not gain "none" alongside the token endpoint.
+			// The introspection endpoint never accepts public clients, so it must
+			// not gain "none". The revocation endpoint accepts them, so it does.
 			expect(openId?.introspection_endpoint_auth_methods_supported).toEqual([
 				...confidential,
 			]);
 			expect(openId?.revocation_endpoint_auth_methods_supported).toEqual([
+				"none",
 				...confidential,
 			]);
 
@@ -238,6 +239,32 @@ describe("oauth metadata", async () => {
 				"none",
 				...confidential,
 			]);
+		});
+
+		/**
+		 * `/oauth2/revoke` authenticates a public client by its `client_id`
+		 * alone (RFC 7009 §2.1), so discovery lists "none" for it whenever
+		 * public clients are supported. Introspection still requires a secret
+		 * or an assertion.
+		 * @see https://github.com/better-auth/better-auth/issues/12949
+		 */
+		it('should advertise "none" for the revocation endpoint, but not introspection, when public clients are supported', async () => {
+			const { auth } = await createTestInstance({
+				oauthProviderConfig: { allowUnauthenticatedClientRegistration: true },
+			});
+
+			for (const metadata of [
+				await auth.api.getOpenIdConfig(),
+				await auth.api.getOAuthServerConfig(),
+			]) {
+				expect(metadata?.revocation_endpoint_auth_methods_supported).toEqual([
+					"none",
+					...confidential,
+				]);
+				expect(metadata?.introspection_endpoint_auth_methods_supported).toEqual(
+					[...confidential],
+				);
+			}
 		});
 
 		it('should keep advertising "none" for a contributed clientDiscovery when unset', async () => {

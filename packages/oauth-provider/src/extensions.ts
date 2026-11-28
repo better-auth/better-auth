@@ -321,9 +321,9 @@ function getExtensionTokenEndpointAuthMethods(
 
 /**
  * Confidential and extension client-authentication methods the provider
- * supports. Pass `includeNone` to prepend `"none"` for the token endpoint and
- * DCR, where public clients are allowed; the introspection and revocation
- * endpoints, which never accept public clients, omit it (the default).
+ * supports. Pass `includeNone` to prepend `"none"` for the token and revocation
+ * endpoints and DCR, where public clients are allowed; the introspection
+ * endpoint, which never accepts public clients, omits it (the default).
  */
 export function getSupportedAuthMethods(
 	opts: OAuthOptions<Scope[]>,
