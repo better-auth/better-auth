@@ -1539,6 +1539,41 @@ export const getNormalTestSuiteTests = (
 			expect(result[0]!.id).toBe(literalRegexUser.id);
 			expect(result[0]!.name.includes(".*")).toBe(true);
 		},
+		"findMany - contains, starts_with and ends_with should match LIKE wildcards literally":
+			async () => {
+				const userTemplate = await generate("user");
+				const literal = await adapter.create<User>({
+					model: "user",
+					data: { ...userTemplate, name: "a_b%c\\d[x]" },
+					forceAllowId: true,
+				});
+				// Each decoy matches a query below only if `%`, `_`, `\` or (on MSSQL)
+				// `[` act as LIKE wildcards or escapes instead of literal characters.
+				for (const name of ["aXbYc\\dx", "aXbz", "noise c\\dx", "plain dx"]) {
+					await adapter.create<User>({
+						model: "user",
+						data: { ...(await generate("user")), name },
+						forceAllowId: true,
+					});
+				}
+
+				const queries = [
+					{ value: "_b%c", operator: "contains" },
+					{ value: "a_b", operator: "starts_with" },
+					{ value: "%c\\d[x]", operator: "ends_with" },
+					{ value: "d[x]", operator: "contains" },
+				] as const;
+				for (const { value, operator } of queries) {
+					const result = await adapter.findMany<User>({
+						model: "user",
+						where: [{ field: "name", value, operator }],
+					});
+					expect(
+						result.map((u) => u.id),
+						`${operator} "${value}"`,
+					).toEqual([literal.id]);
+				}
+			},
 		"findMany - should find many models with ends_with operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			for (const user of users) {

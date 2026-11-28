@@ -1,22 +1,24 @@
-import type { SQL } from "drizzle-orm";
-import { ilike, sql } from "drizzle-orm";
+import type { ilike, SQL } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 type DrizzleColumn = Parameters<typeof ilike>[0];
 
 type DrizzleProvider = "pg" | "mysql" | "sqlite";
 
 /**
- * Case-insensitive LIKE/ILIKE for pattern matching.
- * Uses ILIKE on PostgreSQL, LOWER()+LIKE on MySQL/SQLite.
+ * Escapes backslash, `%` and `_` so a value matches literally inside a LIKE pattern
+ * used with {@link escapedLike}.
  */
-export function insensitiveIlike(
-	column: DrizzleColumn,
-	pattern: string,
-	provider: DrizzleProvider,
-): SQL {
-	return provider === "pg"
-		? ilike(column, pattern)
-		: sql`LOWER(${column}) LIKE LOWER(${pattern})`;
+export function escapeLikePattern(
+	value: string | number | boolean | string[] | number[] | Date | null,
+): string {
+	// Escape the backslash first so the `\` added for `%` and `_` is not
+	// re-escaped, and a literal backslash in the input stays literal under the
+	// `ESCAPE '\'` clause.
+	return String(value)
+		.replace(/\\/g, "\\\\")
+		.replace(/%/g, "\\%")
+		.replace(/_/g, "\\_");
 }
 
 /**

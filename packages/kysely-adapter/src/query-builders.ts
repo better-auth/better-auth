@@ -2,17 +2,38 @@ import { sql } from "kysely";
 import type { KyselyDatabaseType } from "./types";
 
 /**
- * Case-insensitive ILIKE/LIKE for pattern matching.
- * Uses ILIKE on PostgreSQL, LOWER()+LIKE on MySQL/SQLite/MSSQL.
+ * LIKE with a backslash ESCAPE clause, so a pattern built with
+ * {@link escapeLikePattern} matches `%` and `_` literally. Insensitive mode uses
+ * ILIKE on PostgreSQL and LOWER()+LIKE on MySQL/SQLite/MSSQL.
  */
-export function insensitiveIlike(
+export function escapedLike(
 	columnRef: string,
 	pattern: string,
-	dbType?: KyselyDatabaseType,
+	dbType: KyselyDatabaseType | undefined,
+	mode: "sensitive" | "insensitive",
 ) {
+	const column = sql.ref(columnRef);
+	const escape = "\\";
+	if (mode === "sensitive") {
+		return sql<boolean>`${column} LIKE ${pattern} ESCAPE ${escape}`;
+	}
 	return dbType === "postgres"
-		? sql`${sql.ref(columnRef)} ILIKE ${pattern}`
-		: sql`LOWER(${sql.ref(columnRef)}) LIKE LOWER(${pattern})`;
+		? sql<boolean>`${column} ILIKE ${pattern} ESCAPE ${escape}`
+		: sql<boolean>`LOWER(${column}) LIKE LOWER(${pattern}) ESCAPE ${escape}`;
+}
+
+/**
+ * Escapes the LIKE metacharacters in `value` so it matches literally under
+ * {@link escapedLike}'s backslash ESCAPE clause. MSSQL also treats `[` as a
+ * character-class wildcard.
+ */
+export function escapeLikePattern(value: unknown, dbType?: KyselyDatabaseType) {
+	// Backslash first so the escapes added below are not escaped again.
+	const escaped = String(value)
+		.replace(/\\/g, "\\\\")
+		.replace(/%/g, "\\%")
+		.replace(/_/g, "\\_");
+	return dbType === "mssql" ? escaped.replace(/\[/g, "\\[") : escaped;
 }
 
 /**

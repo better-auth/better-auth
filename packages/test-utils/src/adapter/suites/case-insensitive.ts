@@ -202,6 +202,38 @@ export const caseInsensitiveTestSuite = createTestSuite(
 				expect(result.length).toBeGreaterThanOrEqual(1);
 				expect(result.some((u) => u.id === user.id)).toBe(true);
 			},
+			"findMany - insensitive contains, starts_with and ends_with should match LIKE wildcards literally":
+				async () => {
+					const literal = await adapter.create<User>({
+						model: "user",
+						data: { ...(await generate("user")), name: "Lk_A_B%C" },
+						forceAllowId: true,
+					});
+					// Each decoy matches only if `%` or `_` act as LIKE wildcards.
+					for (const name of ["lkXaXbYc", "LK_aXbz", "lkXaYb%c"]) {
+						await adapter.create<User>({
+							model: "user",
+							data: { ...(await generate("user")), name },
+							forceAllowId: true,
+						});
+					}
+
+					const queries = [
+						{ value: "k_a_b%c", operator: "contains" },
+						{ value: "lk_a_b", operator: "starts_with" },
+						{ value: "_a_b%c", operator: "ends_with" },
+					] as const;
+					for (const { value, operator } of queries) {
+						const result = await adapter.findMany<User>({
+							model: "user",
+							where: [{ field: "name", value, operator, mode: "insensitive" }],
+						});
+						expect(
+							result.map((u) => u.id),
+							`${operator} "${value}"`,
+						).toEqual([literal.id]);
+					}
+				},
 			"findMany - starts_with with mode insensitive": async () => {
 				const user = await adapter.create<User>({
 					model: "user",
