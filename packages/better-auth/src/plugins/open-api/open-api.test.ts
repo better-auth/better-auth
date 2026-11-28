@@ -7,7 +7,7 @@ import { emailOTP } from "../email-otp";
 import { phoneNumber } from "../phone-number";
 import { username } from "../username";
 import { openAPI } from ".";
-import type { OpenAPISchema, Path } from "./generator";
+import type { OpenAPIModelSchema, OpenAPISchema, Path } from "./generator";
 
 type PostRequestBody = NonNullable<NonNullable<Path["post"]>["requestBody"]>;
 
@@ -437,6 +437,45 @@ describe("open-api", async () => {
 		});
 		expect(schemas["User"]!.required).not.toContain("tags");
 		expect(schemas["User"]!.required).toContain("scores");
+	});
+
+	/**
+	 * @see https://json-schema.org/draft/2020-12/json-schema-validation#section-6.1.1
+	 */
+	it("should map json and enum additionalFields to valid model schemas", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						metadata: {
+							type: "json",
+							required: false,
+						},
+						plan: {
+							type: ["free", "pro"],
+							required: true,
+							defaultValue: "free",
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const schema = await auth.api.generateOpenAPISchema();
+		const schemas = schema.components.schemas as Record<
+			string,
+			OpenAPIModelSchema
+		>;
+
+		expect(schemas["User"]!.properties.metadata).toEqual({});
+		expect(schemas["User"]!.properties.plan).toEqual({
+			type: "string",
+			enum: ["free", "pro"],
+			default: "free",
+		});
+		expect(schemas["User"]!.required).not.toContain("metadata");
+		expect(schemas["User"]!.required).toContain("plan");
 	});
 
 	/**
