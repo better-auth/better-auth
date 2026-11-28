@@ -1,4 +1,4 @@
-import type { Role, Statements } from "../access";
+import { type Role, type Statements, authorizeRoles } from "../access";
 import { parseRoleList } from "./roles";
 import type { OrganizationOptions } from "./types";
 
@@ -17,14 +17,7 @@ export const hasPermissionFn = (
 	const allowCreatorsAllPermissions = input.allowCreatorAllPermissions || false;
 	if (isCreator && allowCreatorsAllPermissions) return true;
 
-	for (const role of roles) {
-		const _role = acRoles[role as keyof typeof acRoles];
-		const result = _role?.authorize(input.permissions);
-		if (result?.success) {
-			return true;
-		}
-	}
-	return false;
+	return authorizeRoles(roles, acRoles, input.permissions);
 };
 
 export type PermissionExclusive = {
