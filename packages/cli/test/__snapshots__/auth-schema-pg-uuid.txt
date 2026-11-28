@@ -11,7 +11,7 @@ import {
 
 export const custom_user = pgTable("custom_user", {
   id: uuid("id")
-    .default(sql`pg_catalog.gen_random_uuid()`)
+    .default(sql`gen_random_uuid()`)
     .primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
@@ -31,7 +31,7 @@ export const custom_session = pgTable(
   "custom_session",
   {
     id: uuid("id")
-      .default(sql`pg_catalog.gen_random_uuid()`)
+      .default(sql`gen_random_uuid()`)
       .primaryKey(),
     expiresAt: timestamp("expires_at").notNull(),
     token: text("token").notNull().unique(),
@@ -52,7 +52,7 @@ export const custom_account = pgTable(
   "custom_account",
   {
     id: uuid("id")
-      .default(sql`pg_catalog.gen_random_uuid()`)
+      .default(sql`gen_random_uuid()`)
       .primaryKey(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
@@ -78,7 +78,7 @@ export const custom_verification = pgTable(
   "custom_verification",
   {
     id: uuid("id")
-      .default(sql`pg_catalog.gen_random_uuid()`)
+      .default(sql`gen_random_uuid()`)
       .primaryKey(),
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
@@ -96,7 +96,7 @@ export const twoFactor = pgTable(
   "two_factor",
   {
     id: uuid("id")
-      .default(sql`pg_catalog.gen_random_uuid()`)
+      .default(sql`gen_random_uuid()`)
       .primaryKey(),
     secret: text("secret").notNull(),
     backupCodes: text("backup_codes").notNull(),
